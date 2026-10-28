@@ -1,42 +1,18 @@
 use crate::pubsub::backfill::{
-    backfill_attachment, backfill_message, backfill_thread, calendar_google_backfill,
-    depopulate_crm_contact, depopulate_crm_for_user, error_handlers, increment_counters, init,
-    list_threads, populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
+    backfill_attachment, backfill_message, backfill_thread, deferral, depopulate_crm_contact,
+    depopulate_crm_for_user, error_handlers, increment_counters, init, list_threads,
+    populate_crm_contact, populate_crm_for_user, seed_sent_contact, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
 use anyhow::Context;
-use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use models_email::email::service::backfill::{
     BackfillJob, BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
+use std::time::Duration;
 use uuid::Uuid;
-
-/// When calendar sync is disabled, return the delivery's outbox row to the
-/// unpublished state and ack the message; the outbox drain republishes it
-/// once the switch flips back on. `None` means calendar sync is enabled and
-/// the delivery should proceed.
-async fn park_calendar_delivery(
-    ctx: &PubSubContext,
-    calendar_job_id: Uuid,
-) -> Option<Result<(), ProcessingError>> {
-    if ctx.calendar_sync_enabled {
-        return None;
-    }
-    tracing::info!(%calendar_job_id, "calendar sync disabled; returning delivery to the outbox");
-    Some(
-        crate::calendar_outbox::republish_calendar_job(&ctx.db, calendar_job_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("failed to return calendar delivery to the outbox"),
-                })
-            }),
-    )
-}
 
 // Process a single message from the backfill queue
 pub async fn process_message(
@@ -55,7 +31,8 @@ pub async fn process_message(
         }
     };
 
-    let processing_result = inner_process_message(&ctx, &data).await;
+    let processing_result =
+        keep_invisible(message, &ctx.sqs_worker, inner_process_message(&ctx, &data)).await;
 
     match processing_result {
         // Processing success. Clean up the message
@@ -70,8 +47,53 @@ pub async fn process_message(
         }
 
         // A temporary failure occurred. We log it and don't clean up the message, so it gets retried
-        Err(ProcessingError::Retryable(e)) => {
-            error_handlers::handle_retryable_error(&data, &e).await
+        Err(ProcessingError::Retryable(e)) => match deferral::rate_limit(&e) {
+            Some(retry_after) => {
+                error_handlers::defer_rate_limited_operation(&ctx, message, &data, &e, retry_after)
+                    .await
+            }
+            None => error_handlers::handle_retryable_error(&data, &e).await,
+        },
+    }
+}
+
+/// How often a running operation pushes its message's visibility out again.
+const VISIBILITY_HEARTBEAT: Duration = Duration::from_secs(20);
+/// The backfill queue's visibility timeout, restored by every heartbeat.
+const VISIBILITY_TIMEOUT_SECONDS: i32 = 60;
+
+/// Runs `work` while keeping its message hidden from other workers.
+///
+/// A whole thread, or any operation slowed by a struggling database, can
+/// outlast the queue's visibility timeout. Delivered again while the first
+/// copy still runs, the second copy would find the thread written and count
+/// it, and the first would count it again through its metadata step,
+/// completing the job early. A failed heartbeat only logs: the message then
+/// reappears as it would have without one.
+async fn keep_invisible<F: Future>(
+    message: &aws_sdk_sqs::types::Message,
+    sqs_worker: &sqs_worker::SQSWorker,
+    work: F,
+) -> F::Output {
+    let Some(receipt_handle) = message.receipt_handle() else {
+        return work.await;
+    };
+    let mut work = std::pin::pin!(work);
+    let mut heartbeats = tokio::time::interval_at(
+        tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
+        VISIBILITY_HEARTBEAT,
+    );
+    loop {
+        tokio::select! {
+            output = &mut work => return output,
+            _ = heartbeats.tick() => {
+                if let Err(error) = sqs_worker
+                    .change_message_visibility(receipt_handle, VISIBILITY_TIMEOUT_SECONDS)
+                    .await
+                {
+                    tracing::warn!(error = ?error, "failed to keep a running backfill operation hidden");
+                }
+            }
         }
     }
 }
@@ -144,39 +166,6 @@ async fn inner_process_message(
             };
             backfill_attachment::backfill_attachment(ctx, &link, &scope.payload).await
         }
-        BackfillOperation::CalendarGoogleBackfill(scope) => {
-            if let Some(parked) = park_calendar_delivery(ctx, scope.payload.calendar_job_id).await {
-                return parked;
-            }
-            let link = fetch_link(ctx, scope.link_id).await?;
-            // Calendar jobs can be created immediately after an incremental
-            // Google scope grant. Bypass the Gmail token cache so this job does
-            // not reuse a pre-consent access token that lacks calendar scopes.
-            let access_token = ctx
-                .email_api
-                .get_access_token(link.id, TokenFreshness::Fresh)
-                .await
-                .map_err(|error| {
-                    let is_auth_required = matches!(error, EmailApiError::AuthRequired);
-                    let detail = DetailedError {
-                        reason: FailureReason::AccessTokenFetchFailed,
-                        source: anyhow::anyhow!(error)
-                            .context("failed to fetch token for Google Calendar backfill"),
-                    };
-                    if is_auth_required {
-                        ProcessingError::NonRetryable(detail)
-                    } else {
-                        ProcessingError::Retryable(detail)
-                    }
-                })?;
-            calendar_google_backfill::calendar_google_backfill(
-                ctx,
-                access_token.expose_secret(),
-                &link,
-                &scope.payload,
-            )
-            .await
-        }
         BackfillOperation::FinalizeBackfill(scope) => {
             increment_counters::finalize_backfill(ctx, scope.link_id, scope.job_id).await
         }
@@ -189,11 +178,15 @@ async fn inner_process_message(
             seed_sent_contact::seed_sent_contact(ctx, scope, &link).await
         }
         BackfillOperation::PopulateCrmContact(scope) => {
-            let link = fetch_link(ctx, scope.link_id).await?;
+            let Some(link) = fetch_link_if_present(ctx, scope.link_id).await? else {
+                return Ok(());
+            };
             populate_crm_contact::populate_crm_contact(ctx, &link, &scope.payload).await
         }
         BackfillOperation::DepopulateCrmContact(scope) => {
-            let link = fetch_link(ctx, scope.link_id).await?;
+            let Some(link) = fetch_link_if_present(ctx, scope.link_id).await? else {
+                return Ok(());
+            };
             depopulate_crm_contact::depopulate_crm_contact(ctx, &link, &scope.payload).await
         }
         BackfillOperation::PopulateCrmForUser(payload) => {
@@ -275,6 +268,28 @@ async fn fetch_link(ctx: &PubSubContext, link_id: Uuid) -> Result<link::Link, Pr
             source: e,
         })),
     }
+}
+
+/// Looks up the link a link-scoped CRM message was fanned out for.
+///
+/// Returns `None` once the link is deleted: link teardown already removed the
+/// link's CRM rows, so messages still queued for it have nothing left to do.
+async fn fetch_link_if_present(
+    ctx: &PubSubContext,
+    link_id: Uuid,
+) -> Result<Option<link::Link>, ProcessingError> {
+    let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e,
+            })
+        })?;
+    if link.is_none() {
+        tracing::debug!(%link_id, "Link was deleted; dropping link-scoped CRM message");
+    }
+    Ok(link)
 }
 
 /// Extracts backfill message from the SQS message body

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            t.id AS thread_id,\n            CASE\n                WHEN l.macro_id = $3 THEN 'inbox_owner'\n                WHEN EXISTS (\n                    SELECT 1\n                    FROM macro_user_links mul\n                    WHERE mul.link_id = l.id\n                      AND mul.primary_macro_id = $3\n                ) THEN 'inbox_delegate'\n                ELSE 'thread_grant'\n            END AS \"reason!\"\n        FROM document_email de\n        JOIN email_attachments ea ON ea.id = de.email_attachment_id\n        JOIN email_messages em ON em.id = ea.message_id\n        JOIN email_threads t ON t.id = em.thread_id\n        JOIN email_links l ON l.id = t.link_id\n        WHERE de.document_id = $1\n          AND (\n              l.macro_id = $3\n              OR EXISTS (\n                  SELECT 1\n                  FROM macro_user_links mul\n                  WHERE mul.link_id = l.id\n                    AND mul.primary_macro_id = $3\n              )\n              OR EXISTS (\n                  SELECT 1\n                  FROM entity_access thread_access\n                  WHERE thread_access.entity_id = t.id\n                    AND thread_access.entity_type = 'email_thread'\n                    AND thread_access.source_id = ANY($2)\n              )\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "reason!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "539ebdf36e054cdc7278729549d608006a2fc1c3c719680bce5765c14e671dee"
+}

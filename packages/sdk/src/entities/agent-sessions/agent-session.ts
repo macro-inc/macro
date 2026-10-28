@@ -1,0 +1,501 @@
+import type { FoldedMessage } from '../../../generated/agent-fold';
+import type {
+  AgentAction,
+  AgentMode,
+  AgentSessionChangesResponse,
+  AgentSessionLogResponse,
+  AgentSessionResponse,
+  CodingPreferencesBody,
+  ControlResponse,
+  PromptAttachment,
+  PullRequestLinkSource,
+  SandboxSize,
+  SessionBot,
+} from '../../../generated/agent-harness/types.gen';
+import { unwrap } from '../../utils';
+import type { MacroClient } from '../../utils/client';
+import { MacroEntity } from '../entity';
+import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
+import { User } from '../users/user';
+import { CodeExecution } from './code-execution';
+import { QueuedAction } from './queued-action';
+import { type CreateReviewOptions, SessionReview } from './review';
+import { ToolApproval } from './tool-approval';
+
+/** A session's history folded into readable messages, oldest first. */
+export type FoldedAgentSessionLog = {
+  /** The agent that sent every agent message. */
+  bot: SessionBot;
+  /**
+   * Prompts and replies with their tool calls, results, plans, permission
+   * requests and how each turn ended.
+   */
+  messages: FoldedMessage[];
+};
+
+/** A GitHub pull request linked to a session. */
+export type SessionPullRequest = {
+  /** The pull request's `owner/repo/pull/number` key. */
+  githubKey: string;
+  /** The pull request's GitHub URL. */
+  url: string;
+  /** Whether the session's agent opened it or a person linked it. */
+  source: PullRequestLinkSource;
+  /** Who linked it, for pull requests a person linked. */
+  linkedBy?: User;
+  /** When it was linked. */
+  createdAt: string;
+};
+
+/** A GitHub repository the caller can point a managed session at. */
+export type SelectableRepository = {
+  /** The canonical `https://github.com/owner/name` URL, as `createManaged` takes it. */
+  url: string;
+  /**
+   * The branch its clones check out, and where a session starts unless
+   * `createManaged` names another. Absent for a repository with no commits.
+   */
+  defaultBranch?: string;
+};
+
+/** What a managed session is created with. */
+export type CreateManagedSessionOptions = {
+  /** First prompt to deliver once the session is running. */
+  prompt?: string;
+  /** Instructions the session's runtime works under, fixed for its life. */
+  instructions?: string;
+  /**
+   * The model the session runs on, instead of its persona's. The session's
+   * model from creation, read back as {@link AgentSession.model}.
+   */
+  model?: string;
+  /**
+   * The repository the session works on, as one of the URLs
+   * {@link AgentSession.repositories} lists for the caller. Omitted, the
+   * runtime chooses from the prompt. Honored for Cursor sessions.
+   */
+  repoUrl?: string;
+  /**
+   * The branch the session starts on; needs `repoUrl`. Omitted, the
+   * repository's default branch.
+   */
+  repoBranch?: string;
+};
+
+/** A managed or externally hosted coding-agent session. */
+export class AgentSession extends MacroEntity<AgentSessionResponse> {
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'agent_session', this);
+
+  /** Construct an approval handle scoped to this session. */
+  toolApprovalById(id: string): ToolApproval {
+    return ToolApproval.byId(this.client, this, id);
+  }
+
+  /** Sharing configuration. */
+  async sharePermissions() {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionPermissions({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** Replace sharing grants. */
+  async updateSharePermissions(options: SharePermissionOptions) {
+    return this.mutate((c) =>
+      c.agentHarness.updateAgentSessionPermissions({
+        path: { session_id: this.id },
+        body: sharePermissionBody(options),
+      }),
+    );
+  }
+
+  /** A handle to an agent session by id. Details load on first access. */
+  static byId(client: MacroClient, id: string): AgentSession {
+    return new AgentSession(client, id);
+  }
+
+  /** Create a managed session, optionally delivering its first prompt. */
+  static async createManaged(
+    client: MacroClient,
+    opts?: CreateManagedSessionOptions,
+  ): Promise<AgentSession> {
+    const { session } = unwrap(
+      await client.agentHarness.createAgentSession({
+        body: {
+          prompt: opts?.prompt,
+          instructions: opts?.instructions,
+          model: opts?.model,
+          repoUrl: opts?.repoUrl,
+          repoBranch: opts?.repoBranch,
+        },
+      }),
+    );
+    return new AgentSession(client, session.id, session);
+  }
+
+  /**
+   * The GitHub repositories the caller can hand a managed session: every
+   * repository under an installation of Macro's GitHub App they or their
+   * teams made, sorted by `owner/name`. Empty when the App is installed
+   * nowhere they reach.
+   */
+  static async repositories(
+    client: MacroClient,
+  ): Promise<SelectableRepository[]> {
+    const { repositories } = unwrap(
+      await client.agentHarness.listAgentRepositories(),
+    );
+    return repositories.map((repository) => ({
+      url: repository.url,
+      defaultBranch: repository.defaultBranch ?? undefined,
+    }));
+  }
+
+  /**
+   * Branch names on one repository the caller can start a managed session
+   * from, in the order GitHub listed them. Empty when the repository has
+   * no commits yet. `repoUrl` is one of the URLs {@link AgentSession.repositories}
+   * lists.
+   */
+  static async repositoryBranches(
+    client: MacroClient,
+    repoUrl: string,
+  ): Promise<string[]> {
+    const { branches } = unwrap(
+      await client.agentHarness.listAgentRepositoryBranches({
+        query: { repoUrl },
+      }),
+    );
+    return branches;
+  }
+
+  /**
+   * Whether `prompt` needs a chat agent or a coding agent, as the app's Auto
+   * mode decides before starting a session. Rejects when Auto mode is not
+   * enabled for the caller, the classifier is unavailable or slow, or the
+   * caller is out of AI quota.
+   */
+  static async chooseMode(
+    client: MacroClient,
+    prompt: string,
+  ): Promise<AgentMode> {
+    const { mode } = unwrap(
+      await client.agentHarness.chooseAgentMode({ body: { prompt } }),
+    );
+    return mode;
+  }
+
+  protected async fetch(): Promise<AgentSessionResponse> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSession({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** The session's user-facing display name. */
+  readonly name = this.field('name');
+
+  /** Whether the session is archived and read-only. */
+  readonly isArchived = this.field('isArchived');
+
+  /** The model currently configured for the session. */
+  readonly model = this.field('model');
+
+  /** The agent harness implementation serving the session. */
+  readonly harness = this.field('harness');
+
+  /** The repository the agent works with, when one was supplied. */
+  readonly repoUrl = this.field('repoUrl');
+
+  /** The directory in which the agent harness runs. */
+  readonly workspace = this.field('workspace');
+
+  /**
+   * Instructions the session's runtime works under, when any were stated at
+   * creation. Fixed for the session's life.
+   */
+  readonly instructions = this.field('instructions');
+
+  /** The session's latest runtime status. */
+  readonly status = this.field('status');
+
+  /** Compute tier of the managed sandbox. */
+  readonly sandboxSize = this.field('sandboxSize');
+
+  /** When the session was created. */
+  readonly createdAt = this.field('createdAt');
+
+  /** When the session was last modified. */
+  readonly modifiedAt = this.field('modifiedAt');
+
+  /**
+   * The sessions linked to the GitHub pull request at `url` that the caller
+   * can view, oldest link first.
+   */
+  static async forPullRequest(
+    client: MacroClient,
+    url: string,
+  ): Promise<AgentSession[]> {
+    const { sessionIds } = unwrap(
+      await client.agentHarness.agentSessionsForPullRequest({ body: { url } }),
+    );
+    return sessionIds.map((id) => AgentSession.byId(client, id));
+  }
+
+  /**
+   * The GitHub pull requests linked to this session: the one its agent
+   * opened and any a person linked, oldest first.
+   */
+  async pullRequests(): Promise<SessionPullRequest[]> {
+    const { pullRequests } = unwrap(
+      await this.client.agentHarness.listAgentSessionPullRequests({
+        path: { session_id: this.id },
+      }),
+    );
+    return pullRequests.map((link) => ({
+      githubKey: link.githubKey,
+      url: link.url,
+      source: link.source,
+      linkedBy: link.linkedBy
+        ? User.byId(this.client, link.linkedBy)
+        : undefined,
+      createdAt: link.createdAt,
+    }));
+  }
+
+  /**
+   * Link the GitHub pull request at `url` to this session. Linking one that
+   * is already linked changes nothing.
+   */
+  async linkPullRequest(url: string): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.linkAgentSessionPullRequest({
+        path: { session_id: this.id },
+        body: { url },
+      }),
+    );
+  }
+
+  /**
+   * Unlink a GitHub pull request a person linked to this session. The pull
+   * request the session's agent opened stays linked.
+   */
+  async unlinkPullRequest(url: string): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.unlinkAgentSessionPullRequest({
+        path: { session_id: this.id },
+        query: { url },
+      }),
+    );
+  }
+
+  /** Rename this session. */
+  async rename(name: string): Promise<void> {
+    await this.mutate((client) =>
+      client.agentHarness.renameAgentSession({
+        path: { session_id: this.id },
+        body: { name },
+      }),
+    );
+  }
+
+  /** Archive this session, making it read-only until unarchived. */
+  async archive(): Promise<void> {
+    await this.setArchived(true);
+  }
+
+  /** Restore an archived session so it can be edited and prompted again. */
+  async unarchive(): Promise<void> {
+    await this.setArchived(false);
+  }
+
+  private async setArchived(isArchived: boolean): Promise<void> {
+    await this.mutate((client) =>
+      client.agentHarness.setAgentSessionArchived({
+        path: { session_id: this.id },
+        body: { isArchived },
+      }),
+    );
+  }
+
+  /** Resize this session's sandbox and remember the size as the owner's default. */
+  async setSandboxSize(size: SandboxSize): Promise<SandboxSize> {
+    const { size: next } = await this.mutate((client) =>
+      client.agentHarness.putAgentSessionSandboxSize({
+        path: { session_id: this.id },
+        body: { size },
+      }),
+    );
+    return next;
+  }
+
+  /** The caller's default sandbox size for new `@coder` sessions. */
+  static async defaultSandboxSize(client: MacroClient): Promise<SandboxSize> {
+    return unwrap(await client.agentHarness.getAgentSandboxSize()).size;
+  }
+
+  /** Set the caller's default sandbox size for the next `@coder` mention. */
+  static async setDefaultSandboxSize(
+    client: MacroClient,
+    size: SandboxSize,
+  ): Promise<SandboxSize> {
+    return unwrap(
+      await client.agentHarness.putAgentSandboxSize({
+        body: { size },
+      }),
+    ).size;
+  }
+
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  static async codingPreferences(
+    client: MacroClient,
+  ): Promise<CodingPreferencesBody> {
+    return unwrap(await client.agentHarness.getAgentCodingPreferences());
+  }
+
+  /** Replace the caller's coding preferences. */
+  static async setCodingPreferences(
+    client: MacroClient,
+    preferences: CodingPreferencesBody,
+  ): Promise<CodingPreferencesBody> {
+    return unwrap(
+      await client.agentHarness.putAgentCodingPreferences({
+        body: preferences,
+      }),
+    );
+  }
+
+  /**
+   * Send a prompt or lifecycle operation to the live agent session.
+   *
+   * The returned `actionId` matches `requestId` on the folded message the
+   * action derives once it dispatches. A `queued` status means a turn was
+   * running: the action waits in the session's queue ({@link queue}) and
+   * dispatches when that turn ends.
+   */
+  async control(action: AgentAction): Promise<ControlResponse> {
+    return this.mutate((client) =>
+      client.agentHarness.controlAgentSession({
+        path: { session_id: this.id },
+        body: action,
+      }),
+    );
+  }
+
+  /**
+   * Send a prompt to the session — sugar over {@link control}.
+   *
+   * `attachments` are files the prompt refers to, each by a URL the agent
+   * can fetch (a static file service URL in practice); they reach the agent
+   * as ACP `resource_link` blocks after the text.
+   */
+  prompt(
+    text: string,
+    attachments?: PromptAttachment[],
+  ): Promise<ControlResponse> {
+    return this.control({
+      type: 'prompt',
+      prompt: text,
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
+    });
+  }
+
+  /**
+   * The actions waiting to dispatch in this session, oldest first. Each can
+   * be edited or removed until it dispatches.
+   */
+  async queue(): Promise<QueuedAction[]> {
+    const { entries } = unwrap(
+      await this.client.agentHarness.getAgentSessionQueue({
+        path: { session_id: this.id },
+      }),
+    );
+    return entries.map((entry) =>
+      QueuedAction.from(this.client, this.id, entry),
+    );
+  }
+
+  /** Read the latest captured GitHub pull request changes and capture status. */
+  async changes(): Promise<AgentSessionChangesResponse> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionChanges({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** Read the unified diff of the latest captured changeset. */
+  async changesPatch(): Promise<string> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionChangesPatch({
+        path: { session_id: this.id },
+      }),
+    ).patch;
+  }
+
+  /** Request a fresh capture and return the current state while it runs. */
+  async refreshChanges(): Promise<AgentSessionChangesResponse> {
+    return this.mutate((client) =>
+      client.agentHarness.refreshAgentSessionChanges({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /**
+   * Read this session's whole history as the conversation the app renders:
+   * each user prompt and agent reply, oldest first, with tool calls and their
+   * results, plans, permission requests and how each turn ended. Works on any
+   * session the caller can view, live or finished, so it is the way to read
+   * what another agent session did. Prefer it to {@link log}, which returns
+   * raw protocol frames.
+   */
+  async foldedLog(): Promise<FoldedAgentSessionLog> {
+    const { bot, messages } = unwrap(
+      await this.client.agentHarness.getAgentSessionFoldedLog({
+        path: { session_id: this.id },
+      }),
+    );
+    // The schema is opaque: the server serializes the fold's `FoldedMessage`,
+    // whose TypeScript contract is generated from the same Rust type.
+    return { bot, messages: messages as FoldedMessage[] };
+  }
+
+  /** Read the complete raw protocol log for this session. */
+  async log(): Promise<AgentSessionLogResponse> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionLog({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** Persisted reviews scoped to this session, with or without a code execution. */
+  readonly reviews = {
+    create: (input: CreateReviewOptions) =>
+      SessionReview.createForSession(this.client, this, input),
+    byId: (id: string) => SessionReview.byId(this.client, this, id),
+  };
+
+  /** Saved code executions scoped to this session. Handle construction makes no request. */
+  readonly codeExecutions = {
+    byId: (id: string): CodeExecution =>
+      CodeExecution.byId(this.client, this, id),
+  };
+
+  /** Delete this session and any live resources it owns. */
+  async delete(): Promise<void> {
+    await this.mutate((client) =>
+      client.agentHarness.deleteAgentSession({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+}

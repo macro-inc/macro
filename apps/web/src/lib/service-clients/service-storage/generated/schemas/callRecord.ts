@@ -4,17 +4,22 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CallRecordChannelId } from './callRecordChannelId';
 import type { CallRecordChannelName } from './callRecordChannelName';
 import type { CallRecordCustomName } from './callRecordCustomName';
 import type { CallRecordDurationMs } from './callRecordDurationMs';
 import type { CallRecordEgressId } from './callRecordEgressId';
 import type { CallRecordEndedAt } from './callRecordEndedAt';
+import type { CallRecordGuest } from './callRecordGuest';
 import type { CallRecordParticipant } from './callRecordParticipant';
 import type { CallRecordRecordingPreviewUrl } from './callRecordRecordingPreviewUrl';
 import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
+import type { CallRecordRoomName } from './callRecordRoomName';
+import type { CallRecordSourceProperty } from './callRecordSourceProperty';
 import type { CallRecordStatus } from './callRecordStatus';
 import type { CallRecordSummary } from './callRecordSummary';
+import type { CallRecordTeamShareAccessLevel } from './callRecordTeamShareAccessLevel';
 import type { CallRecordTranscriptSegment } from './callRecordTranscriptSegment';
 import type { CallRecordUserAccessLevel } from './callRecordUserAccessLevel';
 
@@ -26,7 +31,7 @@ export interface CallRecord {
   /** The call identifier. */
   callId: string;
   /** The channel this call belongs to. */
-  channelId: string;
+  channelId?: CallRecordChannelId;
   /** Resolved display name for the channel. */
   channelName?: CallRecordChannelName;
   /** User who created the call. */
@@ -40,9 +45,12 @@ archived `call_records`; active calls always return `None`. */
   egressId?: CallRecordEgressId;
   /** When the call ended (None if still active). */
   endedAt?: CallRecordEndedAt;
+  /** Non-account guests (both active and historic). Guests only ever exist
+on standalone meeting calls, never on channel calls. */
+  guests: CallRecordGuest[];
   /** Whether the call is currently active (from `calls` table). */
   isActive: boolean;
-  /** Participants (both active and historic). */
+  /** Macro-account participants (both active and historic). */
   participants: CallRecordParticipant[];
   /** Presigned URL for the call recording preview image, if available. */
   recordingPreviewUrl?: CallRecordRecordingPreviewUrl;
@@ -53,17 +61,25 @@ this value when present, falling back to `started_at` otherwise. */
   recordingStartedAt?: CallRecordRecordingStartedAt;
   /** Presigned URL for the call recording, if available. */
   recordingUrl?: CallRecordRecordingUrl;
-  /** The RTC room name. */
-  roomName: string;
-  /** Whether the call is shared with the creator's team. */
+  /** The RTC room name. `None` for imported calls, which never had a room. */
+  roomName?: CallRecordRoomName;
+  /** Whether the call is shared with the creator's team. While the call is
+live this is the pending toggle applied at archive; afterwards it
+mirrors `team_share_access_level`. */
   shareWithTeam: boolean;
+  source?: CallRecordSourceProperty;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
   status?: CallRecordStatus;
   /** AI-generated summary of the call. Only set on archived `call_records`
 once summarization has run; active calls always return `None`. */
   summary?: CallRecordSummary;
+  teamShareAccessLevel?: CallRecordTeamShareAccessLevel;
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
   userAccessLevel?: CallRecordUserAccessLevel;
+  /** Whether the authenticated viewer has declined this call on any device.
+Set on the single-record read so clients that missed `call_declined`
+can still stop ringing via reconciliation; `false` in list contexts. */
+  viewerHasDeclined?: boolean;
 }

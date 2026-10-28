@@ -195,10 +195,26 @@ pub(crate) async fn upload_staged_file_to_presigned_url(
     token: String,
     upload_url: String,
     mime_type: String,
+    checksum_sha256: Option<String>,
 ) -> Result<(), String> {
     let path = staged_file_path(&app, source, &token)?;
     let description = source.description();
-    upload_file_to_presigned_url(&path, &upload_url, &mime_type, description).await?;
+    upload_file_to_presigned_url(
+        &path,
+        &upload_url,
+        &mime_type,
+        description,
+        checksum_sha256.as_deref(),
+    )
+    .await?;
+
+    // Android keeps a durable incoming-share queue until the composer sends or
+    // cancels. An eager attachment upload must not invalidate that queue during
+    // an auth detour, a second incoming share, or a process restart.
+    #[cfg(target_os = "android")]
+    if matches!(source, StagedUploadSource::Share) {
+        return Ok(());
+    }
 
     if let Err(error) = tokio::fs::remove_file(&path).await
         && error.kind() != std::io::ErrorKind::NotFound
@@ -219,6 +235,7 @@ pub(crate) async fn upload_file_to_presigned_url(
     upload_url: &str,
     mime_type: &str,
     description: &str,
+    checksum_sha256: Option<&str>,
 ) -> Result<(), String> {
     let upload_url = Url::parse(upload_url)
         .map_err(|error| format!("invalid {description} upload URL: {error}"))?;
@@ -245,6 +262,9 @@ pub(crate) async fn upload_file_to_presigned_url(
     let mut request = client.put(upload_url).body(body);
     if !mime_type.is_empty() {
         request = request.header(CONTENT_TYPE, mime_type);
+    }
+    if let Some(checksum) = checksum_sha256 {
+        request = request.header("x-amz-checksum-sha256", checksum);
     }
 
     let response = request

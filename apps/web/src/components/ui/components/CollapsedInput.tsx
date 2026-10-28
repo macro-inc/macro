@@ -1,9 +1,11 @@
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
+import { ComposerSurface } from './ComposerSurface';
 import { Layer } from './Layer';
 import { SendButton } from './SendButton';
 
@@ -25,6 +27,8 @@ export type CollapsedInputProps = {
    */
   disabled?: boolean;
   class?: string;
+  /** Replaces the attach button at the start of the input. */
+  leadingAction?: JSX.Element;
   /**
    * Target of the real input this trigger stands in for. Focused via the
    * `focusInput` directive when the trigger is clicked, so the iOS virtual
@@ -49,26 +53,36 @@ export function CollapsedInput(props: CollapsedInputProps) {
 
   return (
     <Layer depth={3} data-collapsed-input>
-      <div
+      <ComposerSurface
+        as="div"
+        data-composer-collapsed
         class={cn(
-          'rounded-xl w-full h-12.5 island flex min-w-0 items-center gap-1.5 px-2',
+          'w-full h-[48.75px] flex min-w-0 items-center gap-[5.625px] px-[7.5px] touch:rounded-xl touch:h-12.5 touch:island touch:gap-1.5 touch:px-2',
           props.class
         )}
       >
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Attach files"
-          label="Attach files"
-          onClick={() => props.onAttach?.()}
+        <Show
+          when={props.leadingAction}
+          fallback={
+            <Button
+              tooltip="Attach files"
+              variant="ghost"
+              size="icon-md"
+              class="not-touch:light-mode:text-composer-ink"
+              aria-label="Attach files"
+              onClick={() => props.onAttach?.()}
+            >
+              <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            </Button>
+          }
         >
-          <PaperclipIcon />
-        </Button>
+          {props.leadingAction}
+        </Show>
         <button
           type="button"
           class={cn(
-            'min-w-0 flex-1 overflow-hidden rounded-sm px-1.5 text-left text-sm outline-none',
-            'flex h-8 items-center text-ink focus-visible:bg-active'
+            'min-w-0 flex-1 overflow-hidden rounded-sm px-1.5 text-left text-base outline-none',
+            'flex h-8 items-center text-ink focus-visible:bg-active not-touch:h-[30px] not-touch:px-[5.625px] not-touch:leading-[24.375px]'
           )}
           ref={attachFocusInput}
           onClick={() => props.onOpen?.()}
@@ -77,7 +91,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
           <Show
             when={hasText()}
             fallback={
-              <span class="truncate text-ink-placeholder">
+              <span class="truncate text-ink-placeholder not-touch:text-composer-placeholder">
                 {props.placeholder ?? 'Message'}
               </span>
             }
@@ -91,37 +105,35 @@ export function CollapsedInput(props: CollapsedInputProps) {
         </button>
         <Show when={hasAttachments() && !hasText()}>
           <Button
+            tooltip={`${attachmentCount()} attachment${
+              attachmentCount() === 1 ? '' : 's'
+            }`}
             variant="ghost"
             size="sm"
             class="h-8 px-1.5 gap-1"
             aria-label={`${attachmentCount()} attachment${
               attachmentCount() === 1 ? '' : 's'
             }`}
-            label={`${attachmentCount()} attachment${
-              attachmentCount() === 1 ? '' : 's'
-            }`}
             ref={attachFocusInput}
             onClick={() => props.onOpen?.()}
             data-collapsed-input-attachments
           >
-            <PaperclipIcon />
+            <PaperclipIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             <span>{attachmentCount()}</span>
           </Button>
         </Show>
-        <Show when={!isMobile() || !props.disabled}>
-          <SendButton
-            // Match the expanded input's send button (pill on touch).
-            class="touch:rounded-full"
-            pending={props.pending}
-            disabled={props.disabled || props.pending}
-            onPointerDown={(event) => {
-              event.preventDefault();
-              void props.onSend?.();
-            }}
-            data-collapsed-input-send
-          />
-        </Show>
-      </div>
+        <SendButton
+          appearance="composer"
+          pending={props.pending}
+          hidden={isMobile() && props.disabled}
+          disabled={props.disabled || props.pending}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            fireAndForget(props.onSend?.(), 'collapsed-input');
+          }}
+          data-collapsed-input-send
+        />
+      </ComposerSurface>
     </Layer>
   );
 }

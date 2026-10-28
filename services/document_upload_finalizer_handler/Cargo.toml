@@ -9,22 +9,30 @@ anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 documents = { path = "../../crates/documents", default-features = false, features = [
   "markdown_init",
   "outbound",
   "ports",
 ] }
+entity_registry = { path = "../../crates/entity_registry/entity_registry" }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 lambda_runtime = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_uuid = { path = "../../crates/macro_uuid" }
 model = { path = "../../crates/model" }
+model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
+sqs_client = { path = "../../crates/sqs_client" }
 sync_service_client = { path = "../../crates/sync_service_client" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }

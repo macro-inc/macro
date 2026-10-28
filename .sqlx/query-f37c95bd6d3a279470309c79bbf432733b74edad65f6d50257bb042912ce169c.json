@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE database_tables SET name = $3\n        WHERE id = $1 AND database_id = $2 AND name = $4\n          AND NOT EXISTS (\n            SELECT 1 FROM database_tables other\n            WHERE other.database_id = $2 AND other.id <> $1\n              AND lower(other.name) = lower($3)\n          )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f37c95bd6d3a279470309c79bbf432733b74edad65f6d50257bb042912ce169c"
+}

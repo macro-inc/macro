@@ -79,13 +79,16 @@ pub async fn get_entity_name_and_owner(
             .fetch_one(db)
             .await?
         }
-        SearchEntityType::Projects => {
+        SearchEntityType::AgentSessions | SearchEntityType::Projects => {
             anyhow::bail!("entity type not supported");
         }
         SearchEntityType::CallRecords => {
             anyhow::bail!("entity type not supported");
         }
         SearchEntityType::CrmCompanies => {
+            anyhow::bail!("entity type not supported");
+        }
+        SearchEntityType::CalendarEvents => {
             anyhow::bail!("entity type not supported");
         }
     };

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE gtm_invite_link\n            SET revoked_at = $2\n            WHERE id = $1\n              AND revoked_at IS NULL\n              AND redeemed_by_user_id IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "856bef0f024f9c257f5f02597f78182a88f7cf505246f7a9e36ab93e1a3b4fe2"
+}

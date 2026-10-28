@@ -2,13 +2,13 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::EntityAccessReceipt;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 
 use super::{FavoritesServiceImpl, MAX_FAVORITES_PER_COLLECTION};
-use crate::domain::models::{Favorite, FavoritesError};
-use crate::domain::ports::{FavoritesRepo, FavoritesService};
+use crate::domain::models::{Favorite, FavoriteFilter, FavoritesError};
+use crate::domain::ports::{FavoriteView, FavoritesRepo, FavoritesService};
 
 const USER_ID: &str = "macro|favorites-user@macro.com";
 
@@ -87,6 +87,7 @@ impl FavoritesRepo for FakeFavoritesRepo {
     async fn list_favorites(
         &self,
         _user_id: &MacroUserIdStr<'_>,
+        _filter: &FavoriteFilter,
     ) -> Result<Vec<Favorite>, Self::Err> {
         Ok(Vec::new())
     }
@@ -123,7 +124,7 @@ fn user_id() -> MacroUserIdStr<'static> {
 fn authenticated_receipt(
     entity_id: &str,
     entity_type: EntityType,
-) -> EntityAccessReceipt<ViewAccessLevel> {
+) -> EntityAccessReceipt<FavoriteView> {
     EntityAccessReceipt::dangerously_assert_authenticated_user(user_id(), entity_id, entity_type)
 }
 
@@ -188,7 +189,7 @@ async fn add_favorite_with_established_access_forwards_user_and_entity() {
 async fn add_favorite_rejects_internal_receipt_before_repository_calls() {
     let repo = FakeFavoritesRepo::new(0);
     let service = FavoritesServiceImpl::new(repo.clone());
-    let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_internal_user(
+    let receipt = EntityAccessReceipt::<FavoriteView>::dangerously_assert_internal_user(
         "doc-123",
         EntityType::Document,
     );

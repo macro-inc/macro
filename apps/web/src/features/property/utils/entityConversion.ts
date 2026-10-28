@@ -19,7 +19,7 @@ export function entityReferencesToIdSet(refs: EntityReference[]): Set<string> {
 export function updateEntityReferences(
   currentRefs: EntityReference[],
   newSelectedIds: Set<string>,
-  entityInfo?: Array<{ id: string; entity_type: string }>
+  entityInfo?: Array<{ id: string; entity_type: EntityType }>
 ): EntityReference[] {
   const currentIds = new Set(currentRefs.map((ref) => ref.entity_id));
 
@@ -38,30 +38,41 @@ export function updateEntityReferences(
 
   // Add new entities with proper entity type
   for (const id of addedIds) {
-    const entityType =
-      entityInfo?.find((info) => info.id === id)?.entity_type || 'DOCUMENT';
     updatedRefs.push({
       entity_id: id,
-      entity_type: entityType as EntityReference['entity_type'],
+      entity_type:
+        entityInfo?.find((info) => info.id === id)?.entity_type ?? 'DOCUMENT',
     });
   }
 
   return updatedRefs;
 }
 
+/** `undefined` means this build doesn't know the entity type. */
+export function parseEntityType(value: string): EntityType | undefined {
+  return Object.values(EntityType).find((type) => type === value);
+}
+
+/** `undefined` means the entity type has no item-preview surface. */
 export function entityTypeToItemType(type: EntityType): ItemType | undefined {
-  return match(type)
-    .with('TASK', () => 'document' as ItemType)
-    .with('DOCUMENT', () => 'document' as ItemType)
-    .with('PROJECT', () => 'project' as ItemType)
-    .with('CHANNEL', () => 'channel' as ItemType)
-    .with('CHAT', () => 'chat' as ItemType)
-    .with('CALL_RECORD', () => 'call' as ItemType)
-    .with('COMPANY', () => undefined) // huh
-    .with('USER', () => undefined) // huh
-    .with('THREAD', () => 'email' as ItemType)
-    .with('CALENDAR_EVENT', () => undefined) // no calendar item rendering yet
-    .exhaustive();
+  return match<EntityType, ItemType | undefined>(type)
+    .with('TASK', () => 'document')
+    .with('DOCUMENT', () => 'document')
+    .with('PROJECT', () => 'project')
+    .with('CHANNEL', () => 'channel')
+    .with('CHAT', () => 'chat')
+    .with('CALL_RECORD', () => 'call')
+    .with('THREAD', () => 'email')
+    .with('COMPANY', () => 'crm_company')
+    .with('CONTACT', () => 'crm_contact')
+    .with(
+      'USER',
+      'CALENDAR_EVENT',
+      'INITIATIVE',
+      'DATABASE_ROW',
+      () => undefined
+    )
+    .exhaustive(() => undefined);
 }
 
 export function macroEntityToPropertyEntityType(
@@ -71,6 +82,7 @@ export function macroEntityToPropertyEntityType(
     .when(isTaskEntity, () => EntityType.DOCUMENT)
     .with({ type: 'channel' }, () => EntityType.CHANNEL)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'initiative' }, () => EntityType.INITIATIVE)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
@@ -79,21 +91,29 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'call' }, () => EntityType.CALL_RECORD)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
     .with({ type: 'crm_contact' }, () => {
-      // No CONTACT in the properties-service EntityType yet.
+      // Contacts are entity-reference values (CONTACT), never property owners.
       throw new Error('crm contacts do not support properties');
     })
-    .with({ type: 'automation' }, () => {
-      throw new Error('automation entities do not support properties');
+    .with({ type: 'agent_session' }, () => {
+      throw new Error(
+        'agent sessions are not property-service mutation targets'
+      );
+    })
+    .with({ type: 'routine' }, () => {
+      throw new Error('routine entities do not support properties');
     })
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })
-    .with({ type: 'reminder' }, () => {
-      throw new Error('reminders do not support properties');
-    })
     .with({ type: 'calendar_event' }, () => {
       // CALENDAR_EVENT is not a property-editing target on the frontend yet.
       throw new Error('calendar events do not support properties');
+    })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases do not support properties');
+    })
+    .with({ type: 'form' }, () => {
+      throw new Error('forms do not support properties');
     })
     .exhaustive();
 }

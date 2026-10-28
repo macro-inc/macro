@@ -9,26 +9,31 @@ type DateDividerProps = {
   isReply?: boolean;
 };
 
+export function isDateDividerVisible(
+  createdAt: string,
+  listMeta?: ChannelMessageListMeta,
+  isReply?: boolean
+): boolean {
+  if (isReply || !listMeta) return false;
+
+  if (listMeta.index === 0) return true;
+
+  const previousCreatedAt = listMeta.previousTopLevelCreatedAt;
+  if (!previousCreatedAt) return false;
+
+  return !isSameDay(new Date(createdAt), new Date(previousCreatedAt));
+}
+
 export function DateDivider(props: DateDividerProps) {
-  const shouldRender = createMemo(() => {
-    if (props.isReply) return false;
-    if (!props.listMeta) return false;
-
-    if (props.listMeta.index === 0) return true;
-
-    const previousCreatedAt = props.listMeta.previousTopLevelCreatedAt;
-    if (!previousCreatedAt) return false;
-
-    return !isSameDay(new Date(props.createdAt), new Date(previousCreatedAt));
-  });
+  const shouldRender = createMemo(
+    () =>
+      isDateDividerVisible(props.createdAt, props.listMeta, props.isReply) &&
+      props.listMeta?.isFirstNewMessage !== true
+  );
 
   return (
     <Show when={shouldRender()}>
-      <MessageFlag
-        text={formatRelativeDate(props.createdAt)}
-        highlightAbove={props.listMeta?.isNewMessage}
-        highlightBelow={props.listMeta?.isNewMessage}
-      />
+      <MessageFlag text={formatRelativeDate(props.createdAt)} />
     </Show>
   );
 }

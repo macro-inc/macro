@@ -4,10 +4,29 @@ import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
+import { ChannelActivity } from './activity';
 import { Channel } from './channel';
+import { ChannelLabelsNamespace } from './labels';
 
 export class ChannelNamespace {
-  constructor(private readonly client: MacroClient) {}
+  /** Recent channel activity, with channel and user handles. */
+  async activity(): Promise<ChannelActivity[]> {
+    return unwrap(await this.client.storage.getActivity()).map(
+      (record) =>
+        new ChannelActivity(
+          this.client,
+          Channel.byId(this.client, record.channel_id),
+          record,
+        ),
+    );
+  }
+
+  /** Team-shared labels that group channels in the Chat sidebar. */
+  readonly labels: ChannelLabelsNamespace;
+
+  constructor(private readonly client: MacroClient) {
+    this.labels = new ChannelLabelsNamespace(client);
+  }
 
   byId(id: string): Channel {
     return Channel.byId(this.client, id);

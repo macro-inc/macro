@@ -235,7 +235,7 @@ ensure_dockerd() {
 # Populate `doppler_args` for `just stack up`. The doppler CLI is already on
 # PATH from `nix develop` — this only chooses whether to pass `--no-doppler`.
 # A config-scoped service token (local / lcl_preview) is enough; no login.
-# DOPPLER_PREVIEW_TOKEN is the Fly/CI name for the same token.
+# DOPPLER_PREVIEW_TOKEN is the CI name for the same token.
 stack_doppler_args() {
   if [ -z "${DOPPLER_TOKEN:-}" ] && [ -n "${DOPPLER_PREVIEW_TOKEN:-}" ]; then
     export DOPPLER_TOKEN="${DOPPLER_PREVIEW_TOKEN}"
@@ -247,6 +247,20 @@ stack_doppler_args() {
     echo "cursor-cloud: no DOPPLER_TOKEN — using --no-doppler stubs"
     doppler_args+=(--no-doppler)
   fi
+}
+
+# Run a command while re-applying bridge forwarding every few seconds.
+# Compose creates networks mid-`stack up`; a service booting on a bridge
+# before its FORWARD rules exist times out reaching its database (FusionAuth
+# wedged in maintenance mode this way). The watcher closes that window.
+run_with_bridge_forwarding() {
+  "$@" &
+  local cmd_pid=$!
+  while kill -0 "${cmd_pid}" 2>/dev/null; do
+    ensure_docker_bridge_forwarding
+    sleep 3
+  done
+  wait "${cmd_pid}"
 }
 
 in_pinned_nix_shell() {

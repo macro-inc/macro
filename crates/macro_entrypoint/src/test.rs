@@ -44,6 +44,89 @@ fn test_tracer_provider() -> (InMemorySpanExporter, SdkTracerProvider) {
     (exporter, provider)
 }
 
+#[tokio::test]
+async fn force_flush_exports_short_invocations_and_preserves_warm_provider() {
+    use opentelemetry::trace::Tracer as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter.clone())
+        .build();
+    let tracer = provider.tracer("retention-test");
+    let entrypoint = InitializedEntrypoint {
+        tracer_provider: Some(provider),
+        logger_provider: None,
+    };
+
+    tracer.in_span("first-invocation", |_| {});
+    entrypoint
+        .force_flush()
+        .await
+        .expect("first flush succeeds");
+    let spans = exporter.get_finished_spans().expect("exported spans");
+    assert_eq!(spans.len(), 1);
+    assert_eq!(spans[0].name, "first-invocation");
+
+    tracer.in_span("warm-invocation", |_| {});
+    entrypoint.force_flush().await.expect("warm flush succeeds");
+    let spans = exporter.get_finished_spans().expect("exported spans");
+    assert_eq!(spans.len(), 2);
+    assert_eq!(spans[1].name, "warm-invocation");
+    entrypoint.shutdown();
+}
+
+#[tokio::test]
+async fn force_flush_reports_export_failure_instead_of_success() {
+    use opentelemetry::trace::Tracer as _;
+    use opentelemetry_sdk::{
+        error::{OTelSdkError, OTelSdkResult},
+        trace::{BatchConfigBuilder, BatchSpanProcessor, SpanData, SpanExporter},
+    };
+
+    #[derive(Debug)]
+    struct FailingExporter;
+    impl SpanExporter for FailingExporter {
+        async fn export(&self, _batch: Vec<SpanData>) -> OTelSdkResult {
+            Err(OTelSdkError::InternalFailure(
+                "test export failure".to_owned(),
+            ))
+        }
+    }
+    let processor = BatchSpanProcessor::builder(FailingExporter)
+        .with_batch_config(
+            BatchConfigBuilder::default()
+                .with_scheduled_delay(std::time::Duration::from_secs(3600))
+                .build(),
+        )
+        .build();
+    let provider = SdkTracerProvider::builder()
+        .with_span_processor(processor)
+        .build();
+    provider
+        .tracer("test")
+        .in_span("completed-invocation", |_| {});
+    let entrypoint = InitializedEntrypoint {
+        tracer_provider: Some(provider),
+        logger_provider: None,
+    };
+    assert!(matches!(
+        entrypoint.force_flush().await,
+        Err(TelemetryFlushError::Traces(_))
+    ));
+    entrypoint.shutdown();
+}
+
+#[tokio::test]
+async fn force_flush_without_exporters_is_a_noop() {
+    InitializedEntrypoint {
+        tracer_provider: None,
+        logger_provider: None,
+    }
+    .force_flush()
+    .await
+    .expect("no exporter needs flushing");
+}
+
 #[test]
 fn rootcause_tracing_subscriber_captures_span_chain() {
     static INSTALL_ROOTCAUSE_HOOKS: Once = Once::new();
@@ -247,4 +330,90 @@ fn otel_trace_filter_invalid_value_falls_back_to_info() {
     });
 
     assert_eq!(exporter.get_finished_spans().unwrap().len(), 1);
+}
+
+#[test]
+fn absent_rust_log_still_logs_info() {
+    // A builder with no default directive and an empty value parses to zero
+    // directives, which logs nothing at all - the failure mode this floor
+    // exists to prevent. A service deployed without `RUST_LOG` must still
+    // emit its INFO lines, because those are what carry the decisions worth
+    // reconstructing after the fact.
+    for value in [None, Some("")] {
+        let logs = SharedWriter::default();
+        let subscriber = Registry::default().with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(logs.clone())
+                .with_filter(rust_log_filter(value)),
+        );
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!("info survives an unset RUST_LOG");
+            tracing::debug!("debug is still filtered");
+        });
+
+        let output = logs.contents();
+        assert!(
+            output.contains("info survives an unset RUST_LOG"),
+            "RUST_LOG={value:?} should keep INFO: {output:?}"
+        );
+        assert!(
+            !output.contains("debug is still filtered"),
+            "RUST_LOG={value:?} should not raise the floor to DEBUG: {output:?}"
+        );
+    }
+}
+
+#[test]
+fn explicit_rust_log_still_wins_over_the_floor() {
+    let logs = SharedWriter::default();
+    let subscriber = Registry::default().with(
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .with_writer(logs.clone())
+            .with_filter(rust_log_filter(Some("warn"))),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::warn!("warn is kept");
+        tracing::info!("info is filtered by an explicit directive");
+    });
+
+    let output = logs.contents();
+    assert!(output.contains("warn is kept"), "{output:?}");
+    assert!(
+        !output.contains("info is filtered by an explicit directive"),
+        "an explicit RUST_LOG must override the default floor: {output:?}"
+    );
+}
+
+#[test]
+fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
+    let output = SharedWriter::default();
+    let subscriber = Registry::default()
+        .with(tracing_subscriber::filter::filter_fn(|metadata| {
+            dependency_logs_allowed(&["russh", "rmcp"], metadata.target())
+        }))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(output.clone())
+                .with_filter(EnvFilter::new("info")),
+        );
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(target: "russh::server", username = "test-only-token", "authentication");
+        tracing::info!(target: "rmcp::service", "script containing test-only-token");
+        tracing::info!(target: "preview_gateway", "gateway ready");
+        tracing::info!(target: "russh_unrelated", "unrelated target");
+    });
+    let text = output.contents();
+    assert!(!text.contains("test-only-token"));
+    assert!(text.contains("gateway ready"));
+    assert!(text.contains("unrelated target"));
+    let entrypoint = MacroEntrypoint::default()
+        .suppress_dependency_logs(&["russh"])
+        .local()
+        .build();
+    assert_eq!(entrypoint.suppressed_targets, &["russh"]);
 }

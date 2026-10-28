@@ -1,13 +1,13 @@
-import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
-import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
+import { enableMultiInbox } from '@core/constant/featureFlags';
+import { useAddInboxFlow } from '@core/email-link';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrayIcon from '@icon/system/regular/tray.svg';
 import { Combobox } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrayIcon from '@phosphor/tray.svg';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 import { useInboxPicker } from './inbox-picker';
@@ -18,7 +18,7 @@ import { SearchableMultiSelect } from './searchable-multi-select';
  * default = all (no clause). Shown whenever the multi-inbox flag is on (or
  * the user already has multiple inboxes). With exactly one inbox connected
  * there is nothing to filter, so the dropdown is replaced by a "Connect
- * another email" button that jumps straight into the add-inbox flow.
+ * another account" button that jumps straight into the add-inbox flow.
  * Selection is held in soup-view's `inboxFilter` and compiled into `Owner`
  * email literals.
  */
@@ -28,23 +28,19 @@ export function InboxSelector() {
     selectedIds: inboxFilter,
     setSelectedIds: setInboxFilter,
   });
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
-  const { openSettings } = useSettingsState();
-
-  const startAddInboxFlow = () => {
-    openSettings('Connected');
-    openAddInboxDialog();
-  };
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
+  const addInbox = useAddInboxFlow();
 
   const label = () => {
     const ids = inboxFilter();
-    if (ids === undefined) return 'All inboxes';
-    if (ids.length === 0) return 'No inboxes';
+    if (ids === undefined) return t('viewMenus.allInboxes');
+    if (ids.length === 0) return t('viewMenus.noInboxes');
     if (ids.length === 1)
-      return picker.options().find((o) => o.id === ids[0])?.label ?? '1 inbox';
-    return `${ids.length} inboxes`;
+      return (
+        picker.options().find((o) => o.id === ids[0])?.label ??
+        t('viewMenus.oneInbox')
+      );
+    return t('viewMenus.inboxCount', { count: ids.length });
   };
 
   const Selector = (selectorProps: { hideLabel?: boolean }) => (
@@ -53,30 +49,31 @@ export function InboxSelector() {
       activeIds={picker.activeIds}
       onChange={(ids) => (ids.length ? picker.onChange(ids) : picker.reset())}
       onOnly={picker.selectOnly}
-      placeholder="Search inboxes..."
+      placeholder={t('viewMenus.searchInboxes')}
       preserveOrder
       action={
         multiInboxFlag().enabled
           ? {
-              label: 'Add inbox',
+              get label() {
+                return t('viewMenus.connectAnotherAccount');
+              },
               icon: () => <PlusIcon class="size-4" />,
-              onSelect: startAddInboxFlow,
+              onSelect: () => addInbox(),
             }
           : undefined
       }
     >
       <Combobox.Trigger
         as={Button}
-        variant="base"
+        variant="secondary"
         size="sm"
-        depth={2}
         aria-label={selectorProps.hideLabel ? label() : undefined}
         class={cn(
           'bg-surface gap-1',
           selectorProps.hideLabel ? 'px-1' : 'max-w-50'
         )}
       >
-        <TrayIcon />
+        <TrayIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         <Show when={!selectorProps.hideLabel}>
           <span class="truncate">{label()}</span>
         </Show>
@@ -85,19 +82,22 @@ export function InboxSelector() {
     </SearchableMultiSelect>
   );
 
-  const ConnectAnotherEmail = (buttonProps: { hideLabel?: boolean }) => (
+  const ConnectAnotherAccount = (buttonProps: { hideLabel?: boolean }) => (
     <Button
-      variant="base"
+      variant="secondary"
       size="sm"
-      depth={2}
-      aria-label={buttonProps.hideLabel ? 'Connect another email' : undefined}
-      tooltip={buttonProps.hideLabel ? 'Connect another email' : undefined}
+      aria-label={
+        buttonProps.hideLabel ? t('viewMenus.connectAnotherAccount') : undefined
+      }
+      tooltip={
+        buttonProps.hideLabel ? t('viewMenus.connectAnotherAccount') : undefined
+      }
       class={cn('bg-surface gap-1', buttonProps.hideLabel && 'px-1')}
-      onClick={startAddInboxFlow}
+      onClick={() => addInbox()}
     >
-      <TrayIcon />
+      <TrayIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
       <Show when={!buttonProps.hideLabel}>
-        <span class="truncate">Connect another email</span>
+        <span class="truncate">{t('viewMenus.connectAnotherAccount')}</span>
       </Show>
     </Button>
   );
@@ -117,7 +117,7 @@ export function InboxSelector() {
             when={showConnectButton()}
             fallback={<Selector hideLabel={isCollapsed()} />}
           >
-            <ConnectAnotherEmail hideLabel={isCollapsed()} />
+            <ConnectAnotherAccount hideLabel={isCollapsed()} />
           </Show>
         )}
       </CollapsibleHeaderItem>

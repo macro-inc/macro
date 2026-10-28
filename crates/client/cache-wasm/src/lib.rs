@@ -16,7 +16,12 @@
 //! internally.
 
 #[cfg(target_arch = "wasm32")]
+mod query_telemetry;
+#[cfg(target_arch = "wasm32")]
 mod shell;
+
+#[cfg(target_arch = "wasm32")]
+pub use query_telemetry::set_slow_query_callback;
 
 #[cfg(target_arch = "wasm32")]
 pub use shell::*;

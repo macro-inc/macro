@@ -1,14 +1,13 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isPlatform } from '@core/util/platform';
 import { type Accessor, Show } from 'solid-js';
 import { useMaybeNativeCallState } from '../native-call-state';
+import { setNativeCallKitVideoOverlayMode } from '../use-callkit';
 import { CallControlsDefaultAndPanelRow } from './CallControlsDefaultAndPanelRow';
-import { CallControlsPanelSmallRow } from './CallControlsPanelSmallRow';
-
-export type CallControlsVariant = 'default' | 'panel' | 'panel-small';
 
 export type CallControlsProps = {
   /** Leave / hang up — parent supplies tab switch, `leaveCall()`, etc. */
   onLeave: () => void | Promise<void>;
-  variant?: CallControlsVariant;
   when?: boolean | Accessor<boolean>;
 };
 
@@ -17,22 +16,35 @@ function readWhen(when: boolean | Accessor<boolean> | undefined): boolean {
   return typeof when === 'function' ? when() : when;
 }
 
-/**
- * Mic / camera / screen / leave wired to `useCallContext()`. Single place for
- * control markup so the Call overlay and the sidebar InCall panel stay in
- * sync. The slim `panel-small` variant renders a single gear-menu instead of
- * the inline pill row.
- */
+/** Mic / camera / screen / leave wired to `useCallContext()`. */
 export function CallControls(props: CallControlsProps) {
   const nativeCall = useMaybeNativeCallState();
 
   return (
-    <Show when={() => readWhen(props.when) && !nativeCall?.snapshot()}>
-      <Show
-        when={props.variant === 'panel-small'}
-        fallback={<CallControlsDefaultAndPanelRow onLeave={props.onLeave} />}
-      >
-        <CallControlsPanelSmallRow />
+    <Show when={readWhen(props.when)}>
+      <Show when={isPlatform('android') && nativeCall?.snapshot()}>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              fireAndForget(
+                setNativeCallKitVideoOverlayMode('expanded'),
+                'channel-call'
+              )
+            }
+          >
+            Open call controls
+          </button>
+          <button
+            type="button"
+            onClick={() => fireAndForget(props.onLeave(), 'channel-call')}
+          >
+            End call
+          </button>
+        </div>
+      </Show>
+      <Show when={!nativeCall?.snapshot()}>
+        <CallControlsDefaultAndPanelRow onLeave={props.onLeave} />
       </Show>
     </Show>
   );

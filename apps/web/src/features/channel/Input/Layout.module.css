@@ -1,0 +1,77 @@
+@layer components {
+  .layout {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    width: 100%;
+
+    /* Shared with the hidden compact-layout measurement copy. */
+    &[data-composer-compact='true'] {
+      grid-template-areas: 'left body right';
+      align-items: flex-end;
+      gap: 3.75px;
+      min-height: 48.75px;
+      padding: 7.5px;
+      --input-editor-padding: 4.6875px 3.75px;
+
+      /* On touch this row replaces the CollapsedInput pill, so it keeps the
+         pill's height, gutter, and gap (h-12.5, px-2, gap-1.5) rather than
+         growing when the editor takes over. The single line (with the
+         markdown theme's paragraph margins) is shorter than the row, so the
+         row centers it instead of padding around it. */
+      :global(html[data-touch-device='true']) & {
+        align-items: center;
+        gap: calc(var(--spacing) * 1.5);
+        min-height: calc(var(--spacing) * 12.5);
+        padding: 0 calc(var(--spacing) * 2);
+        --input-editor-padding: 0 calc(var(--spacing) * 1.5);
+      }
+    }
+
+    &[data-composer-compact='false'] {
+      grid-template-areas:
+        'body body body'
+        'left . right';
+      align-items: center;
+
+      :global(html:not([data-touch-device='true'])) & {
+        row-gap: 3.75px;
+        padding: 7.5px;
+        --input-editor-padding: 4.6875px 9.375px;
+      }
+
+      :global(html[data-touch-device='true']) & {
+        padding-bottom: calc(var(--spacing) * 2);
+        --input-editor-padding: 0.5rem 0.75rem;
+
+        @container (width >= 40rem) {
+          --input-editor-padding: 0.5rem 0.75rem 1rem;
+        }
+
+        > [data-input-actions-left],
+        > [data-input-actions-right] {
+          height: calc(var(--spacing) * 8);
+        }
+
+        > [data-input-actions-left] {
+          padding-left: calc(var(--spacing) * 2);
+        }
+
+        > [data-input-actions-right] {
+          padding-right: calc(var(--spacing) * 2);
+        }
+      }
+    }
+  }
+
+  .body {
+    grid-area: body;
+  }
+
+  .actionsLeft {
+    grid-area: left;
+  }
+
+  .actionsRight {
+    grid-area: right;
+  }
+}

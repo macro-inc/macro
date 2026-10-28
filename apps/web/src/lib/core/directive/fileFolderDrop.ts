@@ -24,9 +24,12 @@ declare module 'solid-js' {
 }
 
 // Helper to convert File to FileSystemFileEntry for HTML-extracted images if webkitGetAsEntry fails
-// We only need to shim the file() method
+// Shim file() plus the name that drop handlers use to classify media
 function fileToFileSystemFileEntry(file: File): FileSystemFileEntry {
   return {
+    name: file.name,
+    isFile: true,
+    isDirectory: false,
     file: (successCallback, _errorCallback) => {
       return successCallback(file);
     },

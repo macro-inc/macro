@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupChatSoupPropertiesFieldAllOfTwoDeletedAt } from './soupChatSoupPropertiesFieldAllOfTwoDeletedAt';
+import type { SoupChatSoupPropertiesFieldAllOfTwoModel } from './soupChatSoupPropertiesFieldAllOfTwoModel';
 import type { SoupChatSoupPropertiesFieldAllOfTwoProjectId } from './soupChatSoupPropertiesFieldAllOfTwoProjectId';
 import type { SoupChatSoupPropertiesFieldAllOfTwoViewedAt } from './soupChatSoupPropertiesFieldAllOfTwoViewedAt';
 
@@ -17,6 +18,8 @@ export type SoupChatSoupPropertiesFieldAllOfTwo = {
   id: string;
   /** Whether the chat is persistent or not */
   isPersistent: boolean;
+  /** The last model selected for a sent message (`provider/model` id). */
+  model?: SoupChatSoupPropertiesFieldAllOfTwoModel;
   /** The name of the chat */
   name: string;
   /** Who the chat belongs to */

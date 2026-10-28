@@ -17,6 +17,11 @@ export class Thread {
     readonly rootId: string,
   ) {}
 
+  /** Serialize the thread identity without its authenticated client. */
+  toJSON(): { channelId: string; rootId: string } {
+    return { channelId: this.channelId, rootId: this.rootId };
+  }
+
   /** The channel this thread is in. */
   channel(): Channel {
     return Channel.byId(this.client, this.channelId);
@@ -29,13 +34,17 @@ export class Thread {
 
   /** List the replies in this thread, oldest first. */
   async replies(): Promise<Message[]> {
-    const replies = unwrap(
-      await this.client.storage.getThreadReplies({
-        path: { channel_id: this.channelId, message_id: this.rootId },
+    const { replies } = unwrap(
+      await this.client.storage.entityMessageGetThread({
+        path: {
+          parent_type: 'channel',
+          parent_id: this.channelId,
+          id: this.rootId,
+        },
       }),
     );
     return replies.map((reply) =>
-      Message.fromReply(this.client, this.channelId, reply),
+      Message.from(this.client, this.channelId, reply),
     );
   }
 

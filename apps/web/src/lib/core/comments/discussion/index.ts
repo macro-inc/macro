@@ -1,8 +1,12 @@
 export { DiscussionProvider, useDiscussion } from './context';
-export { Discussion, DiscussionThreadView } from './Discussion';
+export {
+  Discussion,
+  DiscussionComposer,
+  DiscussionThreadView,
+} from './Discussion';
 export { DiscussionInput } from './DiscussionInput';
 export {
-  discussionCommentToApiChannelMessage,
+  discussionCommentToChannelMessage,
   discussionCommentToMessageData,
 } from './messageAdapter';
 export type {

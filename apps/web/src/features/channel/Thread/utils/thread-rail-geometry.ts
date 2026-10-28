@@ -8,14 +8,18 @@ export const innerRailTop =
   'calc(var(--regular-message-padding-t) + var(--thread-padding-y))';
 
 export const threadConnectorStyle = {
-  left: 'var(--left-of-connector)',
+  left: 'var(--left-of-channel-rail)',
   top: 'calc(var(--regular-message-padding-t) + var(--thread-padding-y))',
-  width: 'calc(var(--thread-shift) - var(--user-icon-width) / 2 + .5rem)',
+  width:
+    'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
 } as const;
 
-/** Left offset for the reply-input wrapper, placing it icon-width/2 right of the inner rail. */
+/** Default composer alignment for standalone thread renderers. */
 export const replyInputOffsetX =
   'calc(var(--user-icon-width) + var(--message-padding-x))';
+
+/** Channel composers replace the reply action, so they share its anchor. */
+export const channelReplyInputOffsetX = 'var(--message-padding-x)';
 
 export function getInnerRailBottom(isReplying: boolean): string {
   if (!isReplying) return 'calc(var(--user-icon-width) / 2 + 0.5rem)';

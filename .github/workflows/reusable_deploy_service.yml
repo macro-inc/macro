@@ -55,6 +55,11 @@ jobs:
       run: |
         set -euo pipefail
         cfg=.github/services-config.json
+        if jq -e --arg service "$SERVICE" '.services[$service].bootstrap_pending != null' "$cfg" > /dev/null; then
+          reason=$(jq -r --arg service "$SERVICE" '.services[$service].bootstrap_pending' "$cfg")
+          echo "::error::Cannot deploy $SERVICE before bootstrap: $reason"
+          exit 1
+        fi
         has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' "$cfg")
         has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' "$cfg")
         echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
@@ -85,7 +90,9 @@ jobs:
       run: |
         set -euo pipefail
         mkdir -p prebuilt
-        nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
+        # DSS bundles two cargo packages; the hand-written nix.conf leaves
+        # max-jobs at 1, which would build them one after the other.
+        nix build --max-jobs auto --print-build-logs ".#deploy-service-binaries-${SERVICE}"
         cp -r result/bin/* prebuilt/
         mkdir -p prebuilt/nix-store
         while IFS= read -r store_path; do

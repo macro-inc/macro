@@ -7,16 +7,26 @@
 //! # Architecture
 //!
 //! - **domain**: Contains domain models, ports (traits), and the service implementation
-//! - **inbound**: Contains adapters for incoming requests (Axum handlers)
+//! - **inbound**: Contains adapters for incoming requests (Axum handlers, Kafka)
 //! - **outbound**: Contains adapters for external dependencies (PostgreSQL)
 
 /// The domain module contains the domain logic for CRM
 pub mod domain;
 
 /// The inbound module contains the inbound adapters for CRM
-#[cfg(any(feature = "inbound", feature = "ai_tools", all(test, feature = "axum")))]
+#[cfg(any(
+    feature = "inbound",
+    feature = "ai_tools",
+    feature = "call_link",
+    all(test, feature = "axum")
+))]
 pub mod inbound;
 
 /// The outbound module contains the outbound adapters for CRM
-#[cfg(any(feature = "outbound", feature = "search"))]
+#[cfg(any(
+    feature = "outbound",
+    feature = "search",
+    feature = "lookup",
+    feature = "call_link"
+))]
 pub mod outbound;

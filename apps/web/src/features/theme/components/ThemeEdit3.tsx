@@ -1,11 +1,11 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { toast } from '@core/component/Toast/Toast';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
 import { Button, Layer } from '@ui';
 import { createEffect, createSignal, onMount } from 'solid-js';
 import { DEFAULT_THEMES } from '../constants';
@@ -203,7 +203,7 @@ export default function ThemeEdit3() {
             </Select.Trigger>
             <Select.Portal>
               <Layer depth={3}>
-                <Select.Content class="z-action-menu min-w-60 rounded-md border border-edge-muted bg-surface p-1 shadow-lg">
+                <Select.Content class="menu-surface z-action-menu min-w-60 p-1">
                   <Select.Listbox />
                 </Select.Content>
               </Layer>
@@ -218,7 +218,7 @@ export default function ThemeEdit3() {
             class="h-9 min-w-48 flex-1 rounded-md border border-edge-muted bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
           />
 
-          <Button variant="base" size="md" onClick={copyTheme}>
+          <Button variant="secondary" size="md" onClick={copyTheme}>
             <ClipboardIcon class="size-4" />
             Copy full theme JSON
           </Button>

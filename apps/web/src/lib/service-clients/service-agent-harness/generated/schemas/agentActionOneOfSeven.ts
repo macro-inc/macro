@@ -4,11 +4,12 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentActionOneOfSevenType } from './agentActionOneOfSevenType';
+
+import type { AgentActionOneOfSevenAllOf } from './agentActionOneOfSevenAllOf';
+import type { AgentSetConfigOptionAction } from './agentSetConfigOptionAction';
 
 /**
- * Compact the agent's current context.
+ * Change an agent-advertised select-style session setting.
  */
-export type AgentActionOneOfSeven = {
-  type: AgentActionOneOfSevenType;
-};
+export type AgentActionOneOfSeven = AgentSetConfigOptionAction &
+  AgentActionOneOfSevenAllOf;

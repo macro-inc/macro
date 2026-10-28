@@ -1,0 +1,24 @@
+<svg width="384" height="258" viewBox="0 0 384 258" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="tasks-team-sales-pb" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="#818181"/>
+<stop offset="0.528846" stop-color="#2B2B2B"/>
+<stop offset="1" stop-color="#414141"/>
+</linearGradient>
+<linearGradient id="tasks-team-sales-pbw" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="#6D6D6D"/>
+<stop offset="0.528846" stop-color="#1D1C1C"/>
+<stop offset="1" stop-color="#7C4B0D"/>
+</linearGradient>
+<linearGradient id="tasks-team-sales-pbg" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="#6D6D6D"/>
+<stop offset="0.528846" stop-color="#1D1C1C"/>
+<stop offset="1" stop-color="#1E6B2E"/>
+</linearGradient>
+<linearGradient id="tasks-team-sales-sheen" x1="0.5" y1="0" x2="0.5" y2="1">
+<stop stop-color="white"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+</defs>
+<rect x="0" y="0" width="384" height="258" rx="16" fill="url(#tasks-team-sales-pb)"/><rect x="0.5" y="0.5" width="383" height="257" rx="15.5" fill="#16191F"/><rect opacity="0.15" x="0.5" y="0.5" width="383" height="257" rx="15.5" fill="url(#tasks-team-sales-sheen)" fill-opacity="0.3"/><g stroke="#FF8F00" stroke-width="1.15" stroke-linecap="round" fill="none"><rect x="18" y="22.2" width="6.44" height="6.44" rx="1.6"/><path d="M18.8 29.68L21.08 32.76L25.0 26.88"/><path d="M26.68 25.2H32.7"/><path d="M26.68 31.08H32.7"/></g><text x="40" y="33" font-family="Inter" font-size="15" fill="white" font-weight="600" style="white-space: pre">Sales</text><rect x="299.95" y="19" width="66.05000000000001" height="20" rx="10.0" fill="#20242C"/><text x="308.95" y="32.6" font-family="Inter" font-size="10" fill="#8B8B8B" font-weight="500" style="white-space: pre">This week</text><line x1="1" y1="50" x2="383" y2="50" stroke="#353535" stroke-width="0.5"/><rect x="18.9" y="65.9" width="12.2" height="12.2" rx="4.06" stroke="#8B8B8B" stroke-width="1.8" fill="none"/><text x="40" y="76" font-family="Inter" font-size="13" fill="white" style="white-space: pre">Follow up with Northwind</text><rect x="306.0" y="63" width="60.0" height="20" rx="10.0" fill="#20242C"/><circle cx="319.0" cy="73.0" r="4" fill="#FF8F00"/><text x="329.0" y="76.6" font-family="Inter" font-size="10" fill="white" font-weight="500" style="white-space: pre">Today</text><rect x="40" y="86" width="248.0" height="4" rx="2.0" fill="#353535"/><rect x="40" y="86" width="124.0" height="4" rx="2.0" fill="#FF8F00"/><rect x="18" y="111" width="14" height="14" rx="4.06" fill="#15DA43"/><path d="M21.64 118.42L24.16 120.94L28.5 115.34" stroke="#060709" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/><text x="40" y="122" font-family="Inter" font-size="13" fill="#8B8B8B" text-decoration="line-through" style="white-space: pre">Send the security review</text><rect x="311.45" y="109" width="54.55" height="20" rx="10.0" fill="#20242C"/><circle cx="324.45" cy="119.0" r="4" fill="#15DA43"/><text x="334.45" y="122.6" font-family="Inter" font-size="10" fill="white" font-weight="500" style="white-space: pre">Done</text><rect x="40" y="132" width="253.45" height="4" rx="2.0" fill="#353535"/><rect x="40" y="132" width="253.45" height="4" rx="2.0" fill="#15DA43"/><rect x="18.9" y="157.9" width="12.2" height="12.2" rx="4.06" stroke="#8B8B8B" stroke-width="1.8" fill="none"/><text x="40" y="168" font-family="Inter" font-size="13" fill="white" style="white-space: pre">Renewal: Acme, Q3</text><rect x="282.9" y="155" width="83.10000000000001" height="20" rx="10.0" fill="#20242C"/><circle cx="295.9" cy="165.0" r="4" fill="#FFAE00"/><text x="305.9" y="168.6" font-family="Inter" font-size="10" fill="white" font-weight="500" style="white-space: pre">In Progress</text><rect x="40" y="178" width="224.89999999999998" height="4" rx="2.0" fill="#353535"/><rect x="40" y="178" width="56.224999999999994" height="4" rx="2.0" fill="#FF8F00"/><line x1="1" y1="200" x2="383" y2="200" stroke="#353535" stroke-width="0.5"/><path d="M23.5 216.5L25.37 220.13L29.0 222L25.37 223.87L23.5 227.5L21.63 223.87L18.0 222L21.63 220.13Z" fill="#FF8F00"/><text x="36" y="226" font-family="Inter" font-size="11" fill="#8B8B8B" style="white-space: pre">@Macro drafted 4 follow-ups from your calls</text>
+</svg>

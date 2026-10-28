@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n               SELECT 1 FROM reminder WHERE id = $1 AND user_id = $2\n           ) AS \"owns!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owns!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ed9cce412861d253700f4104a1edeb21f5a7fb97646af2451e799643fe419f5a"
+}

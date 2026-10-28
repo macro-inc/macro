@@ -92,6 +92,29 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       expect(formatDate(oldDate)).toBe('06/01/25');
     });
 
+    it('shows the date for last week even before that time of day has passed', () => {
+      vi.setSystemTime(new Date('2026-10-01T17:08:00Z'));
+
+      expect(
+        formatDate('2026-09-24T20:37:53Z', {
+          timeZone: NEW_YORK_TZ,
+          showTime: true,
+        })
+      ).toBe('09/24/26 at 4:37 PM');
+    });
+
+    it('uses the display timezone for the seven-calendar-day cutoff', () => {
+      vi.setSystemTime(new Date('2026-10-01T02:00:00Z'));
+      const lastWeek = '2026-09-24T04:00:00Z';
+
+      expect(formatDate(lastWeek, { showTime: true })).toBe(
+        '09/24/26 at 4:00 AM'
+      );
+      expect(
+        formatDate(lastWeek, { timeZone: NEW_YORK_TZ, showTime: true })
+      ).toBe('Thursday at 12:00 AM');
+    });
+
     it('should handle timezone-aware day boundaries', () => {
       // Reference: June 14, 2025 at 2:15 PM UTC
       // Test timestamp: June 14 at 11:30 PM Eastern (3:30 AM UTC June 15)

@@ -1,15 +1,23 @@
 import type {
   CreateCrmCompanyRequest,
+  CrmStagesResponse,
   CrmTeamSettingsResponse,
+  ReplaceCrmStagesRequest,
   UpdateCrmTeamSettingsRequest,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Company } from './company';
 import { Contact } from './contact';
+import { PipelineNamespace } from './pipelines';
 
 export class CrmNamespace {
-  constructor(private readonly client: MacroClient) {}
+  /** Pipelines, their records and sharing settings. */
+  readonly pipelines: PipelineNamespace;
+
+  constructor(private readonly client: MacroClient) {
+    this.pipelines = new PipelineNamespace(client);
+  }
 
   /** A handle to a CRM company by id. */
   companyById(id: string): Company {
@@ -29,6 +37,25 @@ export class CrmNamespace {
       }),
     );
     return contact ? Contact.from(this.client, contact) : undefined;
+  }
+
+  /**
+   * Search the caller's current team's CRM contacts whose email or name
+   * contains `query` (case-insensitive), most recently interacted first.
+   * An empty query lists the most recent contacts.
+   *
+   * @param opts.limit Maximum contacts to return (1-500, default 20).
+   */
+  async searchContacts(
+    query: string,
+    opts: { limit?: number } = {},
+  ): Promise<Contact[]> {
+    const { contacts } = unwrap(
+      await this.client.storage.searchContacts({
+        query: { query, limit: opts.limit },
+      }),
+    );
+    return contacts.map((contact) => Contact.from(this.client, contact));
   }
 
   /** Create a CRM company for the caller's current team. */
@@ -51,6 +78,16 @@ export class CrmNamespace {
     return unwrap(
       await this.client.storage.putCrmTeamSettings({ body: settings }),
     );
+  }
+
+  /** Replace the caller's current team's deal stages, in pipeline order. */
+  async setStages(stages: ReplaceCrmStagesRequest): Promise<CrmStagesResponse> {
+    return unwrap(await this.client.storage.putCrmTeamStages({ body: stages }));
+  }
+
+  /** Reset the caller's current team's deal stages to the defaults. */
+  async resetStages(): Promise<void> {
+    unwrap(await this.client.storage.resetCrmTeamStages());
   }
 
   /** Search CRM companies by name/domain, most relevant first, auto-paginated. */

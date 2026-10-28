@@ -69,7 +69,10 @@ pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
             entity_type,
         } => {
             let (entity_type_filter, entity_type_bind) = match entity_type {
-                Some(et) => ("AND ep.entity_type = $10".to_string(), Some(et.clone())),
+                Some(et) => (
+                    "AND ep.entity_type = $10::property_entity_type".to_string(),
+                    Some(et.clone()),
+                ),
                 None => (String::new(), None),
             };
 

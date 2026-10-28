@@ -48,7 +48,8 @@ pub(in crate::api::search) async fn enrich_call_records(
         let mut seen: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
         metadata_rows
             .iter()
-            .filter_map(|r| seen.insert(r.channel_id).then_some(r.channel_id))
+            .filter_map(|r| r.channel_id)
+            .filter(|id| seen.insert(*id))
             .collect()
     };
     let channel_names_by_id =
@@ -63,7 +64,9 @@ pub(in crate::api::search) async fn enrich_call_records(
         .map(|row| {
             let status = parse_call_status(&row.status)?;
             custom_name_by_id.insert(row.call_id, row.custom_name);
-            let channel_name = channel_names_by_id.get(&row.channel_id).cloned();
+            let channel_name = row
+                .channel_id
+                .and_then(|id| channel_names_by_id.get(&id).cloned());
             Ok((
                 row.call_id,
                 CallRecordMetadata {
@@ -81,7 +84,7 @@ pub(in crate::api::search) async fn enrich_call_records(
         .collect::<Result<_, SearchError>>()?;
 
     let mut hits_by_call_id: IndexMap<Uuid, Vec<CallRecordSearchResult>> = IndexMap::new();
-    let mut call_context: std::collections::HashMap<Uuid, (Uuid, Vec<String>)> =
+    let mut call_context: std::collections::HashMap<Uuid, (Option<Uuid>, Vec<String>)> =
         std::collections::HashMap::new();
 
     for hit in results {

@@ -8,6 +8,7 @@ use std::future::Future;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_mutation::EntityMutationErrorCode;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::ContentType;
 use model::folder::{UploadFolderRequest, UploadFolderResponseData, UploadFolderWithIdsResponse};
@@ -18,18 +19,21 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewV2,
     ProjectWithUploadRequest,
 };
+use model_entity::Entity;
+use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
     UploadExtractFolderResponseData,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
 use super::models::{
     CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, MutatedProject, ProjectError,
-    PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
+    ProjectTree, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 
 /// Repository for reading project data from persistent storage.
@@ -59,6 +63,15 @@ pub trait ProjectRepo: Send + Sync + 'static {
         user_id: &str,
     ) -> impl Future<Output = Result<Vec<Project>, Self::Err>> + Send;
 
+    /// List non-deleted projects the user can access via `entity_access`.
+    ///
+    /// Includes pending uploads. Soft-deleted projects are excluded. Order is
+    /// newest `updatedAt` first.
+    fn get_accessible_projects_for_user(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Project>, Self::Err>> + Send;
+
     /// List non-deleted, pending root projects owned by the user.
     fn get_pending_root_projects(
         &self,
@@ -71,11 +84,28 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<Vec<Item>, Self::Err>> + Send;
 
+    /// Get the live folders below a project and the live documents and chats
+    /// filed in it or them. Returns at most `limit` folders and at most
+    /// `limit` items, so a caller detects an oversized tree by asking for
+    /// one more than it accepts.
+    fn get_project_tree(
+        &self,
+        project_id: &str,
+        limit: usize,
+    ) -> impl Future<Output = Result<ProjectTree, Self::Err>> + Send;
+
     /// Get the project's share permission configuration.
     fn get_project_share_permission(
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<SharePermissionV2, Self::Err>> + Send;
+
+    /// Load the canonical team-share facts (persisted owner, owner's team,
+    /// current explicit grant, revision) the owner policy authorizes against.
+    fn get_team_share_facts(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<TeamShareFacts, ProjectError>> + Send;
 
     /// Get previews for the supplied project identifiers.
     fn batch_get_project_preview(
@@ -83,11 +113,12 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_ids: &[String],
     ) -> impl Future<Output = Result<Vec<ProjectPreviewV2>, Self::Err>> + Send;
 
-    /// Get the link-share preference of the user's team, or `None` when the
-    /// user is not on a team.
+    /// Get the link-share preference of the team `owner` resolves to, per
+    /// [`model_owner::team::owner_team`]. Bots resolve through their team or
+    /// owning user; a teamless owner has no team default.
     fn get_team_default_link_share(
         &self,
-        user_id: &str,
+        owner: &Owner,
     ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
 
     /// Atomically create a project and its permission, history, and owner-access rows.
@@ -100,7 +131,7 @@ pub trait ProjectRepo: Send + Sync + 'static {
     fn edit_project(
         &self,
         args: EditProjectArgs,
-    ) -> impl Future<Output = Result<MutatedProject, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<MutatedProject, ProjectError>> + Send;
 
     /// Return whether the proposed parent is inside the project's subtree.
     fn is_project_recursively_nested(
@@ -229,6 +260,40 @@ pub trait ProjectSearchIndexer: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// What a folder duplication needs from other domains, acting as the user who
+/// duplicates the folder.
+///
+/// The composition root implements it over `entity_access` and the owning
+/// domains' duplicate and move capabilities, so the projects domain never
+/// depends on the documents or chat crates.
+pub trait ProjectContentCopier: Send + Sync {
+    /// The user's view receipt for `entity`, or `None` when they cannot view
+    /// it or it no longer exists.
+    fn view_receipt(
+        &self,
+        entity: &Entity<'static>,
+    ) -> impl Future<
+        Output = Result<Option<EntityAccessReceipt<ViewAccessLevel>>, EntityMutationErrorCode>,
+    > + Send;
+
+    /// Whether the user may add items to the project.
+    fn can_add_to_project(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<bool, EntityMutationErrorCode>> + Send;
+
+    /// Duplicate the document or chat `receipt` covers, as the user, and file
+    /// the copy in `project_id`, returning the copy. `name` is the source's
+    /// name, kept on the copy where its domain allows a chosen name. On
+    /// failure nothing this call created remains.
+    fn copy_into_project(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        name: String,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Entity<'static>, EntityMutationErrorCode>> + Send;
+}
+
 /// Unwired upload-URL port for hosts that expose project operations without
 /// upload flows (e.g. AI tools). Upload methods fail loudly if reached.
 #[derive(Clone, Copy, Debug, Default)]
@@ -331,6 +396,14 @@ pub trait ProjectService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Project>, ProjectError>> + Send;
 
+    /// List non-deleted projects the user can access via `entity_access`.
+    ///
+    /// Includes pending uploads so in-progress folder trees appear in Drive.
+    fn list_accessible_projects(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<Project>, ProjectError>> + Send;
+
     /// List pending root projects owned by the user.
     fn list_pending_projects(
         &self,
@@ -349,6 +422,15 @@ pub trait ProjectService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ItemWithUserAccessLevel>, ProjectError>> + Send;
 
+    /// Get the live folders, documents, and chats below a project, at most
+    /// `limit` folders and `limit` items (see [`ProjectRepo::get_project_tree`]).
+    /// The receipt covers the project; callers check each entry themselves.
+    fn get_project_tree(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        limit: usize,
+    ) -> impl Future<Output = Result<ProjectTree, ProjectError>> + Send;
+
     /// Get project share permissions for an owner.
     fn get_project_permissions(
         &self,
@@ -361,10 +443,11 @@ pub trait ProjectService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<AccessLevel, ProjectError>> + Send;
 
-    /// Create a project, optionally beneath an authorized parent.
+    /// Create a project owned by `principal`, optionally beneath an authorized
+    /// parent.
     fn create_project(
         &self,
-        actor: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         args: CreateProjectRequest,
     ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
 

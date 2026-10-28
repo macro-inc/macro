@@ -13,7 +13,7 @@ use lambda_runtime::{
 };
 use macro_db_client::projects::ProjectToDelete;
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 
 #[tracing::instrument(skip(ctx, _event), err)]
@@ -76,7 +76,7 @@ async fn publish_project_purge_events<B: MacroEventBroker>(
         .iter()
         .map(|project| {
             let project_id = project.project_id.clone();
-            let owner: MacroUserIdStr<'static> = MacroUserIdStr::try_from(project.user_id.clone())
+            let owner = Owner::from_principal_str(&project.user_id)
                 .with_context(|| format!("invalid owner for project {}", project.project_id))?;
 
             Ok(ProjectMacroEvent::permanently_deleted(

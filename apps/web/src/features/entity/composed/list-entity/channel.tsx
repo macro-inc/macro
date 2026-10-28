@@ -5,6 +5,8 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import { useActiveCallsQuery } from '@queries/call/call';
 import { useJoinChannelMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
@@ -29,7 +31,7 @@ export function ChannelJoinButton(props: {
   return (
     <Button
       type="button"
-      variant="active"
+      variant="primary"
       size="sm"
       class={props.class ?? 'shrink-0'}
       disabled={joinMutation.isPending}
@@ -41,6 +43,22 @@ export function ChannelJoinButton(props: {
     >
       {joinMutation.isPending ? 'Joining…' : 'Join'}
     </Button>
+  );
+}
+
+/**
+ * Accent phone icon shown on a channel row while a call is live in it. Reads
+ * the shared all-active-calls query, so every row dedupes into one request.
+ */
+export function ChannelActiveCallBadge(props: { channelId: string }) {
+  const activeCallsQuery = useActiveCallsQuery();
+  const hasActiveCall = () =>
+    (activeCallsQuery.data ?? []).some((c) => c.channelId === props.channelId);
+
+  return (
+    <Show when={hasActiveCall()}>
+      <PhoneIcon class="size-4 shrink-0 text-accent fill-accent" />
+    </Show>
   );
 }
 
@@ -59,6 +77,7 @@ function ChannelMessage(props: {
           fallback={<span class="italic">Attached Items</span>}
         >
           <StaticMarkdown
+            inert
             theme={singleLineMarkdownTheme}
             markdown={props.message.content}
             singleLine
@@ -143,6 +162,7 @@ export function ChannelLatestMessageNarrowBody(props: {
           <DisplayName id={props.message.senderId} format="firstName" />:{' '}
         </span>
         <StaticMarkdown
+          inert
           theme={twoLineClampMarkdownTheme}
           markdown={props.message.content.trim()}
           singleLine

@@ -21,7 +21,9 @@ use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::links::resync::ResyncResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
-use crate::api::email::threads::archived::ArchiveThreadRequest;
+use crate::api::email::threads::archived::{
+    ArchiveThreadRequest, ArchiveThreadsRequest, ArchiveThreadsResponse,
+};
 use crate::api::{email, health};
 use ::email::inbound;
 use ::email::inbound::axum::api_types::{
@@ -61,6 +63,9 @@ use utoipa::OpenApi;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        crate::api::calendar_invitations::handler,
+        crate::api::calendar_invitations::copy_handler,
+        crate::api::calendar_event_forward::handler,
         health::health_handler,
         email::attachments::get::handler,
         email::attachments::get_document_id::handler,
@@ -70,11 +75,16 @@ use utoipa::OpenApi;
         email::backfill::get::list_handler,
         email::init::handler,
         inbound::axum::draft_router::create_draft_handler,
+        inbound::axum::draft_router::resolve_message_operation_handler,
+        inbound::axum::draft_router::message_operation_status_handler,
         email::drafts::delete::handler,
         email::drafts::scheduled::list::handler,
         email::drafts::scheduled::remove::handler,
         email::drafts::scheduled::upsert::handler,
         email::drafts::add_attachment::handler,
+        email::drafts::complete_attachment::handler,
+        email::drafts::transfer::handler,
+        email::drafts::transfer::recover,
         email::drafts::remove_attachment::handler,
         email::drafts::add_forwarded_attachment::handler,
         email::drafts::remove_forwarded_attachment::handler,
@@ -85,7 +95,10 @@ use utoipa::OpenApi;
         email::threads::seen::seen_handler,
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
+        email::threads::archived::archived_batch_handler,
         inbound::axum::thread_labels_router::update_thread_labels_handler,
+        inbound::axum::thread_labels_router::update_thread_state_handler,
+        inbound::axum::thread_labels_router::thread_operations_handler,
         inbound::axum::previews_router::cursor_handler,
         inbound::axum::get_thread_router::get_thread_handler,
         inbound::axum::thread_project_router::update_thread_project_handler,
@@ -106,11 +119,7 @@ use utoipa::OpenApi;
         email::contacts::list_blocked::handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
-        calendar_events::inbound::mutation_router::list_calendars,
-        calendar_events::inbound::mutation_router::create_calendar_event,
-        calendar_events::inbound::mutation_router::update_calendar_event,
-        calendar_events::inbound::mutation_router::delete_calendar_event,
-        calendar_events::inbound::mutation_router::rsvp_calendar_event,
+        email::settings::operations::handler,
     ),
     components(
         schemas(
@@ -148,6 +157,8 @@ use utoipa::OpenApi;
             ParsedMessage,
             // Thread types
             ArchiveThreadRequest,
+            ArchiveThreadsRequest,
+            ArchiveThreadsResponse,
             UpdateThreadLabelRequest,
             UpdateThreadLabelsResponse,
             UpdateThreadProjectRequest,
@@ -192,26 +203,7 @@ use utoipa::OpenApi;
             service::thread::Thread,
             service::message::Message,
             PatchSettingsRequest,
-            PatchSettingsResponse,
-            // Calendar mutation types
-            calendar_events::inbound::mutation_router::CreateCalendarEventRequest,
-            calendar_events::inbound::mutation_router::ListCalendarsResponse,
-            calendar_events::domain::models::VisibleCalendar,
-            calendar_events::inbound::mutation_router::UpdateCalendarEventRequest,
-            calendar_events::inbound::mutation_router::RsvpCalendarEventRequest,
-            calendar_events::inbound::mutation_router::CalendarAttendeeInputBody,
-            calendar_events::inbound::mutation_router::CalendarMutationApiError,
-            calendar_events::inbound::mutation_router::CalendarMutationErrorCode,
-            calendar_events::inbound::mutation_router::CalendarDeletionScopeParam,
-            calendar_events::inbound::mutation_router::CalendarUpdateScopeParam,
-            calendar_events::domain::models::CalendarEvent,
-            calendar_events::domain::models::CalendarAttendee,
-            calendar_events::domain::models::AttendeeResponseStatus,
-            calendar_events::domain::models::EventTime,
-            calendar_events::domain::models::EventStatus,
-            calendar_events::domain::models::EventVisibility,
-            calendar_events::domain::models::EventTransparency,
-            calendar_events::domain::models::RefreshCalendarEvent
+            PatchSettingsResponse
         ),
     ),
     tags(

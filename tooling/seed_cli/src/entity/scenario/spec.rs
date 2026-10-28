@@ -278,7 +278,7 @@ pub struct TaskSpec {
     /// Assignee user keys. Defaults to the owner.
     #[serde(default)]
     pub assignees: Vec<String>,
-    /// Grant the owner's team comment access, like the app's
+    /// Grant the owner's team edit access, like the app's
     /// share-with-team toggle on tasks.
     #[serde(default)]
     pub share_with_team: bool,
@@ -362,6 +362,11 @@ pub struct EmailThreadSpec {
     /// Plain-text body. Defaults to a short generated body.
     #[serde(default)]
     pub body: Option<String>,
+    /// Raw HTML body. Apply runs it through [`email_utils::sanitize_email_html`]
+    /// before writing `body_html_sanitized`. When omitted, the plaintext body
+    /// is wrapped in a paragraph and sanitized.
+    #[serde(default)]
+    pub body_html: Option<String>,
     /// Whether the thread is unread.
     #[serde(default)]
     pub unread: bool,

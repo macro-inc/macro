@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_credit_ledger (id, user_id, kind, delta_cents, stripe_reference, note)\n            VALUES ($1, $2, 'purchase', $3, $4, 'Credit pack purchase')\n            ON CONFLICT (stripe_reference) WHERE stripe_reference IS NOT NULL DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a3d091f2a54954ba8bb1aa6fcd500d7118220a8f0e0d971646892f627ef6c554"
+}

@@ -11,8 +11,13 @@ use crate::process::call::{process_call_record, process_remove_call_record};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CallIndexAction {
-    Upsert { call_id: Uuid },
-    Remove { call_id: Uuid, channel_id: Uuid },
+    Upsert {
+        call_id: Uuid,
+    },
+    Remove {
+        call_id: Uuid,
+        channel_id: Option<Uuid>,
+    },
     Ignore,
 }
 
@@ -63,6 +68,11 @@ pub(super) fn describe_call_event(event: &CallTopicEvent) -> CallEventDescriptio
             action: CallIndexAction::Ignore,
             call_id: metadata.call_id,
             event_type: "call.recording_ready",
+        },
+        CallTopicEvent::RecordImported(metadata) => CallEventDescription {
+            action: CallIndexAction::Ignore,
+            call_id: metadata.call_id,
+            event_type: "call.record_imported",
         },
     }
 }

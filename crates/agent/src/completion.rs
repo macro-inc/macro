@@ -2,10 +2,18 @@
 //!
 //! This is the non-streaming API layer: routing only resolves a model, and the
 //! actual prompting lives here.
+#[cfg(test)]
+mod test;
+
+use crate::model::metering::{MeteringContext, WireProtocol};
 use crate::model::router::{ModelRouter, RoutedModel};
+use crate::model::usage_amount::usage_amount;
+use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 use ai_usage::{UsageContext, UsageRecorder};
+use genai_telemetry::ContentPolicy;
 use rig_agent::agent::{AgentBuilder, PromptResponse};
 use rig_agent::completion::Prompt;
+use rig_core::OneOrMany;
 use rig_core::completion::CompletionModel;
 use rig_core::message::Message;
 
@@ -17,8 +25,10 @@ const ONE_SHOT_MAX_TOKENS: u64 = 16_000;
 /// summarization. `model` is anything stringifiable to an api id — an
 /// [`AgentModel`](crate::AgentModel) or a raw string from the frontend.
 ///
-/// Token usage is recorded against `ctx` via `recorder` once the completion
-/// returns. Recording is best-effort and never affects the result.
+/// Aggregate analytics are recorded against `ctx` on success. A recorder's optional
+/// tracking capability binds observational HTTP-attempt recording automatically.
+/// Activated traffic must run inside a [`MeteringContext::scope`]; each attempt is authorized
+/// and its evidence persisted before SDK or structured-output parsing.
 #[tracing::instrument(skip(model, system_prompt, user_message, recorder, ctx), err)]
 pub async fn complete<M: ToString>(
     model: M,
@@ -27,20 +37,55 @@ pub async fn complete<M: ToString>(
     recorder: &dyn UsageRecorder,
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
-    let model = model.to_string();
-    let response = match ModelRouter::shared()?.route_or_default(&model) {
-        RoutedModel::Anthropic(m) => {
-            prompt_once(m.completion(), system_prompt, user_message).await?
-        }
-        RoutedModel::OpenAiChatCompletions(m) => {
-            prompt_once(m.completion(), system_prompt, user_message).await?
-        }
-        RoutedModel::OpenAiResponses(m) => {
-            prompt_once(m.completion(), system_prompt, user_message).await?
-        }
-    };
-    record(recorder, ctx, model, &response);
-    Ok(response.output)
+    MeteringContext::require_usage(&ctx)?;
+    let metering = MeteringContext::for_operation(recorder, &ctx);
+    MeteringContext::carry(metering, async {
+        let model = model.to_string();
+        let routed = ModelRouter::shared()?.route_or_default(&model);
+        let telemetry = telemetry_for(&ctx, &routed);
+        let protocol = routed.protocol();
+        let response = match routed {
+            RoutedModel::Anthropic(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::Gemini(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiChatCompletions(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiResponses(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+        };
+        record(recorder, ctx, model, protocol, &response);
+        Ok(response.output)
+    })
+    .await
 }
 
 /// Send a system prompt + conversation history and return the model's text
@@ -55,48 +100,163 @@ pub async fn complete_with_history<M: ToString>(
     recorder: &dyn UsageRecorder,
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
-    let model = model.to_string();
-    let response = match ModelRouter::shared()?.route_or_default(&model) {
-        RoutedModel::Anthropic(m) => {
-            prompt_with_history(m.completion(), system_prompt, messages).await?
-        }
-        RoutedModel::OpenAiChatCompletions(m) => {
-            prompt_with_history(m.completion(), system_prompt, messages).await?
-        }
-        RoutedModel::OpenAiResponses(m) => {
-            prompt_with_history(m.completion(), system_prompt, messages).await?
-        }
-    };
-    record(recorder, ctx, model, &response);
-    Ok(response.output)
+    complete_with_history_and_params(model, system_prompt, messages, None, recorder, ctx).await
 }
 
-/// Record the usage of a one-shot completion.
+/// A metered one-shot completion with provider-specific request parameters.
+///
+/// Callers may supply structured-output or reasoning settings supported by the
+/// selected provider. Routing, financial authorization, tracing and usage
+/// recording follow the same path as [`complete_with_history`].
+#[tracing::instrument(skip_all, err)]
+pub async fn complete_with_history_and_params<M: ToString>(
+    model: M,
+    system_prompt: &str,
+    messages: Vec<Message>,
+    additional_params: Option<serde_json::Value>,
+    recorder: &dyn UsageRecorder,
+    ctx: UsageContext,
+) -> anyhow::Result<String> {
+    MeteringContext::require_usage(&ctx)?;
+    let metering = MeteringContext::for_operation(recorder, &ctx);
+    MeteringContext::carry(metering, async {
+        let model = model.to_string();
+        let routed = ModelRouter::shared()?.route_or_default(&model);
+        let telemetry = telemetry_for(&ctx, &routed);
+        let protocol = routed.protocol();
+        let response = match routed {
+            RoutedModel::Anthropic(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                    additional_params,
+                )
+                .await?
+            }
+            RoutedModel::Gemini(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                    additional_params,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiChatCompletions(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                    additional_params,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiResponses(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                    additional_params,
+                )
+                .await?
+            }
+        };
+        record(recorder, ctx, model, protocol, &response);
+        Ok(response.output)
+    })
+    .await
+}
+
+/// Ask `model` to answer `instruction` about one image and return its text.
+///
+/// `image_bytes` are the original file. They are downscaled to WebP before the
+/// model sees them. Token usage is recorded the same way as [`complete`].
+#[tracing::instrument(skip(model, system_prompt, image_bytes, recorder, ctx), err)]
+pub async fn complete_about_image<M: ToString>(
+    model: M,
+    system_prompt: &str,
+    instruction: &str,
+    image_bytes: Vec<u8>,
+    recorder: &dyn UsageRecorder,
+    ctx: UsageContext,
+) -> anyhow::Result<String> {
+    let message = image_user_message(instruction, image_bytes)?;
+    complete_with_history(model, system_prompt, vec![message], recorder, ctx).await
+}
+
+/// A user turn whose text is `instruction` and whose second block is the image.
+pub(crate) fn image_user_message(
+    instruction: &str,
+    image_bytes: Vec<u8>,
+) -> anyhow::Result<Message> {
+    use attachment::image::ImageData;
+    use rig_core::message::{ImageMediaType, UserContent};
+
+    let ImageData::Base64(image) = ImageData::try_from_bytes(image_bytes)? else {
+        anyhow::bail!("image bytes did not normalize to a base64 image");
+    };
+    let content = OneOrMany::many([
+        UserContent::text(instruction),
+        UserContent::image_base64(
+            image.base64_data().to_owned(),
+            Some(ImageMediaType::WEBP),
+            None,
+        ),
+    ])?;
+    Ok(Message::User { content })
+}
+
+/// GenAI telemetry for a one-shot completion: named after the feature making
+/// it, reporting the routed model, with no conversation (a one-shot has none).
+fn telemetry_for(ctx: &UsageContext, routed: &RoutedModel<'_>) -> GenAiContext {
+    let telemetry = GenAiContext::new(
+        None,
+        ctx.feature.to_string(),
+        ContentPolicy::from_env(),
+        true,
+    );
+    telemetry.set_model(routed.provider(), routed.model_name());
+    telemetry
+}
+
+/// Record aggregate analytics only, never financial evidence.
 fn record(
     recorder: &dyn UsageRecorder,
     ctx: UsageContext,
     model: String,
+    protocol: WireProtocol,
     response: &PromptResponse,
 ) {
-    recorder.record(ctx.into_event(
-        model,
-        response.usage.input_tokens,
-        response.usage.output_tokens,
-    ));
+    recorder.record(ctx.into_event(model, usage_amount(protocol, &response.usage)));
 }
 
 /// Build a toolless agent and prompt it with a single user message.
+///
+/// The model is a [`TracedModel`]; `telemetry` also drives the hook that
+/// records the model's output on the `chat` span.
 async fn prompt_once<M: CompletionModel + 'static>(
     completion_model: M,
     system_prompt: &str,
     user_message: &str,
+    telemetry: GenAiContext,
 ) -> anyhow::Result<PromptResponse> {
     let agent = AgentBuilder::new(completion_model)
+        .name(telemetry.agent_name())
+        .record_content_telemetry(false)
         .preamble(system_prompt)
         .max_tokens(ONE_SHOT_MAX_TOKENS)
         .build();
 
-    Ok(agent.prompt(user_message).extended_details().await?)
+    Ok(agent
+        .prompt(user_message)
+        .extended_details()
+        .add_hook(ChatSpanHook(telemetry))
+        .await?)
 }
 
 /// Build a toolless agent and prompt it with the last message of `messages`,
@@ -105,11 +265,18 @@ async fn prompt_with_history<M: CompletionModel + 'static>(
     completion_model: M,
     system_prompt: &str,
     messages: Vec<Message>,
+    telemetry: GenAiContext,
+    additional_params: Option<serde_json::Value>,
 ) -> anyhow::Result<PromptResponse> {
-    let agent = AgentBuilder::new(completion_model)
+    let mut builder = AgentBuilder::new(completion_model)
+        .name(telemetry.agent_name())
+        .record_content_telemetry(false)
         .preamble(system_prompt)
-        .max_tokens(ONE_SHOT_MAX_TOKENS)
-        .build();
+        .max_tokens(ONE_SHOT_MAX_TOKENS);
+    if let Some(params) = additional_params {
+        builder = builder.additional_params(params);
+    }
+    let agent = builder.build();
 
     let Some((prompt, history)) = messages.split_last() else {
         anyhow::bail!("messages must not be empty");
@@ -119,5 +286,6 @@ async fn prompt_with_history<M: CompletionModel + 'static>(
         .prompt(prompt.clone())
         .extended_details()
         .history(history.to_vec())
+        .add_hook(ChatSpanHook(telemetry))
         .await?)
 }

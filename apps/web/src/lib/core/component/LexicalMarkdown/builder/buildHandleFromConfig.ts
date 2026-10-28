@@ -1,10 +1,12 @@
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EditorType } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { SerializedEditorState } from 'lexical';
 import { createSignal } from 'solid-js';
 import { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import {
   actionsPlugin,
+  agentCommandsPlugin,
   awaitPlugin,
   codePlugin,
   createAccessoryStore,
@@ -16,6 +18,7 @@ import {
   filePastePlugin,
   horizontalRulePlugin,
   keyboardFocusPlugin,
+  listSwipeIndentPlugin,
   markdownPastePlugin,
   mediaPlugin,
   mentionsPlugin,
@@ -26,6 +29,7 @@ import {
   tabIndentationPlugin,
   tagsPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
 } from '../plugins';
 import { checkboxToTaskPlugin } from '../plugins/checkbox-to-task';
 import { normalizeEnterPlugin } from '../plugins/normalize-enter';
@@ -97,6 +101,16 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     config.type !== 'plain-text'
       ? createMenuOperations()
       : undefined;
+  // Agent commands (`/` menu) list the slash commands a connected coding
+  // agent advertises over ACP. They share the `/` trigger with the actions
+  // and skills menus, so they only activate when neither owns it.
+  const agentCommandsMenuOps =
+    config.agentCommands &&
+    !actionsMenuOps &&
+    !skillsMenuOps &&
+    config.type !== 'plain-text'
+      ? createMenuOperations()
+      : undefined;
 
   const accessoryStoreResult = config.code ? createAccessoryStore() : undefined;
   const accessoryStore = accessoryStoreResult?.[0];
@@ -116,6 +130,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       .state<string>(setMarkdownState, 'markdown');
   }
 
+  if (config.type !== 'plain-text' && !config.singleLine) {
+    plugins.use(trailingParagraphPlugin());
+  }
+
   // History
   if (config.history) {
     plugins.history(config.history.timeGap);
@@ -132,7 +150,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   }
 
   // Text paste handling
-  plugins.use(textPastePlugin());
+  plugins.use(textPastePlugin(config.resolveAppLink));
 
   // Markdown paste handling (rich & full editors only)
   if (config.type !== 'plain-text') {
@@ -142,6 +160,11 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   // Tab indentation (unless custom handler)
   if (!config.handlers.onTab) {
     plugins.use(tabIndentationPlugin());
+  }
+
+  // Touch swipe indent/outdent for list items (Apple Notes-style).
+  if (config.type !== 'plain-text' && !config.singleLine) {
+    plugins.use(listSwipeIndentPlugin(isInteractable));
   }
 
   // Horizontal rules & normalize-enter (full multi-line markdown only)
@@ -208,6 +231,14 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     if (skillsMenuOps) {
       plugins.use(skillsPlugin({ menu: skillsMenuOps }));
     }
+
+    if (agentCommandsMenuOps && config.agentCommands) {
+      plugins.use(
+        agentCommandsPlugin({
+          menu: agentCommandsMenuOps,
+        })
+      );
+    }
   }
 
   // Media (images, videos)
@@ -264,6 +295,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
               undefined,
               fileDropConfig.constrainedMediaDimensions
             )
+          ).catch((error) =>
+            Telemetry.error(error, { surface: 'markdown-file-paste' })
           );
         },
       })
@@ -306,7 +339,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
           (tagsMenuOps?.isOpen() ?? false) ||
           (emojisMenuOps?.isOpen() ?? false) ||
           (snippetsMenuOps?.isOpen() ?? false) ||
-          (skillsMenuOps?.isOpen() ?? false),
+          (skillsMenuOps?.isOpen() ?? false) ||
+          (agentCommandsMenuOps?.isOpen() ?? false),
       })
     );
   }
@@ -332,7 +366,16 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       const actions = actionsMenuOps?.isOpen() ?? false;
       const snippets = snippetsMenuOps?.isOpen() ?? false;
       const skills = skillsMenuOps?.isOpen() ?? false;
-      return mentions || tags || emojis || actions || snippets || skills;
+      const agentCommands = agentCommandsMenuOps?.isOpen() ?? false;
+      return (
+        mentions ||
+        tags ||
+        emojis ||
+        actions ||
+        snippets ||
+        skills ||
+        agentCommands
+      );
     },
   };
 
@@ -355,6 +398,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       emojisMenuOps,
       snippetsMenuOps,
       skillsMenuOps,
+      agentCommandsMenuOps,
       accessoryStore,
       dragInsertStore,
       draggableBlockStore,

@@ -1,0 +1,2574 @@
+event: status
+data: {"runId":"run-0805fd86-7661-4cbd-841f-19a843ec29d7","status":"RUNNING"}
+
+id: 1787345130418-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787345130428-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-0805fd86-7661-4cbd-841f-19a843ec29d7","text":"Use your web tools to fetch https://example.com and tell me the page title. Then search the web for the phrase 'server sent events spec'. Do not modify files, commit, push, or open a PR."}}
+
+id: 1787345133276-0
+event: thinking
+data: {"text":"Fetching https://example.com"}
+
+id: 1787345133276-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Fetching https://example.com"}
+
+id: 1787345133278-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787345133282-0
+event: thinking
+data: {"text":" to retrieve its page"}
+
+id: 1787345133282-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" to retrieve its page"}
+
+id: 1787345133285-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345133288-0
+event: thinking
+data: {"text":" title."}
+
+id: 1787345133288-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" title."}
+
+id: 1787345133291-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345133294-0
+event: thinking
+data: {"text":"\n\nSearching the web "}
+
+id: 1787345133294-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nSearching the web "}
+
+id: 1787345133296-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345133299-0
+event: thinking
+data: {"text":"for the server events"}
+
+id: 1787345133299-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"for the server events"}
+
+id: 1787345133302-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345133305-0
+event: thinking
+data: {"text":" specification. No file"}
+
+id: 1787345133305-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" specification. No file"}
+
+id: 1787345133307-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345133310-0
+event: thinking
+data: {"text":" changes or commits "}
+
+id: 1787345133310-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" changes or commits "}
+
+id: 1787345133312-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345133315-0
+event: thinking
+data: {"text":"will be made."}
+
+id: 1787345133315-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"will be made."}
+
+id: 1787345133317-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345133320-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":46}
+
+id: 1787345133324-0
+event: assistant
+data: {"text":"I'll"}
+
+id: 1787345133324-0
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+id: 1787345133327-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133329-0
+event: assistant
+data: {"text":" fetch"}
+
+id: 1787345133329-0
+event: interaction_update
+data: {"type":"text-delta","text":" fetch"}
+
+id: 1787345133334-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133338-0
+event: assistant
+data: {"text":" example"}
+
+id: 1787345133338-0
+event: interaction_update
+data: {"type":"text-delta","text":" example"}
+
+id: 1787345133343-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345133346-0
+event: assistant
+data: {"text":".com"}
+
+id: 1787345133346-0
+event: interaction_update
+data: {"type":"text-delta","text":".com"}
+
+id: 1787345133348-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133351-0
+event: assistant
+data: {"text":" for"}
+
+id: 1787345133351-0
+event: interaction_update
+data: {"type":"text-delta","text":" for"}
+
+id: 1787345133354-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133357-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345133357-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345133359-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133362-0
+event: assistant
+data: {"text":" page"}
+
+id: 1787345133362-0
+event: interaction_update
+data: {"type":"text-delta","text":" page"}
+
+id: 1787345133365-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345133368-0
+event: assistant
+data: {"text":" title"}
+
+id: 1787345133368-0
+event: interaction_update
+data: {"type":"text-delta","text":" title"}
+
+id: 1787345133371-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133373-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345133373-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345133376-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133379-0
+event: assistant
+data: {"text":" search"}
+
+id: 1787345133379-0
+event: interaction_update
+data: {"type":"text-delta","text":" search"}
+
+id: 1787345133382-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345133384-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345133384-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345133389-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133392-0
+event: assistant
+data: {"text":" web"}
+
+id: 1787345133392-0
+event: interaction_update
+data: {"type":"text-delta","text":" web"}
+
+id: 1787345133395-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133398-0
+event: assistant
+data: {"text":" for"}
+
+id: 1787345133398-0
+event: interaction_update
+data: {"type":"text-delta","text":" for"}
+
+id: 1787345133401-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133404-0
+event: assistant
+data: {"text":" that"}
+
+id: 1787345133404-0
+event: interaction_update
+data: {"type":"text-delta","text":" that"}
+
+id: 1787345133407-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133410-0
+event: assistant
+data: {"text":" phrase"}
+
+id: 1787345133410-0
+event: interaction_update
+data: {"type":"text-delta","text":" phrase"}
+
+id: 1787345133413-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345133416-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345133416-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345133420-0
+event: assistant
+data: {"text":" No"}
+
+id: 1787345133420-0
+event: interaction_update
+data: {"type":"text-delta","text":" No"}
+
+id: 1787345133425-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133428-0
+event: assistant
+data: {"text":" files"}
+
+id: 1787345133428-0
+event: interaction_update
+data: {"type":"text-delta","text":" files"}
+
+id: 1787345133430-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133433-0
+event: assistant
+data: {"text":" or"}
+
+id: 1787345133433-0
+event: interaction_update
+data: {"type":"text-delta","text":" or"}
+
+id: 1787345133435-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133438-0
+event: assistant
+data: {"text":" git"}
+
+id: 1787345133438-0
+event: interaction_update
+data: {"type":"text-delta","text":" git"}
+
+id: 1787345133441-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345133444-0
+event: assistant
+data: {"text":" changes"}
+
+id: 1787345133444-0
+event: interaction_update
+data: {"type":"text-delta","text":" changes"}
+
+id: 1787345133446-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345133449-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345133449-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345133453-0
+event: interaction_update
+data: {"type":"token-delta","tokens":8}
+
+id: 1787345133456-0
+event: interaction_update
+data: {"type":"token-delta","tokens":31}
+
+id: 1787345137298-0
+event: tool_call
+data: {"callId":"call-ce960905-3b7a-4492-87a0-3965919a538b-0\nfc_a3d206df-d125-9466-a802-34d321c23dc2_0","name":"web_fetch","status":"running"}
+
+id: 1787345137298-1
+event: tool_call
+data: {"callId":"call-ce960905-3b7a-4492-87a0-3965919a538b-0\nfc_a3d206df-d125-9466-a802-34d321c23dc2_0","name":"web_fetch","status":"running","args":{"url":"https://example.com","toolCallId":"call-ce960905-3b7a-4492-87a0-3965919a538b-0\nfc_a3d206df-d125-9466-a802-34d321c23dc2_0"}}
+
+id: 1787345137362-0
+event: tool_call
+data: {"callId":"call-ce960905-3b7a-4492-87a0-3965919a538b-1\nfc_a3d206df-d125-9466-a802-34d321c23dc2_1","name":"web_search","status":"running"}
+
+id: 1787345137362-1
+event: tool_call
+data: {"callId":"call-ce960905-3b7a-4492-87a0-3965919a538b-1\nfc_a3d206df-d125-9466-a802-34d321c23dc2_1","name":"web_search","status":"running","args":{"searchTerm":"server sent events spec","toolCallId":"call-ce960905-3b7a-4492-87a0-3965919a538b-1\nfc_a3d206df-d125-9466-a802-34d321c23dc2_1"}}
+
+id: 1787345137896-0
+event: tool_call
+data: {"callId":"call-ce960905-3b7a-4492-87a0-3965919a538b-0\nfc_a3d206df-d125-9466-a802-34d321c23dc2_0","name":"web_fetch","status":"completed","args":{"url":"https://example.com","toolCallId":"call-ce960905-3b7a-4492-87a0-3965919a538b-0\nfc_a3d206df-d125-9466-a802-34d321c23dc2_0"},"result":{"success":{"url":"https://example.com","markdown":"Example Domain\n\n# Example Domain\n\nThis domain is for use in documentation examples without needing permission. Avoid use in operations.\n\nExample Domain\n# Example Domain\nThis domain is for use in documentation examples without needing permission. Avoid use in operations.\n[Learn more](https://iana.org/domains/example)"}}}
+
+id: 1787345137899-0
+event: interaction_update
+data: {"type":"token-delta","tokens":88}
+
+id: 1787345141334-0
+event: tool_call
+data: {"callId":"call-ce960905-3b7a-4492-87a0-3965919a538b-1\nfc_a3d206df-d125-9466-a802-34d321c23dc2_1","name":"web_search","status":"completed","args":{"searchTerm":"server sent events spec","toolCallId":"call-ce960905-3b7a-4492-87a0-3965919a538b-1\nfc_a3d206df-d125-9466-a802-34d321c23dc2_1"},"result":{"success":{"references":[{"title":"Web search results","chunk":"Links:\n1. [HTML Standard, Edition for Web Developers](https://html.spec.whatwg.org/dev/server-sent-events.html)\n2. [HTML Standard](https://html.spec.whatwg.org/multipage/server-sent-events.html)\n3. [Server-sent events](https://en.wikipedia.org/wiki/Server-sent_events)\n4. [Using server-sent events - Web APIs | MDN](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)\n5. [Event ID & Retry Mechanism Design — Server-Sent Events](https://www.server-sent-events.com/sse-protocol-fundamentals-architecture/event-id-retry-mechanism-design/)\n\nSynthesis:\nServer-Sent Events (SSE) is a web technology standardized by the WHATWG HTML Living Standard that enables servers to push real-time, unidirectional updates to a client over a persistent HTTP connection [1][2][3].\n\nThe client interface is the EventSource object, which uses the text/event-stream MIME type [1][4][3].\n\nMinimal example:\n// Client\nconst source = new EventSource('/events');\nsource.onmessage = (event) => console.log(event.data);\n\n// Server\nContent-Type: text/event-stream\ndata: Hello world\n\nKey features include automatic reconnection, an id field for tracking state via the Last-Event-ID header, and a retry field to suggest reconnection intervals [5][6][7].\n\nHighlights:\n<result id=\"1\">\n<title>HTML Standard, Edition for Web Developers</title>\n<url>https://html.spec.whatwg.org/dev/server-sent-events.html</url>\n<content>### 9.2 Server-sent events\n...\nTo enable servers to push data to web pages over HTTP or using dedicated server-push protocols, this specification introduces the`EventSource` interface.\n...\nUsing this API consists of creating an`EventSource` object and registering an event listener.\n...\nOn the server-side, the script (\"`updates.cgi`\" in this case) sends messages in the following form, with the`text/event-stream` MIME type:\n...\nCreates a new\n...\nurl is a string giving\n...\nThe following are the event handlers(and their corresponding event handler event types) supported, as event handler IDL attributes, by all objects implementing the`EventSource` interface:\n...\n#### 9.2.3 The `Last-Event-ID` header\n...\nThe`Last-Event-ID`` HTTP request header reports an`EventSource` object's last event ID string to the server when the user agent is to reestablish the connection.\n...\n9.2.4 The event stream format\n...\nThis event stream format's MIME type is`text/event-stream`.\n...\nEvent streams in this format must always be encoded as UTF-8. [ENCODING]\n...\nThe following stream contains four blocks. The first block has just a comment, and will fire nothing. The second block has two fields with names \"data\" and \"id\" respectively; an event will be fired for this block, with the data \"first event\", and will then set the last event ID to \"1\" so that if the connection died between this block and the next, the server would be sent a ``Last-Event-ID`` header with the value ``1``. The third block fires an event with data \"second event\", and also has an \"id\" field, this time with no value, which resets the last event ID to the empty string (meaning no ``Last-Event-ID`` header will now be sent in the event of a reconnection being attempted). Finally, the last block just fires an event with the data \" third event\" (with a single leading space character). Note that the last still has to end with a blank line, the end of the stream is not enough to trigger the dispatch of the last event.</content>\n</result>\n\n<result id=\"2\">\n<title>HTML Standard</title>\n<url>https://html.spec.whatwg.org/multipage/server-sent-events.html</url>\n<content>### 9.2 Server-sent events\n...\nTo enable servers to push data to web pages over HTTP or using dedicated server-push protocols, this specification introduces the`EventSource` interface.\n...\nUsing this API consists of creating an`EventSource` object and registering an event listener.\n...\nWait a delay equal to\n...\nOptionally, wait some more\n...\nAlternatively, if the operating system has reported that there is no network connectivity, user agents might wait for the operating system to announce that the network connection has returned before retrying. Wait until the aforementioned task has run, if it has not yet run. Queue a task to run the following steps: If the`EventSource` object's`readyState` attribute is not set to`CONNECTING`, then return. Let request be the`EventSource` object's request. If the`EventSource` object's last event ID string is not the empty string: Let lastEventIDValue be the`EventSource` object's last event ID string, encoded as UTF-8. Set(``Last-Event-ID``, lastEventIDValue) in request's header list. Fetch request and process the response obtained in this fashion, if any, as described earlier in this section. When a user agent is to fail the connection, the user agent must error at the`EventSource` object\n...\nOnce the user agent has failed the connection, it does not attempt to reconnect. The queued by`EventSource` objects is the remote event task source. 9.2.4 The ` `Last-Event-ID` header` The `EventSource` object's last event ID string to the server when the user agent is to reestablish the connection. See whatwg/html issue #7363 to define the value space better. It is essentially any UTF-8 encoded string, that does not contain U+0000 NULL, U+000A LF, or U+000D CR. 9.2.5 Parsing an event stream This event stream format's MIME type is text/event-stream. The event stream format is as described by the`stream` production of the following ABNF, the character set for which is Unicode. [ABNF] scalar value scalar value`stream = [ bom ] *event\n...\n00A</content>\n</result>\n\n<result id=\"3\">\n<title>Server-sent events</title>\n<url>https://en.wikipedia.org/wiki/Server-sent_events</url>\n<content>Server-Sent Events (SSE) is a server push technology enabling a client to receive automatic updates from a server via an HTTP connection, and describes how servers can initiate data transmission towards clients once an initial client connection has been established. They are commonly used to send message updates or continuous data streams to a browser client and designed to enhance native, cross-browser streaming through a JavaScript API called EventSource, through which a client requests a particular URL in order to receive an event stream. The EventSource API is standardized as part of HTML Living Standard by the WHATWG. The media type for SSE is`text/event-stream`.\n...\nAll modern browsers support server-sent events: Firefox 6+, Google Chrome 6+, Opera 11.5+, Safari 5+, Microsoft Edge 79+, Brave. Since SSE does not use either persistent connections nor chunked transfer encoding, HTTP/1.1 is not a technical requirement.\n...\nThe SSE mechanism was first specified by Ian Hickson as part of the \" WHATWG Web Applications 1.0\" proposal starting in 2004. In September 2006, the Opera web browser implemented the experimental technology in a feature called \"Server-Sent Events\".\n...\nThe W3C published Server-Sent Events as a Recommendation on February 3, 2015, after years of development through Working Drafts and Candidate Recommendations.\n...\nWhen sending high-frequency data , the server must manage backpressure to prevent saturating clients. This is mitigated in the following ways:\n...\n- Client-side buffering: Browsers have limited buffer space for incoming server-sent events\n- Adaptive rate limiting: Servers can adjust event frequency and monitor connection health\n- Event batching: Combining multiple events into larger and less frequent transmissions\n...\nServer-Sent Events.\n...\n, Part 1\n...\nPart 1\n...\nServerSent Events.\n-\n...\nServer-Sent Events. A concise example of\n...\nserver-sent events\n...\nNetwork.\n- EventSource reference\n...\n- Server-Sent</content>\n</result>\n\n<result id=\"4\">\n<title>Using server-sent events - Web APIs | MDN</title>\n<url>https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events</url>\n<content>Developing a web application that uses server-sent events is straightforward. You'll need a bit of code on the server to stream events to the front-end, but the client side code works almost identically to websockets in part of handling incoming events. This is a one-way connection, so you can't send events from a client to a server.\n...\nThe server-sent event API is contained in the EventSource interface.\n...\nMessages sent from the server that don't have an`event` field are received as`message` events. To receive message events, attach\n...\nThe server-side script that sends events needs to respond using the MIME type`text/event-stream`. Each notification is sent as a block of text terminated by a pair of newlines. For details on the format of the event stream, see Event stream format.\n...\n## Event stream format\n...\nThe event stream is a simple stream of text data which must be encoded using UTF-8. Messages in the event stream are separated by a pair of newline characters. A colon as the first character of a line is in essence a comment, and is ignored.\n...\nEach message received has some combination of the following fields\n...\nA string identifying the type of event described. If this is specified, an event will be dispatched on the browser to the listener for the specified event name; the website source code should use`addEventListener()` to listen for named events. The`onmessage` handler is called if no event name is specified for a message.\n...\n`data`\n...\nThe data field for the message. When the`EventSource` receives multiple consecutive lines that begin with`data:`, it concatenates them, inserting a newline character between each one. Trailing newlines are removed.\n...\nThe reconnection time. If the connection to the server is lost, the browser will wait for the specified time before attempting to reconnect. This must be an integer, specifying the reconnection time in milliseconds. If a non-integer value is specified, the field is ignored.</content>\n</result>\n\n<result id=\"5\">\n<title>Event ID & Retry Mechanism Design — Server-Sent Events</title>\n<url>https://www.server-sent-events.com/sse-protocol-fundamentals-architecture/event-id-retry-mechanism-design/</url>\n<content>`id` and`retry` as optional event-stream fields alongside`data`\n...\nWhen a client’s`EventSource` parser encounters an`id:` line, it stores the value in its last event ID buffer. That buffer persists across reconnections for the lifetime of the`EventSource` object. On every reconnect, the browser sends the buffer’s contents as the`Last-Event-ID` HTTP request header.\n...\n`retry:` takes a decimal integer in milliseconds. The spec requires the value consist only of ASCII digits; any non-digit character causes the directive to be ignored. The browser replaces its internal reconnect timer on the first`retry:` it sees and keeps the new value for all subsequent reconnects unless overwritten.\n...\n- `retry:` updates the timer globally for the connection, not per-event. Send it once at stream open, then only when you want to change it.\n- The browser does not apply exponential backoff automatically. Whatever you send is what it uses. Implement progressive backoff server-side by updating the`retry` value over time, or use a`fetch`-based polyfill for full backoff control.\n- If`retry:` is never sent, browsers default to approximately 3000 ms (Chrome, Firefox) — but this is implementation-defined, not specified.\n...\nThe server’s job on reconnect is to read`Last-Event-ID`, look up what events the client missed, and replay them in order before resuming the live stream. The cursor store must support range queries by event ID.\n...\n1. Receives`retry: 3000`→ stores 3000 ms as the reconnect delay.\n2. Receives`id: evt-042`→ stores`\"evt-042\"` in the last-event-ID buffer.\n3. On TCP drop → waits 3000 ms → sends`GET /stream` with`Last-Event-ID: evt-042`.\n4. On`id:`(empty) → clears buffer → next reconnect sends no`Last-Event-ID`.\n...\nWhat the browser does not do: exponential backoff, jitter, max retry attempts, or custom headers beyond`Last-Event-ID`. For those capabilities, use a`fetch`-based implementation instead — covered in Browser Support & Polyfill Strategies.</content>\n</result>"},{"title":"HTML Standard","url":"https://html.spec.whatwg.org/multipage/server-sent-events.html","chunk":"Full page text written to file: /home/ubuntu/.cursor/projects/workspace/agent-tools/c0093b9d-11fb-43f7-a05b-74ba20371859.txt\nSize: 24.9 KB, 328 lines\nUse shell / grep / read_file on this path to inspect the page; no follow-up fetch is needed."},{"title":"Event ID & Retry Mechanism Design — Server-Sent Events","url":"https://www.server-sent-events.com/sse-protocol-fundamentals-architecture/event-id-retry-mechanism-design/","chunk":"Full page text written to file: /home/ubuntu/.cursor/projects/workspace/agent-tools/62cfa994-c0c4-43a3-82d7-5de2dcdb8752.txt\nSize: 27.6 KB, 548 lines\nUse shell / grep / read_file on this path to inspect the page; no follow-up fetch is needed."}]}}}
+
+id: 1787345141341-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3222}
+
+id: 1787345141837-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":11409}
+
+id: 1787345142016-0
+event: interaction_update
+data: {"type":"step-started","stepId":64}
+
+id: 1787345143014-0
+event: thinking
+data: {"text":"I have the information"}
+
+id: 1787345143014-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"I have the information"}
+
+id: 1787345143016-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345143103-0
+event: thinking
+data: {"text":" needed to complete "}
+
+id: 1787345143103-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" needed to complete "}
+
+id: 1787345143106-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345143685-0
+event: thinking
+data: {"text":"the request."}
+
+id: 1787345143685-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"the request."}
+
+id: 1787345143687-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345143690-0
+event: thinking
+data: {"text":"\n\nThe page title for"}
+
+id: 1787345143690-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nThe page title for"}
+
+id: 1787345143693-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345143695-0
+event: thinking
+data: {"text":" example.com is \"Example"}
+
+id: 1787345143695-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" example.com is \"Example"}
+
+id: 1787345143698-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345143700-0
+event: thinking
+data: {"text":" Domain\". The web search"}
+
+id: 1787345143700-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" Domain\". The web search"}
+
+id: 1787345143703-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345143706-0
+event: thinking
+data: {"text":" for the server-sent"}
+
+id: 1787345143706-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" for the server-sent"}
+
+id: 1787345143708-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345143711-0
+event: thinking
+data: {"text":" events specification"}
+
+id: 1787345143711-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" events specification"}
+
+id: 1787345143713-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345143716-0
+event: thinking
+data: {"text":" is next."}
+
+id: 1787345143716-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" is next."}
+
+id: 1787345143718-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345143720-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":717}
+
+id: 1787345143724-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345143724-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345143727-0
+event: assistant
+data: {"text":"example"}
+
+id: 1787345143727-0
+event: interaction_update
+data: {"type":"text-delta","text":"example"}
+
+id: 1787345143729-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143732-0
+event: assistant
+data: {"text":".com"}
+
+id: 1787345143732-0
+event: interaction_update
+data: {"type":"text-delta","text":".com"}
+
+id: 1787345143734-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143737-0
+event: assistant
+data: {"text":" title"}
+
+id: 1787345143737-0
+event: interaction_update
+data: {"type":"text-delta","text":" title"}
+
+id: 1787345143739-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143742-0
+event: assistant
+data: {"text":":**"}
+
+id: 1787345143742-0
+event: interaction_update
+data: {"type":"text-delta","text":":**"}
+
+id: 1787345143745-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143749-0
+event: assistant
+data: {"text":" Example"}
+
+id: 1787345143749-0
+event: interaction_update
+data: {"type":"text-delta","text":" Example"}
+
+id: 1787345143753-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143756-0
+event: assistant
+data: {"text":" Domain"}
+
+id: 1787345143756-0
+event: interaction_update
+data: {"type":"text-delta","text":" Domain"}
+
+id: 1787345143758-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143762-0
+event: assistant
+data: {"text":"\n\n"}
+
+id: 1787345143762-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n\n"}
+
+id: 1787345143765-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345143765-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345143767-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143770-0
+event: assistant
+data: {"text":"Web"}
+
+id: 1787345143770-0
+event: interaction_update
+data: {"type":"text-delta","text":"Web"}
+
+id: 1787345143774-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143776-0
+event: assistant
+data: {"text":" search"}
+
+id: 1787345143776-0
+event: interaction_update
+data: {"type":"text-delta","text":" search"}
+
+id: 1787345143779-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143781-0
+event: assistant
+data: {"text":" for"}
+
+id: 1787345143781-0
+event: interaction_update
+data: {"type":"text-delta","text":" for"}
+
+id: 1787345143784-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143788-0
+event: assistant
+data: {"text":" “"}
+
+id: 1787345143788-0
+event: interaction_update
+data: {"type":"text-delta","text":" “"}
+
+id: 1787345143790-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143793-0
+event: assistant
+data: {"text":"server"}
+
+id: 1787345143793-0
+event: interaction_update
+data: {"type":"text-delta","text":"server"}
+
+id: 1787345143796-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143799-0
+event: assistant
+data: {"text":" sent"}
+
+id: 1787345143799-0
+event: interaction_update
+data: {"type":"text-delta","text":" sent"}
+
+id: 1787345143803-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143809-0
+event: assistant
+data: {"text":" events"}
+
+id: 1787345143809-0
+event: interaction_update
+data: {"type":"text-delta","text":" events"}
+
+id: 1787345143813-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143816-0
+event: assistant
+data: {"text":" spec"}
+
+id: 1787345143816-0
+event: interaction_update
+data: {"type":"text-delta","text":" spec"}
+
+id: 1787345143818-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143821-0
+event: assistant
+data: {"text":"”"}
+
+id: 1787345143821-0
+event: interaction_update
+data: {"type":"text-delta","text":"”"}
+
+id: 1787345143823-0
+event: assistant
+data: {"text":":**"}
+
+id: 1787345143823-0
+event: interaction_update
+data: {"type":"text-delta","text":":**"}
+
+id: 1787345143826-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143830-0
+event: assistant
+data: {"text":" Server"}
+
+id: 1787345143830-0
+event: interaction_update
+data: {"type":"text-delta","text":" Server"}
+
+id: 1787345143833-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143835-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345143835-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345143838-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143841-0
+event: assistant
+data: {"text":"Sent"}
+
+id: 1787345143841-0
+event: interaction_update
+data: {"type":"text-delta","text":"Sent"}
+
+id: 1787345143844-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143846-0
+event: assistant
+data: {"text":" Events"}
+
+id: 1787345143846-0
+event: interaction_update
+data: {"type":"text-delta","text":" Events"}
+
+id: 1787345143848-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143851-0
+event: assistant
+data: {"text":" are"}
+
+id: 1787345143851-0
+event: interaction_update
+data: {"type":"text-delta","text":" are"}
+
+id: 1787345143853-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143856-0
+event: assistant
+data: {"text":" specified"}
+
+id: 1787345143856-0
+event: interaction_update
+data: {"type":"text-delta","text":" specified"}
+
+id: 1787345143858-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345143861-0
+event: assistant
+data: {"text":" in"}
+
+id: 1787345143861-0
+event: interaction_update
+data: {"type":"text-delta","text":" in"}
+
+id: 1787345143864-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143867-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345143867-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345143870-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143873-0
+event: assistant
+data: {"text":" WHAT"}
+
+id: 1787345143873-0
+event: interaction_update
+data: {"type":"text-delta","text":" WHAT"}
+
+id: 1787345143875-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143878-0
+event: assistant
+data: {"text":"WG"}
+
+id: 1787345143878-0
+event: interaction_update
+data: {"type":"text-delta","text":"WG"}
+
+id: 1787345143880-0
+event: assistant
+data: {"text":" HTML"}
+
+id: 1787345143880-0
+event: interaction_update
+data: {"type":"text-delta","text":" HTML"}
+
+id: 1787345143883-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143885-0
+event: assistant
+data: {"text":" Living"}
+
+id: 1787345143885-0
+event: interaction_update
+data: {"type":"text-delta","text":" Living"}
+
+id: 1787345143887-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143890-0
+event: assistant
+data: {"text":" Standard"}
+
+id: 1787345143890-0
+event: interaction_update
+data: {"type":"text-delta","text":" Standard"}
+
+id: 1787345143894-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345143897-0
+event: assistant
+data: {"text":" (`"}
+
+id: 1787345143897-0
+event: interaction_update
+data: {"type":"text-delta","text":" (`"}
+
+id: 1787345143899-0
+event: assistant
+data: {"text":"Event"}
+
+id: 1787345143899-0
+event: interaction_update
+data: {"type":"text-delta","text":"Event"}
+
+id: 1787345143901-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143904-0
+event: assistant
+data: {"text":"Source"}
+
+id: 1787345143904-0
+event: interaction_update
+data: {"type":"text-delta","text":"Source"}
+
+id: 1787345143906-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143909-0
+event: assistant
+data: {"text":"`,"}
+
+id: 1787345143909-0
+event: interaction_update
+data: {"type":"text-delta","text":"`,"}
+
+id: 1787345143911-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143914-0
+event: assistant
+data: {"text":" MIME"}
+
+id: 1787345143914-0
+event: interaction_update
+data: {"type":"text-delta","text":" MIME"}
+
+id: 1787345143916-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143921-0
+event: assistant
+data: {"text":" type"}
+
+id: 1787345143921-0
+event: interaction_update
+data: {"type":"text-delta","text":" type"}
+
+id: 1787345143923-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143926-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345143926-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345143928-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143932-0
+event: assistant
+data: {"text":"text"}
+
+id: 1787345143932-0
+event: interaction_update
+data: {"type":"text-delta","text":"text"}
+
+id: 1787345143936-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143939-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345143939-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345143941-0
+event: assistant
+data: {"text":"event"}
+
+id: 1787345143941-0
+event: interaction_update
+data: {"type":"text-delta","text":"event"}
+
+id: 1787345143944-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143946-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345143946-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345143949-0
+event: assistant
+data: {"text":"stream"}
+
+id: 1787345143949-0
+event: interaction_update
+data: {"type":"text-delta","text":"stream"}
+
+id: 1787345143952-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345143956-0
+event: assistant
+data: {"text":"`)."}
+
+id: 1787345143956-0
+event: interaction_update
+data: {"type":"text-delta","text":"`)."}
+
+id: 1787345143959-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143962-0
+event: assistant
+data: {"text":" Top"}
+
+id: 1787345143962-0
+event: interaction_update
+data: {"type":"text-delta","text":" Top"}
+
+id: 1787345143964-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143966-0
+event: assistant
+data: {"text":" hits"}
+
+id: 1787345143966-0
+event: interaction_update
+data: {"type":"text-delta","text":" hits"}
+
+id: 1787345143969-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143972-0
+event: assistant
+data: {"text":":\n\n"}
+
+id: 1787345143972-0
+event: interaction_update
+data: {"type":"text-delta","text":":\n\n"}
+
+id: 1787345143976-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143978-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345143978-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345143981-0
+event: assistant
+data: {"text":" ["}
+
+id: 1787345143981-0
+event: interaction_update
+data: {"type":"text-delta","text":" ["}
+
+id: 1787345143983-0
+event: assistant
+data: {"text":"HTML"}
+
+id: 1787345143983-0
+event: interaction_update
+data: {"type":"text-delta","text":"HTML"}
+
+id: 1787345143987-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345143989-0
+event: assistant
+data: {"text":" Standard"}
+
+id: 1787345143989-0
+event: interaction_update
+data: {"type":"text-delta","text":" Standard"}
+
+id: 1787345143992-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345143994-0
+event: assistant
+data: {"text":" —"}
+
+id: 1787345143994-0
+event: interaction_update
+data: {"type":"text-delta","text":" —"}
+
+id: 1787345143997-0
+event: assistant
+data: {"text":" Server"}
+
+id: 1787345143997-0
+event: interaction_update
+data: {"type":"text-delta","text":" Server"}
+
+id: 1787345143999-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144014-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144014-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144017-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144017-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144019-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144022-0
+event: assistant
+data: {"text":" events"}
+
+id: 1787345144022-0
+event: interaction_update
+data: {"type":"text-delta","text":" events"}
+
+id: 1787345144024-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144027-0
+event: assistant
+data: {"text":"]"}
+
+id: 1787345144027-0
+event: interaction_update
+data: {"type":"text-delta","text":"]"}
+
+id: 1787345144029-0
+event: assistant
+data: {"text":"("}
+
+id: 1787345144029-0
+event: interaction_update
+data: {"type":"text-delta","text":"("}
+
+id: 1787345144031-0
+event: assistant
+data: {"text":"https"}
+
+id: 1787345144031-0
+event: interaction_update
+data: {"type":"text-delta","text":"https"}
+
+id: 1787345144034-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144037-0
+event: assistant
+data: {"text":"://"}
+
+id: 1787345144037-0
+event: interaction_update
+data: {"type":"text-delta","text":"://"}
+
+id: 1787345144039-0
+event: assistant
+data: {"text":"html"}
+
+id: 1787345144039-0
+event: interaction_update
+data: {"type":"text-delta","text":"html"}
+
+id: 1787345144042-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144045-0
+event: assistant
+data: {"text":".spec"}
+
+id: 1787345144045-0
+event: interaction_update
+data: {"type":"text-delta","text":".spec"}
+
+id: 1787345144047-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144050-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345144050-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345144052-0
+event: assistant
+data: {"text":"what"}
+
+id: 1787345144052-0
+event: interaction_update
+data: {"type":"text-delta","text":"what"}
+
+id: 1787345144055-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144058-0
+event: assistant
+data: {"text":"wg"}
+
+id: 1787345144058-0
+event: interaction_update
+data: {"type":"text-delta","text":"wg"}
+
+id: 1787345144060-0
+event: assistant
+data: {"text":".org"}
+
+id: 1787345144060-0
+event: interaction_update
+data: {"type":"text-delta","text":".org"}
+
+id: 1787345144063-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144066-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144066-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144068-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144072-0
+event: assistant
+data: {"text":"multip"}
+
+id: 1787345144072-0
+event: interaction_update
+data: {"type":"text-delta","text":"multip"}
+
+id: 1787345144075-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144078-0
+event: assistant
+data: {"text":"age"}
+
+id: 1787345144078-0
+event: interaction_update
+data: {"type":"text-delta","text":"age"}
+
+id: 1787345144080-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144095-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144095-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144098-0
+event: assistant
+data: {"text":"server"}
+
+id: 1787345144098-0
+event: interaction_update
+data: {"type":"text-delta","text":"server"}
+
+id: 1787345144100-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144105-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144105-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144109-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144109-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144112-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144115-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144115-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144117-0
+event: assistant
+data: {"text":"events"}
+
+id: 1787345144117-0
+event: interaction_update
+data: {"type":"text-delta","text":"events"}
+
+id: 1787345144120-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144122-0
+event: assistant
+data: {"text":".html"}
+
+id: 1787345144122-0
+event: interaction_update
+data: {"type":"text-delta","text":".html"}
+
+id: 1787345144125-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144127-0
+event: assistant
+data: {"text":")\n"}
+
+id: 1787345144127-0
+event: interaction_update
+data: {"type":"text-delta","text":")\n"}
+
+id: 1787345144130-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144130-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144132-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144135-0
+event: assistant
+data: {"text":" ["}
+
+id: 1787345144135-0
+event: interaction_update
+data: {"type":"text-delta","text":" ["}
+
+id: 1787345144139-0
+event: assistant
+data: {"text":"HTML"}
+
+id: 1787345144139-0
+event: interaction_update
+data: {"type":"text-delta","text":"HTML"}
+
+id: 1787345144142-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144145-0
+event: assistant
+data: {"text":" Standard"}
+
+id: 1787345144145-0
+event: interaction_update
+data: {"type":"text-delta","text":" Standard"}
+
+id: 1787345144147-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144150-0
+event: assistant
+data: {"text":","}
+
+id: 1787345144150-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345144153-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144155-0
+event: assistant
+data: {"text":" Edition"}
+
+id: 1787345144155-0
+event: interaction_update
+data: {"type":"text-delta","text":" Edition"}
+
+id: 1787345144158-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144161-0
+event: assistant
+data: {"text":" for"}
+
+id: 1787345144161-0
+event: interaction_update
+data: {"type":"text-delta","text":" for"}
+
+id: 1787345144163-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144165-0
+event: assistant
+data: {"text":" Web"}
+
+id: 1787345144165-0
+event: interaction_update
+data: {"type":"text-delta","text":" Web"}
+
+id: 1787345144168-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144170-0
+event: assistant
+data: {"text":" Developers"}
+
+id: 1787345144170-0
+event: interaction_update
+data: {"type":"text-delta","text":" Developers"}
+
+id: 1787345144173-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144178-0
+event: assistant
+data: {"text":"]"}
+
+id: 1787345144178-0
+event: interaction_update
+data: {"type":"text-delta","text":"]"}
+
+id: 1787345144180-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144183-0
+event: assistant
+data: {"text":"("}
+
+id: 1787345144183-0
+event: interaction_update
+data: {"type":"text-delta","text":"("}
+
+id: 1787345144190-0
+event: assistant
+data: {"text":"https"}
+
+id: 1787345144190-0
+event: interaction_update
+data: {"type":"text-delta","text":"https"}
+
+id: 1787345144192-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144195-0
+event: assistant
+data: {"text":"://"}
+
+id: 1787345144195-0
+event: interaction_update
+data: {"type":"text-delta","text":"://"}
+
+id: 1787345144198-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144200-0
+event: assistant
+data: {"text":"html"}
+
+id: 1787345144200-0
+event: interaction_update
+data: {"type":"text-delta","text":"html"}
+
+id: 1787345144203-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144205-0
+event: assistant
+data: {"text":".spec"}
+
+id: 1787345144205-0
+event: interaction_update
+data: {"type":"text-delta","text":".spec"}
+
+id: 1787345144208-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144211-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345144211-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345144213-0
+event: assistant
+data: {"text":"what"}
+
+id: 1787345144213-0
+event: interaction_update
+data: {"type":"text-delta","text":"what"}
+
+id: 1787345144216-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144218-0
+event: assistant
+data: {"text":"wg"}
+
+id: 1787345144218-0
+event: interaction_update
+data: {"type":"text-delta","text":"wg"}
+
+id: 1787345144221-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144224-0
+event: assistant
+data: {"text":".org"}
+
+id: 1787345144224-0
+event: interaction_update
+data: {"type":"text-delta","text":".org"}
+
+id: 1787345144227-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144230-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144230-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144234-0
+event: assistant
+data: {"text":"dev"}
+
+id: 1787345144234-0
+event: interaction_update
+data: {"type":"text-delta","text":"dev"}
+
+id: 1787345144236-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144239-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144239-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144242-0
+event: assistant
+data: {"text":"server"}
+
+id: 1787345144242-0
+event: interaction_update
+data: {"type":"text-delta","text":"server"}
+
+id: 1787345144245-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144248-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144248-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144250-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144250-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144252-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144255-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144255-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144258-0
+event: assistant
+data: {"text":"events"}
+
+id: 1787345144258-0
+event: interaction_update
+data: {"type":"text-delta","text":"events"}
+
+id: 1787345144260-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144263-0
+event: assistant
+data: {"text":".html"}
+
+id: 1787345144263-0
+event: interaction_update
+data: {"type":"text-delta","text":".html"}
+
+id: 1787345144265-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144268-0
+event: assistant
+data: {"text":")\n"}
+
+id: 1787345144268-0
+event: interaction_update
+data: {"type":"text-delta","text":")\n"}
+
+id: 1787345144271-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144271-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144273-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144276-0
+event: assistant
+data: {"text":" ["}
+
+id: 1787345144276-0
+event: interaction_update
+data: {"type":"text-delta","text":" ["}
+
+id: 1787345144279-0
+event: assistant
+data: {"text":"Wikipedia"}
+
+id: 1787345144279-0
+event: interaction_update
+data: {"type":"text-delta","text":"Wikipedia"}
+
+id: 1787345144281-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144283-0
+event: assistant
+data: {"text":":"}
+
+id: 1787345144283-0
+event: interaction_update
+data: {"type":"text-delta","text":":"}
+
+id: 1787345144286-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144288-0
+event: assistant
+data: {"text":" Server"}
+
+id: 1787345144288-0
+event: interaction_update
+data: {"type":"text-delta","text":" Server"}
+
+id: 1787345144291-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144293-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144293-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144296-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144298-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144298-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144300-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144306-0
+event: assistant
+data: {"text":" events"}
+
+id: 1787345144306-0
+event: interaction_update
+data: {"type":"text-delta","text":" events"}
+
+id: 1787345144308-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144310-0
+event: assistant
+data: {"text":"]"}
+
+id: 1787345144310-0
+event: interaction_update
+data: {"type":"text-delta","text":"]"}
+
+id: 1787345144317-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144320-0
+event: assistant
+data: {"text":"("}
+
+id: 1787345144320-0
+event: interaction_update
+data: {"type":"text-delta","text":"("}
+
+id: 1787345144323-0
+event: assistant
+data: {"text":"https"}
+
+id: 1787345144323-0
+event: interaction_update
+data: {"type":"text-delta","text":"https"}
+
+id: 1787345144326-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144328-0
+event: assistant
+data: {"text":"://"}
+
+id: 1787345144328-0
+event: interaction_update
+data: {"type":"text-delta","text":"://"}
+
+id: 1787345144330-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144333-0
+event: assistant
+data: {"text":"en"}
+
+id: 1787345144333-0
+event: interaction_update
+data: {"type":"text-delta","text":"en"}
+
+id: 1787345144336-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345144336-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345144338-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144341-0
+event: assistant
+data: {"text":"wikipedia"}
+
+id: 1787345144341-0
+event: interaction_update
+data: {"type":"text-delta","text":"wikipedia"}
+
+id: 1787345144344-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144346-0
+event: assistant
+data: {"text":".org"}
+
+id: 1787345144346-0
+event: interaction_update
+data: {"type":"text-delta","text":".org"}
+
+id: 1787345144349-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144351-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144351-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144355-0
+event: assistant
+data: {"text":"wiki"}
+
+id: 1787345144355-0
+event: interaction_update
+data: {"type":"text-delta","text":"wiki"}
+
+id: 1787345144357-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144360-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144360-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144362-0
+event: assistant
+data: {"text":"Server"}
+
+id: 1787345144362-0
+event: interaction_update
+data: {"type":"text-delta","text":"Server"}
+
+id: 1787345144365-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144367-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144367-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144371-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144371-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144373-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144376-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345144376-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345144378-0
+event: assistant
+data: {"text":"events"}
+
+id: 1787345144378-0
+event: interaction_update
+data: {"type":"text-delta","text":"events"}
+
+id: 1787345144380-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144383-0
+event: assistant
+data: {"text":")\n"}
+
+id: 1787345144383-0
+event: interaction_update
+data: {"type":"text-delta","text":")\n"}
+
+id: 1787345144386-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144386-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144388-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144391-0
+event: assistant
+data: {"text":" ["}
+
+id: 1787345144391-0
+event: interaction_update
+data: {"type":"text-delta","text":" ["}
+
+id: 1787345144393-0
+event: assistant
+data: {"text":"MD"}
+
+id: 1787345144393-0
+event: interaction_update
+data: {"type":"text-delta","text":"MD"}
+
+id: 1787345144397-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144399-0
+event: assistant
+data: {"text":"N"}
+
+id: 1787345144399-0
+event: interaction_update
+data: {"type":"text-delta","text":"N"}
+
+id: 1787345144402-0
+event: assistant
+data: {"text":":"}
+
+id: 1787345144402-0
+event: interaction_update
+data: {"type":"text-delta","text":":"}
+
+id: 1787345144405-0
+event: assistant
+data: {"text":" Using"}
+
+id: 1787345144405-0
+event: interaction_update
+data: {"type":"text-delta","text":" Using"}
+
+id: 1787345144407-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144410-0
+event: assistant
+data: {"text":" server"}
+
+id: 1787345144410-0
+event: interaction_update
+data: {"type":"text-delta","text":" server"}
+
+id: 1787345144412-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144415-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144415-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144417-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144419-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144419-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144421-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144424-0
+event: assistant
+data: {"text":" events"}
+
+id: 1787345144424-0
+event: interaction_update
+data: {"type":"text-delta","text":" events"}
+
+id: 1787345144427-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144429-0
+event: assistant
+data: {"text":"]"}
+
+id: 1787345144429-0
+event: interaction_update
+data: {"type":"text-delta","text":"]"}
+
+id: 1787345144434-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144438-0
+event: assistant
+data: {"text":"("}
+
+id: 1787345144438-0
+event: interaction_update
+data: {"type":"text-delta","text":"("}
+
+id: 1787345144440-0
+event: assistant
+data: {"text":"https"}
+
+id: 1787345144440-0
+event: interaction_update
+data: {"type":"text-delta","text":"https"}
+
+id: 1787345144443-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144445-0
+event: assistant
+data: {"text":"://"}
+
+id: 1787345144445-0
+event: interaction_update
+data: {"type":"text-delta","text":"://"}
+
+id: 1787345144448-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144450-0
+event: assistant
+data: {"text":"developer"}
+
+id: 1787345144450-0
+event: interaction_update
+data: {"type":"text-delta","text":"developer"}
+
+id: 1787345144453-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144455-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345144455-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345144457-0
+event: assistant
+data: {"text":"mozilla"}
+
+id: 1787345144457-0
+event: interaction_update
+data: {"type":"text-delta","text":"mozilla"}
+
+id: 1787345144460-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144463-0
+event: assistant
+data: {"text":".org"}
+
+id: 1787345144463-0
+event: interaction_update
+data: {"type":"text-delta","text":".org"}
+
+id: 1787345144465-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144467-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144467-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144470-0
+event: assistant
+data: {"text":"en"}
+
+id: 1787345144470-0
+event: interaction_update
+data: {"type":"text-delta","text":"en"}
+
+id: 1787345144472-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144475-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144475-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144477-0
+event: assistant
+data: {"text":"US"}
+
+id: 1787345144477-0
+event: interaction_update
+data: {"type":"text-delta","text":"US"}
+
+id: 1787345144480-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144482-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144482-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144485-0
+event: assistant
+data: {"text":"docs"}
+
+id: 1787345144485-0
+event: interaction_update
+data: {"type":"text-delta","text":"docs"}
+
+id: 1787345144487-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144490-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144490-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144492-0
+event: assistant
+data: {"text":"Web"}
+
+id: 1787345144492-0
+event: interaction_update
+data: {"type":"text-delta","text":"Web"}
+
+id: 1787345144494-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144497-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144497-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144500-0
+event: assistant
+data: {"text":"API"}
+
+id: 1787345144500-0
+event: interaction_update
+data: {"type":"text-delta","text":"API"}
+
+id: 1787345144502-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144505-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144505-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144507-0
+event: assistant
+data: {"text":"Server"}
+
+id: 1787345144507-0
+event: interaction_update
+data: {"type":"text-delta","text":"Server"}
+
+id: 1787345144510-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144514-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144514-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144521-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144521-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144524-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144527-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345144527-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345144529-0
+event: assistant
+data: {"text":"events"}
+
+id: 1787345144529-0
+event: interaction_update
+data: {"type":"text-delta","text":"events"}
+
+id: 1787345144532-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144534-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144534-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144538-0
+event: assistant
+data: {"text":"Using"}
+
+id: 1787345144538-0
+event: interaction_update
+data: {"type":"text-delta","text":"Using"}
+
+id: 1787345144541-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144544-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345144544-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345144547-0
+event: assistant
+data: {"text":"server"}
+
+id: 1787345144547-0
+event: interaction_update
+data: {"type":"text-delta","text":"server"}
+
+id: 1787345144549-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144552-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345144552-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345144555-0
+event: assistant
+data: {"text":"sent"}
+
+id: 1787345144555-0
+event: interaction_update
+data: {"type":"text-delta","text":"sent"}
+
+id: 1787345144557-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144561-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345144561-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345144563-0
+event: assistant
+data: {"text":"events"}
+
+id: 1787345144563-0
+event: interaction_update
+data: {"type":"text-delta","text":"events"}
+
+id: 1787345144566-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144568-0
+event: assistant
+data: {"text":")\n\n"}
+
+id: 1787345144568-0
+event: interaction_update
+data: {"type":"text-delta","text":")\n\n"}
+
+id: 1787345144571-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144573-0
+event: assistant
+data: {"text":"No"}
+
+id: 1787345144573-0
+event: interaction_update
+data: {"type":"text-delta","text":"No"}
+
+id: 1787345144576-0
+event: assistant
+data: {"text":" files"}
+
+id: 1787345144576-0
+event: interaction_update
+data: {"type":"text-delta","text":" files"}
+
+id: 1787345144578-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144581-0
+event: assistant
+data: {"text":" were"}
+
+id: 1787345144581-0
+event: interaction_update
+data: {"type":"text-delta","text":" were"}
+
+id: 1787345144583-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144586-0
+event: assistant
+data: {"text":" changed"}
+
+id: 1787345144586-0
+event: interaction_update
+data: {"type":"text-delta","text":" changed"}
+
+id: 1787345144588-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144592-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345144592-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345144594-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144597-0
+event: assistant
+data: {"text":" no"}
+
+id: 1787345144597-0
+event: interaction_update
+data: {"type":"text-delta","text":" no"}
+
+id: 1787345144600-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144603-0
+event: assistant
+data: {"text":" git"}
+
+id: 1787345144603-0
+event: interaction_update
+data: {"type":"text-delta","text":" git"}
+
+id: 1787345144605-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144608-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345144608-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345144611-0
+event: assistant
+data: {"text":"PR"}
+
+id: 1787345144611-0
+event: interaction_update
+data: {"type":"text-delta","text":"PR"}
+
+id: 1787345144613-0
+event: assistant
+data: {"text":" actions"}
+
+id: 1787345144613-0
+event: interaction_update
+data: {"type":"text-delta","text":" actions"}
+
+id: 1787345144615-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144618-0
+event: assistant
+data: {"text":" were"}
+
+id: 1787345144618-0
+event: interaction_update
+data: {"type":"text-delta","text":" were"}
+
+id: 1787345144622-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345144625-0
+event: assistant
+data: {"text":" taken"}
+
+id: 1787345144625-0
+event: interaction_update
+data: {"type":"text-delta","text":" taken"}
+
+id: 1787345144627-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345144630-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345144630-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345144732-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787345144735-0
+event: interaction_update
+data: {"type":"step-completed","stepId":64,"stepDurationMs":2731}
+
+event: status
+data: {"runId":"run-0805fd86-7661-4cbd-841f-19a843ec29d7","status":"FINISHED"}
+
+id: 1787345146025-0
+event: result
+data: {"runId":"run-0805fd86-7661-4cbd-841f-19a843ec29d7","status":"FINISHED","text":"**example.com title:** Example Domain\n\n**Web search for “server sent events spec”:** Server-Sent Events are specified in the WHATWG HTML Living Standard (`EventSource`, MIME type `text/event-stream`). Top hits:\n\n- [HTML Standard — Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html)\n- [HTML Standard, Edition for Web Developers](https://html.spec.whatwg.org/dev/server-sent-events.html)\n- [Wikipedia: Server-sent events](https://en.wikipedia.org/wiki/Server-sent_events)\n- [MDN: Using server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)\n\nNo files were changed and no git/PR actions were taken.","durationMs":15895,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/web-page-specification-76c6"}]}}
+
+id: 1787345146025-0
+event: done
+data: {}
+

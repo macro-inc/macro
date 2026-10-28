@@ -1,11 +1,15 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import type { ChannelEntity } from '@entity';
-import ClockIcon from '@phosphor/clock.svg';
-import EmailIcon from '@phosphor/envelope.svg';
-import UsersIcon from '@phosphor/users.svg';
+import { type ChannelEntity, isTaskEntity } from '@entity/types/entity';
+import { getTaskStatusOptionId } from '@entity/utils/task-properties';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { cn } from '@ui';
-import { createEffect, Show } from 'solid-js';
+import { createEffect, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionItem } from '../utils/botMention';
 import {
@@ -22,6 +26,7 @@ export function MentionsMenuItem(props: {
   setOpen: (open: boolean) => void;
   /** When true, disables the internal scrollIntoView behavior (used when list is virtualized) */
   disableScrollIntoView?: boolean;
+  actions?: JSX.Element;
 }) {
   let itemRef: HTMLDivElement | undefined;
 
@@ -33,25 +38,63 @@ export function MentionsMenuItem(props: {
 
   const name = () => getMentionItemName(props.item);
 
-  // For user items we render the email at reduced opacity (no pipe separator)
-  // instead of baking it into the display string.
-  const userParts = () => {
-    if (props.item.kind !== 'user') return undefined;
-    const { name, email } = props.item.data;
-    if (!name || name === email) return { name: email, email: undefined };
-    return { name, email };
-  };
+  const labelParts = () =>
+    match(props.item)
+      .with({ kind: 'user' }, ({ data: { name, email } }) => ({
+        name: name || email,
+        detail: name && name !== email ? email : undefined,
+      }))
+      .with({ kind: 'entity', data: { type: 'crm_contact' } }, ({ data }) => ({
+        name: data.name || data.email,
+        detail: data.name && data.name !== data.email ? data.email : undefined,
+      }))
+      .with({ kind: 'agentSession' }, ({ data }) => ({
+        name: data.name || 'Agent session',
+        detail: data.bot?.name ? `@${data.bot.name}` : undefined,
+      }))
+      .with({ kind: 'bookingLink' }, ({ data }) => ({
+        name: data.title,
+        detail: `${data.durationMinutes} min · ${data.owner}`,
+      }))
+      .with({ kind: 'calendarEvent' }, ({ data }) => ({
+        name: data.title,
+        detail: data.when,
+      }))
+      .otherwise(() => ({ name: name(), detail: undefined }));
 
   const icon = () => {
     switch (props.item.kind) {
       case 'user':
-        return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
+        return (
+          <UserIcon
+            id={props.item.id}
+            size="sm"
+            isDeleted={false}
+            photoUrl={props.item.data.photoUrl}
+          />
+        );
 
+      case 'agentSession':
+        return <EntityIcon targetType="agent" size="xs" />;
       case 'group':
         return <UsersIcon class="size-4 text-ink-muted" />;
 
       case 'date':
         return <ClockIcon class="size-4 text-ink-muted" />;
+
+      case 'bookingLink':
+        return <CalendarBlankIcon class="size-4 text-accent" />;
+      case 'externalChat':
+        return (
+          <EntityIcon
+            targetType="external_chat"
+            provider={props.item.data.provider}
+            size="xs"
+          />
+        );
+
+      case 'calendarEvent':
+        return <EntityIcon targetType="calendar" size="xs" />;
 
       case 'entity':
         if (props.item.bucket === 'email') {
@@ -63,6 +106,15 @@ export function MentionsMenuItem(props: {
             <EntityIcon
               size="xs"
               targetType={entity.channelType || 'channel'}
+            />
+          );
+        }
+        if (isTaskEntity(props.item.data)) {
+          return (
+            <TaskStatusIcon
+              statusId={getTaskStatusOptionId(props.item.data)}
+              completed={props.item.data.subType.is_completed}
+              size="xs"
             />
           );
         }
@@ -82,6 +134,9 @@ export function MentionsMenuItem(props: {
         e.preventDefault();
         e.stopPropagation();
       }}
+      on:pointerdown={(e) => {
+        e.preventDefault();
+      }}
       on:mousedown={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -100,17 +155,12 @@ export function MentionsMenuItem(props: {
       <div class="flex min-w-0 grow items-center gap-2">
         <span
           class="ph-no-capture min-w-0 max-w-full overflow-hidden text-nowrap text-ink text-xs sm:text-sm font-medium"
+          title={name()}
           style={{ 'text-overflow': 'ellipsis' }}
         >
-          <Show when={userParts()} fallback={name()}>
-            {(parts) => (
-              <>
-                {parts().name}
-                <Show when={parts().email}>
-                  <span class="ml-[0.5em] opacity-50">{parts().email}</span>
-                </Show>
-              </>
-            )}
+          {labelParts().name}
+          <Show when={labelParts().detail}>
+            {(detail) => <span class="ml-[0.5em] opacity-50">{detail()}</span>}
           </Show>
         </span>
         <Show when={isBotMentionItem(props.item)}>
@@ -119,6 +169,7 @@ export function MentionsMenuItem(props: {
           </span>
         </Show>
       </div>
+      {props.actions}
     </div>
   );
 }

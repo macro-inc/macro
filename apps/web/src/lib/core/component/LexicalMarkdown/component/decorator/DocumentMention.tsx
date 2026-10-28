@@ -1,6 +1,10 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
+import { externalChatApi } from '@app/features/external-chat/queries/production-api';
+import { externalChatContent } from '@app/features/external-view/hosted-content';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   type BlockAlias,
   type BlockName,
@@ -8,47 +12,60 @@ import {
   useMaybeBlockName,
 } from '@core/block';
 import {
+  type DocumentPreviewContentProps,
   getMentionsIcon,
   mentionsAccessories,
   PopupPreview,
 } from '@core/component/DocumentPreview';
+import { DocumentPreviewSheet } from '@core/component/DocumentPreviewSheet';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { HoverCard } from '@core/component/HoverCard';
+import { InlineTaskProperties } from '@core/component/InlineTaskProperties';
 import { useItemPreviewData } from '@core/component/ItemPreview';
-import { UserIcon } from '@core/component/UserIcon';
+import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import {
   itemToBlockName,
   resolveBlockAlias,
   verifyBlockName,
 } from '@core/constant/allBlocks';
-import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_BLOCK_IN_BLOCK,
+  enableDatabases,
+} from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { ThrownResultError } from '@core/util/result';
+import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import ArrowsOut from '@icon/system/regular/arrows-out-simple.svg';
+import EyeSlashDuo from '@icon/system/regular/eye-slash.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,
   DocumentCardNode,
   type DocumentMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
-import EyeSlashDuo from '@phosphor/eye-slash.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
-import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { useEntityProperties } from '@property/hooks';
+import { useExternalChatDetailQuery } from '@queries/external-chats';
 import {
+  failedReadAccess,
   type ItemEntity,
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
   type PreviewCalendarEventAccess,
   type PreviewItemNoAccess,
-  useItemPreview,
 } from '@queries/preview';
+import { useDatabaseDetailQuery } from '@queries/storage/databases';
+import { useFormDetailQuery } from '@queries/storage/forms';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button, Tooltip } from '@ui';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -61,12 +78,14 @@ import {
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   Show,
   Suspense,
   Switch,
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { useMarkdownHost } from '../../context/MarkdownHostContext';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
@@ -95,11 +114,11 @@ function MentionContainer(props: {
 }) {
   return (
     <span class="pointer-events-auto">
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
+      <span class="relative top-[0.125em] size-[1em] inline-flex mx-[0.25em]">
         {props.icon}
       </span>
       <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
           {props.text}
         </span>
       </Show>
@@ -127,8 +146,8 @@ function SkillSlashText(props: {
   const systemSkills = useSystemSkillsQuery();
   const openSkill = createCallback((e: MouseEvent) => {
     if (systemSkills.isSystemSkillId(props.documentId)) return;
-    // Also keeps the outer mention click handler (read-only contexts) from
-    // opening the skill a second time.
+    // Also keeps the outer mention click handler from opening the skill a
+    // second time.
     e.stopPropagation();
     openDocument(
       'skill',
@@ -170,68 +189,28 @@ export function calendarMentionTimeLabel(
   return startDate ? formatDate(startDate) : undefined;
 }
 
-function InlineTaskProperties(props: { taskId: string }) {
-  const { properties, isLoading } = useEntityProperties(
-    props.taskId,
-    'TASK',
-    false
-  );
-
-  const statusOptionId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
-    );
-    return p?.valueType === 'SELECT_STRING' ? p.value?.[0] : undefined;
-  });
-
-  const priorityOptionId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY
-    );
-    return p?.valueType === 'SELECT_STRING' ? p.value?.[0] : undefined;
-  });
-
-  const firstAssigneeId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
-    );
-    return p?.valueType === 'ENTITY' ? p.value?.[0]?.entity_id : undefined;
-  });
-
-  const hasAny = createMemo(
-    () =>
-      !isLoading() &&
-      !!(statusOptionId() || priorityOptionId() || firstAssigneeId())
-  );
-
+function MentionAccessories(props: {
+  blockName: BlockName | BlockAlias;
+  blockParams?: Record<string, string>;
+}) {
+  const accessories = () =>
+    mentionsAccessories(props.blockName as BlockName, props.blockParams ?? {});
   return (
-    <Show when={hasAny()}>
-      <span class="inline-flex items-center gap-1 mx-1 align-middle relative top-[-0.05em]">
-        <Show when={statusOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
-        </Show>
-        <Show when={priorityOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
-        </Show>
-        <Show when={firstAssigneeId()}>
-          {(id) => (
-            <span class="inline-flex ml-0.5 size-3.25">
-              <UserIcon
-                id={id()}
-                isDeleted={false}
-                size="fill"
-                suppressClick
-                showTooltip={false}
-              />
-            </span>
-          )}
-        </Show>
-      </span>
-    </Show>
+    <span class="relative text-[0.8em] text-current/50 rounded-xs">
+      <Show when={accessories()}>
+        {(value) => (
+          <>
+            {` ${value().note ?? ''}`}
+            {getMentionsIcon(value().icon)}
+          </>
+        )}
+      </Show>
+    </span>
   );
 }
 
 function InlinePreview(props: {
+  previewData: ReturnType<typeof useItemPreviewData>;
   entity: ItemEntity;
   blockName: BlockName | BlockAlias;
   blockParams: Record<string, string>;
@@ -241,7 +220,7 @@ function InlinePreview(props: {
   createdAt?: number;
   isRecentMention: () => boolean;
 }) {
-  const { item, ItemEntityIcon } = useItemPreviewData(() => props.entity);
+  const { item, ItemEntityIcon, documentProperties } = props.previewData;
 
   const shouldShowFallback = createMemo(() => {
     return (
@@ -259,11 +238,18 @@ function InlinePreview(props: {
           fallback={
             <MentionContainer
               icon={
-                <EntityIcon
-                  targetType={props.blockName as any}
-                  size="fill"
-                  class="animate-pulse"
-                />
+                <Show
+                  when={props.blockName === 'task'}
+                  fallback={
+                    <EntityIcon
+                      targetType={props.blockName as any}
+                      size="fill"
+                      class="animate-pulse"
+                    />
+                  }
+                >
+                  <TaskStatusIcon size="fill" />
+                </Show>
               }
               text={
                 <span
@@ -273,9 +259,13 @@ function InlinePreview(props: {
                   data-document-name={props.documentName}
                   class="opacity-50"
                 >
-                  <Show when={props.documentName} fallback={'Loading...'}>
+                  <Show when={props.documentName} fallback="Loading...">
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
+                  <MentionAccessories
+                    blockName={props.blockName}
+                    blockParams={props.blockParams}
+                  />
                 </span>
               }
               collapsed={props.collapsed}
@@ -296,7 +286,17 @@ function InlinePreview(props: {
           fallback={
             <MentionContainer
               icon={
-                <EntityIcon targetType={props.blockName as any} size="fill" />
+                <Show
+                  when={props.blockName === 'task'}
+                  fallback={
+                    <EntityIcon
+                      targetType={props.blockName as any}
+                      size="fill"
+                    />
+                  }
+                >
+                  <TaskStatusIcon size="fill" />
+                </Show>
               }
               text={
                 <span
@@ -305,25 +305,13 @@ function InlinePreview(props: {
                   data-block-name={props.blockName}
                   data-document-name={props.documentName}
                 >
-                  <Show when={props.documentName} fallback={'Unknown'}>
+                  <Show when={props.documentName} fallback="Unknown">
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
-                  <span class="relative text-[0.8em] text-current/50 rounded-md">
-                    {(() => {
-                      const accessories = mentionsAccessories(
-                        props.blockName as BlockName,
-                        props.blockParams
-                      );
-                      if (accessories) {
-                        return (
-                          <>
-                            {` ${accessories.note ?? ''}`}
-                            {getMentionsIcon(accessories.icon)}
-                          </>
-                        );
-                      }
-                    })()}
-                  </span>
+                  <MentionAccessories
+                    blockName={props.blockName}
+                    blockParams={props.blockParams}
+                  />
                 </span>
               }
               collapsed={props.collapsed}
@@ -389,25 +377,16 @@ function InlinePreview(props: {
                         </Show>
                       )}
                     </Show>
-                    <span class="relative text-[0.8em] text-current/50 rounded-xs">
-                      {(() => {
-                        const accessories = mentionsAccessories(
-                          props.blockName as BlockName,
-                          props.blockParams
-                        );
-                        if (accessories) {
-                          return (
-                            <>
-                              {` ${accessories.note ?? ''}`}
-                              {getMentionsIcon(accessories.icon)}
-                            </>
-                          );
-                        }
-                      })()}
-                    </span>
+                    <MentionAccessories
+                      blockName={props.blockName}
+                      blockParams={props.blockParams}
+                    />
                     <Show when={props.blockName === 'task'}>
                       <Suspense>
-                        <InlineTaskProperties taskId={accessibleItem().id} />
+                        <InlineTaskProperties
+                          taskId={accessibleItem().id}
+                          previewProperties={documentProperties()}
+                        />
                       </Suspense>
                     </Show>
                   </span>
@@ -435,10 +414,445 @@ function InlinePreview(props: {
 }
 
 export function DocumentMention(props: DocumentMentionDecoratorProps) {
+  if (props.blockName === 'routine' || props.blockName === 'automation') {
+    return <RoutineMention {...props} />;
+  }
   const lexicalWrapper = useContext(LexicalWrapperContext);
   if (lexicalWrapper?.skipPreviewFetch) {
     return <DocumentMentionStatic {...props} />;
   }
+  // Only skill mentions need to distinguish built-ins from stored documents.
+  // Ordinary mentions must not wait for a once-per-session skills request.
+  return (
+    <Switch
+      fallback={
+        <Suspense fallback={<DocumentMentionStatic {...props} />}>
+          <DocumentMentionInner {...props} />
+        </Suspense>
+      }
+    >
+      <Match when={props.blockName === 'database'}>
+        <DatabaseMention {...props} />
+      </Match>
+      <Match when={props.blockName === 'form'}>
+        <FormMention {...props} />
+      </Match>
+      <Match when={props.blockName === 'skill'}>
+        <SkillDocumentMention {...props} />
+      </Match>
+      <Match when={props.blockName === 'external_chat'}>
+        <ExternalChatMention {...props} />
+      </Match>
+    </Switch>
+  );
+}
+
+/** Whether a mention was made in the last minute; it stops being recent while mounted. */
+function createRecentMention(createdAt: number | undefined) {
+  const recentForMs = createdAt
+    ? createdAt + RECENT_MENTION_THRESHOLD_MS - Date.now()
+    : 0;
+  const [isRecent, setIsRecent] = createSignal(recentForMs > 0);
+  if (recentForMs > 0) {
+    const timer = setTimeout(() => setIsRecent(false), recentForMs);
+    onCleanup(() => clearTimeout(timer));
+  }
+  return isRecent;
+}
+
+/**
+ * A reference that opens its item on click or Enter: its icon and name in
+ * the mention chip, without a document preview.
+ */
+function EntityMentionLink(props: {
+  documentId: string;
+  blockName: string;
+  name: string;
+  icon: JSX.Element;
+  collapsed?: boolean;
+  onOpen: (event: MouseEvent | KeyboardEvent) => void;
+}) {
+  const open = (event: MouseEvent | KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    props.onOpen(event);
+  };
+  return (
+    <span
+      class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
+      role="link"
+      tabIndex={0}
+      on:mousedown={(event) => event.preventDefault()}
+      on:click={open}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') open(event);
+      }}
+    >
+      <MentionContainer
+        icon={props.icon}
+        collapsed={props.collapsed}
+        text={
+          <span
+            data-document-mention="true"
+            data-document-id={props.documentId}
+            data-block-name={props.blockName}
+            data-document-name={props.name}
+          >
+            {props.name}
+          </span>
+        }
+      />
+    </span>
+  );
+}
+
+/** How an unavailable reference reads: `Deleted` or `No Access`. */
+function UnavailableMentionChip(props: {
+  access: PreviewItemNoAccess['access'];
+  collapsed?: boolean;
+}) {
+  return (
+    <Show
+      when={props.access === 'no_access'}
+      fallback={
+        <MentionContainer
+          icon={<TrashSimple />}
+          text="Deleted"
+          collapsed={props.collapsed}
+        />
+      }
+    >
+      <MentionContainer
+        icon={<EyeSlashDuo />}
+        text="No Access"
+        collapsed={props.collapsed}
+      />
+    </Show>
+  );
+}
+
+/**
+ * A database, form or routine reference whose item is gone or hidden from the
+ * viewer. It reads `Deleted` or `No Access` like any other unavailable
+ * reference, and clicking it keeps the item's card open (a tap opens the card
+ * as a sheet) instead of opening anything.
+ */
+function UnavailableMention(props: {
+  access: PreviewItemNoAccess['access'];
+  documentInfo: DocumentPreviewContentProps['documentInfo'];
+  collapsed?: boolean;
+}) {
+  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+  const [previewSheetOpen, setPreviewSheetOpen] = createSignal(false);
+  const open = (event: MouseEvent | KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isTouchDevice()) setPreviewSheetOpen(true);
+    else setPreviewCardOpen(true);
+  };
+  return (
+    <>
+      <Show when={isTouchDevice()}>
+        <DocumentPreviewSheet
+          open={previewSheetOpen()}
+          onOpenChange={setPreviewSheetOpen}
+          documentInfo={props.documentInfo}
+        />
+      </Show>
+      <HoverCard
+        open={previewCardOpen()}
+        onOpenChange={setPreviewCardOpen}
+        keepOpenOnTriggerPress
+        trigger={
+          <span
+            class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
+            role="link"
+            tabIndex={0}
+            on:mousedown={(event) => event.preventDefault()}
+            on:click={open}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') open(event);
+            }}
+          >
+            <UnavailableMentionChip
+              access={props.access}
+              collapsed={props.collapsed}
+            />
+          </span>
+        }
+        content={
+          <PopupPreview
+            mouseEnter={() => {}}
+            mouseLeave={() => {}}
+            documentInfo={props.documentInfo}
+          />
+        }
+      />
+    </>
+  );
+}
+
+/**
+ * How a database or form reference reads once its detail read fails, or
+ * nothing while it keeps the chip it loaded: a refetch that fails for any
+ * reason but the item being gone leaves the loaded chip on screen.
+ */
+function detailUnavailable(detail: {
+  isError: boolean;
+  error: unknown;
+  dataUpdatedAt: number;
+}): PreviewItemNoAccess['access'] | undefined {
+  if (!detail.isError) return undefined;
+  const access =
+    detail.error instanceof ThrownResultError
+      ? failedReadAccess(detail.error.errors)
+      : 'no_access';
+  if (detail.dataUpdatedAt > 0 && access !== 'does_not_exist') return undefined;
+  return access;
+}
+
+function RoutineMention(props: DocumentMentionDecoratorProps) {
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  if (lexicalWrapper?.skipPreviewFetch) return <RoutineLink {...props} />;
+  return <PreviewedRoutineMention {...props} />;
+}
+
+function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
+  const { item } = useItemPreviewData(() => ({
+    id: props.documentId,
+    type: 'routine',
+  }));
+  const isRecentMention = createRecentMention(props.createdAt);
+  // A routine made in the last minute can briefly preview as missing; it
+  // still opens rather than reading as deleted.
+  const unavailable = () => {
+    const i = item();
+    if (i.loading || i.access === 'access') return undefined;
+    if (i.access === 'does_not_exist' && isRecentMention()) return undefined;
+    return i.access;
+  };
+  return (
+    <Show when={unavailable()} fallback={<RoutineLink {...props} />}>
+      {(access) => (
+        <UnavailableMention
+          access={access()}
+          collapsed={props.collapsed}
+          documentInfo={{
+            id: props.documentId,
+            type: 'routine',
+            params: {},
+            isOpenable: true,
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
+/** Routine references use their saved label; routines have no hover preview. */
+function RoutineLink(props: DocumentMentionDecoratorProps) {
+  const name = () =>
+    props.documentName?.replaceAll('\n', ' ').trim() || 'Routine';
+  const open = (event: MouseEvent | KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openDocument(
+      'routine',
+      props.documentId,
+      undefined,
+      openInNewSplitForMention(event.shiftKey, true)
+    );
+  };
+  return (
+    <Tooltip label={name()} as="span" disabled={!props.collapsed}>
+      <span
+        class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
+        role="link"
+        aria-label={name()}
+        tabIndex={0}
+        on:mousedown={(event) => event.preventDefault()}
+        on:click={open}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') open(event);
+        }}
+      >
+        <DocumentMentionStatic {...props} />
+      </span>
+    </Tooltip>
+  );
+}
+
+/** Databases have their own permission-checked metadata, not a document preview. */
+function DatabaseMention(props: DocumentMentionDecoratorProps) {
+  const wrapper = useContext(LexicalWrapperContext);
+  const [editable, setEditable] = createSignal(
+    wrapper?.editor.isEditable() ?? false
+  );
+  if (wrapper)
+    onCleanup(
+      wrapper.editor.registerEditableListener((value) => {
+        setEditable(value);
+      })
+    );
+  const enabled = useFeatureFlag(enableDatabases);
+  const detail = useDatabaseDetailQuery(() =>
+    enabled().enabled ? props.documentId : undefined
+  );
+  const name = () =>
+    detail.isSuccess ? detail.data.database.name : props.documentName;
+  const expand = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!wrapper?.editor.isEditable() || !wrapper.isInteractable()) return;
+    wrapper.editor.update(() => {
+      const node = $getNodeByKey(props.key);
+      if ($isDocumentMentionNode(node)) $convertMentionToCard(node);
+    });
+  };
+  return (
+    <Show
+      when={detailUnavailable(detail)}
+      fallback={
+        <span class="inline-flex items-baseline gap-1">
+          <EntityMentionLink
+            documentId={props.documentId}
+            blockName="database"
+            name={name() || 'Database'}
+            icon={<EntityIcon targetType="database" size="fill" />}
+            collapsed={props.collapsed}
+            onOpen={(event) =>
+              openDocument(
+                'database',
+                props.documentId,
+                props.blockParams,
+                openInNewSplitForMention(event.shiftKey, true)
+              )
+            }
+          />
+          <Show
+            when={enabled().enabled && editable() && wrapper?.isInteractable()}
+          >
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Expand database"
+              tooltip="Expand database"
+              on:mousedown={(event) => event.preventDefault()}
+              on:click={expand}
+            >
+              <ArrowsOut class="size-3.5" />
+            </Button>
+          </Show>
+        </span>
+      }
+    >
+      {(access) => (
+        <UnavailableMention
+          access={access()}
+          collapsed={props.collapsed}
+          documentInfo={{
+            id: props.documentId,
+            type: 'database',
+            params: props.blockParams ?? {},
+            isOpenable: true,
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
+/**
+ * A form: its icon and name, from its own detail, which respondents can read.
+ * Opens for every recipient; the forms flag gates authoring only.
+ */
+function FormMention(props: DocumentMentionDecoratorProps) {
+  const detail = useFormDetailQuery(() => props.documentId);
+  const name = () =>
+    detail.isSuccess ? detail.data.form.name : props.documentName;
+  return (
+    <Show
+      when={detailUnavailable(detail)}
+      fallback={
+        <EntityMentionLink
+          documentId={props.documentId}
+          blockName="form"
+          name={name() || 'Form'}
+          icon={<EntityIcon targetType="form" size="fill" />}
+          collapsed={props.collapsed}
+          onOpen={(event) =>
+            openDocument(
+              'form',
+              props.documentId,
+              props.blockParams,
+              openInNewSplitForMention(event.shiftKey, true)
+            )
+          }
+        />
+      }
+    >
+      {(access) => (
+        <UnavailableMention
+          access={access()}
+          collapsed={props.collapsed}
+          documentInfo={{
+            id: props.documentId,
+            type: 'form',
+            params: props.blockParams ?? {},
+            isOpenable: true,
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
+/**
+ * An external chat: not a previewable document, so it shows its name and opens
+ * inside External; a viewer the chat isn't shared with sees it as
+ * unavailable.
+ */
+function ExternalChatMention(props: DocumentMentionDecoratorProps) {
+  const { openWithSplit } = useSplitLayout();
+  const userId = useUserId();
+  const detail = useExternalChatDetailQuery(
+    externalChatApi,
+    () => userId() ?? '',
+    () => props.documentId
+  );
+  const name = () => (detail.isSuccess ? detail.data.name : props.documentName);
+  return (
+    <Show
+      when={detailUnavailable(detail)}
+      fallback={
+        <EntityMentionLink
+          documentId={props.documentId}
+          blockName="external_chat"
+          name={name() || 'External chat'}
+          icon={
+            <EntityIcon
+              targetType="external_chat"
+              provider={detail.isSuccess ? detail.data.provider : undefined}
+              size="fill"
+            />
+          }
+          collapsed={props.collapsed}
+          onOpen={(event) =>
+            openWithSplit(externalChatContent(props.documentId), {
+              preferNewSplit: openInNewSplitForMention(event.shiftKey, true),
+            })
+          }
+        />
+      }
+    >
+      {(access) => (
+        <UnavailableMentionChip access={access()} collapsed={props.collapsed} />
+      )}
+    </Show>
+  );
+}
+
+function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
   const systemSkills = useSystemSkillsQuery();
   return (
     <Switch>
@@ -452,7 +866,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
         <DocumentMentionStatic {...props} />
       </Match>
       <Match when={true}>
-        <Suspense>
+        <Suspense fallback={<DocumentMentionStatic {...props} />}>
           <DocumentMentionInner {...props} />
         </Suspense>
       </Match>
@@ -478,18 +892,29 @@ function SystemSkillMention(
 }
 
 /** Lightweight mention display that skips all backend fetches. Uses only the stored name. */
-function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
+export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
   if (props.blockName === 'skill') {
     return (
       <SkillSlashText
         documentId={props.documentId}
         name={props.documentName ?? ''}
+        collapsed={props.collapsed}
       />
     );
   }
   return (
     <MentionContainer
-      icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
+      icon={
+        <Show
+          when={props.blockName === 'task'}
+          fallback={
+            <EntityIcon targetType={props.blockName as any} size="fill" />
+          }
+        >
+          <TaskStatusIcon size="fill" />
+        </Show>
+      }
+      collapsed={props.collapsed}
       text={
         <span
           data-document-mention="true"
@@ -497,7 +922,11 @@ function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
           data-block-name={props.blockName}
           data-document-name={props.documentName}
         >
-          {props.documentName ?? props.documentId}
+          {(props.documentName || 'Loading...').replaceAll('\n', ' ').trim()}
+          <MentionAccessories
+            blockName={verifyBlockName(props.blockName)}
+            blockParams={props.blockParams}
+          />
         </span>
       }
     />
@@ -506,7 +935,7 @@ function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
 
 function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
-  const currentBlockName = useMaybeBlockName();
+  const currentBlockName = useMarkdownHost() ?? useMaybeBlockName();
 
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
@@ -520,12 +949,10 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return lexicalWrapper?.isInteractable() ?? false;
   });
 
-  // Check if this is a recently created mention that we should show fallback for
-  const isRecentMention = createMemo(() => {
-    if (!props.createdAt) return false;
-    const age = Date.now() - props.createdAt;
-    return age < RECENT_MENTION_THRESHOLD_MS;
-  });
+  // Check if this is a recently created mention that we should show fallback for.
+  // It stops being recent while mounted, so a chip for an event deleted in the
+  // meantime then reads and opens as deleted without a remount.
+  const isRecentMention = createRecentMention(props.createdAt);
 
   const showEmbedOption = createMemo(() => {
     if (!lexicalWrapper?.isInteractable()) return false;
@@ -558,7 +985,8 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return baseEntity;
   };
 
-  const [item] = useItemPreview(itemEntity);
+  const previewData = useItemPreviewData(itemEntity);
+  const { item } = previewData;
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -576,26 +1004,53 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return props.blockName;
   });
 
+  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+  const [previewSheetOpen, setPreviewSheetOpen] = createSignal(false);
+
+  const calendarOpen = createMemo(() =>
+    verifyBlockName(props.blockName) === 'calendar'
+      ? calendarMentionOpen(
+          item(),
+          props.documentId,
+          props.blockParams?.occurrenceKey
+        )
+      : undefined
+  );
+
+  // A deleted or inaccessible item has nothing to open. A just-created
+  // mention can briefly preview as missing; it still opens rather than
+  // reading as deleted.
+  const isUnavailable = () => {
+    const i = item();
+    if (i.loading) return false;
+    return (
+      i.access === 'no_access' ||
+      (i.access === 'does_not_exist' && !isRecentMention())
+    );
+  };
+  const showsPreviewOnOpen = () =>
+    calendarOpen()?.kind === 'read_only' || isUnavailable();
+
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     // The calendar is a singleton block: open it aimed at the viewer's own
-    // copy of the meeting, which the preview resolved through the shared
-    // iCalendar UID.
-    if (verifyBlockName(props.blockName) === 'calendar') {
-      const i = item();
-      const event = isCalendarEventPreviewItem(i) ? i.event : undefined;
-      const paramKey = props.blockParams?.occurrenceKey;
-      openCalendarEventSplit({
-        eventId: event?.viewerEventId ?? props.documentId,
-        occurrenceKey: paramKey ?? event?.occurrenceKey ?? undefined,
-        // The preview's time only locates the instance it previewed; a
-        // mention aimed at a different instance derives its range from the
-        // occurrence key instead.
-        time:
-          !paramKey || paramKey === event?.occurrenceKey
-            ? event?.time
-            : undefined,
-        openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
-      });
+    // copy of the meeting. A meeting shared through the channel but absent
+    // from the viewer's calendars, like any item that is gone or hidden from
+    // the viewer, has nothing to open, so its preview card is shown instead,
+    // as a sheet on touch devices.
+    if (showsPreviewOnOpen()) {
+      if (isTouchDevice()) setPreviewSheetOpen(true);
+      else setPreviewCardOpen(true);
+      return;
+    }
+    const target = calendarOpen();
+    if (target?.kind === 'calendar') {
+      fireAndForget(
+        openCalendarEventSplit({
+          ...target.target,
+          openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
+        }),
+        'document-mention'
+      );
       return;
     }
     openDocument(
@@ -670,92 +1125,122 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     });
   };
 
-  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+  // Native listeners: inside an editable editor (the agent and chat
+  // composers) the shell stops click propagation before Solid's delegated
+  // handlers run, which left the chip inert there.
+  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();
     const i = item();
     if (
-      !i.loading &&
-      (i.access === 'access' ||
-        shouldUseFallbackForRecentMention(i, isRecentMention()))
+      isUnavailable() ||
+      (!i.loading &&
+        (i.access === 'access' ||
+          shouldUseFallbackForRecentMention(i, isRecentMention())))
     ) {
       open(e);
     }
   });
 
+  // One set of preview props for the hover card and the touch sheet.
+  const previewContentProps: DocumentPreviewContentProps = {
+    get delete() {
+      return editor?.isEditable() ? deleteMention : undefined;
+    },
+    get collapseInfo() {
+      return {
+        isCollapsed: isCollapsed(),
+        isCollapsable: isCollapsable(),
+        handleCollapse: () => {
+          const state = !isCollapsed();
+          setIsCollapsed(state);
+          editor?.update(() => {
+            const node = $getNodeByKey(props.key);
+            if ($isDocumentMentionNode(node)) {
+              node.setCollapsed(state);
+            }
+          });
+        },
+      };
+    },
+    get documentInfo() {
+      return {
+        id: props.documentId,
+        name: shouldUseFallbackForRecentMention(item(), isRecentMention())
+          ? props.documentName
+          : undefined,
+        type: verifyBlockName(props.blockName),
+        params: props.blockParams ?? {},
+        isOpenable: currentBlockId !== props.documentId,
+      };
+    },
+    get previewInfo() {
+      return {
+        isPreviewable: isEmbeddable(),
+        showPreview: showEmbedOption(),
+        handlePreviewToggle: convertToCard,
+      };
+    },
+    get useFallbackData() {
+      return shouldUseFallbackForRecentMention(item(), isRecentMention());
+    },
+  };
+
   return (
-    <HoverCard
-      trigger={
-        <span class="relative">
-          <span
-            class="size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
-            classList={{
-              'bg-active text-ink': isSelectedAsNode(),
-            }}
-            style={{
-              'user-select': 'inherit',
-            }}
-            {...navHandlers}
-          >
-            <Switch>
-              <Match when={item()}>
-                <InlinePreview
-                  entity={itemEntity()}
-                  blockName={verifyBlockName(props.blockName)}
-                  blockParams={props.blockParams || {}}
-                  theme={props.theme}
-                  collapsed={isCollapsed()}
-                  documentName={props.documentName}
-                  createdAt={props.createdAt}
-                  isRecentMention={isRecentMention}
-                />
-              </Match>
-            </Switch>
-          </span>
-          <MentionTooltip show={isSelectedAsNode()} text="Open" />
-        </span>
-      }
-      content={
-        <PopupPreview
-          mouseEnter={() => {}}
-          mouseLeave={() => {}}
-          delete={editor?.isEditable() ? deleteMention : undefined}
-          collapseInfo={{
-            isCollapsed: isCollapsed(),
-            isCollapsable: isCollapsable(),
-            handleCollapse: () => {
-              const state = !isCollapsed();
-              setIsCollapsed(state);
-              editor?.update(() => {
-                const node = $getNodeByKey(props.key);
-                if ($isDocumentMentionNode(node)) {
-                  node.setCollapsed(state);
-                }
-              });
-            },
-          }}
-          documentInfo={{
-            id: props.documentId,
-            name: (() => {
-              const i = item();
-              return shouldUseFallbackForRecentMention(i, isRecentMention())
-                ? props.documentName
-                : undefined;
-            })(),
-            type: verifyBlockName(props.blockName),
-            params: props.blockParams ?? {},
-            isOpenable: currentBlockId !== props.documentId,
-          }}
-          previewInfo={{
-            isPreviewable: isEmbeddable(),
-            showPreview: showEmbedOption(),
-            handlePreviewToggle: convertToCard,
-          }}
-          useFallbackData={shouldUseFallbackForRecentMention(
-            item(),
-            isRecentMention()
-          )}
+    <>
+      {/* The sheet stays up once open, so a share the viewer adds or is
+          invited to meanwhile shows it is on their calendar in place. */}
+      <Show
+        when={isTouchDevice() && (showsPreviewOnOpen() || previewSheetOpen())}
+      >
+        <DocumentPreviewSheet
+          open={previewSheetOpen()}
+          onOpenChange={setPreviewSheetOpen}
+          {...previewContentProps}
         />
-      }
-    />
+      </Show>
+      <HoverCard
+        open={previewCardOpen()}
+        onOpenChange={setPreviewCardOpen}
+        keepOpenOnTriggerPress={showsPreviewOnOpen()}
+        trigger={
+          <span class="relative">
+            <span
+              class="size-full py-[0.125em] cursor-default rounded-xs hover:bg-hover focus:bg-active"
+              classList={{
+                'bg-active text-ink': isSelectedAsNode(),
+              }}
+              style={{
+                'user-select': 'inherit',
+              }}
+              {...navHandlers}
+            >
+              <Switch>
+                <Match when={item()}>
+                  <InlinePreview
+                    previewData={previewData}
+                    entity={itemEntity()}
+                    blockName={verifyBlockName(props.blockName)}
+                    blockParams={props.blockParams || {}}
+                    theme={props.theme}
+                    collapsed={isCollapsed()}
+                    documentName={props.documentName}
+                    createdAt={props.createdAt}
+                    isRecentMention={isRecentMention}
+                  />
+                </Match>
+              </Switch>
+            </span>
+            <MentionTooltip show={isSelectedAsNode()} text="Open" />
+          </span>
+        }
+        content={
+          <PopupPreview
+            mouseEnter={() => {}}
+            mouseLeave={() => {}}
+            {...previewContentProps}
+          />
+        }
+      />
+    </>
   );
 }

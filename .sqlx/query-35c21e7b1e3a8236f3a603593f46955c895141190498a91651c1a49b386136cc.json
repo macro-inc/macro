@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scheduling_host_claim SET occupied = tstzmultirange(tstzrange($2,$3,'[)')) WHERE booking_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35c21e7b1e3a8236f3a603593f46955c895141190498a91651c1a49b386136cc"
+}

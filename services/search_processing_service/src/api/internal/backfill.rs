@@ -28,13 +28,15 @@ use crate::BackfillServiceImpl;
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::domain::jobs::{BackfillJobs, JobId};
 use crate::domain::models::{
-    CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest, DocumentBackfillRequest,
-    EmailBackfillRequest, ProjectBackfillRequest, PropertiesBackfillRequest,
+    CalendarEventBackfillRequest, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
+    DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillRequest,
+    PropertiesBackfillRequest,
 };
 use crate::domain::service::BackfillService;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
+        .route("/agent-sessions", post(agent_sessions))
         .route("/calls", post(calls))
         .route("/chats", post(chats))
         .route("/channels", post(channels))
@@ -42,12 +44,31 @@ pub fn router() -> Router<ApiContext> {
         .route("/emails", post(emails))
         .route("/properties", post(properties))
         .route("/projects", post(projects))
+        .route("/calendar-events", post(calendar_events))
         .route("/{job_id}", get(status))
 }
 
 #[derive(Debug, Serialize)]
 struct AcceptedReceipt {
     job_id: JobId,
+}
+
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn agent_sessions(
+    State(service): State<Arc<crate::AgentSessionIndexer>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<
+        crate::domain::agent_session_index::AgentSessionBackfillRequest,
+    >,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "agent-sessions",
+        move |svc, progress, cancel| async move { svc.backfill(req, progress, cancel).await },
+    )
+    .await
 }
 
 #[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
@@ -172,6 +193,24 @@ async fn projects(
     .await
 }
 
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn calendar_events(
+    State(service): State<Arc<BackfillServiceImpl>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<CalendarEventBackfillRequest>,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "calendar-events",
+        move |svc, progress, cancel| async move {
+            svc.backfill_calendar_events(req, progress, cancel).await
+        },
+    )
+    .await
+}
+
 #[tracing::instrument(skip(jobs, _internal_authorization))]
 async fn status(
     State(jobs): State<BackfillJobs>,
@@ -192,15 +231,16 @@ async fn status(
 /// to the worker future the caller built, spawn it, and return
 /// `202 Accepted` with the job id. The worker future captures the request
 /// body so the HTTP body reference doesn't outlive the handler.
-async fn spawn_backfill<F, Fut>(
-    service: Arc<BackfillServiceImpl>,
+async fn spawn_backfill<S, F, Fut>(
+    service: Arc<S>,
     jobs: BackfillJobs,
     entity: &'static str,
     run: F,
 ) -> Response
 where
+    S: Send + Sync + 'static,
     F: FnOnce(
-            Arc<BackfillServiceImpl>,
+            Arc<S>,
             Arc<crate::domain::jobs::JobProgress>,
             tokio_util::sync::CancellationToken,
         ) -> Fut

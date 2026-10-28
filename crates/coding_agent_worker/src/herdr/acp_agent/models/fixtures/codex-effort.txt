@@ -1,0 +1,7 @@
+Select Reasoning Level for gpt-6-sol
+  1. Low
+› 2. Medium (default)
+  3. High
+  4. Extra high
+  5. More reasoning… Max and Ultra consume usage limits faster
+Press enter to confirm or esc to go back

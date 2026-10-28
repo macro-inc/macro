@@ -107,6 +107,58 @@ fn assert_published_batches(thread_count: usize, expected_batch_sizes: &[usize])
     assert_eq!(published_thread_ids, thread_ids);
 }
 
+fn other_contact(email: Option<&str>, name: Option<&str>) -> Contact {
+    Contact {
+        id: Uuid::from_u128(1),
+        link_id: Uuid::from_u128(2),
+        name: name.map(str::to_owned),
+        email_address: email.map(str::to_owned),
+        original_photo_url: None,
+        sfs_photo_url: None,
+    }
+}
+
+#[test]
+fn other_contact_at_a_shared_sender_address_keeps_no_name() {
+    let contact = normalize_other_contact(other_contact(
+        Some("notifications@cal.com"),
+        Some("Nathan Flurry"),
+    ));
+
+    assert_eq!(contact.name, None);
+    assert_eq!(
+        contact.email_address.as_deref(),
+        Some("notifications@cal.com")
+    );
+}
+
+#[test]
+fn other_contact_at_a_personal_address_keeps_its_name() {
+    let contact = normalize_other_contact(other_contact(
+        Some("nathan@example.com"),
+        Some("Nathan Flurry"),
+    ));
+
+    assert_eq!(contact.name.as_deref(), Some("Nathan Flurry"));
+}
+
+#[test]
+fn other_contact_drops_the_relay_suffix_from_its_name() {
+    let contact = normalize_other_contact(other_contact(
+        Some("nathan@example.com"),
+        Some("Nathan Flurry via Cal.com"),
+    ));
+
+    assert_eq!(contact.name.as_deref(), Some("Nathan Flurry"));
+}
+
+#[test]
+fn other_contact_without_an_address_is_left_alone() {
+    let contact = normalize_other_contact(other_contact(None, Some("Nathan Flurry")));
+
+    assert_eq!(contact.name.as_deref(), Some("Nathan Flurry"));
+}
+
 #[tokio::test]
 async fn publishes_no_batches_for_zero_threads() {
     assert_published_batches(0, &[]);
@@ -130,4 +182,52 @@ async fn publishes_a_second_batch_for_fifty_one_threads() {
 #[tokio::test]
 async fn publishes_ordered_bounded_batches_for_larger_inputs() {
     assert_published_batches(137, &[50, 50, 37]);
+}
+
+fn link_for(macro_id: &str, email: &str) -> Link {
+    let macro_id = MacroUserIdStr::try_from(macro_id.to_string()).expect("valid macro id");
+    let email_address = macro_user_id::email::EmailStr::try_from(email.to_string()).expect("email");
+    Link {
+        id: Uuid::nil(),
+        is_primary: Link::derive_is_primary(&macro_id, &email_address),
+        macro_id,
+        fusionauth_user_id: "fa".to_string(),
+        email_address,
+        provider: models_email::service::link::UserProvider::Gmail,
+        is_sync_active: true,
+        needs_reauth: false,
+        last_sync_error_at: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    }
+}
+
+#[test]
+fn address_book_connections_cover_saved_contacts_and_skip_noise() {
+    let link = link_for("macro|owner@acme.com", "owner@acme.com");
+    let contacts = vec![
+        other_contact(Some("Alice@Acme.com"), Some("Alice")),
+        other_contact(Some("alice@acme.com"), Some("Alice again")),
+        other_contact(Some("owner@acme.com"), Some("Me")),
+        other_contact(Some("noreply@acme.com"), None),
+        other_contact(Some("   "), None),
+        other_contact(None, Some("No address")),
+        other_contact(Some("friend@gmail.com"), Some("Friend")),
+    ];
+
+    let connections = address_book_connections(&link, &contacts);
+
+    let second: Vec<String> = connections
+        .iter()
+        .map(|connection| connection.second.to_string())
+        .collect();
+    assert_eq!(
+        second,
+        vec!["macro|alice@acme.com", "macro|friend@gmail.com"]
+    );
+    assert!(
+        connections
+            .iter()
+            .all(|connection| connection.first == link.macro_id)
+    );
 }

@@ -4,7 +4,7 @@ import { useProperty } from '../core/context';
 
 type ButtonClickHandler = JSX.EventHandler<HTMLButtonElement, MouseEvent>;
 
-type Props = Omit<
+export type PropertyEditTriggerProps = Omit<
   JSX.ButtonHTMLAttributes<HTMLButtonElement>,
   'type' | 'disabled' | 'onClick'
 > & {
@@ -20,7 +20,7 @@ type Props = Omit<
  *
  * Must be inside <Property.Root>.
  */
-export function PropertyEditTrigger(props: Props) {
+export function PropertyEditTrigger(props: PropertyEditTriggerProps) {
   const ctx = useProperty();
   const [local, rest] = splitProps(props, [
     'class',

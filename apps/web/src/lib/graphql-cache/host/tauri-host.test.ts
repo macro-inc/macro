@@ -1,27 +1,88 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
+const emitMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: listenMock,
+  emit: emitMock,
+}));
 
-import { createTauriCacheHost } from './tauri-host';
+import {
+  type EntityFilterCacheArgs,
+  type EntityFilterCacheResult,
+  INITIAL_CACHE_REVISION,
+} from '../protocol';
+import {
+  createTauriCacheHost,
+  NativeCacheUpgradeRequiredError,
+} from './tauri-host';
 
 type EventCallback = (event: { payload: Record<string, unknown> }) => void;
+
+const filterArgs: EntityFilterCacheArgs = {
+  filters: {},
+  sortMethod: 'UPDATED_AT',
+  sortDirection: 'DESC',
+  limit: 25,
+  mail: { view: 'ALL' },
+};
+const missingFilterCommand = 'Command graphql_cache_entity_filter not found';
+const emptyMailPage: EntityFilterCacheResult = {
+  kind: 'mail-page',
+  revision: INITIAL_CACHE_REVISION,
+  keys: [],
+  sortTimestamps: [],
+  nextCursor: null,
+  optimistic: false,
+};
 
 describe('createTauriCacheHost', () => {
   let eventCallbacks: Map<string, EventCallback>;
   const unlisten = vi.fn();
 
+  afterEach(async () => {
+    await vi.dynamicImportSettled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     eventCallbacks = new Map();
     invokeMock.mockResolvedValue(null);
+    emitMock.mockResolvedValue(undefined);
     listenMock.mockImplementation((event: string, cb: EventCallback) => {
       eventCallbacks.set(event, cb);
       return Promise.resolve(unlisten);
     });
+  });
+
+  it('reads the database generation after native initialization', async () => {
+    const generation = '00000000-0000-4000-8000-000000000001';
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_current_storage_generation' ? generation : null
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await expect(host.currentStorageGeneration()).resolves.toBe(generation);
+    expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
+      'graphql_cache_init_with_schema',
+      'graphql_cache_inspect_mutations',
+      'graphql_cache_current_storage_generation',
+    ]);
+    host.dispose();
+  });
+
+  it('reports logical storage resets to generation subscribers', () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const changed = vi.fn();
+    host.onCacheGenerationChanged(changed);
+    const notify = eventCallbacks.get('graphql-cache://cache-changed')!;
+    notify({ payload: { revision: INITIAL_CACHE_REVISION } });
+    expect(changed).not.toHaveBeenCalled();
+    notify({ payload: { revision: INITIAL_CACHE_REVISION, reset: true } });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({ storage: 'reset' });
+    host.dispose();
   });
 
   it('initializes the native cache once and prefixes op ids', async () => {
@@ -47,9 +108,10 @@ describe('createTauriCacheHost', () => {
     });
     expect(result).toEqual({ kind: 'miss' });
 
-    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init', {
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init_with_schema', {
       scope: 'scope-1',
       hotCapacity: 42,
+      schemaSdl: expect.stringContaining('type GraphqlUser'),
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read', {
       opId: `${host.clientId}:7`,
@@ -61,9 +123,10 @@ describe('createTauriCacheHost', () => {
   });
 
   it('reports asynchronous native initialization failures', async () => {
-    const onInitializationError = vi.fn();
+    const failed = Promise.withResolvers<Error>();
+    const onInitializationError = vi.fn(failed.resolve);
     invokeMock.mockImplementation((command: string) =>
-      command === 'graphql_cache_init'
+      command === 'graphql_cache_init_with_schema'
         ? Promise.reject(new Error('init failed'))
         : Promise.resolve(null)
     );
@@ -73,12 +136,47 @@ describe('createTauriCacheHost', () => {
       onInitializationError,
     });
 
-    await vi.waitFor(() =>
-      expect(onInitializationError).toHaveBeenCalledOnce()
-    );
+    await failed.promise;
+    expect(onInitializationError).toHaveBeenCalledOnce();
     expect(onInitializationError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'init failed' })
     );
+    host.dispose();
+  });
+
+  it('preserves the old queue and refuses writes when an OTA outpaces the native runtime', async () => {
+    const onInitializationError = vi.fn();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_inspect_mutations')
+        throw 'Command graphql_cache_inspect_mutations not found';
+      return null;
+    });
+    const host = createTauriCacheHost({
+      scope: 'old-native',
+      onInitializationError,
+    });
+    await expect(
+      host.claimNextMutation('runner', 10, 100)
+    ).rejects.toBeInstanceOf(NativeCacheUpgradeRequiredError);
+    await expect(
+      host.enqueueOptimisticMutation(
+        {
+          uuid: '00000000-0000-4000-8000-000000000001',
+          query: 'mutation Save { save { id } }',
+          data: {},
+        },
+        { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 100 }
+      )
+    ).rejects.toBeInstanceOf(NativeCacheUpgradeRequiredError);
+    expect(onInitializationError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Update Macro'),
+      })
+    );
+    expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
+      'graphql_cache_init_with_schema',
+      'graphql_cache_inspect_mutations',
+    ]);
     host.dispose();
   });
 
@@ -91,7 +189,9 @@ describe('createTauriCacheHost', () => {
     ];
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
-        command === 'graphql_cache_read_records_by_keys' ? records : null
+        command === 'graphql_cache_read_records_by_keys'
+          ? { revision: INITIAL_CACHE_REVISION, records }
+          : null
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
@@ -102,7 +202,7 @@ describe('createTauriCacheHost', () => {
         fragmentName: 'Item',
         keys: ['GraphqlSoupDocument:item-1'],
       })
-    ).resolves.toEqual(records);
+    ).resolves.toEqual({ revision: INITIAL_CACHE_REVISION, records });
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_read_records_by_keys',
       {
@@ -138,6 +238,253 @@ describe('createTauriCacheHost', () => {
         nowMs: 123,
       },
     });
+  });
+
+  it('waits for native initialization and forwards Mail filter requests over IPC', async () => {
+    let initialize: () => void = () => {
+      throw new Error('init not requested');
+    };
+    const page = {
+      kind: 'mail-page',
+      revision: INITIAL_CACHE_REVISION,
+      keys: ['GraphqlSoupEmailThread:thread-1'],
+      sortTimestamps: ['2025-01-04T00:00:00Z'],
+      nextCursor: 'local-cursor',
+      optimistic: false,
+    };
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? new Promise<void>((resolve) => {
+            initialize = resolve;
+          })
+        : Promise.resolve(page)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const args: EntityFilterCacheArgs = {
+      filters: { emailFilter: { tree: { literal: { importance: false } } } },
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 25,
+      mail: { view: 'INBOX', cursor: 'previous-local-cursor' },
+    };
+    const pending = host.entityFilter(args);
+    await vi.dynamicImportSettled();
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    initialize();
+    await expect(pending).resolves.toEqual(page);
+    expect(invokeMock).toHaveBeenLastCalledWith('graphql_cache_entity_filter', {
+      request: args,
+    });
+    host.dispose();
+  });
+
+  it.each([missingFilterCommand, new Error(missingFilterCommand)])(
+    'preserves legacy native behavior and remembers a missing filter command (%s)',
+    async (failure) => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_entity_filter') throw failure;
+        if (command === 'graphql_cache_read') return { kind: 'miss' };
+        if (command === 'graphql_cache_hydrate')
+          return { kind: 'void', revision: INITIAL_CACHE_REVISION };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'old-native' });
+      try {
+        await expect(host.entityFilter(filterArgs)).resolves.toEqual({
+          kind: 'unsupported',
+        });
+        await expect(
+          host.entityFilter({ ...filterArgs, mail: { view: 'INBOX' } })
+        ).resolves.toEqual({ kind: 'unsupported' });
+        expect(
+          invokeMock.mock.calls.filter(
+            ([command]) => command === 'graphql_cache_entity_filter'
+          )
+        ).toHaveLength(1);
+        // Missing this additive command must not disable the existing cache API.
+        await expect(host.readQuery({ query: '{ x }' })).resolves.toEqual({
+          kind: 'miss',
+        });
+        await expect(
+          host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+        ).resolves.toEqual({
+          kind: 'void',
+          revision: INITIAL_CACHE_REVISION,
+        });
+      } finally {
+        host.dispose();
+      }
+    }
+  );
+
+  it('falls back to full reads when native predates incremental watches', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_watch')
+        throw 'Command graphql_cache_watch not found';
+      if (command === 'graphql_cache_read')
+        return { kind: 'hit', data: { x: 1 } };
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'old-native' });
+    try {
+      const args = { opKey: 1, query: '{ x }' };
+      await expect(host.watchQuery?.(args)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      await expect(host.watchQuery?.(args)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      expect(
+        invokeMock.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_watch'
+        )
+      ).toHaveLength(1);
+      await expect(host.readQuery({ query: '{ x }' })).resolves.toEqual({
+        kind: 'hit',
+        data: { x: 1 },
+      });
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it('surfaces watch failures other than a missing native command', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_watch') throw new Error('storage failed');
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'new-native' });
+    try {
+      await expect(
+        host.watchQuery?.({ opKey: 1, query: '{ x }' })
+      ).rejects.toThrow('storage failed');
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it('does not treat an unsupported predicate as a missing native command', async () => {
+    const page = emptyMailPage;
+    const filter = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: 'unsupported' })
+      .mockResolvedValueOnce(page);
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_entity_filter' ? await filter() : null
+    );
+    const host = createTauriCacheHost({ scope: 'new-native' });
+    try {
+      await expect(host.entityFilter(filterArgs)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      await expect(
+        host.entityFilter({ ...filterArgs, mail: { view: 'INBOX' } })
+      ).resolves.toEqual(page);
+      expect(filter).toHaveBeenCalledTimes(2);
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it.each([
+    'cache storage failed',
+    'invalid entity-filter sort direction',
+    'Command graphql_cache_entity_filter not allowed by ACL',
+    'Command graphql_cache_read not found',
+    'Command not found',
+  ])(
+    'propagates non-capability errors without disabling future filtering: %s',
+    async (message) => {
+      const page = emptyMailPage;
+      const filter = vi
+        .fn()
+        .mockRejectedValueOnce(message)
+        .mockResolvedValueOnce(page);
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_entity_filter' ? await filter() : null
+      );
+      const host = createTauriCacheHost({ scope: 'new-native' });
+      try {
+        await expect(host.entityFilter(filterArgs)).rejects.toThrow(message);
+        await expect(host.entityFilter(filterArgs)).resolves.toEqual(page);
+        expect(filter).toHaveBeenCalledTimes(2);
+      } finally {
+        host.dispose();
+      }
+    }
+  );
+
+  it('does not hide native cache initialization failures', async () => {
+    invokeMock.mockRejectedValue(new Error('cache initialization failed'));
+    const host = createTauriCacheHost({ scope: 'old-native' });
+    try {
+      await expect(host.entityFilter(filterArgs)).rejects.toThrow(
+        'cache initialization failed'
+      );
+      expect(invokeMock).toHaveBeenCalledTimes(1);
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it('does not suppress filter timeouts or permanently disable the command', async () => {
+    vi.useFakeTimers();
+    const host = createTauriCacheHost({
+      scope: 'new-native',
+      requestTimeoutMs: 50,
+    });
+    try {
+      invokeMock.mockImplementation((command: string) =>
+        command === 'graphql_cache_entity_filter'
+          ? new Promise(() => {})
+          : Promise.resolve(null)
+      );
+      const assertion = expect(host.entityFilter(filterArgs)).rejects.toThrow(
+        'graphql cache ipc timeout: graphql_cache_entity_filter'
+      );
+      await vi.dynamicImportSettled();
+      await vi.advanceTimersByTimeAsync(60);
+      await assertion;
+      invokeMock.mockResolvedValue({ kind: 'unsupported' });
+      await expect(host.entityFilter(filterArgs)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      expect(
+        invokeMock.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_entity_filter'
+        )
+      ).toHaveLength(2);
+    } finally {
+      host.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('rechecks capabilities when a new native host is created', async () => {
+    const filter = vi
+      .fn()
+      .mockRejectedValueOnce(missingFilterCommand)
+      .mockResolvedValueOnce(emptyMailPage);
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_entity_filter' ? await filter() : null
+    );
+    const oldHost = createTauriCacheHost({ scope: 'scope-1' });
+    try {
+      await expect(oldHost.entityFilter(filterArgs)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+    } finally {
+      oldHost.dispose();
+    }
+    const newHost = createTauriCacheHost({ scope: 'scope-1' });
+    try {
+      await expect(newHost.entityFilter(filterArgs)).resolves.toEqual(
+        emptyMailPage
+      );
+      expect(filter).toHaveBeenCalledTimes(2);
+    } finally {
+      newHost.dispose();
+    }
   });
 
   it('sends writes with origin and dependency registration', async () => {
@@ -186,7 +533,12 @@ describe('createTauriCacheHost', () => {
 
   it('returns only the native hydration projection', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
-    const hydration = { kind: 'data' as const, data: { cursor: 'next' } };
+    const hydration = {
+      kind: 'data' as const,
+      data: { cursor: 'next' },
+      revision: '1',
+      revisionAdvanced: true,
+    };
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(command === 'graphql_cache_hydrate' ? hydration : null)
     );
@@ -198,6 +550,9 @@ describe('createTauriCacheHost', () => {
         identity: 'user-1',
       })
     ).resolves.toEqual(hydration);
+    expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+      revision: '1',
+    });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
       query: 'query Backfill { items @cacheOnly { id } cursor }',
       operationName: undefined,
@@ -207,6 +562,160 @@ describe('createTauriCacheHost', () => {
     });
   });
 
+  it.each(['data', 'void'])(
+    'skips native no-op hydration notifications (%s)',
+    async (kind) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const hydration = {
+        kind,
+        data: null,
+        revision: '5',
+        revisionAdvanced: false,
+      };
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_hydrate' ? hydration : null
+      );
+      await expect(
+        host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+      ).resolves.toEqual(hydration);
+      expect(emitMock).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
+
+  it('deduplicates repeated and out-of-order legacy revisions without an extra IPC read', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const revisions = [
+      '9007199254740993',
+      '9007199254740993',
+      '9007199254740992',
+      '9007199254740994',
+    ];
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_hydrate'
+        ? { kind: 'void', revision: revisions.shift() }
+        : null
+    );
+    for (let i = 0; i < 4; i++)
+      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+    expect(emitMock.mock.calls).toEqual([
+      ['graphql-cache://cache-hydrated', { revision: '9007199254740993' }],
+      ['graphql-cache://cache-hydrated', { revision: '9007199254740994' }],
+    ]);
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      'graphql_cache_current_revision',
+      expect.anything()
+    );
+    host.dispose();
+  });
+
+  it.each(['cache-changed', 'cache-hydrated'])(
+    'does not re-announce a legacy revision already observed via %s',
+    async (event) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      eventCallbacks.get(`graphql-cache://${event}`)?.({
+        payload: { revision: '7' },
+      });
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_hydrate'
+          ? { kind: 'void', revision: '7' }
+          : null
+      );
+      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      expect(emitMock).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
+
+  it.each(
+    [[], ['note']].map((searchChangedBuckets) => ({ searchChangedBuckets }))
+  )(
+    'forwards native bucket metadata $searchChangedBuckets across windows',
+    async ({ searchChangedBuckets }) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener, { includeHydration: true });
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_hydrate'
+          ? {
+              kind: 'void',
+              revision: '7',
+              revisionAdvanced: true,
+              searchChangedBuckets,
+            }
+          : null
+      );
+      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+        revision: '7',
+        searchChangedBuckets,
+      });
+      eventCallbacks.get('graphql-cache://cache-hydrated')?.({
+        payload: { revision: '7', searchChangedBuckets },
+      });
+      expect(listener).toHaveBeenCalledWith('7', { searchChangedBuckets });
+      host.dispose();
+    }
+  );
+
+  it.each(
+    [[], ['note']].map((searchChangedBuckets) => ({ searchChangedBuckets }))
+  )(
+    'forwards ordinary native writes and keeps resets conservative: $searchChangedBuckets',
+    ({ searchChangedBuckets }) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const listener = vi.fn();
+      host.onCacheChanged(listener);
+      const notify = eventCallbacks.get('graphql-cache://cache-changed')!;
+      notify({ payload: { revision: '7', searchChangedBuckets } });
+      expect(listener).toHaveBeenLastCalledWith('7', { searchChangedBuckets });
+      notify({ payload: { revision: '8', searchChangedBuckets, reset: true } });
+      expect(listener).toHaveBeenLastCalledWith('8');
+      host.dispose();
+    }
+  );
+
+  it('delivers cross-window hydration only to opted-in listeners', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const foreground = vi.fn();
+    const quickAccess = vi.fn();
+    const operations = vi.fn();
+    host.onCacheChanged(foreground);
+    host.onOpsAffected(operations);
+    const unsubscribe = host.onCacheChanged(quickAccess, {
+      includeHydration: true,
+    });
+    const hydrated = () =>
+      eventCallbacks.get('graphql-cache://cache-hydrated')?.({
+        payload: { revision: INITIAL_CACHE_REVISION },
+      });
+    hydrated();
+    expect(quickAccess).toHaveBeenCalledOnce();
+    expect(foreground).not.toHaveBeenCalled();
+    expect(operations).not.toHaveBeenCalled();
+    unsubscribe();
+    hydrated();
+    expect(quickAccess).toHaveBeenCalledOnce();
+    host.onCacheChanged(quickAccess, { includeHydration: true });
+    host.dispose();
+    hydrated();
+    expect(quickAccess).toHaveBeenCalledOnce();
+  });
+
+  it('does not fail a committed hydration when its notification fails', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const hydration = { kind: 'void', revision: '1', revisionAdvanced: true };
+    invokeMock.mockResolvedValue(hydration);
+    emitMock.mockRejectedValueOnce(new Error('notification failed'));
+    await expect(
+      host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+    ).resolves.toEqual(hydration);
+    expect(emitMock).toHaveBeenCalledOnce();
+    warning.mockRestore();
+    host.dispose();
+  });
+
   it('settles optimistic writes through the dedicated commands', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const optimistic = {
@@ -214,17 +723,23 @@ describe('createTauriCacheHost', () => {
       changed: ['A:1'],
       affectedOps: [],
       reset: false,
+      upsertKind: { kind: 'inserted' as const },
       initialClaim: { kind: 'not-runnable' as const },
     };
     invokeMock.mockImplementation((command: string) => {
       if (command === 'graphql_cache_enqueue_optimistic_mutation') {
         return Promise.resolve(optimistic);
       }
-      if (
-        command === 'graphql_cache_commit_optimistic_write' ||
-        command === 'graphql_cache_rollback_optimistic_write'
-      ) {
+      if (command === 'graphql_cache_commit_optimistic_write') {
         return Promise.resolve({ changed: [], affectedOps: [], reset: false });
+      }
+      if (command === 'graphql_cache_rollback_optimistic_write') {
+        return Promise.resolve({
+          kind: 'rolled-back',
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        });
       }
       return Promise.resolve(null);
     });
@@ -242,6 +757,7 @@ describe('createTauriCacheHost', () => {
     };
     const begun = await host.enqueueOptimisticMutation(
       {
+        uuid: '00000000-0000-4000-8000-000000000004',
         query: 'mutation { m }',
         data: { m: 1 },
         linkPatches: [patch],
@@ -256,6 +772,7 @@ describe('createTauriCacheHost', () => {
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_enqueue_optimistic_mutation',
       expect.objectContaining({
+        uuid: '00000000-0000-4000-8000-000000000004',
         linkPatches: [patch],
         createdAtMs: 123,
         owner: 'runner',
@@ -287,6 +804,22 @@ describe('createTauriCacheHost', () => {
         leaseOwner: 'runner',
         leaseGeneration: '2',
         error: 'invalid property',
+      }
+    );
+    await host.rollbackOptimisticWrite(
+      '2',
+      claim,
+      'already sent',
+      'DRAFT_ALREADY_SENT'
+    );
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_rollback_optimistic_write',
+      {
+        transactionId: '2',
+        leaseOwner: 'runner',
+        leaseGeneration: '2',
+        error: 'already sent',
+        errorCode: 'DRAFT_ALREADY_SENT',
       }
     );
   });
@@ -366,27 +899,33 @@ describe('createTauriCacheHost', () => {
     host.onCacheChanged(() => calls++);
     await Promise.resolve();
 
-    eventCallbacks.get('graphql-cache://cache-changed')?.({ payload: {} });
+    eventCallbacks.get('graphql-cache://cache-changed')?.({
+      payload: { revision: INITIAL_CACHE_REVISION },
+    });
     expect(calls).toBe(1);
   });
 
-  it('delivers queued mutation settlements from the broadcast event', async () => {
-    const host = createTauriCacheHost({ scope: 'scope-1' });
-    const seen: unknown[] = [];
-    host.onMutationSettled((settlement) => seen.push(settlement));
-    await Promise.resolve();
+  it.each([undefined, 'DRAFT_ALREADY_SENT'])(
+    'delivers queued mutation settlements with optional code %s',
+    async (errorCode) => {
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      const seen: unknown[] = [];
+      host.onMutationSettled((settlement) => seen.push(settlement));
+      await Promise.resolve();
 
-    const settlement = {
-      transactionId: '12',
-      status: 'permanently-failed' as const,
-      error: 'invalid property',
-    };
-    eventCallbacks.get('graphql-cache://mutation-settled')?.({
-      payload: settlement,
-    });
+      const settlement = {
+        transactionId: '12',
+        status: 'permanently-failed' as const,
+        error: 'invalid property',
+        ...(errorCode === undefined ? {} : { errorCode }),
+      };
+      eventCallbacks.get('graphql-cache://mutation-settled')?.({
+        payload: settlement,
+      });
 
-    expect(seen).toEqual([settlement]);
-  });
+      expect(seen).toEqual([settlement]);
+    }
+  );
 
   it('normalizes string command errors to Error rejections', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
@@ -409,7 +948,8 @@ describe('createTauriCacheHost', () => {
         requestTimeoutMs: 50,
       });
       invokeMock.mockImplementation((command: string) =>
-        command === 'graphql_cache_init'
+        command === 'graphql_cache_init_with_schema' ||
+        command === 'graphql_cache_inspect_mutations'
           ? Promise.resolve(null)
           : new Promise(() => {})
       );
@@ -418,6 +958,7 @@ describe('createTauriCacheHost', () => {
       const assertion = expect(read).rejects.toThrow(
         'graphql cache ipc timeout: graphql_cache_read'
       );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
       await assertion;
     } finally {
@@ -429,7 +970,8 @@ describe('createTauriCacheHost', () => {
     vi.useFakeTimers();
     try {
       invokeMock.mockImplementation((command: string) =>
-        command === 'graphql_cache_init'
+        command === 'graphql_cache_init_with_schema' ||
+        command === 'graphql_cache_inspect_mutations'
           ? Promise.resolve(null)
           : new Promise(() => {})
       );
@@ -441,7 +983,11 @@ describe('createTauriCacheHost', () => {
       let settled = false;
       void host
         .enqueueOptimisticMutation(
-          { query: 'mutation Rename { rename { id } }', data: {} },
+          {
+            uuid: '00000000-0000-4000-8000-000000000101',
+            query: 'mutation Rename { rename { id } }',
+            data: {},
+          },
           { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 1_010 }
         )
         .then(
@@ -452,6 +998,7 @@ describe('createTauriCacheHost', () => {
             settled = true;
           }
         );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
 
       expect(settled).toBe(false);
@@ -487,5 +1034,146 @@ describe('createTauriCacheHost', () => {
     host.dispose();
     await Promise.resolve();
     expect(unlisten).toHaveBeenCalled();
+  });
+
+  it('absorbs unlisten rejections on dispose', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      const rejectingUnlisten = vi.fn(() =>
+        Promise.reject(new Error('listener already gone'))
+      );
+      listenMock.mockResolvedValue(rejectingUnlisten);
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      host.dispose();
+
+      await vi.waitFor(() =>
+        expect(rejectingUnlisten).toHaveBeenCalledTimes(
+          listenMock.mock.calls.length
+        )
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
+  describe('calendar ranges', () => {
+    const rangeArgs = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
+    const range = {
+      kind: 'range',
+      revision: '4',
+      occurrenceKeys: ['GraphqlCalendarOccurrence:e1:k'],
+      gaps: [],
+      freshness: 'fresh',
+      uncertainEventKeys: [],
+      optimistic: false,
+      watermark: [{ linkId: 'l1', seq: '3' }],
+    };
+
+    it('reads ranges, commits, and forwards uncertain calendar events', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_calendar_range') return range;
+        if (command === 'graphql_cache_calendar_commit')
+          return {
+            revision: '5',
+            revisionAdvanced: true,
+            changed: ['GraphqlCalendarEvent:e2'],
+            affectedOps: [],
+            reset: false,
+            revalidations: [],
+          };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'calendar-native' });
+      try {
+        await expect(host.calendarRange(rangeArgs)).resolves.toEqual(range);
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_calendar_range',
+          { request: rangeArgs }
+        );
+        const commit = { deletedEventKeys: ['GraphqlCalendarEvent:e2'] };
+        await expect(host.calendarCommit(commit)).resolves.toEqual({
+          kind: 'committed',
+          revision: '5',
+          changed: ['GraphqlCalendarEvent:e2'],
+        });
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_calendar_commit',
+          { commit }
+        );
+        invokeMock.mockResolvedValue(null);
+        const enqueued = host.enqueueOptimisticMutation(
+          {
+            query: 'mutation M { m }',
+            data: {},
+            uuid: '00000000-0000-4000-8000-000000000001',
+            uncertainCalendarEventKeys: ['GraphqlCalendarEvent:e1'],
+          },
+          { owner: 'runner', nowMs: 0, leaseExpiresAtMs: 1 }
+        );
+        await vi.waitFor(() =>
+          expect(invokeMock).toHaveBeenLastCalledWith(
+            'graphql_cache_enqueue_optimistic_mutation',
+            expect.objectContaining({
+              uncertainCalendarEventKeys: ['GraphqlCalendarEvent:e1'],
+            })
+          )
+        );
+        await enqueued;
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('reports old native binaries as unsupported and stops probing them', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_calendar_range')
+          throw 'Command graphql_cache_calendar_range not found';
+        if (command === 'graphql_cache_read') return { kind: 'miss' };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'old-native-calendar' });
+      try {
+        await expect(host.calendarRange(rangeArgs)).resolves.toEqual({
+          kind: 'unsupported',
+        });
+        await expect(host.calendarCommit({ reset: true })).resolves.toEqual({
+          kind: 'unsupported',
+        });
+        expect(
+          invokeMock.mock.calls.filter(([command]) =>
+            String(command).startsWith('graphql_cache_calendar_')
+          )
+        ).toHaveLength(1);
+        await expect(host.readQuery({ query: '{ x }' })).resolves.toEqual({
+          kind: 'miss',
+        });
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('does not mistake other calendar failures for a missing command', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_calendar_range')
+          throw 'invalid calendar cache key';
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'calendar-error' });
+      try {
+        await expect(host.calendarRange(rangeArgs)).rejects.toThrow(
+          'invalid calendar cache key'
+        );
+        invokeMock.mockImplementation(async (command: string) =>
+          command === 'graphql_cache_calendar_range' ? range : null
+        );
+        await expect(host.calendarRange(rangeArgs)).resolves.toEqual(range);
+      } finally {
+        host.dispose();
+      }
+    });
   });
 });

@@ -3,39 +3,25 @@
  */
 
 import { render } from '@solidjs/testing-library';
-import { type Accessor, createEffect, on } from 'solid-js';
+import { createEffect, on } from 'solid-js';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ParamsProvider, useUrlParams } from './ParamsProvider';
+import {
+  createParamsState,
+  ParamsProvider,
+  useParamNavigationCount,
+  useUrlParams,
+} from './ParamsProvider';
 
 type MockSearchParams = Record<string, string | string[] | undefined>;
 
 const mocks = vi.hoisted(() => ({
-  registeredMethods: {} as Record<
-    string,
-    (params: Record<string, string>) => void
-  >,
   searchParams: undefined as MockSearchParams | undefined,
   setSearchParams: undefined as SetStoreFunction<MockSearchParams> | undefined,
 }));
 
 vi.mock('@solidjs/router', () => ({
   useSearchParams: () => [mocks.searchParams, mocks.setSearchParams],
-}));
-
-vi.mock('@core/orchestrator', () => ({
-  createMethodRegistration: (
-    _blockHandle: Accessor<unknown>,
-    methods: Record<string, (params: Record<string, string>) => void>
-  ) => {
-    mocks.registeredMethods = methods;
-  },
-}));
-
-vi.mock('@core/signal/load', () => ({
-  blockHandleSignal: {
-    get: () => ({}),
-  },
 }));
 
 const URL_PARAMS = {
@@ -99,11 +85,12 @@ function renderHarness(initialSearchParams: MockSearchParams = {}) {
   };
   const [searchParams, setSearchParams] =
     createStore<MockSearchParams>(initialSearchParams);
+  const paramsState = createParamsState();
   mocks.searchParams = searchParams;
   mocks.setSearchParams = setSearchParams;
 
   const rendered = render(() => (
-    <ParamsProvider>
+    <ParamsProvider state={paramsState}>
       <Consumer counts={counts} values={values} />
     </ParamsProvider>
   ));
@@ -112,12 +99,12 @@ function renderHarness(initialSearchParams: MockSearchParams = {}) {
     ...rendered,
     counts,
     values,
+    paramsState,
     setSearchParams,
   };
 }
 
 beforeEach(() => {
-  mocks.registeredMethods = {};
   mocks.searchParams = undefined;
   mocks.setSearchParams = undefined;
 });
@@ -172,14 +159,14 @@ describe('ParamsProvider', () => {
   });
 
   it('notifies an imperatively navigated param even when its value is unchanged', async () => {
-    const { counts, values } = renderHarness({
+    const { counts, values, paramsState } = renderHarness({
       node_id: 'node-1',
       comment_id: 'comment-1',
     });
     await settle();
     resetCounts(counts);
 
-    mocks.registeredMethods.goToLocationFromParams({
+    paramsState.navigate({
       comment_id: 'comment-1',
     });
     await settle();
@@ -193,7 +180,7 @@ describe('ParamsProvider', () => {
   });
 
   it('does not notify watched params when imperative navigation uses unrelated params', async () => {
-    const { counts, values } = renderHarness({
+    const { counts, values, paramsState } = renderHarness({
       node_id: 'node-1',
       location: 'loc-1',
       comment_id: 'comment-1',
@@ -201,7 +188,7 @@ describe('ParamsProvider', () => {
     await settle();
     resetCounts(counts);
 
-    mocks.registeredMethods.goToLocationFromParams({
+    paramsState.navigate({
       unrelated: 'value',
     });
     await settle();
@@ -216,5 +203,33 @@ describe('ParamsProvider', () => {
       location: 'loc-1',
       commentId: 'comment-1',
     });
+  });
+
+  it('counts navigations that name a param, not URL fallbacks', async () => {
+    mocks.searchParams = createStore<MockSearchParams>({
+      comment_id: 'from-url',
+    })[0];
+    const paramsState = createParamsState();
+    let count = () => -1;
+    let comment = () => undefined as string | undefined;
+    function Reader() {
+      count = useParamNavigationCount('comment_id');
+      comment = useUrlParams(URL_PARAMS).commentId;
+      return null;
+    }
+    render(() => (
+      <ParamsProvider state={paramsState}>
+        <Reader />
+      </ParamsProvider>
+    ));
+    expect(count()).toBe(0);
+
+    paramsState.navigate({ comment_id: 'from-link' });
+    paramsState.navigate({ comment_id: 'from-link' });
+    expect(count()).toBe(2);
+
+    paramsState.navigate({ node_id: 'node-1' });
+    expect(comment()).toBe('from-url');
+    expect(count()).toBe(2);
   });
 });

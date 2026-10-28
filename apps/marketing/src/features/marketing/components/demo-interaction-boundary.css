@@ -1,0 +1,4 @@
+.demo-interaction-boundary { position: relative; isolation: isolate; outline: none; }
+.demo-interaction-content { display: contents; }
+.demo-interaction-boundary > .demo-interaction-activate { position: absolute; box-sizing: border-box; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 100%; margin: 0; padding: 16px; border: 0; border-radius: inherit; background: transparent; cursor: pointer; touch-action: pan-y; }
+.demo-interaction-activate:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: -3px; }

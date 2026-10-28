@@ -1,28 +1,25 @@
-import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
-import { EventForm } from '@app/features/calendar/components/composer/EventForm';
-import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
-import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
-import {
-  calendarDisplayLabel,
-  spansMultipleInboxes,
-} from '@app/features/calendar/utils/calendar-label';
+/**
+ * Chat's half of a deferred `CreateCalendarEvent`: the composer over the
+ * pending call, finished through the cognition tool endpoints.
+ *
+ * Edits are persisted as they happen (`updateToolCall`) so a reload keeps
+ * them; Create runs the call (`callTool`) and Cancel rejects it
+ * (`rejectToolCall`), and either writes the outcome back into the chat's
+ * message so the card re-renders as the finished tool.
+ */
+
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
-import { recipientEntityMapper, useContacts } from '@core/user';
-import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import { useChatQuery } from '@queries/chat';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
-import { Layer } from '@ui';
-import { createMemo, createSignal, onCleanup, Show, Suspense } from 'solid-js';
-import {
-  createCalendarEventToEditorInitialValues,
-  editorSubmitValuesToCreateCalendarEvent,
-} from './event-form-adapter';
+import type { UserToolReviewSink } from '../user-tool-review';
+import { CalendarDraftComposer } from './DraftComposer';
 import { openToolCalendarEvent } from './open-tool-event';
 
 type CreateCalendarEventResponse = NamedTool<
@@ -90,112 +87,41 @@ function updateToolParts(
   return changed ? nextParts : parts;
 }
 
-function CalendarChatComposeFallback() {
-  return (
-    <Layer depth={2}>
-      <div
-        role="status"
-        aria-label="Loading calendar editor"
-        aria-busy="true"
-        class="flex min-h-64 animate-pulse flex-col gap-6 rounded-xl border border-edge-muted bg-surface p-4 shadow-sm"
-      >
-        <span class="sr-only">Loading calendar editor</span>
-
-        <div class="flex flex-col gap-4">
-          <div class="flex items-center gap-2">
-            <div class="h-7 w-28 rounded-lg bg-skeleton" />
-            <div class="h-7 w-28 rounded-lg bg-skeleton" />
-            <div class="h-7 w-16 rounded-lg bg-skeleton" />
-          </div>
-          <div class="h-6 w-2/5 rounded-md bg-skeleton" />
-          <div class="h-3 w-3/4 rounded-full bg-skeleton" />
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-          <div class="h-7 w-24 rounded-full bg-skeleton" />
-          <div class="h-7 w-28 rounded-full bg-skeleton" />
-          <div class="h-7 w-20 rounded-full bg-skeleton" />
-          <div class="h-7 w-24 rounded-full bg-skeleton" />
-        </div>
-
-        <div class="mt-auto flex justify-end gap-3">
-          <div class="h-8 w-16 rounded-lg bg-skeleton" />
-          <div class="h-8 w-28 rounded-lg bg-skeleton" />
-        </div>
-      </div>
-    </Layer>
-  );
-}
-
-/** Inline editor for a deferred CreateCalendarEvent tool call. */
-function CalendarChatComposeContent(props: CalendarChatComposeProps) {
+/** Inline editor for a deferred CreateCalendarEvent tool call in a chat. */
+export function CalendarChatCompose(props: CalendarChatComposeProps) {
   const chat = useChatContext();
   const chatQuery = useChatQuery(() => props.chatId);
-  const calendarsQuery = useVisibleCalendarsQuery();
-  const contacts = useContacts();
-  const [operation, setOperation] = createSignal<'create' | 'reject'>();
 
   const isOwner = () => chatQuery.data?.userAccessLevel === 'owner';
-  const ownerGateDisabled = () => !chatQuery.isSuccess || !isOwner();
-  const showOwnerDisabledMessage = () => chatQuery.isSuccess && !isOwner();
-  const interactionLocked = () =>
-    toolFinalized ||
-    ownerGateDisabled() ||
-    props.streamLocked === true ||
-    operation() !== undefined;
+  const ownerKnown = () => chatQuery.isSuccess;
+  const canAct = () => ownerKnown() && isOwner() && props.streamLocked !== true;
+  const lockedNotice = () => {
+    if (ownerKnown() && !isOwner()) {
+      return 'Only the chat owner can create or edit this calendar event.';
+    }
+    if (props.streamLocked) {
+      return 'Waiting for the response to finish before this event can be edited.';
+    }
+    return undefined;
+  };
 
-  const guestOptions = createMemo(() =>
-    contacts().map(recipientEntityMapper('user'))
-  );
-  const writableCalendars = createMemo(
-    () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []
-  );
-  const calendarsSpanInboxes = () => spansMultipleInboxes(writableCalendars());
-  const calendarOptions = createMemo(() =>
-    writableCalendars().map((calendar) => ({
-      id: calendar.id,
-      label: calendarDisplayLabel(calendar, calendarsSpanInboxes()),
-      color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
-      defaultReminders: calendar.defaultReminders,
-    }))
-  );
-
-  let toolFinalized = false;
+  // Edits go to the server debounced and in order, so the stored call is what
+  // the user last saw even if they reload before confirming.
   let lastPersistedSnapshot = JSON.stringify(props.initialData);
   let lastEnqueuedSnapshot = lastPersistedSnapshot;
+  let latestArgs: CreateCalendarEvent | undefined;
   let persistenceQueue = Promise.resolve();
-
-  const controller = createCalendarEventFormController({
-    initialValue: createCalendarEventToEditorInitialValues(props.initialData),
-    calendarOptions,
-    guestOptions,
-    onChange: scheduleUpdate,
-  });
-
-  function currentArgs(values = controller.submitValues()) {
-    return values
-      ? editorSubmitValuesToCreateCalendarEvent(values, props.initialData)
-      : undefined;
-  }
-
-  const debouncedUpdate = debounce(() => void enqueueUpdate(), 150);
-
-  function scheduleUpdate() {
-    if (toolFinalized || interactionLocked()) return;
-    debouncedUpdate();
-  }
+  let finalized = false;
 
   function enqueueUpdate() {
-    if (toolFinalized || operation() !== undefined) return persistenceQueue;
-    const args = currentArgs();
-    if (!args) return persistenceQueue;
-
+    const args = latestArgs;
+    if (finalized || !args) return persistenceQueue;
     const snapshot = JSON.stringify(args);
     if (snapshot === lastEnqueuedSnapshot) return persistenceQueue;
     lastEnqueuedSnapshot = snapshot;
 
     persistenceQueue = persistenceQueue.then(async () => {
-      if (toolFinalized) return;
+      if (finalized) return;
       try {
         const result =
           await cognitionApiServiceClient.updateToolCall<'CreateCalendarEvent'>(
@@ -218,9 +144,12 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
       }
       toast.failure('Failed to save calendar event changes');
     });
-
     return persistenceQueue;
   }
+  const debouncedUpdate = debounce(
+    () => fireAndForget(enqueueUpdate(), 'ai-calendar-compose'),
+    150
+  );
 
   function updateLocalResponse(
     response: CreateCalendarEventResponse,
@@ -242,108 +171,68 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
     );
   }
 
-  async function handleCreate(values: EventEditorSubmitValues) {
-    if (interactionLocked()) return;
-    setOperation('create');
-    debouncedUpdate.clear();
-    await persistenceQueue;
-
-    const args = currentArgs(values);
-    if (!args) {
-      setOperation(undefined);
-      return;
-    }
-    const result =
-      await cognitionApiServiceClient.callTool<'CreateCalendarEvent'>({
+  const sink: UserToolReviewSink<CreateCalendarEvent> = {
+    canAct,
+    lockedNotice,
+    onEdit: (args) => {
+      latestArgs = args;
+      debouncedUpdate();
+    },
+    onExecute: async (args) => {
+      debouncedUpdate.clear();
+      await persistenceQueue;
+      const result =
+        await cognitionApiServiceClient.callTool<'CreateCalendarEvent'>({
+          chat_id: props.chatId,
+          messageId: props.messageId,
+          toolCallId: props.toolCallId,
+          args,
+        });
+      if (result.isErr()) {
+        toast.failure('Failed to create calendar event');
+        return false;
+      }
+      const event = createdEvent(result.value);
+      if (!event) {
+        toast.failure('Failed to create calendar event', {
+          subtext: toolError(result.value),
+        });
+        return false;
+      }
+      finalized = true;
+      updateLocalResponse(result.value as CreateCalendarEventResponse, args);
+      fireAndForget(invalidateCalendarOccurrences(), 'ai-calendar-compose');
+      toast.success('Calendar event created', {
+        actions: [
+          { label: 'Open', onClick: () => openToolCalendarEvent(event) },
+        ],
+      });
+      return true;
+    },
+    onReject: async () => {
+      debouncedUpdate.clear();
+      await persistenceQueue;
+      const result = await cognitionApiServiceClient.rejectToolCall({
         chat_id: props.chatId,
         messageId: props.messageId,
         toolCallId: props.toolCallId,
-        args,
       });
-
-    if (result.isErr()) {
-      setOperation(undefined);
-      toast.failure('Failed to create calendar event');
-      return;
-    }
-
-    const event = createdEvent(result.value);
-    if (!event) {
-      setOperation(undefined);
-      toast.failure('Failed to create calendar event', {
-        subtext: toolError(result.value),
-      });
-      return;
-    }
-
-    toolFinalized = true;
-    setOperation(undefined);
-    updateLocalResponse(result.value as CreateCalendarEventResponse, args);
-    void invalidateCalendarOccurrences();
-    toast.success('Calendar event created', {
-      actions: [{ label: 'Open', onClick: () => openToolCalendarEvent(event) }],
-    });
-  }
-
-  async function handleCancel() {
-    if (interactionLocked()) return;
-    setOperation('reject');
-    debouncedUpdate.clear();
-    await persistenceQueue;
-
-    const result = await cognitionApiServiceClient.rejectToolCall({
-      chat_id: props.chatId,
-      messageId: props.messageId,
-      toolCallId: props.toolCallId,
-    });
-    if (result.isErr()) {
-      setOperation(undefined);
-      toast.failure('Failed to cancel calendar event');
-      return;
-    }
-
-    toolFinalized = true;
-    setOperation(undefined);
-    updateLocalResponse('Rejected');
-  }
-
-  onCleanup(() => debouncedUpdate.clear());
+      if (result.isErr()) {
+        toast.failure('Failed to cancel calendar event');
+        return false;
+      }
+      finalized = true;
+      updateLocalResponse('Rejected');
+      return true;
+    },
+    onDispose: () => debouncedUpdate.clear(),
+  };
 
   return (
-    <Layer depth={2}>
-      <div class="flex max-h-[32rem] min-h-0 flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-4 text-ink shadow-sm">
-        <Show when={showOwnerDisabledMessage()}>
-          <p class="text-xs text-ink-extra-muted/60">
-            Only the chat owner can create or edit this calendar event.
-          </p>
-        </Show>
-        <Show when={props.streamLocked && !showOwnerDisabledMessage()}>
-          <p class="text-xs text-ink-extra-muted/60">
-            Waiting for the response to finish before this event can be edited.
-          </p>
-        </Show>
-        <EventForm
-          controller={controller}
-          disabled={
-            toolFinalized ||
-            ownerGateDisabled() ||
-            props.streamLocked === true ||
-            operation() === 'reject'
-          }
-          pending={operation() === 'create'}
-          onCancel={() => void handleCancel()}
-          onSubmit={(values) => void handleCreate(values)}
-        />
-      </div>
-    </Layer>
-  );
-}
-
-/** Query-scoped boundary for the deferred calendar editor. */
-export function CalendarChatCompose(props: CalendarChatComposeProps) {
-  return (
-    <Suspense fallback={<CalendarChatComposeFallback />}>
-      <CalendarChatComposeContent {...props} />
-    </Suspense>
+    <CalendarDraftComposer
+      initialData={props.initialData}
+      sink={sink}
+      previewKey={props.toolCallId}
+    />
   );
 }

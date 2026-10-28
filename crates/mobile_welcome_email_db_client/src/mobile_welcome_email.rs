@@ -45,5 +45,27 @@ pub async fn insert_mobile_welcome_email(
     Ok(result.rows_affected() > 0)
 }
 
+/// Removes the record for the given email address, so a send that failed
+/// after the address was claimed can be retried.
+#[tracing::instrument(skip(db), err)]
+pub async fn delete_mobile_welcome_email(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    email: &str,
+) -> anyhow::Result<()> {
+    let email = email.to_lowercase();
+
+    sqlx::query!(
+        r#"
+            DELETE FROM mobile_welcome_email
+            WHERE email = $1
+        "#,
+        &email
+    )
+    .execute(db)
+    .await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test;

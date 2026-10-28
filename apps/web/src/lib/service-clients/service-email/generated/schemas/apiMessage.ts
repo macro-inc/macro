@@ -17,15 +17,18 @@ import type { ApiMessageFrom } from './apiMessageFrom';
 import type { ApiMessageGlobalId } from './apiMessageGlobalId';
 import type { ApiMessageInternalDateTs } from './apiMessageInternalDateTs';
 import type { ApiMessageLabel } from './apiMessageLabel';
+import type { ApiMessageOperationStatus } from './apiMessageOperationStatus';
 import type { ApiMessageProviderHistoryId } from './apiMessageProviderHistoryId';
 import type { ApiMessageProviderId } from './apiMessageProviderId';
 import type { ApiMessageProviderThreadId } from './apiMessageProviderThreadId';
 import type { ApiMessageReplyingToId } from './apiMessageReplyingToId';
+import type { ApiMessageScheduledSendStatus } from './apiMessageScheduledSendStatus';
 import type { ApiMessageScheduledSendTime } from './apiMessageScheduledSendTime';
 import type { ApiMessageSentAt } from './apiMessageSentAt';
 import type { ApiMessageSizeEstimate } from './apiMessageSizeEstimate';
 import type { ApiMessageSnippet } from './apiMessageSnippet';
 import type { ApiMessageSubject } from './apiMessageSubject';
+import type { CalendarInvitation } from './calendarInvitation';
 
 /**
  * API representation of a fully assembled email message.
@@ -39,9 +42,12 @@ export interface ApiMessage {
   body_macro?: ApiMessageBodyMacro;
   body_replyless?: ApiMessageBodyReplyless;
   body_text?: ApiMessageBodyText;
+  calendar_invitations?: CalendarInvitation[];
   cc: ApiContactInfo[];
   created_at: string;
   db_id: string;
+  /** Draft edit generation; changes at send and cancellation boundaries. */
+  draft_generation: number;
   from?: ApiMessageFrom;
   global_id?: ApiMessageGlobalId;
   has_attachments: boolean;
@@ -53,10 +59,12 @@ export interface ApiMessage {
   is_starred: boolean;
   labels: ApiMessageLabel[];
   link_id: string;
+  operation_status?: ApiMessageOperationStatus;
   provider_history_id?: ApiMessageProviderHistoryId;
   provider_id?: ApiMessageProviderId;
   provider_thread_id?: ApiMessageProviderThreadId;
   replying_to_id?: ApiMessageReplyingToId;
+  scheduled_send_status?: ApiMessageScheduledSendStatus;
   scheduled_send_time?: ApiMessageScheduledSendTime;
   sent_at?: ApiMessageSentAt;
   size_estimate?: ApiMessageSizeEstimate;

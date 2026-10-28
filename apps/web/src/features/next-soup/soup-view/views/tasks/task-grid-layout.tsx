@@ -1,12 +1,11 @@
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayNameParts, tryMacroId } from '@core/user';
 import {
   Entity,
   type EntityData,
   type EntityWithProperties,
   isProjectContainedEntity,
   MultiSelectCheckbox,
+  OwnerLabel,
   ProjectBreadCrumb,
   UnreadIndicator,
 } from '@entity';
@@ -23,10 +22,10 @@ import {
 } from '@property/context/PropertiesContext';
 import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
-import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { Badge } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { ListPropertyValue } from './list-property-value';
@@ -47,7 +46,7 @@ const EPOCH = new Date(0).toISOString();
  */
 function buildStubProperty(col: TaskGridColumn): Property {
   const stubSoup: SoupProperty = {
-    id: col.defId,
+    id: `pending:${col.defId}`,
     definition: {
       id: col.defId,
       display_name: col.label,
@@ -66,16 +65,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 export function TaskGridLayout(props: LayoutProps) {
   const soupView = useMaybeSoupView();
-  const currentId = useUserId();
   const entity = () => props.entity as EntityWithProperties<EntityData>;
-  const isShared = () => props.entity.ownerId !== currentId();
-
-  // Get owner's first name for the Created By column
-  const ownerDisplayName = () =>
-    isShared()
-      ? getDisplayNameParts(tryMacroId(props.entity.ownerId)).firstName ||
-        'Unknown'
-      : 'Me';
 
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
@@ -181,13 +171,10 @@ export function TaskGridLayout(props: LayoutProps) {
               </span>
             )}
           </Show>
-          {/* Show shared badges on narrow/medium containers, hide on wide (>1220px) */}
-          <Show when={isShared()}>
-            {/* Narrow: "shared this with you" tooltip */}
+          <Show when={props.isShared}>
             <span class="@min-[841px]/u-list:hidden">
               <SharedBadgeSmall ownerId={props.entity.ownerId} />
             </span>
-            {/* Medium (841px-1220px): "Created by" tooltip */}
             <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
@@ -216,13 +203,13 @@ export function TaskGridLayout(props: LayoutProps) {
           )}
         </For>
 
-        {/* Created By column - only shown on wide containers (>1220px) */}
         <Entity.Slot
           placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
+          class="hidden @min-[1221px]/u-list:flex min-w-0 overflow-hidden ph-no-capture"
         >
-          <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
-          <span class="truncate text-ink-muted">{ownerDisplayName()}</span>
+          <Badge variant="ghost" size="sm" class="max-w-full gap-1.5">
+            <OwnerLabel ownerId={props.entity.ownerId} viewerLabel="Me" />
+          </Badge>
         </Entity.Slot>
 
         <Entity.Slot

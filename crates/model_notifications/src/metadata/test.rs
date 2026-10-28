@@ -1,4 +1,8 @@
 use super::*;
+use crate::NotifEvent;
+use notification::domain::models::apple::{
+    APNSPushNotification, Alert, AlertDictionary, PushNotificationData,
+};
 
 fn uid(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(value).unwrap().into_owned()
@@ -8,6 +12,127 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(value)
         .unwrap()
         .with_timezone(&Utc)
+}
+
+#[test]
+fn calendar_join_requests_name_the_requester_and_the_event() {
+    let request = CalendarEventJoinRequestMetadata {
+        request_id: Uuid::nil(),
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    };
+    let event: NotifEvent = serde_json::from_value(
+        serde_json::to_value(NotifEvent::CalendarEventJoinRequest(request.clone())).unwrap(),
+    )
+    .unwrap();
+    assert!(matches!(event, NotifEvent::CalendarEventJoinRequest(_)));
+    assert_eq!(
+        request
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join Design review"
+    );
+    assert_eq!(request.format_body(None).unwrap(), "Design review");
+    let untitled = CalendarEventJoinRequestMetadata {
+        title: String::new(),
+        ..request
+    };
+    assert_eq!(untitled.format_body(None).unwrap(), "(No title)");
+}
+
+#[test]
+fn view_access_notifications_preserve_permission_and_format_copy() {
+    let request = EntityAccessRequestedMetadata {
+        request_id: Uuid::nil(),
+        revision: 1,
+        entity_name: "Private document".into(),
+        file_type: Some("md".into()),
+        access_level: RequestedAccessLevel::View,
+    };
+    let encoded = serde_json::to_value(&request).unwrap();
+    assert_eq!(encoded["accessLevel"], "view");
+    let decoded: EntityAccessRequestedMetadata = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded.access_level, RequestedAccessLevel::View);
+    assert!(
+        decoded
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap()
+            .contains("requested view access")
+    );
+    let granted = EntityAccessGrantedMetadata {
+        request_id: request.request_id,
+        revision: 2,
+        entity_name: request.entity_name,
+        file_type: request.file_type,
+        access_level: RequestedAccessLevel::View,
+    };
+    assert!(
+        granted
+            .format_title(Some(uid("macro|owner@macro.com")))
+            .unwrap()
+            .contains("granted you view access")
+    );
+}
+
+fn channel_reaction() -> ChannelMessageReactionMetadata {
+    ChannelMessageReactionMetadata {
+        message_id: "message-1".to_string(),
+        thread_id: None,
+        message_content: "This is a useful message".to_string(),
+        emoji: "👍".to_string(),
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Public,
+            channel_name: "general".to_string(),
+        },
+        sender_profile_picture_url: None,
+    }
+}
+
+#[test]
+fn channel_reaction_formats_push_copy() {
+    let reaction = channel_reaction();
+    assert_eq!(
+        reaction
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo reacted with 👍 to “This is a useful message”"
+    );
+    assert_eq!(reaction.format_body(None).unwrap(), "#general");
+    let apns = reaction
+        .as_apns(
+            Some(uid("macro|teo@macro.com")),
+            &EntityType::Channel.with_entity_str("channel-1"),
+            Uuid::nil(),
+        )
+        .unwrap();
+    assert!(matches!(
+        apns.aps.alert,
+        Some(Alert::Dictionary(AlertDictionary {
+            title: Some(ref title),
+            body: Some(ref body),
+            ..
+        })) if title == "teo reacted with 👍 to “This is a useful message”"
+            && body == "#general"
+    ));
+
+    let mut multiline = channel_reaction();
+    multiline.message_content = "First line\nsecond line".to_string();
+    assert_eq!(
+        multiline
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo reacted with 👍 to “First line second line”"
+    );
+}
+
+#[test]
+fn channel_reaction_round_trips_as_notif_event() {
+    let value = serde_json::json!({
+        "tag": "channel_message_reaction",
+        "content": serde_json::to_value(channel_reaction()).unwrap(),
+    });
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    assert!(matches!(event, NotifEvent::ChannelMessageReaction(_)));
 }
 
 fn github_pr_common() -> GithubPrNotificationCommon {
@@ -570,10 +695,31 @@ fn channel_mention_title_falls_back_to_bot_display_name() {
     assert_eq!(title, "Helper Bot mentioned you in #general");
 }
 
+#[test]
+fn channel_message_body_renders_mentioned_agent_by_its_own_name() {
+    let notification = ChannelMessageSendMetadata {
+        sender: Some(uid("macro|teo@macro.com")),
+        sender_display_name: None,
+        message_content: r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention> push notifications resolve mentions wrong"#.to_string(),
+        message_id: Uuid::nil().to_string(),
+        has_attachments: false,
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Team,
+            channel_name: "AI Team".to_string(),
+        },
+        sender_profile_picture_url: None,
+    };
+
+    assert_eq!(
+        notification.format_body(None).unwrap(),
+        "Cursor push notifications resolve mentions wrong"
+    );
+}
+
 fn document_mention(sub_type: Option<NotificationDocumentSubType>) -> DocumentMentionMetadata {
     DocumentMentionMetadata {
         document_name: "Q3 plan".to_string(),
-        owner: uid("macro|owner@macro.com"),
+        owner: Owner::from_principal_str("macro|owner@macro.com").unwrap(),
         file_type: Some("md".to_string()),
         sub_type,
         channel: ChannelMentionMetadata {
@@ -719,7 +865,10 @@ fn reminder_notif_event_round_trips_and_renders_without_a_sender() {
 
     // A reminder is self-set, so the dispatcher passes no sender. Formatting
     // must not depend on one.
-    assert_eq!(event.format_title(None).unwrap(), "Reminder");
+    assert_eq!(
+        event.format_title(None).unwrap(),
+        "Reminder: Follow up on the contract"
+    );
     assert_eq!(
         event.format_body(None).unwrap(),
         "Follow up on the contract"
@@ -750,6 +899,111 @@ fn reminder_body_is_bounded_for_the_push_payload() {
     assert_eq!(body.chars().count(), 513, "512 chars plus the ellipsis");
     assert!(body.ends_with('…'));
     assert!(body.len() < 4_096, "must fit inside the APNS payload limit");
+}
+
+fn new_email_metadata() -> NewEmailMetadata {
+    NewEmailMetadata {
+        sender: Some("Ada Lovelace".to_string()),
+        to_email: "teo@macro.com".to_string(),
+        thread_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string(),
+        subject: "Quarterly plan".to_string(),
+        snippet: "Here is the draft".to_string(),
+    }
+}
+
+fn new_email_apns(metadata: &NewEmailMetadata) -> APNSPushNotification<PushNotificationData> {
+    let entity = EntityType::EmailThread.with_entity_str(&metadata.thread_id);
+    let notification_id = Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap();
+    metadata
+        .as_apns(None, &entity, notification_id)
+        .expect("new_email should build an APNS alert")
+}
+
+fn new_email_alert(metadata: &NewEmailMetadata) -> AlertDictionary {
+    match new_email_apns(metadata).aps.alert {
+        Some(Alert::Dictionary(alert)) => alert,
+        other => panic!("expected dictionary alert, got {other:?}"),
+    }
+}
+
+#[test]
+fn new_email_title_prefers_sender() {
+    assert_eq!(
+        new_email_metadata().format_title(None).unwrap(),
+        "Ada Lovelace"
+    );
+}
+
+#[test]
+fn new_email_apns_matches_gmail_layout() {
+    let metadata = new_email_metadata();
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+
+    let apns = new_email_apns(&metadata);
+    assert_eq!(
+        apns.aps.thread_id.as_deref(),
+        Some(metadata.thread_id.as_str())
+    );
+    assert_eq!(
+        apns.push_notification_data.notification_id,
+        Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap()
+    );
+
+    let json = serde_json::to_value(&apns).unwrap();
+    assert_eq!(json["aps"]["alert"]["title"], "Ada Lovelace");
+    assert_eq!(json["aps"]["alert"]["subtitle"], "Quarterly plan");
+    assert_eq!(json["aps"]["alert"]["body"], "Here is the draft");
+}
+
+#[test]
+fn new_email_apns_falls_back_to_subject_without_sender() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = None;
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+}
+
+#[test]
+fn new_email_apns_treats_blank_sender_as_missing() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = Some("   ".to_string());
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+}
+
+#[test]
+fn new_email_apns_omits_blank_subject_subtitle() {
+    let mut metadata = new_email_metadata();
+    metadata.subject = "  ".to_string();
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle, None);
+}
+
+#[test]
+fn new_email_collapse_key_is_per_thread() {
+    let entity = EntityType::EmailThread.with_entity_str("ignored");
+    let first = new_email_metadata();
+    let mut second = first.clone();
+    second.thread_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb".to_string();
+
+    assert_ne!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        second.collapse_key(&entity).into_hashed().into_inner()
+    );
+    assert_eq!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        first.collapse_key(&entity).into_hashed().into_inner()
+    );
 }
 
 /// A reminder metadata collapse key, hashed for comparison.
@@ -810,4 +1064,248 @@ fn reminder_metadata_reads_back_without_a_firing() {
         serde_json::from_value(stored).expect("legacy metadata should deserialize");
 
     assert!(metadata.scheduled_for.is_none());
+}
+
+#[test]
+fn notification_status_patch_decodes_notif_event_metadata() {
+    use std::borrow::Cow;
+
+    use notification::domain::models::{
+        PatchDelete, UserNotificationRow, websocket_notification_event::NotificationTopicEvent,
+    };
+
+    let user = uid("macro|recipient@example.com");
+    let assigned_by = uid("macro|assigner@example.com");
+    let row = UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id: Uuid::nil(),
+        notification_event_type: "task_assigned".to_string(),
+        entity: EntityType::Document.with_entity_string("document-id".to_string()),
+        sent: true,
+        state: notification::domain::models::NotificationState::Unseen,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::json!({
+            "taskId": "task-1",
+            "taskName": "Test task",
+            "assignedBy": assigned_by.as_ref(),
+        }),
+        sender_id: None,
+    };
+    let event = NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+        user,
+        updates: vec![PatchDelete::Patch {
+            diff: Cow::Owned(row),
+        }],
+    };
+
+    let NotificationTopicEvent::NotificationStatusesUpdatedForUser { updates, .. } = event
+        .deserialize_metadata::<crate::NotifEvent>()
+        .expect("tagged status patch metadata decodes")
+    else {
+        panic!("expected user notification statuses event");
+    };
+    let PatchDelete::Patch { diff } = &updates[0] else {
+        panic!("expected status patch");
+    };
+    let crate::NotifEvent::TaskAssigned(TaskAssignedMetadata {
+        task_id,
+        task_name,
+        assigned_by: decoded_assigned_by,
+        ..
+    }) = &diff.notification_metadata
+    else {
+        panic!("expected task assigned metadata");
+    };
+
+    assert_eq!(task_id, "task-1");
+    assert_eq!(task_name.as_deref(), Some("Test task"));
+    assert_eq!(decoded_assigned_by, &assigned_by);
+}
+
+fn agent_session_ref() -> AgentSessionNotificationRef {
+    AgentSessionNotificationRef {
+        session_id: Uuid::parse_str("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa").unwrap(),
+        session_name: "Fix the flaky test".to_string(),
+        bot_id: Uuid::parse_str("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb").unwrap(),
+        bot_name: "Macro Coder".to_string(),
+        parent: Some(AgentSessionOriginParent {
+            kind: "channel".to_string(),
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc".to_string(),
+        }),
+        channel_id: Some(Uuid::parse_str("cccccccc-cccc-4ccc-8ccc-cccccccccccc").unwrap()),
+        thread_id: Some(Uuid::parse_str("dddddddd-dddd-4ddd-8ddd-dddddddddddd").unwrap()),
+        announcement_message_id: None,
+    }
+}
+
+#[test]
+fn agent_session_settled_serializes_flat_and_formats() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 3,
+        actor: Some(uid("macro|asker@example.com")),
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some("  Done.\nAll   tests pass. ".to_string()),
+    };
+
+    let value = serde_json::to_value(&metadata).unwrap();
+    assert_eq!(value["sessionId"], "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    assert_eq!(value["botName"], "Macro Coder");
+    assert_eq!(value["threadId"], "dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+    assert!(value.get("announcementMessageId").is_none());
+    assert_eq!(value["turn"], 3);
+    assert_eq!(value["actor"], "macro|asker@example.com");
+    let parsed: AgentSessionSettledMetadata = serde_json::from_value(value).unwrap();
+    assert_eq!(parsed, metadata);
+
+    assert_eq!(metadata.format_title(None).unwrap(), "Macro Coder finished");
+    assert_eq!(metadata.format_body(None).unwrap(), "Done. All tests pass.");
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "agent_session_settled",
+        "content": serde_json::to_value(&metadata).unwrap(),
+    }))
+    .unwrap();
+    assert!(matches!(event, NotifEvent::AgentSessionSettled(_)));
+}
+
+#[test]
+fn agent_session_settled_without_prose_falls_back_to_the_session_name() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some("   ".to_string()),
+    };
+    assert_eq!(metadata.format_body(None).unwrap(), "Fix the flaky test");
+}
+
+#[test]
+fn agent_session_settled_push_groups_with_the_thread_and_collapses_per_session() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some("Done.".to_string()),
+    };
+    let entity = EntityType::Channel.with_entity_str("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    let notification_id = Uuid::parse_str("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee").unwrap();
+
+    let apns = metadata.as_apns(None, &entity, notification_id).unwrap();
+    assert_eq!(
+        apns.aps.thread_id.as_deref(),
+        Some("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+    );
+    assert!(apns.aps.interruption_level.is_none());
+    assert!(matches!(
+        apns.aps.alert,
+        Some(Alert::Dictionary(AlertDictionary { title: Some(ref title), body: Some(ref body), .. }))
+            if title == "Macro Coder finished" && body == "Done."
+    ));
+    assert_eq!(apns.push_notification_data.notification_id, notification_id);
+
+    let next_turn = AgentSessionSettledMetadata {
+        turn: 1,
+        ..metadata.clone()
+    };
+    assert_eq!(
+        metadata.collapse_key(&entity).into_hashed().as_ref(),
+        next_turn.collapse_key(&entity).into_hashed().as_ref(),
+        "one alert per session"
+    );
+}
+
+#[test]
+fn agent_session_waiting_for_input_is_time_sensitive() {
+    let metadata = AgentSessionWaitingForInputMetadata {
+        session: agent_session_ref(),
+        turn: 2,
+        question: "Which database should I migrate first?".to_string(),
+    };
+    let entity = EntityType::Channel.with_entity_str("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+
+    assert_eq!(
+        metadata.format_title(None).unwrap(),
+        "Macro Coder needs an answer"
+    );
+    assert_eq!(
+        metadata.format_body(None).unwrap(),
+        "Which database should I migrate first?"
+    );
+    let apns = metadata.as_apns(None, &entity, Uuid::nil()).unwrap();
+    assert!(matches!(
+        apns.aps.interruption_level,
+        Some(InterruptionLevel::TimeSensitive)
+    ));
+}
+
+#[test]
+fn agent_session_mentioned_names_the_author_and_collapses_per_prompt() {
+    let metadata = AgentSessionMentionedMetadata {
+        session: agent_session_ref(),
+        mentioned_by: Some(uid("macro|wolf@macro.com")),
+        action_id: Uuid::parse_str("ffffffff-ffff-4fff-8fff-ffffffffffff").unwrap(),
+    };
+    let entity = EntityType::Channel.with_entity_str("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+
+    assert_eq!(
+        metadata.format_title(None).unwrap(),
+        "wolf mentioned you in Fix the flaky test"
+    );
+    let anonymous = AgentSessionMentionedMetadata {
+        mentioned_by: None,
+        ..metadata.clone()
+    };
+    assert_eq!(
+        anonymous.format_title(None).unwrap(),
+        "You were mentioned in Fix the flaky test"
+    );
+
+    let other_prompt = AgentSessionMentionedMetadata {
+        action_id: Uuid::parse_str("00000000-0000-4000-8000-000000000001").unwrap(),
+        ..metadata.clone()
+    };
+    assert_ne!(
+        metadata.collapse_key(&entity).into_hashed().as_ref(),
+        other_prompt.collapse_key(&entity).into_hashed().as_ref(),
+        "each prompt that names you is its own alert"
+    );
+}
+
+#[test]
+fn agent_excerpt_flattens_whitespace_and_truncates() {
+    assert_eq!(agent_excerpt("a\n\n  b\tc"), "a b c");
+    let long = "x".repeat(400);
+    let excerpt = agent_excerpt(&long);
+    assert_eq!(excerpt.chars().count(), AGENT_EXCERPT_MAX_CHARS);
+    assert!(excerpt.ends_with('…'));
+}
+
+#[test]
+fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
+    use notification::domain::models::NotificationExtEmail;
+    let metadata = CalendarEventReminderMetadata {
+        event_id: Uuid::now_v7(),
+        occurrence_key: "one".into(),
+        title: "<img src=x> & Planning\r\nMeeting".into(),
+        starts_at: None,
+        ends_at: None,
+        start_date: Some(chrono::NaiveDate::from_ymd_opt(2026, 10, 5).unwrap()),
+        time_zone: Some("UTC".into()),
+        minutes_before: 10,
+    };
+    let email = metadata.format_email();
+    assert!(!email.body.contains("<img"));
+    assert!(email.body.contains("&lt;img"));
+    assert!(!email.subject.contains(['\r', '\n']));
+    assert!(email.body.contains("All day"));
+    let first = metadata.rate_limit_key();
+    let mut second = metadata.clone();
+    second.minutes_before = 5;
+    assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
 }

@@ -1,8 +1,9 @@
 {
-  "version": "2.0.7",
+  "productName": "macro",
+  "version": "2.0.12",
   "bundle": {
     "iOS": {
-      "bundleVersion": "179"
+      "bundleVersion": "191"
     }
   }
 }

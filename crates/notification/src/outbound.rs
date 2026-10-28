@@ -6,18 +6,23 @@
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
+mod entity_notifications;
 /// Notification status update fanout across multiple realtime publishers.
 pub mod fanout_notification_realtime;
 /// Realtime notification fanout across multiple delivery adapters.
 pub mod fanout_realtime;
+pub mod item_preferences;
 /// Kafka-backed notification status update publication.
+#[cfg(feature = "kafka")]
 pub mod kafka_notification_realtime;
 /// Kafka-backed realtime notification delivery.
+#[cfg(feature = "kafka")]
 pub mod kafka_realtime;
 pub mod last_online_checker;
 pub mod message_receipt_repository;
 pub mod mobile;
 /// Independent Kafka consumer for WebSocket notification delivery requests.
+#[cfg(feature = "kafka")]
 pub mod notification_consumer;
 /// Postgres LISTEN adapter for notification database events.
 pub mod notification_events;
@@ -26,6 +31,9 @@ pub mod push_notification_event_queue;
 pub mod queue;
 pub mod rate_limit;
 pub mod repository;
+pub mod retention;
 pub mod sns_endpoint;
 pub mod user_existence_checker;
 pub mod websocket;
+/// Durable suppression of superseded notification delivery.
+pub mod withdrawal;

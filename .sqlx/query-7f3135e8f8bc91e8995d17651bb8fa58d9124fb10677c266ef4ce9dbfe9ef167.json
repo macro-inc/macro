@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                email_provider::text AS \"email_provider!\",\n                macro_user_id,\n                linked_email,\n                requested_google_scopes,\n                granted_google_scopes\n            FROM\n                in_progress_user_link\n            WHERE\n                id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_provider!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "linked_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "requested_google_scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "granted_google_scopes",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "7f3135e8f8bc91e8995d17651bb8fa58d9124fb10677c266ef4ce9dbfe9ef167"
+}

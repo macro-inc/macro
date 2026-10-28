@@ -1,0 +1,415 @@
+//! Request/response DTOs for the Cloud Agents endpoints this crate uses.
+//!
+//! Shapes follow the Cloud Agents API reference; only the fields this crate
+//! reads are modelled, and unknown response fields are ignored so Cursor can
+//! grow its API without breaking us.
+
+#[cfg(test)]
+mod test;
+
+use crate::domain::model::McpServer;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+/// The prompt payload shared by agent and run creation.
+#[derive(Debug, Serialize)]
+pub struct PromptBody {
+    /// The prompt text.
+    pub text: String,
+}
+
+/// One repository for a new agent to clone.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoSelection {
+    /// HTTPS repository url.
+    pub url: String,
+    /// Ref to start from.
+    pub starting_ref: String,
+}
+
+/// An explicit model choice: an id plus the params that pin its variant.
+///
+/// Both halves are required in practice. Cursor answers a bare id with
+/// `validation_error: Model 'grok-4.5' does not match a known variant`, so
+/// `params` is omitted only when a caller genuinely has none to send.
+#[derive(Debug, Serialize)]
+pub struct ModelSelection {
+    /// Model id, e.g. `composer-2.5`.
+    pub id: String,
+    /// The variant's parameters. Omitted when empty rather than sent as `[]`,
+    /// which Cursor reads as "a variant with no params" and may not have.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<ModelParamSelection>,
+}
+
+/// One `{id, value}` parameter of a model variant.
+#[derive(Debug, Serialize)]
+pub struct ModelParamSelection {
+    /// The parameter's id, e.g. `reasoning`.
+    pub id: String,
+    /// Its value, always a string on this wire — Cursor enumerates booleans as
+    /// `"true"`/`"false"`.
+    pub value: String,
+}
+
+impl From<&crate::domain::model::ModelChoice> for ModelSelection {
+    fn from(choice: &crate::domain::model::ModelChoice) -> Self {
+        Self {
+            id: choice.id.clone(),
+            params: choice
+                .params
+                .iter()
+                .map(|param| ModelParamSelection {
+                    id: param.id.clone(),
+                    value: param.value.clone(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// `GET /v1/models` response.
+#[derive(Debug, Deserialize)]
+pub struct ListModelsResponse {
+    /// The offered models. Cursor names this `items`.
+    #[serde(default)]
+    pub items: Vec<ModelListing>,
+}
+
+/// One model as `GET /v1/models` describes it.
+///
+/// `parameters` — the per-parameter list of permitted values — is deliberately
+/// not modelled: `variants` already enumerates every combination Cursor will
+/// accept, which is the only question this crate asks. Reading both would mean
+/// deciding what to do when they disagree.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelListing {
+    /// The id to send.
+    pub id: String,
+    /// The human-readable name.
+    pub display_name: Option<String>,
+    /// The accepted id+params combinations.
+    #[serde(default)]
+    pub variants: Vec<VariantListing>,
+}
+
+/// One accepted parameter combination for a model.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VariantListing {
+    /// The parameters this variant fixes.
+    #[serde(default)]
+    pub params: Vec<ParamListing>,
+    /// Whether Cursor marks this the default.
+    #[serde(default)]
+    pub is_default: bool,
+}
+
+/// One `{id, value}` pair inside a variant.
+#[derive(Debug, Deserialize)]
+pub struct ParamListing {
+    /// The parameter's id.
+    pub id: String,
+    /// Its value.
+    pub value: String,
+}
+
+/// One MCP server for a new agent to connect to.
+///
+/// Only remote transports: an agent's MCP configuration is fixed at creation
+/// and runs inside Cursor's sandbox, so a url is reachable from there while a
+/// local executable path is not — see [`McpServer`].
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpServerSelection {
+    /// The client's name for the server.
+    pub name: String,
+    /// Transport discriminator: `http` or `sse`.
+    #[serde(rename = "type")]
+    pub transport: &'static str,
+    /// The server's url.
+    pub url: String,
+    /// Headers to send with each request. Omitted entirely when there are
+    /// none, rather than sent as an empty object.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+}
+
+impl From<&McpServer> for McpServerSelection {
+    fn from(server: &McpServer) -> Self {
+        Self {
+            name: server.name.clone(),
+            transport: server.transport.as_str(),
+            url: server.url.clone(),
+            // Cursor takes headers as an object; ACP hands them over as a
+            // list of pairs. A repeated name is the client contradicting
+            // itself, and last-wins is the only reading a map allows.
+            headers: server
+                .headers
+                .iter()
+                .map(|header| (header.name.clone(), header.value.clone()))
+                .collect(),
+        }
+    }
+}
+
+/// `POST /v1/agents`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAgentRequest {
+    /// The initial prompt.
+    pub prompt: PromptBody,
+    /// Repositories to clone; empty means a repo-less agent.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub repos: Vec<RepoSelection>,
+    /// Model override, when configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelSelection>,
+    /// MCP servers the ACP client configured. Omitted when empty so Cursor's
+    /// own MCP configuration is left alone rather than overridden with an
+    /// empty list.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<McpServerSelection>,
+    /// Ask Cursor to push its work to a generated branch and open a pull
+    /// request against the starting ref. Cursor spells the field `autoCreatePR`,
+    /// which the struct's camel case would mangle to `autoCreatePr`, so the
+    /// rename is explicit. Omitted when false so a repo-less agent — which has
+    /// nothing to open a pull request against — sends no opinion at all.
+    #[serde(rename = "autoCreatePR", skip_serializing_if = "std::ops::Not::not")]
+    pub auto_create_pr: bool,
+}
+
+/// `POST /v1/agents` response: the agent and its first run together.
+#[derive(Debug, Deserialize)]
+pub struct CreateAgentResponse {
+    /// The created agent.
+    pub agent: AgentSummary,
+    /// Its initial run.
+    pub run: RunSummary,
+}
+
+/// The slice of an agent record this crate reads.
+#[derive(Debug, Deserialize)]
+pub struct AgentSummary {
+    /// Agent id (`bc-…`).
+    pub id: String,
+    /// Display name Cursor derived from the prompt.
+    #[serde(default)]
+    pub name: String,
+    /// The agent's page on cursor.com — logged so a session can be opened in
+    /// the browser without reconstructing the link.
+    #[serde(default)]
+    pub url: String,
+}
+
+/// `GET /v1/agents/{id}/runs/{run}` — the slice the fallback poll reads.
+#[derive(Debug, Deserialize)]
+pub struct RunDetail {
+    /// Where the run is in its lifecycle.
+    pub status: crate::domain::model::RunStatus,
+    /// The final assistant reply, present once the run is terminal.
+    #[serde(default)]
+    pub result: Option<String>,
+}
+
+/// `GET /v1/agents/{id}/runs` response.
+#[derive(Debug, Deserialize)]
+pub struct ListRunsResponse {
+    /// The agent's runs, newest first.
+    pub items: Vec<RunListItem>,
+    /// Cursor for the next page, absent on the last page.
+    #[serde(default, rename = "nextCursor")]
+    pub next_cursor: Option<String>,
+}
+
+/// `GET /v0/agents/{id}/conversation` response.
+///
+/// Deliberately the older API version: v1 has no conversation endpoint, and
+/// this one answers for agents v1 created.
+#[derive(Debug, Deserialize)]
+pub struct ConversationResponse {
+    /// The agent's prompts and replies, oldest first.
+    pub messages: Vec<ConversationMessage>,
+}
+
+/// One message in a `GET /v0/agents/{id}/conversation` response.
+#[derive(Debug, Deserialize)]
+pub struct ConversationMessage {
+    /// `user_message` or `assistant_message`. Anything else is skipped rather
+    /// than guessed at, so a kind Cursor adds cannot be read as a prompt.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// The message text. Absent on a kind that carries none.
+    #[serde(default)]
+    pub text: Option<String>,
+}
+
+/// One run in a `GET /v1/agents/{id}/runs` page.
+#[derive(Debug, Deserialize)]
+pub struct RunListItem {
+    /// Run id (`run-…`).
+    pub id: String,
+    /// Where the run is in its lifecycle.
+    pub status: crate::domain::model::RunStatus,
+}
+
+/// `GET /v1/agents` response.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListAgentsResponse {
+    /// The page of agents, newest first.
+    pub items: Vec<AgentSummary>,
+    /// Cursor for the next page. Absent — not null — when this page is the
+    /// last, so an `Option` with a default reads both.
+    #[serde(default)]
+    pub next_cursor: Option<String>,
+}
+
+/// `POST /v1/agents/{id}/archive` response.
+#[derive(Debug, Deserialize)]
+pub struct ArchiveAgentResponse {
+    /// The archived agent's id.
+    pub id: String,
+}
+
+/// `GET /v1/me`: who this API key is.
+///
+/// User-scoped keys carry the owner's identity; service-account keys carry
+/// only the key's own name, which is why everything but `api_key_name` is
+/// optional.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeResponse {
+    /// Display name of the API key.
+    pub api_key_name: String,
+    /// Email of the key's owner; absent on service-account keys.
+    #[serde(default)]
+    pub user_email: Option<String>,
+}
+
+/// The slice of a run record this crate reads.
+#[derive(Debug, Deserialize)]
+pub struct RunSummary {
+    /// Run id (`run-…`).
+    pub id: String,
+}
+
+/// `POST /v1/agents/{id}/runs`.
+#[derive(Debug, Serialize)]
+pub struct CreateRunRequest {
+    /// The follow-up prompt.
+    pub prompt: PromptBody,
+    /// The model for this run.
+    ///
+    /// Undocumented on this endpoint — Cursor's reference lists only `prompt`,
+    /// `mode` and `mcpServers`, and says follow-up runs inherit the agent's
+    /// model — but the endpoint validates it and honours it. Its schema is
+    /// strict (an unknown key is a `validation_error` naming the key), which is
+    /// how the field was confirmed to exist rather than be ignored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelSelection>,
+}
+
+/// `POST /v1/agents/{id}/runs` response.
+///
+/// Observed both as a bare run object and as `{"run": {…}}`; both shapes are
+/// accepted rather than betting on one.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum CreateRunResponse {
+    /// The run nested under a `run` key.
+    Wrapped {
+        /// The created run.
+        run: RunSummary,
+    },
+    /// The run as the whole body.
+    Bare(RunSummary),
+}
+
+impl CreateRunResponse {
+    /// The created run's id, whichever shape arrived.
+    #[must_use]
+    pub fn into_run_id(self) -> String {
+        match self {
+            Self::Wrapped { run } | Self::Bare(run) => run.id,
+        }
+    }
+}
+
+/// The envelope Cursor wraps an error status in: `{"error": {"code", "message"}}`.
+///
+/// `message` is read as well as `code` because Cursor files more than one
+/// distinct failure under `validation_error`, and the wording is the only
+/// thing that tells a branch it could not verify apart from a malformed
+/// model id. This crate still has its own wording for the cases it acts on;
+/// everything else keeps the raw body instead.
+#[derive(Debug, Deserialize)]
+pub struct ApiErrorEnvelope {
+    /// The error itself.
+    pub error: ApiErrorCode,
+}
+
+/// The two halves of an error body.
+#[derive(Debug, Deserialize)]
+pub struct ApiErrorCode {
+    /// Cursor's error code, e.g. `repository_access`.
+    pub code: String,
+    /// Cursor's human-readable wording. Defaulted so a body with only a code
+    /// still classifies by it.
+    #[serde(default)]
+    pub message: String,
+}
+
+/// `GET /v1/agents/{id}/artifacts` response.
+///
+/// The listing is the agent's whole artifact directory, not one run's output:
+/// artifacts persist across runs and Cursor offers no run filter, so `items`
+/// on a later turn still contains everything earlier turns wrote.
+#[derive(Debug, Deserialize)]
+pub struct ListArtifactsResponse {
+    /// Every artifact the agent has written so far. Defaulted so a bare `{}`
+    /// for an agent that has written none reads as empty; the docs show only
+    /// the populated shape, so this is a guard, not an observed answer.
+    #[serde(default)]
+    pub items: Vec<ArtifactListing>,
+}
+
+/// One artifact in a `GET /v1/agents/{id}/artifacts` page.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactListing {
+    /// Workspace-relative path, always under `artifacts/`, e.g.
+    /// `artifacts/screenshot.png`. This is both the artifact's identity and
+    /// the value the download endpoint takes.
+    pub path: String,
+    /// Size in bytes. Videos run to tens of megabytes, so a caller deciding
+    /// whether to fetch something has this before it commits to the body.
+    #[serde(default)]
+    pub size_bytes: u64,
+    /// When Cursor last wrote the artifact, as the RFC 3339 string it sends.
+    ///
+    /// Kept as text because nothing in this crate reads a Cursor timestamp as
+    /// a moment in time — parsing one here would mean adding a date library
+    /// to serve a field that is currently only compared for equality, which is
+    /// exactly what a change detector needs it for.
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+/// `GET /v1/agents/{id}/artifacts/download` response.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactDownloadResponse {
+    /// A presigned S3 GET url. It carries its own credentials in the query
+    /// string, so it must be fetched without this crate's API key.
+    pub url: String,
+    /// When the presigned url stops working, as the RFC 3339 string Cursor
+    /// sends. Text for the same reason as [`ArtifactListing::updated_at`];
+    /// the expiry that matters in practice is the documented 15 minutes,
+    /// which a caller honours by fetching promptly rather than by storing
+    /// the url.
+    #[serde(default)]
+    pub expires_at: String,
+}

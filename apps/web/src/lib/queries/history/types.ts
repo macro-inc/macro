@@ -4,6 +4,7 @@ import type { Item } from '@service-storage/generated/schemas/item';
 type BaseHistoryItem = Pick<Item, 'id' | 'name'> & {
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
+  viewedAt?: DateValue | null;
   deletedAt?: DateValue | null;
   // TODO: item name without safe name transform
   rawName?: string;

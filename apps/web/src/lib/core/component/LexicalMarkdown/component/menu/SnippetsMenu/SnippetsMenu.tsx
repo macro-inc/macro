@@ -32,6 +32,7 @@ false && floatWithSelection;
 
 // Height consumed by Surface's border + vertical padding
 const PANEL_DECORATION_HEIGHT = 18;
+const MAX_CONTENT_HEIGHT = 256;
 
 type SnippetsMenuProps = {
   editor: LexicalEditor;
@@ -97,7 +98,10 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     setSelectedIndex(0);
   });
 
+  // Reading snippets builds the whole Quick Access index, so a closed menu
+  // must not: every composer mounts one.
   createEffect(() => {
+    if (!menuOpen()) return;
     const count = filteredSnippets().length;
     if (count > 0 && selectedIndex() >= count) {
       setSelectedIndex(count - 1);
@@ -182,20 +186,25 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
 
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
-    if (h === undefined) return 256;
-    return Math.min(256, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    if (h === undefined) return MAX_CONTENT_HEIGHT;
+    return Math.min(
+      MAX_CONTENT_HEIGHT,
+      Math.max(0, h - PANEL_DECORATION_HEIGHT)
+    );
   };
 
   return (
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
+            fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,
           }}
           use:clickOutside={() => {
             closeMenu();
@@ -204,7 +213,8 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
         >
           <Surface
             depth={2}
-            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-xl"
+            hideBorder
+            class="menu-surface rounded-xl pt-2 pb-1.5"
           >
             <div class="px-3.5 pb-1 text-xs font-medium text-ink-muted">
               Snippets

@@ -1,5 +1,7 @@
 //! Domain models for CRM companies and their related records.
 
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
@@ -315,6 +317,9 @@ pub struct CrmTeamSettings {
     /// Stage option ids counting as closed deals; `None` = the client
     /// falls back to its label heuristic.
     pub closed_stage_ids: Option<Vec<uuid::Uuid>>,
+    /// System stage option id to team stage option id for seeded stages.
+    /// Entries may outlive their stage; readers check membership in the set.
+    pub legacy_stage_ids: BTreeMap<uuid::Uuid, uuid::Uuid>,
     /// Team saved views — an opaque JSON array owned by the frontend.
     pub team_views: Value,
     /// Team view applied by default when a member opens the CRM view.
@@ -328,6 +333,7 @@ impl Default for CrmTeamSettings {
             move_closed_deals_role: CrmPermissionRole::Admin,
             delete_records_role: CrmPermissionRole::Admin,
             closed_stage_ids: None,
+            legacy_stage_ids: BTreeMap::new(),
             team_views: Value::Array(Vec::new()),
             default_team_view_id: None,
         }
@@ -347,6 +353,8 @@ pub struct CrmTeamSettingsPatch {
     pub delete_records_role: Option<CrmPermissionRole>,
     /// New `closed_stage_ids`; `Some(None)` clears to the heuristic.
     pub closed_stage_ids: Option<Option<Vec<uuid::Uuid>>>,
+    /// Replacement `legacy_stage_ids` map.
+    pub legacy_stage_ids: Option<BTreeMap<uuid::Uuid, uuid::Uuid>>,
     /// Replacement `team_views` array.
     pub team_views: Option<Value>,
     /// New `default_team_view_id`; `Some(None)` clears it.
@@ -365,17 +373,6 @@ pub enum CrmError {
     /// Contact id is not owned by the requesting team.
     #[error("crm contact not found for team")]
     ContactNotFoundForTeam,
-    /// Comment thread id does not exist, is deleted, or does not belong
-    /// to the addressed entity / team.
-    #[error("crm comment thread not found")]
-    ThreadNotFound,
-    /// Comment id does not exist or does not belong to the team.
-    #[error("crm comment not found for team")]
-    CommentNotFound,
-    /// Comment exists and is visible to the caller, but they are not its
-    /// author — only the comment owner may edit or delete it.
-    #[error("crm comment not owned by caller")]
-    CommentNotOwned,
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),
@@ -388,6 +385,9 @@ pub enum CrmError {
     /// is below admin/owner.
     #[error("changing crm permission or stage settings requires admin/owner team role")]
     SettingsAdminRequired,
+    /// Caller's team role is below the team's `edit_stages_role`.
+    #[error("editing deal stages requires the {} team role", .0.as_db_str())]
+    StageEditRoleRequired(CrmPermissionRole),
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.
@@ -408,4 +408,17 @@ pub enum CrmError {
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,
+}
+
+/// Contact fields plus the owning team/company and the viewer's history.
+#[derive(Debug, Clone)]
+pub struct CrmContactForSoup {
+    /// The original team-owned contact; its identity is never merged.
+    pub contact: CrmContact,
+    /// Team owning the company/contact record.
+    pub team_id: uuid::Uuid,
+    /// The company's display name (team override, directory name, or domain).
+    pub company_name: String,
+    /// When this viewer last opened this particular contact record.
+    pub viewed_at: Option<DateTime<Utc>>,
 }

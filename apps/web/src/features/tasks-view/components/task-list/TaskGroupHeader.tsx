@@ -1,0 +1,143 @@
+import type { SoupGroupHeaderRow } from '@app/features/soup';
+import { UserIcon } from '@core/component/UserIcon';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { getDisplayName, tryMacroId } from '@core/user';
+import { getPropertyOptionLabel } from '@entity';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import { PROPERTY_OPTION_IDS } from '@property';
+import { PropertyValueIcon } from '@property/component/propertyValue';
+import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
+import { ComposerSurface, cn, Layer } from '@ui';
+import { createMemo, Match, Show, Switch } from 'solid-js';
+import type { TaskGroupBy } from '../../types';
+
+export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
+  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
+    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
+    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
+    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
+    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
+    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
+};
+
+export function TaskGroupHeader(props: {
+  row: SoupGroupHeaderRow;
+  groupBy: TaskGroupBy;
+  expanded: boolean;
+  focused: boolean;
+  /** Grid columns the header row spans. */
+  columnCount: number;
+  onToggle: () => void;
+  onFocus: () => void;
+}) {
+  const agent = usePropertyUserDisplay(() =>
+    props.groupBy === 'assignee' && isBotPrincipalId(props.row.groupId)
+      ? props.row.groupId
+      : ''
+  );
+  const label = createMemo(() => {
+    if (!props.row.groupId) return props.row.label || 'Not set';
+
+    if (props.groupBy === 'status' || props.groupBy === 'priority') {
+      return getPropertyOptionLabel(props.row.groupId) ?? props.row.label;
+    }
+
+    if (props.groupBy === 'assignee') {
+      if (isBotPrincipalId(props.row.groupId)) return agent.name();
+      const assigneeId = tryMacroId(props.row.groupId);
+      if (!assigneeId) return props.row.label;
+      return (
+        getDisplayName(assigneeId, { emailFallback: 'local-part' }) ||
+        props.row.label
+      );
+    }
+
+    return props.row.label;
+  });
+  const statusTint = createMemo(() =>
+    props.groupBy === 'status'
+      ? STATUS_GROUP_HEADER_TINTS[props.row.groupId]
+      : undefined
+  );
+
+  return (
+    <div id={props.row.id} role="row">
+      <div role="gridcell" aria-colspan={props.columnCount}>
+        {/* Desktop shares the email card's composer chrome: soft shadow in
+            light mode, glass rim in dark mode. */}
+        <Layer depth={3}>
+          <ComposerSurface
+            as="div"
+            data-highlighted={props.focused || undefined}
+            class={cn(
+              'group/header relative mx-1 my-0.5 w-[calc(100%-0.5rem)] rounded-xl text-ink-muted hover:bg-active',
+              isTouchDevice() &&
+                'rounded-lg border border-edge-muted bg-surface',
+              statusTint(),
+              props.focused && 'bg-active'
+            )}
+          >
+            <button
+              type="button"
+              tabIndex={-1}
+              class="flex w-full items-center gap-2.5 rounded-[inherit] px-2 py-1.5 text-left text-xs font-semibold tracking-tight"
+              aria-expanded={props.expanded}
+              onMouseMove={props.onFocus}
+              onClick={props.onToggle}
+            >
+              <Layer depth={3}>
+                <span class="flex size-4.5 items-center justify-center rounded-xs group-hover/header:bg-ink/5">
+                  <CaretRightIcon
+                    class={cn(
+                      'size-2.5 transition-transform',
+                      props.expanded && 'rotate-90'
+                    )}
+                  />
+                </span>
+              </Layer>
+              <Switch>
+                <Match when={!props.row.groupId}>
+                  <CircleDashedIcon class="size-3.5 text-ink-extra-muted" />
+                </Match>
+                <Match
+                  when={
+                    props.groupBy === 'status' || props.groupBy === 'priority'
+                  }
+                >
+                  <PropertyValueIcon
+                    optionId={props.row.groupId}
+                    class="size-3.5"
+                  />
+                </Match>
+                <Match when={props.groupBy === 'assignee'}>
+                  <UserIcon
+                    id={props.row.groupId}
+                    size="sm"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                </Match>
+                <Match when={props.groupBy === 'project'}>
+                  <FolderIcon class="size-3.5 shrink-0" />
+                </Match>
+              </Switch>
+              <span class="truncate">{label()}</span>
+              <Show when={props.row.count !== undefined}>
+                <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
+                  {props.row.count}
+                </span>
+              </Show>
+            </button>
+          </ComposerSurface>
+        </Layer>
+      </div>
+    </div>
+  );
+}

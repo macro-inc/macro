@@ -8,6 +8,7 @@ import type { Store } from 'solid-js/store';
 import type { MentionBucketId } from '../component/menu/MentionsMenu/MentionsMenuController';
 import type { createLexicalWrapper } from '../context/LexicalWrapperContext';
 import type {
+  AgentCommandItem,
   AutoLinkMatchMode,
   createAccessoryStore,
   createDraggableBlockStore,
@@ -18,6 +19,7 @@ import type {
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
 import type { TagMentionLifecycle } from '../plugins/tags';
+import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import type { createMenuOperations } from '../shared/inlineMenu';
 import type { UserMentionRecord } from '../utils/mentionsUtils';
 
@@ -56,6 +58,11 @@ export interface TagsOptions {
   onCreate?: (tag: TagMentionLifecycle) => void;
   onRemove?: (tag: TagMentionLifecycle) => void;
   setTags?: (tags: ReadonlySet<TagMentionLifecycle>) => void;
+}
+
+export interface AgentCommandsOptions {
+  /** Reactive source of the slash commands the connected agent advertises. */
+  commands: () => AgentCommandItem[];
 }
 
 /** Intentional extension point — no options yet. */
@@ -123,7 +130,10 @@ export interface EditorControls {
  * Props of an Editor component.
  */
 export interface EditorComponentProps {
+  /** Controlled Markdown. Host updates do not echo through onChange. */
+  value?: string;
   placeholder?: string;
+  ariaLabel?: string;
   /** Initialize with markdown text */
   initialValue?: string;
   /** Initialize with a serialized editor state. Takes precedence over initialValue. */
@@ -149,8 +159,16 @@ export interface EditorConfig {
    * actions are disabled.
    */
   skills?: boolean;
+  /**
+   * Agent commands (`/` menu) list the slash commands a connected coding
+   * agent advertises over ACP — for agent composers. Shares the `/` trigger
+   * with the actions and skills menus, so this only takes effect when both
+   * are disabled.
+   */
+  agentCommands?: AgentCommandsOptions;
   emojis?: EmojisOptions;
   links?: LinksOptions;
+  resolveAppLink?: MentionLinkResolver;
   history?: HistoryOptions;
   singleLine: boolean;
   handlers: EditorCallbacks;
@@ -162,8 +180,12 @@ export interface EditorConfig {
   focusLeave?: FocusLeaveCallbacks;
   withIds: boolean;
   selectionData: boolean;
-  /** Show a floating format toolbar over the current text selection. */
-  floatingFormatMenu: boolean;
+  /**
+   * Show a floating format toolbar over the current text selection. Pass
+   * `{ extendedInlineFormats: true }` to also offer underline/super/subscript
+   * (only for non-Markdown-backed editors).
+   */
+  floatingFormatMenu: boolean | { extendedInlineFormats?: boolean };
   actions: ActionsOptions | false;
   /** When true, decorator components skip backend fetches (e.g. preview API). */
   skipPreviewFetch: boolean;
@@ -186,6 +208,7 @@ export interface EditorInternals {
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   snippetsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   skillsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
+  agentCommandsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;
   dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
   draggableBlockStore:

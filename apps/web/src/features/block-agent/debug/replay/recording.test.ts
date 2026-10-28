@@ -23,11 +23,13 @@ describe('parseRecording', () => {
 
     expect(entries).toEqual([
       {
+        id: '00000000-0000-0000-0000-000000000000',
         createdAt: '2026-08-03T21:04:19.934Z',
         direction: 'to_server',
         content: { type: 'event', event: 'acp_ready' },
       },
       {
+        id: '00000000-0000-0000-0000-000000000002',
         createdAt: '2026-08-03T21:04:20.000Z',
         direction: 'to_runtime',
         content: { type: 'acp', jsonrpc: '2.0', method: 'session/prompt' },
@@ -72,11 +74,17 @@ describe('parseRecording', () => {
 describe('isPromptEntry', () => {
   it('matches only session/prompt frames headed to the runtime', () => {
     const prompt = {
+      id: '00000000-0000-0000-0000-000000000001',
       createdAt: 't',
       direction: 'to_runtime',
       content: { type: 'acp', method: 'session/prompt' },
     } as const;
     expect(isPromptEntry(prompt)).toBe(true);
+    const [notification] = parseRecording(
+      LINE({ ...prompt, direction: 'notification' })
+    );
+    expect(notification?.direction).toBe('notification');
+    expect(isPromptEntry(notification!)).toBe(true);
     expect(isPromptEntry({ ...prompt, direction: 'to_server' })).toBe(false);
     expect(
       isPromptEntry({

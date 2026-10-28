@@ -1,20 +1,14 @@
 subscription NotificationUpdates {
 	notificationUpdates {
 		__typename
-		... on GraphqlNotification {
-			id
-			eventType
-			entityType
-			notificationEntityId: entityId
-			sent
-			done
-			seen
-			createdAt
-			viewedAt
-			updatedAt
-			senderId
-			metadata {
-				...SoupNotificationMetadataFields
+		... on GraphqlNewNotification {
+			notification {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlUpdatedNotification {
+			notification {
+				...SoupNotificationFields
 			}
 		}
 		... on GraphqlCacheDeletion {

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM scheduling_host_claim WHERE booking_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "47ed313afdb94ab2f8f66e7a2c1fbe51feeefa5c7722ac92f6e799a3c4d5902b"
+}

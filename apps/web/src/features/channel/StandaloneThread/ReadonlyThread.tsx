@@ -1,10 +1,10 @@
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem } from '@service-storage/messages';
 import { StandaloneThread } from './StandaloneThread';
 
 type ReadonlyThreadProps = {
   channelId: string;
   messageId: string;
-  data?: ApiChannelMessage;
+  data?: MessageListItem;
   onClickMessage?: (messageId: string, e: MouseEvent) => void;
 };
 

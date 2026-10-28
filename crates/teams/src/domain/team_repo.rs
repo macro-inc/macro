@@ -8,12 +8,16 @@ use entity_access::domain::models::{
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
-    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-    ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, DueInviteReminder,
+    InviteUsersToTeamError, JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome,
+    JoinTeamDirectlyError, JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse,
+    PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
+    SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
+    TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+    ToggleAutoJoinDomainError,
 };
+use crate::domain::owned_entity_cleanup::ClearedTeam;
 
 /// The TeamRepository defines a set of actions to perform on teams data
 pub trait TeamRepository: Clone + Send + Sync + 'static {
@@ -47,14 +51,24 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
+    /// Gets the owner of a team.
+    ///
+    /// Every team has exactly one owner.
+    fn get_team_owner(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<MacroUserIdStr<'static>, TeamError>> + Send;
+
     /// Creates a new team with the provided normalized slug. `subscription_id` is `None` for
-    /// free teams (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
+    /// free teams. Membership is not capped by team size. `owner_plan` is the plan the owner's
+    /// own seat is already billed at.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
+        owner_plan: SeatPlan,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Moves any user-owned GitHub App installation rows to the given team.
@@ -87,6 +101,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         invite_ids: &[uuid::Uuid],
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Claims up to `limit` unanswered invites whose next reminder is due,
+    /// counting the reminder as sent. Concurrent callers claim disjoint invites.
+    fn claim_due_invite_reminders(
+        &self,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<DueInviteReminder>, TeamError>> + Send;
 
     /// Removes user from a team.
     fn remove_user_from_team(
@@ -122,10 +143,11 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         paying: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
-    /// Deletes a team
+    /// Deletes a team that owns nothing, with the access grants it and its
+    /// bots were given.
     fn delete_team(
         &self,
-        team_id: &uuid::Uuid,
+        cleared: &ClearedTeam,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Gets all members of a team including the owner
@@ -237,6 +259,14 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_role: TeamRole,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
+    /// Records the plan the provided member's seat is billed at.
+    fn patch_team_member_plan(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        plan: SeatPlan,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
     /// Get the teams current seat count
     fn get_team_seat_count(
         &self,
@@ -305,6 +335,38 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TeamError>> + Send;
+
+    /// Return team ids after `after_team_id`, ordered by id, limited to `limit`.
+    fn list_team_ids_after(
+        &self,
+        after_team_id: Option<uuid::Uuid>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, TeamError>> + Send;
+
+    /// The token of the team's invite link, if the team has one.
+    fn get_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkToken>, TeamError>> + Send;
+
+    /// Sets the team's invite link to `token`, replacing any existing link.
+    fn set_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Removes the team's invite link. A no-op when the team has none.
+    fn delete_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// The team whose invite link has `token`, if any.
+    fn get_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkTeam>, TeamError>> + Send;
 }
 
 /// The TeamMembersService defines read-only team membership queries.
@@ -318,8 +380,8 @@ pub trait TeamMembersService: Clone + Send + Sync + 'static {
 
 /// The TeamService defines a set of actions to perform on the teams
 pub trait TeamService: Clone + Send + Sync + 'static {
-    /// Creates a new team. `subscription_id` is `None` for free teams
-    /// (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
+    /// Creates a new team. `subscription_id` is `None` for free teams.
+    /// Membership is not capped by team size.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -327,7 +389,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
-    /// Returns the user's active stripe subscription id when the user is premium.
+    /// Returns the user's active or trialing Stripe subscription id, if any.
     fn is_user_premium(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -368,11 +430,26 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_invite_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RemoveTeamInviteError>> + Send;
 
-    /// Cancels the team subscription and deletes the team.
+    /// Purges everything the team and its bots own, then cancels the team
+    /// subscription and deletes the team.
     fn delete_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
     ) -> impl Future<Output = Result<(), DeleteTeamError>> + Send;
+
+    /// Detaches the user from every team ahead of account deletion.
+    ///
+    /// A team the user owns is deleted the way [`TeamService::delete_team`]
+    /// does it: the subscription is cancelled, the team and its memberships
+    /// are removed, `team.deleted` is published, and members on no other
+    /// team lose the team subscriber role. A team the user merely belongs to
+    /// is left the way [`TeamService::remove_user_from_team`] does it, with
+    /// the user recorded as the actor.
+    /// NOTE: this is not exposed via axum and is meant for account deletion only.
+    fn remove_user_from_all_teams(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), RemoveUserFromAllTeamsError>> + Send;
 
     /// Accepts a team invite for a user
     fn join_team(
@@ -395,7 +472,28 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn restore_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
+        started: Option<super::open_seat_release::SubscriptionStart>,
     ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
+
+    /// Moves a member's seat to `plan`: swaps the seat between the team
+    /// subscription's per-plan items (invoicing the proration now), records
+    /// the plan on the membership, and re-stamps the member's tier role.
+    /// Team admins and above only; the team must be paying or enterprise.
+    /// Returns the member as they now stand; a no-op when already on `plan`.
+    fn set_team_member_plan(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        user_id: &MacroUserIdStr<'_>,
+        plan: SeatPlan,
+    ) -> impl Future<Output = Result<TeamMember<'static>, SetTeamMemberPlanError>> + Send;
+
+    /// Whether the team's seats are billed per plan through the team: a
+    /// paying team with a subscription, or an enterprise team. On a free team
+    /// every member pays for themself and seat plans do not apply.
+    fn team_bills_per_seat(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
     /// Patches the team subscription id
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
@@ -495,10 +593,50 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// roles / channel side effects as `join_team`.
     ///
     /// Returns the new team member, or None when no team matched or the
-    /// user could not be joined (already a member, team at its seat cap,
-    /// ...).
+    /// user is already on a team. Membership is not capped by plan or team size.
     fn try_join_team_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, TryJoinTeamByDomainError>> + Send;
+    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, JoinTeamDirectlyError>> + Send;
+}
+
+/// Manages a team's shareable invite link and joins users through it.
+///
+/// Showing or creating the link is inviting, so it follows the team's invite
+/// policy: any member by default, admins only when the team restricts
+/// inviting. Replacing or turning off a link that already exists breaks links
+/// people have shared, so only admins may do it.
+pub trait TeamInviteLinkService: Clone + Send + Sync + 'static {
+    /// The token of the caller's team invite link, if the team has one.
+    fn get_team_invite_link(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkToken>, ManageTeamInviteLinkError>> + Send;
+
+    /// Creates the team's invite link, or replaces it with a new token when
+    /// one already exists. Returns the new token.
+    fn create_team_invite_link(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
+    ) -> impl Future<Output = Result<TeamInviteLinkToken, ManageTeamInviteLinkError>> + Send;
+
+    /// Turns off the team's invite link.
+    fn delete_team_invite_link(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// The team an invite link joins, so the user can see it before joining.
+    fn get_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<TeamInviteLinkTeam, JoinTeamByInviteLinkError>> + Send;
+
+    /// Adds the user to the team whose invite link has `token`, with the same
+    /// billing, role, and channel side effects as accepting an email invite.
+    fn join_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError>> + Send;
 }

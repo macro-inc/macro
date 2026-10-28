@@ -4,9 +4,9 @@ import {
   type QuickAccessList,
   useQuickAccess,
 } from '@core/context/quickAccess';
-import { searchQuickAccessEntities } from '@core/context/quickAccess/entity-search';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
+import { rankMentions } from '../utils/mention-ranking';
 
 type UseEntityMentionOptions = {
   buckets: EntityBucket[];
@@ -36,22 +36,20 @@ export function useEntityMention(
   }) as QuickAccessList<EntityItem>;
   const usesRankedList = () =>
     quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection();
-  const entities = createLazyMemo(() => {
-    if (usesRankedList()) return entityList.items();
-    return searchQuickAccessEntities(entityList.items(), options.searchTerm());
-  });
+  const entities = createLazyMemo(() =>
+    rankMentions(entityList.items(), options.searchTerm(), usesRankedList())
+  );
 
   return {
     entities,
     totalCount: () =>
       usesRankedList() ? entityList.totalCount() : entities().length,
-    hasMore: () => quickAccess.usesRecordSelection() && entityList.hasMore(),
+    hasMore: () => usesRankedList() && entityList.hasMore(),
     isLoading: () =>
       usesRankedList() ? entityList.isLoading() : quickAccess.isLoading(),
-    isLoadingMore: () =>
-      quickAccess.usesRecordSelection() && entityList.isLoadingMore(),
+    isLoadingMore: () => usesRankedList() && entityList.isLoadingMore(),
     loadMore: async () => {
-      if (quickAccess.usesRecordSelection()) await entityList.loadMore();
+      if (usesRankedList()) await entityList.loadMore();
     },
   };
 }
@@ -77,7 +75,7 @@ export function useEntityMentionFromList(
   );
 
   const entities = createLazyMemo(() =>
-    searchQuickAccessEntities(entitiesList(), searchTerm())
+    rankMentions(entitiesList(), searchTerm())
   );
 
   return {

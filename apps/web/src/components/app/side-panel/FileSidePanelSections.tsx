@@ -5,15 +5,15 @@ import {
 import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { UserIcon } from '@core/component/UserIcon';
 import { useCanEdit } from '@core/signal/permissions';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { OwnerLabel } from '@entity/owner/owner-display';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, Show } from 'solid-js';
+import { EntityMetadata } from './EntityMetadata';
 import { SidePanel } from './SidePanel';
 
 export function FileSidePanelSections() {
@@ -26,16 +26,50 @@ export function FileSidePanelSections() {
   );
 }
 
-export function FileDetailsSection(props: { order?: number }) {
+export type DocumentFileSidePanelSectionsProps = {
+  documentId: string;
+  documentName: string;
+  canEdit: boolean;
+};
+
+export function DocumentFileSidePanelSections(
+  props: DocumentFileSidePanelSectionsProps
+) {
   return (
-    <SidePanel.Section
-      id="details"
-      title="Details"
-      defaultOpen
-      order={props.order}
-    >
-      <DetailsSectionContent />
-    </SidePanel.Section>
+    <>
+      <DocumentFileDetailsSection documentId={props.documentId} order={10} />
+      <EntityTagsSection
+        entityId={props.documentId}
+        entityType="DOCUMENT"
+        canEdit={props.canEdit}
+        order={20}
+      />
+      <DocumentFilePropertiesSection
+        documentId={props.documentId}
+        documentName={props.documentName}
+        canEdit={props.canEdit}
+        order={30}
+      />
+    </>
+  );
+}
+
+export function FileDetailsSection(_props: { order?: number }) {
+  return (
+    <SidePanel.Footer>
+      <BlockDetailsSectionContent />
+    </SidePanel.Footer>
+  );
+}
+
+export function DocumentFileDetailsSection(props: {
+  documentId: string;
+  order?: number;
+}) {
+  return (
+    <SidePanel.Footer>
+      <DetailsSectionContent documentId={props.documentId} />
+    </SidePanel.Footer>
   );
 }
 
@@ -48,6 +82,30 @@ export function FilePropertiesSection(props: { order?: number }) {
       order={props.order}
     >
       <PropertiesSectionContent />
+    </SidePanel.Section>
+  );
+}
+
+export function DocumentFilePropertiesSection(props: {
+  documentId: string;
+  documentName: string;
+  canEdit: boolean;
+  order?: number;
+}) {
+  return (
+    <SidePanel.Section
+      id="properties"
+      title="Properties"
+      defaultOpen
+      order={props.order}
+    >
+      <EntityPropertiesSection
+        entityId={props.documentId}
+        entityType="DOCUMENT"
+        canEdit={props.canEdit}
+        documentName={props.documentName}
+        showTags={false}
+      />
     </SidePanel.Section>
   );
 }
@@ -82,20 +140,21 @@ function PropertiesSectionContent() {
   );
 }
 
-function DetailsSectionContent() {
+function BlockDetailsSectionContent() {
   const blockId = useBlockId();
-  const query = useDocumentMetadataQuery(() => blockId);
+  return <DetailsSectionContent documentId={blockId} />;
+}
+
+function DetailsSectionContent(props: { documentId: string }) {
+  const query = useDocumentMetadataQuery(() => props.documentId);
   const metadata = createMemo(() => query.data);
 
   return (
-    <SidePanel.Grid>
-      <Show when={metadata()?.owner}>
-        {(ownerId) => (
-          <SidePanel.Row label="Owner">
-            <OwnerValue ownerId={ownerId()} />
-          </SidePanel.Row>
-        )}
-      </Show>
+    <EntityMetadata
+      ownerId={metadata()?.owner}
+      createdAt={metadata()?.createdAt}
+      updatedAt={metadata()?.updatedAt}
+    >
       <Show
         when={(() => {
           const id = metadata()?.projectId;
@@ -104,32 +163,19 @@ function DetailsSectionContent() {
         })()}
       >
         {(folder) => (
-          <SidePanel.Row label="Folder">
+          <div class="flex items-center gap-1">
+            Folder
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </SidePanel.Row>
+          </div>
         )}
       </Show>
-      <Show when={metadata()?.createdAt}>
-        {(created) => (
-          <SidePanel.Row label="Created">
-            <DateValueDisplay value={created()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-      <Show when={metadata()?.updatedAt}>
-        {(updated) => (
-          <SidePanel.Row label="Last updated">
-            <DateValueDisplay value={updated()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-    </SidePanel.Grid>
+    </EntityMetadata>
   );
 }
 
 export function FolderLink(props: { projectId: string; projectName: string }) {
-  const open = createCallback((e: MouseEvent) => {
-    openDocument('project', props.projectId, undefined, !e.shiftKey);
+  const open = createCallback(() => {
+    openDocument('project', props.projectId, undefined, true);
   });
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>(open);
 
@@ -152,12 +198,9 @@ export function FolderLink(props: { projectId: string; projectName: string }) {
 }
 
 export function OwnerValue(props: { ownerId: string }) {
-  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
-
   return (
     <SidePanel.Pill>
-      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
-      <span class="truncate">{displayName()}</span>
+      <OwnerLabel ownerId={props.ownerId} suppressClick />
     </SidePanel.Pill>
   );
 }

@@ -1,4 +1,5 @@
 import './ListEntity.css';
+import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
@@ -20,6 +21,7 @@ import {
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui';
 import {
+  children,
   createEffect,
   createMemo,
   createSignal,
@@ -31,6 +33,7 @@ import {
 } from 'solid-js';
 import { Entity } from '../entity';
 import type { EntityRowConfig } from '../extractors-notification';
+import { EntityReferenceProperties } from '../extractors-property/entity-reference-properties';
 import {
   isHitSnippetComplete,
   isHitSnippetEntity,
@@ -45,10 +48,13 @@ import {
   filterValidNotifications,
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
+import { usesCompactEmailRow } from './list-entity/email-row-layout';
 import { NarrowCondensedLayout } from './list-entity/narrow-condensed-layout';
+import { NarrowEmailLayout } from './list-entity/narrow-email-layout';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
 import { NarrowSingleLineLayout } from './list-entity/narrow-single-line-layout';
+import { SOUP_ROW_CLASS } from './list-entity/row-geometry';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
@@ -65,6 +71,10 @@ export {
 
 interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
+  /** Collection-owned schedule metadata for the original entity row. */
+  scheduleStatus?: JSX.Element;
+  /** Stored reference properties to show beside the row's other properties. */
+  referencePropertyIds?: readonly string[];
 }
 
 export function MaybeEntityRow(props: {
@@ -89,6 +99,16 @@ export function MaybeEntityRow(props: {
 }
 
 export function ListEntity(props: ListEntityProps) {
+  // Legacy Soup callers do not pass row behavior explicitly yet.
+  const soupView = useMaybeSoupView();
+  const rowActions = children(() => props.actions);
+  const leadingAction = children(() => props.leadingAction);
+  const titleLeading = children(() => props.titleLeading);
+  const icon = children(() => props.icon);
+  const titleTrailing = children(() => props.titleTrailing);
+  const meta = children(() => props.meta);
+  const scheduleStatus = children(() => props.scheduleStatus);
+
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
@@ -116,7 +136,11 @@ export function ListEntity(props: ListEntityProps) {
   const [snippetContainerRef, setSnippetContainerRef] = createSignal<
     HTMLElement | undefined
   >();
-  const chars = useCharacterCount(snippetContainerRef);
+  const chars = useCharacterCount(() =>
+    props.deferInteractions && !hasSearchContentHits(props.entity)
+      ? undefined
+      : snippetContainerRef()
+  );
 
   // For singleton hits on a SnippetEntity, expanding "show more" only adds
   // value when windowSearchMatch trimmed text — otherwise the inline
@@ -139,6 +163,15 @@ export function ListEntity(props: ListEntityProps) {
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
+    actions: !isTouchDevice() ? rowActions() : undefined,
+    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    titleLeading: titleLeading(),
+    icon: icon(),
+    titleTrailing: titleTrailing(),
+    meta: meta(),
+    scheduleStatus: scheduleStatus(),
+    referenceProperties: referenceProperties(),
+    authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
@@ -150,19 +183,45 @@ export function ListEntity(props: ListEntityProps) {
     setSnippetContainerRef,
     chars: chars(),
     onProjectClick: props.onProjectClick,
+    onFilterByTag: props.onFilterByTag ?? soupView?.filterByTag,
+    showCalendarAttendance:
+      props.showCalendarAttendance ??
+      (soupView?.activeTab() ?? 'all') === 'all',
   });
 
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
+    deferUntilInteraction: () => props.deferInteractions === true,
   });
 
   const listLayout = useListLayout();
   const isWide = listLayout?.isWide ?? (() => true);
+  const referenceProperties = children(() => (
+    <Show when={props.referencePropertyIds}>
+      {(ids) => (
+        <EntityReferenceProperties
+          entity={props.entity}
+          propertyIds={ids()}
+          compact={!isWide()}
+        />
+      )}
+    </Show>
+  ));
   const isCondensedVariant = () => listLayout?.narrowLayout() === 'condensed';
   const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
   const isSingleLineVariant = () =>
     listLayout?.narrowLayout() === 'single-line';
+  // Compact email rows span the list edge to edge like a mail client's, so the
+  // highlight is a full-bleed band and the open row's accent bar runs its
+  // whole height.
+  const isNarrowEmail = () =>
+    usesCompactEmailRow({
+      wide: isWide(),
+      touch: isTouchDevice(),
+      narrowLayout: listLayout?.narrowLayout(),
+      email: isEmailEntity(props.entity),
+    });
 
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
@@ -178,6 +237,9 @@ export function ListEntity(props: ListEntityProps) {
 
   return (
     <Entity.Root
+      role={props.role}
+      tabIndex={props.tabIndex}
+      onKeyDown={props.onKeyDown}
       entity={props.entity}
       onClick={(e) => {
         if (e.metaKey && props.onChecked) {
@@ -188,18 +250,40 @@ export function ListEntity(props: ListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
+        // The row family class carries the --soup-row-* geometry (ListEntity.css)
+        // that the layouts below and the soup group headers both read, so it has
+        // to track which layout the Switch actually renders.
+        isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
+        'soup-list-entity @container/entity relative group/narrow flex flex-col py-0.5',
+        isNarrowEmail()
+          ? // The gutter moves inside, so text still lines up with the headers.
+            'w-full px-(--soup-row-gutter)'
+          : 'rounded-xl w-[calc(100%-0.5rem)] mr-1',
+        // Keep avatar-group separators in sync with the row background so they
+        // blend into it instead of creating visible rings.
+        '[--avatar-group-separator:var(--color-panel)]',
         {
-          'min-h-10 mx-1': !isMobile() && !usesCondensedNarrowLayout(),
-          'min-h-9 mx-1': !isMobile() && usesCondensedNarrowLayout(),
-          'bg-list-selected': props.checked,
-          'bg-list-selected-highlighted': props.checked && props.highlighted,
-          'bg-list-highlighted':
+          'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
+          'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
+          'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
+          'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
+            props.checked,
+          'bg-list-selected-highlighted [--avatar-group-separator:var(--color-list-selected-highlighted)]':
+            props.checked && props.highlighted,
+          'bg-list-highlighted [--avatar-group-separator:var(--color-list-highlighted)]':
             props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-list-hover':
+          'hover:bg-list-hover hover:[--avatar-group-separator:var(--color-list-hover)]':
             !props.highlighted && !props.checked && !isTouchDevice(),
+          'focus-within:bg-list-hover focus-within:[--avatar-group-separator:var(--color-list-hover)]':
+            !!rowActions() && !props.highlighted && !props.checked,
+          'before:absolute before:left-0 before:w-0.5 before:bg-accent':
+            props.current,
+          'before:inset-y-2 before:rounded-full':
+            props.current && !isNarrowEmail(),
+          'before:inset-y-0': props.current && isNarrowEmail(),
         }
       )}
+      aria-current={props.current ? 'true' : undefined}
       onMouseMove={props.onMouseMove}
     >
       <Switch>
@@ -221,9 +305,24 @@ export function ListEntity(props: ListEntityProps) {
             <NarrowSingleLineLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
+        {/* Email lists on desktop stack their rows compactly; mixed lists keep
+            the per-type icon that tells their rows apart. */}
+        <Match
+          when={isNarrowEmail() && isEmailEntity(props.entity) && props.entity}
+        >
+          {(entity) => (
+            <MaybeEntityRow
+              entityId={props.entity.id}
+              config={props.entityRowConfig}
+            >
+              <NarrowEmailLayout {...layoutProps()} entity={entity()} />
+            </MaybeEntityRow>
+          )}
+        </Match>
         <Match when={isTouchDevice() && mobileStacks().length > 0}>
           <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
+            scheduleStatus={scheduleStatus()}
             entity={props.entity}
             entityRowConfig={props.entityRowConfig}
           />
@@ -232,8 +331,8 @@ export function ListEntity(props: ListEntityProps) {
           when={
             isTouchDevice() &&
             ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
-              isEmailEntity(props.entity) ||
-              props.showUnrollNotifications)
+              props.showUnrollNotifications ||
+              isEmailEntity(props.entity))
           }
         >
           <MaybeEntityRow

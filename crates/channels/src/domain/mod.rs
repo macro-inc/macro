@@ -1,25 +1,48 @@
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+#[cfg(feature = "ports")]
+pub mod agent_dm;
 /// Kafka event models for the `macro.channels` topic.
 pub mod broker_events;
+/// Agent personas that converse in a channel.
+#[cfg(feature = "ports")]
+pub mod channel_agents;
+/// Direct-message identity and batch commands.
+pub mod dm;
 #[cfg(feature = "entity_mutation")]
 /// Unified entity-mutation capability impls.
 pub mod entity_mutation;
 /// Domain events emitted by channel workflows.
 pub mod events;
+/// Channel audience policy for authored group mentions.
+#[cfg(feature = "ports")]
+pub mod group_mentions;
+/// Silent historical creation commands and shared atomic DM creation policy.
+pub mod historical;
 /// Legacy channel list service implementation.
 #[cfg(feature = "list")]
 pub mod list_service;
+/// Reserved uploads for images and videos attached to channel messages.
+pub mod media_upload;
 /// Kafka event models for the `macro.mentions` topic.
 pub mod mention_events;
+/// Channel side effects for messages committed by the shared message service.
+#[cfg(feature = "ports")]
+pub mod message_delivery;
 /// Domain models for channel messages.
 pub mod models;
 #[cfg(feature = "ports")]
 /// Port traits for channel messages.
 pub mod ports;
 #[cfg(feature = "ports")]
+/// Authorization and grants for entities referenced by channel messages.
+pub mod reference_sharing;
+#[cfg(feature = "ports")]
 /// Service orchestration for channel messages.
 pub mod service;
 #[cfg(feature = "ports")]
 /// Domain orchestration for channel side effects.
 pub mod side_effects;
+/// Ensure teammate direct messages from a join payload.
+#[cfg(feature = "ports")]
+pub mod teammate_dms;

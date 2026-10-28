@@ -1,10 +1,10 @@
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageData } from '@core/messages/types';
 
 export type GroupableMessage = Pick<
-  ApiChannelMessage,
+  MessageData,
   'id' | 'sender_id' | 'sender' | 'created_at' | 'attachments' | 'deleted_at'
 > & {
-  thread?: Pick<ApiChannelMessage['thread'], 'reply_count'>;
+  thread?: { reply_count: number };
 };
 
 export const MESSAGE_GROUPING_WINDOW_MS = 5 * 60 * 1000;
@@ -26,7 +26,12 @@ export function shouldGroupWithPreviousMessage(
   // Agent messages share the Macro bot's sender_id but carry the triggering
   // user in `sender.triggered_by`; messages prompted by different users must
   // not merge under a single "from" pill.
-  if (current.sender?.triggered_by !== previous.sender?.triggered_by) {
+  // Optimistic sends omit attribution; server messages can return null.
+  // Both represent the same absence and must group before acknowledgement.
+  if (
+    (current.sender?.triggered_by ?? null) !==
+    (previous.sender?.triggered_by ?? null)
+  ) {
     return false;
   }
   if (isDeleted(current) || isDeleted(previous)) return false;

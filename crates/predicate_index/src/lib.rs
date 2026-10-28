@@ -1,7 +1,10 @@
 //! Minimal storage-neutral predicate-index intermediate representation.
 #![deny(missing_docs)]
 
-use std::{cmp::Ordering, collections::HashSet};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashSet},
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -20,8 +23,9 @@ pub const MAX_QUERY_LIMIT: u16 = 500;
 pub const MAX_TOKEN_BYTES: usize = 128;
 /// Maximum bytes in an exact value.
 pub const MAX_EXACT_VALUE_BYTES: usize = 16 * 1_024;
-/// Maximum facts in one index document.
-pub const MAX_FACTS_PER_DOCUMENT: usize = 256;
+/// Maximum distinct attribute names in one index document or patch.
+/// Set-valued attributes may contain any number of individually bounded values.
+pub const MAX_ATTRIBUTES_PER_DOCUMENT: usize = 256;
 /// Maximum distinct records whose optimistic projections may be merged into one query.
 pub const MAX_OPTIMISTIC_RECORDS_PER_QUERY: usize = 128;
 
@@ -171,6 +175,24 @@ pub enum PredicateExpr {
     Or(Box<Self>, Box<Self>),
     /// Subtract a result set from the profile/partition universe.
     Not(Box<Self>),
+    /// Match at least one value of an exact attribute.
+    ExactExists {
+        /// Fact vocabulary token.
+        attribute: Token,
+    },
+    /// Exclusive keyset boundary over a sort fact and normalized key.
+    After {
+        /// Sort attribute.
+        attribute: Token,
+        /// Last returned sort value.
+        value: i64,
+        /// Last returned normalized key.
+        key: RecordKey,
+        /// Value ordering.
+        direction: SortDirection,
+        /// Tie-break ordering.
+        tie_direction: SortDirection,
+    },
 }
 
 impl PredicateExpr {
@@ -192,7 +214,12 @@ impl PredicateExpr {
                     stack.push((right, depth + 1));
                 }
                 Self::Not(expr) => stack.push((expr, depth + 1)),
-                Self::All | Self::None | Self::Exact { .. } | Self::I64Range { .. } => {}
+                Self::All
+                | Self::None
+                | Self::Exact { .. }
+                | Self::I64Range { .. }
+                | Self::ExactExists { .. }
+                | Self::After { .. } => {}
             }
         }
 
@@ -201,7 +228,7 @@ impl PredicateExpr {
 }
 
 /// One exact fact in an index document.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ExactFact {
     /// Fact vocabulary token.
     pub attribute: Token,
@@ -210,7 +237,7 @@ pub struct ExactFact {
 }
 
 /// One ordered integer fact in an index document.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct IntegerFact {
     /// Fact vocabulary token.
     pub attribute: Token,
@@ -235,13 +262,38 @@ pub struct IndexDocument {
     pub sort_facts: Vec<IntegerFact>,
 }
 
-impl IndexDocument {
-    /// Validate bounded fact counts and unique sort attributes.
-    pub fn validate(&self) -> Result<(), ValidationError> {
-        let facts = self.exact_facts.len() + self.integer_facts.len() + self.sort_facts.len();
-        if facts > MAX_FACTS_PER_DOCUMENT {
-            return Err(ValidationError::DocumentFacts);
+fn validate_attribute_count<'a>(
+    attributes: impl IntoIterator<Item = &'a Token>,
+) -> Result<(), ValidationError> {
+    let mut distinct = HashSet::new();
+    for attribute in attributes {
+        distinct.insert(attribute);
+        if distinct.len() > MAX_ATTRIBUTES_PER_DOCUMENT {
+            return Err(ValidationError::DocumentAttributes);
         }
+    }
+    Ok(())
+}
+
+impl IndexDocument {
+    /// Put facts in deterministic order and remove duplicate membership facts.
+    pub fn canonicalize(&mut self) {
+        self.exact_facts.sort();
+        self.exact_facts.dedup();
+        self.integer_facts.sort();
+        self.integer_facts.dedup();
+        self.sort_facts.sort();
+    }
+
+    /// Validate bounded attribute counts and unique sort attributes.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        validate_attribute_count(
+            self.exact_facts
+                .iter()
+                .map(|fact| &fact.attribute)
+                .chain(self.integer_facts.iter().map(|fact| &fact.attribute))
+                .chain(self.sort_facts.iter().map(|fact| &fact.attribute)),
+        )?;
         let mut sort_attributes = HashSet::new();
         if self
             .sort_facts
@@ -262,6 +314,10 @@ impl IndexDocument {
                 .exact_facts
                 .iter()
                 .any(|fact| &fact.attribute == attribute && &fact.value == value),
+            PredicateExpr::ExactExists { attribute } => self
+                .exact_facts
+                .iter()
+                .any(|fact| &fact.attribute == attribute),
             PredicateExpr::I64Range {
                 attribute,
                 lower,
@@ -271,6 +327,24 @@ impl IndexDocument {
                     && lower.is_none_or(|bound| lower_matches(fact.value, bound))
                     && upper.is_none_or(|bound| upper_matches(fact.value, bound))
             }),
+            PredicateExpr::After {
+                attribute,
+                value,
+                key,
+                direction,
+                tie_direction,
+            } => self
+                .sort_facts
+                .iter()
+                .find(|fact| &fact.attribute == attribute)
+                .is_some_and(|fact| {
+                    sorts_after(
+                        (fact.value, &self.record_key),
+                        (*value, key),
+                        *direction,
+                        *tie_direction,
+                    )
+                }),
             PredicateExpr::And(left, right) => self.matches(left) && self.matches(right),
             PredicateExpr::Or(left, right) => self.matches(left) || self.matches(right),
             PredicateExpr::Not(expr) => !self.matches(expr),
@@ -356,6 +430,34 @@ impl ValidatedIndexQuery {
         Self::new(query)
     }
 
+    /// Add an exclusive, direction-aware keyset boundary without changing sort semantics.
+    pub fn after(&self, value: i64, key: RecordKey) -> Result<Self, ValidationError> {
+        let mut query = self.0.clone();
+        for partition in &mut query.partitions {
+            partition.predicate = PredicateExpr::And(
+                Box::new(partition.predicate.clone()),
+                Box::new(PredicateExpr::After {
+                    attribute: query.sort_attribute.clone(),
+                    value,
+                    key: key.clone(),
+                    direction: query.sort_direction,
+                    tie_direction: query.tie_break_direction,
+                }),
+            );
+        }
+        Self::new(query)
+    }
+
+    /// Whether a row sorts after a keyset boundary, as [`Self::after`] decides.
+    pub fn sorts_after(&self, row: (i64, &RecordKey), boundary: (i64, &RecordKey)) -> bool {
+        sorts_after(
+            row,
+            boundary,
+            self.0.sort_direction,
+            self.0.tie_break_direction,
+        )
+    }
+
     /// Whether this query can inspect documents in `profile` and `partition`.
     pub fn includes_scope(&self, profile: &Profile, partition: &Token) -> bool {
         self.0.profile == *profile
@@ -381,6 +483,191 @@ impl ValidatedIndexQuery {
         };
         self.0.sort_attribute == *attribute
             || expression_depends_on(&candidate.predicate, attribute)
+    }
+
+    /// Collect predicate and sort attributes inspected in one selected partition.
+    pub fn dependent_attributes(&self, partition: &Token) -> BTreeSet<Token> {
+        let mut attributes = BTreeSet::from([self.0.sort_attribute.clone()]);
+        if let Some(candidate) = self
+            .0
+            .partitions
+            .iter()
+            .find(|candidate| candidate.partition == *partition)
+        {
+            collect_expression_attributes(&candidate.predicate, &mut attributes);
+        }
+        attributes
+    }
+}
+
+/// Why a known projection is not currently safe to query.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProjectionIncompleteKind {
+    /// An update may have changed indexed facts.
+    Dirty,
+    /// A supported normalized record arrived without its required projection.
+    Missing,
+    /// The record carries a projection version this client cannot interpret.
+    IncompatibleVersion,
+}
+
+/// Current effective uncertainty after composing optimistic projection changes.
+///
+/// `AllExcept` is needed so an exact later patch can make one attribute known
+/// after a wildcard unknown mutation without incorrectly clearing uncertainty
+/// for every other possible profile attribute.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OptimisticUncertainty {
+    /// Only the listed attributes are uncertain.
+    Attributes(BTreeSet<Token>),
+    /// Every attribute except the listed attributes is uncertain.
+    AllExcept(BTreeSet<Token>),
+}
+
+impl Default for OptimisticUncertainty {
+    fn default() -> Self {
+        Self::Attributes(BTreeSet::new())
+    }
+}
+
+impl OptimisticUncertainty {
+    /// Whether no attribute is uncertain.
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Attributes(attributes) if attributes.is_empty())
+    }
+
+    /// Whether one attribute remains uncertain.
+    pub fn affects(&self, attribute: &Token) -> bool {
+        match self {
+            Self::Attributes(attributes) => attributes.contains(attribute),
+            Self::AllExcept(certain) => !certain.contains(attribute),
+        }
+    }
+
+    /// Mark listed attributes uncertain, or every attribute when the slice is empty.
+    pub fn mark(&mut self, attributes: &[Token]) {
+        if attributes.is_empty() {
+            *self = Self::AllExcept(BTreeSet::new());
+            return;
+        }
+        match self {
+            Self::Attributes(uncertain) => uncertain.extend(attributes.iter().cloned()),
+            Self::AllExcept(certain) => {
+                for attribute in attributes {
+                    certain.remove(attribute);
+                }
+            }
+        }
+    }
+
+    /// Mark attributes exact after a deterministic replacement patch.
+    pub fn clear(&mut self, attributes: impl IntoIterator<Item = Token>) {
+        match self {
+            Self::Attributes(uncertain) => {
+                for attribute in attributes {
+                    uncertain.remove(&attribute);
+                }
+            }
+            Self::AllExcept(certain) => certain.extend(attributes),
+        }
+    }
+}
+
+/// Current fully composed optimistic projection for one record key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OptimisticProjectionState {
+    /// Complete effective facts.
+    Complete(IndexDocument),
+    /// Effective tombstone. Authoritative facts remain suppressed.
+    Deleted {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+    },
+    /// Authority is suppressed, but exact effective facts cannot be proven.
+    Incomplete {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Why exact composition failed.
+        kind: ProjectionIncompleteKind,
+    },
+}
+
+impl OptimisticProjectionState {
+    /// Read the affected normalized record key.
+    pub fn record_key(&self) -> &RecordKey {
+        match self {
+            Self::Complete(document) => &document.record_key,
+            Self::Deleted { record_key, .. } | Self::Incomplete { record_key, .. } => record_key,
+        }
+    }
+
+    /// Read the effective profile.
+    pub fn profile(&self) -> &Profile {
+        match self {
+            Self::Complete(document) => &document.profile,
+            Self::Deleted { profile, .. } | Self::Incomplete { profile, .. } => profile,
+        }
+    }
+
+    /// Read the effective partition.
+    pub fn partition(&self) -> &Token {
+        match self {
+            Self::Complete(document) => &document.partition,
+            Self::Deleted { partition, .. } | Self::Incomplete { partition, .. } => partition,
+        }
+    }
+
+    /// Validate complete facts when this state contains a document.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        match self {
+            Self::Complete(document) => document.validate(),
+            Self::Deleted { .. } | Self::Incomplete { .. } => Ok(()),
+        }
+    }
+}
+
+/// Effective shadow value whose owner already has a durable mutation ID.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EffectiveOptimisticProjection {
+    /// Greatest active mutation ID affecting this record.
+    pub owner: u64,
+    /// Fully composed projection, tombstone, or incomplete marker.
+    pub state: OptimisticProjectionState,
+    /// Uncertainty still effective after all active mutations.
+    pub uncertainty: OptimisticUncertainty,
+}
+
+impl EffectiveOptimisticProjection {
+    /// Validate owner and effective projection bounds.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.owner == 0 {
+            return Err(ValidationError::InvalidOptimisticOwner);
+        }
+        self.state.validate()
+    }
+}
+
+/// Effective shadow value awaiting the mutation ID assigned during enqueue.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingOptimisticProjection {
+    /// Fully composed projection, tombstone, or incomplete marker.
+    pub state: OptimisticProjectionState,
+    /// Uncertainty still effective after applying the new mutation.
+    pub uncertainty: OptimisticUncertainty,
+}
+
+impl PendingOptimisticProjection {
+    /// Validate effective projection bounds.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        self.state.validate()
     }
 }
 
@@ -427,6 +714,19 @@ pub enum OptimisticProjectionMutation {
         /// Potentially changed attributes. Empty means every attribute.
         affected_attributes: Vec<Token>,
     },
+    /// Edit individual set members without replacing other contributors.
+    PatchExact {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Members to remove before inserting replacements.
+        remove: Vec<ExactFact>,
+        /// Members to insert (idempotently).
+        insert: Vec<ExactFact>,
+    },
 }
 
 /// Complete replacement of one exact attribute's values.
@@ -460,10 +760,20 @@ impl OptimisticProjectionMutation {
             return match self {
                 Self::Replace(document) => document.validate(),
                 Self::Delete { .. } | Self::Unknown { .. } => Ok(()),
+                Self::PatchExact { remove, insert, .. } => validate_attribute_count(
+                    remove.iter().chain(insert).map(|fact| &fact.attribute),
+                ),
                 Self::Patch { .. } => unreachable!(),
             };
         };
 
+        validate_attribute_count(
+            exact
+                .iter()
+                .map(|patch| &patch.attribute)
+                .chain(integers.iter().map(|patch| &patch.attribute))
+                .chain(sorts.iter().map(|fact| &fact.attribute)),
+        )?;
         let mut attributes = HashSet::new();
         if exact
             .iter()
@@ -491,7 +801,8 @@ impl OptimisticProjectionMutation {
             Self::Replace(document) => &document.record_key,
             Self::Patch { record_key, .. }
             | Self::Delete { record_key, .. }
-            | Self::Unknown { record_key, .. } => record_key,
+            | Self::Unknown { record_key, .. }
+            | Self::PatchExact { record_key, .. } => record_key,
         }
     }
 
@@ -501,7 +812,8 @@ impl OptimisticProjectionMutation {
             Self::Replace(document) => &document.profile,
             Self::Patch { profile, .. }
             | Self::Delete { profile, .. }
-            | Self::Unknown { profile, .. } => profile,
+            | Self::Unknown { profile, .. }
+            | Self::PatchExact { profile, .. } => profile,
         }
     }
 
@@ -511,7 +823,8 @@ impl OptimisticProjectionMutation {
             Self::Replace(document) => &document.partition,
             Self::Patch { partition, .. }
             | Self::Delete { partition, .. }
-            | Self::Unknown { partition, .. } => partition,
+            | Self::Unknown { partition, .. }
+            | Self::PatchExact { partition, .. } => partition,
         }
     }
 
@@ -555,9 +868,9 @@ pub enum ValidationError {
     /// An integer range is inverted or empty.
     #[error("invalid integer range")]
     InvalidRange,
-    /// A document contains too many facts.
-    #[error("index document contains too many facts")]
-    DocumentFacts,
+    /// A document or patch contains too many distinct attribute names.
+    #[error("index document contains too many distinct attributes")]
+    DocumentAttributes,
     /// A document has more than one sort value for an attribute.
     #[error("duplicate sort fact attribute")]
     DuplicateSortFact,
@@ -579,6 +892,9 @@ pub enum ValidationError {
     /// A query limit is zero or too large.
     #[error("invalid index query limit {0}")]
     Limit(u16),
+    /// A durable effective optimistic projection has no active owner.
+    #[error("effective optimistic projection owner must be non-zero")]
+    InvalidOptimisticOwner,
 }
 
 /// Pure reference result used for adapter conformance tests.
@@ -647,12 +963,36 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
         | PredicateExpr::I64Range {
             attribute: candidate,
             ..
+        }
+        | PredicateExpr::ExactExists {
+            attribute: candidate,
+        }
+        | PredicateExpr::After {
+            attribute: candidate,
+            ..
         } => candidate == attribute,
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
             expression_depends_on(left, attribute) || expression_depends_on(right, attribute)
         }
         PredicateExpr::Not(expr) => expression_depends_on(expr, attribute),
         PredicateExpr::All | PredicateExpr::None => false,
+    }
+}
+
+fn collect_expression_attributes(expr: &PredicateExpr, attributes: &mut BTreeSet<Token>) {
+    match expr {
+        PredicateExpr::Exact { attribute, .. }
+        | PredicateExpr::I64Range { attribute, .. }
+        | PredicateExpr::ExactExists { attribute }
+        | PredicateExpr::After { attribute, .. } => {
+            attributes.insert(attribute.clone());
+        }
+        PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
+            collect_expression_attributes(left, attributes);
+            collect_expression_attributes(right, attributes);
+        }
+        PredicateExpr::Not(expr) => collect_expression_attributes(expr, attributes),
+        PredicateExpr::All | PredicateExpr::None => {}
     }
 }
 
@@ -688,7 +1028,11 @@ fn simplify(expr: PredicateExpr) -> Result<PredicateExpr, ValidationError> {
                 upper,
             }
         }
-        expr @ (PredicateExpr::All | PredicateExpr::None | PredicateExpr::Exact { .. }) => expr,
+        expr @ (PredicateExpr::All
+        | PredicateExpr::None
+        | PredicateExpr::Exact { .. }
+        | PredicateExpr::ExactExists { .. }
+        | PredicateExpr::After { .. }) => expr,
     })
 }
 
@@ -724,6 +1068,17 @@ fn upper_matches(value: i64, bound: RangeBound) -> bool {
         RangeBound::Inclusive(upper) => value <= upper,
         RangeBound::Exclusive(upper) => value < upper,
     }
+}
+
+fn sorts_after(
+    (value, key): (i64, &RecordKey),
+    (boundary_value, boundary_key): (i64, &RecordKey),
+    direction: SortDirection,
+    tie_direction: SortDirection,
+) -> bool {
+    directional_cmp(value.cmp(&boundary_value), direction)
+        .then_with(|| directional_cmp(key.cmp(boundary_key), tie_direction))
+        == Ordering::Greater
 }
 
 fn directional_cmp(ordering: Ordering, direction: SortDirection) -> Ordering {

@@ -1,0 +1,14 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  stroke-linejoin="round"
+  stroke-linecap="round"
+  stroke="currentColor"
+  viewBox="0 0 74 46"
+  stroke-width="0.4"
+  fill="none"
+>
+ <path id="panel" d="m3 1h68c1.108 0 2 0.892 2 2v40c0 1.108-0.892 2-2 2h-68c-1.1055 0.002218-2.0022-0.89451-2-2v-40c0-1.108 0.892-2 2-2"/>
+ <path id="grid" d="m1 33h72m0-4h-72m0-4h72m0-4h-72m0-4h72m0-4h-72m0-4h72m-20-8v44m-4 0v-44m-4 0v44m-4 0v-44m-4 44v-44m-4 44v-44m-4 0v44m-4 0v-44m-4 0v44m-4 0v-44m-4 0v44m-4 0v-44m-4 0v44m-4-40h72m-4 40v-44m-4 0v44m-4 0v-44m-4 44v-44m16 40h-72m0-4h72"/>
+ <path id="header" d="m1 9v-6c0-1.1046 0.89543-2 2-2h68c1.1046 0 2 0.89543 2 2v6z"/>
+ <path id="x" d="m68 6 2-2m-2 0 2 2"/>
+</svg>

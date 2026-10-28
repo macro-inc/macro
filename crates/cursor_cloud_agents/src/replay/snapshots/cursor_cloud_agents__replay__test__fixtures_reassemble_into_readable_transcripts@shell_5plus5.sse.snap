@@ -1,0 +1,15 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 239
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/shell_5plus5.sse
+---
+
+--- thinking ---
+Running a shell command to compute 5 + 5.
+--- assistant ---
+I'll compute 5 + 5 with a shell command and report the result.
+--- thinking ---
+5 + 5 equals 10.
+--- assistant ---
+The answer is **10**.

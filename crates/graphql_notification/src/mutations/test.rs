@@ -46,7 +46,10 @@ fn notification_row(
         notification_event_type: "channel_message_send".to_string(),
         entity,
         sent: true,
-        done: matches!(status, NotificationStatus::Done(true)),
+        state: match status {
+            NotificationStatus::Done(true) => notification::domain::models::NotificationState::Done,
+            _ => notification::domain::models::NotificationState::Seen,
+        },
         created_at: now,
         viewed_at: matches!(status, NotificationStatus::Seen).then_some(now),
         updated_at: now,
@@ -155,7 +158,7 @@ async fn update_notifications_maps_operation_and_returns_normalized_rows_in_orde
 
     let response = schema
         .execute(format!(
-            r#"mutation {{ updateNotifications(input: {{ notificationIds: ["{second}", "{first}"], operation: MARK_SEEN }}) {{ __typename id seen viewedAt metadata {{ __typename }} }} }}"#
+            r#"mutation {{ updateNotifications(input: {{ notificationIds: ["{second}", "{first}"], operation: MARK_SEEN }}) {{ __typename id state viewedAt metadata {{ __typename }} }} }}"#
         ))
         .await;
 
@@ -205,7 +208,7 @@ async fn update_notifications_for_entity_maps_entities_and_operation() {
                     operation: MARK_DONE
                 }) {
                     id
-                    done
+                    state
                     entityType
                     entityId
                 }
@@ -219,7 +222,7 @@ async fn update_notifications_for_entity_maps_entities_and_operation() {
         data["updateNotificationsForEntity"][0]["id"],
         Uuid::from_u128(1).to_string()
     );
-    assert_eq!(data["updateNotificationsForEntity"][0]["done"], true);
+    assert_eq!(data["updateNotificationsForEntity"][0]["state"], "DONE");
     assert_eq!(
         data["updateNotificationsForEntity"][0]["entityType"],
         "DOCUMENT"

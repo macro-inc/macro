@@ -1,9 +1,17 @@
 import { stack } from '.';
 
+/** Public OAuth identities remain stable when their processes move to the harness. */
+export const AGENT_PUBLIC_URLS = {
+  cognition: `https://document-cognition${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+  mcp: `https://mcp-server${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+};
+
 /**
  * Service url for all macro services
  */
 export enum ServiceUrl {
+  APP_SERVICE_URL = 'APP_SERVICE_URL',
+  PREVIEW_GATEWAY_URL = 'PREVIEW_GATEWAY_URL',
   SYNC_SERVICE_URL = 'SYNC_SERVICE_URL',
   EMAIL_SERVICE_URL = 'EMAIL_SERVICE_URL',
   STATIC_FILE_SERVICE_URL = 'STATIC_FILE_SERVICE_URL',
@@ -13,6 +21,10 @@ export enum ServiceUrl {
   CONNECTION_GATEWAY_URL = 'CONNECTION_GATEWAY_URL',
   DOCUMENT_COGNITION_SERVICE_URL = 'DOCUMENT_COGNITION_SERVICE_URL',
   LEXICAL_SERVICE_URL = 'LEXICAL_SERVICE_URL',
+  UNFURL_SERVICE_URL = 'UNFURL_SERVICE_URL',
+  AGENT_HARNESS_SERVICE_URL = 'AGENT_HARNESS_SERVICE_URL',
+  AGENT_HARNESS_EGRESS_URL = 'AGENT_HARNESS_EGRESS_URL',
+  MCP_SERVER_URL = 'MCP_SERVER_URL',
 }
 
 /**
@@ -26,39 +38,56 @@ type ServiceUrlMap = {
  * Dev Service URLs
  */
 const DEV_SERVICE_URLS: ServiceUrlMap = {
+  [ServiceUrl.APP_SERVICE_URL]: 'https://dev.macro.com',
+  [ServiceUrl.PREVIEW_GATEWAY_URL]: 'https://dev-gateway.macro.com/preview',
   [ServiceUrl.SYNC_SERVICE_URL]:
     'https://sync-service-dev3.macroverse.workers.dev',
-  [ServiceUrl.EMAIL_SERVICE_URL]: 'https://email-service-dev.macro.com',
+  [ServiceUrl.EMAIL_SERVICE_URL]: 'https://dev-gateway.macro.com/email',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]:
     'https://static-file-service-dev.macro.com',
-  [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications-dev.macro.com',
-  [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service-dev.macro.com',
+  [ServiceUrl.NOTIFICATION_SERVICE_URL]:
+    'https://dev-gateway.macro.com/notification',
+  [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://dev-gateway.macro.com/auth',
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]:
-    'https://cloud-storage-dev.macro.com',
+    'https://dev-gateway.macro.com/dss',
   [ServiceUrl.CONNECTION_GATEWAY_URL]:
-    'https://connection-gateway-dev.macro.com',
+    'https://dev-gateway.macro.com/connection-gateway',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
-    'https://document-cognition-dev.macro.com',
-  [ServiceUrl.LEXICAL_SERVICE_URL]:
-    'https://lexical-service-dev.macroverse.workers.dev',
+    'https://dev-gateway.macro.com/cognition',
+  [ServiceUrl.LEXICAL_SERVICE_URL]: 'https://dev-gateway.macro.com/lexical',
+  [ServiceUrl.UNFURL_SERVICE_URL]: 'https://dev-gateway.macro.com/unfurl',
+  [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
+    'https://dev-gateway.macro.com/agent-harness',
+  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
+    'https://dev-gateway.macro.com/agent-harness-egress',
+  [ServiceUrl.MCP_SERVER_URL]: 'https://dev-gateway.macro.com/mcp',
 };
 
 /**
  * Prod Service URLs
  */
 const PROD_SERVICE_URLS: ServiceUrlMap = {
+  [ServiceUrl.APP_SERVICE_URL]: 'https://macro.com',
+  [ServiceUrl.PREVIEW_GATEWAY_URL]: 'https://gateway.macro.com/preview',
   [ServiceUrl.SYNC_SERVICE_URL]:
     'https://sync-service-prod2.macroverse.workers.dev',
-  [ServiceUrl.EMAIL_SERVICE_URL]: 'https://email-service.macro.com',
+  [ServiceUrl.EMAIL_SERVICE_URL]: 'https://gateway.macro.com/email',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]: 'https://static-file-service.macro.com',
-  [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications.macro.com',
-  [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service.macro.com',
-  [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'https://cloud-storage.macro.com',
-  [ServiceUrl.CONNECTION_GATEWAY_URL]: 'https://connection-gateway.macro.com',
+  [ServiceUrl.NOTIFICATION_SERVICE_URL]:
+    'https://gateway.macro.com/notification',
+  [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://gateway.macro.com/auth',
+  [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'https://gateway.macro.com/dss',
+  [ServiceUrl.CONNECTION_GATEWAY_URL]:
+    'https://gateway.macro.com/connection-gateway',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
-    'https://document-cognition.macro.com',
-  [ServiceUrl.LEXICAL_SERVICE_URL]:
-    'https://lexical-service-prod.macroverse.workers.dev',
+    'https://gateway.macro.com/cognition',
+  [ServiceUrl.LEXICAL_SERVICE_URL]: 'https://gateway.macro.com/lexical',
+  [ServiceUrl.UNFURL_SERVICE_URL]: 'https://gateway.macro.com/unfurl',
+  [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
+    'https://gateway.macro.com/agent-harness',
+  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
+    'https://gateway.macro.com/agent-harness-egress',
+  [ServiceUrl.MCP_SERVER_URL]: 'https://gateway.macro.com/mcp',
 };
 
 /**

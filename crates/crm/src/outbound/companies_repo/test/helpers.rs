@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-pub(super) async fn seed_team(pool: &PgPool, team_id: Uuid, owner_id: &str) -> sqlx::Result<()> {
+pub(crate) async fn seed_team(pool: &PgPool, team_id: Uuid, owner_id: &str) -> sqlx::Result<()> {
     let macro_user_id = Uuid::now_v7();
 
     sqlx::query(
@@ -310,13 +310,4 @@ pub(super) async fn insert_contact(
     .execute(pool)
     .await?;
     Ok(contact_id)
-}
-
-/// Counts live (non-soft-deleted) threads.
-pub(super) async fn count_threads(pool: &PgPool) -> sqlx::Result<i64> {
-    let (count,): (i64,) =
-        sqlx::query_as(r#"SELECT COUNT(*) FROM crm_thread WHERE deleted_at IS NULL"#)
-            .fetch_one(pool)
-            .await?;
-    Ok(count)
 }

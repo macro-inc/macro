@@ -1,0 +1,152 @@
+import { CellMentionEditor } from '@app/components/cell-text-editor/CellMentionEditor';
+import type { CellTextEditorProps } from '@app/components/cell-text-editor/types';
+import {
+  type MacroMentionLinkResolver,
+  useMacroMentionLinkResolver,
+} from '@components/app/split-layout/split-router/mention-links';
+import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
+import { UserMention } from '@core/component/LexicalMarkdown/component/decorator/UserMention';
+import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
+import { getBlockNameFromEntity } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/utils/entityUtils';
+import { parseMacroAppUrl } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
+import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
+import { formatRelativeDay, formatTooltipDate } from '@core/util/dateParser';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import {
+  type CellDateMention,
+  cellTextParts,
+  encodeCellMention,
+} from '@macro-inc/spreadsheet/cell-mentions';
+import { For, Suspense } from 'solid-js';
+import type { SpreadsheetMentions } from './context/spreadsheet-mentions';
+import { SpreadsheetCellLinks } from './spreadsheet-cell-links';
+import { DateMentionMenu } from './views/DateMentionMenu';
+
+export function linkMentions(
+  value: string,
+  resolveAppLink?: MacroMentionLinkResolver
+): string {
+  if (value.startsWith('=')) return value;
+  return cellTextParts(value)
+    .map((part) =>
+      part.mention
+        ? part.text
+        : part.text.replace(/https?:\/\/[^\s<>]+/g, (url) => {
+            const legacy = parseMacroAppUrl(url);
+            const parsed = legacy.isValid ? legacy : resolveAppLink?.(url);
+            return parsed?.id && parsed.block
+              ? encodeCellMention({
+                  type: 'document',
+                  documentId: parsed.id,
+                  documentName: '',
+                  blockName: parsed.block,
+                  blockParams: parsed.params,
+                })
+              : url;
+          })
+    )
+    .join('');
+}
+function fromItem(item: MentionItem): string | undefined {
+  if (item.kind === 'user')
+    return encodeCellMention({
+      type: 'user',
+      userId: item.id,
+      email: item.data.email,
+      displayName: item.data.name,
+    });
+  if (item.kind === 'entity')
+    return encodeCellMention({
+      type: 'document',
+      documentId: item.id,
+      documentName: item.data.name ?? '',
+      blockName: getBlockNameFromEntity(item),
+    });
+}
+/**
+ * Same chip as docs, without the picker: edit the cell to change the date.
+ * The `@` menu enters dates as date values, so chips come from older cells
+ * and AI edits.
+ */
+function CellDateChip(props: CellDateMention) {
+  const date = () => new Date(props.date);
+  return (
+    <span
+      data-spreadsheet-mention
+      data-date={props.date}
+      class="inline-block max-w-full align-bottom truncate rounded-md bg-accent/8 p-0.5 text-accent"
+      title={formatTooltipDate(date())}
+    >
+      <span class="relative top-[0.125em] mx-0.5 inline-flex size-[1em]">
+        <ClockIcon class="size-full" />
+      </span>
+      {formatRelativeDay(date())}
+    </span>
+  );
+}
+function CellMentions(props: { value: string }) {
+  const resolveAppLink = useMacroMentionLinkResolver();
+  return (
+    <For each={cellTextParts(linkMentions(props.value, resolveAppLink))}>
+      {(part) => {
+        const mention = part.mention;
+        if (!mention) return <SpreadsheetCellLinks value={part.text} />;
+        if (mention.type === 'date') return <CellDateChip {...mention} />;
+        return (
+          <span
+            data-spreadsheet-mention
+            class="inline-block max-w-full align-bottom truncate"
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onDblClick={(event) => event.stopPropagation()}
+          >
+            <Suspense
+              fallback={
+                mention.type === 'user'
+                  ? mention.email
+                  : mention.documentName || 'Linked item'
+              }
+            >
+              {mention.type === 'user' ? (
+                <UserMention {...mention} key="spreadsheet" theme={{}} />
+              ) : (
+                <DocumentMention {...mention} key="spreadsheet" theme={{}} />
+              )}
+            </Suspense>
+          </span>
+        );
+      }}
+    </For>
+  );
+}
+function SpreadsheetMentionEditor(props: CellTextEditorProps) {
+  const resolveAppLink = useMacroMentionLinkResolver();
+  return (
+    <CellMentionEditor
+      {...props}
+      convertPaste={(text) => linkMentions(text, resolveAppLink)}
+      renderMenu={(menu, anchor, pick) => (
+        <DateMentionMenu menu={menu} anchor={anchor} pick={pick}>
+          {(pickDate) => (
+            <MentionsMenu
+              menu={menu}
+              anchor={anchor}
+              sources={['users', 'documents', 'channels', 'emails', 'dates']}
+              showOpenTabs={false}
+              onPick={(item) => {
+                if (item.kind === 'date') return pickDate(item.data.date);
+                const value = fromItem(item);
+                if (value) pick(value);
+              }}
+            />
+          )}
+        </DateMentionMenu>
+      )}
+    />
+  );
+}
+
+export const spreadsheetMentions: SpreadsheetMentions = {
+  renderText: (value) => <CellMentions value={value} />,
+  renderEditor: (props) => <SpreadsheetMentionEditor {...props} />,
+};

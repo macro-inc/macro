@@ -6,6 +6,7 @@
  */
 import type { SimpleUnifiedSearchResponseBaseItemOneOf } from './simpleUnifiedSearchResponseBaseItemOneOf';
 import type { SimpleUnifiedSearchResponseBaseItemOneOfFour } from './simpleUnifiedSearchResponseBaseItemOneOfFour';
+import type { SimpleUnifiedSearchResponseBaseItemOneOfOnenine } from './simpleUnifiedSearchResponseBaseItemOneOfOnenine';
 import type { SimpleUnifiedSearchResponseBaseItemOneOfOnesix } from './simpleUnifiedSearchResponseBaseItemOneOfOnesix';
 import type { SimpleUnifiedSearchResponseBaseItemOneOfOnethree } from './simpleUnifiedSearchResponseBaseItemOneOfOnethree';
 import type { SimpleUnifiedSearchResponseBaseItemOneOfOnezero } from './simpleUnifiedSearchResponseBaseItemOneOfOnezero';
@@ -17,4 +18,5 @@ export type SimpleUnifiedSearchResponseBaseItem =
   | SimpleUnifiedSearchResponseBaseItemOneOfSeven
   | SimpleUnifiedSearchResponseBaseItemOneOfOnezero
   | SimpleUnifiedSearchResponseBaseItemOneOfOnethree
-  | SimpleUnifiedSearchResponseBaseItemOneOfOnesix;
+  | SimpleUnifiedSearchResponseBaseItemOneOfOnesix
+  | SimpleUnifiedSearchResponseBaseItemOneOfOnenine;

@@ -1,10 +1,15 @@
-use crate::outbound::pg_soup_repo::{
-    expanded::{
-        by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
-        by_ids::expanded_soup_by_ids,
-        dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
+use crate::{
+    domain::models::SoupDocumentServerFacts,
+    outbound::pg_soup_repo::{
+        expanded::{
+            by_ids::{expanded_soup_by_ids, expanded_soup_by_ids_with_projection},
+            dynamic::{
+                ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup,
+                expanded_dynamic_cursor_soup_with_projection,
+            },
+        },
+        populate_properties,
     },
-    populate_properties,
 };
 use filter_ast::Expr;
 use item_filters::{
@@ -23,7 +28,49 @@ use models_soup::item::SoupItem;
 use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
 use std::sync::Arc;
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
+
+/// The unfiltered soup pages used to be served by two hand-written queries in
+/// `expanded::by_cursor`. They are now answered by the dynamic builder with an
+/// empty filter, which folds to the same predicates. These helpers keep the
+/// old call shape so the suite below goes on asserting the same behaviour
+/// against the replacement.
+async fn expanded_generic_cursor_soup(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, ()>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id,
+            limit,
+            cursor: cursor.map_filter(|_| EntityFilterAst::default()),
+            exclude_frecency: false,
+        },
+    )
+    .await
+}
+
+async fn no_frecency_expanded_generic_soup(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, Frecency>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id,
+            limit,
+            cursor: cursor.map_filter(|_| EntityFilterAst::default()),
+            exclude_frecency: true,
+        },
+    )
+    .await
+}
 
 macro_rules! unwrap_enum {
     // Base case: single variant
@@ -385,6 +432,7 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
         })
         .expect("The chat should exist");
     assert_eq!(chat.name, "Chat in B");
+    assert_eq!(chat.model.as_deref(), Some("gpt-4o"));
     assert_eq!(chat.project_id.as_ref(), Some(&expected_project_id));
 }
 
@@ -1065,6 +1113,12 @@ async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
     )
     .await?;
 
+    for item in &items {
+        if let SoupItem::Chat(chat) = item {
+            assert_eq!(chat.model.as_deref(), Some("gpt-4o"));
+        }
+    }
+
     // Should get 2 chats (filtered), all documents, and all projects
     let mut chat_ids: HashSet<Uuid> = HashSet::new();
     let mut doc_count = 0;
@@ -1603,7 +1657,7 @@ async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
         match item {
             SoupItem::Document(doc) => {
                 assert_eq!(
-                    doc.owner_id.as_ref(),
+                    doc.owner_id.principal_id(),
                     "macro|user-1@test.com",
                     "All documents should be owned by user-1"
                 );
@@ -4112,22 +4166,28 @@ async fn test_dyn_filter_notification_done_false(db: PgPool) -> anyhow::Result<(
     let entity_filters = EntityFilters {
         document_filters: DocumentFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },
         chat_filters: ChatFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },
         project_filters: ProjectFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },
@@ -4173,8 +4233,7 @@ async fn test_dyn_filter_notification_done_and_seen_false(db: PgPool) -> anyhow:
     };
 
     let notification_filters = NotificationFilters {
-        done: Some(false),
-        seen: Some(false),
+        states: vec![item_filters::NotificationState::Unseen],
     };
     let entity_filters = EntityFilters {
         document_filters: DocumentFilters {
@@ -5311,6 +5370,333 @@ async fn test_dyn_filter_by_sub_type_and_file_type(db: PgPool) -> anyhow::Result
     Ok(())
 }
 
+async fn document_ids_for_phase0_membership_filter(
+    db: &PgPool,
+    document_filter: serde_json::Value,
+) -> anyhow::Result<HashSet<Uuid>> {
+    let filters: EntityFilterAst = serde_json::from_value(serde_json::json!({
+        "df": document_filter
+    }))?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let items = expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id,
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    Ok(items
+        .into_iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(document) => Some(document.id),
+            _ => None,
+        })
+        .collect())
+}
+
+// Characterizes the authoritative PostgreSQL membership for every production
+// Documents tab before soup-flat-v2 introduces equivalent local facts.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests", "soup_projection_phase0")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn production_documents_presets_have_authoritative_membership(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let owner = "macro|user-1@test.com";
+    let not_task = serde_json::json!({ "!": { "l": { "dst": "task" } } });
+    let not_task_or_snippet = serde_json::json!({
+        "!": {
+            "|": [
+                { "l": { "dst": "task" } },
+                { "l": { "dst": "snippet" } }
+            ]
+        }
+    });
+    let owned = |sub_type_filter: serde_json::Value| {
+        serde_json::json!({
+            "&": [
+                sub_type_filter,
+                {
+                    "&": [
+                        { "l": { "o": owner } },
+                        { "l": { "iea": false } }
+                    ]
+                }
+            ]
+        })
+    };
+    let shared = |sub_type_filter: serde_json::Value| {
+        serde_json::json!({
+            "&": [
+                sub_type_filter,
+                {
+                    "&": [
+                        { "!": { "l": { "o": owner } } },
+                        { "l": { "iea": false } }
+                    ]
+                }
+            ]
+        })
+    };
+    let ids = |values: &[&str]| {
+        values
+            .iter()
+            .map(|value| Uuid::parse_str(value).unwrap())
+            .collect::<HashSet<_>>()
+    };
+
+    let ordinary_owned = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+    let ordinary_shared = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+    let snippet = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+    let attachment_task_a = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let attachment_task_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+    let cases = [
+        (
+            "owned/snippets-on",
+            owned(not_task.clone()),
+            ids(&[ordinary_owned, snippet]),
+        ),
+        (
+            "owned/snippets-off",
+            owned(not_task_or_snippet.clone()),
+            ids(&[ordinary_owned]),
+        ),
+        (
+            "shared/snippets-on",
+            shared(not_task.clone()),
+            ids(&[ordinary_shared]),
+        ),
+        (
+            "shared/snippets-off",
+            shared(not_task_or_snippet.clone()),
+            ids(&[ordinary_shared]),
+        ),
+        (
+            "attachments",
+            serde_json::json!({ "l": { "iea": true } }),
+            ids(&[attachment_task_a, attachment_task_b]),
+        ),
+        (
+            "all/snippets-on",
+            not_task,
+            ids(&[ordinary_owned, ordinary_shared, snippet]),
+        ),
+        (
+            "all/snippets-off",
+            not_task_or_snippet,
+            ids(&[ordinary_owned, ordinary_shared]),
+        ),
+    ];
+
+    for (name, filter, expected) in cases {
+        assert_eq!(
+            document_ids_for_phase0_membership_filter(&db, filter).await?,
+            expected,
+            "{name}"
+        );
+    }
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn projection_hydration_carries_viewer_relative_facts_from_flat_and_by_id_rows(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let flat = expanded_dynamic_cursor_soup_with_projection(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let attachment_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let unimportant_task_id = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let ordinary_id = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
+    let attachment_facts = flat
+        .iter()
+        .find(|hydration| hydration.item.id() == attachment_id)
+        .and_then(|hydration| hydration.document_server_facts.clone())
+        .expect("attachment document server facts are hydrated");
+    let unimportant_task_facts = flat
+        .iter()
+        .find(|hydration| hydration.item.id() == unimportant_task_id)
+        .and_then(|hydration| hydration.document_server_facts.clone())
+        .expect("unimportant task server facts are hydrated");
+    let ordinary_facts = flat
+        .iter()
+        .find(|hydration| hydration.item.id() == ordinary_id)
+        .and_then(|hydration| hydration.document_server_facts.clone())
+        .expect("ordinary document server facts are hydrated");
+    assert_eq!(
+        attachment_facts,
+        SoupDocumentServerFacts {
+            is_email_attachment: true,
+            is_important: true,
+            status_option_ids: vec![StatusOption::NOT_STARTED_UUID],
+        }
+    );
+    assert_eq!(
+        unimportant_task_facts,
+        SoupDocumentServerFacts {
+            is_email_attachment: true,
+            is_important: false,
+            status_option_ids: vec![StatusOption::IN_PROGRESS_UUID],
+        }
+    );
+    assert_eq!(
+        ordinary_facts,
+        SoupDocumentServerFacts {
+            is_email_attachment: false,
+            is_important: true,
+            status_option_ids: Vec::new(),
+        }
+    );
+
+    let entities = [
+        EntityType::Document.with_entity_string(attachment_id.to_string()),
+        EntityType::Document.with_entity_string(unimportant_task_id.to_string()),
+        EntityType::Document.with_entity_string(ordinary_id.to_string()),
+    ];
+    let by_id = expanded_soup_by_ids_with_projection(&db, user_id, &entities).await?;
+    assert_eq!(by_id.len(), 3);
+    assert!(by_id.iter().any(|hydration| {
+        hydration.item.id() == attachment_id
+            && hydration.document_server_facts
+                == Some(SoupDocumentServerFacts {
+                    is_email_attachment: true,
+                    is_important: true,
+                    status_option_ids: vec![StatusOption::NOT_STARTED_UUID],
+                })
+    }));
+    assert!(by_id.iter().any(|hydration| {
+        hydration.item.id() == unimportant_task_id
+            && hydration.document_server_facts
+                == Some(SoupDocumentServerFacts {
+                    is_email_attachment: true,
+                    is_important: false,
+                    status_option_ids: vec![StatusOption::IN_PROGRESS_UUID],
+                })
+    }));
+    assert!(by_id.iter().any(|hydration| {
+        hydration.item.id() == ordinary_id
+            && hydration.document_server_facts
+                == Some(SoupDocumentServerFacts {
+                    is_email_attachment: false,
+                    is_important: true,
+                    status_option_ids: Vec::new(),
+                })
+    }));
+
+    // The relation probe is backed by the composite primary key's leading
+    // document_id column. Disable sequential scans so the fixture's tiny table
+    // still exposes the representative production access path.
+    let mut tx = db.begin().await?;
+    sqlx::query!("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await?;
+    let plan = sqlx::query_scalar!(
+        r#"EXPLAIN (FORMAT JSON)
+           SELECT EXISTS (
+               SELECT 1 FROM document_email de WHERE de.document_id = $1
+           )"#,
+        attachment_id.to_string(),
+    )
+    .fetch_one(&mut *tx)
+    .await?
+    .expect("EXPLAIN returns a JSON plan");
+    assert!(
+        plan.to_string().contains("document_email_pkey"),
+        "attachment existence lookup must use document_email_pkey: {plan}"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn projection_status_extraction_treats_non_array_values_as_empty(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let json_null_status_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let scalar_status_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    sqlx::query!(
+        r#"UPDATE entity_properties
+           SET values = CASE entity_id
+               WHEN $1 THEN 'null'::jsonb
+               ELSE '{"type":"String","value":"not-an-array"}'::jsonb
+           END
+           WHERE entity_id IN ($1, $2)
+             AND entity_type = 'TASK'
+             AND property_definition_id = $3"#,
+        json_null_status_id,
+        scalar_status_id,
+        SystemPropertyKey::STATUS_UUID,
+    )
+    .execute(&db)
+    .await?;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let flat = expanded_dynamic_cursor_soup_with_projection(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    for id in [json_null_status_id, scalar_status_id] {
+        let id = Uuid::parse_str(id)?;
+        let facts = flat
+            .iter()
+            .find(|hydration| hydration.item.id() == id)
+            .and_then(|hydration| hydration.document_server_facts.as_ref())
+            .expect("task document server facts are hydrated");
+        assert!(facts.status_option_ids.is_empty());
+    }
+
+    let entities = [json_null_status_id, scalar_status_id]
+        .map(|id| EntityType::Document.with_entity_string(id.to_string()));
+    let by_id = expanded_soup_by_ids_with_projection(&db, user_id, &entities).await?;
+    assert_eq!(by_id.len(), 2);
+    assert!(by_id.iter().all(|hydration| {
+        hydration
+            .document_server_facts
+            .as_ref()
+            .is_some_and(|facts| facts.status_option_ids.is_empty())
+    }));
+
+    Ok(())
+}
+
 // Test filtering documents by is_email_attachment = true (only email attachments)
 #[sqlx::test(
     fixtures(
@@ -5512,6 +5898,7 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
 
 fn mock_empty_ast() -> EntityFilterAst {
     EntityFilterAst {
+        crm_association: None,
         document_filter: None,
         calendar_event_filter: None,
         project_filter: None,
@@ -5521,9 +5908,14 @@ fn mock_empty_ast() -> EntityFilterAst {
         channel_thread_filter: None,
         call_filter: None,
         crm_company_filter: None,
+        crm_contact_filter: None,
         foreign_entity_filter: None,
-        reminder_filter: None,
+        github_pull_request_filter: None,
+        agent_session_filter: None,
+        initiative_filter: None,
+        database_row_filter: None,
         properties_filter: None,
+        favorites_only: None,
     }
 }
 
@@ -6184,7 +6576,7 @@ async fn insert_notification(
     done: bool,
     seen: bool,
 ) -> anyhow::Result<()> {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO notification (
             id,
@@ -6197,29 +6589,31 @@ async fn insert_notification(
         )
         VALUES ($1::uuid, 'test', $2, $3, 'test', NOW(), '{}')
         "#,
+        Uuid::parse_str(notification_id)?,
+        item_id,
+        item_type,
     )
-    .bind(notification_id)
-    .bind(item_id)
-    .bind(item_type)
     .execute(db)
     .await?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO user_notification (
             user_id,
             notification_id,
-            done,
+            state,
             seen_at,
             deleted_at
         )
-        VALUES ($1, $2::uuid, $3, CASE WHEN $4 THEN NOW() ELSE NULL END, NULL)
+        VALUES ($1, $2::uuid, CASE WHEN $3::bool THEN 'done'::notification_state
+            WHEN $4::bool THEN 'seen'::notification_state ELSE 'unseen'::notification_state END,
+            CASE WHEN $4 THEN NOW() ELSE NULL END, NULL)
         "#,
+        user_id,
+        Uuid::parse_str(notification_id)?,
+        done,
+        seen,
     )
-    .bind(user_id)
-    .bind(notification_id)
-    .bind(done)
-    .bind(seen)
     .execute(db)
     .await?;
 
@@ -6310,15 +6704,30 @@ async fn test_notification_optimization_preserves_access_control(db: PgPool) -> 
     }
 
     let ast = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::NotificationDone(
-            false,
-        )))),
-        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::NotificationDone(
-            false,
-        )))),
-        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::NotificationDone(
-            false,
-        )))),
+        document_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        chat_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        project_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
         ..mock_empty_ast()
     };
 
@@ -6381,25 +6790,54 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
     }
 
     let optimized = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::NotificationDone(
-            false,
-        )))),
-        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::NotificationDone(
-            false,
-        )))),
-        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::NotificationDone(
-            false,
-        )))),
+        document_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        chat_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        project_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
         ..mock_empty_ast()
     };
 
-    // This is logically equivalent to NotificationDone(false), but because the
+    // This is logically equivalent to Unseen OR Seen, but because the
     // notification predicate appears under OR it intentionally stays on the old
     // correlated-EXISTS path.
     let unoptimized_doc = Expr::Or(
-        Box::new(Expr::Literal(DocumentLiteral::NotificationDone(false))),
+        Box::new(Expr::or(
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        )),
         Box::new(Expr::And(
-            Box::new(Expr::Literal(DocumentLiteral::NotificationDone(false))),
+            Box::new(Expr::or(
+                filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            )),
             Box::new(Expr::Literal(DocumentLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(
                     chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
@@ -6408,9 +6846,23 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
         )),
     );
     let unoptimized_chat = Expr::Or(
-        Box::new(Expr::Literal(ChatLiteral::NotificationDone(false))),
+        Box::new(Expr::or(
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        )),
         Box::new(Expr::And(
-            Box::new(Expr::Literal(ChatLiteral::NotificationDone(false))),
+            Box::new(Expr::or(
+                filter_ast::Expr::val(ChatLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(ChatLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            )),
             Box::new(Expr::Literal(ChatLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(
                     chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
@@ -6419,9 +6871,23 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
         )),
     );
     let unoptimized_project = Expr::Or(
-        Box::new(Expr::Literal(ProjectLiteral::NotificationDone(false))),
+        Box::new(Expr::or(
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        )),
         Box::new(Expr::And(
-            Box::new(Expr::Literal(ProjectLiteral::NotificationDone(false))),
+            Box::new(Expr::or(
+                filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            )),
             Box::new(Expr::Literal(ProjectLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(
                     chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
@@ -6441,5 +6907,163 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
 
     assert_eq!(optimized_ids, unoptimized_ids);
 
+    Ok(())
+}
+
+const DOC_A: &str = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DOC_B: &str = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const DOC_D: &str = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+
+/// The fixture's attachments hang off messages that do not exist. Give doc A's
+/// attachment a message from the user to vendor@acme.com and doc B's a message
+/// from other@globex.com, and point doc D's Companies property at `company`.
+async fn seed_crm_document_associations(db: &PgPool, company: Uuid) -> anyhow::Result<()> {
+    let mut tx = db.begin().await?;
+    sqlx::raw_sql("SET LOCAL session_replication_role = 'replica'")
+        .execute(&mut *tx)
+        .await?;
+    let link = Uuid::now_v7();
+    let (me, vendor, other) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    for (id, address) in [
+        (me, "user-1@test.com"),
+        (vendor, "Vendor@Acme.com"),
+        (other, "other@globex.com"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)",
+            id,
+            link,
+            address,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+    let to_acme = Uuid::parse_str("ea000001-0000-0000-0000-000000000099")?;
+    let from_globex = Uuid::now_v7();
+    for (message, sender) in [(to_acme, me), (from_globex, other)] {
+        sqlx::query!(
+            "INSERT INTO email_messages (id, thread_id, link_id, from_contact_id) VALUES ($1, $2, $3, $4)",
+            message,
+            Uuid::now_v7(),
+            link,
+            sender,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')",
+        to_acme,
+        vendor,
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_attachments SET message_id = $1 WHERE id = 'ea000001-0000-0000-0000-000000000002'",
+        from_globex,
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, $2, 'DOCUMENT', $3, $4)"#,
+        Uuid::now_v7(),
+        DOC_D,
+        SystemPropertyKey::COMPANIES_UUID,
+        serde_json::json!({
+            "type": "EntityReference",
+            "value": [{ "entity_type": "COMPANY", "entity_id": company.to_string() }]
+        }),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn matching_document_ids(db: &PgPool, filter: Expr<DocumentLiteral>) -> HashSet<String> {
+    let (items, ..) = run_and_count(
+        db,
+        EntityFilterAst {
+            document_filter: Some(Arc::new(filter)),
+            ..mock_empty_ast()
+        },
+    )
+    .await
+    .unwrap();
+    items
+        .into_iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(doc) => Some(doc.id.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn ids(values: &[&str]) -> HashSet<String> {
+    values.iter().map(ToString::to_string).collect()
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn crm_document_literals_match_attachments_and_associations(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    use item_filters::ast::{
+        email::Email,
+        properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue},
+    };
+    use macro_user_id::email::EmailStr;
+
+    let company = Uuid::now_v7();
+    seed_crm_document_associations(&db, company).await?;
+    let participant =
+        |email: Email| Expr::Literal(DocumentLiteral::EmailAttachmentParticipant(email));
+    let associated = Expr::Literal(DocumentLiteral::Property(PropertiesLiteral {
+        property_definition_id: SystemPropertyKey::COMPANIES_UUID,
+        entity_type: None,
+        value: PropertyMatchValue::EntityRef(EntityRefId::new(company.to_string())?),
+    }));
+
+    // Recipients count as participants, and domains match case-insensitively.
+    assert_eq!(
+        matching_document_ids(&db, participant(Email::Domain("ACME.com".to_string()))).await,
+        ids(&[DOC_A])
+    );
+    // So do senders, by exact address.
+    let globex = EmailStr::parse_from_str("other@globex.com")?.into_owned();
+    assert_eq!(
+        matching_document_ids(&db, participant(Email::Complete(globex))).await,
+        ids(&[DOC_B])
+    );
+    assert_eq!(
+        matching_document_ids(&db, participant(Email::Partial("vendor@".to_string()))).await,
+        ids(&[DOC_A])
+    );
+    // A company's files: attachments with its people OR documents associated with it.
+    assert_eq!(
+        matching_document_ids(
+            &db,
+            Expr::or(
+                participant(Email::Domain("acme.com".to_string())),
+                associated.clone()
+            )
+        )
+        .await,
+        ids(&[DOC_A, DOC_D])
+    );
+    // Negation keeps every other document.
+    let not_acme = matching_document_ids(
+        &db,
+        Expr::is_not(participant(Email::Domain("acme.com".to_string()))),
+    )
+    .await;
+    assert!(!not_acme.contains(DOC_A));
+    assert!(not_acme.contains(DOC_B) && not_acme.contains(DOC_D));
     Ok(())
 }

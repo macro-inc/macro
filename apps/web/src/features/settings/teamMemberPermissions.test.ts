@@ -1,6 +1,11 @@
-import { type TeamMember, TeamRole } from '@service-auth/generated/schemas';
+import {
+  SeatPlan,
+  type TeamMember,
+  TeamRole,
+} from '@service-auth/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
+  canInviteToTeam,
   canRemoveTeamMember,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions.ts';
@@ -10,11 +15,27 @@ const ACTING_USER_ID = 'acting-user-id';
 
 function teamMember(userId: string, role: TeamRole): TeamMember {
   return {
+    plan: SeatPlan.premium,
     role,
     team_id: TEAM_ID,
     user_id: userId,
   };
 }
+
+describe('canInviteToTeam', function () {
+  it.each([
+    [TeamRole.owner, false, true],
+    [TeamRole.admin, false, true],
+    [TeamRole.member, true, true],
+    [TeamRole.member, false, false],
+    [undefined, false, false],
+  ])(
+    'lets the %s role invite when member invites are %s: %s',
+    function (role, allowNonAdminInvites, expected) {
+      expect(canInviteToTeam(role, allowNonAdminInvites)).toBe(expected);
+    }
+  );
+});
 
 describe('isTeamAdminOrOwner', function () {
   it.each([

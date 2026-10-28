@@ -6,7 +6,15 @@
  */
 import type { NotifEventOneOf } from './notifEventOneOf';
 import type { NotifEventOneOfFive } from './notifEventOneOfFive';
+import type { NotifEventOneOfFivefive } from './notifEventOneOfFivefive';
+import type { NotifEventOneOfFivenine } from './notifEventOneOfFivenine';
+import type { NotifEventOneOfFiveone } from './notifEventOneOfFiveone';
+import type { NotifEventOneOfFiveseven } from './notifEventOneOfFiveseven';
+import type { NotifEventOneOfFivethree } from './notifEventOneOfFivethree';
+import type { NotifEventOneOfFourfive } from './notifEventOneOfFourfive';
+import type { NotifEventOneOfFournine } from './notifEventOneOfFournine';
 import type { NotifEventOneOfFourone } from './notifEventOneOfFourone';
+import type { NotifEventOneOfFourseven } from './notifEventOneOfFourseven';
 import type { NotifEventOneOfFourthree } from './notifEventOneOfFourthree';
 import type { NotifEventOneOfNine } from './notifEventOneOfNine';
 import type { NotifEventOneOfOnefive } from './notifEventOneOfOnefive';
@@ -15,6 +23,8 @@ import type { NotifEventOneOfOneone } from './notifEventOneOfOneone';
 import type { NotifEventOneOfOneseven } from './notifEventOneOfOneseven';
 import type { NotifEventOneOfOnethree } from './notifEventOneOfOnethree';
 import type { NotifEventOneOfSeven } from './notifEventOneOfSeven';
+import type { NotifEventOneOfSixone } from './notifEventOneOfSixone';
+import type { NotifEventOneOfSixthree } from './notifEventOneOfSixthree';
 import type { NotifEventOneOfThree } from './notifEventOneOfThree';
 import type { NotifEventOneOfThreefive } from './notifEventOneOfThreefive';
 import type { NotifEventOneOfThreenine } from './notifEventOneOfThreenine';
@@ -57,4 +67,14 @@ export type NotifEvent =
   | NotifEventOneOfThreeseven
   | NotifEventOneOfThreenine
   | NotifEventOneOfFourone
-  | NotifEventOneOfFourthree;
+  | NotifEventOneOfFourthree
+  | NotifEventOneOfFourfive
+  | NotifEventOneOfFourseven
+  | NotifEventOneOfFournine
+  | NotifEventOneOfFiveone
+  | NotifEventOneOfFivethree
+  | NotifEventOneOfFivefive
+  | NotifEventOneOfFiveseven
+  | NotifEventOneOfFivenine
+  | NotifEventOneOfSixone
+  | NotifEventOneOfSixthree;

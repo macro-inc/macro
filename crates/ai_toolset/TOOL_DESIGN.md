@@ -131,3 +131,21 @@ Before adding a tool, verify:
 - Anthropic's guide: https://www.anthropic.com/engineering/writing-tools-for-agents
 - Crate documentation: `src/lib.rs`
 - Schema requirements: `src/schema/`
+
+## Telemetry
+
+Every tool call dispatched through `ToolSet::try_tool_call` runs inside an
+OpenTelemetry GenAI `execute_tool` span (see `ai_toolset::telemetry`). The span
+carries the tool name, the arguments as input and the result as output — the
+attributes an LLM-as-a-judge evaluation of tool selection reads — and an error
+status when the call fails. Two rules follow:
+
+- **Tools and toolsets do not open tool telemetry themselves.** Implement
+  `ToolSet::dispatch_tool_call` (routing only) and let `try_tool_call` wrap it;
+  a toolset that delegates to children calls *their* `dispatch_tool_call`, so
+  one call yields exactly one tool span. Inside a tool, ordinary
+  `#[tracing::instrument]` spans for its own work are fine and nest under it.
+- **Arguments and results are content**, recorded under the content policy
+  (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, on unless set to
+  `false`) and cut to a size budget. Do not record them as span fields or log
+  them in tools: that bypasses the policy and repeats them on every log line.

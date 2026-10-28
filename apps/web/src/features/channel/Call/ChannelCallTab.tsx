@@ -1,11 +1,15 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { UserGroup } from '@core/component/UserGroup';
 import { getDisplayName, tryMacroId } from '@core/user';
-import PhoneIcon from '@icon/wide-call.svg';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
+import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
+import { getCallExitPath } from './call-exit';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
@@ -75,9 +79,9 @@ function JoinCallEmptyState(props: {
       </div>
 
       <Button
-        variant="cta"
+        variant="primary"
         size="lg"
-        class="rounded-lg px-5"
+        class="px-5"
         onClick={props.onJoin}
         disabled={props.isJoining}
       >
@@ -99,6 +103,9 @@ export function ChannelCallTab(props: {
   pendingJoin?: Accessor<boolean>;
 }) {
   const { setActiveTab } = useChannelTab();
+  const navigate = useNavigate();
+  const location = useLocation();
+  let leaving = false;
 
   // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
   // overlay (or disconnect) switches back to Messages — not only when
@@ -108,13 +115,48 @@ export function ChannelCallTab(props: {
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
-  const handleRetry = async () => {
+  async function handleJoin() {
     try {
       await call.joinCall();
-    } catch {
-      // joinError is set inside useCall join mutation onError
+    } catch (error) {
+      console.error('Failed to join call', error);
     }
-  };
+  }
+
+  async function handleLeave() {
+    if (leaving) return;
+    leaving = true;
+    const callId = call.callCtx.activeCallId();
+    const channelId = props.channelId;
+    const from = location.key;
+    try {
+      await Telemetry.span('call.leave', async (span) => {
+        if (callId) span.setAttr('call.id', callId);
+        const result = await call.leaveCall();
+        span.setAttr('call.leave.ended', result?.callEnded ?? false);
+        if (
+          props.channelId !== channelId ||
+          location.key !== from ||
+          call.callCtx.isInCall() ||
+          !result?.callEnded
+        )
+          return;
+        // Leaving switches to Messages and unmounts this tab before cleanup
+        // settles. The route key keeps that expected teardown distinct from
+        // the user navigating elsewhere while the server responds.
+        navigate(
+          getCallExitPath({
+            authenticated: true,
+            callId,
+            channelId,
+            callEnded: true,
+          })
+        );
+      });
+    } finally {
+      leaving = false;
+    }
+  }
 
   return (
     <Switch
@@ -122,12 +164,19 @@ export function ChannelCallTab(props: {
         <JoinCallEmptyState
           channelId={props.channelId}
           isJoining={call.isJoining()}
-          onJoin={() => void call.joinCall()}
+          onJoin={handleJoin}
         />
       }
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
-        <CallOverlay onLeave={call.leaveCall} />
+        <div class="flex size-full min-h-0 flex-col">
+          <div class="px-2 pt-2">
+            <ActiveCallLink />
+          </div>
+          <div class="min-h-0 flex-1">
+            <CallOverlay onLeave={handleLeave} />
+          </div>
+        </div>
       </Match>
       <Match when={call.joinError()}>
         <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted px-4">
@@ -139,7 +188,7 @@ export function ChannelCallTab(props: {
           </Show>
           <button
             type="button"
-            onClick={handleRetry}
+            onClick={handleJoin}
             disabled={call.isJoining()}
             class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >

@@ -7,6 +7,8 @@
  * connect page, which reports lifecycle events back via `postMessage`.
  */
 
+// The desktop shell must allow this page to load in a frame: keep in sync with
+// `EMBEDDED_DOCUMENTS` in `apps/web/tauri/src-tauri/src/lib.rs`.
 const CONNECT_UI_URL = 'https://pipedream.com/_static/connect.html';
 
 export type PipedreamConnectEvent =
@@ -36,6 +38,13 @@ export function openPipedreamConnectUI(options: {
   /** The Pipedream app to connect, by name slug (e.g. `linear`). */
   app: string;
   onEvent: (event: PipedreamConnectEvent) => void;
+  /**
+   * Where the iframe mounts; `document.body` by default. A modal dialog
+   * disables pointer events on the body and traps focus inside its content,
+   * so a surface opening this from inside one passes the dialog's content
+   * element to keep the iframe clickable and typeable.
+   */
+  container?: HTMLElement;
 }): PipedreamConnectUI {
   const params = new URLSearchParams({
     token: options.token,
@@ -54,8 +63,13 @@ export function openPipedreamConnectUI(options: {
   };
 
   const onMessage = (event: MessageEvent) => {
-    // The hosted page posts from pipedream.com; ignore everything else.
-    if (!String(event.origin).endsWith('pipedream.com')) return;
+    // Only this hosted iframe can complete the flow. A lookalike origin or
+    // another Connect window must not resume the chat waiting on this one.
+    if (
+      event.origin !== new URL(CONNECT_UI_URL).origin ||
+      event.source !== iframe.contentWindow
+    )
+      return;
     const data = event.data as
       | { type?: string; authProvisionId?: string; error?: string }
       | undefined;
@@ -78,7 +92,7 @@ export function openPipedreamConnectUI(options: {
   };
 
   window.addEventListener('message', onMessage);
-  document.body.appendChild(iframe);
+  (options.container ?? document.body).appendChild(iframe);
 
   return { close: cleanup };
 }

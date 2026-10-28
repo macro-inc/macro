@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "notification_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "notification_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [features]
 default = ["push_notification_event_handler"]
 local_queue = []
@@ -33,9 +37,12 @@ http-body-util = { workspace = true }
 itertools = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
+doppler-config = { workspace = true }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }

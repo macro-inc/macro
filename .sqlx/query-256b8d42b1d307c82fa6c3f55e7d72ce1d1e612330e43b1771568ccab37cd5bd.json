@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                SELECT 1 FROM entity_properties,\n                LATERAL jsonb_array_elements(CASE WHEN values ->> 'type' = 'EntityReference'\n                    THEN values -> 'value' ELSE '[]'::jsonb END) AS reference\n                WHERE reference ->> 'entity_type' = 'DATABASE_ROW'\n                  AND reference ->> 'entity_id' = ANY($1)\n                  AND NOT (entity_type = 'DATABASE_ROW' AND entity_id = ANY($1))\n            ) AS \"used!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "used!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "256b8d42b1d307c82fa6c3f55e7d72ce1d1e612330e43b1771568ccab37cd5bd"
+}

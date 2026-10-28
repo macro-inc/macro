@@ -1,127 +1,687 @@
+//! The orchestrator behind every agent session: one service over the ports
+//! in [`crate::domain::ports`], split by concern.
+//!
+//! - [`queue`]: the per-session command queue and its worker, the one-turn-
+//!   in-flight invariant, and routing a command to whichever replica holds
+//!   the session's actor.
+//! - [`open`]: creating sessions - from a mention, from the create menu, or
+//!   for an external runtime - and provisioning their egress.
+//! - [`deliver`]: composing a queued action with channel context and handing
+//!   it to the running agent, announcing it in the channel first.
+//! - [`lifecycle`]: everything after open - control events, sandbox size,
+//!   turn boundaries, teardown.
+//!
+//! This file holds the service type itself and its public entry points.
+
 #[cfg(test)]
 mod test;
 
+mod admission;
+mod deliver;
+mod external_replies;
+mod lifecycle;
+mod lifecycle_events;
+mod open;
+mod present;
+mod queue;
+mod session_mcp;
+mod warm;
+
+use futures::FutureExt as _;
 use std::sync::Arc;
 
+type NotificationDrain = futures::future::Shared<futures::future::BoxFuture<'static, ()>>;
+
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
+use agent_session::domain::model::SessionManagement;
 use agent_session::domain::model::{
-    AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
+    AgentMcpServers, AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
+    SandboxSize,
 };
-use agent_session::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
+use agent_session::domain::ports::{
+    AcceptedControl, AgentSessionLifecyclePublisher, AgentSessionNotificationRecipient,
+    AgentSessionQueueChanged, ControlDisposition, ControlEvent, QueuedControl,
+};
 use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use dashmap::DashMap;
+use dashmap::DashSet;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument as _;
+use tracing::instrument::WithSubscriber as _;
+use trigger_context::TriggerContext;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, OpenSession,
-    SessionAnnouncement, SessionDefaults, SpawnContainer, is_managed_bot,
+    AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
+    HarnessCommand, HarnessDefaults, OpenSession, PromptPeople, ReplyOutcome, ResolvedReply,
+    SessionAnnouncement, SpawnContainer, ToolApprovalChange, is_macro_staff,
 };
-use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
+use crate::domain::pending::PendingCommands;
+use crate::domain::ports::{
+    AgentPromptComposer, AgentSessionNotifier, CodingAgentSource, CommandForwarder,
+    ContainerManager, MessagePromptContext, PermissionPolicySource, PromptMentions,
+    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
+};
+use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
+use crate::domain::sandbox::SandboxResizeEffect;
 
-type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
+use self::queue::{ErasedForwarder, SessionWorkers};
 
-struct QueuedCommand {
-    command: HarnessCommand,
-    completed: oneshot::Sender<Result<()>>,
+/// [`PermissionPolicySource`], object-safe, erased for the same reason as
+/// [`ErasedForwarder`].
+trait ErasedPermissionPolicySource: Send + Sync + 'static {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    >;
 }
 
-struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
+impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(PermissionPolicySource::permission_policy(self, bot))
+    }
+}
+
+/// [`CodingAgentSource`], object-safe, erased like
+/// [`ErasedPermissionPolicySource`].
+trait ErasedCodingAgentSource: Send + Sync + 'static {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>>;
+}
+
+impl<S: CodingAgentSource> ErasedCodingAgentSource for S {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>> {
+        Box::pin(CodingAgentSource::coding_agent_choice(self, bot))
+    }
+}
+
+struct AgentHarnessInner<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> {
     sessions: Sessions,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
-    defaults: SessionDefaults,
+    prompt_context: PromptContext,
+    prompt_composer: PromptComposer,
+    egress: Egress,
+    forwarder: Box<dyn ErasedForwarder>,
+    permission_policies: Box<dyn ErasedPermissionPolicySource>,
+    coding_agents: Box<dyn ErasedCodingAgentSource>,
+    conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
+    conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
+    external_replies: Option<Arc<dyn crate::domain::external_replies::ExternalReplyStore>>,
+    notification_store: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    /// Discovery advances past busy or unreachable sessions and wraps each cycle.
+    notification_cursor: tokio::sync::Mutex<Option<AgentSessionId>>,
+    notification_drains:
+        tokio::sync::Mutex<std::collections::HashMap<AgentSessionId, NotificationDrain>>,
+    notification_batches:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationBatch>,
+    notification_completions:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationOutcome>,
+    /// Bounded recent completions suppress duplicate observer callbacks.
+    notification_finished:
+        tokio::sync::Mutex<std::collections::VecDeque<(AgentSessionId, AgentActionId)>>,
+    defaults: HarnessDefaults,
+    /// Turn-occupying actions waiting for their session's running turn to
+    /// end. In-memory working copy; the session store is the durable source.
+    queues: SessionQueues,
+    /// Sessions whose durable queue has been loaded into [`Self::queues`]
+    /// in this process. A restart starts empty; resume and the first local
+    /// command restore from the session store.
+    hydrated: DashSet<AgentSessionId>,
+    /// The sessions with a command admitted and not yet resolved, and which
+    /// turn it opened once dispatch names one. Marked the moment a
+    /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
+    /// cleared by `TurnEnded`/`SessionStopped` or on admission failure. Only
+    /// ever touched from the session's own command worker, which is what
+    /// serializes it against dispatch.
+    ///
+    /// Shared (not private to this service) so a provider's idle reaper can
+    /// read it before closing a session's transport: marking on admission
+    /// rather than on delivery success is what closes the gap between "a
+    /// command was handed to this session" and "the runtime has visibly
+    /// started a turn", which a reaper watching only the latter cannot see.
+    busy: PendingCommands,
+    /// Where lifecycle facts go.
+    lifecycle_publisher: Lifecycle,
+    /// Who a prompt names.
+    mentions: Mentions,
+    /// Where the notifications a fact warrants go.
+    notifier: Notifier,
+    /// How a running turn's reply was last reported, keyed by session: the
+    /// reply's segments as the fold reported them, for the turn's end to
+    /// show. Only ever touched from the session's own command worker.
+    projections: DashMap<
+        AgentSessionId,
+        (
+            agent_fold::domain::model::TurnId,
+            Vec<agent_fold::domain::model::ProjectedSegment>,
+        ),
+    >,
+    /// What each running turn's agent is doing, for its typing indicator.
+    typing_phases: DashMap<AgentSessionId, agent_fold::domain::model::TurnPhase>,
+    /// The shape each reply message was last shown with, so a report that
+    /// changes nothing it shows does not rewrite it.
+    presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
 }
+
+/// One handle on the orchestrator's state, shared by the service's clones
+/// and every session worker it spawns.
+type SharedInner<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> = Arc<
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >,
+>;
 
 /// Turns trigger commands into running, announced agent sessions.
-pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes> {
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
+pub struct AgentHarnessService<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> {
+    inner: SharedInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >,
     workers: Arc<SessionWorkers>,
+    repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
+    warm_lifecycle: Option<Arc<dyn agent_session::domain::warm::WarmSessionLifecycle>>,
+    warm_tools: Arc<dyn agent_session::domain::ports::SessionToolCatalog>,
+    warm_reservations: Arc<tokio::sync::Mutex<warm::WarmReservations>>,
 }
 
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+// Manual Clone impl so the port types don't need to be Clone (both fields
+// are behind Arcs). A clone is another handle on the same workers and queues,
+// which is what lets the service be bound as its own session services' turn
+// observer.
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> Clone
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            workers: Arc::clone(&self.workers),
+            repositories: self.repositories.clone(),
+            warm_lifecycle: self.warm_lifecycle.clone(),
+            warm_tools: Arc::clone(&self.warm_tools),
+            warm_reservations: Arc::clone(&self.warm_reservations),
+        }
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
+    AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// Build the orchestrator from its ports.
+    ///
+    /// One argument per port, however many ports there are: bundling some of
+    /// them into a struct would only move the same list one level down.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
         sessions: Sessions,
         containers: Containers,
         announcer: Announcer,
         runtimes: Runtimes,
-        defaults: SessionDefaults,
+        prompt_context: PromptContext,
+        prompt_composer: PromptComposer,
+        egress: Egress,
+        forwarder: impl CommandForwarder,
+        permission_policies: impl PermissionPolicySource,
+        coding_agents: impl CodingAgentSource,
+        defaults: impl Into<HarnessDefaults>,
+        lifecycle_publisher: Lifecycle,
+        pending: PendingCommands,
+        mentions: Mentions,
+        notifier: Notifier,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
                 sessions,
+                admission: Arc::new(ai_billing::DisabledAiAdmissionService),
+                agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
                 containers,
                 announcer,
                 runtimes,
-                defaults,
+                prompt_context,
+                prompt_composer,
+                egress,
+                forwarder: Box::new(forwarder),
+                permission_policies: Box::new(permission_policies),
+                coding_agents: Box::new(coding_agents),
+                conversations,
+                conversation_turns: None,
+                external_replies: None,
+                notification_store: None,
+                notification_cursor: tokio::sync::Mutex::new(None),
+                notification_drains: Default::default(),
+                notification_batches: DashMap::new(),
+                notification_completions: DashMap::new(),
+                notification_finished: Default::default(),
+                defaults: defaults.into(),
+                queues: SessionQueues::new(),
+                hydrated: DashSet::new(),
+                busy: pending,
+                lifecycle_publisher,
+                mentions,
+                notifier,
+                projections: DashMap::new(),
+                typing_phases: DashMap::new(),
+                presented_shapes: DashMap::new(),
             }),
             workers: Arc::new(DashMap::new()),
+            repositories: None,
+            warm_lifecycle: None,
+            warm_tools: Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+            warm_reservations: Arc::default(),
         }
+    }
+
+    /// Enable durable conversation admission and recovery before sharing this service.
+    pub fn with_conversation_turns(
+        mut self,
+        store: Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure journal before cloning the harness")
+            .conversation_turns = Some(store);
+        self
+    }
+
+    /// Configure durable system-event delivery before cloning the harness.
+    pub fn with_notifications(
+        mut self,
+        store: Arc<dyn agent_session::domain::notifications::NotificationStore>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure outbox before cloning harness")
+            .notification_store = Some(store);
+        self
+    }
+
+    /// Reconcile durable events through the same routed worker as user prompts.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn recover_notifications(&self) -> Result<()> {
+        let Some(store) = &self.inner.notification_store else {
+            return Ok(());
+        };
+        let leases: Vec<_> = self
+            .inner
+            .notification_batches
+            .iter()
+            .map(|batch| batch.lease_id)
+            .collect();
+        for lease in leases {
+            if let Err(error) = store.renew(lease).await {
+                tracing::warn!(?error, %lease, "notification lease renewal failed");
+            }
+        }
+        let mut cursor = self.inner.notification_cursor.lock().await;
+        let mut sessions = store.pending_sessions(*cursor).await?;
+        if sessions.is_empty() && cursor.is_some() {
+            sessions = store.pending_sessions(None).await?;
+        }
+        *cursor = sessions.last().copied();
+        drop(cursor);
+        sessions.extend(
+            self.inner
+                .notification_completions
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.extend(
+            self.inner
+                .notification_batches
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.sort_by_key(AgentSessionId::as_uuid);
+        sessions.dedup();
+        // The command worker keeps running when the recovery budget expires.
+        // Retain its result future so the next tick neither queues a duplicate
+        // nor waits for a slow session before renewing other delivery leases.
+        let mut drains = self.inner.notification_drains.lock().await;
+        drains.retain(|_, drain| drain.peek().is_none());
+        for session in sessions {
+            drains.entry(session).or_insert_with(|| {
+                let drain = self.enqueue(session, HarnessCommand::DrainNotifications, true);
+                async move {
+                    if let Err(error) = drain.await {
+                        tracing::warn!(?error, %session, "system event delivery will retry");
+                    }
+                }
+                .boxed()
+                .shared()
+            });
+        }
+        let pending: Vec<_> = drains.values().cloned().collect();
+        drop(drains);
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            futures::future::join_all(pending),
+        )
+        .await;
+        Ok(())
+    }
+
+    /// Save a conversation message before acknowledging its broker event. Returns its
+    /// original segment and payload when the source message was already seen.
+    ///
+    /// `None` is a message no attempt can ever admit: its conversation was
+    /// deleted, or its sender may not prompt it. The caller acknowledges it
+    /// instead of having the broker redeliver it forever. A context that
+    /// another replica is changing is waited out; only one that stays busy is
+    /// an error.
+    pub async fn admit_conversation_message(
+        &self,
+        session: AgentSessionId,
+        command: OpenSession,
+    ) -> Result<Option<(AgentSessionId, OpenSession)>> {
+        match self.journal_conversation_message(session, command).await {
+            Err(HarnessError::Session(AgentSessionError::Forbidden)) => Ok(None),
+            admitted => admitted.map(Some),
+        }
+    }
+
+    async fn journal_conversation_message(
+        &self,
+        session: AgentSessionId,
+        command: OpenSession,
+    ) -> Result<(AgentSessionId, OpenSession)> {
+        let origin = command.origin.announcement();
+        if origin.reply_placement != crate::domain::model::ReplyPlacement::Timeline {
+            return Err(AgentSessionError::Forbidden.into());
+        }
+        if let Some(policy) = &self.inner.conversations
+            && !policy
+                .validate_binding(session, command.bot_id, Some(command.origin.actor()))
+                .await?
+        {
+            return Err(AgentSessionError::Forbidden.into());
+        }
+        let Some(store) = &self.inner.conversation_turns else {
+            return Ok((session, command));
+        };
+        let messages::domain::models::MessageParent::Channel(channel) = origin.parent else {
+            return Err(AgentSessionError::Forbidden.into());
+        };
+        if let Some(record) = store.get(origin.message_id, command.bot_id).await? {
+            if record.channel_id != channel {
+                return Err(AgentSessionError::Forbidden.into());
+            }
+            return Ok((record.session_id, record.command));
+        }
+        // An event can have reserved its segment before the user pressed Start
+        // fresh. Serialize first admission with reset and select the current
+        // segment again; replays above always retain their original identity.
+        // The context lease is also taken by every claim and retry of the
+        // session, each a few queries long, so a busy lease is waited out.
+        let mut backoff = std::time::Duration::from_millis(50);
+        for _ in 0..8 {
+            let current = match &self.inner.conversations {
+                Some(policy) => policy.current_context(session).await?,
+                None => session,
+            };
+            let Some(_lease) = store.claim_context(current).await? else {
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(std::time::Duration::from_secs(1));
+                continue;
+            };
+            if let Some(policy) = &self.inner.conversations
+                && policy.current_context(session).await? != current
+            {
+                continue;
+            }
+            let record = store.admit(current, channel, command).await?;
+            return Ok((record.session_id, record.command));
+        }
+        Err(AgentSessionError::RuntimeUnavailable(
+            "conversation context stayed busy; retry admission",
+        )
+        .into())
+    }
+
+    /// Reconcile journaled work after process loss. Only undispatched prompts
+    /// may run automatically; ambiguous attempts are marked interrupted.
+    pub async fn recover_conversations(&self) -> Result<()> {
+        let Some(store) = &self.inner.conversation_turns else {
+            return Ok(());
+        };
+        for record in store.running(100).await? {
+            let management = self.inner.sessions.management(record.session_id).await?;
+            if matches!(management, SessionManagement::Unmanaged)
+                || (matches!(management, SessionManagement::Ours)
+                    && !self.inner.busy.is_pending(record.session_id))
+            {
+                store
+                    .finish(
+                        record.action_id,
+                        crate::domain::conversation_turns::ConversationTurnState::Interrupted,
+                        ReplyOutcome::Failed,
+                    )
+                    .await?;
+                tracing::warn!(session_id = %record.session_id, action_id = %record.action_id, "conversation turn interrupted; explicit retry required");
+            }
+        }
+        for record in store.pending_replies(100).await? {
+            let Some(outcome) = record.outcome else {
+                continue;
+            };
+            if let Some(turn) = &record.in_flight {
+                self.inner
+                    .resolve_reply(record.session_id, Some(turn), outcome)
+                    .await;
+            } else {
+                store.finalize_reply(record.action_id, &outcome).await?;
+            }
+        }
+        let pending = store.pending(50).await?;
+        let work: Vec<_> = pending
+            .into_iter()
+            .map(|record| {
+                self.execute(
+                    record.session_id,
+                    HarnessCommand::ConversationMessage(record.command),
+                )
+            })
+            .collect();
+        for result in futures::future::join_all(work).await {
+            if let Err(error) = result {
+                tracing::warn!(
+                    ?error,
+                    "durable conversation recovery could not dispatch a queued prompt"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Configure shared admission before cloning the harness or starting workers.
+    pub fn with_admission(mut self, admission: Arc<dyn ai_billing::AiAdmissionService>) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure admission before sharing the harness")
+            .admission = admission;
+        self
+    }
+
+    /// Let in-memory sessions of agents with their own usable API key past
+    /// the allowance gate: their turns never run on Macro usage. Configure
+    /// before sharing the harness.
+    pub fn with_agent_keys(
+        mut self,
+        agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure agent keys before sharing the harness")
+            .agent_keys = agent_keys;
+        self
+    }
+
+    /// Enable explicit repository choices, authorized against the owner's reachable repositories.
+    pub fn with_repositories(
+        mut self,
+        repositories: Arc<dyn crate::domain::ports::ReachableRepositories>,
+    ) -> Self {
+        self.repositories = Some(repositories);
+        self
     }
 
     /// Queue one command behind any work already running for its session.
     ///
     /// Queue admission happens synchronously so callers can spawn the returned
-    /// completion future without reordering commands.
+    /// completion future without reordering commands. It is also where the
+    /// caller's span is captured: the returned future only awaits a oneshot, so
+    /// the span has to travel with the command to reach the work itself.
     pub fn execute(
         &self,
         session_id: AgentSessionId,
-        mut command: HarnessCommand,
-    ) -> impl Future<Output = Result<()>> + Send + 'static {
-        let result = loop {
-            let commands = self.commands(session_id);
-            let (completed, result) = oneshot::channel();
-            let queued = QueuedCommand { command, completed };
-
-            match commands.send(queued) {
-                Ok(()) => break result,
-                Err(error) => {
-                    command = error.0.command;
-                    self.workers
-                        .remove_if(&session_id, |_, current| current.same_channel(&commands));
-                }
-            }
-        };
-
-        async move {
-            result
-                .await
-                .map_err(|_| HarnessError::CommandWorkerStopped(session_id))?
-        }
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
+        self.enqueue(session_id, command, true)
     }
 
-    fn commands(&self, session_id: AgentSessionId) -> mpsc::UnboundedSender<QueuedCommand> {
-        match self.workers.entry(session_id) {
-            Entry::Occupied(entry) => entry.get().clone(),
-            Entry::Vacant(entry) => {
-                let (commands, receiver) = mpsc::unbounded_channel();
-                entry.insert(commands.clone());
-                self.spawn_worker(session_id, receiver);
-                commands
-            }
-        }
-    }
-
-    fn spawn_worker(
+    /// [`execute`](Self::execute), without resolving which replica manages
+    /// the session first.
+    ///
+    /// The entry point for commands received *as* forwards: the sender
+    /// already resolved management to this replica, and re-resolving here is
+    /// what could bounce a command between two replicas whose lease views
+    /// momentarily differ. Forwarding is single-hop; this is the second hop's
+    /// half of that contract.
+    pub fn execute_here(
         &self,
         session_id: AgentSessionId,
-        receiver: mpsc::UnboundedReceiver<QueuedCommand>,
-    ) {
-        tokio::spawn(run_session_worker(session_id, self.inner.clone(), receiver));
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
+        self.enqueue(session_id, command, false)
     }
 
     /// Post the announcement for a prompt an external runtime delivers.
@@ -137,6 +697,10 @@ where
         session_id: AgentSessionId,
         prompt: AnnouncePrompt,
     ) -> Result<()> {
+        self.inner
+            .prompt_context
+            .authorize_origin(&prompt.sender, &prompt.origin)
+            .await?;
         // Re-read rather than trusted: the row is what vouches that the
         // trigger's session and bot actually belong together.
         let session = self.inner.sessions.get_session(session_id).await?;
@@ -150,13 +714,25 @@ where
             return Ok(());
         }
 
+        let persona = self.inner.reply_persona(&session).await?;
+        if !persona.is_coding && self.inner.external_replies.is_some() {
+            return self
+                .inner
+                .announce_external_reply(session_id, prompt.origin, prompt.sender)
+                .await;
+        }
         self.inner
             .announcer
             .announce(SessionAnnouncement {
+                reply_message_id: None,
+                reply_placement: prompt.origin.reply_placement,
+                reuse_origin_message: false,
                 session_id,
                 bot_id: session.bot_id,
-                origin_channel_id: prompt.origin.channel_id,
+                is_coding: persona.is_coding,
+                origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
+                origin_message_id: prompt.origin.message_id,
                 prompted_message_id: self
                     .inner
                     .sessions
@@ -166,121 +742,65 @@ where
                 triggered_by: prompt.sender,
             })
             .await
+            // The external runtime drives this turn itself; there is no
+            // in-flight record here to remember the chip in.
+            .map(drop)
     }
 }
 
-/// The harness is what holds a session's live resources, so it is what the
-/// control routes notify. Both operations go through the per-session queue, so
-/// a teardown cannot land in the middle of an open and a model change cannot
-/// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes> AgentSessionNotificationRecipient
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+/// The receiving half of command forwarding, called by the command-bus
+/// consumer and implemented by the harness as [`AgentHarnessService::execute_here`].
+pub trait ForwardedCommands: Send + Sync + 'static {
+    /// Run a command the transport has targeted to this replica.
+    fn execute_forwarded(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send;
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> ForwardedCommands
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
-    async fn session_deleted(
+    async fn execute_forwarded(
         &self,
-        id: AgentSessionId,
-    ) -> agent_session::domain::error::Result<()> {
-        self.execute(id, HarnessCommand::Delete)
-            .await
-            .map_err(into_session_error)
-    }
-
-    async fn control_event(
-        &self,
-        id: AgentSessionId,
-        event: ControlEvent,
-    ) -> agent_session::domain::error::Result<AgentActionId> {
-        let action_id = AgentActionId::mint();
-        self.execute(
-            id,
-            HarnessCommand::Deliver(DeliverAction::control(action_id.clone(), event)),
-        )
-        .await
-        .map_err(into_session_error)?;
-        Ok(action_id)
-    }
-}
-
-/// External sessions create the row and announce - the magic-chip message
-/// the session's bot posts into the mention's thread, which is where the
-/// app renders the session's replies. No sandbox (the runtime dials in) and
-/// no first prompt (the runtime sends it through the control endpoint).
-/// The announcement is best-effort: a session a runtime is about to serve
-/// must not die because the courtesy post failed, most plainly when the bot
-/// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::ExternalSessionOpener
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
-where
-    Sessions: AgentSessionService,
-    Containers: ContainerManager,
-    Announcer: SessionAnnouncer,
-    Runtimes: RuntimeConnections,
-{
-    async fn open_external_session(
-        &self,
-        request: agent_session::domain::ports::OpenExternalAgentSession,
-    ) -> agent_session::domain::error::Result<AgentSession> {
-        let session = self
-            .inner
-            .sessions
-            .create_session(CreateAgentSessionParams {
-                id: AgentSessionId::new(),
-                owner_id: request.owner.clone(),
-                bot_id: request.bot_id,
-                thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
-                originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
-                model: self.inner.defaults.model.clone(),
-                harness: self.inner.defaults.harness.clone(),
-                repo_url: request.repo_url,
-                workspace: request.workspace,
-                // The thread linkage is the caller's claim, not an observed
-                // mention; it must not grant the channel anything.
-            })
-            .await?;
-
-        if let Some(thread) = request.thread {
-            let announcement = SessionAnnouncement {
-                session_id: session.id,
-                bot_id: request.bot_id,
-                origin_channel_id: thread.channel_id,
-                origin_thread_id: thread.thread_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: thread.content,
-                triggered_by: request.owner,
-            };
-            if let Err(error) = self.inner.announcer.announce(announcement).await {
-                tracing::warn!(
-                    error = ?error,
-                    session = %session.id,
-                    "external session announcement failed; the session runs unannounced"
-                );
-            }
-        }
-
-        Ok(session)
-    }
-
-    async fn find_thread_session(
-        &self,
-        thread_id: macro_uuid::Uuid,
-        bot_id: BotId,
-    ) -> agent_session::domain::error::Result<Option<AgentSessionId>> {
-        match self
-            .inner
-            .sessions
-            .find_for_channel(Some(thread_id), Some(bot_id))
-            .await?
-        {
-            agent_session::domain::model::ChannelSession::CreatedFromThread(session) => {
-                Ok(Some(session.id))
-            }
-            agent_session::domain::model::ChannelSession::None => Ok(None),
-        }
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<CommandOutcome> {
+        self.execute_here(session_id, command).await
     }
 }
 
@@ -291,226 +811,8 @@ where
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Admission(error) => AgentSessionError::Admission(error),
+        HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
-    }
-}
-
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>
-where
-    Sessions: AgentSessionService,
-    Containers: ContainerManager,
-    Announcer: SessionAnnouncer,
-    Runtimes: RuntimeConnections,
-{
-    async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
-        match command {
-            HarnessCommand::Open(command) => self.open(session_id, command).await,
-            HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
-            HarnessCommand::Delete => self.delete(session_id).await,
-        }
-    }
-
-    /// Release everything the session holds, then delete it.
-    ///
-    /// The durable delete goes last on purpose. Crashing between the two
-    /// leaves a session whose container is gone, which `resume` heals by
-    /// spawning a new one; the other order leaves a paid sandbox that nothing
-    /// knows to reap.
-    #[tracing::instrument(err, skip(self), fields(%session_id))]
-    async fn delete(&self, session_id: AgentSessionId) -> Result<()> {
-        self.sessions.close_session(session_id).await?;
-        self.containers.teardown(session_id).await?;
-        self.sessions.delete_session(session_id).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self, command), fields(
-        %session_id,
-        bot_id = %command.bot_id,
-        message_id = %command.origin.message_id,
-    ))]
-    async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
-        let OpenSession { bot_id, origin } = command;
-        let repo_url = self.defaults.repo_url.clone();
-
-        self.sessions
-            .create_session(CreateAgentSessionParams {
-                id: session_id,
-                owner_id: origin.sender.clone(),
-                bot_id,
-                thread_id: Some(origin.thread_id),
-                originating_message_id: Some(origin.message_id),
-                model: self.defaults.model.clone(),
-                harness: self.defaults.harness.clone(),
-                repo_url: Some(repo_url.clone()),
-                // Managed sandboxes run in the path baked into their image.
-                workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
-                // This open came from the trigger pipeline seeing the mention.
-            })
-            .await?;
-
-        self.announcer
-            .announce(SessionAnnouncement {
-                session_id,
-                bot_id,
-                origin_channel_id: origin.channel_id,
-                origin_thread_id: origin.thread_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: origin.content.clone(),
-                triggered_by: origin.sender.clone(),
-            })
-            .await?;
-
-        let container = match self
-            .containers
-            .spawn(SpawnContainer {
-                session_id,
-                repo_url,
-            })
-            .await
-        {
-            Ok(container) => container,
-            Err(error) => {
-                let _ = self
-                    .sessions
-                    .mark_disconnected(session_id)
-                    .await
-                    .inspect_err(|status_error| {
-                        tracing::error!(
-                            error = ?status_error,
-                            %session_id,
-                            "failed to mark an unprovisioned session disconnected"
-                        );
-                    });
-                return Err(error);
-            }
-        };
-        self.sessions
-            .attach_session(session_id, RuntimeAttachment::solo(container))
-            .await?;
-        self.sessions
-            .send_action(
-                session_id,
-                Some(origin.sender),
-                AgentAction::prompt(origin.content),
-                AgentActionId::mint(),
-            )
-            .await?;
-        Ok(())
-    }
-
-    /// Do one thing in a session that already exists.
-    ///
-    /// Three steps, in this order: persist whatever the action changes about
-    /// the session, work out whether anyone needs telling, then deliver it.
-    /// Announcing last means nothing is announced that was never sent.
-    #[tracing::instrument(err, skip(self, command), fields(%session_id))]
-    async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
-        let DeliverAction {
-            id,
-            action,
-            actor,
-            announce,
-        } = command;
-
-        let announcement = self
-            .announcement(session_id, &action, actor.as_ref(), announce)
-            .await?;
-
-        match self
-            .sessions
-            .send_action(session_id, actor.clone(), action.clone(), id.clone())
-            .await
-        {
-            Ok(()) => {}
-            // Nothing is attached, so get this session onto a transport and
-            // retry against it. Same id: the first attempt never reached the
-            // wire.
-            Err(AgentSessionError::Disconnected(_)) => {
-                let session = self.sessions.get_session(session_id).await?;
-                if is_managed_bot(session.bot_id) {
-                    let container = self.containers.resume(session_id).await?;
-                    self.sessions
-                        .attach_session(session_id, RuntimeAttachment::solo(container))
-                        .await?;
-                } else {
-                    // An external runtime is not ours to start - only its
-                    // operator can dial - but a bot whose runtime is already
-                    // connected just has not had this session bound to it
-                    // yet. That is the ordinary case: sessions bind when they
-                    // are prompted, not when the runtime dials, so the first
-                    // prompt after a reconnect is what restores the session.
-                    let Some(attachment) = self.runtimes.bind(session.bot_id, session_id).await
-                    else {
-                        // Kept in the session vocabulary so transports report
-                        // it as a disconnect, not an internal error.
-                        return Err(HarnessError::Session(AgentSessionError::Disconnected(
-                            session_id,
-                        )));
-                    };
-                    self.sessions.attach_session(session_id, attachment).await?;
-                }
-                self.sessions
-                    .send_action(session_id, actor, action, id)
-                    .await?;
-            }
-            Err(error) => return Err(error.into()),
-        }
-
-        if let Some(announcement) = announcement {
-            self.announcer.announce(announcement).await?;
-        }
-        Ok(())
-    }
-
-    /// Who, if anyone, should be told that this landed.
-    ///
-    /// Only prompts are announced, and only when the caller named an origin
-    /// to answer back into. A session has no channel of its own, so an origin
-    /// is never redundant.
-    async fn announcement(
-        &self,
-        session_id: AgentSessionId,
-        action: &AgentAction,
-        actor: Option<&MacroUserIdStr<'static>>,
-        announce: Option<AnnounceOrigin>,
-    ) -> Result<Option<SessionAnnouncement>> {
-        let (Some(origin), Some(triggered_by), AgentAction::Prompt(prompt)) =
-            (announce, actor, action)
-        else {
-            return Ok(None);
-        };
-
-        // The announcement posts as the session's own bot, which only the
-        // row remembers.
-        let session = self.sessions.get_session(session_id).await?;
-
-        Ok(Some(SessionAnnouncement {
-            session_id,
-            bot_id: session.bot_id,
-            origin_channel_id: origin.channel_id,
-            origin_thread_id: origin.thread_id,
-            prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
-            prompted_content: prompt.prompt.clone(),
-            triggered_by: triggered_by.clone(),
-        }))
-    }
-}
-
-async fn run_session_worker<Sessions, Containers, Announcer, Runtimes>(
-    session_id: AgentSessionId,
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
-    mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
-) where
-    Sessions: AgentSessionService,
-    Containers: ContainerManager,
-    Announcer: SessionAnnouncer,
-    Runtimes: RuntimeConnections,
-{
-    while let Some(queued) = receiver.recv().await {
-        let QueuedCommand { command, completed } = queued;
-        let result = inner.execute(session_id, command).await;
-        let _ = completed.send(result);
     }
 }

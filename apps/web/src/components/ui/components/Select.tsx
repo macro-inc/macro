@@ -1,3 +1,5 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import type {
   SelectContentProps as KobalteSelectContentProps,
   SelectIconProps as KobalteSelectIconProps,
@@ -12,8 +14,6 @@ import type {
   SelectRootItemComponentProps,
 } from '@kobalte/core/select';
 import { Select as KobalteSelect } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
 import { type Component, createSignal, type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
@@ -24,14 +24,18 @@ export type SelectTriggerProps = KobalteSelectTriggerProps & {
   children?: JSX.Element;
 };
 
+/** Shared appearance for select and searchable-combobox triggers. */
+export function selectTriggerClasses(className?: string): string {
+  return cn(
+    'flex h-8 w-full items-center justify-between gap-2 rounded-full border border-edge-frame bg-control not-touch:elevated px-2 text-left text-ink-muted outline-none data-expanded:overlay-active data-expanded:text-ink focus-visible:ring-2 focus-visible:ring-edge-muted aria-invalid:border-failure data-invalid:border-failure',
+    className
+  );
+}
 function SelectTrigger(props: SelectTriggerProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteSelect.Trigger
-      class={cn(
-        'flex w-full items-center justify-between gap-2 text-left data-expanded:bg-hover',
-        local.class
-      )}
+      class={selectTriggerClasses(local.class)}
       {...rest}
     />
   );
@@ -106,7 +110,7 @@ function SelectContent(props: SelectContentProps) {
         <Layer depth={local.depth ?? 3}>
           <KobalteSelect.Content
             class={cn(
-              'z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation',
+              'menu-surface z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto p-1.5 menu-open-animation',
               local.class
             )}
             {...rest}
@@ -222,7 +226,18 @@ function SelectRoot<Option, OptGroup = never>(
   );
 }
 
-/** Composable, styled single- or multi-value select built on Kobalte. */
+/** Composable, styled single- or multi-value select built on Kobalte.
+ *
+ * @do Let `Select.Content` own the menu chrome; pass only sizing classes to
+ *   it.
+ * @do Include `Select.ItemIndicator` so the current selection is visible in
+ *   the list.
+ * @do Use `portalScope="local"` when the select lives inside a dialog or other
+ *   portal scope.
+ * @dont Do not wrap `Select.Content` in a Portal — it already portals itself.
+ * @dont Do not use Select for more than roughly a dozen options; use a command
+ *   menu with search.
+ */
 export const Select = Object.assign(SelectRoot, {
   Content: SelectContent,
   Icon: SelectIcon,

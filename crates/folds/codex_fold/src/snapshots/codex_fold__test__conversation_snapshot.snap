@@ -1,0 +1,105 @@
+---
+source: crates/folds/codex_fold/src/test.rs
+expression: events
+---
+[
+  {
+    "Update": {
+      "sessionUpdate": "user_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "Read the file."
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "agent_thought_chunk",
+      "content": {
+        "type": "text",
+        "text": "I will inspect it."
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "t1",
+      "title": "Run cat a.txt",
+      "kind": "read",
+      "status": "failed",
+      "rawInput": {
+        "command": "cat a.txt"
+      },
+      "content": [
+        {
+          "type": "content",
+          "content": {
+            "type": "text",
+            "text": "File missing"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "f1",
+      "title": "Edit /repo/a.txt",
+      "kind": "edit",
+      "status": "completed",
+      "rawInput": {
+        "paths": [
+          "/repo/a.txt"
+        ]
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "m1",
+      "title": "Call macro.search",
+      "kind": "other",
+      "status": "failed",
+      "rawInput": {
+        "query": "file"
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "w1",
+      "title": "Search file format",
+      "kind": "search",
+      "status": "completed",
+      "rawInput": null
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "The file is missing."
+      }
+    }
+  },
+  {
+    "TurnEnded": "end_turn"
+  },
+  {
+    "Update": {
+      "sessionUpdate": "user_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "Stop."
+      }
+    }
+  },
+  {
+    "TurnEnded": "cancelled"
+  }
+]

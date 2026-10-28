@@ -2,15 +2,18 @@
 //! This is used in simple_unified.rs
 
 use comms_db_client::model::SimpleMention;
+use models_search::calendar_event::CalendarEventSearchScope;
 use opensearch_client::search::unified::{
-    UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs,
-    UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs, UnifiedProjectSearchArgs,
+    UnifiedCalendarEventSearchArgs, UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs,
+    UnifiedChatSearchArgs, UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
+    UnifiedProjectSearchArgs,
 };
 
 use crate::api::{
     context::SearchHandlerState,
     search::simple::{
-        SearchError, simple_call_record::filter_calls, simple_channel::filter_channels,
+        SearchError, simple_calendar_event::filter_calendar_events,
+        simple_call_record::filter_calls, simple_channel::filter_channels,
         simple_chat::filter_chats, simple_document::filter_documents,
         simple_project::filter_projects,
     },
@@ -193,6 +196,41 @@ impl FilterVariantToSearchArgs for item_filters::CallFilters {
             channel_ids: response.channel_ids,
             speaker_ids: self.speaker_ids.clone(),
             ids_only: true,
+            ..Default::default()
+        })
+    }
+}
+
+/// Calendar event filters with the set of events the request searches, which
+/// lives on the request rather than in the soup-shaped filters.
+pub(super) struct ScopedCalendarEventFilters {
+    pub filters: item_filters::CalendarEventFilters,
+    pub scope: CalendarEventSearchScope,
+}
+
+impl FilterVariantToSearchArgs for ScopedCalendarEventFilters {
+    type Output = UnifiedCalendarEventSearchArgs;
+
+    async fn filter_to_search_args(
+        &self,
+        ctx: &SearchHandlerState,
+        user_id: &str,
+        _user_organization_id: Option<i32>,
+        should_include: bool,
+    ) -> Result<Self::Output, SearchError> {
+        if !should_include {
+            return Ok(UnifiedCalendarEventSearchArgs::default());
+        }
+
+        let response = filter_calendar_events(ctx, user_id, &self.filters, self.scope).await?;
+
+        Ok(UnifiedCalendarEventSearchArgs {
+            calendar_event_ids: response.calendar_event_ids,
+            link_ids: response.link_ids,
+            ids_only: response.ids_only,
+            statuses: self.filters.statuses.clone(),
+            organizer_emails: self.filters.organizers.clone(),
+            attendee_emails: self.filters.attendees.clone(),
             ..Default::default()
         })
     }

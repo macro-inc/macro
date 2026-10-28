@@ -17,6 +17,11 @@ const SWAP_MS = 200;
 export interface TextShimmerProps {
   text: string;
   active: boolean;
+  /**
+   * What assistive technology hears, when that should stay put while the
+   * visible text changes. Defaults to the visible text.
+   */
+  label?: string;
   class?: string;
 }
 
@@ -49,7 +54,7 @@ export function TextShimmer(props: TextShimmerProps) {
   return (
     <span
       class={`inline-grid whitespace-pre align-baseline ${props.class ?? ''}`}
-      aria-label={props.text}
+      aria-label={props.label ?? props.text}
     >
       <span
         aria-hidden="true"
@@ -61,6 +66,10 @@ export function TextShimmer(props: TextShimmerProps) {
       <span
         aria-hidden="true"
         class="col-start-1 row-start-1 transition-opacity duration-200 motion-reduce:transition-none"
+        // Share the page clock so a newly mounted status continues the sweep.
+        style={{
+          'animation-delay': run() ? `${-performance.now()}ms` : undefined,
+        }}
         classList={{
           'opacity-0': !props.active,
           'magic-chip-shimmer': run(),

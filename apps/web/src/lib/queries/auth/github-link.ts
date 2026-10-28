@@ -1,4 +1,5 @@
-import { throwOnErr } from '@core/util/result';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { authServiceClient } from '@service-auth/client';
@@ -14,13 +15,16 @@ export type GithubLinkStatus =
 
 export type GithubLink = {
   status: GithubLinkStatus;
-  // Populated once auth-service includes the linked account handle on
-  // /link/github/status.
+  /** Linked account identity, when the auth service exposes it. */
   username?: string;
+  userId?: string;
 };
 
 type UseGithubLinkStatusQueryOptions = {
   enabled?: boolean | (() => boolean);
+  refetchInterval?: number;
+  refetchOnMount?: 'always';
+  retryOnMount?: boolean;
 };
 
 function hasReauthenticationError(
@@ -33,23 +37,26 @@ export async function fetchGithubLinkStatus(): Promise<GithubLink> {
   const response = await authServiceClient.checkGithubLinkStatus();
 
   if (response.isOk()) {
-    const username =
-      (response.value as { github_username?: string | null }).github_username ??
-      undefined;
+    // The deployed auth service can lag the identity fields in the API schema.
+    const link = response.value as typeof response.value & {
+      github_username?: string | null;
+      github_user_id?: string | null;
+    };
 
     return {
-      status: response.value.reauthentication_required
+      status: link.reauthentication_required
         ? 'reauthentication_required'
         : 'linked',
-      username,
+      username: link.github_username ?? undefined,
+      userId: link.github_user_id ?? undefined,
     };
   }
 
-  return {
-    status: hasReauthenticationError(response.error)
-      ? 'reauthentication_required'
-      : 'unlinked',
-  };
+  if (hasReauthenticationError(response.error))
+    return { status: 'reauthentication_required' };
+  if (response.error.some((error) => error.code === 'NOT_FOUND'))
+    return { status: 'unlinked' };
+  throw new ThrownResultError(response.error);
 }
 
 export function githubLinkStatusQueryOptions() {
@@ -73,14 +80,25 @@ export function useGithubLinkStatusQuery(
     return {
       ...githubLinkStatusQueryOptions(),
       enabled,
+      refetchInterval: options?.refetchInterval,
+      refetchOnMount: options?.refetchOnMount,
+      retryOnMount: options?.retryOnMount,
     };
   });
 }
 
-export function invalidateGithubLinkStatus() {
-  return queryClient.invalidateQueries({
-    queryKey: authKeys.githubLinkStatus.queryKey,
+export async function invalidateGithubLinkStatus() {
+  const options = githubLinkStatusQueryOptions();
+  // A pre-OAuth request must not overwrite the newly verified connection.
+  await queryClient.cancelQueries({ queryKey: options.queryKey });
+  await queryClient.invalidateQueries({
+    queryKey: options.queryKey,
+    refetchType: 'none',
   });
+  // Invalidation skips queries whose observers are all disabled (for example,
+  // skipPreviewFetch mentions). Explicit fetching refreshes those readers too.
+  // Keep refresh failures in query state, not in the completed OAuth result.
+  return queryClient.prefetchQuery({ ...options, staleTime: 0 });
 }
 
 export function useInitGithubLinkMutation() {
@@ -104,7 +122,7 @@ export function useDeleteGithubLinkMutation() {
     mutationFn: async () =>
       await throwOnErr(() => authServiceClient.deleteGithubLink()),
     onSuccess: () => {
-      invalidateGithubLinkStatus();
+      fireAndForget(invalidateGithubLinkStatus(), 'github-link');
       invalidateAllSoup();
     },
   }));

@@ -1,9 +1,10 @@
-import {
-  executeOptimisticMutation,
-  optimisticMutationDispositionOf,
-} from '@graphql-cache/exchange/optimistic';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
-import { match } from 'ts-pattern';
+import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
+import {
+  getChannelListRevalidations,
+  revalidateChannelLists,
+} from '../../queries/soup/graphql/channel-list-revalidation';
 import {
   type NotificationEntityInput,
   type NotificationUpdateOperation,
@@ -29,7 +30,21 @@ export type GraphqlUpdateNotificationsResult =
 export type GraphqlUpdateNotificationsForEntitiesArgs = {
   entities: NotificationEntityInput[];
   operation: Exclude<NotificationUpdateOperation, 'MARK_UNDONE'>;
+  /** Notifications this client shows as changing; never sent. A mark seen
+   * that leaves one out means this client was stale. */
+  expectedNotificationIds?: readonly string[];
 };
+
+/** A mark seen answers with only the rows it changed. An expected row it left
+ * out is seen or done elsewhere, which this client cannot tell apart. */
+function missedExpectedSeen(
+  args: GraphqlUpdateNotificationsForEntitiesArgs,
+  rows: readonly { id: string }[]
+): boolean {
+  if (args.operation !== 'MARK_SEEN') return false;
+  const changed = new Set(rows.map(({ id }) => id));
+  return (args.expectedNotificationIds ?? []).some((id) => !changed.has(id));
+}
 
 /** Authoritative rows returned after an entity-scoped notification write. */
 export type GraphqlUpdateNotificationsForEntitiesResult =
@@ -43,41 +58,6 @@ function deduplicateEntities(
     unique.set(`${entity.entityType}:${entity.entityId}`, entity);
   }
   return [...unique.values()];
-}
-
-type OptimisticNotificationPatch = Pick<
-  GraphqlUpdateNotificationsResult[number],
-  '__typename' | 'id'
-> &
-  Partial<GraphqlUpdateNotificationsResult[number]>;
-
-/**
- * Builds a deliberately partial mutation response. The normalized cache merges
- * only fields present in an optimistic payload, so unrelated notification data
- * remains intact until the authoritative response commits the transaction.
- */
-function createOptimisticUpdateNotificationsData({
-  notificationIds,
-  operation,
-}: GraphqlUpdateNotificationsArgs): UpdateNotificationsMutation {
-  const viewedAt =
-    operation === 'MARK_SEEN' ? new Date().toISOString() : undefined;
-  const updateNotifications: OptimisticNotificationPatch[] =
-    notificationIds.map((id) => {
-      const identity = {
-        __typename: 'GraphqlNotification' as const,
-        id,
-      };
-      return match(operation)
-        .with('MARK_SEEN', () => ({ ...identity, seen: true, viewedAt }))
-        .with('MARK_DONE', () => ({ ...identity, done: true }))
-        .with('MARK_UNDONE', () => ({ ...identity, done: false }))
-        .exhaustive();
-    });
-
-  // GraphQL result types model complete server data, while the cache
-  // normalizer intentionally accepts and merges partial optimistic entities.
-  return { updateNotifications } as UpdateNotificationsMutation;
 }
 
 /** Execute a status write with a durable normalized-cache optimistic layer. */
@@ -96,25 +76,18 @@ export async function executeGraphqlUpdateNotifications(
       operation: args.operation,
     },
   };
-  const optimisticData = createOptimisticUpdateNotificationsData(args);
-  const result = await executeOptimisticMutation(
-    client,
-    UpdateNotificationsDocument,
-    variables,
-    optimisticData
-  ).toPromise();
+  const result = await client
+    .mutation(UpdateNotificationsDocument, variables, {
+      optimisticMutation: {
+        revalidations: getChannelListRevalidations(client),
+      },
+    })
+    .toPromise();
 
-  // A retryable transport failure keeps the normalized optimistic layer in
-  // the durable queue. Treat that disposition as accepted so consumers do not
-  // roll back their TanStack/view state while the GraphQL cache stays patched.
-  if (optimisticMutationDispositionOf(result)?.kind === 'queued') {
-    return {
-      ...result,
-      data: result.data ?? optimisticData,
-      error: undefined,
-    };
+  // Without the normalized exchange there is no durable revalidation runner.
+  if (!result.error && optimisticMutationDispositionOf(result) === undefined) {
+    await revalidateChannelLists(client);
   }
-
   return result;
 }
 
@@ -141,7 +114,19 @@ export async function executeGraphqlUpdateNotificationsForEntities(
     },
   };
 
-  return await client
+  const result = await client
     .mutation(UpdateNotificationsForEntityDocument, variables)
     .toPromise();
+  if (!result.error && result.data) {
+    // The changed rows update every reader the cache maintains; the others
+    // are read again. A stale mark seen reads every reader again: the rows
+    // it left out are seen or done, and only the server knows which.
+    await revalidateNotificationReaders(client, {
+      unmaintainedOnly: !missedExpectedSeen(
+        args,
+        result.data.updateNotificationsForEntity
+      ),
+    });
+  }
+  return result;
 }

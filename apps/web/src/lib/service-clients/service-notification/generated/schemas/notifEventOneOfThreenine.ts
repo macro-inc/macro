@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubPrComment } from './githubPrComment';
+import type { CalendarEventReminderMetadata } from './calendarEventReminderMetadata';
 import type { NotifEventOneOfThreenineTag } from './notifEventOneOfThreenineTag';
 
 /**
- * A GitHub pull request was commented on.
+ * A calendar event alarm came due.
  */
 export type NotifEventOneOfThreenine = {
-  /** A GitHub pull request was commented on. */
-  content: GithubPrComment;
+  /** A calendar event alarm came due. */
+  content: CalendarEventReminderMetadata;
   tag: NotifEventOneOfThreenineTag;
 };

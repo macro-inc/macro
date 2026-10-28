@@ -1,0 +1,19 @@
+[package]
+name = "mcp_toolset"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset" }
+anyhow.workspace = true
+futures.workspace = true
+rmcp = { workspace = true, features = ["client"] }
+schemars.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+regex.workspace = true

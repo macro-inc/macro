@@ -1,0 +1,124 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/release_label_check.rs
+name: Release Label Check
+'on':
+  pull_request_target:
+    types:
+    - labeled
+jobs:
+  check:
+    if: github.event.label.name == 'ios-update' || github.event.label.name == 'android-update'
+    name: Announce the release the label started
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      LABEL: ${{ github.event.label.name }}
+      PLATFORM: ${{ github.event.label.name == 'ios-update' && 'iOS' || 'Android' }}
+      WORKFLOW: ${{ github.event.label.name == 'ios-update' && 'iOS App Store Release' || 'Android Play Release' }}
+      WORKFLOW_FILE: ${{ github.event.label.name == 'ios-update' && 'ios-app-store-release.yml' || 'android-play-release.yml' }}
+      CONF_PATH: ${{ github.event.label.name == 'ios-update' && 'apps/web/tauri/src-tauri/tauri.ios.conf.json' || 'apps/web/tauri/src-tauri/tauri.android.conf.json' }}
+    timeout-minutes: 10
+    steps:
+    - name: Announce the release, or explain why none started
+      run: |
+        # --- PR merge result ----------------------------------------------------------
+        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+        # the merge result the native gates hash. GitHub computes it lazily
+        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+        pr_merge_commit() {
+          local deadline pr_json mergeable merge
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+            if [[ -n "$merge" ]]; then
+              echo "$merge"
+              return 0
+            fi
+            if [[ "$mergeable" == "CONFLICTING" ]]; then
+              echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+              return 1
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+              return 1
+            fi
+            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+            sleep 10
+          done
+        }
+        # ------------------------------------------------------------------------------
+        set -euo pipefail
+        # The $WORKFLOW workflow runs on `pull_request` events. GitHub delivers none
+        # for a PR that conflicts with its base, and the release job skips fork PRs;
+        # either way the label did nothing and nobody was told. Say so on the PR and
+        # take the label off: a release label with no release behind it misleads the
+        # drift and watch workflows. On a mergeable PR the label did start a release:
+        # announce it, with the version in flight and the run to watch (the run
+        # itself comments the outcome when it ends).
+        announce_release() {
+          local since deadline run url conf what steps
+          # The release run was created by the same label event as this one, so it
+          # exists by now; the window only keeps an older run for the same head (an
+          # earlier label add) from being mistaken for it. Runs the release job
+          # skipped (another label added at the same time) complete within seconds.
+          since=$(date -u -d '-10 minutes' +%FT%TZ)
+          deadline=$(( $(date +%s) + 120 ))
+          while true; do
+            run=$(gh run list --repo "$GH_REPO" --workflow "$WORKFLOW_FILE" --event pull_request --branch "$HEAD_REF" \
+              --json databaseId,url,createdAt,headSha,conclusion --limit 10 \
+              --jq "[.[] | select(.headSha == \"${HEAD_SHA}\" and .createdAt >= \"${since}\" and .conclusion != \"skipped\")] | first // empty")
+            [[ -n "$run" ]] && break
+            if (( $(date +%s) > deadline )); then
+              gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "⚠️ This PR is mergeable, but no **${WORKFLOW}** run has appeared for it in two minutes. Remove and re-add the \`${LABEL}\` label."
+              return 0
+            fi
+            echo "No ${WORKFLOW} run for ${HEAD_SHA:0:10} yet; waiting."
+            sleep 10
+          done
+          url=$(jq -r '.url' <<<"$run")
+          conf=$(gh api "repos/${GH_REPO}/contents/${CONF_PATH}?ref=${HEAD_SHA}" --jq '.content' | base64 --decode)
+          if [[ "$LABEL" == ios-update ]]; then
+            what="iOS $(jq -r '.version' <<<"$conf") (build $(jq -r '.bundle.iOS.bundleVersion' <<<"$conf"))"
+            steps="builds the app, uploads it to TestFlight and submits it for App Review"
+          else
+            what="Android version code $(jq -r '.bundle.android.versionCode' <<<"$conf")"
+            steps="builds the App Bundle, uploads it to the internal track and promotes it to production"
+          fi
+          gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "🚀 **${WORKFLOW}** started for ${what} at ${HEAD_SHA:0:10} ([workflow run](${url})). It ${steps}, then comments here with the result."
+          echo "PR #${PR_NUMBER}: ${WORKFLOW} started for ${what}: ${url}"
+        }
+        if [[ "$HEAD_REPO" != "$GH_REPO" ]]; then
+          why="this PR comes from a fork (\`${HEAD_REPO}\`), and releases are only built from branches in this repository."
+          next="Push the branch to this repository, open a PR from it, and add the \`${LABEL}\` label there."
+        elif merge=$(pr_merge_commit); then
+          echo "PR #${PR_NUMBER} is mergeable (merge result ${merge:0:10}); the ${WORKFLOW} workflow should have started."
+          announce_release
+          exit 0
+        elif [[ "$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable --jq '.mergeable')" == "CONFLICTING" ]]; then
+          why="this PR has merge conflicts with its base branch, and GitHub does not run \`pull_request\` workflows (the **${WORKFLOW}** workflow among them) on a conflicting PR."
+          next="Resolve the conflicts, wait for the checks, then re-add the \`${LABEL}\` label."
+        else
+          # Still UNKNOWN after the helper's polling: GitHub may or may not have run
+          # the release. Say so without touching the label — removing it under a
+          # release that did start would hide that release from the drift and watch
+          # workflows.
+          gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "⚠️ GitHub has not worked out whether this PR is mergeable, so it is unclear whether the **${WORKFLOW}** workflow started. If no **${WORKFLOW}** run appears in this PR's checks within a few minutes, remove and re-add the \`${LABEL}\` label."
+          exit 0
+        fi
+        gh pr edit "$PR_NUMBER" --repo "$GH_REPO" --remove-label "$LABEL"
+        gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "⚠️ The ${PLATFORM} release did not start: ${why} The \`${LABEL}\` label was removed.
+
+        ${next}"
+        echo "PR #${PR_NUMBER}: ${why}"
+      shell: bash

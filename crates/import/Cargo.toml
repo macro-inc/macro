@@ -5,6 +5,10 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+agent_session = { path = "../agent_session", default-features = false }
+ai_billing = { path = "../ai_billing" }
+rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
 ai_usage = { path = "../ai_usage" }
@@ -21,6 +25,9 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 mcp_select = { path = "../mcp_select" }
 model-entity = { path = "../model-entity" }
+import_notion = { path = "../import_notion" }
+import_tracker = { path = "../import_tracker" }
+models_databases = { path = "../models_databases" }
 models_properties = { path = "../models_properties" }
 properties = { path = "../properties", default-features = false, features = [
   "ports",
@@ -33,6 +40,7 @@ sqlx = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
@@ -40,3 +48,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
+tower = { workspace = true, features = ["util"] }

@@ -16,6 +16,8 @@ export function ChannelCallAutoJoin(props: {
   channelId: string;
   pendingJoinCall: Accessor<boolean>;
   onHandled: () => void;
+  /** Wait for metadata; agent DMs cannot host calls. */
+  canCall?: Accessor<boolean | undefined>;
 }) {
   const { setActiveTab } = useChannelTab();
   // Mirror ChannelCallButton's tab-sync behavior so leaving via the
@@ -28,9 +30,16 @@ export function ChannelCallAutoJoin(props: {
 
   createEffect(() => {
     if (!props.pendingJoinCall()) return;
+    const canCall = props.canCall ? props.canCall() : true;
+    if (canCall === undefined) return;
+    if (!canCall) {
+      setActiveTab(getCallLeaveTab());
+      props.onHandled();
+      return;
+    }
 
     untrack(() => {
-      if (!ENABLE_CALLS()) {
+      if (!ENABLE_CALLS) {
         props.onHandled();
         return;
       }
@@ -49,7 +58,7 @@ export function ChannelCallAutoJoin(props: {
       }
 
       call
-        .joinCall()
+        .joinCall('deep_link')
         .catch((e) => console.error('Auto-join call failed', e))
         .finally(() => props.onHandled());
     });

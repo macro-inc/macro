@@ -7,11 +7,20 @@ import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
+import { frontendInstanceId } from '@app/observability/frontend-instance';
 import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { getPlatform } from '@core/util/platform';
+import { getPlatform, isTauri } from '@core/util/platform';
+import {
+  redactLinkTokenProperties,
+  redactLinkTokens,
+} from '@core/util/telemetryUrl';
+import { getWebOrigin } from '@core/util/webOrigin';
+import type { Language } from '@service-auth/generated/schemas/language';
+import type { Team } from '@service-auth/generated/schemas/team';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { isIgnorableException, rewriteNativeFrameUrls } from './exceptionList';
 import { getPlanAnalyticsProperties } from './planProperties';
 
 /**
@@ -29,6 +38,14 @@ const DEVICE_PROPERTY = 'macro_device' as const;
 const ENVIRONMENT_PROPERTY = 'macro_environment' as const;
 const PLAN_TIER_AT_EVENT_PROPERTY = 'plan_tier_at_event' as const;
 const HAS_PAID_ACCESS_AT_EVENT_PROPERTY = 'has_paid_access_at_event' as const;
+/**
+ * The interface language being shown, as a BCP 47 tag (`en`, `zh-Hans`):
+ * the person's choice, else the team's, else the browser's, else English.
+ * A person property, so a breakdown uses the current language.
+ */
+const INTERFACE_LANGUAGE_PROPERTY = 'interface_language' as const;
+/** PostHog group type for team analytics; server events send the same key. */
+const TEAM_GROUP_TYPE = 'team' as const;
 
 function getEnvironment(): 'dev' | 'prod' | 'unknown' {
   if (PROD_MODE_ENV) return 'prod';
@@ -63,6 +80,8 @@ type TrackFn = <E extends EventName>(
   providersToSendTo?: AnalyticsProvider[],
   options?: TrackOptions
 ) => void;
+
+type TeamGroupInfo = Pick<Team, 'id' | 'name' | 'enterprise'>;
 
 interface UserIdentifyInfo {
   email: string;
@@ -107,14 +126,14 @@ export type MetaStandardEvent = (typeof META_STANDARD_EVENT_NAMES)[number];
 
 const META_STANDARD_EVENTS: Set<string> = new Set(META_STANDARD_EVENT_NAMES);
 
-const IGNORABLE_ERRORS = [
-  // This error is reported very frequently but is not an actual issue.
-  'ResizeObserver loop completed with undelivered notifications',
-];
-
 // Privacy filter lists block the upstream filename; the proxy maps this opaque alias back.
 const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
 const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
+
+function isPrivateCallPage() {
+  const path = window.location.pathname + window.location.hash;
+  return redactLinkTokens(path) !== path;
+}
 
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
@@ -124,6 +143,10 @@ const initializePosthog = (instance: PostHog) => {
     api_host: 'https://macro-prox.macroverse.workers.dev/i/ph',
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
+    // Scroll depth listens to every scroll in the app (capture phase) and
+    // reads window geometry, forcing a layout per scroll. The app shell never
+    // scrolls the window, so the depth it reports is always zero.
+    disable_scroll_properties: true,
     prepare_external_dependency_script: (script) => {
       const url = new URL(script.src);
 
@@ -135,7 +158,15 @@ const initializePosthog = (instance: PostHog) => {
       return script;
     },
     before_send: (cr) => {
+      // Call URLs are bearer capabilities and meeting content must not replay.
+      if (isPrivateCallPage()) return null;
       if (cr) {
+        cr.properties = redactLinkTokenProperties(cr.properties);
+        cr.properties.frontend_instance_id = frontendInstanceId;
+        if (cr.$set) cr.$set = redactLinkTokenProperties(cr.$set);
+        if (cr.$set_once) {
+          cr.$set_once = redactLinkTokenProperties(cr.$set_once);
+        }
         cr.properties.env = DEV_MODE_ENV
           ? 'DEV'
           : PROD_MODE_ENV
@@ -145,12 +176,10 @@ const initializePosthog = (instance: PostHog) => {
 
       if (cr?.event !== '$exception') return cr;
 
-      const exceptionValues = cr.properties.$exception_values;
+      if (isIgnorableException(cr.properties.$exception_list)) return null;
 
-      if (!exceptionValues || !Array.isArray(exceptionValues)) return cr;
-
-      if (IGNORABLE_ERRORS.some((e) => exceptionValues.includes(e))) {
-        return null;
+      if (isTauri()) {
+        rewriteNativeFrameUrls(cr.properties.$exception_list, getWebOrigin());
       }
 
       return cr;
@@ -170,12 +199,17 @@ const createAnalytics = () => {
   const posthog = new PostHog();
 
   const disabled = import.meta.env.DEV === true;
+  // Meta can submit events through hidden frames. Native navigation handlers
+  // can mistake those loads for external links and open the system browser.
+  const metaPixelEnabled = !isTauri();
 
   const initializeProviders = () => {
     if (disabled) return;
 
-    tryInitialize(initializeGoogleAnalytics);
-    tryInitialize(initializeMetaPixel);
+    if (!isPrivateCallPage()) {
+      tryInitialize(initializeGoogleAnalytics);
+      if (metaPixelEnabled) tryInitialize(initializeMetaPixel);
+    }
     tryInitialize(() => initializePosthog(posthog));
   };
 
@@ -187,7 +221,7 @@ const createAnalytics = () => {
     data?: Record<string, unknown>,
     options?: TrackOptions & { eventID?: string }
   ) => {
-    if (disabled) return;
+    if (disabled || isPrivateCallPage()) return;
 
     const enriched = {
       ...data,
@@ -201,6 +235,7 @@ const createAnalytics = () => {
           gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
+          if (!metaPixelEnabled) return;
           const fbqMethod = META_STANDARD_EVENTS.has(event)
             ? 'track'
             : 'trackCustom';
@@ -301,10 +336,12 @@ const createAnalytics = () => {
         ...(info.os && { os: info.os }),
       });
 
-      fbq('init', '639142540393286', {
-        external_id: userID,
-        em: info.email,
-      });
+      if (metaPixelEnabled) {
+        fbq('init', '639142540393286', {
+          external_id: userID,
+          em: info.email,
+        });
+      }
 
       posthog.identify(userID, { ...info });
     } catch (e) {
@@ -325,14 +362,68 @@ const createAnalytics = () => {
     }
   };
 
+  // Person properties are per PostHog identity. Forget the last value on
+  // reset so the next account is recorded even when the tag matches.
+  let reportedInterfaceLanguage: Language | undefined;
+
+  const setInterfaceLanguage = (language: Language) => {
+    if (disabled || reportedInterfaceLanguage === language) return;
+
+    try {
+      posthog.setPersonProperties({ [INTERFACE_LANGUAGE_PROPERTY]: language });
+      reportedInterfaceLanguage = language;
+    } catch (e) {
+      console.error('[Analytics] Failed to set interface language:', e);
+    }
+  };
+
+  // `group` with properties captures a `$groupidentify` event, so only send
+  // it when the team or its properties change, not on every team refetch.
+  let syncedTeamGroupKey: string | undefined;
+
+  const setTeamGroup = (team: TeamGroupInfo) => {
+    if (disabled) return;
+
+    const key = `${team.id}:${team.name}:${team.enterprise}`;
+    if (syncedTeamGroupKey === key) return;
+
+    try {
+      posthog.group(TEAM_GROUP_TYPE, team.id, {
+        name: team.name,
+        enterprise: team.enterprise,
+      });
+      syncedTeamGroupKey = key;
+    } catch (e) {
+      console.error('[Analytics] Failed to set team group:', e);
+    }
+  };
+
+  const clearTeamGroup = () => {
+    if (disabled) return;
+
+    syncedTeamGroupKey = undefined;
+    try {
+      // The group persists across reloads; clear it only when one is set,
+      // since `resetGroups` also reloads feature flags.
+      if (posthog.getGroups()[TEAM_GROUP_TYPE] === undefined) return;
+      posthog.resetGroups();
+    } catch (e) {
+      console.error('[Analytics] Failed to clear team group:', e);
+    }
+  };
+
   const reset = () => {
     if (disabled) return;
 
     try {
       gtag('config', GA_ID, { user_id: undefined });
 
+      // `posthog.reset()` clears the persisted groups.
+      syncedTeamGroupKey = undefined;
+
       posthog.unregister(PLAN_TIER_AT_EVENT_PROPERTY);
       posthog.unregister(HAS_PAID_ACCESS_AT_EVENT_PROPERTY);
+      reportedInterfaceLanguage = undefined;
       posthog.reset();
     } catch (e) {
       console.error('[Analytics] Failed to reset:', e);
@@ -342,8 +433,11 @@ const createAnalytics = () => {
   const pageView = (pageTitle: string, opts?: PageViewOptions) => {
     if (disabled) return;
 
-    const pagePath = opts?.path ?? window.location.pathname;
-    const pageLocation = opts?.location ?? window.location.href;
+    if (isPrivateCallPage()) return;
+    const pagePath = redactLinkTokens(opts?.path ?? window.location.pathname);
+    const pageLocation = redactLinkTokens(
+      opts?.location ?? window.location.href
+    );
     const deviceType = getDeviceType();
     const environment = getEnvironment();
 
@@ -356,11 +450,13 @@ const createAnalytics = () => {
         page_path: pagePath,
       });
 
-      fbq('track', 'PageView', {
-        [DEVICE_PROPERTY]: deviceType,
-        [ENVIRONMENT_PROPERTY]: environment,
-        content_name: pageTitle,
-      });
+      if (metaPixelEnabled) {
+        fbq('track', 'PageView', {
+          [DEVICE_PROPERTY]: deviceType,
+          [ENVIRONMENT_PROPERTY]: environment,
+          content_name: pageTitle,
+        });
+      }
 
       posthog.capture('$pageview', {
         [DEVICE_PROPERTY]: deviceType,
@@ -382,6 +478,9 @@ const createAnalytics = () => {
     trackGoogleConversion,
     identify,
     setPlanProperties,
+    setInterfaceLanguage,
+    setTeamGroup,
+    clearTeamGroup,
     reset,
     pageView,
   };
@@ -401,6 +500,12 @@ export type AnalyticsInterface = {
   ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
   setPlanProperties: (licenseStatus: string | undefined) => void;
+  /** Records the interface language currently shown, for usage breakdowns. */
+  setInterfaceLanguage: (language: Language) => void;
+  /** Associates this user's events with their team (PostHog group analytics). */
+  setTeamGroup: (team: TeamGroupInfo) => void;
+  /** Detaches events from any team, e.g. after leaving it. */
+  clearTeamGroup: () => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;
 };

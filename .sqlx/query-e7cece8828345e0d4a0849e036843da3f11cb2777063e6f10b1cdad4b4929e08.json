@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n          COALESCE((SELECT SUM(delta_cents)::bigint FROM ai_credit_ledger WHERE user_id = $1), 0) AS \"balance!\",\n          COALESCE((SELECT SUM(amount_cents)::bigint FROM ai_overage_charge WHERE user_id = $1 AND period_start = $2\n            AND accounting_policy = 'legacy' AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)), 0) AS \"charged!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "balance!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "charged!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "e7cece8828345e0d4a0849e036843da3f11cb2777063e6f10b1cdad4b4929e08"
+}

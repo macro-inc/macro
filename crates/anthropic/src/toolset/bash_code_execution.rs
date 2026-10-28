@@ -32,12 +32,12 @@ impl AsyncTool<AnthropicToolContext> for BashCodeExecution {
     async fn call(
         &self,
         service_context: ServiceContext<AnthropicToolContext>,
-        _request_context: RequestContext,
+        request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let ctx = &*service_context;
         let blocks = super::invoke_server_tool(
-            &ctx.client,
-            &ctx.model,
+            ctx,
+            &request_context,
             CODE_EXECUTION_TOOL.clone(),
             &self.input,
         )

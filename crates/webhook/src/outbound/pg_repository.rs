@@ -118,6 +118,26 @@ async fn fetch_webhook(pool: &PgPool, webhook_id: &str) -> Result<Option<Webhook
     row.map(row_to_webhook).transpose()
 }
 
+async fn fetch_user_team_workspace_id(
+    pool: &PgPool,
+    user_id: MacroUserIdStr<'static>,
+) -> Result<Option<String>, sqlx::Error> {
+    let team_id = sqlx::query_scalar!(
+        r#"
+            SELECT team_id
+            FROM team_user
+            WHERE user_id = $1
+            ORDER BY team_role DESC
+            LIMIT 1
+            "#,
+        user_id.as_ref()
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(team_id.map(|id| id.to_string()))
+}
+
 impl WebhookWorkspaceResolver for PgRepository {
     type Err = sqlx::Error;
 
@@ -153,6 +173,14 @@ impl WebhookWorkspaceResolver for PgRepository {
         workspace_ids.sort_unstable();
         workspace_ids.dedup();
         Ok(workspace_ids)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_team_workspace_id(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<String>, Self::Err> {
+        fetch_user_team_workspace_id(&self.pool, user_id).await
     }
 }
 
@@ -387,20 +415,6 @@ impl WebhookRepo for PgRepository {
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Option<String>, Self::Err> {
-        let user_id = user_id.as_ref();
-        let team_id = sqlx::query_scalar!(
-            r#"
-            SELECT team_id
-            FROM team_user
-            WHERE user_id = $1
-            ORDER BY team_role DESC
-            LIMIT 1
-            "#,
-            user_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(team_id.map(|id| id.to_string()))
+        fetch_user_team_workspace_id(&self.pool, user_id).await
     }
 }

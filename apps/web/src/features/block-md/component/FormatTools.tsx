@@ -1,4 +1,3 @@
-import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   NODE_TRANSFORM,
@@ -13,7 +12,40 @@ import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { useCanComment, useCanEdit } from '@core/signal/permissions';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import Check from '@icon/system/regular/check-square.svg';
+import TextCode from '@icon/system/regular/code.svg';
+import CodeBlock from '@icon/system/regular/code-block.svg';
+import CornersIn from '@icon/system/regular/corners-in.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
+import DotsThreeLarge from '@icon/system/regular/dots-three.svg';
+import ThreeDots from '@icon/system/regular/dots-three.svg';
+import MathIcon from '@icon/system/regular/function.svg';
+import Grid from '@icon/system/regular/grid-four.svg';
+import BrokenLinkIcon from '@icon/system/regular/link-break.svg';
+import LinkIcon from '@icon/system/regular/link-simple.svg';
+import ListBullets from '@icon/system/regular/list-bullets.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import One from '@icon/system/regular/number-one.svg';
+import TextHighlight from '@icon/system/regular/paint-roller.svg';
+import PlusSquare from '@icon/system/regular/plus-square.svg';
+import Quote from '@icon/system/regular/quotes.svg';
+import TextAA from '@icon/system/regular/text-aa.svg';
+import TextBold from '@icon/system/regular/text-b.svg';
+import TextH from '@icon/system/regular/text-h.svg';
+import TextH1 from '@icon/system/regular/text-h-one.svg';
+import TextH3 from '@icon/system/regular/text-h-three.svg';
+import TextH2 from '@icon/system/regular/text-h-two.svg';
+import TextItalic from '@icon/system/regular/text-italic.svg';
+import TextStriketrough from '@icon/system/regular/text-strikethrough.svg';
+import TextSub from '@icon/system/regular/text-subscript.svg';
+import TextSuper from '@icon/system/regular/text-superscript.svg';
+import TextT from '@icon/system/regular/text-t.svg';
+import TextUnderline from '@icon/system/regular/text-underline.svg';
 import {
   $isTableCellNode,
   $isTableSelection,
@@ -21,39 +53,14 @@ import {
   $unmergeCell,
 } from '@lexical/table';
 import type { ElementName } from '@macro-inc/lexical-core';
-import CaretRight from '@phosphor/caret-right.svg';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Check from '@phosphor/check-square.svg';
-import TextCode from '@phosphor/code.svg';
-import CodeBlock from '@phosphor/code-block.svg';
-import CornersIn from '@phosphor/corners-in.svg';
-import CornersOut from '@phosphor/corners-out.svg';
-import ThreeDots from '@phosphor/dots-three.svg';
-import MathIcon from '@phosphor/function.svg';
-import Grid from '@phosphor/grid-four.svg';
-import BrokenLinkIcon from '@phosphor/link-break.svg';
-import LinkIcon from '@phosphor/link-simple.svg';
-import ListBullets from '@phosphor/list-bullets.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import Minus from '@phosphor/minus.svg';
-import One from '@phosphor/number-one.svg';
-import TextHighlight from '@phosphor/paint-roller.svg';
-import PlusSquare from '@phosphor/plus-square.svg';
-import Quote from '@phosphor/quotes.svg';
-import TextAA from '@phosphor/text-aa.svg';
-import TextBold from '@phosphor/text-b.svg';
-import TextH from '@phosphor/text-h.svg';
-import TextH1 from '@phosphor/text-h-one.svg';
-import TextH3 from '@phosphor/text-h-three.svg';
-import TextH2 from '@phosphor/text-h-two.svg';
-import TextItalic from '@phosphor/text-italic.svg';
-import TextStriketrough from '@phosphor/text-strikethrough.svg';
-import TextSub from '@phosphor/text-subscript.svg';
-import TextSuper from '@phosphor/text-superscript.svg';
-import TextT from '@phosphor/text-t.svg';
-import TextUnderline from '@phosphor/text-underline.svg';
-import { Button, Dropdown, Hotkey, SingleSelectCheck } from '@ui';
+import {
+  Button,
+  type ButtonSize,
+  Dropdown,
+  Hotkey,
+  SingleSelectCheck,
+  Toolbar,
+} from '@ui';
 import {
   $getSelection,
   COMMAND_PRIORITY_LOW,
@@ -75,11 +82,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  generatedAndWaitingSignal,
-  isGeneratingSignal,
-} from '../signal/generateSignal';
-import { mdStore } from '../signal/markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { MediaSelector } from './MediaSelector';
 import { TableInsert } from './TableInsert';
 
@@ -218,17 +221,19 @@ const InlineFormatButton = (props: {
   selection: () => SelectionData | undefined;
   onClick: (e: MouseEvent) => void;
   buttonIsDisabled: Accessor<boolean>;
+  size?: ButtonSize;
 }) => {
   const icon = InlineIcons[props.format];
   const isActive = () => isInlineFormatActive(props.selection(), props.format);
   return (
     <Button
-      label={InlineLabels[props.format]}
-      shortcut={InlineShortcuts[props.format]}
-      size="icon-sm"
-      variant={isActive() ? 'active' : 'ghost'}
-      class="rounded-md"
-      depth={3}
+      aria-label={InlineLabels[props.format]}
+      tooltip={{
+        content: InlineLabels[props.format],
+        shortcut: InlineShortcuts[props.format],
+      }}
+      size={props.size ?? 'icon-sm'}
+      variant={isActive() ? 'primary' : 'ghost'}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
@@ -258,9 +263,7 @@ const InlineFormatMenuItem = (props: {
       <Dynamic component={icon} class="size-4 shrink-0" />
       <span class="flex-1 truncate">{InlineLabels[props.format]}</span>
       <Show when={InlineShortcuts[props.format]}>
-        {(shortcut) => (
-          <Hotkey shortcut={shortcut()} class="text-ink-muted" showPlus />
-        )}
+        {(shortcut) => <Hotkey shortcut={shortcut()} theme="subtle" />}
       </Show>
       <SingleSelectCheck active={isActive()} />
     </Dropdown.Item>
@@ -272,18 +275,17 @@ export const ElementFormatButton = (props: {
   selection: () => SelectionData | undefined;
   onClick: (e: MouseEvent) => void;
   buttonIsDisabled: Accessor<boolean>;
+  size?: ButtonSize;
 }) => {
   const name = NodeMenuOptions[props.format]?.label || 'Body';
   const icon = NodeMenuOptions[props.format]?.icon;
   return (
     <Button
       tooltip={name}
-      size="icon-sm"
-      class="rounded-md"
-      depth={3}
+      size={props.size ?? 'icon-sm'}
       variant={
         isElementFormatActive(props.selection(), props.format)
-          ? 'active'
+          ? 'primary'
           : 'ghost'
       }
       onClick={(e: MouseEvent | KeyboardEvent) =>
@@ -347,12 +349,18 @@ const ElementFormatMenuItem = (
   );
 };
 
-export function FormatTools(props: { withinPopup?: boolean }) {
-  const mdData = mdStore.get;
+export function FormatTools(props: {
+  withinPopup?: boolean;
+  size?: ButtonSize;
+  onRequestLink?: () => void;
+}) {
+  const { permissions, state } = useMarkdownDocument();
+  const { md: mdData, error: editorError } = state.editor;
+  const buttonSize = () => props.size ?? 'icon-sm';
   const editor = () => mdData.editor;
   const titleEditor = () => mdData.titleEditor;
   const selection = () => mdData.selection;
-  const [editorError] = markdownBlockErrorSignal;
+  const { isGenerating, generatedAndWaiting } = state.generation;
 
   const [editorHasFocus, setEditorHasFocus] = createSignal(false);
   const [, setTitleEditorHasFocus] = createSignal(false);
@@ -362,24 +370,26 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   const [lastFocusedEditor, setLastFocusedEditor] =
     createSignal<LexicalEditor>();
 
-  const editAccess = useCanEdit();
+  const editAccess = permissions.canEdit;
   const canEdit = () => editAccess();
 
-  const canComment = ENABLE_MARKDOWN_COMMENTS ? useCanComment() : () => false;
+  const canComment = ENABLE_MARKDOWN_COMMENTS
+    ? permissions.canComment
+    : () => false;
 
   const buttonIsDisabled = createMemo(() => {
     return !(
       canEdit() &&
-      !isGeneratingSignal() &&
-      !generatedAndWaitingSignal() &&
+      !isGenerating() &&
+      !generatedAndWaiting() &&
       editorError() === null
     );
   });
   const commentButtonIsDisabled = createMemo(() => {
     return !(
       canComment() &&
-      !isGeneratingSignal() &&
-      !generatedAndWaitingSignal() &&
+      !isGenerating() &&
+      !generatedAndWaiting() &&
       editorError() === null
     );
   });
@@ -514,15 +524,13 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant={isActive() ? 'active' : 'ghost'}
-          size="icon-sm"
-          class="rounded-md"
-          depth={3}
-          tooltip={'Text Styles'}
+          variant={isActive() ? 'primary' : 'ghost'}
+          size={buttonSize()}
+          tooltip="Text Styles"
           disabled={buttonIsDisabled()}
           tabIndex={-1}
         >
-          <TextAA />
+          <TextAA class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content
           onCloseAutoFocus={() => {
@@ -578,15 +586,13 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant={isActive() ? 'active' : 'ghost'}
-          size="icon-sm"
-          class="rounded-md"
-          depth={3}
+          variant={isActive() ? 'primary' : 'ghost'}
+          size={buttonSize()}
           tooltip="Text Styles"
           disabled={props.buttonIsDisabled()}
           tabIndex={-1}
         >
-          <TextAA />
+          <TextAA class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Show when={!props.buttonIsDisabled()}>
           <Dropdown.Content
@@ -635,12 +641,10 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               (format) => !props.excludes?.includes(format)
             )
           )
-            ? 'active'
+            ? 'primary'
             : 'ghost'
         }
-        size="icon-sm"
-        class="rounded-md"
-        depth={3}
+        size={buttonSize()}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
@@ -684,12 +688,10 @@ export function FormatTools(props: { withinPopup?: boolean }) {
       <Dropdown.Trigger
         variant={
           hasActiveElementFormat(selection(), props.elements)
-            ? 'active'
+            ? 'primary'
             : 'ghost'
         }
-        size="icon-sm"
-        class="rounded-md"
-        depth={3}
+        size={buttonSize()}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
         tabIndex={-1}
@@ -733,72 +735,165 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     'quote',
   ];
 
+  // The inline formats that aren't surfaced as their own buttons, tucked
+  // behind a "..." trigger that opens them as a horizontal row of buttons.
+  const MoreInlineFormats: InlineFormat[] = [
+    'underline',
+    'strikethrough',
+    'highlight',
+    'code',
+    'superscript',
+    'subscript',
+  ];
+  const MoreInlineDropdown = () => {
+    const [moreInlineOpen, setMoreInlineOpen] = createSignal(false);
+    return (
+      <Dropdown open={moreInlineOpen()} onOpenChange={setMoreInlineOpen}>
+        <Dropdown.Trigger
+          variant="ghost"
+          size={buttonSize()}
+          tooltip="More formatting"
+          disabled={buttonIsDisabled()}
+          tabIndex={-1}
+        >
+          <DotsThreeLarge class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+        </Dropdown.Trigger>
+        <Show when={!buttonIsDisabled()}>
+          <Dropdown.Content
+            onCloseAutoFocus={() => {
+              lastFocusedEditor()?.focus();
+            }}
+          >
+            <Dropdown.Group>
+              <div class="flex items-center gap-1">
+                <For each={MoreInlineFormats}>
+                  {(format) => (
+                    <InlineFormatButton
+                      format={format}
+                      selection={selection}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        inlineFormat(format);
+                      }}
+                      buttonIsDisabled={buttonIsDisabled}
+                    />
+                  )}
+                </For>
+              </div>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Show>
+      </Dropdown>
+    );
+  };
+
+  // A single "Text" trigger that opens the block-level style menu
+  // (paragraph, headings, lists, code, quote), used by the selection popup.
+  // Reflects the selected block when the selection is a single block type.
+  const TextBlockDropdown = () => {
+    const [textMenuOpen, setTextMenuOpen] = createSignal(false);
+    const blockFormats: ElementName[] = [
+      'paragraph',
+      'heading1',
+      'heading2',
+      'heading3',
+      'list-bullet',
+      'list-number',
+      'list-check',
+      'code',
+      'quote',
+    ];
+    const currentBlockLabel = () => {
+      const active = blockFormats.filter((format) =>
+        isElementFormatActive(selection(), format)
+      );
+      return active.length === 1
+        ? (NodeMenuOptions[active[0]]?.label ?? 'Text')
+        : 'Text';
+    };
+    return (
+      <Dropdown open={textMenuOpen()} onOpenChange={setTextMenuOpen}>
+        <Dropdown.Trigger
+          variant="ghost"
+          size="sm"
+          class="gap-1"
+          tooltip="Text style"
+          disabled={buttonIsDisabled()}
+          tabIndex={-1}
+        >
+          {currentBlockLabel()}
+          <CaretDown class="size-3" />
+        </Dropdown.Trigger>
+        <Show when={!buttonIsDisabled()}>
+          <Dropdown.Content
+            class="text-xs"
+            onCloseAutoFocus={() => {
+              lastFocusedEditor()?.focus();
+            }}
+          >
+            <Dropdown.Group>
+              <For each={blockFormats}>
+                {(format) => (
+                  <ElementFormatMenuItem
+                    format={format}
+                    selection={selection}
+                    onClick={() => {
+                      nodeFormat(format);
+                      setTextMenuOpen(false);
+                    }}
+                    useIcon={true}
+                    useStyle={false}
+                    buttonIsDisabled={buttonIsDisabled}
+                  />
+                )}
+              </For>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Show>
+      </Dropdown>
+    );
+  };
+
   if (props.withinPopup) {
     return (
-      <div class="flex h-full gap-1 items-center">
+      <div class="flex h-full items-center gap-1">
         <Show when={canEdit()}>
-          <ElementFormatButton
-            format="paragraph"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              nodeFormat('paragraph');
-            }}
-            buttonIsDisabled={buttonIsDisabled}
-            selection={selection}
-          />
-          <ElementFormatMenu
-            elements={['heading1', 'heading2', 'heading3']}
-            icon={TextH}
-            label="Headings"
-            buttonIsDisabled={buttonIsDisabled}
-          />
-          <ElementFormatMenu
-            elements={['list-bullet', 'list-number', 'list-check']}
-            icon={ListBullets}
-            label="Lists"
-            buttonIsDisabled={buttonIsDisabled}
-          />
-          <ElementFormatButton
-            format="code"
+          <InlineFormatButton
+            format="bold"
             selection={selection}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              nodeFormat('code');
+              inlineFormat('bold');
             }}
             buttonIsDisabled={buttonIsDisabled}
+            size={buttonSize()}
           />
-          <ElementFormatButton
-            format="quote"
+          <InlineFormatButton
+            format="italic"
             selection={selection}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              nodeFormat('quote');
+              inlineFormat('italic');
             }}
             buttonIsDisabled={buttonIsDisabled}
-          />
-          <InlineFormatPopDown
-            formats={[
-              'bold',
-              'italic',
-              'underline',
-              'strikethrough',
-              'code',
-              'highlight',
-              'superscript',
-              'subscript',
-            ]}
-            buttonIsDisabled={buttonIsDisabled}
+            size={buttonSize()}
           />
           <Button
             variant="ghost"
-            size="icon-sm"
-            class="rounded-md"
-            depth={3}
+            size={buttonSize()}
             onPointerDown={(e: PointerEvent) => e.preventDefault()}
-            onClick={handleLink}
+            onClick={(e) => {
+              if (!selection()?.hasLinks && props.onRequestLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                props.onRequestLink();
+              } else {
+                handleLink(e);
+              }
+            }}
             tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
             disabled={buttonIsDisabled()}
           >
@@ -806,49 +901,31 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
             />
           </Button>
+          <MoreInlineDropdown />
+          <Toolbar.Divider />
+          <TextBlockDropdown />
           <Show when={selection()?.onMergableCells}>
             <Button
               variant="ghost"
-              size="icon-sm"
-              class="rounded-md"
-              depth={3}
+              size={buttonSize()}
               tooltip="Merge cells"
               onClick={handleMergeCells}
               disabled={buttonIsDisabled()}
             >
-              <CornersIn />
+              <CornersIn class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Show when={selection()?.onSplittableCells}>
             <Button
               variant="ghost"
-              size="icon-sm"
-              class="rounded-md"
-              depth={3}
+              size={buttonSize()}
               tooltip="Split cell"
               onClick={handleSplitCell}
               disabled={buttonIsDisabled()}
             >
-              <CornersOut />
+              <CornersOut class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
-        </Show>
-        <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="rounded-md"
-            depth={3}
-            tooltip="Comment"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleInsertComment();
-            }}
-            disabled={commentButtonIsDisabled()}
-          >
-            <ChatTeardrop />
-          </Button>
         </Show>
       </div>
     );
@@ -969,8 +1046,6 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              class="rounded-md"
-              depth={3}
               onPointerDown={(e: PointerEvent) => e.preventDefault()}
               onClick={handleLink}
               tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
@@ -985,8 +1060,6 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-md"
-                depth={3}
                 tooltip="Comment"
                 onClick={(e) => {
                   e.preventDefault();
@@ -995,7 +1068,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
                 }}
                 disabled={commentButtonIsDisabled()}
               >
-                <ChatTeardrop />
+                <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
             <VerticalBar />
@@ -1006,13 +1079,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-md"
-                depth={3}
                 tooltip="More"
                 disabled={buttonIsDisabled()}
                 tabIndex={-1}
               >
-                <PlusSquare />
+                <PlusSquare class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Show when={!buttonIsDisabled()}>
                 <Dropdown.Content
@@ -1083,8 +1154,6 @@ export function FormatTools(props: { withinPopup?: boolean }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-md"
-            depth={3}
             tooltip="Comment"
             onClick={(e) => {
               e.preventDefault();
@@ -1093,7 +1162,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
             }}
             disabled={commentButtonIsDisabled()}
           >
-            <ChatTeardrop />
+            <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </>

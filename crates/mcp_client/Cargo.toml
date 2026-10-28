@@ -38,4 +38,5 @@ utoipa.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+regex.workspace = true
 tokio.workspace = true

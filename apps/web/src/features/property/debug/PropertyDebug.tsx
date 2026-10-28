@@ -1,7 +1,6 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { seedMockDisplayNames } from '@core/user';
-import { cn } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import {
   PROPERTIES_EMPTY,
@@ -60,11 +59,6 @@ const Grid: Component<{
       </For>
     </div>
   </div>
-);
-
-const buttonClass = cn(
-  'inline-flex items-center gap-1 min-w-0',
-  'px-2 py-1 leading-tight text-left rounded-sm hover:bg-hover'
 );
 
 /**
@@ -193,7 +187,7 @@ const PropertyDebug: Component = () => {
 
         <Section title="Compositions — inline pill (like InlinePropertyValue)">
           <Grid
-            title="Tooltip + EditTrigger + Icon + Text + Caret"
+            title="Tooltip + Pill + Icon + Text + Caret"
             properties={PROPERTIES_FILLED}
           >
             {(p) => (
@@ -204,14 +198,14 @@ const PropertyDebug: Component = () => {
                 onEdit={onEdit}
               >
                 <Property.Tooltip property={get(p)}>
-                  <Property.EditTrigger class={buttonClass}>
+                  <Property.Pill>
                     <Property.Icon property={get(p)} class="size-3 shrink-0" />
                     <Property.Text
                       property={get(p)}
                       fallback={<Property.Empty label="None" />}
                     />
                     <Property.Caret />
-                  </Property.EditTrigger>
+                  </Property.Pill>
                 </Property.Tooltip>
               </Property.Root>
             )}
@@ -366,14 +360,14 @@ const EditorRow: Component<{ initial: PropertyT }> = (props) => {
           when={isInline()}
           fallback={
             <>
-              <Property.EditTrigger class={buttonClass}>
+              <Property.Pill>
                 <Property.Icon property={property()} class="size-3 shrink-0" />
                 <Property.Text
                   property={property()}
                   fallback={<Property.Empty label="None" />}
                 />
                 <Property.Caret />
-              </Property.EditTrigger>
+              </Property.Pill>
               <Property.PopoverEditor />
             </>
           }

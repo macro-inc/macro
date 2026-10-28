@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EntityType } from './entityType';
 
 export interface UnsubscribeItemPathParams {
   item_id: string;
-  item_type: string;
+  item_type: EntityType;
 }

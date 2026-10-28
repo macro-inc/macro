@@ -1,20 +1,18 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { refetchHistory } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
 
-export function useHandleFileUpload({
-  projectId,
-}: {
-  projectId?: string;
-} = {}) {
+export function useHandleFileUpload(options: { projectId?: string } = {}) {
   const { replaceOrInsertSplit, openWithSplit } = useSplitLayout();
 
   return async (files: UploadInput[], withOpen = true) => {
     const results = await uploadFiles(files, 'dss', {
-      projectId,
+      projectId: options.projectId,
     });
 
     const notFailedUploads = results.filter((result) => !result.failed);
@@ -31,32 +29,41 @@ export function useHandleFileUpload({
     // Refetch soup for folders once pending uploads are done, and show a success
     // toast with an action to open the created folder/project.
     for (const upload of pendingUploads) {
-      upload.projectId.then((createdProjectId) => {
-        if (!createdProjectId) return;
+      fireAndForget(
+        upload.projectId.then((createdProjectId) => {
+          if (!createdProjectId) return;
 
-        refetchSoupEntity(createdProjectId, 'project', { includeRoot: true });
-        refetchHistory();
+          refetchSoupEntity(createdProjectId, 'project', {
+            includeRoot: true,
+          }).catch((error) =>
+            Telemetry.error(error, { surface: 'file-upload' })
+          );
+          fireAndForget(refetchHistory(), 'file-upload');
 
-        toast.success(`Uploaded ${upload.name}`, {
-          actions: [
-            {
-              label: 'Open folder',
-              onClick: () => {
-                openWithSplit(
-                  { type: 'project', id: createdProjectId },
-                  { referredFrom: 'file-upload', activate: true }
-                );
+          toast.success(`Uploaded ${upload.name}`, {
+            actions: [
+              {
+                label: 'Open folder',
+                onClick: () => {
+                  openWithSplit(
+                    { type: 'project', id: createdProjectId },
+                    { referredFrom: 'file-upload', activate: true }
+                  );
+                },
               },
-            },
-          ],
-        });
-      });
+            ],
+          });
+        }),
+        'file-upload'
+      );
     }
 
     // refetch soup for uploaded docs
     for (const upload of successfulUploads) {
       if (upload.type === 'document') {
-        refetchSoupEntity(upload.documentId, 'document');
+        refetchSoupEntity(upload.documentId, 'document').catch((error) =>
+          Telemetry.error(error, { surface: 'file-upload' })
+        );
       }
     }
 

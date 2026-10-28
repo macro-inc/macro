@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_message SET effect_revision = effect_revision + 1, notification_retry_at = now()\n        WHERE chat_id = $1 AND person_id = $2 AND source_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f2e464b977716f1c5105ffe8d60d42f8d3b1ac99d70123b501e8ef94d918ed86"
+}

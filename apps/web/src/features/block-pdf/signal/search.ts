@@ -1,25 +1,13 @@
 import type { PDFViewer } from '@block-pdf/PdfViewer';
-import { createBlockSignal } from '@core/block';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import {
   FindState,
   type IMatchesCount,
   type IUpdateFindControlStateEvent,
 } from '../PdfViewer/EventBus';
 import type { FindController } from '../PdfViewer/FindController';
-import {
-  type TPageToSectionMap,
-  useGetPageToSectionMap,
-} from '../store/tableOfContents';
-import TocUtils from '../util/TocUtils';
 import { generatePhrases } from '../util/wordSearchUtils';
-import {
-  updateFindControlStateSignal,
-  updateFindMatchesCountSignal,
-  useGetRootViewer,
-} from './pdfViewer';
-
-export const searchSignal = createBlockSignal<string>('');
-export const isSearchOpenSignal = createBlockSignal<boolean>(false);
 
 enum SearchMatchType {
   Word = 'word',
@@ -49,12 +37,11 @@ type WordMatch = BaseMatch & {
 type Match = EntityMatch | WordMatch;
 
 function useMergedEventSignal() {
-  const updateFindControlState = updateFindControlStateSignal.get;
-  const updateFindMatchesCount = updateFindMatchesCountSignal.get;
+  const { findControlState, findMatchesCount } = usePdfViewer().root;
 
   return (): IUpdateFindControlStateEvent | null => {
-    const controlStateEvent = updateFindControlState();
-    const matchesCount = updateFindMatchesCount();
+    const controlStateEvent = findControlState();
+    const matchesCount = findMatchesCount();
 
     if (!controlStateEvent) return null;
 
@@ -111,10 +98,7 @@ function useMergedEventSignal() {
   };
 }
 
-function getWordMatches(
-  pageToSectionMap: TPageToSectionMap,
-  findController: FindController
-): WordMatch[] {
+function getWordMatches(findController: FindController): WordMatch[] {
   if (
     !findController._pageMatches ||
     findController._pageMatches.length === 0 ||
@@ -161,12 +145,6 @@ function getWordMatches(
         endPos,
         page: pageContent,
       });
-      const section =
-        TocUtils.getNearestSection({
-          page: pageIndex,
-          yPos: startPos,
-          pageToSectionMap,
-        })?.title ?? '';
       matches.push({
         startPos,
         endPos,
@@ -174,7 +152,7 @@ function getWordMatches(
         prePhrase,
         postPhrase,
         matchPhrase,
-        section,
+        section: '',
         matchNumber,
         type: SearchMatchType.Word,
       });
@@ -185,15 +163,14 @@ function getWordMatches(
 }
 
 export function useSearchStart() {
-  const getRootViewer = useGetRootViewer();
+  const rootViewer = usePdfViewer().root.instance;
   return (args: Parameters<PDFViewer['search']>[0]) => {
-    getRootViewer()?.search(args);
+    rootViewer()?.search(args);
   };
 }
 
 export function useSearchResults() {
   const mergedEvent = useMergedEventSignal();
-  const pageToSectionMap = useGetPageToSectionMap();
 
   return (): {
     query: string;
@@ -214,7 +191,7 @@ export function useSearchResults() {
       };
 
     const findController = results.source;
-    const matches = getWordMatches(pageToSectionMap(), findController);
+    const matches = getWordMatches(findController);
     if (matches.length === 0) {
       return null;
     }
@@ -230,7 +207,7 @@ export function useSearchResults() {
 }
 
 export function useJumpToResult() {
-  const getRootViewer = useGetRootViewer();
+  const rootViewer = usePdfViewer().root.instance;
   const mergedEvent = useMergedEventSignal();
 
   return (match: Match) => {
@@ -240,17 +217,20 @@ export function useJumpToResult() {
         matchIndex: match.matchNumber,
       });
     } else {
-      getRootViewer()?.scrollTo({
-        pageNumber: match.page + 1,
-        yPos: match.yPos,
-      });
+      fireAndForget(
+        rootViewer()?.scrollTo({
+          pageNumber: match.page + 1,
+          yPos: match.yPos,
+        }),
+        'pdf-search'
+      );
     }
   };
 }
 
 export function useSearchClose() {
-  const getRootViewer = useGetRootViewer();
+  const rootViewer = usePdfViewer().root.instance;
   return () => {
-    getRootViewer()?.findBarClose();
+    rootViewer()?.findBarClose();
   };
 }

@@ -2,15 +2,19 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { invalidateContacts } from '@core/user/contactService';
-
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
-import { storageServiceClient } from '@service-storage/client';
-import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
+import {
+  newMessageId,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
+import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
 
@@ -18,6 +22,8 @@ type SendContent = {
   content: string;
   mentions: SimpleMention[];
   attachments?: NewAttachment[];
+  /** An entity owner may need to authorize the resolved DM/channel before sending. */
+  beforeSend?: (channelId: string) => Promise<void>;
 };
 
 type NavigationOptions = {
@@ -41,33 +47,32 @@ export function useSendMessageToPeople() {
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const getOrCreatePrivateChannelMutation =
     useGetOrCreatePrivateChannelMutation();
+  const userId = useUserId();
+  const sendMessage = useSendMessageMutation();
 
   async function sendAndNavigateToChannel(
     channelId: string,
     content: string,
     mentions: SimpleMention[],
     attachments: NewAttachment[],
-    navigate?: NavigationOptions
+    navigate?: NavigationOptions,
+    beforeSend?: (channelId: string) => Promise<void>
   ) {
-    const message = await storageServiceClient.postMessage({
-      channel_id: channelId,
-      message: {
-        content,
-        attachments,
-        mentions,
-      },
-    });
+    const senderId = userId();
+    if (!senderId) return;
+    await beforeSend?.(channelId);
+    const messageResponse = await sendMessage
+      .mutateAsync({
+        parent: { type: 'channel', id: channelId },
+        message: { content, attachments, mentions },
+        senderId,
+        optimisticId: newMessageId(),
+      })
+      .catch(() => null);
+    if (!messageResponse) return;
 
-    if (message.isErr()) {
-      toast.failure('Failed to send message to people');
-      console.error('failed to post message to channel', message.error);
-      return;
-    }
-
-    const messageResponse = message.value;
-
-    invalidateListChannels();
-    invalidateContacts();
+    fireAndForget(invalidateListChannels(), 'messages');
+    fireAndForget(invalidateContacts(), 'messages');
 
     const navigateToChannel = async () => {
       replaceSplit({
@@ -113,7 +118,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 
@@ -123,7 +129,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 

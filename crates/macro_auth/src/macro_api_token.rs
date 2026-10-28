@@ -1,8 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
+use uuid::Uuid;
 
-/// The expected JWT access token that is provided back from FusionAuth
+/// A Macro-signed API token with optional agent attribution for SDK messages.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct MacroApiToken {
     /// The expiration time of the token
@@ -17,6 +18,9 @@ pub struct MacroApiToken {
     pub macro_user_id: String,
     /// The organization id for the user if they belong to one
     pub macro_organization_id: Option<i32>,
+    /// Agent responsible for this user-authorized execution, signed by the harness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<Uuid>,
 }
 
 pub struct EncodeMacroApiTokenArgs {
@@ -32,6 +36,8 @@ pub struct EncodeMacroApiTokenArgs {
     pub private_key: String,
     /// The token expiry duration in seconds
     pub expiry_seconds: usize,
+    /// Optional agent attribution; never supplied by an API caller.
+    pub agent_id: Option<Uuid>,
 }
 
 #[tracing::instrument(skip(args))]
@@ -43,6 +49,7 @@ pub fn encode_macro_api_token(args: EncodeMacroApiTokenArgs) -> anyhow::Result<S
 
     let claims = MacroApiToken {
         exp: now + args.expiry_seconds,
+        agent_id: args.agent_id,
         iss: args.issuer.clone(),
         fusion_user_id: args.fusionauth_id.clone(),
         macro_user_id: args.macro_user_id.clone(),

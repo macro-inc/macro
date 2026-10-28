@@ -1,16 +1,27 @@
+import { pollCardHeight } from '@app/features/block-form/core/poll-card-layout';
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import {
-  type PreviewState,
-  useBlockOwner,
-  useMaybeBlockName,
-} from '@core/block';
+import { isInBlock, type PreviewState, useMaybeBlockName } from '@core/block';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
+import { getDisplayName, tryMacroId } from '@core/user';
+import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
+import Minimize from '@icon/system/regular/arrows-in.svg';
+import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import Link from '@icon/system/regular/link.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -22,20 +33,14 @@ import {
   setDocumentCardPreviewComponent,
   unsetDocumentCardPreviewCache,
 } from '@macro-inc/lexical-core';
-import Minimize from '@phosphor/arrows-in.svg';
-import Clipboard from '@phosphor/clipboard.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import DotsThree from '@phosphor/list.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
-import UserIcon from '@phosphor/user.svg';
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
+import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, Dropdown, Layer } from '@ui';
+import { Card, cn, Dropdown, Item } from '@ui';
 import {
   $addUpdateTag,
   $createNodeSelection,
@@ -48,6 +53,7 @@ import {
   createMemo,
   createRoot,
   createSignal,
+  getOwner,
   Match,
   onCleanup,
   runWithOwner,
@@ -58,16 +64,25 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { formatDate } from '../../../../util/date';
-import { TaskPropertiesPreview } from '../../../DocumentPreview';
+import {
+  TaskPropertiesPreview,
+  TaskPropertiesPreviewProvider,
+} from '../../../TaskPropertiesPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { useMarkdownHost } from '../../context/MarkdownHostContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
-import { BlockLink } from '../core/BlockLink';
-import { ChannelMessageThreadCard } from './ChannelMessageThreadCard';
+import { BlockLink, openDocument } from '../core/BlockLink';
+import { DatabaseCard } from './DatabaseCard';
 
 false && floatWithElement;
+
+const ChannelMessageThreadCard = lazyNamed(
+  () => import('./ChannelMessageThreadCard'),
+  'ChannelMessageThreadCard'
+);
 
 const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
   const widthStr = typeof width === 'string' ? width : `${width}px`;
@@ -76,8 +91,31 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
 };
 
 export function DocumentCard(props: DocumentCardDecoratorProps) {
+  if (props.blockName === 'database') return <DatabaseCard {...props} />;
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <Show
+          when={props.blockName === 'form' && pollCardHeight(props.previewData)}
+        >
+          {(height) => (
+            <Card
+              variant="filled"
+              depth={2}
+              class="my-2 overflow-hidden"
+              style={{ height: height() }}
+            >
+              <div
+                role="status"
+                class="flex flex-1 items-center justify-center text-sm text-ink-muted"
+              >
+                Loading poll…
+              </div>
+            </Card>
+          )}
+        </Show>
+      }
+    >
       <DocumentCardInner {...props} />
     </Suspense>
   );
@@ -86,17 +124,29 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
 function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
+  const [editable, setEditable] = createSignal(editor()?.isEditable() ?? false);
+  if (wrapper) {
+    onCleanup(
+      wrapper.editor.registerEditableListener((value) => {
+        setEditable(value);
+      })
+    );
+  }
   const selection = () => wrapper?.selection;
+  const portalMount = isInBlock() ? blockElementSignal.get : () => undefined;
 
-  const currentBlockName = useMaybeBlockName();
+  // Outside the legacy block system the markdown's host names the parent.
+  const currentBlockName = useMarkdownHost() ?? useMaybeBlockName();
 
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const { item, ItemEntityIcon } = useItemPreviewData(() => ({
-    id: props.documentId,
-    type: previewType(),
-  }));
+  const { item, ItemEntityIcon, documentProperties } = useItemPreviewData(
+    () => ({
+      id: props.documentId,
+      type: previewType(),
+    })
+  );
 
   const channelMessageId = () => {
     if (previewType() !== 'channel') return undefined;
@@ -147,23 +197,41 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       showDraftSelectorButton: true,
       canvas: {
         onLocationChange: (location) => {
-          if (!editor()) return;
-          editor()?.update(() => {
-            $addUpdateTag(HISTORY_MERGE_TAG);
-            const node = $getNodeByKey(props.key);
-            if (!$isDocumentCardNode(node)) return;
-            node.setPreviewData({
-              view: location,
-            });
-          });
+          const currentEditor = editor();
+          if (!currentEditor) return;
+          const focused = document.activeElement;
+          const restoreFocus =
+            focused instanceof HTMLElement &&
+            currentEditor.getElementByKey(props.key)?.contains(focused);
+          currentEditor.update(
+            () => {
+              $addUpdateTag(HISTORY_MERGE_TAG);
+              const node = $getNodeByKey(props.key);
+              if (!$isDocumentCardNode(node)) return;
+              node.setPreviewData({
+                view: location,
+              });
+            },
+            {
+              onUpdate: () => {
+                if (
+                  restoreFocus &&
+                  focused instanceof HTMLElement &&
+                  focused.isConnected
+                )
+                  focused.focus({ preventScroll: true });
+              },
+            }
+          );
         },
       },
     };
   });
 
   const previewData = () => {
-    if (props.previewData?.view) {
-      return { view: props.previewData.view };
+    const data = props.previewData;
+    if (data && 'view' in data) {
+      return { view: data.view };
     }
     return {};
   };
@@ -182,22 +250,27 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     NonNullable<DocumentCardDecoratorProps['previewComponent']> | undefined
   >(undefined);
 
-  const blockOwner = useBlockOwner();
+  // Cached previews outlive individual Lexical decorator instances, so attach
+  // them to the editor lifecycle rather than the decorator lifecycle.
+  const previewOwner = wrapper?.owner ?? getOwner();
+  const cardOwner = getOwner();
+  let disposeStaticPreview: (() => void) | undefined;
+  onCleanup(() => disposeStaticPreview?.());
 
   const registerPreviewElement = (
     nodeId: string,
     getElement: () => JSX.Element
   ) =>
-    runWithOwner(blockOwner, () => {
-      let disposeOnBlockUnmount: () => void = () => {};
-      onCleanup(() => disposeOnBlockUnmount());
+    runWithOwner(previewOwner, () => {
+      let disposeOnOwnerCleanup: () => void = () => {};
+      onCleanup(() => disposeOnOwnerCleanup());
 
       return createRoot((dispose) => {
         const element = createMemo(getElement);
         setDocumentCardPreviewComponent(nodeId, element, dispose);
-        disposeOnBlockUnmount = () => unsetDocumentCardPreviewCache(nodeId);
+        disposeOnOwnerCleanup = () => unsetDocumentCardPreviewCache(nodeId);
         return element;
-      }, blockOwner);
+      }, previewOwner);
     });
 
   createEffect(() => {
@@ -213,13 +286,6 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     const shouldCreateBlockPreview = !msgId && isPreviewable();
 
     if (!msgId && !shouldCreateBlockPreview) return;
-
-    const nodeId = editor()?.read(() => {
-      const node = $getNodeByKey(props.key);
-      if (!node) return;
-      return $getId(node);
-    });
-    if (!nodeId) return;
 
     let getElement: () => JSX.Element;
 
@@ -241,13 +307,34 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     } else {
       getElement = () => (
         <div class="p-2">
-          <ChannelMessageThreadCard
-            channelId={props.documentId}
-            messageId={msgId!}
-          />
+          <Suspense>
+            <ChannelMessageThreadCard
+              channelId={props.documentId}
+              messageId={msgId!}
+            />
+          </Suspense>
         </div>
       );
     }
+
+    const currentEditor = editor();
+    if (!currentEditor) {
+      // A static render (a sent message) has no editor to cache previews
+      // on: the card owns its preview and disposes it with itself.
+      const element = createRoot((dispose) => {
+        disposeStaticPreview = dispose;
+        return createMemo(getElement);
+      }, cardOwner);
+      setHasLoadedPreview(true);
+      setPreviewComponent(() => element);
+      return;
+    }
+    const nodeId = currentEditor.read(() => {
+      const node = $getNodeByKey(props.key);
+      if (!node) return;
+      return $getId(node);
+    });
+    if (!nodeId) return;
 
     const noDispose = registerPreviewElement(nodeId, getElement);
 
@@ -274,7 +361,36 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     });
   };
 
-  const handleCopy = () => {
+  const canOpenInChat = () =>
+    currentBlockName !== 'chat' &&
+    ['write', 'pdf', 'md', 'code', 'image', 'canvas'].includes(props.blockName);
+
+  const handleOpenInChat = () => {
+    const preview = item();
+    fireAndForget(
+      openChatWithAgent({
+        type: 'document',
+        id: props.documentId,
+        name: isAccessiblePreviewItem(preview)
+          ? preview.name
+          : props.documentName,
+        fileType: verifyBlockName(props.blockName),
+      }),
+      'document-card'
+    );
+  };
+
+  const isSplitAlreadyOpen = () =>
+    !!globalSplitManager()?.getSplitByContent(
+      verifyBlockName(props.blockName),
+      props.documentId
+    );
+
+  const openInNewSplit = createCallback(() => {
+    openDocument(props.blockName, props.documentId, props.blockParams, true);
+  });
+
+  const handleCopy = async () => {
     try {
       let hostname = window.location.hostname.replace('www.', '').toLowerCase();
       if (hostname === 'localhost') {
@@ -286,10 +402,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         const queryParams = new URLSearchParams(props.blockParams).toString();
         link += `?${queryParams}`;
       }
-      navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(link);
       toast.success('Copied document link to clipboard');
     } catch (e) {
       console.error(e);
+      toast.failure('Could not copy link');
     }
   };
 
@@ -311,8 +428,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     }
   });
 
-  const [_, previewBoxHeight] = stringifyPreviewBox(
-    props.previewBox || DEFAULT_PREVIEW_BOX
+  // A form fits its content (a poll is a few rows); other previews keep a
+  // resizable box.
+  const resizable = () => isPreviewable() && props.blockName !== 'form';
+  const pollHeight = () =>
+    props.blockName === 'form' ? pollCardHeight(props.previewData) : undefined;
+  const boundedPreview = () => resizable() || Boolean(pollHeight());
+
+  const [previewBoxHeight, setPreviewBoxHeight] = createSignal(
+    stringifyPreviewBox(props.previewBox || DEFAULT_PREVIEW_BOX)[1]
   );
 
   const [previewBoxRef, setPreviewBoxRef] = createSignal<HTMLDivElement | null>(
@@ -328,18 +452,21 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     });
   }, 1000);
 
-  // create mutation observer to update preview box
+  // Native resizing changes the inline style. Keep that height in Solid before
+  // selection updates can reapply the old style, then persist it to Lexical.
   createEffect(() => {
     const el = previewBoxRef();
     if (!el) return;
-    const observer = new MutationObserver((_mutations) => {
+    const observer = new MutationObserver(() => {
+      if (!resizable() || el.style.height === previewBoxHeight()) return;
       const { width, height } = el.getBoundingClientRect();
+      setPreviewBoxHeight(el.style.height);
       if (editor()) {
         dispatchInternalLayoutShift(editor()!);
       }
       debouncedUpdatePreviewBox([width, height]);
     });
-    observer.observe(el, { attributes: true });
+    observer.observe(el, { attributes: true, attributeFilter: ['style'] });
     onCleanup(() => {
       observer.disconnect();
     });
@@ -348,125 +475,230 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const DocumentInfo = (props: {
     item: AccessiblePreviewItem;
     blockName: string;
+    blockParams: DocumentCardDecoratorProps['blockParams'];
   }) => {
     return (
-      <div class="p-2">
-        <div class="flex center gap-2 items-center">
-          <div class="shrink-0">
-            <ItemEntityIcon size="sm" />
-          </div>
-          <div class="text-sm font-semibold truncate grow">
-            <BlockLink id={props.item.id} blockOrFileName={props.blockName}>
-              <span class="hover:underline">{props.item.name}</span>
-            </BlockLink>
-          </div>
-          <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
-            <Dropdown.Trigger size="icon-sm" variant="ghost">
-              <DotsThree />
-            </Dropdown.Trigger>
-            <Dropdown.Content mount={blockElementSignal.get()}>
-              <Dropdown.Group>
-                <Dropdown.Item onSelect={convertToMention}>
-                  <Minimize class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">Convert to Inline Mention</span>
-                </Dropdown.Item>
-                <Dropdown.Item onSelect={handleCopy}>
-                  <Clipboard class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">Copy Link</span>
-                </Dropdown.Item>
-              </Dropdown.Group>
-              <Dropdown.Group>
-                <Dropdown.Item onSelect={deleteCard}>
-                  <TrashSimple class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">Delete</span>
-                </Dropdown.Item>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
-        </div>
-        <div
-          class={cn('flex items-center justify-between', {
-            'mt-2': Boolean(props.item.owner) || Boolean(props.item.updatedAt),
-          })}
-        >
-          <Show when={props.item.owner}>
-            {(owner) => (
-              <div class="flex items-center text-xs text-ink-extra-muted">
-                <UserIcon class="size-3 mr-1" />
-                <span class="truncate">{owner().replace('macro|', '')}</span>
-              </div>
-            )}
-          </Show>
-          <Show when={props.item.updatedAt}>
-            {(updatedAt) => (
-              <div class="flex items-center text-xs text-ink-extra-muted pr-1">
-                <ClockIcon class="size-3 mr-1" />
-                <span>{formatDate(updatedAt())}</span>
-              </div>
-            )}
-          </Show>
-        </div>
-      </div>
+      <Card.Header class="shrink-0 py-2.5">
+        <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
+          <Item.Icon class="col-start-1 row-start-1">
+            <Show
+              when={props.blockName === 'task'}
+              fallback={<ItemEntityIcon size="xs" />}
+            >
+              <Suspense
+                fallback={
+                  <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+                }
+              >
+                <TaskPropertiesPreview
+                  taskId={props.item.id}
+                  taskName={props.item.name}
+                  previewProperties={documentProperties()}
+                  mode="status"
+                />
+              </Suspense>
+            </Show>
+          </Item.Icon>
+          <Item.Content class="col-start-2 row-start-1">
+            <Item.Title>
+              <BlockLink
+                id={props.item.id}
+                blockOrFileName={props.blockName}
+                params={props.blockParams}
+              >
+                <span
+                  role="link"
+                  tabIndex={0}
+                  class="wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.click();
+                  }}
+                >
+                  {props.item.name}
+                </span>
+              </BlockLink>
+            </Item.Title>
+            <Show when={props.item.owner || props.item.updatedAt}>
+              <Item.Description class="text-left wrap-anywhere">
+                <Show when={props.item.owner}>
+                  {(owner) =>
+                    getDisplayName(tryMacroId(owner())) ||
+                    owner().replace('macro|', '')
+                  }
+                </Show>
+                <Show when={props.item.owner && props.item.updatedAt}>
+                  {' - '}
+                </Show>
+                <Show when={props.item.updatedAt}>
+                  {(updatedAt) => formatDate(updatedAt())}
+                </Show>
+              </Item.Description>
+            </Show>
+          </Item.Content>
+          <Item.Actions class="col-start-3 row-start-1 h-5">
+            <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
+              <Dropdown.Trigger
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Document card actions"
+              >
+                <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              </Dropdown.Trigger>
+              <Dropdown.Content mount={portalMount()}>
+                <Dropdown.Group>
+                  <Show when={editable()}>
+                    <Dropdown.Item onSelect={convertToMention}>
+                      <Minimize class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">
+                        Convert to Inline Mention
+                      </span>
+                    </Dropdown.Item>
+                  </Show>
+                  <Show when={canOpenInChat()}>
+                    <Dropdown.Item onSelect={handleOpenInChat}>
+                      <Sparkle class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Ask Macro</span>
+                    </Dropdown.Item>
+                  </Show>
+                  <Dropdown.Item onSelect={handleCopy}>
+                    <Link class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Copy Link</span>
+                  </Dropdown.Item>
+                  <Show when={props.blockName === 'task'}>
+                    <Dropdown.Item
+                      onSelect={() =>
+                        fireAndForget(
+                          copyBranchNameToClipboard(props.item.id),
+                          'document-card'
+                        )
+                      }
+                    >
+                      <GitBranch class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Copy Branch Name</span>
+                    </Dropdown.Item>
+                  </Show>
+                  <Show when={!isSplitAlreadyOpen()}>
+                    <Dropdown.Item onSelect={openInNewSplit}>
+                      <ColumnsPlusRight class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Open in New Split</span>
+                    </Dropdown.Item>
+                  </Show>
+                </Dropdown.Group>
+                <Show when={editable()}>
+                  <Dropdown.Group>
+                    <Dropdown.Item onSelect={deleteCard}>
+                      <TrashSimple class="size-4 shrink-0" />
+                      <span class="flex-1 truncate">Delete</span>
+                    </Dropdown.Item>
+                  </Dropdown.Group>
+                </Show>
+              </Dropdown.Content>
+            </Dropdown>
+          </Item.Actions>
+        </Item>
+      </Card.Header>
     );
   };
 
   return (
-    <Layer depth={2}>
-      <div
-        ref={(el) => {
-          setContainerRef(el);
-          setPreviewBoxRef(el);
-        }}
-        contentEditable={false}
-        class={cn(
-          'relative my-2 rounded border border-edge bg-surface no-select-children select-none overflow-hidden flex flex-col',
-          isSelectedAsNode() &&
-            !channelMessageId() &&
-            'bg-active outline-edge outline-4',
-          isPreviewable() && 'resize-y shrink-0 min-h-25'
-        )}
-        style={{
-          height: isPreviewable() ? previewBoxHeight : 'auto',
-        }}
-        onClick={(e) => {
-          if (channelMessageId()) return;
-          e.preventDefault();
-          clickCardHandler();
-        }}
-      >
-        <Switch>
-          <Match when={item().loading}>
-            <div class="flex items-center justify-center p-4 text-ink-muted">
-              <LoadingSpinner class="size-6 animate-spin" />
-            </div>
-          </Match>
-          <Match when={matches(item(), isAccessiblePreviewItem)}>
-            {(item) => (
-              <>
-                {/*<div class="h-2"/>*/}
-                <DocumentInfo item={item()} blockName={props.blockName} />
-                <Show when={props.blockName === 'task'}>
+    <Card
+      variant="filled"
+      depth={2}
+      ref={(el) => {
+        setContainerRef(el);
+        setPreviewBoxRef(el);
+      }}
+      contentEditable={false}
+      class={cn(
+        'my-2 rounded-xl no-select-children select-none overflow-hidden',
+        isSelectedAsNode() &&
+          !channelMessageId() &&
+          'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted',
+        resizable() && 'resize-y shrink-0 min-h-80'
+      )}
+      style={{
+        height: pollHeight() ?? (resizable() ? previewBoxHeight() : 'auto'),
+      }}
+      onClick={(e) => {
+        if (channelMessageId()) return;
+        // Controls and embedded editors own their clicks and native defaults.
+        if (
+          e.target instanceof Element &&
+          e.target.closest(
+            'a, button, input, textarea, select, [role="link"], [role="button"], [role="combobox"], [data-document-card-controls]'
+          )
+        )
+          return;
+        e.preventDefault();
+        clickCardHandler();
+      }}
+    >
+      <Switch>
+        <Match when={item().loading}>
+          <div class="flex flex-1 items-center justify-center p-4 text-ink-muted">
+            <LoadingSpinner class="size-6 animate-spin" />
+          </div>
+        </Match>
+        <Match when={matches(item(), isAccessiblePreviewItem)}>
+          {(item) => (
+            <TaskPropertiesPreviewProvider
+              taskId={props.blockName === 'task' ? item().id : undefined}
+              previewProperties={documentProperties()}
+            >
+              <DocumentInfo
+                item={item()}
+                blockName={props.blockName}
+                blockParams={props.blockParams}
+              />
+              <Show when={props.blockName === 'task'}>
+                <Card.Body
+                  class="shrink-0 pt-2 pl-9 [&>div]:px-0 [&>div]:pb-0"
+                  data-document-card-controls
+                >
                   <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
-                    <TaskPropertiesPreview taskId={item().id} />
+                    <TaskPropertiesPreview
+                      taskId={item().id}
+                      previewProperties={documentProperties()}
+                      mode="details"
+                    />
                   </Suspense>
-                </Show>
-                <Show when={previewComponent()}>
-                  <Show
-                    when={isPreviewable()}
-                    fallback={
-                      <Dynamic component={previewComponent()} {...props} />
-                    }
+                </Card.Body>
+              </Show>
+              <Show when={previewComponent()}>
+                <Card.Body
+                  data-lexical-interactive
+                  class={cn(
+                    'mx-3 mt-2 mb-3 p-0',
+                    boundedPreview() && 'flex min-h-0 flex-1'
+                  )}
+                  data-document-card-controls
+                >
+                  <Card
+                    variant="filled"
+                    offset={1}
+                    class={cn(
+                      'w-full overflow-hidden rounded-lg',
+                      boundedPreview() && 'min-h-0 flex-1'
+                    )}
                   >
-                    <div class="relative grow overflow-y-scroll">
+                    <div
+                      class={cn(
+                        'relative min-w-0',
+                        boundedPreview() && 'min-h-0 flex-1 overflow-y-auto'
+                      )}
+                    >
                       <Dynamic component={previewComponent()} {...props} />
                     </div>
-                  </Show>
-                </Show>
-              </>
-            )}
-          </Match>
-        </Switch>
-      </div>
-    </Layer>
+                  </Card>
+                </Card.Body>
+              </Show>
+            </TaskPropertiesPreviewProvider>
+          )}
+        </Match>
+      </Switch>
+    </Card>
   );
 }

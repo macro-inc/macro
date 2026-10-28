@@ -9,6 +9,14 @@ const config: KnipConfig = {
     // block reachable without hiding dead block-local files from Knip.
     'src/features/block-*/definition.ts',
     'src/lib/workers/**/*.{js,ts,tsx}',
+    // Feature browser harnesses load from their own HTML and Playwright specs.
+    'src/features/*/browser-test/*.{ts,tsx}',
+    'src/lib/i18n/browser-test/*.{ts,tsx}',
+    'src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/*.tsx',
+    'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/browser-test/*.{ts,tsx}',
+    'src/features/billing-lab/entry.tsx',
+    // Native test runners are invoked by scripts, not the application graph.
+    'tests/native/{runner,links-runner,notifications-runner}.ts',
   ],
   project: ['src/**/*.{js,ts,tsx}'],
 
@@ -17,6 +25,12 @@ const config: KnipConfig = {
     '**/generated/**',
     'scripts/**',
     '../../packages/loro-mirror/**',
+    '../../packages/sdk/**',
+    // Standalone browser harnesses are loaded from HTML and Playwright/Vite
+    // configs rather than imported by the application graph.
+    'src/lib/graphql-cache/worker/browser-test/**',
+    // Compile-only API assertions are checked by tsc, not imported at runtime.
+    '**/*.typecheck.ts',
     '**/vite.config.ts',
     '**/vite-ci.config.ts',
     '**/vite.base.ts',
@@ -33,7 +47,6 @@ const config: KnipConfig = {
   ignoreDependencies: [
     '@fontsource-variable/inter',
     '@fontsource-variable/roboto-mono',
-    'tauri-plugin-safe-area-insets',
     '@inkibra/tauri-plugins',
     '@types/facebook-pixel',
     '@types/gtag.js',
@@ -51,9 +64,13 @@ const config: KnipConfig = {
     '@vitest/ui',
     '@datadog/datadog-ci',
     'libheif-js',
+    '@tailwindcss/vite',
+    'bebop',
+    // TypeScript 7's compiler, run by path from `type-check`.
+    'typescript-native',
   ],
 
-  ignoreWorkspaces: ['../../packages/loro-mirror'],
+  ignoreWorkspaces: ['../../packages/loro-mirror', '../../packages/sdk'],
 };
 
 export default config;

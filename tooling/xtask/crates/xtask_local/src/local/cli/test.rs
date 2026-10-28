@@ -26,6 +26,68 @@ fn local_e2e_accepts_suite_and_trailing_test_arguments() {
 }
 
 #[test]
+fn stack_update_accepts_binaries_dir_with_build_aux_services() {
+    let cli = Cli::try_parse_from([
+        "cargo-x",
+        "stack",
+        "update",
+        "--binaries-dir",
+        "/tmp/bins",
+        "--build-aux-services",
+    ])
+    .unwrap();
+    let Cmd::Stack(StackCmd::Update(args)) = cli.command else {
+        panic!("expected stack update");
+    };
+    assert_eq!(
+        args.binaries_dir.as_deref(),
+        Some(std::path::Path::new("/tmp/bins"))
+    );
+    assert!(args.build_aux_services);
+}
+
+#[test]
+fn run_local_defaults_cf_tunnels_off() {
+    let cli = Cli::try_parse_from(["cargo-x", "run-local"]).unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("expected run-local command");
+    };
+    assert!(!args.with_cf_tunnel);
+}
+
+#[test]
+fn run_local_accepts_with_cf_tunnel() {
+    let cli = Cli::try_parse_from(["cargo-x", "run-local", "--with-cf-tunnel"]).unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("expected run-local command");
+    };
+    assert!(args.with_cf_tunnel);
+}
+
+#[test]
+fn stack_has_no_snapshot_verb() {
+    match Cli::try_parse_from(["cargo-x", "stack", "snapshot"]) {
+        Err(err) => assert_eq!(err.kind(), clap::error::ErrorKind::InvalidSubcommand),
+        Ok(_) => panic!("stack snapshot must not parse"),
+    }
+}
+
+#[test]
+fn run_local_and_stack_up_accept_no_snapshot() {
+    let cli = Cli::try_parse_from(["cargo-x", "run-local", "--no-snapshot"]).unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("expected run-local command");
+    };
+    assert!(args.no_snapshot);
+
+    let cli = Cli::try_parse_from(["cargo-x", "stack", "up", "--no-snapshot"]).unwrap();
+    let Cmd::Stack(StackCmd::Up(args)) = cli.command else {
+        panic!("expected stack up");
+    };
+    assert!(args.run.no_snapshot);
+}
+
+#[test]
 fn seed_scenario_accepts_instance_and_trailing_scenario_arguments() {
     let cli = Cli::try_parse_from([
         "cargo-x",

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_try_advisory_xact_lock(hashtextextended($1, 45)) AS \"claimed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claimed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "09ca8d4cc344e95de45c49ed787d28f81fa820ca18bac401bb1350e1ca40b7c3"
+}

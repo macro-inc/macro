@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.message_id,d.state,d.revision,m.provider_version,d.error_code,d.checkpoint->>'stage' AS stage FROM email_mailbox_drafts d JOIN email_messages m ON m.id = d.message_id WHERE d.message_id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "error_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "stage",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "8d0bd4572d8345f3e249a6415fc36317c09c2b40ff943849d8201293a13697d9"
+}

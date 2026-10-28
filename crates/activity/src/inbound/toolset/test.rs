@@ -70,12 +70,29 @@ impl ActivityReads for FakeReads {
         })
     }
 
+    async fn teammate_feed(
+        &self,
+        _viewer_id: &str,
+        _cursor: Option<(DateTime<Utc>, Uuid)>,
+        _limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, Self::Err> {
+        unreachable!()
+    }
+
     async fn entity_activity(
         &self,
         _keys: &[(crate::EntityType, String)],
         _per_entity_limit: u32,
     ) -> Result<EntityActivityMap, Self::Err> {
         Ok(HashMap::new())
+    }
+
+    async fn subject_overview(
+        &self,
+        _subject_id: &str,
+        window: crate::domain::overview::ActivityWindow,
+    ) -> Result<crate::domain::overview::ActivityOverview, Self::Err> {
+        Ok(crate::domain::overview::ActivityOverview::empty(window))
     }
 
     async fn subject_activity_range(

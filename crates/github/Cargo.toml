@@ -12,11 +12,13 @@ axum = [
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:utoipa",
+  "github_pull_requests/schema",
 ]
 default = ["axum", "inbound", "link", "outbound", "ports", "sync"]
 inbound = ["axum", "ports"]
-link = ["dep:entity_access", "dep:foreign_entity", "ports"]
+link = ["dep:entity_access", "github_pull_requests/ports", "ports"]
 outbound = [
+  "dep:connection_gateway_client",
   "dep:fusionauth",
   "dep:redis",
   "dep:reqwest",
@@ -34,13 +36,17 @@ sync = [
   "dep:model_notifications",
   "dep:notification",
   "dep:reqwest",
+  "github_pull_requests/ports",
   "ports",
 ]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+cowlike = { path = "../cowlike" }
 documents = { path = "../documents", default-features = false, features = [
   "ports",
 ], optional = true }
@@ -51,9 +57,11 @@ entity_access = { path = "../entity_access", default-features = false, features 
 foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ], optional = true }
+github_pull_requests = { path = "../github_pull_requests", default-features = false }
 hex = { workspace = true }
 hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
+lru = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
@@ -69,7 +77,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
-subtle = "2.6.1"
+subtle = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true, optional = true }
@@ -89,11 +97,20 @@ utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+axum = { workspace = true }
+wiremock = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = [
+  "ports",
+] }
+github_pull_requests = { path = "../github_pull_requests", default-features = false, features = [
+  "service",
+] }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 model = { path = "../model" }
+model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }

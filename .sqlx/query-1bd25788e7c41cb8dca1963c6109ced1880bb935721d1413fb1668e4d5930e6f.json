@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE collab_surfaces\n            SET deleted_at = now(), updated_at = now()\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1bd25788e7c41cb8dca1963c6109ced1880bb935721d1413fb1668e4d5930e6f"
+}

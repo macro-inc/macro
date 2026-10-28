@@ -1,0 +1,20 @@
+diff --git a/tls/gnutls/gtlsbackend-gnutls.c b/tls/gnutls/gtlsbackend-gnutls.c
+--- a/tls/gnutls/gtlsbackend-gnutls.c
++++ b/tls/gnutls/gtlsbackend-gnutls.c
+@@ -135,7 +135,15 @@ g_tls_backend_gnutls_get_default_database (GTlsBackend *backend)
+     }
+   else
+     {
+-      result = G_TLS_DATABASE (g_tls_database_gnutls_new (&error));
++      const char *ca_file = g_getenv ("SSL_CERT_FILE");
++      /* The AppImage launcher discovers the host's CA bundle. An explicit
++       * invalid bundle must fail closed, not fall back to other trust roots.
++       */
++      if (ca_file && *ca_file)
++        result = g_initable_new (G_TYPE_TLS_FILE_DATABASE_GNUTLS,
++                                 NULL, &error, "anchors", ca_file, NULL);
++      else
++        result = G_TLS_DATABASE (g_tls_database_gnutls_new (&error));
+       if (error)
+         {
+           g_warning ("Failed to load TLS database: %s", error->message);

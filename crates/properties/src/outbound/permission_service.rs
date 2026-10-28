@@ -9,6 +9,7 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::EntityType as StorageEntityType;
 use sqlx::{Pool, Postgres};
@@ -95,18 +96,8 @@ fn caller_auth(user_id: Option<&MacroUserIdStr<'_>>) -> EntityAccessAuth {
 }
 
 fn storage_entity_type(entity_type: AccessEntityType) -> anyhow::Result<StorageEntityType> {
-    Ok(match entity_type {
-        AccessEntityType::CalendarEvent => StorageEntityType::CalendarEvent,
-        AccessEntityType::Document => StorageEntityType::Document,
-        AccessEntityType::Call => StorageEntityType::CallRecord,
-        AccessEntityType::Chat => StorageEntityType::Chat,
-        AccessEntityType::Project => StorageEntityType::Project,
-        AccessEntityType::EmailThread => StorageEntityType::Thread,
-        AccessEntityType::Channel => StorageEntityType::Channel,
-        AccessEntityType::CrmCompany => StorageEntityType::Company,
-        AccessEntityType::User => StorageEntityType::User,
-        _ => anyhow::bail!("Unsupported property target type"),
-    })
+    crate::domain::model::storage_entity_type(entity_type)
+        .ok_or_else(|| anyhow::anyhow!("Unsupported property target type"))
 }
 
 fn access_receipt<T: entity_access::domain::models::RequiredPermission>(
@@ -139,6 +130,7 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
         // entities are only visible to their owner.
         match entity_type {
             AccessEntityType::Call
+            | AccessEntityType::Initiative
             | AccessEntityType::Channel
             | AccessEntityType::CrmCompany
             | AccessEntityType::User
@@ -150,9 +142,10 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
                     storage_entity_type(entity_type)?,
                 )
                 .await?;
+                let owner = Owner::from_principal_str(&owner)?;
 
                 // If you are the owner fast return
-                if user_id.is_some_and(|u| owner == u.as_ref()) {
+                if user_id.is_some_and(|u| owner.is_user(u)) {
                     return Ok(access_receipt(
                         caller_auth(user_id),
                         entity_id,

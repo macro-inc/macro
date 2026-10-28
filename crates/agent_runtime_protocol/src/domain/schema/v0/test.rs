@@ -98,7 +98,10 @@ fn acp_message_contains_an_acp_raw_jsonrpc_message() {
     );
 
     let ToRuntimeMessage::Acp(AcpMessage(parsed)) =
-        serde_json::from_value::<ToRuntimeMessage>(message).unwrap();
+        serde_json::from_value::<ToRuntimeMessage>(message).unwrap()
+    else {
+        panic!("expected ACP message")
+    };
     assert_eq!(
         serde_json::to_value(parsed).unwrap(),
         json!({
@@ -107,6 +110,31 @@ fn acp_message_contains_an_acp_raw_jsonrpc_message() {
             "method": "initialize",
             "params": {
                 "protocolVersion": 1,
+            },
+        })
+    );
+}
+
+#[test]
+fn model_probe_messages_carry_no_session_id_and_no_correlation() {
+    let request = ToRuntimeMessage::ModelProbeRequest;
+    let response = ToServerMessage::ModelProbeResponse {
+        result: ModelProbeResult::Available {
+            config_options: Vec::new(),
+        },
+    };
+
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        json!({ "type": "modelProbeRequest" })
+    );
+    assert_eq!(
+        serde_json::to_value(response).unwrap(),
+        json!({
+            "type": "modelProbeResponse",
+            "result": {
+                "status": "available",
+                "configOptions": [],
             },
         })
     );

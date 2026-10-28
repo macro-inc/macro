@@ -1,0 +1,94 @@
+event: status
+data: {"runId":"run-3f18821e-16c5-4408-a9a1-222812408ac7","status":"RUNNING"}
+
+id: 1787331048018-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787331048029-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-3f18821e-16c5-4408-a9a1-222812408ac7","text":"What is the capital of France? Answer directly in one word without using any tools and without reading any files."}}
+
+id: 1787331051486-0
+event: thinking
+data: {"text":"The user wants the capital"}
+
+id: 1787331051486-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"The user wants the capital"}
+
+id: 1787331051489-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331051492-0
+event: thinking
+data: {"text":" of France in one word."}
+
+id: 1787331051492-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" of France in one word."}
+
+id: 1787331051494-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331051496-0
+event: thinking
+data: {"text":"\n\nThe capital of France"}
+
+id: 1787331051496-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nThe capital of France"}
+
+id: 1787331051499-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331051501-0
+event: thinking
+data: {"text":" is Paris."}
+
+id: 1787331051501-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" is Paris."}
+
+id: 1787331051504-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331051507-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":22}
+
+id: 1787331051512-0
+event: assistant
+data: {"text":"Paris"}
+
+id: 1787331051512-0
+event: interaction_update
+data: {"type":"text-delta","text":"Paris"}
+
+id: 1787331051515-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331051672-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787331051674-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":3656}
+
+event: status
+data: {"runId":"run-3f18821e-16c5-4408-a9a1-222812408ac7","status":"FINISHED"}
+
+id: 1787331057248-0
+event: result
+data: {"runId":"run-3f18821e-16c5-4408-a9a1-222812408ac7","status":"FINISHED","text":"Paris","durationMs":9560,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/capital-of-france-e2db"}]}}
+
+id: 1787331057248-0
+event: done
+data: {}
+

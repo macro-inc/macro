@@ -1,6 +1,6 @@
 use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
 use document_sub_type::DocumentSubType;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
@@ -50,13 +50,6 @@ pub async fn unexpanded_soup_by_ids<'a>(
             UNION ALL
             SELECT $1
         ),
-        UserAccessibleItems AS (
-            SELECT DISTINCT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM entity_access ea
-            WHERE ea.source_id = ANY(SELECT source_id FROM user_source_ids)
-        ),
         Combined AS (
             SELECT
                 'document' as "item_type!",
@@ -72,6 +65,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 d."updatedAt"::timestamptz as "updated_at!",
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
+                NULL::text as "model",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
                 uh."updatedAt"::timestamptz as "viewed_at",
@@ -92,9 +86,6 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 AND ep_status.entity_id = d.id
                 AND ep_status.entity_type = 'TASK'
                 AND ep_status.property_definition_id = $6
-            INNER JOIN UserAccessibleItems uai
-                ON uai.item_id = d.id
-                AND uai.item_type = 'document'
             LEFT JOIN "UserHistory" uh
                 ON uh."itemId" = d.id
                 AND uh."itemType" = 'document'
@@ -115,6 +106,12 @@ pub async fn unexpanded_soup_by_ids<'a>(
             ) di ON true
             WHERE d."deletedAt" IS NULL
             AND d.id = ANY($2::text[])
+            AND EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id::text = d.id
+                    AND ea.entity_type = 'document'
+                    AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+            )
 
             UNION ALL
 
@@ -132,6 +129,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 c."updatedAt"::timestamptz as "updated_at!",
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
+                c.model as "model",
                 NULL as "sha",
                 NULL as "sub_type",
                 uh."updatedAt"::timestamptz as "viewed_at",
@@ -139,15 +137,18 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 NULL as "is_completed",
                 c."deletedAt"::timestamptz as "deleted_at"
             FROM "Chat" c
-            INNER JOIN UserAccessibleItems uai
-                ON uai.item_id = c.id
-                AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh
                 ON uh."itemId" = c.id
                 AND uh."itemType" = 'chat'
                 AND uh."userId" = $1
             WHERE c."deletedAt" IS NULL
             AND c.id = ANY($3::text[])
+            AND EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id::text = c.id
+                    AND ea.entity_type = 'chat'
+                    AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+            )
 
             UNION ALL
 
@@ -165,6 +166,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 p."updatedAt"::timestamptz as "updated_at!",
                 p."parentId" as "project_id",
                 NULL as "is_persistent",
+                NULL::text as "model",
                 NULL as "sha",
                 NULL as "sub_type",
                 uh."updatedAt"::timestamptz as "viewed_at",
@@ -172,15 +174,18 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 NULL as "is_completed",
                 p."deletedAt"::timestamptz as "deleted_at"
             FROM "Project" p
-            INNER JOIN UserAccessibleItems uai
-                ON uai.item_id = p.id
-                AND uai.item_type = 'project'
             LEFT JOIN "UserHistory" uh
                 ON uh."itemId" = p.id
                 AND uh."itemType" = 'project'
                 AND uh."userId" = $1
             WHERE p."deletedAt" IS NULL
             AND p.id = ANY($4::text[])
+            AND EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id::text = p.id
+                    AND ea.entity_type = 'project'
+                    AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+            )
         )
         SELECT * 
         FROM Combined

@@ -1,0 +1,2838 @@
+use std::sync::Arc;
+
+use agent::StreamPart;
+use agent_client_protocol::schema::ProtocolVersion;
+use agent_client_protocol::schema::v1::{
+    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ResourceLink,
+    SessionConfigKind, SessionConfigOptionCategory, SessionConfigSelectOptions,
+    SessionConfigValueId, SessionNotification, SetSessionConfigOptionRequest, TextContent,
+};
+use agent_client_protocol::{Client, ConnectionTo};
+use ai_billing::domain::{
+    AiAdmissionError, AiAdmissionService, DenyReason, DisabledAiAdmissionService,
+};
+use rig_agent::agent::StreamingError;
+use rig_agent::completion::PromptError;
+
+use super::*;
+use crate::domain::engine::TurnEngine;
+use crate::testing::{HangingEngine, ScriptedEngine, TestAdmission};
+use macro_user_id::user_id::MacroUserIdStr;
+
+struct Harness {
+    notifications: std::sync::Mutex<Vec<SessionNotification>>,
+    summaries:
+        std::sync::Mutex<Vec<agent_runtime_protocol::domain::context::ContextSummaryNotification>>,
+}
+
+/// What a scripted client saw while it ran a scenario.
+struct Recorded<Out> {
+    summaries: Vec<agent_runtime_protocol::domain::context::ContextSummaryNotification>,
+    out: Out,
+}
+
+struct CancelledEngine;
+
+impl TurnEngine for CancelledEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let cancellation = PromptError::PromptCancelled {
+                chat_history: Vec::new(),
+                reason: "user cancelled".to_owned(),
+            };
+            let error =
+                agent::AgentError::Streaming(StreamingError::Prompt(Box::new(cancellation)));
+            let _ = parts.send(Err(error)).await;
+        });
+        receiver
+    }
+}
+
+/// Drive the served agent as a scripted ACP client: initialize, open a
+/// session, then hand the connection to `scenario`.
+async fn with_agent<Engine, Out>(
+    engine: Arc<Engine>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out)
+where
+    Engine: TurnEngine,
+{
+    with_admission(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, _| scenario(connection, session).await,
+    )
+    .await
+}
+
+async fn with_admission<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
+    with_model_access(
+        engine,
+        admission,
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        scenario,
+    )
+    .await
+}
+
+async fn with_model_access<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    model_access: Arc<dyn InMemModelAccess>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
+    let (notifications, recorded) = record(
+        engine,
+        admission,
+        model_access,
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
+        scenario,
+    )
+    .await;
+    let (config_options, out) = recorded.out;
+    (notifications, config_options, out)
+}
+
+/// Like [`with_admission`] with admission off, keeping every summary the
+/// client was told of.
+async fn with_summaries<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> Recorded<Out> {
+    let (_, recorded) = record(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
+        scenario,
+    )
+    .await;
+    Recorded {
+        summaries: recorded.summaries,
+        out: recorded.out.1,
+    }
+}
+
+async fn record<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    model_access: Arc<dyn InMemModelAccess>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (
+    Vec<SessionNotification>,
+    Recorded<(Vec<SessionConfigOption>, Out)>,
+) {
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine,
+        admission,
+        agent_keys,
+        model_access,
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        mcp: Arc::new(crate::domain::mcp::NoMcpServers),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+        enable_dev_commands: true,
+    });
+
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(Arc::clone(&state), agent_channel));
+
+    let harness = Arc::new(Harness {
+        notifications: std::sync::Mutex::new(Vec::new()),
+        summaries: std::sync::Mutex::new(Vec::new()),
+    });
+    let observed = Arc::clone(&harness);
+    let summarized = Arc::clone(&harness);
+    let out = Client
+        .builder()
+        .on_receive_notification(
+            async move |notification: SessionNotification, _connection| {
+                observed
+                    .notifications
+                    .lock()
+                    .expect("notifications lock")
+                    .push(notification);
+                Ok(())
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .on_receive_notification(
+            async move |summary: agent_runtime_protocol::domain::context::ContextSummaryNotification, _connection| {
+                summarized
+                    .summaries
+                    .lock()
+                    .expect("summaries lock")
+                    .push(summary);
+                Ok(())
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                let initialized = connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                assert!(
+                    initialized
+                        .agent_capabilities
+                        .session_capabilities
+                        .resume
+                        .is_some(),
+                    "the agent must declare resume support or reattachment dies"
+                );
+                assert_eq!(
+                    initialized
+                        .agent_info
+                        .as_ref()
+                        .map(|info| info.name.as_str()),
+                    Some(AGENT_NAME),
+                    "the fold recognizes this harness by its announced name"
+                );
+                let session = connection
+                    .send_request(NewSessionRequest::new("/"))
+                    .block_task()
+                    .await?;
+                let out = scenario(connection, session.session_id, state).await;
+                Ok((session.config_options, out))
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    let notifications = harness
+        .notifications
+        .lock()
+        .expect("notifications lock")
+        .clone();
+    let summaries = harness.summaries.lock().expect("summaries lock").clone();
+    (
+        notifications,
+        Recorded {
+            summaries,
+            out: (out.0.unwrap_or_default(), out.1),
+        },
+    )
+}
+
+fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
+    PromptRequest::new(
+        session.clone(),
+        vec![ContentBlock::Text(TextContent::new(text))],
+    )
+}
+
+#[tokio::test]
+async fn direct_acp_denials_preserve_history_and_allow_retry() {
+    for failure in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "reply".into(),
+        )]));
+        let admission = Arc::new(TestAdmission::new(Ok(())));
+        with_admission(
+            engine.clone(),
+            admission.clone(),
+            async |connection, session, state| {
+                connection
+                    .send_request(text_prompt(&session, "first"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                *admission.result.lock().unwrap() = Err(failure);
+                let error = connection
+                    .send_request(text_prompt(&session, "denied"))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+                let error = serde_json::to_value(error).unwrap();
+                assert_eq!(error["message"], failure.to_string());
+                assert_eq!(error["data"]["code"], failure.code());
+                assert_eq!(error["data"]["retryable"], failure.is_retryable());
+                assert_eq!(engine.requests().len(), 1);
+                assert_eq!(state.store.get(&state.session_id).unwrap().history.len(), 2);
+                assert!(
+                    state
+                        .active_cancel
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .all(CancellationToken::is_cancelled)
+                );
+
+                // Loading and deterministic configuration still work with exhausted quota.
+                connection
+                    .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                connection
+                    .send_request(SetSessionConfigOptionRequest::new(
+                        session.clone(),
+                        MODEL_CONFIG_ID,
+                        SessionConfigValueId::new("other-model"),
+                    ))
+                    .block_task()
+                    .await
+                    .unwrap();
+                assert_eq!(admission.calls.lock().unwrap().len(), 2);
+                *admission.result.lock().unwrap() = Ok(());
+                connection
+                    .send_request(text_prompt(&session, "retry"))
+                    .block_task()
+                    .await
+                    .unwrap();
+            },
+        )
+        .await;
+        assert_eq!(engine.requests()[1].messages, ["first", "reply", "retry"]);
+        assert_eq!(engine.requests()[1].model, "other-model");
+        assert!(
+            admission
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(user, feature)| user == "macro|owner@macro.com"
+                    && *feature == ai_usage::AiFeature::AgentSession)
+        );
+    }
+}
+
+#[tokio::test]
+async fn deterministic_commands_skip_admission_but_provider_commands_do_not() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, _| {
+            connection
+                .send_request(text_prompt(&session, "/ask choose | a | b"))
+                .block_task()
+                .await
+                .unwrap();
+            assert!(admission.calls.lock().unwrap().is_empty());
+            // Any other command text, `/compact` included, is a message for
+            // the provider, and is gated like one.
+            for command in ["/compact", "/develop something"] {
+                connection
+                    .send_request(text_prompt(&session, command))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+            }
+            assert_eq!(admission.calls.lock().unwrap().len(), 2);
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn queued_turns_check_admission_only_when_they_can_execute() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Ok(())));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            assert!(admission.calls.lock().unwrap().is_empty());
+            *admission.result.lock().unwrap() = Err(AiAdmissionError::Unavailable);
+            drop(lock);
+            prompt.block_task().await.unwrap_err();
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn cancelling_a_queued_turn_skips_admission_and_engine() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let _lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "cancel queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+    assert!(admission.calls.lock().unwrap().is_empty());
+}
+
+struct WaitingAdmission(tokio::sync::Notify);
+
+impl AiAdmissionService for WaitingAdmission {
+    fn admit<'a>(
+        &'a self,
+        _: &'a MacroUserIdStr<'_>,
+        _: ai_usage::AiFeature,
+    ) -> ai_billing::domain::AdmissionFuture<'a> {
+        Box::pin(async move {
+            self.0.notify_one();
+            std::future::pending().await
+        })
+    }
+}
+
+#[tokio::test]
+async fn cancel_during_billing_does_not_start_engine_or_write_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(WaitingAdmission(tokio::sync::Notify::new()));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let prompt = connection.send_request(text_prompt(&session, "cancel during admission"));
+            tokio::time::timeout(Duration::from_secs(5), admission.0.notified())
+                .await
+                .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+            assert!(
+                state
+                    .active_cancel
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(CancellationToken::is_cancelled)
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+/// An agent with its own key for `provider`, or none.
+struct OneAgentKey(Option<agent_api_keys::domain::ModelProvider>);
+
+#[async_trait::async_trait]
+impl agent_api_keys::domain::AgentKeys for OneAgentKey {
+    async fn usable_provider(
+        &self,
+        _bot_id: macro_uuid::Uuid,
+        _user: &MacroUserIdStr<'_>,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::ModelProvider>> {
+        Ok(self.0)
+    }
+
+    async fn usable_key(
+        &self,
+        bot_id: macro_uuid::Uuid,
+        _user: &MacroUserIdStr<'_>,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::UsableAgentKey>> {
+        Ok(self
+            .0
+            .map(|provider| agent_api_keys::domain::UsableAgentKey {
+                bot_id,
+                key: agent_api_keys::domain::ProviderApiKey::parse(provider, "sk-ant-api03-abc")
+                    .expect("valid key"),
+            }))
+    }
+}
+
+fn be_agent(state: &AgentState, bot: bot_id::BotId) {
+    state
+        .store
+        .get_mut(&state.session_id)
+        .expect("session")
+        .identity = Some(crate::domain::engine::AgentIdentity {
+        bot,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    });
+}
+
+#[tokio::test]
+async fn an_agent_with_its_own_key_runs_turns_on_it_without_spending_the_allowance() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "reply".into(),
+    )]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Denied(
+        DenyReason::AllowanceExhausted,
+    ))));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    record(
+        engine.clone(),
+        admission.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            be_agent(&state, bot);
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .expect("the turn runs on the agent's key");
+        },
+    )
+    .await;
+
+    assert_eq!(engine.requests()[0].agent_key, Some(bot.as_uuid()));
+    assert!(
+        admission.calls.lock().unwrap().is_empty(),
+        "the owner's allowance is never asked"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_with_a_key_offers_only_its_providers_models() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let (_, recorded) = record(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        // A free plan alone would offer only the free model.
+        Arc::new(crate::testing::TestModelAccess::new(
+            crate::domain::model_access::ModelAccess::Free,
+        )),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            // Attach seeds the agent and its model before `session/new`; this
+            // harness opens the session first, so put them back.
+            be_agent(&state, bot);
+            use_model(&state, "anthropic/claude-sonnet-5-5");
+            let resumed = connection
+                .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                .block_task()
+                .await
+                .expect("resumed");
+            let other = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    SessionConfigValueId::new("other-model"),
+                ))
+                .block_task()
+                .await;
+            (resumed.config_options.unwrap_or_default(), other.is_err())
+        },
+    )
+    .await;
+    let (options, other_refused) = recorded.out.1;
+
+    let selection = agent_fold::domain::model_selection::model_selection(&options)
+        .expect("resume should advertise a model select");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
+    assert_eq!(
+        selection
+            .options
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["anthropic/claude-sonnet-5-5"]
+    );
+    assert!(other_refused, "another provider's model cannot be picked");
+}
+
+#[tokio::test]
+async fn new_session_advertises_the_engine_supported_models() {
+    let (_notifications, config_options, ()) =
+        with_agent(Arc::new(ScriptedEngine::new(vec![])), async |_, _| {}).await;
+
+    let selection = agent_fold::domain::model_selection::model_selection(&config_options)
+        .expect("session/new should advertise a model select");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
+    assert_eq!(
+        selection
+            .options
+            .iter()
+            .map(|model| (model.id.as_str(), model.name.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
+            ("other-model", "other-model"),
+            (chat::domain::models::FREE_MODEL, "Gemini 3.8 Flash")
+        ]
+    );
+
+    let effort = config_options
+        .iter()
+        .find(|option| option.id.to_string() == REASONING_EFFORT_CONFIG_ID)
+        .expect("session/new should advertise reasoning effort");
+    assert_eq!(
+        effort.category,
+        Some(SessionConfigOptionCategory::ThoughtLevel)
+    );
+    let SessionConfigKind::Select(effort) = &effort.kind else {
+        panic!("reasoning effort should be a select");
+    };
+    assert_eq!(effort.current_value.to_string(), "default");
+    let SessionConfigSelectOptions::Ungrouped(options) = &effort.options else {
+        panic!("reasoning effort should be ungrouped");
+    };
+    assert_eq!(
+        options
+            .iter()
+            .map(|option| option.value.to_string())
+            .collect::<Vec<_>>(),
+        ["default", "low", "medium", "high", "xhigh", "max"]
+    );
+}
+
+#[tokio::test]
+async fn changing_reasoning_effort_applies_to_the_next_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (_notifications, _config_options, ()) =
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    SessionConfigValueId::new("low"),
+                ))
+                .block_task()
+                .await
+                .expect("the effort selection should be accepted");
+            connection
+                .send_request(text_prompt(&session, "be quick"))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        })
+        .await;
+
+    assert_eq!(
+        engine.requests()[0].reasoning_effort,
+        agent::ReasoningEffort::Low
+    );
+}
+
+#[tokio::test]
+async fn new_session_advertises_its_slash_commands() {
+    let (notifications, _config_options, ()) = with_agent(
+        Arc::new(ScriptedEngine::new(vec![])),
+        async |connection, session| {
+            // A round trip so the advertisement, sent right after the
+            // session/new response, has landed before the client is torn down.
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        },
+    )
+    .await;
+
+    let advertised = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::AvailableCommandsUpdate(update) => Some(update),
+            _ => None,
+        })
+        .expect("session/new is followed by an available_commands_update");
+    let names = advertised
+        .available_commands
+        .iter()
+        .map(|command| command.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec!["ask"]);
+    assert!(
+        advertised.available_commands[0].input.is_some(),
+        "/ask carries a hint for its question"
+    );
+}
+
+#[tokio::test]
+async fn a_prompt_streams_updates_and_ends_the_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::Thinking("hmm".into()),
+        StreamPart::Content("Hello ".into()),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            json: serde_json::json!({"query": "roadmap"}),
+            mcp: None,
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-1".into(),
+            json: serde_json::json!({"hits": 1}),
+            name: "NameSearch".into(),
+        }),
+        StreamPart::Content("world".into()),
+    ]));
+
+    let (notifications, _config_options, response) =
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "find the roadmap"))
+                .block_task()
+                .await
+                .expect("the prompt should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    let kinds: Vec<&'static str> = notifications
+        .iter()
+        .map(|notification| match &notification.update {
+            SessionUpdate::AgentThoughtChunk(_) => "thought",
+            SessionUpdate::AgentMessageChunk(_) => "message",
+            SessionUpdate::ToolCall(_) => "tool_call",
+            SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+            SessionUpdate::AvailableCommandsUpdate(_) => "commands",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "commands",
+            "thought",
+            "message",
+            "tool_call",
+            "tool_call_update",
+            "message"
+        ]
+    );
+}
+
+/// Every tool call is stamped with the tool's name under `_meta.macro`, the
+/// way Claude Code stamps `_meta.claudeCode.toolName`: an MCP tool as
+/// `mcp__<server>__<tool>`, a delegation flagged `subagent`.
+#[tokio::test]
+async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "ReadContent".into(),
+            json: serde_json::json!({"documentId": "d"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-2".into(),
+            name: "Subagent".into(),
+            json: serde_json::json!({"task": "count the beans"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-3".into(),
+            name: "slack__search".into(),
+            json: serde_json::json!({"query": "standup"}),
+            mcp: Some(agent::McpInfo {
+                service: "slack".into(),
+                tool_name: "search".into(),
+                display_name: Some("Search Slack".into()),
+            }),
+        }),
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "go"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    let metas: Vec<serde_json::Value> = notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(serde_json::Value::Object(
+                call.meta.clone().expect("meta is stamped"),
+            )),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        metas,
+        vec![
+            serde_json::json!({"macro": {"toolName": "ReadContent"}}),
+            serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
+            serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn turns_accumulate_history_and_send_the_model() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        for prompt in ["first", "second"] {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        }
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].model, "anthropic/claude-sonnet-5-5");
+    assert_eq!(requests[0].messages, vec!["first".to_owned()]);
+    // The second turn carries the first turn's prompt and reply.
+    assert_eq!(
+        requests[1].messages,
+        vec!["first".to_owned(), "ok".to_owned(), "second".to_owned()]
+    );
+}
+
+#[tokio::test]
+async fn attached_files_reach_the_model_and_stay_in_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "blue".into(),
+    )]));
+    let image = "https://static.example/file/11111111-1111-4111-8111-111111111111";
+    let notes = "https://static.example/file/22222222-2222-4222-8222-222222222222";
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        let prompt = PromptRequest::new(
+            session.clone(),
+            vec![
+                ContentBlock::Text(TextContent::new("what color is this?")),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("screenshot.png", image).mime_type("image/png".to_owned()),
+                ),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("notes.txt", notes).mime_type("text/plain".to_owned()),
+                ),
+            ],
+        );
+        connection
+            .send_request(prompt)
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        connection
+            .send_request(text_prompt(&session, "and now?"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2);
+    // The image rides the user message as an image URL the provider fetches;
+    // the text file has no image form, so it is named to the model instead.
+    assert_eq!(requests[0].messages, vec!["what color is this?".to_owned()]);
+    assert_eq!(requests[0].images, vec![image.to_owned()]);
+    // History keeps the files: a follow-up still shows the model the image.
+    assert_eq!(requests[1].images, vec![image.to_owned()]);
+    assert_eq!(
+        requests[1].messages,
+        vec![
+            "what color is this?".to_owned(),
+            "blue".to_owned(),
+            "and now?".to_owned()
+        ]
+    );
+}
+
+/// Answers turns from `turns`, and the calls that condense the conversation
+/// from `summaries` (a summary) or `reads` (an image read for one), each
+/// summary `delay` late. The first `failures` summaries fail instead.
+struct CondensingEngine {
+    turns: ScriptedEngine,
+    summaries: ScriptedEngine,
+    reads: ScriptedEngine,
+    delay: std::time::Duration,
+    failures: std::sync::atomic::AtomicUsize,
+}
+
+impl CondensingEngine {
+    fn new() -> Self {
+        Self {
+            turns: ScriptedEngine::new(vec![StreamPart::Content("ok".into())]),
+            summaries: ScriptedEngine::new(vec![StreamPart::Content("SUMMARY".into())]),
+            reads: ScriptedEngine::new(vec![StreamPart::Content("a red square".into())]),
+            delay: std::time::Duration::ZERO,
+            failures: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+}
+
+/// A model call that fails at once.
+fn failed_call() -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    let (parts, receiver) = tokio::sync::mpsc::channel(1);
+    parts
+        .try_send(Err(agent::AgentError::Other(anyhow::anyhow!(
+            "summary unavailable"
+        ))))
+        .unwrap();
+    receiver
+}
+
+impl TurnEngine for CondensingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Conversation {
+            return self.turns.run_turn(request);
+        }
+        if request
+            .messages
+            .iter()
+            .any(|message| message.attachments.is_some())
+        {
+            return self.reads.run_turn(request);
+        }
+        if self
+            .failures
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return failed_call();
+        }
+        let delay = self.delay;
+        let mut summary = self.summaries.run_turn(request);
+        let (parts, receiver) = tokio::sync::mpsc::channel(8);
+        tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            while let Some(part) = summary.recv().await {
+                if parts.send(part).await.is_err() {
+                    break;
+                }
+            }
+        });
+        receiver
+    }
+}
+
+/// Text of `bytes` bytes, a third as many tokens by the estimate.
+fn big(bytes: usize) -> String {
+    "x".repeat(bytes)
+}
+
+/// Run the session on `model` from here on. `other-model` is one the
+/// catalog has no window for, so it gets the 128k-token fallback: a summary
+/// starts at 76,800 tokens, a turn waits from 96,000 or on a message of
+/// 12,800, and one message may take 64,000.
+fn use_model(state: &AgentState, model: &str) {
+    state
+        .store
+        .get_mut(&state.session_id)
+        .expect("the session exists")
+        .model = model.to_owned();
+}
+
+/// Wait for the summary being written, if any, to land or fail.
+async fn summary_settled(state: &AgentState) {
+    let settled = state.store.get(&state.session_id).and_then(|session| {
+        session
+            .summarizing
+            .pending
+            .as_ref()
+            .map(|summary| summary.settled.clone())
+    });
+    if let Some(mut settled) = settled {
+        let _ = settled.changed().await;
+    }
+}
+
+async fn prompt(connection: &ConnectionTo<Agent>, session: &SessionId, text: &str) {
+    connection
+        .send_request(text_prompt(session, text))
+        .block_task()
+        .await
+        .expect("the prompt should complete");
+}
+
+/// Send a message showing `count` images, `photo-<first>.png` on. Twelve
+/// are 19,200 tokens, however short their message.
+async fn show_images(
+    connection: &ConnectionTo<Agent>,
+    session: &SessionId,
+    first: usize,
+    count: usize,
+) {
+    let mut blocks = vec![ContentBlock::Text(TextContent::new("compare these"))];
+    blocks.extend((first..first + count).map(|index| {
+        ContentBlock::ResourceLink(
+            ResourceLink::new(
+                format!("photo-{index}.png"),
+                format!("https://static.example/file/photo-{index}"),
+            )
+            .mime_type("image/png".to_owned()),
+        )
+    }));
+    connection
+        .send_request(PromptRequest::new(session.clone(), blocks))
+        .block_task()
+        .await
+        .expect("the prompt should complete");
+}
+
+#[tokio::test]
+async fn a_long_conversation_is_summarized_in_the_background_while_its_message_runs_on_all_of_it() {
+    let engine = Arc::new(CondensingEngine::new());
+    let recorded = with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // Six messages of 12,000 tokens each: under a long message, and
+        // 72,000 tokens in all, short of a summary.
+        for _ in 0..6 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        let fifth_prompt = match state
+            .store
+            .get(&state.session_id)
+            .expect("the session")
+            .history
+            .get(8)
+        {
+            Some(HistoryEntry::User { request_id, .. }) => Some(request_id.clone()),
+            _ => None,
+        };
+        // 84,000 tokens with this one: the summary starts, and the message
+        // does not wait for it.
+        prompt(&connection, &session, &big(36_000)).await;
+        summary_settled(&state).await;
+        prompt(&connection, &session, "continue").await;
+        let session = state.store.get(&state.session_id).expect("the session");
+        (session.summarizing.pending.is_none(), fifth_prompt)
+    })
+    .await;
+
+    let turns = engine.turns.requests();
+    let mut whole = Vec::new();
+    for _ in 0..6 {
+        whole.extend([big(36_000), "ok".to_owned()]);
+    }
+    whole.push(big(36_000));
+    assert_eq!(
+        turns[6].messages, whole,
+        "the message that started the summary ran on the whole history"
+    );
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].model, compaction::SUMMARY_MODEL);
+    assert_eq!(summaries[0].purpose, TurnPurpose::Summary);
+    assert!(summaries[0].messages[0].contains(&big(36_000)));
+    assert!(
+        summaries[0].messages[0].len() < 6 * 36_000,
+        "the latest turn stays word for word, and the latest message is not in its own summary"
+    );
+    assert_eq!(
+        turns[7].messages,
+        [
+            crate::domain::session::SUMMARY_PREAMBLE.to_owned(),
+            "SUMMARY".to_owned(),
+            big(36_000),
+            "ok".to_owned(),
+            big(36_000),
+            "ok".to_owned(),
+            "continue".to_owned()
+        ],
+        "the next message reads the summary in place of the first five turns"
+    );
+    assert_eq!(recorded.summaries.len(), 1, "the log records the summary");
+    assert_eq!(recorded.summaries[0].text, "SUMMARY");
+    assert_eq!(recorded.summaries[0].replaces, 10);
+    let (free, fifth_prompt) = recorded.out;
+    assert!(free, "the slot is free once the summary lands");
+    assert!(fifth_prompt.is_some());
+    assert_eq!(
+        recorded.summaries[0].through, fifth_prompt,
+        "the log names the summary's last turn by its prompt's request"
+    );
+}
+
+/// A long paste compacts the conversation before it runs, rather than in
+/// the background, so it has room at once.
+#[tokio::test]
+async fn a_long_message_waits_for_the_summary_it_starts() {
+    let mut engine = CondensingEngine::new();
+    // Long enough that a turn not waiting would run first.
+    engine.delay = std::time::Duration::from_millis(200);
+    let engine = Arc::new(engine);
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // 60,000 tokens in messages short of a long one.
+        for _ in 0..5 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        // 20,000 tokens, past 12,800: long, and with it the conversation
+        // reaches 80,000, past where a summary starts.
+        prompt(&connection, &session, &big(60_000)).await;
+    })
+    .await;
+
+    assert_eq!(engine.summaries.requests().len(), 1);
+    assert_eq!(
+        engine.turns.requests()[5].messages,
+        [
+            crate::domain::session::SUMMARY_PREAMBLE.to_owned(),
+            "SUMMARY".to_owned(),
+            big(36_000),
+            "ok".to_owned(),
+            big(60_000)
+        ],
+        "the long message ran on the summary of the first four turns"
+    );
+}
+
+#[tokio::test]
+async fn a_turn_waits_for_its_summary_when_the_conversation_would_not_fit_its_model() {
+    let mut engine = CondensingEngine::new();
+    // Long enough that a turn not waiting would run first.
+    engine.delay = std::time::Duration::from_millis(200);
+    let engine = Arc::new(engine);
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        // 120,000 tokens: far from a summary on a million-token model.
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(90_000)).await;
+        }
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("the model changes");
+        prompt(&connection, &session, "continue").await;
+    })
+    .await;
+
+    assert_eq!(engine.summaries.requests().len(), 1);
+    let turns = engine.turns.requests();
+    assert_eq!(
+        turns.last().expect("the last turn").messages,
+        [
+            crate::domain::session::SUMMARY_PREAMBLE.to_owned(),
+            "SUMMARY".to_owned(),
+            "continue".to_owned()
+        ],
+        "the turn ran on the summary, not on more than its model holds"
+    );
+}
+
+/// An engine whose summaries fail, counting how often one was tried.
+struct FailedSummaryEngine {
+    turns: ScriptedEngine,
+    attempts: std::sync::atomic::AtomicUsize,
+}
+
+impl TurnEngine for FailedSummaryEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Summary {
+            self.attempts.fetch_add(1, Ordering::Relaxed);
+            failed_call()
+        } else {
+            self.turns.run_turn(request)
+        }
+    }
+}
+
+impl FailedSummaryEngine {
+    fn new() -> Self {
+        Self {
+            turns: ScriptedEngine::new(vec![StreamPart::Content("noted".into())]),
+            attempts: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    fn attempts(&self) -> usize {
+        self.attempts.load(Ordering::Relaxed)
+    }
+}
+
+#[tokio::test]
+async fn a_failed_summary_is_tried_again_only_once_the_conversation_has_grown() {
+    let engine = Arc::new(FailedSummaryEngine::new());
+    let recorded = with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        for _ in 0..6 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        // 84,000 tokens: a summary starts, and fails.
+        prompt(&connection, &session, &big(36_000)).await;
+        summary_settled(&state).await;
+        prompt(&connection, &session, "continue").await;
+        summary_settled(&state).await;
+        let after_a_short_message = engine.attempts();
+        // 13,334 tokens more, past a tenth of the window since the failure.
+        prompt(&connection, &session, &big(40_000)).await;
+        summary_settled(&state).await;
+        after_a_short_message
+    })
+    .await;
+
+    assert_eq!(
+        recorded.out, 1,
+        "a message that barely grew the conversation does not try again"
+    );
+    assert_eq!(
+        engine.attempts(),
+        2,
+        "one that grew it by a tenth of the window does"
+    );
+    assert!(recorded.summaries.is_empty(), "nothing landed to record");
+    let mut whole = Vec::new();
+    for _ in 0..7 {
+        whole.extend([big(36_000), "noted".to_owned()]);
+    }
+    whole.push("continue".to_owned());
+    assert_eq!(
+        engine.turns.requests()[7].messages,
+        whole,
+        "the message ran on the whole history"
+    );
+}
+
+#[tokio::test]
+async fn a_turn_that_would_not_fit_waits_out_one_failed_summary_and_the_next_none() {
+    let engine = Arc::new(FailedSummaryEngine::new());
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        // 120,000 tokens: far from a summary on a million-token model.
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(90_000)).await;
+        }
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("the model changes");
+        // Past three quarters of the window: this turn waits for a summary,
+        // which fails, and runs on the whole history.
+        prompt(&connection, &session, "continue").await;
+        // Grown too little since to try again, so nothing is waited for.
+        prompt(&connection, &session, "and again").await;
+    })
+    .await;
+
+    assert_eq!(engine.attempts(), 1);
+    assert_eq!(engine.turns.requests().len(), 6, "both turns ran");
+}
+
+#[tokio::test]
+async fn a_summary_that_runs_long_lands_cut_at_its_limit() {
+    let mut engine = CondensingEngine::new();
+    engine.summaries = ScriptedEngine::new(vec![StreamPart::Content(
+        "y".repeat(compaction::SUMMARY_BYTES + 4_000),
+    )]);
+    let engine = Arc::new(engine);
+    let recorded = with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        for _ in 0..7 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        summary_settled(&state).await;
+    })
+    .await;
+
+    assert_eq!(recorded.summaries.len(), 1, "it lands rather than failing");
+    assert_eq!(
+        recorded.summaries[0].text,
+        "y".repeat(compaction::SUMMARY_BYTES)
+    );
+}
+
+/// An engine whose summaries wait until they are cancelled, saying when one
+/// has started.
+struct HangingSummaryEngine {
+    turns: ScriptedEngine,
+    summarizing: Arc<tokio::sync::Notify>,
+}
+
+impl TurnEngine for HangingSummaryEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Summary {
+            self.summarizing.notify_one();
+            HangingEngine.run_turn(request)
+        } else {
+            self.turns.run_turn(request)
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_stop_while_a_turn_waits_for_its_summary_stops_the_turn() {
+    let summarizing = Arc::new(tokio::sync::Notify::new());
+    let engine = Arc::new(HangingSummaryEngine {
+        turns: ScriptedEngine::new(vec![StreamPart::Content("noted".into())]),
+        summarizing: Arc::clone(&summarizing),
+    });
+    let (_, _, response) = with_agent(engine, async |connection, session| {
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(90_000)).await;
+        }
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("the model changes");
+        let pending = connection.send_request(text_prompt(&session, "continue"));
+        summarizing.notified().await;
+        connection
+            .send_notification(agent_client_protocol::schema::v1::CancelNotification::new(
+                session.clone(),
+            ))
+            .expect("the cancel notification should send");
+        pending
+            .block_task()
+            .await
+            .expect("a stopped turn completes")
+    })
+    .await;
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+}
+
+#[tokio::test]
+async fn images_count_toward_the_context_and_are_each_read_for_the_summary() {
+    let engine = Arc::new(CondensingEngine::new());
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // The fourth brings the conversation to 76,800 tokens.
+        for batch in 0..4 {
+            show_images(&connection, &session, batch * 12, 12).await;
+        }
+        summary_settled(&state).await;
+    })
+    .await;
+
+    let reads = engine.reads.requests();
+    assert_eq!(reads.len(), 36, "one read per image the summary covers");
+    assert!(reads.iter().all(|read| read.images.len() == 1
+        && read.model == compaction::SUMMARY_MODEL
+        && read.purpose == TurnPurpose::Summary));
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 1);
+    assert!(summaries[0].messages[0].contains("IMAGE photo-0.png: a red square"));
+    assert!(summaries[0].messages[0].contains("IMAGE photo-35.png: a red square"));
+    assert!(
+        summaries[0].images.is_empty(),
+        "the summary reads the descriptions, not the images"
+    );
+}
+
+#[tokio::test]
+async fn images_a_failed_summary_read_are_not_read_again() {
+    let engine = Arc::new(CondensingEngine {
+        failures: std::sync::atomic::AtomicUsize::new(1),
+        ..CondensingEngine::new()
+    });
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // A summary of the first 36 images reads them all, then fails.
+        for batch in 0..4 {
+            show_images(&connection, &session, batch * 12, 12).await;
+        }
+        summary_settled(&state).await;
+        // Nine more grow the conversation past a tenth of the window, and
+        // the next summary covers 48.
+        show_images(&connection, &session, 48, 9).await;
+        summary_settled(&state).await;
+    })
+    .await;
+
+    assert_eq!(
+        engine.reads.requests().len(),
+        48,
+        "the 36, then only the 12 the failed summary had not read"
+    );
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 1, "the second summary landed");
+    assert!(summaries[0].messages[0].contains("IMAGE photo-0.png: a red square"));
+    assert!(summaries[0].messages[0].contains("IMAGE photo-47.png: a red square"));
+}
+
+#[tokio::test]
+async fn a_conversation_longer_than_one_summary_call_reads_is_summarized_in_parts() {
+    let engine = Arc::new(CondensingEngine::new());
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        // Gemini's window: a summary starts at 629,145 tokens, and covers
+        // the three messages before the fourth, past the 400,000 one summary
+        // call reads.
+        use_model(&state, chat::domain::models::FREE_MODEL);
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(610_000)).await;
+        }
+        summary_settled(&state).await;
+    })
+    .await;
+
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 2);
+    assert!(summaries[1].messages[0].starts_with("Earlier summary:\nSUMMARY"));
+}
+
+#[tokio::test]
+async fn a_message_is_too_long_by_its_model_s_window() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    with_admission(
+        Arc::clone(&engine),
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, state| {
+            // 66,667 tokens: past half of a 128k window.
+            use_model(&state, "other-model");
+            let error = connection
+                .send_request(text_prompt(&session, &big(200_000)))
+                .block_task()
+                .await
+                .expect_err("too long for this model");
+            assert!(format!("{error:?}").contains("This message is too long"));
+            use_model(&state, "anthropic/claude-sonnet-5-5");
+            prompt(&connection, &session, &big(200_000)).await;
+        },
+    )
+    .await;
+    assert_eq!(engine.requests().len(), 1, "only the message that fit ran");
+}
+
+#[tokio::test]
+async fn compact_is_a_message_like_any_other() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        prompt(&connection, &session, "remember this").await;
+        prompt(&connection, &session, "/compact").await;
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1].purpose, TurnPurpose::Conversation);
+    assert_eq!(requests[1].messages, ["remember this", "ok", "/compact"]);
+}
+
+#[tokio::test]
+async fn cancel_stops_the_turn_with_the_cancelled_stop_reason() {
+    let engine = Arc::new(HangingEngine);
+
+    let (_notifications, _config_options, response) =
+        with_agent(engine, async |connection, session| {
+            let pending = connection.send_request(text_prompt(&session, "hang"));
+            let cancel =
+                agent_client_protocol::schema::v1::CancelNotification::new(session.clone());
+            connection
+                .send_notification(cancel)
+                .expect("the cancel notification should send");
+            pending
+                .block_task()
+                .await
+                .expect("a cancelled prompt still completes")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+}
+
+#[tokio::test]
+async fn engine_cancellation_is_not_rendered_as_an_error_message() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(CancelledEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "cancel me"))
+                .block_task()
+                .await
+                .expect("a cancelled prompt still completes")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    assert!(
+        notifications.iter().all(|notification| matches!(
+            notification.update,
+            SessionUpdate::AvailableCommandsUpdate(_)
+        )),
+        "only the session-open command advertisement, no error message"
+    );
+}
+
+#[tokio::test]
+async fn a_prompt_for_an_unknown_session_is_refused() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+
+    with_agent(engine, async |connection, _session| {
+        let error = connection
+            .send_request(text_prompt(&SessionId::new("not-a-session"), "hi"))
+            .block_task()
+            .await
+            .expect_err("a foreign session id must be refused");
+        assert_eq!(
+            error.code,
+            agent_client_protocol::schema::v1::ErrorCode::InvalidParams
+        );
+    })
+    .await;
+}
+
+/// Records the servers it was asked to dial and dials none of them.
+struct SpyConnector {
+    asked: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<SpyConnector> {
+    async fn connect(
+        &self,
+        servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        self.asked
+            .lock()
+            .expect("asked lock")
+            .push(servers.into_iter().map(|server| server.name).collect());
+        None
+    }
+}
+
+async fn wait_until_asked(spy: &SpyConnector) {
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if !spy.asked.lock().expect("asked lock").is_empty() {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("connect should be spawned after session/new");
+}
+
+/// Holds `connect` until `release` is sent, and signals `started` when it
+/// begins. Used to prove the handshake does not join listing, and the first
+/// turn does.
+struct HoldConnector {
+    started: tokio::sync::mpsc::Sender<()>,
+    release: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<HoldConnector> {
+    async fn connect(
+        &self,
+        _servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        let _ = self.started.send(()).await;
+        if let Some(release) = self.release.lock().await.take() {
+            let _ = release.await;
+        }
+        None
+    }
+}
+
+fn hold_connector() -> (
+    Arc<HoldConnector>,
+    tokio::sync::mpsc::Receiver<()>,
+    tokio::sync::oneshot::Sender<()>,
+) {
+    let (started_tx, started_rx) = tokio::sync::mpsc::channel(1);
+    let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+    let connector = Arc::new(HoldConnector {
+        started: started_tx,
+        release: tokio::sync::Mutex::new(Some(release_rx)),
+    });
+    (connector, started_rx, release_tx)
+}
+
+fn test_mcp_servers() -> Vec<agent_client_protocol::schema::v1::McpServer> {
+    use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
+
+    ["macro", "linear", "notion"]
+        .into_iter()
+        .map(|name| {
+            AcpMcpServer::Http(
+                McpServerHttp::new(name, format!("https://egress.test/mcp/{name}")).headers(vec![
+                    HttpHeader::new("Authorization", "Bearer session-token"),
+                ]),
+            )
+        })
+        .collect()
+}
+
+async fn serve_with_mcp(
+    mcp: Arc<dyn crate::domain::mcp::DynMcpToolConnector>,
+    engine: Arc<dyn TurnEngine>,
+) -> (ConnectionTo<Agent>, SessionId, tokio::task::AbortHandle) {
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine,
+        admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp,
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+    let abort = agent.abort_handle();
+    let (connection, session) = Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                let opened = connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(test_mcp_servers()))
+                    .block_task()
+                    .await?;
+                Ok((connection, opened.session_id))
+            },
+        )
+        .await
+        .expect("initialize and session/new should succeed");
+    (connection, session, abort)
+}
+
+/// The servers `session/new` carries are dialed in the background, minus
+/// Macro's own, whose tools this runtime already has natively.
+#[tokio::test]
+async fn session_new_dials_the_advertised_servers_except_macros_own() {
+    use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
+
+    let spy = Arc::new(SpyConnector {
+        asked: std::sync::Mutex::new(Vec::new()),
+    });
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp: Arc::new(Arc::clone(&spy)),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let servers = ["macro", "linear", "notion"]
+        .into_iter()
+        .map(|name| {
+            AcpMcpServer::Http(
+                McpServerHttp::new(name, format!("https://egress.test/mcp/{name}")).headers(vec![
+                    HttpHeader::new("Authorization", "Bearer session-token"),
+                ]),
+            )
+        })
+        .collect::<Vec<_>>();
+    Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(servers))
+                    .block_task()
+                    .await?;
+                Ok(())
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    wait_until_asked(&spy).await;
+    agent.abort();
+
+    assert_eq!(
+        *spy.asked.lock().expect("asked lock"),
+        vec![vec!["linear".to_owned(), "notion".to_owned()]]
+    );
+}
+
+/// `session/new` answers while MCP listing is still held, so create is not
+/// blocked on `tools/list`.
+#[tokio::test]
+async fn session_new_does_not_wait_for_mcp_connect() {
+    let (connector, mut started, _release) = hold_connector();
+    let setup = tokio::spawn(async move {
+        serve_with_mcp(
+            Arc::new(Arc::clone(&connector)),
+            Arc::new(ScriptedEngine::new(Vec::new())) as Arc<dyn TurnEngine>,
+        )
+        .await
+    });
+    started.recv().await.expect("connect should start");
+    let (_connection, _session, abort) = tokio::time::timeout(Duration::from_millis(200), setup)
+        .await
+        .expect("session/new must not wait for MCP listing")
+        .expect("the handshake task should finish");
+    abort.abort();
+}
+
+/// The first prompt joins the in-flight connect so SearchTools still sees
+/// the catalog, even though `session/new` did not wait.
+#[tokio::test]
+async fn first_prompt_waits_for_background_mcp_connect() {
+    let (connector, mut started, release) = hold_connector();
+    let engine = Arc::new(ScriptedEngine::new(Vec::new()));
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine: Arc::clone(&engine) as Arc<dyn TurnEngine>,
+        admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp: Arc::new(Arc::clone(&connector)),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                let opened = connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(test_mcp_servers()))
+                    .block_task()
+                    .await?;
+                started.recv().await.expect("connect should start");
+
+                let mut prompt = std::pin::pin!(
+                    connection
+                        .send_request(text_prompt(&opened.session_id, "hi"))
+                        .block_task()
+                );
+                tokio::select! {
+                    biased;
+                    result = &mut prompt => {
+                        panic!("the prompt finished before MCP listing was released: {result:?}");
+                    }
+                    () = tokio::time::sleep(Duration::from_millis(50)) => {}
+                }
+                assert!(
+                    engine.requests().is_empty(),
+                    "the turn must not start until MCP listing finishes"
+                );
+                release.send(()).expect("release the held connect");
+                prompt
+                    .await
+                    .expect("the prompt should complete after MCP listing");
+                assert_eq!(engine.requests().len(), 1);
+                Ok(())
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+}
+
+/// Like [`with_agent`], but the client advertises form elicitation and
+/// answers every `elicitation/create` with `answer`, recording what it was
+/// asked.
+async fn with_asking_agent<Out>(
+    answer: agent_client_protocol::schema::v1::ElicitationAction,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out) {
+    with_asking_engine(
+        Arc::new(ScriptedEngine::new(vec![])),
+        true,
+        answer,
+        Duration::ZERO,
+        scenario,
+    )
+    .await
+}
+
+/// [`with_asking_agent`] over `engine`, with the client taking `delay` to
+/// answer each question - the user's think time.
+async fn with_asking_engine<Engine, Out>(
+    engine: Arc<Engine>,
+    enable_dev_commands: bool,
+    answer: agent_client_protocol::schema::v1::ElicitationAction,
+    delay: Duration,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out)
+where
+    Engine: TurnEngine,
+{
+    use agent_client_protocol::schema::v1::{
+        ClientCapabilities, CreateElicitationResponse, ElicitationCapabilities,
+        ElicitationFormCapabilities,
+    };
+
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
+        engine,
+        admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        client_renders_forms: AtomicBool::new(false),
+        mcp: Arc::new(crate::domain::mcp::NoMcpServers),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_connect: std::sync::Mutex::new(None),
+        enable_dev_commands,
+    });
+
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let notifications = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let asked = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let out = Client
+        .builder()
+        .on_receive_notification(
+            {
+                let notifications = Arc::clone(&notifications);
+                async move |notification: SessionNotification, _connection| {
+                    notifications.lock().unwrap().push(notification);
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .on_receive_request(
+            {
+                let asked = Arc::clone(&asked);
+                async move |request: CreateElicitationRequest, responder, connection| {
+                    asked.lock().unwrap().push(request);
+                    if delay.is_zero() {
+                        return responder.respond(CreateElicitationResponse::new(answer.clone()));
+                    }
+                    // Answer off the dispatch loop so the delay does not hold
+                    // up the notifications the agent keeps sending meanwhile.
+                    let answer = answer.clone();
+                    connection.spawn(async move {
+                        tokio::time::sleep(delay).await;
+                        let _ = responder.respond(CreateElicitationResponse::new(answer));
+                        Ok(())
+                    })?;
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(
+                        InitializeRequest::new(ProtocolVersion::V1).client_capabilities(
+                            ClientCapabilities::new().elicitation(
+                                ElicitationCapabilities::new()
+                                    .form(ElicitationFormCapabilities::new()),
+                            ),
+                        ),
+                    )
+                    .block_task()
+                    .await?;
+                let session = connection
+                    .send_request(NewSessionRequest::new("/"))
+                    .block_task()
+                    .await?;
+                Ok(scenario(connection, session.session_id).await)
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    let notifications = notifications.lock().unwrap().clone();
+    let asked = asked.lock().unwrap().clone();
+    (notifications, asked, out)
+}
+
+fn spoken(notifications: &[SessionNotification]) -> String {
+    notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn ask_is_an_ordinary_prompt_when_dev_commands_are_disabled() {
+    use agent_client_protocol::schema::v1::ElicitationAction;
+
+    let prompt = "/ask Which colour? | red | blue";
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "An ordinary model response".to_owned(),
+    )]));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::clone(&engine),
+        false,
+        ElicitationAction::Decline,
+        Duration::ZERO,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the ordinary turn should complete")
+        },
+    )
+    .await;
+
+    assert!(
+        asked.is_empty(),
+        "the manual command must not ask a question"
+    );
+    assert_eq!(engine.requests().len(), 1);
+    assert_eq!(engine.requests()[0].messages, vec![prompt]);
+    assert_eq!(spoken(&notifications), "An ordinary model response");
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+}
+
+#[tokio::test]
+async fn ask_sends_a_form_elicitation_and_echoes_the_accepted_answer() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue, ElicitationMode,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("blue".to_owned()),
+        )])));
+    let (notifications, asked, response) =
+        with_asking_agent(answer, async |connection, session| {
+            connection
+                .send_request(text_prompt(
+                    &session,
+                    "/ask What is the best colour? | red | blue | green",
+                ))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(asked.len(), 1, "exactly one question was asked");
+    assert_eq!(asked[0].message, "What is the best colour?");
+    let ElicitationMode::Form(form) = &asked[0].mode else {
+        panic!("a form was asked");
+    };
+    let field = form
+        .requested_schema
+        .properties
+        .get(ASK_FIELD)
+        .expect("the one field");
+    let agent_client_protocol::schema::v1::ElicitationPropertySchema::String(field) = field else {
+        panic!("a string field");
+    };
+    assert_eq!(
+        field.one_of.as_ref().map(|options| options
+            .iter()
+            .map(|option| option.value.as_str())
+            .collect::<Vec<_>>()),
+        Some(vec!["red", "blue", "green"])
+    );
+    assert_eq!(
+        form.requested_schema.required.as_deref(),
+        Some(&[ASK_FIELD.to_owned()][..])
+    );
+    assert_eq!(spoken(&notifications), "You answered: blue");
+}
+
+#[tokio::test]
+async fn ask_rejects_an_answer_outside_the_offered_options() {
+    use std::collections::BTreeMap;
+
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("yellow".to_owned()),
+        )])));
+    let (notifications, _, response) = with_asking_agent(answer, async |connection, session| {
+        connection
+            .send_request(text_prompt(
+                &session,
+                "/ask What is the best colour? | red | blue | green",
+            ))
+            .block_task()
+            .await
+            .expect("the ask turn should complete with a validation message")
+    })
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert!(
+        spoken(&notifications).contains("was not one of the offered options"),
+        "got {:?}",
+        spoken(&notifications)
+    );
+}
+
+#[tokio::test]
+async fn ask_reports_a_decline_and_a_free_text_question_has_no_options() {
+    use agent_client_protocol::schema::v1::{ElicitationAction, ElicitationMode};
+
+    let (notifications, asked, response) =
+        with_asking_agent(ElicitationAction::Decline, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "/ask Name the service"))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    let ElicitationMode::Form(form) = &asked[0].mode else {
+        panic!("a form was asked");
+    };
+    let agent_client_protocol::schema::v1::ElicitationPropertySchema::String(field) =
+        &form.requested_schema.properties[ASK_FIELD]
+    else {
+        panic!("a string field");
+    };
+    assert!(field.one_of.is_none(), "free text has no options");
+    assert_eq!(spoken(&notifications), "You declined to answer.");
+}
+
+/// An engine whose one tool asks the user a question through the turn's
+/// user-input port and then says the answer - `AskUser` reduced to the part
+/// the ACP surface cares about.
+struct AskingEngine;
+
+impl TurnEngine for AskingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let requester = request
+                .user_input
+                .expect("the client advertised forms, so the turn can ask");
+            let outcome = requester
+                .ask(UserInputRequest {
+                    question: "Which colour?".to_owned(),
+                    options: Vec::new(),
+                })
+                .await;
+            let text = match outcome {
+                Ok(UserInputOutcome::Answered(answer)) => format!("You said {answer}."),
+                Ok(other) => format!("{other:?}"),
+                Err(error) => error.to_string(),
+            };
+            let _ = parts.send(Ok(StreamPart::Content(text))).await;
+        });
+        receiver
+    }
+}
+
+/// A user who takes longer than the idle timeout to answer is not a hung
+/// turn: the question holds the timeout off, and the turn finishes on the
+/// answer rather than being stopped for producing nothing meanwhile.
+#[tokio::test(start_paused = true)]
+async fn a_turn_waiting_on_the_user_outlasts_the_idle_timeout() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("teal".to_owned()),
+        )])));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::new(AskingEngine),
+        false,
+        answer,
+        TURN_IDLE_TIMEOUT * 3,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "pick a colour for me"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        },
+    )
+    .await;
+
+    assert_eq!(asked.len(), 1, "the tool asked once");
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "You said teal.");
+}
+
+/// An engine whose turn puts one user tool call to the reviewer and says what
+/// came back - the agent loop's finisher reduced to the ACP surface.
+struct ReviewingEngine;
+
+impl TurnEngine for ReviewingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let reviewer = request
+                .reviewer
+                .expect("the client advertised forms, so the turn can ask for a review");
+            let outcome = reviewer
+                .review(ReviewRequest {
+                    tool_name: "CreateCalendarEvent".to_owned(),
+                    tool_call_id: "toolu_7".to_owned(),
+                    message: "Create calendar event?".to_owned(),
+                    draft: serde_json::json!({"title": "Q3 sync", "addGoogleMeet": false}),
+                    form: ReviewForm {
+                        title: Some("Create calendar event".to_owned()),
+                        fields: vec![
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "title".to_owned(),
+                                description: Some("The event title.".to_owned()),
+                                kind: ReviewFieldKind::Text {
+                                    default: Some("Q3 sync".to_owned()),
+                                    format: None,
+                                },
+                            },
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "addGoogleMeet".to_owned(),
+                                description: None,
+                                kind: ReviewFieldKind::Boolean {
+                                    default: Some(false),
+                                },
+                            },
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "draft".to_owned(),
+                                description: None,
+                                kind: ReviewFieldKind::Json,
+                            },
+                        ],
+                        required: vec!["title".to_owned()],
+                    },
+                })
+                .await;
+            let text = match outcome {
+                Ok(ReviewOutcome::Accepted(content)) => format!(
+                    "accepted {}",
+                    serde_json::to_string(&content).expect("content serializes")
+                ),
+                Ok(other) => format!("{other:?}"),
+                Err(error) => error.to_string(),
+            };
+            let _ = parts.send(Ok(StreamPart::Content(text))).await;
+        });
+        receiver
+    }
+}
+
+/// A user tool's review goes out as a tool-call-scoped form elicitation the
+/// fold and a Macro client can recognize: the draft's flat fields with their
+/// values as defaults, the `_macro/json` draft field, and `_meta.macro.userTool`
+/// naming the tool. The accepted content comes back as submitted.
+#[tokio::test]
+async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue, ElicitationMode,
+        ElicitationPropertySchema, ElicitationScope,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([
+            (
+                "title".to_owned(),
+                ElicitationContentValue::String("Q3 planning".to_owned()),
+            ),
+            (
+                "addGoogleMeet".to_owned(),
+                ElicitationContentValue::Boolean(true),
+            ),
+        ])));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::new(ReviewingEngine),
+        false,
+        answer,
+        Duration::ZERO,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "create the event"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        },
+    )
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(asked.len(), 1, "one review was asked");
+    let request = &asked[0];
+    assert_eq!(request.message, "Create calendar event?");
+    let ElicitationMode::Form(form) = &request.mode else {
+        panic!("a form was asked");
+    };
+    let ElicitationScope::Session(scope) = &form.scope else {
+        panic!("session scoped");
+    };
+    assert_eq!(
+        scope.tool_call_id.as_ref().map(|id| id.0.as_ref()),
+        Some("toolu_7"),
+        "the elicitation names the call it reviews"
+    );
+    let user_tool = request
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get(META_NAMESPACE))
+        .and_then(|ours| ours.get(USER_TOOL_META_KEY))
+        .expect("_meta.macro.userTool names the tool under review");
+    assert_eq!(
+        user_tool.get("name").and_then(|name| name.as_str()),
+        Some("CreateCalendarEvent"),
+        "a Macro client learns which tool's composer to show"
+    );
+    assert_eq!(
+        user_tool.get("draft"),
+        Some(&serde_json::json!({"title": "Q3 sync", "addGoogleMeet": false})),
+        "and has the draft whether or not it opened the call"
+    );
+    let schema = &form.requested_schema;
+    assert_eq!(schema.title.as_deref(), Some("Create calendar event"));
+    let ElicitationPropertySchema::String(title) = &schema.properties["title"] else {
+        panic!("title is a string field");
+    };
+    assert_eq!(title.default.as_deref(), Some("Q3 sync"));
+    assert_eq!(title.description.as_deref(), Some("The event title."));
+    let ElicitationPropertySchema::Boolean(meet) = &schema.properties["addGoogleMeet"] else {
+        panic!("addGoogleMeet is a boolean field");
+    };
+    assert_eq!(meet.default, Some(false));
+    let ElicitationPropertySchema::Other(draft) = &schema.properties["draft"] else {
+        panic!(
+            "the draft is a custom field, got {:?}",
+            schema.properties["draft"]
+        );
+    };
+    assert_eq!(draft.type_, JSON_PROPERTY_TYPE);
+    assert_eq!(
+        schema.required.as_deref(),
+        Some(&["title".to_owned()][..]),
+        "the draft field is never required"
+    );
+    assert_eq!(
+        spoken(&notifications),
+        r#"accepted {"addGoogleMeet":true,"title":"Q3 planning"}"#
+    );
+}
+
+/// The timeout still guards a turn that is silent with nothing asked, and
+/// the turn it stops failed: nobody pressed Stop.
+#[tokio::test(start_paused = true)]
+async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(HangingEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "hang"))
+                .block_task()
+                .await
+        })
+        .await;
+
+    let error = response.expect_err("a timed-out turn fails");
+    assert!(
+        error.to_string().contains("produced nothing")
+            || format!("{error:?}").contains("produced nothing"),
+        "got {error:?}"
+    );
+    assert!(
+        spoken(&notifications).contains("produced nothing"),
+        "got {:?}",
+        spoken(&notifications)
+    );
+}
+
+/// An engine whose turn waits on a person for twice the idle timeout - the
+/// way a tool call held for the owner does - and then answers.
+struct OwnerWaitingEngine;
+
+impl TurnEngine for OwnerWaitingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            {
+                let _waiting = request.awaiting.begin();
+                tokio::time::sleep(TURN_IDLE_TIMEOUT * 2).await;
+            }
+            let _ = parts.send(Ok(StreamPart::Content("approved".into()))).await;
+        });
+        receiver
+    }
+}
+
+/// Waiting on the owner to approve a tool call is not the turn hanging.
+#[tokio::test(start_paused = true)]
+async fn a_turn_waiting_on_the_owner_outlasts_the_idle_timeout() {
+    let (notifications, _config_options, response) =
+        with_agent(Arc::new(OwnerWaitingEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "read my email"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "approved");
+}
+
+#[tokio::test]
+async fn ask_without_form_support_explains_instead_of_asking() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (notifications, _config_options, response) =
+        with_agent(engine, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "/ask anything?"))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert!(
+        spoken(&notifications).contains("did not advertise form elicitation"),
+        "got {:?}",
+        spoken(&notifications)
+    );
+}
+
+mod model_selection;
+mod telemetry;
+
+#[tokio::test]
+async fn effort_is_validated_and_model_changes_return_complete_options() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    with_agent(engine, async |connection, session| {
+        let selected = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                REASONING_EFFORT_CONFIG_ID,
+                "max",
+            ))
+            .block_task()
+            .await
+            .expect("Sonnet accepts max");
+        assert_eq!(
+            selected.config_options.len(),
+            2,
+            "effort response retains model control"
+        );
+        let changed = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("model accepted");
+        assert_eq!(
+            changed.config_options.len(),
+            1,
+            "unsupported model removes effort control"
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    "low"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    "unknown-model"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        let restored = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session,
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        let SessionConfigKind::Select(effort) = &restored.config_options[1].kind else {
+            panic!("effort select");
+        };
+        assert_eq!(
+            effort.current_value.to_string(),
+            "default",
+            "invalid effort is reset on model change"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn free_session_defaults_to_gemini_and_rejects_paid_model_changes() {
+    use crate::domain::model_access::ModelAccess;
+    use chat::domain::models::FREE_MODEL;
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    let access = Arc::new(crate::testing::TestModelAccess::new(ModelAccess::Free));
+    let (_, config, ()) = with_model_access(
+        engine.clone(),
+        Arc::new(DisabledAiAdmissionService),
+        access.clone(),
+        async |connection, session, state| {
+            assert_eq!(
+                state.store.get(&state.session_id).unwrap().model,
+                FREE_MODEL
+            );
+            let error = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    SessionConfigValueId::new("other-model"),
+                ))
+                .block_task()
+                .await
+                .unwrap_err();
+            assert_eq!(
+                serde_json::to_value(error).unwrap()["data"]["code"],
+                "model_access_denied"
+            );
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .unwrap();
+            assert_eq!(engine.requests()[0].model, FREE_MODEL);
+            assert!(
+                access
+                    .owners
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|owner| owner == &state.owner)
+            );
+        },
+    )
+    .await;
+    let selection = agent_fold::domain::model_selection::model_selection(&config).unwrap();
+    assert_eq!(selection.options.len(), 1);
+}
+
+#[tokio::test]
+async fn downgrade_and_permission_failure_cannot_run_a_paid_model() {
+    use crate::domain::model_access::{ModelAccess, ModelAccessError};
+    for failure in [Ok(ModelAccess::Free), Err(ModelAccessError::Unavailable)] {
+        let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+        let access = Arc::new(crate::testing::TestModelAccess::paid());
+        with_model_access(
+            engine.clone(),
+            Arc::new(DisabledAiAdmissionService),
+            access.clone(),
+            async |connection, session, state| {
+                *access.result.lock().unwrap() = failure;
+                let error = connection
+                    .send_request(text_prompt(&session, "blocked"))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+                let code = if failure.is_ok() {
+                    "model_access_denied"
+                } else {
+                    "model_access_unavailable"
+                };
+                assert_eq!(serde_json::to_value(error).unwrap()["data"]["code"], code);
+                assert!(engine.requests().is_empty());
+                assert!(
+                    state
+                        .store
+                        .get(&state.session_id)
+                        .unwrap()
+                        .history
+                        .is_empty()
+                );
+                if failure.is_ok() {
+                    let restored = connection
+                        .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    let selection = agent_fold::domain::model_selection::model_selection(
+                        restored.config_options.as_deref().unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(selection.options.len(), 1);
+                    connection
+                        .send_request(text_prompt(&session, "resumed"))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    assert_eq!(engine.requests()[0].model, chat::domain::models::FREE_MODEL);
+                }
+            },
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn text_only_model_rejects_new_and_historical_images_without_running_the_engine() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("red".into())]));
+    with_admission(
+        Arc::clone(&engine),
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, state| {
+            let image_prompt = || {
+                PromptRequest::new(
+                    session.clone(),
+                    vec![ContentBlock::ResourceLink(
+                        ResourceLink::new(
+                            "red.png",
+                            "https://static.example/file/11111111-1111-4111-8111-111111111111",
+                        )
+                        .mime_type("image/png".to_owned()),
+                    )],
+                )
+            };
+            state.set_model("fireworks/glm-5p3".to_owned());
+            let error = connection
+                .send_request(image_prompt())
+                .block_task()
+                .await
+                .expect_err("a text-only model must reject images");
+            assert!(format!("{error:?}").contains("does not support images"));
+            assert!(format!("{error:?}").contains("unsupported_image_input"));
+            assert!(engine.requests().is_empty());
+
+            // A rejected image must not enter history or poison a text-only turn.
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .expect("text-only turns still work");
+            state.set_model("fireworks/kimi-k3".to_owned());
+            connection
+                .send_request(image_prompt())
+                .block_task()
+                .await
+                .expect("vision model accepts the original image");
+            state.set_model("fireworks/glm-5p3".to_owned());
+            let error = connection
+                .send_request(text_prompt(&session, "what color was it?"))
+                .block_task()
+                .await
+                .expect_err("historical images need vision too");
+            assert!(format!("{error:?}").contains("does not support images"));
+            assert_eq!(engine.requests().len(), 2);
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
+    struct SpeedEngine(ScriptedEngine);
+    impl TurnEngine for SpeedEngine {
+        fn supported_models(&self) -> &[&str] {
+            &[
+                "anthropic/claude-sonnet-5-5",
+                "anthropic/claude-opus-5-5",
+                "openai/gpt-6-astra",
+            ]
+        }
+        fn run_turn(
+            &self,
+            request: TurnRequest,
+        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+            self.0.run_turn(request)
+        }
+    }
+    let engine = Arc::new(SpeedEngine(ScriptedEngine::new(vec![])));
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    "speed",
+                    "fast"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-opus-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    "speed",
+                    "fast",
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "openai/gpt-6-astra",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                "speed",
+                "ultrafast",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "fast please"))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "standard please"))
+            .block_task()
+            .await
+            .unwrap();
+    })
+    .await;
+    let requests = engine.0.requests();
+    assert_eq!(requests[0].speed, agent::ModelSpeed::Ultrafast);
+    assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
+}
+
+#[test]
+fn a_turn_that_ends_on_a_tool_call_has_not_replied() {
+    let mut output = TurnOutput::default();
+    output.observe(&StreamPart::Content("Let me look.".to_owned()));
+    output.observe(&StreamPart::ToolCall(agent::ToolCall {
+        id: "call-1".to_owned(),
+        name: "ExecuteCode".to_owned(),
+        json: serde_json::json!({}),
+        mcp: None,
+    }));
+    output.observe(&StreamPart::Content("\n\n".to_owned()));
+    assert_eq!(output.text_chars, 14);
+    assert_eq!(output.tool_calls, 1);
+    assert!(!output.replied);
+
+    output.observe(&StreamPart::Content("Found it.".to_owned()));
+    assert!(output.replied);
+}

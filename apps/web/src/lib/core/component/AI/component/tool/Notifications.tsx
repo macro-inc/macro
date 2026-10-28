@@ -1,5 +1,7 @@
-import Check from '@phosphor-icons/core/regular/check.svg';
-import List from '@phosphor-icons/core/regular/list.svg';
+import BellSlash from '@icon/system/regular/bell-slash.svg';
+import BellZ from '@icon/system/regular/bell-z.svg';
+import Check from '@icon/system/regular/check.svg';
+import List from '@icon/system/regular/list.svg';
 import type { ListNotifications as ListNotificationsTool } from '@service-cognition/generated/tools/types';
 import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -21,6 +23,7 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationFilterType, string> = {
   github: 'GitHub',
   reminder: 'reminders',
   calendar: 'calendar events',
+  agent: 'agent sessions',
 };
 
 const formatList = (items: string[]) => {
@@ -31,12 +34,10 @@ const formatList = (items: string[]) => {
 };
 
 const formatNotificationFilters = (filters: ListNotificationsTool) => {
-  const statusFilters = [filters.done ? 'done' : 'not done'];
-  if (filters.seen != null) {
-    statusFilters.push(filters.seen ? 'seen' : 'unseen');
-  }
-
-  let text = `filtered by ${formatList(statusFilters)}`;
+  const states = filters.states ?? ['unseen', 'seen'];
+  let text = states.length
+    ? `filtered by ${states.join(' or ')}`
+    : 'all notification states';
 
   if (filters.includeTypes?.length) {
     text += ` in ${formatList(
@@ -112,8 +113,43 @@ const markNotificationsDoneHandler = createToolRenderer({
   ),
 });
 
+const muteNotificationsHandler = createToolRenderer({
+  name: 'MuteNotifications',
+  render: (ctx) => {
+    const label = () => {
+      const done = !!ctx.response;
+      switch (ctx.tool.data.action) {
+        case 'mute':
+          return done ? 'Muted notifications' : 'Mute notifications';
+        case 'snooze':
+          return done ? 'Snoozed notifications' : 'Snooze notifications';
+        case 'unmute':
+          return done ? 'Unmuted notifications' : 'Unmute notifications';
+      }
+    };
+    const until = () => {
+      const value = ctx.tool.data.snoozeUntil;
+      return value ? new Date(value).toLocaleString() : undefined;
+    };
+
+    return (
+      <BaseTool
+        icon={ctx.tool.data.action === 'snooze' ? BellZ : BellSlash}
+        renderContext={ctx.renderContext}
+        type="call"
+      >
+        <div class="min-w-0 flex-1">
+          {label()} for a {ctx.tool.data.entityType.replaceAll('_', ' ')}
+          <Show when={until()}>{(time) => <> until {time()}</>}</Show>
+        </div>
+      </BaseTool>
+    );
+  },
+});
+
 export {
   listNotificationsHandler,
   markNotificationsDoneHandler,
   markNotificationsSeenHandler,
+  muteNotificationsHandler,
 };

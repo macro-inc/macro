@@ -5,6 +5,82 @@ export type ClientOptions = {
 };
 
 /**
+ * Side of a folded conversation.
+ */
+export type AgentSessionAuthor = 'user' | 'agent';
+
+/**
+ * Filters for agent sessions.
+ */
+export type AgentSessionFilters = {
+    /**
+     * Agent session ids to filter by. Empty to include all accessible sessions.
+     */
+    ids?: Array<string>;
+    /**
+     * Opt this query into agent sessions at all. Agent sessions are off by
+     * default — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].
+     * Asking for specific `ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
+};
+
+/**
+ * One accessible agent session, grouped with its matching folded messages.
+ */
+export type AgentSessionSearchResponseItem = {
+    /**
+     * Name and folded-message matches.
+     */
+    agent_session_search_results: Array<AgentSessionSearchResult>;
+    /**
+     * Agent persona ID.
+     */
+    bot_id: string;
+    /**
+     * Session creation time.
+     */
+    created_at: string;
+    /**
+     * Session ID.
+     */
+    id: string;
+    /**
+     * Current persisted name.
+     */
+    name: string;
+    /**
+     * Session owner.
+     */
+    owner_id: string;
+    /**
+     * Current persisted modification time.
+     */
+    updated_at: string;
+};
+
+/**
+ * A name match or one matching folded message.
+ */
+export type AgentSessionSearchResult = {
+    goto?: null | SearchGotoAgentSession;
+    /**
+     * Matched name/content fragments.
+     */
+    highlight: SearchHighlight;
+    /**
+     * Search score.
+     */
+    score?: number | null;
+};
+
+/**
  * Filters for canonical calendar-event entities.
  */
 export type CalendarEventFilters = {
@@ -32,6 +108,164 @@ export type CalendarEventFilters = {
      * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
      */
     statuses?: Array<string>;
+};
+
+/**
+ * Metadata for a calendar event fetched from the database.
+ *
+ * The index carries the master span for ranking, but the occurrence a row
+ * should display depends on when the query ran, so it is resolved here
+ * rather than indexed.
+ */
+export type CalendarEventMetadata = {
+    /**
+     * Direct conference join URL when known.
+     */
+    conferenceUrl?: string | null;
+    createdAt: string;
+    /**
+     * Free-text description, when the event carries one. May contain HTML from
+     * the source; clients render a plain-text preview.
+     */
+    description?: string | null;
+    /**
+     * Whether the canonical source prohibits mutation.
+     */
+    isReadOnly: boolean;
+    /**
+     * Whether the series carries a recurrence rule. Lets a row render a
+     * recurring badge without parsing the rules.
+     */
+    isRecurring: boolean;
+    occurrence?: null | CalendarEventSearchOccurrence;
+    organizer?: null | CalendarEventOrganizer;
+    /**
+     * Canonical status (`confirmed`, `tentative`, `cancelled`).
+     */
+    status: string;
+    /**
+     * The series' own span.
+     */
+    time: CalendarEventSearchTime;
+    updatedAt: string;
+};
+
+/**
+ * The event's organizer — its creator, in Google's model. Either field can be
+ * absent when the source does not name it.
+ */
+export type CalendarEventOrganizer = {
+    /**
+     * Organizer email address, when known.
+     */
+    email?: string | null;
+    /**
+     * Display name, when the source provided one.
+     */
+    name?: string | null;
+};
+
+/**
+ * The instance a search row points at.
+ *
+ * A recurring series is indexed once, as its master. Which instance the row
+ * should show is decided per request rather than baked into the index: the
+ * next occurrence at or after now, else the most recent past one. This is
+ * the same resolution a calendar mention performs, so a search row and a
+ * mention of the same event agree on where they land.
+ */
+export type CalendarEventSearchOccurrence = {
+    /**
+     * Stable key of the resolved instance within its series.
+     */
+    occurrenceKey: string;
+    /**
+     * Span of the resolved instance.
+     */
+    time: CalendarEventSearchTime;
+};
+
+/**
+ * A single response item, part of the CalendarEventSearchResponse object
+ */
+export type CalendarEventSearchResponseItem = {
+    calendar_event_search_results: Array<CalendarEventSearchResult>;
+    created_at: string;
+    /**
+     * Standardized fields that all item types will share.
+     */
+    id: string;
+    name: string;
+    owner_id: string;
+    updated_at: string;
+};
+
+/**
+ * CalendarEventSearchResponseItem with metadata fetched from macrodb.
+ */
+export type CalendarEventSearchResponseItemWithMetadata = CalendarEventSearchResponseItem & {
+    metadata?: null | CalendarEventMetadata;
+    /**
+     * Entity properties (e.g. tags) on the event.
+     */
+    properties?: Array<SoupProperty> | null;
+};
+
+export type CalendarEventSearchResult = {
+    highlight: SearchHighlight;
+    /**
+     * The score of the result
+     */
+    score?: number | null;
+};
+
+/**
+ * Which calendar events a unified search covers.
+ *
+ * Sharing an event with a channel lets its members see the sharer's copy,
+ * which is on none of their own calendars, so the default scope never finds
+ * it. Shared events are a separate scope rather than part of the default, so
+ * a caller can list them after the caller's own events without reordering
+ * those.
+ */
+export type CalendarEventSearchScope = 'own' | 'shared_with_you';
+
+/**
+ * Timed or all-day span of a calendar event.
+ *
+ * Deliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`
+ * rather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and
+ * `JsonSchema` (AI tool schemas), and `models_soup` carries no schemars
+ * dependency. The wire shape is identical and must stay that way, so a
+ * client can decode a search row and a soup row with one mapping.
+ *
+ * Fields are camelCased per variant rather than via `rename_all_fields`,
+ * which utoipa ignores.
+ */
+export type CalendarEventSearchTime = {
+    /**
+     * Exclusive end.
+     */
+    endsAt: string;
+    kind: 'timed';
+    /**
+     * Inclusive start.
+     */
+    startsAt: string;
+    /**
+     * Original IANA time zone.
+     */
+    timeZone?: string | null;
+} | {
+    /**
+     * Exclusive end date.
+     */
+    endDate: string;
+    kind: 'allDay';
+    /**
+     * Inclusive start date.
+     */
+    startDate: string;
 };
 
 /**
@@ -74,7 +308,7 @@ export type CallRecordMetadata = {
 export type CallRecordSearchResponseItem = {
     call_id: string;
     call_search_results: Array<CallRecordSearchResult>;
-    channel_id: string;
+    channel_id?: string | null;
     id: string;
     name?: string | null;
     owner_id: string;
@@ -424,7 +658,10 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -632,7 +869,16 @@ export type CrmCompanySearchResponseItem = {
 /**
  * Data type for property values, determining storage and validation.
  */
-export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+
+/**
+ * A span of time from `start` to `end`, both included. The end is never
+ * before the start: a range that would end earlier does not deserialize.
+ */
+export type DateRange = {
+    end: string;
+    start: string;
+};
 
 /**
  * The document filters used to filter down what documents you search over.
@@ -659,7 +905,10 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -794,8 +1043,11 @@ export type DocumentSearchResult = {
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_description';
 
 /**
  * The email filters used to filter down what emails you search over.
@@ -853,6 +1105,10 @@ export type EmailFilters = {
      * Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.
      */
     include_labels?: Array<string>;
+    /**
+     * Filter by the email thread's read flag, independently of notification state.
+     */
+    is_read?: boolean | null;
     /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
@@ -1049,6 +1305,10 @@ export type EmptyResponse = {
  */
 export type EntityFilters = {
     /**
+     * the bundled [AgentSessionFilters]
+     */
+    agent_session_filters?: AgentSessionFilters;
+    /**
      * the bundled [CalendarEventFilters]
      */
     calendar_event_filters?: CalendarEventFilters;
@@ -1081,9 +1341,17 @@ export type EntityFilters = {
      */
     email_filters?: EmailFilters;
     /**
+     * Restrict results to the authenticated viewer's favorites when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the bundled [ForeignEntityFilters]
      */
     foreign_entity_filters?: ForeignEntityFilters;
+    /**
+     * Initiative filters. Initiatives are opt-in.
+     */
+    initiative_filters?: InitiativeFilters;
     /**
      * the bundled [ProjectFilters]
      */
@@ -1092,10 +1360,6 @@ export type EntityFilters = {
      * property-based filters applied across entity types
      */
     property_filters?: Array<PropertyFilter>;
-    /**
-     * the bundled [ReminderFilters]
-     */
-    reminder_filters?: ReminderFilters;
     /**
      * How the `tag_option_ids` combine: `any` (default) matches entities
      * holding at least one selected tag, `all` requires every selected tag.
@@ -1125,7 +1389,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -1154,7 +1418,7 @@ export type ErrorResponse = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'xlsm' | 'ppt' | 'doc' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'psd' | 'psb' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
 
 /**
  * Filters for foreign entity records.
@@ -1185,6 +1449,55 @@ export type ForeignEntityFilters = {
     notification_filters?: NotificationFilters;
 };
 
+/**
+ * The search service version of a highlight
+ */
+export type Highlight = {
+    /**
+     * If the match was on the entity content, this will provide a list of highlights
+     * for each content match
+     */
+    content?: Array<string>;
+    /**
+     * If the match was on the entity name, this will be present with that highlight
+     */
+    name?: string | null;
+};
+
+/**
+ * Filters for initiatives.
+ */
+export type InitiativeFilters = {
+    /**
+     * Inclusive lower due-date bound.
+     */
+    due_after?: string | null;
+    /**
+     * Inclusive upper due-date bound.
+     */
+    due_before?: string | null;
+    /**
+     * Opt this query into initiatives at all. Initiatives are off by
+     * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+     * Asking for specific `initiative_ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Initiative ids to filter by. Empty to include all accessible initiatives.
+     */
+    initiative_ids?: Array<string>;
+    /**
+     * Case-insensitive name substring.
+     */
+    name?: string | null;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
+};
+
 export type MatchType = 'exact' | 'partial' | 'regexp' | 'query';
 
 /**
@@ -1192,16 +1505,16 @@ export type MatchType = 'exact' | 'partial' | 'regexp' | 'query';
  */
 export type NotificationFilters = {
     /**
-     * Filter by notification done state.
-     * None to ignore, true to include only done notifications, false to include only not-done notifications.
+     * Include entities with a non-deleted notification in any of these exact states.
+     * Empty means no notification restriction. Active means `[unseen, seen]`.
      */
-    done?: boolean | null;
-    /**
-     * Filter by notification seen state.
-     * None to ignore, true to include only seen notifications, false to include only unseen notifications.
-     */
-    seen?: boolean | null;
+    states?: Array<NotificationState>;
 };
+
+/**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
 
 /**
  * The project filters used to filter down what projects you search over.
@@ -1220,7 +1533,10 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -1333,7 +1649,7 @@ export type PropertyDefinition = {
      */
     is_system: boolean;
     owner: PropertyOwner;
-    specific_entity_type?: null | EntityType;
+    specific_entity_type: null | EntityType;
     updated_at: string;
 };
 
@@ -1366,7 +1682,7 @@ export type PropertyFilter = {
 };
 
 /**
- * Defines who owns a property - user-scoped, team-scoped, or system.
+ * Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.
  */
 export type PropertyOwner = {
     scope: 'user';
@@ -1374,6 +1690,9 @@ export type PropertyOwner = {
 } | {
     scope: 'team';
     team_id: string;
+} | {
+    database_id: string;
+    scope: 'database';
 } | {
     scope: 'system';
 };
@@ -1413,6 +1732,13 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    type: 'DateRange';
+    /**
+     * Date range value
+     * Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+     */
+    value: DateRange;
+} | {
     type: 'SelectOption';
     /**
      * Select option(s) - always an array (check is_multi_select to determine if single or multi)
@@ -1439,37 +1765,76 @@ export type PropertyValue = {
 };
 
 /**
- * Filters for reminders.
+ * Stable navigation target from the fold, independent of raw ACP log IDs.
  */
-export type ReminderFilters = {
+export type SearchGotoAgentSession = {
     /**
-     * Filter on whether the owner has marked the reminder done. `None` returns
-     * both.
+     * Author within the turn.
      */
-    completed?: boolean | null;
+    author: AgentSessionAuthor;
     /**
-     * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
+     * Fold-assigned turn.
      */
-    entities?: Array<string>;
+    message_turn: number;
+};
+
+export type SearchGotoCallRecord = {
+    channel_id?: string | null;
+    ended_at?: string | null;
+    participant_ids: Array<string>;
+    sequence_num: number;
+    speaker_id: string;
+    started_at: string;
+    transcript_id: string;
+};
+
+export type SearchGotoChannel = {
     /**
-     * Filter on whether the reminder's next run has come due, i.e. it has
-     * fired and is awaiting its owner. `None` returns both.
-     *
-     * Evaluated server-side against the database clock rather than a
-     * timestamp supplied by the caller: a timestamp would land in the query
-     * cache key and change on every render.
+     * The channel message id
      */
-    fired?: boolean | null;
+    channel_message_id: string;
+};
+
+export type SearchGotoChat = {
     /**
-     * Reminder ids to filter by. Empty to include all of the caller's reminders.
+     * The chat message id
      */
-    ids?: Array<string>;
+    chat_message_id: string;
     /**
-     * Opt this query into reminders at all. Reminders are off by default —
-     * see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
-     * specific `ids` or `entities` also opts in.
+     * The role of the chat message
      */
-    include?: boolean;
+    role: string;
+};
+
+/**
+ * The search service version of a goto
+ */
+export type SearchGotoContent = SearchGotoAgentSession | SearchGotoDocument | SearchGotoChat | SearchGotoEmail | SearchGotoChannel | SearchGotoCallRecord;
+
+export type SearchGotoDocument = {
+    /**
+     * The node id of the document
+     * This can be a stringified page number 0-indexed for pdf/docx files,
+     * or it can be a unique id that is used in lexical for markdown files.
+     */
+    node_id: string;
+    /**
+     * The raw content of the document
+     */
+    raw_content?: string | null;
+};
+
+export type SearchGotoEmail = {
+    bcc: Array<string>;
+    cc: Array<string>;
+    /**
+     * The email message id
+     */
+    email_message_id: string;
+    labels: Array<string>;
+    recipients: Array<string>;
+    sender: string;
+    sent_at?: string | null;
 };
 
 export type SearchHighlight = {
@@ -1517,9 +1882,44 @@ export type SearchResponse = {
  */
 export type SharedEmailFilter = 'exclude' | 'include' | 'only';
 
+export type SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp = {
+    /**
+     * The calendar event id
+     */
+    calendar_event_id: string;
+    /**
+     * DateTime<Utc> ts_seconds deserialization + RFC3339 serialization
+     */
+    created_at: string;
+    /**
+     * The highlights on the event
+     */
+    highlight: SearchHighlight;
+    /**
+     * Whether the series carries a recurrence rule
+     */
+    is_recurring: boolean;
+    /**
+     * Stable key of the instance this row points at, when one resolved
+     */
+    occurrence_key?: string | null;
+    /**
+     * The event title
+     */
+    title: string;
+    /**
+     * DateTime<Utc> ts_seconds deserialization + RFC3339 serialization
+     */
+    updated_at: string;
+    /**
+     * The owner of this event projection
+     */
+    user_id: string;
+};
+
 export type SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp = {
     call_id: string;
-    channel_id: string;
+    channel_id?: string | null;
     channel_name?: string | null;
     duration_ms: number;
     /**
@@ -1957,6 +2357,27 @@ export type SimpleProjectSearchResponseBaseItemHumanReadableTimestamp = {
     user_id: string;
 };
 
+/**
+ * The response for simple search
+ */
+export type SimpleSearchResponse = {
+    results: Array<SimpleSearchResponseItem>;
+};
+
+/**
+ * Simple response item to mimic what we get back from opensearch
+ */
+export type SimpleSearchResponseItem = {
+    /**
+     * ID of the chat, channel, email, or document
+     */
+    entity_id: string;
+    entity_type: string;
+    goto?: null | SearchGotoContent;
+    highlight: Highlight;
+    score?: number | null;
+};
+
 export type SimpleUnifiedSearchBaseResponse = {
     results: Array<SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp>;
 };
@@ -1973,6 +2394,8 @@ export type SimpleUnifiedSearchResponseBaseItem = (SimpleDocumentSearchResponseB
     type: 'project';
 }) | (SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp & {
     type: 'call';
+}) | (SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp & {
+    type: 'calendarEvent';
 });
 
 export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp = (SimpleDocumentSearchResponseBaseItemHumanReadableTimestamp & {
@@ -1987,6 +2410,8 @@ export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp = (SimpleD
     type: 'project';
 }) | (SimpleCallRecordSearchResponseBaseItemHumanReadableTimestamp & {
     type: 'call';
+}) | (SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp & {
+    type: 'calendarEvent';
 });
 
 /**
@@ -2024,6 +2449,13 @@ export type TaskFilters = {
 };
 
 export type UnifiedSearchRequest = {
+    /**
+     * Which calendar events to search. Defaults to `own`: events on the
+     * caller's own and delegated calendars. `shared_with_you` searches only
+     * events shared with a channel the caller belongs to that are on none of
+     * their calendars.
+     */
+    calendar_event_scope?: CalendarEventSearchScope;
     collapse?: boolean | null;
     /**
      * Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search.
@@ -2077,6 +2509,10 @@ export type UnifiedSearchResponseItem = (DocumentSearchResponseItemWithMetadata 
     type: 'call';
 }) | (CrmCompanySearchResponseItem & {
     type: 'company';
+}) | (CalendarEventSearchResponseItemWithMetadata & {
+    type: 'calendarEvent';
+}) | (AgentSessionSearchResponseItem & {
+    type: 'agentSession';
 });
 
 export type UnifiedSearchData = {
@@ -2134,7 +2570,7 @@ export type SimpleUnifiedSearchErrors = {
 export type SimpleUnifiedSearchError = SimpleUnifiedSearchErrors[keyof SimpleUnifiedSearchErrors];
 
 export type SimpleUnifiedSearchResponses = {
-    200: SimpleUnifiedSearchBaseResponse;
+    200: SimpleSearchResponse;
 };
 
 export type SimpleUnifiedSearchResponse = SimpleUnifiedSearchResponses[keyof SimpleUnifiedSearchResponses];

@@ -85,11 +85,11 @@ export function CodeFileTypeChip() {
           }}
           gutter={4}
         >
-          <Popover.Trigger class="shrink-0 rounded px-1 py-0.5 text-xxs font-mono font-medium uppercase leading-none bg-code-bg text-code hover:brightness-90 transition-[filter]">
+          <Popover.Trigger class="shrink-0 rounded px-1 py-0.5 text-xxs font-mono font-medium uppercase leading-none bg-code/20 text-code hover:brightness-90 transition-[filter]">
             {fileType()}
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content class="z-action-menu w-48 rounded border border-edge bg-surface text-ink text-sm shadow-md overflow-hidden">
+            <Popover.Content class="menu-surface z-action-menu w-48 text-sm overflow-hidden">
               <div class="p-1.5 border-b border-edge">
                 <input
                   ref={searchRef}

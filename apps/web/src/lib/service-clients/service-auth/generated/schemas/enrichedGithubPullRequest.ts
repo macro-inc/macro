@@ -5,14 +5,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EnrichedGithubPullRequestAdditions } from './enrichedGithubPullRequestAdditions';
+import type { EnrichedGithubPullRequestAssignees } from './enrichedGithubPullRequestAssignees';
 import type { EnrichedGithubPullRequestAuthorId } from './enrichedGithubPullRequestAuthorId';
 import type { EnrichedGithubPullRequestAuthorLogin } from './enrichedGithubPullRequestAuthorLogin';
 import type { EnrichedGithubPullRequestChecks } from './enrichedGithubPullRequestChecks';
 import type { EnrichedGithubPullRequestComments } from './enrichedGithubPullRequestComments';
 import type { EnrichedGithubPullRequestDeletions } from './enrichedGithubPullRequestDeletions';
 import type { EnrichedGithubPullRequestDescription } from './enrichedGithubPullRequestDescription';
+import type { EnrichedGithubPullRequestLabels } from './enrichedGithubPullRequestLabels';
 import type { EnrichedGithubPullRequestName } from './enrichedGithubPullRequestName';
 import type { EnrichedGithubPullRequestParticipantGithubUserIds } from './enrichedGithubPullRequestParticipantGithubUserIds';
+import type { EnrichedGithubPullRequestReviews } from './enrichedGithubPullRequestReviews';
 import type { EnrichedGithubPullRequestStatus } from './enrichedGithubPullRequestStatus';
 
 /**
@@ -24,6 +27,8 @@ export interface EnrichedGithubPullRequest {
    * @minimum 0
    */
   additions?: EnrichedGithubPullRequestAdditions;
+  /** The users assigned to the pull request, when known. */
+  assignees?: EnrichedGithubPullRequestAssignees;
   /**
    * The stable numeric GitHub user id for the pull request author, when available.
    * @minimum 0
@@ -46,6 +51,8 @@ export interface EnrichedGithubPullRequest {
   displayName: string;
   /** The stored GitHub association key, in `owner/repo/pull/number` format. */
   githubKey: string;
+  /** The pull request's labels, when known. */
+  labels?: EnrichedGithubPullRequestLabels;
   /** The GitHub pull request title, when enrichment succeeds. */
   name?: EnrichedGithubPullRequestName;
   /**
@@ -61,6 +68,9 @@ union rather than replacing it (partial write paths must not drop known particip
   participantGithubUserIds?: EnrichedGithubPullRequestParticipantGithubUserIds;
   /** The GitHub repository name. */
   repo: string;
+  /** Each reviewer's latest submitted review, when known. Stored metadata merges this per
+reviewer, so a write that knows one review keeps the others. */
+  reviews?: EnrichedGithubPullRequestReviews;
   status?: EnrichedGithubPullRequestStatus;
   /** The public GitHub URL for the pull request. */
   url: string;

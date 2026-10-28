@@ -14,6 +14,7 @@ export function getBlockNameFromEntity(
     .with('channel', () => 'channel' as const)
     .with('dm', () => 'channel' as const)
     .with('email', () => 'email' as const)
+    .with('agent_session', () => 'agent' as const)
     .with('chat', () => 'chat' as const)
     .with('project', () => 'project' as const)
     .with('task', () => 'task' as const)
@@ -21,6 +22,10 @@ export function getBlockNameFromEntity(
     .with('skill', () => 'skill' as const)
     .with('note', () => 'md' as const)
     .with('crm_company', () => 'company' as const)
+    .with('crm_contact', () => 'contact' as const)
+    .with('database', () => 'database' as const)
+    .with('form', () => 'form' as const)
+    .with('initiative', () => 'initiative' as const)
     .otherwise(() => {
       const entity = item.data;
       if ('fileType' in entity && typeof entity.fileType === 'string') {
@@ -44,7 +49,19 @@ export function getMentionItemName(item: MentionItem): string {
       return `@${item.data.groupAlias}`;
     case 'date':
       return item.data.displayText;
+    case 'agentSession':
+      return [
+        item.data.name || 'Agent session',
+        item.data.bot?.name ? `@${item.data.bot.name}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ');
+    case 'bookingLink':
+    case 'calendarEvent':
+      return item.data.title;
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
+    case 'externalChat':
+      return item.data.name;
   }
 }

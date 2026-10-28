@@ -1,12 +1,13 @@
 /**
  * @file Touch cell selection for tables: long-press a cell to select it, then
  * swipe in any direction to extend the selection cell-by-cell. Mouse/pen
- * drags already do this via @lexical/table's own pointer handlers; on touch
- * the browser claims the drag for scrolling before those handlers see any
- * movement. Long-press is the disambiguator: a finger that hasn't moved by
- * then isn't scrolling, so from that point the gesture is ours to keep (a
- * non-passive touchmove listener blocks the pan) and the selection is driven
- * through the same TableObserver the desktop drag uses.
+ * drags already do this via @lexical/table's own pointer handlers, but a
+ * finger that starts moving right away is scrolling, so those handlers are
+ * kept away from touch entirely by `tableTouchDragGuard`. Long-press is the
+ * disambiguator: a finger that hasn't moved by then isn't scrolling, so from
+ * that point the gesture is ours to keep (a non-passive touchmove listener
+ * blocks the pan) and the selection is driven through the same TableObserver
+ * the desktop drag uses.
  */
 import {
   getDOMCellFromTarget,
@@ -86,9 +87,6 @@ function registerTableTouchSelection(editor: LexicalEditor): () => void {
 
         const onSelectMove = (move: PointerEvent) => {
           if (move.pointerId !== pointerId) return;
-          // Keep @lexical/table's window-level drag handler (attached on the
-          // same pointerdown) from fighting over the selection.
-          move.stopPropagation();
           let focusCell: TableDOMCell | null = null;
           for (const el of document.elementsFromPoint(
             move.clientX,

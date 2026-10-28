@@ -67,8 +67,8 @@ fn values(instance: &Instance) -> Vec<(&'static str, String)> {
     } else {
         let proxy = instance.port(Port::Proxy);
         (
-            format!("http://localhost:{proxy}/sync"),
-            format!("http://localhost:{proxy}/lexical"),
+            format!("https://localhost:{proxy}/sync"),
+            format!("https://localhost:{proxy}/lexical"),
         )
     };
 

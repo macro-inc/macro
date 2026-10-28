@@ -1,0 +1,18 @@
+{
+  "fixture_notice": "Synthetic corporate export roots; no customer data.",
+  "groups.json": [
+    {"id":"C200","name":"synthetic-private","created":"1700000001","creator":"U200","members":["U100","U200"],"is_archived":true}
+  ],
+  "dms.json": [
+    {"id":"D100","members":["U100","U200"],"created":1700000002},
+    {"id":"D101","members":["U100","U400"],"created":null},
+    {"id":"D102","members":["U100","U300"]}
+  ],
+  "mpims.json": [
+    {"id":"G100","name":"mpdm-synthetic","members":["U100","U200","U400"],"created":"1700000003.000001"}
+  ],
+  "users.json": [
+    {"id":"U400","name":"no-email","profile":{"display_name":"External Example"}},
+    {"id":"U500","name":"integration","is_bot":true,"profile":{"email":"integration@example.test"}}
+  ]
+}

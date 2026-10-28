@@ -3,6 +3,11 @@
 use models_properties::service::property_option::PropertyOption;
 use thiserror::Error;
 
+/// A stored property value cannot be decoded or used for the requested mutation.
+#[derive(Debug, Error)]
+#[error("Stored property value is invalid for this operation")]
+pub(crate) struct InvalidStoredPropertyValue;
+
 /// Domain error type for property operations.
 #[derive(Debug, Error)]
 pub enum PropertiesErr {
@@ -47,6 +52,10 @@ pub enum PropertiesErr {
     /// Team scope was requested by a caller with no team - maps to 403
     #[error("You must be on a team to use team-scoped properties")]
     TeamMembershipRequired,
+
+    /// The team definition is owned by another feature's settings - maps to 403
+    #[error("This property is managed from its feature's settings and cannot be edited here")]
+    ManagedDefinition,
 
     /// Repository/database errors - maps to 500
     #[error(transparent)]

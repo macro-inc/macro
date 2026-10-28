@@ -1,36 +1,46 @@
 use async_lock::Mutex;
-use cache_core::codec::cache_database_name;
+use cache_core::codec::{
+    CACHE_FORMAT_VERSION, CACHE_SCHEMA_COMPATIBILITY_EPOCH, UNVERSIONED_STORAGE_VERSIONS,
+    cache_database_name, legacy_cache_database_name,
+};
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite,
-    QueryRegistration, ReadResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
+    EngineError, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::predicate::PredicateQueryResult;
 use cache_core::query_inspection::QueryInspection;
-use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
-use cache_core::record_selection::RecordSelection;
+use cache_core::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
+};
+use cache_core::record_selection::cache::RecordSelectionCache;
 use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
 use cache_turso::{
-    PhysicalResetReason, TursoStorage, TursoStorageCloseOutcome, TursoStorageError,
-    TursoStorageOpenOutcome,
+    PhysicalResetReason, QueuedMutationCount, TursoStorage, TursoStorageCloseOutcome,
+    TursoStorageError, TursoStorageOpenOutcome, count_queued_mutations,
 };
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, optimistic_projection_mutations,
+    SoupFilterCompileOutcome, authoritative_projection_mutations,
+    compile_current_filter_request as compile_filter_request, dirty_projection_mutations,
+    mail::ProjectionError as MailProjectionError, notification_deletion_updates,
+    notification_projection_updates, optimistic_notification_updates,
+    optimistic_projection_mutations,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use turso_opfs::{OpenResult, OpfsOwner};
+use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::future_to_promise;
+use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
+mod calendar;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
@@ -140,19 +150,34 @@ struct JsQueryRegistration {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    identity_errors: Vec<String>,
+    revision: String,
+    revision_advanced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    search_changed_buckets: Option<std::collections::BTreeSet<String>>,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
+    search_changed_buckets: std::collections::BTreeSet<String>,
+    revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     data: Option<serde_json::Value>,
 }
 
@@ -164,12 +189,45 @@ struct JsInspectionPathSegment {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsEnqueueOptimisticMutationResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     transaction_id: String,
+    upsert_kind: JsMutationUpsertKind,
+    revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     initial_claim: JsInitialMutationClaim,
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsMutationUpsertKind {
+    Inserted,
+    ReplacedPending { removed_transaction_id: String },
+    AppendedAfterActive { active_transaction_id: String },
+}
+
+impl From<MutationUpsertKind> for JsMutationUpsertKind {
+    fn from(kind: MutationUpsertKind) -> Self {
+        match kind {
+            MutationUpsertKind::Inserted => Self::Inserted,
+            MutationUpsertKind::ReplacedPending { removed_id } => Self::ReplacedPending {
+                removed_transaction_id: removed_id.to_string(),
+            },
+            MutationUpsertKind::AppendedAfterActive { active_id } => Self::AppendedAfterActive {
+                active_transaction_id: active_id.to_string(),
+            },
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -183,28 +241,48 @@ enum JsInitialMutationClaim {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsClaimedMutation {
+    client_metadata: Option<serde_json::Value>,
     transaction_id: String,
+    uuid: String,
+    superseded: bool,
+    requires_confirmation: bool,
     lease_generation: String,
     query: String,
     operation_name: Option<String>,
     variables: serde_json::Value,
     identity: Option<String>,
     attempt_count: u32,
+    server_failure_count: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enqueued_at_ms: Option<i64>,
 }
 
 impl TryFrom<ClaimedMutation> for JsClaimedMutation {
     type Error = JsValue;
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let requires_confirmation = claimed.queued.requires_confirmation();
+        let client_metadata = cache_core::queue::decode_optimistic_source(
+            &claimed.queued.optimistic.optimistic_data_json,
+        )
+        .map_err(err_js)?
+        .client_metadata;
+        let enqueued_at_ms = claimed.queued.mutation.enqueued_at_ms();
         let request = claimed.queued.mutation.request;
         Ok(Self {
+            client_metadata,
             transaction_id: claimed.queued.id.to_string(),
+            uuid: claimed.queued.uuid.to_string(),
+            superseded: claimed.queued.superseded,
+            requires_confirmation,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,
             variables: serde_json::from_str(&request.variables_json).map_err(err_js)?,
             identity: request.identity,
             attempt_count: claimed.queued.mutation.attempt_count,
+            server_failure_count: claimed.queued.mutation.server_failure_count,
+            enqueued_at_ms,
         })
     }
 }
@@ -259,22 +337,147 @@ fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct JsEntityFilterRequest {
+    live_query: Option<soup_filter_cache_adapter::live_query::LiveQueryRequest>,
     filters: serde_json::Value,
     sort_method: String,
     sort_direction: String,
     limit: u16,
+    baseline: Option<Vec<JsPredicateBaselineEntry>>,
+    mail: Option<soup_filter_cache_adapter::mail::PageRequest>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct JsPredicateBaselineEntry {
+    key: String,
+    sort_timestamp: String,
 }
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 enum JsEntityFilterResult {
-    Complete { keys: Vec<String>, optimistic: bool },
+    LiveQuery {
+        #[serde(flatten)]
+        update: cache_core::engine::live_query::LiveQueryUpdate,
+    },
+    Reconciled {
+        revision: String,
+        keys: Vec<String>,
+        #[serde(rename = "retainedKeys")]
+        retained_keys: Vec<String>,
+        optimistic: bool,
+    },
+    Complete {
+        revision: String,
+        keys: Vec<String>,
+        optimistic: bool,
+    },
     Unsupported,
-    Incomplete,
+    Incomplete {
+        revision: String,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsRecordSelectionResult {
+    revision: String,
+    records: Vec<cache_core::record_selection::SelectedRecord>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsAffectedOperationsResult {
+    revision: String,
+    affected_ops: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct JsRevisionResult {
+    revision: String,
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsDeferOptimisticWriteResult {
+    Deferred,
+    DiscardedSuperseded {
+        replacement_transaction_id: String,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsCommitOptimisticWriteResult {
+    Failed {
+        error: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replacement_transaction_id: Option<String>,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+    Committed {
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+    CommittedSuperseded {
+        replacement_transaction_id: String,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsRollbackOptimisticWriteResult {
+    RolledBack {
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+    DiscardedSuperseded {
+        replacement_transaction_id: String,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+}
+
+fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
+    JsWriteResult {
+        field_changes: result.field_changes,
+        identity_errors: result.identity_errors,
+        revision: result.revision.to_string(),
+        revision_advanced: result.revision_advanced,
+        search_changed_buckets: result.search_changed_buckets,
+        changed: result
+            .changed
+            .into_iter()
+            .map(|key| key.0.into_owned())
+            .collect(),
+        affected_ops: ops.names(result.affected_ops),
+        reset: result.reset,
+        revalidations: result.revalidations,
+        mutation_uuid: result.mutation_uuid,
+    }
 }
 
 struct CacheState {
+    selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
+    mail_generation: String,
     scope: String,
     hot_capacity: Option<u32>,
     reset_required: bool,
@@ -299,11 +502,29 @@ impl CacheState {
             .expect("callable cache state contains an engine"))
     }
 
+    /// Keep stored projection inputs out of writes that will reset the cache.
+    /// The engine still owns the identity reset and operation invalidation.
+    async fn can_reuse_stored_identity(&mut self, identity: Option<&str>) -> Result<bool, JsValue> {
+        let Some(observed) = identity else {
+            return Ok(true);
+        };
+        let result = self.engine_mut()?.current_identity().await;
+        let bound = self.engine_result(result)?;
+        Ok(bound.as_deref().is_none_or(|bound| bound == observed))
+    }
+
     fn engine_result<T>(
         &mut self,
         result: Result<T, EngineError<TursoStorageError>>,
     ) -> Result<T, JsValue> {
         result.map_err(|error| self.engine_error(error))
+    }
+
+    fn mail_projection_error(&mut self, error: MailProjectionError<TursoStorageError>) -> JsValue {
+        match error {
+            MailProjectionError::Storage(error) => self.engine_error(EngineError::Storage(error)),
+            MailProjectionError::Adapter(error) => err_js(error),
+        }
     }
 
     fn engine_error(&mut self, error: EngineError<TursoStorageError>) -> JsValue {
@@ -323,15 +544,80 @@ pub struct CacheEngine {
 }
 
 fn database_identity(scope: &str) -> String {
-    cache_database_name(scope)
+    cache_database_name(scope, cache_turso::STORAGE_SCHEMA_VERSION)
+}
+
+/// Whether `identity` names one of this scope's databases that this build does
+/// not open and that no newer build could want: the unversioned name once this
+/// build's versions have moved past it, or another name for versions no newer
+/// than this build's. A newer version belongs to a build that may come back,
+/// for example after a rollback, so it is never stale.
+fn is_stale_identity(scope: &str, identity: &str) -> bool {
+    let unversioned = legacy_cache_database_name(scope);
+    let version = if identity == unversioned {
+        Some(UNVERSIONED_STORAGE_VERSIONS)
+    } else {
+        storage_version(&unversioned, identity)
+    };
+    let own = (
+        CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        CACHE_FORMAT_VERSION,
+        cache_turso::STORAGE_SCHEMA_VERSION,
+    );
+    identity != database_identity(scope) && version.is_some_and(|version| version <= own)
+}
+
+/// The `(epoch, format, storage)` versions embedded in a scope's database name.
+fn storage_version(unversioned: &str, identity: &str) -> Option<(u32, u32, u32)> {
+    let mut parts = identity
+        .strip_prefix(unversioned)?
+        .strip_prefix(":s")?
+        .split('.');
+    let number = |part: &str| -> Option<u32> {
+        if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        part.parse().ok()
+    };
+    let epoch = number(parts.next()?)?;
+    let format = number(parts.next()?.strip_prefix('v')?)?;
+    let storage = number(parts.next()?.strip_prefix('t')?)?;
+    parts.next().is_none().then_some((epoch, format, storage))
+}
+
+thread_local! {
+    static RUNTIME_SCHEMA: std::cell::RefCell<Option<std::sync::Arc<cache_core::meta::Schema>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Parses bundle SDL once per worker, before opening its engine.
+#[wasm_bindgen(js_name = configureCacheSchema)]
+pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
+    let schema = cache_core::meta::Schema::from_sdl(schema_sdl).map_err(err_js)?;
+    RUNTIME_SCHEMA.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if let Some(existing) = slot.as_ref() {
+            if existing.hash() != schema.hash() {
+                return Err(err_js("schema changed within a running cache worker"));
+            }
+        } else {
+            *slot = Some(schema);
+        }
+        Ok(())
+    })
 }
 
 fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngine {
     let storage = wrap_storage(storage);
-    match hot_capacity {
-        Some(capacity) => Engine::with_capacity(storage, capacity as usize),
-        None => Engine::new(storage),
-    }
+    let schema = RUNTIME_SCHEMA.with(|slot| {
+        slot.borrow_mut()
+            .get_or_insert_with(cache_core::meta::bundled_schema)
+            .clone()
+    });
+    Engine::with_schema(
+        storage,
+        hot_capacity.map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+        schema,
+    )
 }
 
 fn validate_hot_capacity(hot_capacity: Option<u32>) -> Result<(), JsValue> {
@@ -346,7 +632,7 @@ async fn open_owner(owner: OpfsOwner) -> Result<OpenResult, JsValue> {
     match owner.open().await {
         Ok(opened) => Ok(opened),
         Err(failure) => {
-            let error = err_js(&failure);
+            let error = storage_err_js(failure.error());
             if let Some(owner) = failure.into_owner() {
                 owner.release().await.map_err(err_js)?;
             }
@@ -383,12 +669,21 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
                             .physical_reset_reason()
                             .expect("reset-required error has a reset reason"),
                     );
-                    (failure.reset().await.map_err(err_js)?, outcome)
+                    (
+                        failure
+                            .reset()
+                            .await
+                            .map_err(|failure| storage_err_js(failure.error()))?,
+                        outcome,
+                    )
                 }
             }
         }
         OpenResult::ResetRequired(session) => (
-            session.reset().await.map_err(err_js)?,
+            session
+                .reset()
+                .await
+                .map_err(|failure| storage_err_js(failure.error()))?,
             CacheOpenOutcome::ResetStorageUncertain,
         ),
     };
@@ -403,7 +698,10 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
                 }),
                 Err(failure) => {
                     let reset_required = failure.error().requires_physical_reset();
-                    let owner = failure.reset().await.map_err(err_js)?;
+                    let owner = failure
+                        .reset()
+                        .await
+                        .map_err(|failure| storage_err_js(failure.error()))?;
                     owner.release().await.map_err(err_js)?;
                     Err(if reset_required {
                         reset_required_js_error()
@@ -414,19 +712,60 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
             }
         }
         OpenResult::ResetRequired(session) => {
-            let owner = session.reset().await.map_err(err_js)?;
+            let owner = session
+                .reset()
+                .await
+                .map_err(|failure| storage_err_js(failure.error()))?;
             owner.release().await.map_err(err_js)?;
             Err(reset_required_js_error())
         }
     }
 }
 
-async fn acquire_storage(scope: &str, recovery_wipe: bool) -> Result<OpenedStorage, JsValue> {
-    let owner = OpfsOwner::acquire(&database_identity(scope))
-        .await
-        .map_err(err_js)?;
+/// Waits until the caller may touch storage while this owner holds the lock.
+/// Holding the lock only proves no other engine uses the files; the browser
+/// coordinator must also record that this engine's epoch may change them.
+async fn await_storage_grant(
+    owner: OpfsOwner,
+    grant: &js_sys::Function,
+) -> Result<OpfsOwner, JsValue> {
+    let granted = match grant.call0(&JsValue::UNDEFINED) {
+        Ok(value) => JsFuture::from(js_sys::Promise::resolve(&value)).await,
+        Err(error) => Err(error),
+    };
+    match granted {
+        Ok(_) => Ok(owner),
+        Err(error) => {
+            owner.release().await.map_err(err_js)?;
+            Err(error)
+        }
+    }
+}
+
+async fn acquire_storage(
+    scope: &str,
+    recovery_wipe: bool,
+    storage_grant: Option<&js_sys::Function>,
+    if_available: bool,
+) -> Result<OpenedStorage, JsValue> {
+    let identity = database_identity(scope);
+    let owner = if if_available {
+        OpfsOwner::try_acquire(&identity)
+            .await
+            .map_err(err_js)?
+            .ok_or_else(owner_lock_unavailable_js_error)?
+    } else {
+        OpfsOwner::acquire(&identity).await.map_err(err_js)?
+    };
+    let owner = match storage_grant {
+        Some(grant) => await_storage_grant(owner, grant).await?,
+        None => owner,
+    };
     let owner = if recovery_wipe {
-        owner.recovery_wipe().await.map_err(err_js)?
+        owner
+            .recovery_wipe()
+            .await
+            .map_err(|failure| storage_err_js(failure.error()))?
     } else {
         owner
     };
@@ -441,13 +780,18 @@ async fn open_cache_inner(
     scope: String,
     hot_capacity: Option<u32>,
     recovery_wipe: bool,
+    storage_grant: Option<js_sys::Function>,
+    if_available: bool,
 ) -> Result<(CacheEngine, CacheOpenOutcome), JsValue> {
     validate_hot_capacity(hot_capacity)?;
-    let OpenedStorage { storage, outcome } = acquire_storage(&scope, recovery_wipe).await?;
+    let OpenedStorage { storage, outcome } =
+        acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
+                selections: RecordSelectionCache::default(),
                 engine: Some(build_engine(storage, hot_capacity)),
+                mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
                 reset_required: false,
@@ -478,18 +822,40 @@ fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<J
 /// incomplete or incompatible files are reset and reopened before returning.
 #[wasm_bindgen(js_name = openCache)]
 pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsValue> {
-    open_cache_inner(scope, hot_capacity, false)
+    open_cache_inner(scope, hot_capacity, false, None, false)
         .await
         .map(|(engine, _)| engine)
 }
 
 /// Additive open API returning the engine and payload-free recovery outcome.
+///
+/// When given, `on_owner_lock_acquired` is called once the owner lock is held
+/// and before any OPFS access; opening continues after its promise resolves.
+/// A rejection releases the lock without touching storage.
+///
+/// With `if_available`, opening never waits behind another holder of the
+/// owner lock: it rejects at once, touching nothing, with an error whose
+/// `cacheOwnerLockUnavailable` property is `true`.
+///
+/// When another context keeps the database files open through the adapter's
+/// bounded wait, opening rejects with an error whose `cacheStorageBusy`
+/// property is `true`. A plain open has then changed neither file; a recovery
+/// wipe may have removed one of them.
 #[wasm_bindgen(js_name = openCacheWithOutcome)]
 pub async fn open_cache_with_outcome(
     scope: String,
     hot_capacity: Option<u32>,
+    on_owner_lock_acquired: Option<js_sys::Function>,
+    if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(scope, hot_capacity, false).await?;
+    let (engine, outcome) = open_cache_inner(
+        scope,
+        hot_capacity,
+        false,
+        on_owner_lock_acquired,
+        if_available.unwrap_or(false),
+    )
+    .await?;
     cache_open_result(engine, outcome)
 }
 
@@ -500,19 +866,103 @@ pub async fn open_cache_for_recovery(
     scope: String,
     hot_capacity: Option<u32>,
 ) -> Result<CacheEngine, JsValue> {
-    open_cache_inner(scope, hot_capacity, true)
+    open_cache_inner(scope, hot_capacity, true, None, false)
         .await
         .map(|(engine, _)| engine)
 }
 
 /// Additive recovery-open API returning the engine and coarse wipe outcome.
+/// `on_owner_lock_acquired` and `if_available` behave as in
+/// [`openCacheWithOutcome`](open_cache_with_outcome); both precede the wipe.
 #[wasm_bindgen(js_name = openCacheForRecoveryWithOutcome)]
 pub async fn open_cache_for_recovery_with_outcome(
     scope: String,
     hot_capacity: Option<u32>,
+    on_owner_lock_acquired: Option<js_sys::Function>,
+    if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(scope, hot_capacity, true).await?;
+    let (engine, outcome) = open_cache_inner(
+        scope,
+        hot_capacity,
+        true,
+        on_owner_lock_acquired,
+        if_available.unwrap_or(false),
+    )
+    .await?;
     cache_open_result(engine, outcome)
+}
+
+/// Physical database identity this build opens for `scope`; it also names the
+/// OPFS files and derives the owner Web Lock name.
+#[wasm_bindgen(js_name = cacheDatabaseIdentity)]
+pub fn cache_database_identity(scope: String) -> String {
+    database_identity(&scope)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StaleDatabaseCleanup {
+    outcome: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    queued_mutations: Option<u64>,
+}
+
+/// Deletes one of this scope's databases that an older build left behind (see
+/// [`cacheDatabaseIdentity`](cache_database_identity)), unless another context
+/// holds its owner lock (`in-use`) or it still queues mutations
+/// (`queued-mutations`). Never waits for the lock. A file Turso cannot read,
+/// or whose queue cannot be counted, is kept and rejects; the caller should
+/// use a disposable worker, because such a failure can poison the
+/// worker-local OPFS registry.
+#[wasm_bindgen(js_name = removeStaleCacheDatabase)]
+pub async fn remove_stale_cache_database(
+    scope: String,
+    identity: String,
+) -> Result<JsValue, JsValue> {
+    if !is_stale_identity(&scope, &identity) {
+        return Err(err_js("not a stale cache database for this scope"));
+    }
+    let Some(owner) = OpfsOwner::try_acquire(&identity).await.map_err(err_js)? else {
+        return to_js(&StaleDatabaseCleanup {
+            outcome: "in-use",
+            queued_mutations: None,
+        });
+    };
+    let owner = match open_owner(owner).await? {
+        OpenResult::Ready(session) => {
+            let connected = session.connect().map_err(err_js)?;
+            let counted = count_queued_mutations(&connected);
+            let owner = connected
+                .try_close()
+                .map_err(err_js)?
+                .preserve()
+                .map_err(err_js)?;
+            match counted {
+                Ok(QueuedMutationCount::Queued(queued)) if queued > 0 => {
+                    owner.release().await.map_err(err_js)?;
+                    return to_js(&StaleDatabaseCleanup {
+                        outcome: "queued-mutations",
+                        queued_mutations: Some(queued),
+                    });
+                }
+                // A queue that cannot be counted may still hold work, so the
+                // file is kept and the cleanup rejects as for an unreadable file.
+                Err(error) => {
+                    owner.release().await.map_err(err_js)?;
+                    return Err(err_js(error));
+                }
+                // An empty queue or no queue holds no work any build could send.
+                Ok(_) => owner,
+            }
+        }
+        // Only one of the pair exists, so it never held a complete database.
+        OpenResult::ResetRequired(session) => session.reset().await.map_err(err_js)?,
+    };
+    owner.remove_and_release().await.map_err(err_js)?;
+    to_js(&StaleDatabaseCleanup {
+        outcome: "removed",
+        queued_mutations: None,
+    })
 }
 
 /// Recovery-wipes and recreates the cache database for `scope` while holding
@@ -606,14 +1056,84 @@ pub fn schema_hash() -> String {
     cache_core::meta::SCHEMA_HASH.to_string()
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CacheBuildInfo {
+    package_version: &'static str,
+    schema_hash: &'static str,
+    schema_compatibility_epoch: u32,
+    format_version: u32,
+    storage_schema_version: u32,
+}
+
+/// Read-only metadata embedded in this WASM binary, available without opening storage.
+/// Recovery fixtures compare both artifacts before invoking any destructive hook.
+#[wasm_bindgen(js_name = cacheBuildInfo)]
+pub fn cache_build_info() -> Result<JsValue, JsValue> {
+    to_js(&CacheBuildInfo {
+        package_version: env!("CARGO_PKG_VERSION"),
+        schema_hash: cache_core::meta::SCHEMA_HASH,
+        schema_compatibility_epoch: cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        format_version: cache_core::codec::CACHE_FORMAT_VERSION,
+        storage_schema_version: cache_turso::STORAGE_SCHEMA_VERSION,
+    })
+}
+
 fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
     value
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Read envelopes contain strings and JSON values. Converting the JSON in one
+/// call avoids a Wasm/JS crossing for every nested field and array element.
+fn read_response_to_js<'a, T: Serialize>(
+    response: &T,
+    values: impl IntoIterator<Item = &'a serde_json::Value>,
+) -> Result<JsValue, JsValue> {
+    // Preserve the existing rejection of integer values outside JS's safe
+    // range. JSON.parse would otherwise silently round them. Floating-point
+    // values already have JS Number semantics and are allowed at any magnitude.
+    if values.into_iter().any(has_unsafe_json_integer) {
+        return to_js(response);
+    }
+    let json = serde_json::to_string(response).map_err(err_js)?;
+    js_sys::JSON::parse(&json)
+}
+
+/// JSON values a watch update sends to JS. Patch values cross the boundary
+/// the same way as a hit's data, so they need the same integer check.
+fn query_update_values(
+    update: &cache_core::engine::watch_query::QueryUpdate,
+) -> Vec<&serde_json::Value> {
+    use cache_core::engine::watch_query::QueryUpdate;
+    match update {
+        QueryUpdate::Hit { data, .. } => vec![data.as_ref()],
+        QueryUpdate::Patch { patches, .. } => patches.iter().map(|patch| &patch.value).collect(),
+        QueryUpdate::Miss { .. } => Vec::new(),
+    }
+}
+
+fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    match value {
+        serde_json::Value::Number(number) => {
+            !number.is_f64()
+                && number
+                    .as_i64()
+                    .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
+        }
+        serde_json::Value::Array(values) => values.iter().any(has_unsafe_json_integer),
+        serde_json::Value::Object(values) => values.values().any(has_unsafe_json_integer),
+        _ => false,
+    }
+}
+
 const RESET_REQUIRED_MARKER: &str = "cacheStorageResetRequired";
 const RESET_REQUIRED_MESSAGE: &str = "cache storage reset required";
+const OWNER_LOCK_UNAVAILABLE_MARKER: &str = "cacheOwnerLockUnavailable";
+const STORAGE_BUSY_MARKER: &str = "cacheStorageBusy";
+const OWNER_LOCK_UNAVAILABLE_MESSAGE: &str = "cache database owner lock is held by another context";
 
 /// All rejections surface as real `Error` objects with consistent
 /// `instanceof Error` and `.message` behavior.
@@ -633,6 +1153,32 @@ fn reset_required_js_error() -> JsValue {
         &JsValue::TRUE,
     )
     .expect("new JavaScript Error accepts the reset marker");
+    error.into()
+}
+
+/// Converts an OPFS adapter error, marking a path another context kept open
+/// for the whole busy wait with a `cacheStorageBusy` property of `true`.
+fn storage_err_js(error: &OpfsError) -> JsValue {
+    let value = err_js(error);
+    if error.kind() == OpfsErrorKind::Busy {
+        js_sys::Reflect::set(
+            &value,
+            &JsValue::from_str(STORAGE_BUSY_MARKER),
+            &JsValue::TRUE,
+        )
+        .expect("new JavaScript Error accepts the busy marker");
+    }
+    value
+}
+
+fn owner_lock_unavailable_js_error() -> JsValue {
+    let error = js_sys::Error::new(OWNER_LOCK_UNAVAILABLE_MESSAGE);
+    js_sys::Reflect::set(
+        error.as_ref(),
+        &JsValue::from_str(OWNER_LOCK_UNAVAILABLE_MARKER),
+        &JsValue::TRUE,
+    )
+    .expect("new JavaScript Error accepts the unavailable marker");
     error.into()
 }
 
@@ -737,6 +1283,29 @@ impl CacheEngine {
         })
     }
 
+    /// Returns the current in-memory cache revision as an unsigned decimal string.
+    #[wasm_bindgen(js_name = currentRevision)]
+    pub fn current_revision(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let revision = state.engine_mut()?.current_revision();
+            Ok(JsValue::from_str(&revision.to_string()))
+        })
+    }
+
+    /// Returns the durable cache generation, initializing it when absent.
+    #[wasm_bindgen(js_name = currentStorageGeneration)]
+    pub fn current_storage_generation(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.current_storage_generation().await;
+            let generation = state.engine_result(result)?;
+            Ok(JsValue::from_str(&generation.to_string()))
+        })
+    }
+
     /// Returns the opaque identity bound to this cache, or `null` when no
     /// identity-bearing response has been stored yet.
     #[wasm_bindgen(js_name = boundIdentity)]
@@ -781,10 +1350,54 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&match result {
+            let response = match result {
                 ReadResult::Hit { data } => JsReadResult::Hit { data },
                 ReadResult::Miss => JsReadResult::Miss,
-            })
+            };
+            let data = match &response {
+                JsReadResult::Hit { data } => Some(data),
+                JsReadResult::Miss => None,
+            };
+            read_response_to_js(&response, data)
+        })
+    }
+
+    /// Incrementally projects an ordinary query at one engine revision.
+    #[wasm_bindgen(js_name = watchQuery)]
+    pub fn watch_query(
+        &self,
+        op_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        entity_resolvers: JsValue,
+        since: Option<String>,
+    ) -> js_sys::Promise {
+        let state = self.state.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let variables = parse_variables(variables)?;
+            let entity_resolvers: Vec<EntityResolver> = parse_vec(entity_resolvers)?;
+            let since = since
+                .map(|value| value.parse())
+                .transpose()
+                .map_err(err_js)?;
+            let op = ops.borrow_mut().intern(&op_id);
+            let result = state
+                .engine_mut()?
+                .watch_query(
+                    op,
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &entity_resolvers,
+                    since,
+                )
+                .await;
+            let result = state.engine_result(result)?;
+            read_response_to_js(&result, query_update_values(&result))
         })
     }
 
@@ -801,7 +1414,11 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
+            let schema = state.engine_mut()?.schema_snapshot();
+            let selection = state
+                .selections
+                .get(&schema, document, fragment_name)
+                .map_err(err_js)?;
             let keys: Vec<String> = parse_vec(keys)?;
             let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let result = state
@@ -809,7 +1426,14 @@ impl CacheEngine {
                 .read_records_by_keys(&selection, &keys)
                 .await;
             let records = state.engine_result(result)?;
-            to_js(&records)
+            let response = JsRecordSelectionResult {
+                revision: records.revision.to_string(),
+                records: records.value,
+            };
+            read_response_to_js(
+                &response,
+                response.records.iter().map(|record| &record.record),
+            )
         })
     }
 
@@ -828,7 +1452,7 @@ impl CacheEngine {
         })
     }
 
-    /// Evaluates one exact `soup-flat-v1` GraphQL filter request.
+    /// Evaluates one exact current-profile GraphQL Soup filter request.
     #[wasm_bindgen(js_name = entityFilter)]
     pub fn entity_filter(&self, request: JsValue) -> js_sys::Promise {
         let state = self.state.clone();
@@ -837,6 +1461,37 @@ impl CacheEngine {
             state.ensure_callable()?;
             let request: JsEntityFilterRequest =
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            if let Some(live) = &request.live_query {
+                if live.release {
+                    state.engine_mut()?.release_live_query(&live.id);
+                    return to_js(&JsEntityFilterResult::Unsupported);
+                }
+                if request.mail.is_some() || request.baseline.is_none() {
+                    return Err(err_js(
+                        "live queries require a reconciled baseline and do not accept mail cursors",
+                    ));
+                }
+            }
+            if let Some(mail) = request.mail {
+                let generation = state.mail_generation.clone();
+                let result = soup_filter_cache_adapter::mail::page_current(
+                    state.engine_mut()?,
+                    &generation,
+                    request.filters,
+                    &request.sort_method,
+                    &request.sort_direction,
+                    request.limit,
+                    mail,
+                )
+                .await
+                .map_err(|error| match error {
+                    soup_filter_cache_adapter::mail::PageError::Engine(error) => {
+                        state.engine_error(error)
+                    }
+                    soup_filter_cache_adapter::mail::PageError::Adapter(error) => err_js(error),
+                })?;
+                return to_js(&result);
+            }
             let outcome = compile_filter_request(
                 request.filters,
                 &request.sort_method,
@@ -846,10 +1501,78 @@ impl CacheEngine {
             .map_err(err_js)?;
             let result = match outcome {
                 SoupFilterCompileOutcome::Unsupported => JsEntityFilterResult::Unsupported,
+                SoupFilterCompileOutcome::Supported(query) if request.baseline.is_some() => {
+                    let baseline = request.baseline.unwrap();
+                    if baseline.len()
+                        > cache_core::predicate::reconciliation::MAX_RECONCILIATION_BASELINE
+                    {
+                        return Err(err_js("reconciliation baseline is too large"));
+                    }
+                    let baseline = baseline
+                        .into_iter()
+                        .map(|entry| {
+                            soup_filter_cache_adapter::reconciliation_baseline_entry(
+                                entry.key,
+                                &entry.sort_timestamp,
+                            )
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(err_js)?;
+                    if let Some(live) = request.live_query {
+                        let schema = state.engine_mut()?.schema_snapshot();
+                        let selection = state
+                            .selections
+                            .get(&schema, live.document, live.fragment_name)
+                            .map_err(err_js)?;
+                        let since = live
+                            .since
+                            .map(|revision| revision.parse::<cache_core::revision::CacheRevision>())
+                            .transpose()
+                            .map_err(err_js)?;
+                        let result = state
+                            .engine_mut()?
+                            .read_live_query(
+                                &live.id,
+                                cache_core::engine::live_query::LiveQuerySpec {
+                                    query,
+                                    baseline,
+                                    selection,
+                                },
+                                since,
+                            )
+                            .await;
+                        let update = state.engine_result(result)?;
+                        return to_js(&JsEntityFilterResult::LiveQuery { update });
+                    }
+                    let result = state
+                        .engine_mut()?
+                        .reconcile_predicate_index(&query, &baseline)
+                        .await;
+                    let result = state.engine_result(result)?;
+                    JsEntityFilterResult::Reconciled {
+                        revision: result.revision.to_string(),
+                        keys: result
+                            .value
+                            .keys
+                            .into_iter()
+                            .map(|key| key.as_str().to_owned())
+                            .collect(),
+                        retained_keys: result
+                            .value
+                            .retained_keys
+                            .into_iter()
+                            .map(|key| key.as_str().to_owned())
+                            .collect(),
+                        optimistic: result.value.optimistic,
+                    }
+                }
                 SoupFilterCompileOutcome::Supported(query) => {
                     let result = state.engine_mut()?.query_predicate_index(&query).await;
-                    match state.engine_result(result)? {
+                    let result = state.engine_result(result)?;
+                    let revision = result.revision.to_string();
+                    match result.value {
                         PredicateQueryResult::Complete(keys) => JsEntityFilterResult::Complete {
+                            revision,
                             keys: keys
                                 .into_iter()
                                 .map(|key| key.as_str().to_owned())
@@ -857,13 +1580,16 @@ impl CacheEngine {
                             optimistic: false,
                         },
                         PredicateQueryResult::Optimistic(keys) => JsEntityFilterResult::Complete {
+                            revision,
                             keys: keys
                                 .into_iter()
                                 .map(|key| key.as_str().to_owned())
                                 .collect(),
                             optimistic: true,
                         },
-                        PredicateQueryResult::Incomplete => JsEntityFilterResult::Incomplete,
+                        PredicateQueryResult::Incomplete => {
+                            JsEntityFilterResult::Incomplete { revision }
+                        }
                     }
                 }
             };
@@ -903,7 +1629,54 @@ impl CacheEngine {
                 let op_id = ops.borrow_mut().intern(&registration.op_id);
                 (op_id, registration.entity_resolvers)
             });
-            let projections = authoritative_projection_mutations(&data);
+            let mut projections = authoritative_projection_mutations(
+                &state.engine_mut()?.schema_snapshot(),
+                &query,
+                operation_name.as_deref(),
+                &data,
+            )
+            .map_err(err_js)?;
+            let reuse_stored_identity =
+                state.can_reuse_stored_identity(identity.as_deref()).await?;
+            if reuse_stored_identity {
+                projections.extend(
+                    notification_projection_updates(
+                        &state.engine_mut()?.schema_snapshot(),
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &vars,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                );
+            }
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates_for_write(
+                    &state.engine_mut()?.schema_snapshot(),
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                    reuse_stored_identity,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                &state.engine_mut()?.schema_snapshot(),
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -925,16 +1698,7 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            to_js(&js_write_result(result, &ops.borrow()))
         })
     }
 
@@ -956,7 +1720,54 @@ impl CacheEngine {
             state.ensure_callable()?;
             let variables = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections = authoritative_projection_mutations(&data);
+            let mut projections = authoritative_projection_mutations(
+                &state.engine_mut()?.schema_snapshot(),
+                &query,
+                operation_name.as_deref(),
+                &data,
+            )
+            .map_err(err_js)?;
+            let reuse_stored_identity =
+                state.can_reuse_stored_identity(identity.as_deref()).await?;
+            if reuse_stored_identity {
+                projections.extend(
+                    notification_projection_updates(
+                        &state.engine_mut()?.schema_snapshot(),
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                );
+            }
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates_for_write(
+                    &state.engine_mut()?.schema_snapshot(),
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    reuse_stored_identity,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                &state.engine_mut()?.schema_snapshot(),
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -970,6 +1781,9 @@ impl CacheEngine {
                 .await;
             let result = state.engine_result(result)?;
             to_js(&JsHydrationWriteResult {
+                search_changed_buckets: result.search_changed_buckets,
+                revision: result.write_result.revision.to_string(),
+                revision_advanced: result.write_result.revision_advanced,
                 changed: result
                     .write_result
                     .changed
@@ -979,6 +1793,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 data: result.data,
             })
         })
@@ -992,16 +1807,20 @@ impl CacheEngine {
     pub fn enqueue_optimistic_mutation(
         &self,
         origin_op_id: Option<String>,
+        uuid: String,
         query: String,
         operation_name: Option<String>,
         variables: JsValue,
         data: JsValue,
         link_patches: JsValue,
         revalidations: JsValue,
+        identity_bindings: JsValue,
         created_at_ms: f64,
         lease_owner: String,
         now_ms: f64,
         lease_expires_at_ms: f64,
+        client_metadata: JsValue,
+        uncertain_calendar_event_keys: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1009,11 +1828,67 @@ impl CacheEngine {
             let mut state = state.lock().await;
             state.ensure_callable()?;
             let vars = parse_variables(variables)?;
+            let client_metadata: Option<serde_json::Value> =
+                serde_wasm_bindgen::from_value(client_metadata).map_err(err_js)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
+            let identity_bindings: Vec<cache_core::identity::IdentityBinding> =
+                parse_vec(identity_bindings)?;
+            let uncertain_calendar_event_keys: Vec<EntityKey<'static>> =
+                parse_vec(uncertain_calendar_event_keys)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
-            let projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
+            let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
+            projection_mutations.extend(
+                optimistic_notification_updates(
+                    notification_projection_updates(
+                        &state.engine_mut()?.schema_snapshot(),
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &vars,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                )
+                .map_err(err_js)?,
+            );
+            projection_mutations.extend(soup_filter_cache_adapter::mail::optimistic_updates(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    &state.engine_mut()?.schema_snapshot(),
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            ));
+            projection_mutations.extend(
+                soup_filter_cache_adapter::mail::draft_optimistic_updates(
+                    &state.engine_mut()?.schema_snapshot(),
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
+                &state.engine_mut()?.schema_snapshot(),
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                projection_mutations,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1025,9 +1900,11 @@ impl CacheEngine {
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let result = state
                 .engine_mut()?
-                .enqueue_optimistic_mutation_with_projections(
+                .enqueue_optimistic_mutation_with_calendar(
                     origin,
                     BeginOptimisticWrite {
+                        client_metadata: client_metadata.as_ref(),
+                        uuid: &uuid,
                         query: &query,
                         operation_name: operation_name.as_deref(),
                         variables: &vars,
@@ -1035,9 +1912,11 @@ impl CacheEngine {
                         link_patches: &link_patches,
                         revalidations: &revalidations,
                         created_at_ms,
+                        identity_bindings: &identity_bindings,
                     },
                     claim,
                     projection_mutations,
+                    uncertain_calendar_event_keys,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -1054,7 +1933,11 @@ impl CacheEngine {
                 },
             };
             to_js(&JsEnqueueOptimisticMutationResult {
+                field_changes: result.write_result.field_changes,
                 transaction_id: result.transaction_id.to_string(),
+                upsert_kind: result.upsert_kind.into(),
+                revision: result.write_result.revision.to_string(),
+                revision_advanced: result.write_result.revision_advanced,
                 changed: result
                     .write_result
                     .changed
@@ -1064,6 +1947,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 initial_claim,
             })
         })
@@ -1112,6 +1996,18 @@ impl CacheEngine {
         })
     }
 
+    /// Inspects durable mutations without claiming them.
+    #[wasm_bindgen(js_name = inspectMutations)]
+    pub fn inspect_mutations(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let result = state.engine_mut()?.inspect_mutations().await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
     /// Claims the oldest runnable queued mutation.
     #[wasm_bindgen(js_name = claimNextMutation)]
     pub fn claim_next_mutation(
@@ -1147,8 +2043,10 @@ impl CacheEngine {
         lease_generation: String,
         next_attempt_at_ms: f64,
         error: String,
+        server_failure: bool,
     ) -> js_sys::Promise {
         let state = self.state.clone();
+        let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
@@ -1160,10 +2058,25 @@ impl CacheEngine {
             let next_attempt_at_ms = parse_timestamp(next_attempt_at_ms, "next attempt timestamp")?;
             let result = state
                 .engine_mut()?
-                .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+                .defer_optimistic_write(
+                    transaction,
+                    claim,
+                    next_attempt_at_ms,
+                    error,
+                    server_failure,
+                )
                 .await;
-            state.engine_result(result)?;
-            Ok(JsValue::UNDEFINED)
+            let result = state.engine_result(result)?;
+            let result = match result {
+                DeferOptimisticWriteResult::Deferred => JsDeferOptimisticWriteResult::Deferred,
+                DeferOptimisticWriteResult::DiscardedSuperseded(result) => {
+                    JsDeferOptimisticWriteResult::DiscardedSuperseded {
+                        replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+            };
+            to_js(&result)
         })
     }
 
@@ -1193,10 +2106,52 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections = authoritative_projection_mutations(&data);
+            let mut projections = authoritative_projection_mutations(
+                &state.engine_mut()?.schema_snapshot(),
+                &query,
+                operation_name.as_deref(),
+                &data,
+            )
+            .map_err(err_js)?;
+            projections.extend(
+                notification_projection_updates(
+                    &state.engine_mut()?.schema_snapshot(),
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    &state.engine_mut()?.schema_snapshot(),
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                &state.engine_mut()?.schema_snapshot(),
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                true,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
-                .commit_optimistic_write_with_projections(
+                .commit_optimistic_write_with_projections_outcome(
                     transaction,
                     claim,
                     &query,
@@ -1206,17 +2161,29 @@ impl CacheEngine {
                     projections,
                 )
                 .await;
-            let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            let result = match state.engine_result(result)? {
+                CommitOptimisticWriteResult::Failed(result) => {
+                    JsCommitOptimisticWriteResult::Failed {
+                        error: result.error,
+                        replacement_transaction_id: result
+                            .replacement_transaction_id
+                            .map(|id| id.to_string()),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+                CommitOptimisticWriteResult::Committed(result) => {
+                    JsCommitOptimisticWriteResult::Committed {
+                        result: js_write_result(result, &ops.borrow()),
+                    }
+                }
+                CommitOptimisticWriteResult::CommittedSuperseded(result) => {
+                    JsCommitOptimisticWriteResult::CommittedSuperseded {
+                        replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+            };
+            to_js(&result)
         })
     }
 
@@ -1241,19 +2208,22 @@ impl CacheEngine {
             };
             let result = state
                 .engine_mut()?
-                .rollback_optimistic_write(transaction, claim)
+                .rollback_optimistic_write_with_outcome(transaction, claim)
                 .await;
-            let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            let result = match state.engine_result(result)? {
+                RollbackOptimisticWriteResult::RolledBack(result) => {
+                    JsRollbackOptimisticWriteResult::RolledBack {
+                        result: js_write_result(result, &ops.borrow()),
+                    }
+                }
+                RollbackOptimisticWriteResult::DiscardedSuperseded(result) => {
+                    JsRollbackOptimisticWriteResult::DiscardedSuperseded {
+                        replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+            };
+            to_js(&result)
         })
     }
 
@@ -1267,18 +2237,33 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let projections = dirty_projection_mutations(&keys);
-            if !projections.is_empty() {
-                let result = state
-                    .engine_mut()?
-                    .mark_projections_incomplete(projections)
-                    .await;
-                state.engine_result(result)?;
-            }
+            let mut projections = dirty_projection_mutations(&keys);
+            projections.extend(soup_filter_cache_adapter::mail::dirty_updates(&keys));
+            projections.extend(
+                notification_deletion_updates(state.engine_mut()?.storage(), &keys, true)
+                    .await
+                    .map_err(err_js)?,
+            );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
-            let affected = state.engine_mut()?.invalidate_keys(keys.iter());
-            to_js(&ops.borrow().names(affected))
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
+            let result = state
+                .engine_mut()?
+                .invalidate_keys_with_projections(&keys, projections)
+                .await;
+            let affected = state.engine_result(result)?;
+            to_js(&JsAffectedOperationsResult {
+                revision: affected.revision.to_string(),
+                affected_ops: ops.borrow().names(affected.value),
+            })
         })
     }
 
@@ -1291,18 +2276,35 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let projection_keys = keys
-                .iter()
-                .filter_map(|key| RecordKey::new(key.clone()).ok())
-                .collect::<Vec<_>>();
+            let mut projections =
+                notification_deletion_updates(state.engine_mut()?.storage(), &keys, false)
+                    .await
+                    .map_err(err_js)?;
+            projections.extend(
+                keys.iter()
+                    .filter_map(|key| RecordKey::new(key.clone()).ok())
+                    .map(cache_core::predicate::ProjectionMutation::Delete),
+            );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
             let result = state
                 .engine_mut()?
-                .delete_keys_with_projections(&keys, &projection_keys)
+                .delete_keys_with_projection_changes(&keys, projections)
                 .await;
             let affected = state.engine_result(result)?;
-            to_js(&ops.borrow().names(affected))
+            to_js(&JsAffectedOperationsResult {
+                revision: affected.revision.to_string(),
+                affected_ops: ops.borrow().names(affected.value),
+            })
         })
     }
 
@@ -1316,16 +2318,7 @@ impl CacheEngine {
             let mut state = state.lock().await;
             let result = state.engine_mut()?.refresh_optimistic_queue().await;
             let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            to_js(&js_write_result(result, &ops.borrow()))
         })
     }
 
@@ -1338,8 +2331,12 @@ impl CacheEngine {
         let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
-            let affected = state.engine_mut()?.external_reset();
-            to_js(&ops.borrow().names(affected))
+            let result = state.engine_mut()?.external_reset();
+            let affected = state.engine_result(result)?;
+            to_js(&JsAffectedOperationsResult {
+                revision: affected.revision.to_string(),
+                affected_ops: ops.borrow().names(affected.value),
+            })
         })
     }
 
@@ -1364,8 +2361,10 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             let result = state.engine_mut()?.clear().await;
-            state.engine_result(result)?;
-            Ok(JsValue::UNDEFINED)
+            let revision = state.engine_result(result)?;
+            to_js(&JsRevisionResult {
+                revision: revision.to_string(),
+            })
         })
     }
 
@@ -1401,6 +2400,7 @@ impl CacheEngine {
                 }
             };
             state.engine = Some(build_engine(storage, hot_capacity));
+            state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)
         })

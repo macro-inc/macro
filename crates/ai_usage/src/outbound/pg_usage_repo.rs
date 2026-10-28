@@ -4,7 +4,8 @@
 mod test;
 
 use crate::domain::{
-    AiFeature, CompletionUsage, Price, Result, Usage, UsageApiParams, UsageError, UsageRepo,
+    AiFeature, CompletionUsage, ModelPricing, Price, Result, Usage, UsageAmount, UsageApiParams,
+    UsageError, UsageRepo, normalize_model_id,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -23,36 +24,90 @@ impl PgUsageRepo {
 }
 
 impl UsageRepo for PgUsageRepo {
-    async fn insert_usage(&self, usage: &CompletionUsage) -> Result<()> {
+    async fn insert_usage(&self, usage: &CompletionUsage, count_usage: bool) -> Result<()> {
         let id = macro_uuid::generate_uuid_v7();
-        let (per_in, per_out, total) = match &usage.cost.price {
-            Some(p) => (
-                Some(p.price_per_million_in),
-                Some(p.price_per_million_out),
-                Some(p.total),
-            ),
-            None => (None, None, None),
-        };
+        let (input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, audio_seconds) =
+            match usage.cost.amount {
+                UsageAmount::Tokens {
+                    input,
+                    output,
+                    cache_read,
+                    cache_write,
+                } => (
+                    token_column(input),
+                    token_column(output),
+                    token_column(cache_read),
+                    token_column(cache_write),
+                    None,
+                ),
+                UsageAmount::Audio { duration } => (0, 0, 0, 0, Some(duration.as_secs_f64())),
+            };
+        let (per_in, per_out, per_cache_read, per_cache_write, per_audio_minute, total) =
+            match usage.cost.price {
+                Some(Price {
+                    pricing:
+                        ModelPricing::Tokens {
+                            input,
+                            output,
+                            cache_read,
+                            cache_write,
+                        },
+                    total,
+                }) => (
+                    Some(input),
+                    Some(output),
+                    cache_read,
+                    cache_write,
+                    None,
+                    Some(total),
+                ),
+                Some(Price {
+                    pricing: ModelPricing::Audio { per_minute },
+                    total,
+                }) => (
+                    Some(0.0),
+                    Some(0.0),
+                    None,
+                    None,
+                    Some(per_minute),
+                    Some(total),
+                ),
+                None => (None, None, None, None, None, None),
+            };
 
         sqlx::query!(
             r#"
             INSERT INTO ai_usage (
                 id, feature, user_id, entity, model,
                 input_tokens, output_tokens,
-                price_per_million_in, price_per_million_out, total
+                cache_read_input_tokens, cache_write_input_tokens, audio_seconds,
+                price_per_million_in, price_per_million_out,
+                price_per_million_cache_read, price_per_million_cache_write,
+                price_per_audio_minute, total,
+                count_usage, agent_api_key_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+            )
             "#,
             id,
             usage.feature.to_string(),
             usage.user.as_ref(),
             usage.entity,
             usage.cost.model,
-            i64::from(usage.cost.input_tokens),
-            i64::from(usage.cost.output_tokens),
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
+            audio_seconds,
             per_in,
             per_out,
+            per_cache_read,
+            per_cache_write,
+            per_audio_minute,
             total,
+            count_usage,
+            usage.agent_api_key_id,
         )
         .execute(&self.inner)
         .await?;
@@ -60,58 +115,96 @@ impl UsageRepo for PgUsageRepo {
         Ok(())
     }
 
-    async fn get_pricing(&self, model: &str) -> Result<Option<(f32, f32)>> {
+    async fn get_pricing(&self, model: &str) -> Result<Option<ModelPricing>> {
         let row = sqlx::query!(
             r#"
-            SELECT price_per_million_in, price_per_million_out
-            FROM ai_pricing
+            SELECT
+                price_per_million_in AS "price_per_million_in!",
+                price_per_million_out AS "price_per_million_out!",
+                price_per_million_cache_read,
+                price_per_million_cache_write,
+                price_per_audio_minute
+            FROM ai_effective_pricing
             WHERE model = $1
             "#,
-            model,
+            normalize_model_id(model),
         )
         .fetch_optional(&self.inner)
         .await?;
 
-        Ok(row.map(|r| (r.price_per_million_in, r.price_per_million_out)))
+        Ok(row.map(|r| match r.price_per_audio_minute {
+            Some(per_minute) => ModelPricing::Audio { per_minute },
+            None => ModelPricing::Tokens {
+                input: r.price_per_million_in,
+                output: r.price_per_million_out,
+                cache_read: r.price_per_million_cache_read,
+                cache_write: r.price_per_million_cache_write,
+            },
+        }))
     }
 
-    async fn set_pricing(
-        &self,
-        model: &str,
-        price_per_million_in: f32,
-        price_per_million_out: f32,
-    ) -> Result<()> {
+    async fn set_pricing(&self, model: &str, pricing: ModelPricing) -> Result<()> {
+        let (per_in, per_out, per_cache_read, per_cache_write, per_audio_minute) = match pricing {
+            ModelPricing::Tokens {
+                input,
+                output,
+                cache_read,
+                cache_write,
+            } => (input, output, cache_read, cache_write, None),
+            ModelPricing::Audio { per_minute } => (0.0, 0.0, None, None, Some(per_minute)),
+        };
         let mut tx = self.inner.begin().await?;
 
         sqlx::query!(
             r#"
-            INSERT INTO ai_pricing (model, price_per_million_in, price_per_million_out)
-            VALUES ($1, $2, $3)
+            INSERT INTO ai_pricing (
+                model, price_per_million_in, price_per_million_out,
+                price_per_million_cache_read, price_per_million_cache_write,
+                price_per_audio_minute
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (model) DO UPDATE
             SET price_per_million_in = EXCLUDED.price_per_million_in,
                 price_per_million_out = EXCLUDED.price_per_million_out,
+                price_per_million_cache_read = EXCLUDED.price_per_million_cache_read,
+                price_per_million_cache_write = EXCLUDED.price_per_million_cache_write,
+                price_per_audio_minute = EXCLUDED.price_per_audio_minute,
                 updated_at = NOW()
             "#,
             model,
-            price_per_million_in,
-            price_per_million_out,
+            per_in,
+            per_out,
+            per_cache_read,
+            per_cache_write,
+            per_audio_minute,
         )
         .execute(&mut *tx)
         .await?;
 
-        // Recompute the price of every recorded row for this model.
+        // Recompute the price of every recorded row for this model, at its
+        // discounted rates.
         sqlx::query!(
             r#"
             UPDATE ai_usage
-            SET price_per_million_in = $2::real,
-                price_per_million_out = $3::real,
-                total = (input_tokens::real / 1000000.0::real) * $2::real
-                      + (output_tokens::real / 1000000.0::real) * $3::real
-            WHERE model = $1
+            SET price_per_million_in = e.price_per_million_in,
+                price_per_million_out = e.price_per_million_out,
+                price_per_million_cache_read = e.price_per_million_cache_read,
+                price_per_million_cache_write = e.price_per_million_cache_write,
+                price_per_audio_minute = e.price_per_audio_minute,
+                total = CASE
+                    WHEN (ai_usage.audio_seconds IS NULL) <> (e.price_per_audio_minute IS NULL) THEN NULL
+                    WHEN ai_usage.cache_read_input_tokens > 0 AND e.price_per_million_cache_read IS NULL THEN NULL
+                    WHEN ai_usage.cache_write_input_tokens > 0 AND e.price_per_million_cache_write IS NULL THEN NULL
+                    ELSE (ai_usage.input_tokens::real / 1000000.0::real) * e.price_per_million_in
+                      + (ai_usage.output_tokens::real / 1000000.0::real) * e.price_per_million_out
+                      + (ai_usage.cache_read_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_read, 0)
+                      + (ai_usage.cache_write_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_write, 0)
+                      + (COALESCE(ai_usage.audio_seconds, 0) / 60.0 * COALESCE(e.price_per_audio_minute, 0))::real
+                END
+            FROM ai_effective_pricing e
+            WHERE ai_usage.model = $1 AND e.model = $1
             "#,
             model,
-            price_per_million_in,
-            price_per_million_out,
         )
         .execute(&mut *tx)
         .await?;
@@ -134,11 +227,18 @@ impl UsageRepo for PgUsageRepo {
                 feature,
                 user_id,
                 entity,
+                agent_api_key_id,
                 model,
                 input_tokens,
                 output_tokens,
+                cache_read_input_tokens,
+                cache_write_input_tokens,
+                audio_seconds,
                 price_per_million_in,
                 price_per_million_out,
+                price_per_million_cache_read,
+                price_per_million_cache_write,
+                price_per_audio_minute,
                 total,
                 created_at
             FROM ai_usage
@@ -167,8 +267,15 @@ impl UsageRepo for PgUsageRepo {
 
                 let price = match (r.price_per_million_in, r.price_per_million_out, r.total) {
                     (Some(per_in), Some(per_out), Some(total)) => Some(Price {
-                        price_per_million_in: per_in,
-                        price_per_million_out: per_out,
+                        pricing: match r.price_per_audio_minute {
+                            Some(per_minute) => ModelPricing::Audio { per_minute },
+                            None => ModelPricing::Tokens {
+                                input: per_in,
+                                output: per_out,
+                                cache_read: r.price_per_million_cache_read,
+                                cache_write: r.price_per_million_cache_write,
+                            },
+                        },
                         total,
                     }),
                     _ => None,
@@ -178,9 +285,20 @@ impl UsageRepo for PgUsageRepo {
                     feature,
                     user,
                     entity: r.entity,
+                    agent_api_key_id: r.agent_api_key_id,
                     cost: Usage {
-                        input_tokens: r.input_tokens.clamp(0, i64::from(u32::MAX)) as u32,
-                        output_tokens: r.output_tokens.clamp(0, i64::from(u32::MAX)) as u32,
+                        amount: match r.audio_seconds {
+                            Some(seconds) => UsageAmount::Audio {
+                                duration: std::time::Duration::try_from_secs_f64(seconds)
+                                    .map_err(|error| UsageError::Other(error.into()))?,
+                            },
+                            None => UsageAmount::Tokens {
+                                input: r.input_tokens.max(0) as u64,
+                                output: r.output_tokens.max(0) as u64,
+                                cache_read: r.cache_read_input_tokens.max(0) as u64,
+                                cache_write: r.cache_write_input_tokens.max(0) as u64,
+                            },
+                        },
                         model: r.model,
                         price,
                         created_at: r.created_at,
@@ -188,5 +306,19 @@ impl UsageRepo for PgUsageRepo {
                 })
             })
             .collect()
+    }
+}
+
+/// Token counts are `BIGINT`; a count past `i64::MAX` saturates.
+fn token_column(tokens: u64) -> i64 {
+    i64::try_from(tokens).unwrap_or(i64::MAX)
+}
+
+// The domain error stays sqlx-free; this adapter owns the mapping so `?`
+// works on sqlx results throughout the crate's outbound code. The raw sqlx
+// error travels inside the report.
+impl From<sqlx::Error> for crate::domain::ports::UsageError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Db(rootcause::report!(e).into_dynamic())
     }
 }

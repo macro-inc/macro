@@ -1,9 +1,7 @@
 use anyhow::Context;
-use aws_sdk_sns::types::MessageAttributeValue;
 use macro_entrypoint::MacroEntrypoint;
 use serde::Serialize;
 use sns_client::{APNSPushNotification, Alert, AlertDictionary, Aps, MessageAttributes, SnsTarget};
-use std::collections::HashMap;
 
 /// Sends a push notification to the provided ENDPOINT_ARN environment variable
 #[tokio::main]

@@ -7,15 +7,15 @@ import {
 } from '@core/constant/allBlocks';
 import { fileDrop } from '@core/directive/fileDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import ImageIcon from '@phosphor/image.svg';
-import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
+import UploadSimple from '@icon/system/bold/upload-simple-bold.svg?component-solid';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
 import { useHistoryQuery } from '@queries/history/history';
 import { Dropdown } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { mdStore } from '../signal/markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 false && fileSelector;
 false && fileDrop;
@@ -58,8 +58,8 @@ type MediaSelectorProps = {
 
 export function MediaSelector(props: MediaSelectorProps) {
   const { mediaTypes = ['image', 'video'] } = props;
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const { state } = useMarkdownDocument();
+  const editor = () => state.editor.md.editor;
 
   const historyQuery = useHistoryQuery();
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -102,7 +102,7 @@ export function MediaSelector(props: MediaSelectorProps) {
     return null;
   };
 
-  const uploadStaticMediaFiles = async (files: File[]) => {
+  const uploadStaticMediaFiles = (files: File[]) => {
     for (const file of files) {
       const mediaType = lookUpMediaFileType(file);
       if (mediaType === null) continue;
@@ -119,14 +119,15 @@ export function MediaSelector(props: MediaSelectorProps) {
     // TODO bring up to menu best practices, ie. fully focusable menu items, etc.
     <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
       <Dropdown.Trigger
-        label="Insert Media File"
+        aria-label="Insert Media File"
+        tooltip="Insert Media File"
         variant="ghost"
         size="icon-md"
         disabled={props?.buttonIsDisabled?.() ?? false}
         tabIndex={-1}
       >
-        <ImageIcon />
-        <CaretDown />
+        <ImageIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Show when={!props?.buttonIsDisabled?.()}>
         <Dropdown.Content
@@ -144,7 +145,7 @@ export function MediaSelector(props: MediaSelectorProps) {
                 }}
               >
                 <div
-                  class="w-full mt-0 p-2 m-1 bg-surface text-ink flex justify-center items-center gap-2 rounded hover:bg-hover hover-transition-bg hover:text-accent @container"
+                  class="w-full mt-0 mx-1 mb-1 p-2 bg-surface text-ink flex justify-center items-center gap-2 rounded hover:bg-hover hover-transition-bg hover:text-accent @container"
                   use:fileSelector={{
                     acceptedFileExtensions: acceptedFileExtensions(),
                     acceptedMimeTypes: acceptedMimeTypes(),

@@ -1,9 +1,12 @@
-import { useCallContextOptional } from '@channel/Call/CallContext';
-import { joinChannelCall } from '@channel/Call/join-channel-call';
-import PhoneIcon from '@icon/wide-call.svg';
+import { analytics } from '@app/lib/analytics';
+import { getCallJoinTab } from '@channel/Call/call-tabs';
+import { useCall } from '@channel/Call/use-call';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { useChannelTab } from './ChannelTabContext';
 
 function formatDuration(startedAt: string | undefined, nowMs: number) {
   const startedAtMs = startedAt ? new Date(startedAt).getTime() : Number.NaN;
@@ -20,7 +23,10 @@ function formatDuration(startedAt: string | undefined, nowMs: number) {
 
 export function ActiveCallMessage(props: { channelId: string }) {
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
-  const callCtx = useCallContextOptional();
+  const { setActiveTab } = useChannelTab();
+  const call = useCall(() => props.channelId, {
+    onJoin: () => setActiveTab(getCallJoinTab()),
+  });
   const [nowMs, setNowMs] = createSignal(Date.now());
   const durationTimer = globalThis.setInterval(
     () => setNowMs(Date.now()),
@@ -28,12 +34,23 @@ export function ActiveCallMessage(props: { channelId: string }) {
   );
   onCleanup(() => globalThis.clearInterval(durationTimer));
 
-  const shouldShow = () =>
-    !!activeCallQuery.data &&
-    (!callCtx?.isInCall() || callCtx.activeChannelId() !== props.channelId);
+  const shouldShow = () => !!activeCallQuery.data && !call.isInThisChannel();
   const duration = createMemo(() =>
     formatDuration(activeCallQuery.data?.createdAt, nowMs())
   );
+
+  async function handleJoin() {
+    analytics.track('call_action', {
+      action: 'join_clicked',
+      channelId: props.channelId,
+      isExistingCall: true,
+    });
+    try {
+      await call.joinCall();
+    } catch (error) {
+      console.error('Failed to join call', error);
+    }
+  }
 
   return (
     <Show when={shouldShow()}>
@@ -77,7 +94,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
                     variant="success"
                     size="sm"
                     class="shrink-0"
-                    onClick={() => void joinChannelCall(props.channelId)}
+                    onClick={() => fireAndForget(handleJoin(), 'channel-call')}
                   >
                     <PhoneIcon class="size-3.5" />
                     Join

@@ -3,9 +3,17 @@ import type {
   CacheReadArgs,
   InspectQueryVariantsArgs,
 } from '@graphql-cache/host/types';
-import { describe, expect, it, vi } from 'vitest';
+import {
+  GroupSoupDocument,
+  SoupDocument,
+} from '@service-storage/graphql/generated/graphql';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { registerGraphqlSoupRevalidations } from '../graphql/active-queries';
 import { registerGroupedSoupContinuation } from './graphql-operation-registry';
-import { buildOptimisticGroupedPropertyUpdates } from './graphql-optimistic';
+import {
+  buildOptimisticGroupedPropertyUpdates,
+  createGroupedPropertyPreparation,
+} from './graphql-optimistic';
 
 function initialInput(propertyDefinitionId: string) {
   return {
@@ -41,11 +49,13 @@ function host(args?: {
   continuation?: boolean;
   initialContainsItem?: boolean;
   miss?: boolean;
-  onDiscover?: (propertyDefinitionIds: string[]) => void;
+  active?: () => boolean;
+  register?: boolean;
   onInspect?: (request: InspectQueryVariantsArgs) => void;
   onRead?: (request: CacheReadArgs) => void;
   relevantPropertyDefinitionId?: string;
   sourceKey?: string;
+  entityIds?: string[];
   typename?: 'GraphqlSoupCall' | 'GraphqlSoupDocument';
   unrelatedPropertyDefinitionIds?: readonly string[];
 }): CacheHost {
@@ -56,12 +66,10 @@ function host(args?: {
         totalCount: 1,
         nextCursor: null,
         items: containsItem
-          ? [
-              {
-                __typename: args?.typename ?? 'GraphqlSoupDocument',
-                id: 'task-1',
-              },
-            ]
+          ? (args?.entityIds ?? ['task-1']).map((id) => ({
+              __typename: args?.typename ?? 'GraphqlSoupDocument',
+              id,
+            }))
           : [],
       },
       ...(args?.destination === false
@@ -112,20 +120,24 @@ function host(args?: {
     });
   }
 
+  if (args?.register !== false) {
+    onTestFinished(
+      registerGraphqlSoupRevalidations(() =>
+        args?.active?.() === false
+          ? []
+          : instances.map(({ variables }) => ({
+              document: GroupSoupDocument,
+              variables,
+            }))
+      )
+    );
+  }
+
   return {
     clientId: 'test',
     async inspectQueryVariants(request: InspectQueryVariantsArgs) {
       args?.onInspect?.(request);
-      args?.onDiscover?.(
-        instances.map(({ variables }) => {
-          const page =
-            'initial' in variables.input
-              ? variables.input.initial
-              : variables.input.continuation;
-          return String(page.groupBy.propertyDefinitionId);
-        })
-      );
-      return instances.map(({ variables }) => ({ variables }));
+      throw new Error('query inspection variant count 129 exceeds limit 128');
     },
     async readQuery(request: CacheReadArgs) {
       args?.onRead?.(request);
@@ -177,13 +189,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
       [{ field: 'user' }, { field: 'groupSoup' }, { field: 'bins' }],
     ]);
     expect(result.revalidations).toHaveLength(1);
-    expect(onInspect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operationName: 'GroupSoupMembership',
-        path: [{ field: 'user' }, { field: 'groupSoup' }],
-      })
-    );
-    expect(onInspect.mock.calls[0]?.[0]).not.toHaveProperty('variableFilters');
+    expect(onInspect).not.toHaveBeenCalled();
     expect(onRead).toHaveBeenCalledTimes(1);
     expect(onRead).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -193,12 +199,12 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     );
   });
 
-  it('discovers unrelated status, assignee, and priority variants without reading them', async () => {
-    const onDiscover = vi.fn();
+  it('ignores unrelated active status, assignee, and priority views without inspecting the cache', async () => {
+    const onInspect = vi.fn();
     const onRead = vi.fn();
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({
-        onDiscover,
+        onInspect,
         onRead,
         relevantPropertyDefinitionId: 'target-def',
         unrelatedPropertyDefinitionIds: [
@@ -214,12 +220,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     });
 
     expect(result.updates).toHaveLength(2);
-    expect(onDiscover).toHaveBeenCalledWith([
-      'target-def',
-      'status-def',
-      'assignee-def',
-      'priority-def',
-    ]);
+    expect(onInspect).not.toHaveBeenCalled();
     expect(onRead).toHaveBeenCalledTimes(1);
     expect(
       onRead.mock.calls.map(
@@ -229,7 +230,101 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     ).toEqual(['target-def']);
   });
 
-  it('derives the normalized key from the inspected typename and id', async () => {
+  it('never visits historical cached pages, even when inspection would exceed its budget', async () => {
+    const onRead = vi.fn();
+    const onInspect = vi.fn();
+    const result = await buildOptimisticGroupedPropertyUpdates({
+      host: host({
+        register: false,
+        onRead,
+        onInspect,
+        unrelatedPropertyDefinitionIds: Array.from(
+          { length: 200 },
+          (_, i) => `historical-${i}`
+        ),
+      }),
+      entityId: 'task-1',
+      propertyDefinitionId: 'status-def',
+      oldGroupKeys: ['in-progress'],
+      newGroupKeys: ['completed'],
+    });
+    expect(result).toEqual({ updates: [], revalidations: [] });
+    expect(onRead).not.toHaveBeenCalled();
+    expect(onInspect).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates split readers and drops disabled, changed, and unmounted views', async () => {
+    const onRead = vi.fn();
+    const cache = host({ register: false, onRead });
+    let active = true;
+    let currentInput = input;
+    const unregister = registerGraphqlSoupRevalidations(() =>
+      active
+        ? [
+            { document: GroupSoupDocument, variables: { input: currentInput } },
+            { document: GroupSoupDocument, variables: { input: currentInput } },
+            { document: SoupDocument, variables: { input: {} } },
+          ]
+        : []
+    );
+    onTestFinished(unregister);
+    const prepare = () =>
+      buildOptimisticGroupedPropertyUpdates({
+        host: cache,
+        entityId: 'task-1',
+        propertyDefinitionId: 'status-def',
+        oldGroupKeys: ['in-progress'],
+        newGroupKeys: ['completed'],
+      });
+    expect((await prepare()).revalidations).toHaveLength(1);
+    expect(onRead).toHaveBeenCalledOnce();
+    active = false;
+    expect(await prepare()).toEqual({ updates: [], revalidations: [] });
+    active = true;
+    currentInput = initialInput('priority-def');
+    expect(await prepare()).toEqual({ updates: [], revalidations: [] });
+    currentInput = input;
+    unregister();
+    expect(await prepare()).toEqual({ updates: [], revalidations: [] });
+    expect(onRead).toHaveBeenCalledOnce();
+  });
+
+  it('shares reads across a bulk edit but retains each mutation’s durable recovery', async () => {
+    const onRead = vi.fn();
+    const prepare = createGroupedPropertyPreparation(
+      host({ onRead, entityIds: ['task-1', 'task-2'] })
+    );
+    for (const entityId of ['task-1', 'task-2']) {
+      const result = await prepare({
+        entityId,
+        propertyDefinitionId: 'status-def',
+        oldGroupKeys: ['in-progress'],
+        newGroupKeys: ['completed'],
+      });
+      expect(result.updates).toHaveLength(2);
+      expect(result.updates[0].operation).toMatchObject({
+        entityKey: `GraphqlSoupDocument:${entityId}`,
+      });
+      expect(result.revalidations).toHaveLength(1);
+    }
+    expect(onRead).toHaveBeenCalledOnce();
+  });
+
+  it('rereads membership for a repeat edit to an entity within a bulk save', async () => {
+    const onRead = vi.fn();
+    const prepare = createGroupedPropertyPreparation(host({ onRead }));
+    const args = {
+      entityId: 'task-1',
+      propertyDefinitionId: 'status-def',
+      oldGroupKeys: ['in-progress'],
+      newGroupKeys: ['completed'],
+    };
+    await prepare(args);
+    await prepare(args);
+    expect(onRead).toHaveBeenCalledTimes(2);
+  });
+
+  it('derives the normalized key from the loaded typename and id', async () => {
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ typename: 'GraphqlSoupCall' }),
       entityId: 'task-1',
@@ -367,7 +462,7 @@ describe('buildOptimisticGroupedPropertyUpdates', () => {
     expect(onRead).toHaveBeenCalledOnce();
   });
 
-  it('skips inspection when group-key sets are equivalent', async () => {
+  it('skips all reads when group-key sets are equivalent', async () => {
     const onInspect = vi.fn();
     const result = await buildOptimisticGroupedPropertyUpdates({
       host: host({ onInspect }),

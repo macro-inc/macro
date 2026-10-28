@@ -1,6 +1,6 @@
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
-import CaretRight from '@phosphor-icons/core/regular/caret-right.svg';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Terminal from '@icon/system/regular/terminal.svg';
 import type { BashCodeExecutionResult } from '@service-cognition/generated/tools/types';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -42,6 +42,8 @@ function CodeFence(props: {
       <Show when={isCollapsible() && needsTruncation()}>
         <button
           type="button"
+          aria-label="Command output"
+          aria-expanded={expanded()}
           class="text-ink-extra-muted hover:text-ink-muted absolute top-1 right-1 p-1"
           onClick={() => setExpanded(!expanded())}
         >
@@ -51,7 +53,7 @@ function CodeFence(props: {
         </button>
       </Show>
       <pre
-        class="text-ink-muted bg-background-secondary overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
+        class="text-ink-muted bg-code-buffer overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
         classList={{
           'max-h-24 overflow-hidden':
             isCollapsible() && !expanded() && needsTruncation(),
@@ -80,7 +82,7 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
   return (
     <div class="flex flex-col gap-1">
       <Show when={props.result.return_code !== 0}>
-        <span class="text-ink-error">Exit code {props.result.return_code}</span>
+        <span class="text-failure">Exit code {props.result.return_code}</span>
       </Show>
       <Show when={hasOutput()}>
         <CodeFence content={output()} collapsible={false} />
@@ -115,7 +117,7 @@ const handler = createToolRenderer({
                   return (
                     <Switch>
                       <Match when={isError}>
-                        <span class="text-ink-error">Execution failed</span>
+                        <span class="text-failure">Execution failed</span>
                       </Match>
                       <Match when={!isError}>
                         <BashResult

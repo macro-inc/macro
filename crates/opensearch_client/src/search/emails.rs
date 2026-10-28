@@ -8,7 +8,9 @@ use crate::{
 };
 
 use models_opensearch::OpenSearchEntityType;
-use opensearch_query_builder::{BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery};
+use opensearch_query_builder::{
+    BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery, WildcardQuery,
+};
 
 pub(crate) struct EmailSearchConfig;
 
@@ -38,6 +40,23 @@ const EMAIL_KEYWORD_FIELDS: &[&str] = &[
     "cc.parts",
     "bcc.parts",
 ];
+
+/// Domain Macro's own notification/digest emails are sent from. Those are
+/// never signal, mirroring the Postgres `is_signal` heuristic. Kept in sync
+/// with `email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN`, which is not imported
+/// so this crate stays free of the email HTML tooling that crate pulls in.
+const MACRO_NOTIFICATION_SENDER_DOMAIN: &str = "notification.macro.com";
+
+/// Matches messages whose `sender` is any address at
+/// [`MACRO_NOTIFICATION_SENDER_DOMAIN`].
+fn macro_notification_sender_query<'a>() -> QueryType<'a> {
+    QueryType::WildCard(WildcardQuery::new(
+        "sender",
+        format!("*@{MACRO_NOTIFICATION_SENDER_DOMAIN}"),
+        true,
+        None,
+    ))
+}
 
 /// Text-analyzed fields. Matched as a prefix so `scri` matches `script`.
 const EMAIL_TEXT_FIELDS: &[&str] = &[
@@ -304,6 +323,7 @@ impl EmailQueryBuilder {
 
         // Importance filter. Source of truth for the label logic is in
         // email/src/outbound/email_pg_repo/dynamic.rs (EmailLiteral::Importance).
+        // Macro's own notification emails are always noise on top of that.
         match self.importance {
             Some(true) => {
                 // Exclude emails that have depriority labels UNLESS they also have a priority label.
@@ -322,10 +342,12 @@ impl EmailQueryBuilder {
                         ["CATEGORY_PERSONAL", "SENT", "DRAFT"],
                     ));
                 content_bool_query.must_not(QueryType::Bool(importance_exclude));
+                content_bool_query.must_not(macro_notification_sender_query());
             }
             Some(false) => {
                 // Only show deprioritized emails: must have a depriority label
-                // AND must not have a priority label.
+                // AND must not have a priority label, or come from Macro's
+                // own notification sender.
                 let depriority_filter = BoolQuery::new()
                     .filter(QueryType::terms(
                         "labels",
@@ -340,7 +362,11 @@ impl EmailQueryBuilder {
                         "labels",
                         ["CATEGORY_PERSONAL", "SENT", "DRAFT"],
                     ));
-                content_bool_query.filter(QueryType::Bool(depriority_filter));
+                let noise_filter = BoolQuery::new()
+                    .should(QueryType::Bool(depriority_filter))
+                    .should(macro_notification_sender_query())
+                    .minimum_should_match(1);
+                content_bool_query.filter(QueryType::Bool(noise_filter));
             }
             None => {}
         }

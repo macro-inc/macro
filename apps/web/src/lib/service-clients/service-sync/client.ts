@@ -11,7 +11,6 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import { InitializeFromSnapshotRequest } from '@macro-inc/collaboration/sync-service/generated/schema';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
-import type { BlameRow, DocumentMetadata } from './generated/http/schemas';
 
 const SYNC_SERVICE_WORKER_URL = `${SYNC_SERVICE_HOSTS['worker']}`;
 
@@ -62,6 +61,13 @@ function syncFetch<T extends ObjectLike = never>(
     },
   });
 }
+
+type MetadataResponse = {
+  peers: Array<{
+    peer_id: number;
+    user_id: string;
+  }>;
+};
 
 export type HistorySession = {
   userId: string;
@@ -171,7 +177,7 @@ export const syncServiceClient = {
   async getDocumentMetadata(args: { documentId: string }) {
     const token = await getPermissionToken('document', args.documentId);
 
-    const response = await syncFetch<DocumentMetadata>(
+    const response = await syncFetch<MetadataResponse>(
       `/document/${args.documentId}/metadata`,
       {
         headers: {
@@ -185,7 +191,7 @@ export const syncServiceClient = {
       return err(response.error);
     }
 
-    return ok(response.value);
+    return ok(response.value as MetadataResponse);
   },
   /**
    * Look up who last edited a given Lexical node and when. `user_id` is a
@@ -195,16 +201,17 @@ export const syncServiceClient = {
   async getNodeBlame(args: { documentId: string; nodeId: string }) {
     const token = await getPermissionToken('document', args.documentId);
 
-    const response = await syncFetch<BlameRow>(
-      `/document/${args.documentId}/blame/${args.nodeId}`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        method: 'GET',
-      }
-    );
+    const response = await syncFetch<{
+      peer_id: string;
+      user_id: string | null;
+      timestamp_ms: number;
+    }>(`/document/${args.documentId}/blame/${args.nodeId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      method: 'GET',
+    });
 
     if (response.isErr()) {
       return err(response.error);
@@ -212,7 +219,7 @@ export const syncServiceClient = {
     const { peer_id, user_id, timestamp_ms } = response.value;
     return ok({
       peerId: peer_id,
-      userId: user_id ?? null,
+      userId: user_id,
       editedAt: new Date(timestamp_ms),
     });
   },

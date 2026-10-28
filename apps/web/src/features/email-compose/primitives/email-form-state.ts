@@ -1,0 +1,487 @@
+import type { EmailFormRecipients } from '../core/email-recipient';
+
+export type { EmailFormRecipients } from '../core/email-recipient';
+
+import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
+import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { createSignal, type Setter } from 'solid-js';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
+import { match } from 'ts-pattern';
+import type { EmailFormContextInputs } from '../context/email-form-inputs';
+import { decodeBase64Utf8 } from '../core/decode-base64';
+import { replySenderAddress } from '../core/email-sender';
+import { forwardedAttachments } from '../core/forwarded-attachments';
+import {
+  convertContactInfoToEmailRecipient,
+  getReplyAllRecipients,
+  getReplyRecipientsFromParent,
+} from '../core/recipient-conversion';
+import type { ReplyType } from '../core/reply-type';
+import { getSubjectText } from '../core/subject-text';
+
+export type DraftFormAttachment =
+  | {
+      type: 'local';
+      file: File;
+      attachmentId?: string;
+      /** Restored after interruption: remove the uncertain record before re-uploading. */
+      uploadPending?: boolean;
+      uploaded?: boolean;
+    }
+  | {
+      type: 'remote';
+      uploadPending?: boolean;
+      url: string;
+      fileName: string;
+      contentType: string;
+      attachmentId: string;
+      fileSize: number;
+    }
+  | {
+      type: 'forwarded';
+      attachmentId: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+    }
+  | {
+      type: 'native';
+      referenceUrl?: string | null;
+      attachmentId: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+    }
+  | {
+      /**
+       * A Macro document attached by reference; the backend fetches its file
+       * when the email is sent. Used by the AI draft composer, whose email has
+       * no draft row to upload into until it is sent.
+       */
+      type: 'document';
+      documentId: string;
+      /** No draft row holds it, so it never has a draft attachment id. */
+      attachmentId?: never;
+      fileName: string;
+      mimeType?: string;
+      /** Unknown (0) until the document's metadata resolves. */
+      fileSize: number;
+    };
+
+export interface EmailFormStateOptions {
+  getMessageById: (id: string) => EmailMessage | undefined;
+  getDraftForMessageReply: (id: string) => EmailMessage | undefined;
+  onRecipientsChange?: (next: EmailRecipient[]) => void;
+}
+
+type EmailFormState = {
+  recipients: EmailFormRecipients;
+  replyType: ReplyType;
+  withQuotedText: boolean;
+  subject: string;
+};
+
+const EMPTY_FORM_STATE: EmailFormState = {
+  recipients: {
+    to: [],
+    cc: [],
+    bcc: [],
+  },
+  replyType: 'reply-all',
+  withQuotedText: false,
+  subject: '',
+};
+
+/**
+ * Creates a state object for the email form.
+ * @param purpose - The purpose of the form. Are we managing the state of a draft reply or just a draft message
+ * @param options - Required options for the initial state to be calculated from
+ * @returns A state object for the email form.
+ */
+export function createEmailFormState(
+  context: EmailFormContextInputs,
+  purpose?:
+    | { type: 'replying_to'; messageId: string }
+    | { type: 'draft'; messageId: string },
+
+  options?: EmailFormStateOptions
+) {
+  const userEmail = context.viewerEmail;
+
+  let replyingTo: EmailMessage | undefined;
+
+  if (purpose?.type === 'replying_to') {
+    replyingTo = options?.getMessageById(purpose.messageId);
+  }
+
+  let draft: EmailMessage | undefined;
+
+  if (purpose?.type === 'draft') {
+    draft = options?.getMessageById(purpose.messageId);
+  } else if (purpose?.type === 'replying_to') {
+    draft = options?.getDraftForMessageReply(purpose.messageId);
+  }
+
+  // The inbox this compose sends from. Defaults to the inbox that owns the
+  // thread/draft; the user can change it via the "from" selector.
+  const [selectedInboxId, setSelectedInboxId] = createSignal<
+    string | undefined
+  >((draft ?? replyingTo)?.link_id ?? undefined);
+  // Reply logic ("did I send this?") must be judged against the inbox the
+  // message is sent from, not the account's primary email — otherwise replying
+  // from a secondary or delegated inbox misclassifies the sender and picks the
+  // wrong recipients.
+  // An explicit choice (including the primary address) always wins over late
+  // alias discovery. A reopened draft is an explicit, persisted choice too.
+  const [senderChoice, setSenderChoice] = createSignal<
+    { email?: string } | undefined
+  >(draft?.from?.email ? { email: draft.from.email } : undefined);
+  const sendingInbox = () =>
+    context
+      .inboxes()
+      .find(
+        (inbox) =>
+          inbox.id === (selectedInboxId() ?? (draft ?? replyingTo)?.link_id)
+      );
+  const senderEmail = () => {
+    const choice = senderChoice();
+    if (choice) return choice.email ?? sendingInbox()?.email_address;
+    return replySenderAddress(sendingInbox(), replyingTo);
+  };
+  const inboxEmail = () => senderEmail() ?? userEmail() ?? '';
+  const ownAddresses = () =>
+    [
+      inboxEmail(),
+      sendingInbox()?.email_address,
+      ...(sendingInbox()?.sendAs ?? []).map((sender) => sender.email_address),
+    ].filter((address): address is string => !!address);
+  const [recipientsEdited, setRecipientsEdited] = createSignal(false);
+
+  const draftContainsAppendedReply = (message = draft) => {
+    const encoded = message?.body_html_sanitized;
+    if (!encoded) return false;
+    const decodedHtml = decodeBase64Utf8(encoded);
+    if (!decodedHtml) return false;
+    const parsed = new DOMParser().parseFromString(decodedHtml, 'text/html');
+
+    return parsed.body.querySelector('div.macro_quote') !== null;
+  };
+
+  const getInitialState = () => {
+    const replyType =
+      (replyingTo?.to.length ?? 0) + (replyingTo?.cc.length ?? 0) > 1
+        ? 'reply-all'
+        : 'reply';
+
+    let initialSubject = draft?.subject;
+
+    if (initialSubject == null) {
+      initialSubject = getSubjectText(replyingTo, replyType);
+    }
+
+    let initialRecipients: EmailFormRecipients = { to: [], cc: [], bcc: [] };
+
+    if (draft) {
+      initialRecipients = {
+        to: draft.to.map(convertContactInfoToEmailRecipient),
+        cc: draft.cc.map(convertContactInfoToEmailRecipient),
+        bcc: draft.bcc.map(convertContactInfoToEmailRecipient),
+      };
+    } else if (replyingTo) {
+      initialRecipients =
+        replyType === 'reply-all'
+          ? getReplyAllRecipients(replyingTo, inboxEmail(), ownAddresses())
+          : getReplyRecipientsFromParent(
+              replyingTo,
+              inboxEmail(),
+              ownAddresses()
+            );
+    }
+
+    return {
+      recipients: initialRecipients,
+      replyType,
+      withQuotedText: draftContainsAppendedReply(),
+      subject: initialSubject,
+    } satisfies EmailFormState;
+  };
+
+  const [state, setState] = createStore<EmailFormState>(getInitialState());
+
+  // Values and edit revisions may outlive a mounted composer; effects do not.
+  const [editRevision, setEditRevision] = createSignal(0);
+
+  const draftAttachments = (message?: EmailMessage): DraftFormAttachment[] => {
+    const representedIds = new Set([
+      ...(message?.attachments_draft.map((a) => a.id) ?? []),
+      ...(message?.attachments_forwarded.map((a) => a.attachment_id) ?? []),
+    ]);
+    const representedCids = new Set(
+      [...representedIds].map((id) => `${id}@attachments.macro.com`)
+    );
+    for (const file of message?.attachments_draft ?? [])
+      if (file.content_id) representedCids.add(file.content_id);
+    return [
+      ...(message?.attachments
+        .filter(
+          (a) =>
+            !representedIds.has(a.db_id) &&
+            !representedCids.has(a.content_id?.replace(/^<|>$/g, '') ?? '')
+        )
+        .map((a) => ({
+          type: 'native' as const,
+          referenceUrl: a.reference_url,
+          attachmentId: a.db_id,
+          fileName: a.filename ?? 'attachment',
+          mimeType: a.mime_type ?? 'application/octet-stream',
+          fileSize: a.size_bytes ?? 0,
+        })) ?? []),
+      ...(message?.attachments_draft.map((a) => ({
+        type: 'remote' as const,
+        uploadPending: a.upload_pending,
+        attachmentId: a.id,
+        contentType: a.content_type,
+        fileName: a.file_name,
+        url: a.s3_key,
+        fileSize: a.size,
+      })) ?? []),
+      ...(message?.attachments_forwarded.map((a) => ({
+        type: 'forwarded' as const,
+        attachmentId: a.attachment_id,
+        fileName: a.filename ?? 'attachment',
+        mimeType: a.mime_type ?? 'application/octet-stream',
+        fileSize: a.size_bytes ?? 0,
+      })) ?? []),
+    ];
+  };
+  const [attachments, setAttachments] = createSignal(draftAttachments(draft));
+
+  const setRecipients = (
+    field: keyof EmailFormRecipients,
+    value: EmailRecipient[]
+  ) => {
+    setRecipientsEdited(true);
+    setState('recipients', field, value);
+    callDirty();
+    const recipients = state.recipients;
+    const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
+    options?.onRecipientsChange?.(unwrap(all));
+  };
+
+  const setSubject: Setter<string> = (value) => {
+    const result = setState('subject', value);
+    callDirty();
+    return result;
+  };
+
+  const setReplyType = (next: ReplyType) => {
+    setState('replyType', next);
+    const msg = replyingTo;
+
+    // Clear forwarded attachments when switching away from forward
+    setAttachments((prev) => prev.filter((a) => a.type !== 'forwarded'));
+
+    if (msg) {
+      const calculated = match(next)
+        .with('reply-all', () =>
+          getReplyAllRecipients(msg, inboxEmail(), ownAddresses())
+        )
+        .with('reply', () =>
+          getReplyRecipientsFromParent(msg, inboxEmail(), ownAddresses())
+        )
+        .with('forward', () => ({ to: [], cc: [], bcc: [] }))
+        .exhaustive();
+
+      setRecipients('to', calculated.to);
+      setRecipients('cc', calculated.cc);
+      setRecipients('bcc', calculated.bcc);
+
+      setSubject(getSubjectText(msg, next));
+
+      if (next === 'forward') {
+        setState('withQuotedText', true);
+        // Populate forwarded attachments from original message (skip inline images linked in the quote)
+        const fwdAttachments: DraftFormAttachment[] = forwardedAttachments(
+          msg
+        ).map((a) => ({
+          type: 'forwarded' as const,
+          attachmentId: a.db_id,
+          fileName: a.filename ?? 'attachment',
+          mimeType: a.mime_type ?? 'application/octet-stream',
+          fileSize: a.size_bytes ?? 0,
+        }));
+        setAttachments((prev) => [...prev, ...fwdAttachments]);
+      }
+    }
+
+    setRecipientsEdited(false);
+    callDirty();
+    return next;
+  };
+
+  // Change the inbox this compose sends from. For an active reply, re-derive the
+  // recipients against the newly selected inbox (the sender comparison changes).
+  const setSelectedInbox = (
+    inboxId: string | undefined,
+    senderEmail?: string
+  ) => {
+    setSelectedInboxId(inboxId);
+    setSenderChoice({ email: senderEmail });
+    if (!replyingTo || draft || state.replyType === 'forward') return;
+    const recalculated =
+      state.replyType === 'reply-all'
+        ? getReplyAllRecipients(replyingTo, inboxEmail(), ownAddresses())
+        : getReplyRecipientsFromParent(
+            replyingTo,
+            inboxEmail(),
+            ownAddresses()
+          );
+    setRecipients('to', recalculated.to);
+    setRecipients('cc', recalculated.cc);
+    setRecipients('bcc', recalculated.bcc);
+    setRecipientsEdited(false);
+  };
+
+  const callDirty = () => {
+    setEditRevision((revision) => revision + 1);
+  };
+
+  const reset = (next: EmailFormState) => {
+    setState(reconcile(next));
+    const recipients = state.recipients;
+
+    // Notify context of the full recipient list after reset
+    const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
+    options?.onRecipientsChange?.(unwrap(all));
+
+    setAttachments([]);
+  };
+
+  return {
+    draft,
+    restoreDraft(message: EmailMessage) {
+      setSelectedInboxId(message.link_id);
+      setSenderChoice({ email: message.from?.email });
+      setRecipientsEdited(true);
+      setState({
+        subject: message.subject ?? '',
+        recipients: {
+          to: message.to.map(convertContactInfoToEmailRecipient),
+          cc: message.cc.map(convertContactInfoToEmailRecipient),
+          bcc: message.bcc.map(convertContactInfoToEmailRecipient),
+        },
+        withQuotedText: draftContainsAppendedReply(message),
+      });
+      setAttachments(draftAttachments(message));
+      options?.onRecipientsChange?.(
+        unwrap([
+          ...state.recipients.to,
+          ...state.recipients.cc,
+          ...state.recipients.bcc,
+        ])
+      );
+    },
+    replyAppended: () => state.withQuotedText,
+    setReplyAppended: (next: boolean) => setState('withQuotedText', next),
+    recipients: () => {
+      if (
+        draft ||
+        !replyingTo ||
+        recipientsEdited() ||
+        state.replyType === 'forward'
+      )
+        return state.recipients;
+      return state.replyType === 'reply-all'
+        ? getReplyAllRecipients(replyingTo, inboxEmail(), ownAddresses())
+        : getReplyRecipientsFromParent(
+            replyingTo,
+            inboxEmail(),
+            ownAddresses()
+          );
+    },
+    setRecipients,
+    subject: () => state.subject,
+    setSubject,
+    replyType: () => state.replyType,
+    setReplyType,
+    selectedInboxId,
+    senderEmail,
+    setSelectedInbox,
+    editRevision,
+    reset: () => reset(getInitialState()),
+    clear: () => reset({ ...EMPTY_FORM_STATE }),
+    attachments: {
+      clear: () => setAttachments([]),
+      list: attachments,
+      replace: (next: DraftFormAttachment[]) => setAttachments([...next]),
+
+      markUploadComplete: (attachmentId: string) =>
+        setAttachments((files) =>
+          files.map((file) =>
+            file.type === 'remote' && file.attachmentId === attachmentId
+              ? { ...file, uploadPending: false }
+              : file
+          )
+        ),
+      add: (attachment: DraftFormAttachment) => {
+        setAttachments((p) => [...p, attachment]);
+      },
+      assignAttachmentId: (file: File, attachmentId: string) => {
+        setAttachments((p) =>
+          p.map((a) =>
+            a.type === 'local' && a.file === file ? { ...a, attachmentId } : a
+          )
+        );
+      },
+      markAttachmentUploaded: (file: File, attachmentId: string) => {
+        setAttachments((previous) =>
+          previous.map((attachment) =>
+            attachment.type === 'local' && attachment.file === file
+              ? {
+                  ...attachment,
+                  attachmentId,
+                  uploadPending: false,
+                  uploaded: true,
+                }
+              : attachment
+          )
+        );
+      },
+      clearAttachmentId: (file: File) => {
+        setAttachments((p) =>
+          p.map((a) =>
+            a.type === 'local' && a.file === file
+              ? {
+                  ...a,
+                  attachmentId: undefined,
+                  uploadPending: false,
+                  uploaded: false,
+                }
+              : a
+          )
+        );
+      },
+      removeByFile: (file: File) => {
+        setAttachments((p) =>
+          p.filter((a) => a.type !== 'local' || a.file !== file)
+        );
+      },
+      removeById: (attachmentId: string) => {
+        setAttachments((p) =>
+          p.filter(
+            (a) =>
+              (a.type !== 'remote' && a.type !== 'native') ||
+              a.attachmentId !== attachmentId
+          )
+        );
+      },
+      removeForwarded: (attachmentId: string) => {
+        setAttachments((p) =>
+          p.filter(
+            (a) => a.type !== 'forwarded' || a.attachmentId !== attachmentId
+          )
+        );
+      },
+    },
+  };
+}

@@ -1,6 +1,23 @@
 //! This module exposes a expanded dynamic query builder which is able to build specific soup queries
 //! which filter out content basd on some input ast
 
+#[cfg(test)]
+mod test;
+
+mod database_row;
+mod document_ids;
+mod initiative;
+mod property_filter;
+
+use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
+pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
+use initiative::initiative_top_clause;
+pub(in crate::outbound::pg_soup_repo) use initiative::{
+    build_initiative_filter, initiative_access_clause, initiative_opted_in,
+};
+
+#[cfg(test)]
+use item_filters::ast::initiative::InitiativeLiteral;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -12,15 +29,19 @@ use item_filters::ast::{
     chat::ChatLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
+    email::Email,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
     calendar_event::SoupCalendarEvent,
     chat::SoupChat,
+    database_row::SoupDatabaseRow,
     document::{SoupDocument, SoupDocumentSubType},
+    initiative::SoupInitiative,
     item::SoupItem,
     project::SoupProject,
 };
@@ -29,7 +50,9 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::models::grouping::ItemGroupingInfo;
+use crate::domain::models::{
+    SoupDocumentServerFacts, SoupProjectionHydration, grouping::ItemGroupingInfo,
+};
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
 };
@@ -63,81 +86,83 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
                     AND ep_status.property_definition_id = $7
 "#;
 
-static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
-                WHERE d."deletedAt" IS NULL
-"#;
-
 // -- Grouped top clauses: include project_id for grouping support --
 
-static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
+fn grouped_document_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = top_sort_expr("d", sort_method);
+    format!(
+        r#"
                 SELECT
                     'document'::text as item_type,
                     d.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN d."createdAt"
-                        ELSE d."updatedAt"
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     d."projectId"::text as project_id,
                     CASE
                         WHEN dt.sub_type = 'task' THEN 'TASK'::property_entity_type
                         ELSE 'DOCUMENT'::property_entity_type
                     END as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
+                FROM "Document" d
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-"#;
+"#
+    )
+}
 
-static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
+fn grouped_chat_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = top_sort_expr("c", sort_method);
+    let user_history_join = if top_needs_user_history(sort_method) {
+        r#"LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1"#
+    } else {
+        ""
+    };
+    format!(
+        r#"
                 SELECT
                     'chat'::text as item_type,
                     c.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN c."createdAt"
-                        ELSE c."updatedAt"
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     c."projectId"::text as project_id,
                     'CHAT'::property_entity_type as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
-                WHERE c."deletedAt" IS NULL
-"#;
+                FROM "Chat" c
+                {user_history_join}
+"#
+    )
+}
 
-static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
+fn grouped_project_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = top_sort_expr("p", sort_method);
+    let user_history_join = if top_needs_user_history(sort_method) {
+        r#"LEFT JOIN "UserHistory" uh ON uh."itemId" = p.id AND uh."itemType" = 'project' AND uh."userId" = $1"#
+    } else {
+        ""
+    };
+    format!(
+        r#"
                 SELECT
                     'project'::text as item_type,
                     p.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN p."createdAt"
-                        ELSE p."updatedAt"
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     p."parentId"::text as project_id,
                     'PROJECT'::property_entity_type as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
-                LEFT JOIN "UserHistory" uh
-                    ON uh."itemId" = p.id
-                    AND uh."itemType" = 'project'
-                    AND uh."userId" = $1
-                WHERE p."deletedAt" IS NULL
-"#;
+                FROM "Project" p
+                {user_history_join}
+"#
+    )
+}
 
-static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
+fn grouped_calendar_event_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = match sort_method {
+        SimpleSortMethod::CreatedAt => "event.created_at",
+        SimpleSortMethod::ViewedAt => "'1970-01-01 00:00:00+00'",
+        SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated => {
+            "GREATEST(event.updated_at, event.last_reminder_fired_at)"
+        }
+    };
+    format!(
+        r#"
                 SELECT
                     'calendar_event'::text as item_type,
                     event.id::text as id,
-                    CASE $2
-                        WHEN 'created_at' THEN event.created_at
-                        WHEN 'viewed_at' THEN '1970-01-01 00:00:00+00'::timestamptz
-                        ELSE event.updated_at
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     NULL::text as project_id,
                     'CALENDAR_EVENT'::property_entity_type as property_entity_type
                 FROM calendar_events event
@@ -150,7 +175,9 @@ static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
                             AND link.primary_macro_id = $1
                       )
                   )
-"#;
+"#
+    )
+}
 
 // -- Detail clauses: full columns, joined back from TopItems --
 
@@ -169,8 +196,37 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
             NULL as "is_persistent",
+            NULL::text as "model",
             di.sha as "sha",
             dt.sub_type as "sub_type",
+            EXISTS (
+                SELECT 1
+                FROM document_email de
+                WHERE de.document_id = d.id
+            ) as "is_email_attachment",
+            (
+                dt.sub_type IS DISTINCT FROM 'task'
+                OR EXISTS (
+                    SELECT 1
+                    FROM entity_properties ep_assignees_projection
+                    WHERE ep_assignees_projection.entity_id = d.id
+                        AND ep_assignees_projection.entity_type = 'TASK'
+                        AND ep_assignees_projection.property_definition_id = $8
+                        AND ep_assignees_projection.values->'value' @> jsonb_build_array(
+                            jsonb_build_object('entity_id', $1)
+                        )
+                )
+            ) as "is_important",
+            ARRAY(
+                SELECT status_option_id::uuid
+                FROM jsonb_array_elements_text(
+                    CASE
+                        WHEN jsonb_typeof(ep_status.values->'value') = 'array'
+                        THEN ep_status.values->'value'
+                        ELSE '[]'::jsonb
+                    END
+                ) AS status_option_id
+            ) as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             CASE
@@ -181,7 +237,8 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
                 THEN false
                 ELSE NULL
             END as "is_completed",
-            d."deletedAt"::timestamptz as "deleted_at"
+            d."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN "Document" d ON d.id = t.id
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
@@ -224,12 +281,17 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
+            c.model as "model",
             NULL as "sha",
             NULL as "sub_type",
+            false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
-            c."deletedAt"::timestamptz as "deleted_at"
+            c."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN "Chat" c ON c.id = t.id
         LEFT JOIN "UserHistory" uh
@@ -252,12 +314,17 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
             NULL as "is_persistent",
+            NULL::text as "model",
             NULL as "sha",
             NULL as "sub_type",
+            false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
-            p."deletedAt"::timestamptz as "deleted_at"
+            p."deletedAt"::timestamptz as "deleted_at",
+            NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN "Project" p ON p.id = t.id
         LEFT JOIN "UserHistory" uh
@@ -266,6 +333,10 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             AND uh."userId" = $1
         WHERE t.item_type = 'project'
 "#;
+
+static INITIATIVE_DETAIL_CLAUSE: &str = include_str!("dynamic/initiative_detail.sql");
+
+static DATABASE_ROW_DETAIL_CLAUSE: &str = include_str!("dynamic/database_row_detail.sql");
 
 static DETAIL_SUFFIX: &str = r#"
     )
@@ -291,6 +362,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
             NULL::boolean as "is_persistent",
+            NULL::text as "model",
             di.sha as "sha",
             dt.sub_type as "sub_type",
             uh."updatedAt"::timestamptz as "viewed_at",
@@ -305,6 +377,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             END as "is_completed",
             d."deletedAt"::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -350,6 +423,7 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
+            c.model as "model",
             NULL::text as "sha",
             NULL::document_sub_type_value as "sub_type",
             uh."updatedAt"::timestamptz as "viewed_at",
@@ -357,6 +431,7 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
             NULL::boolean as "is_completed",
             c."deletedAt"::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -382,6 +457,7 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
             NULL::boolean as "is_persistent",
+            NULL::text as "model",
             NULL::text as "sha",
             NULL::document_sub_type_value as "sub_type",
             uh."updatedAt"::timestamptz as "viewed_at",
@@ -389,6 +465,7 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL::boolean as "is_completed",
             p."deletedAt"::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -400,6 +477,12 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             AND uh."userId" = $1
         WHERE gi.item_type = 'project'
 "#;
+
+static GROUPED_INITIATIVE_DETAIL_CLAUSE: &str =
+    include_str!("dynamic/initiative_grouped_detail.sql");
+
+static GROUPED_DATABASE_ROW_DETAIL_CLAUSE: &str =
+    include_str!("dynamic/database_row_grouped_detail.sql");
 
 static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
         SELECT
@@ -416,6 +499,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
             event.updated_at as "updated_at",
             NULL::text as "project_id",
             NULL::boolean as "is_persistent",
+            NULL::text as "model",
             NULL::text as "sha",
             NULL::document_sub_type_value as "sub_type",
             NULL::timestamptz as "viewed_at",
@@ -452,8 +536,10 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
                 'isReadOnly', event.is_read_only,
                 'createdAt', event.created_at,
                 'updatedAt', event.updated_at,
+                'lastReminderFiredAt', event.last_reminder_fired_at,
                 'extra', NULL
             ) as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
@@ -477,6 +563,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::timestamptz as "updated_at",
             NULL::text as "project_id",
             NULL::boolean as "is_persistent",
+            NULL::text as "model",
             NULL::text as "sha",
             NULL::document_sub_type_value as "sub_type",
             NULL::timestamptz as "viewed_at",
@@ -484,13 +571,14 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::boolean as "is_completed",
             NULL::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             NULL::text as "group_key",
             NULL::bigint as "group_total_count",
             NULL::bigint as "row_in_group"
         WHERE false
 "#;
 
-fn build_notification_exists_clause(
+pub(in crate::outbound::pg_soup_repo) fn build_notification_exists_clause(
     entity_id_sql: &str,
     entity_type: &str,
     predicate_sql: &str,
@@ -509,51 +597,43 @@ fn build_notification_exists_clause(
     )
 }
 
-pub(in crate::outbound::pg_soup_repo) fn build_notification_done_clause(
+pub(in crate::outbound::pg_soup_repo) fn build_notification_state_clause(
     entity_id_sql: &str,
     entity_type: &str,
-    done: bool,
+    state: item_filters::NotificationState,
 ) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
-        if done {
-            "un.done = true"
-        } else {
-            "un.done = false"
-        },
+        NotificationPredicate::state(state).sql(),
     )
 }
 
-pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
-    entity_id_sql: &str,
-    entity_type: &str,
-    seen: bool,
-) -> String {
-    build_notification_exists_clause(
-        entity_id_sql,
-        entity_type,
-        if seen {
-            "un.seen_at IS NOT NULL"
-        } else {
-            "un.seen_at IS NULL"
-        },
-    )
-}
-
+// A union of exact states for one EXISTS predicate. Do not intersect these on
+// AND: separate literals may be witnessed by different notification rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NotificationPredicate {
-    Done(bool),
-    Seen(bool),
-}
+pub(in crate::outbound::pg_soup_repo) struct NotificationPredicate(u8);
 
 impl NotificationPredicate {
-    fn sql(self) -> &'static str {
-        match self {
-            NotificationPredicate::Done(true) => "un.done = true",
-            NotificationPredicate::Done(false) => "un.done = false",
-            NotificationPredicate::Seen(true) => "un.seen_at IS NOT NULL",
-            NotificationPredicate::Seen(false) => "un.seen_at IS NULL",
+    pub(in crate::outbound::pg_soup_repo) fn state(state: item_filters::NotificationState) -> Self {
+        use item_filters::NotificationState::*;
+        Self(match state {
+            Unseen => 1,
+            Seen => 2,
+            Done => 4,
+        })
+    }
+
+    pub(in crate::outbound::pg_soup_repo) fn sql(self) -> &'static str {
+        match self.0 {
+            1 => "un.state = 'unseen'",
+            2 => "un.state = 'seen'",
+            3 => "un.state IN ('unseen', 'seen')",
+            4 => "un.state = 'done'",
+            5 => "un.state IN ('unseen', 'done')",
+            6 => "un.state IN ('seen', 'done')",
+            7 => "TRUE",
+            _ => "FALSE",
         }
     }
 }
@@ -661,7 +741,18 @@ fn strip_notification_conjunction<T: Clone>(
                 _ => None,
             }
         }
-        Expr::Or(_, _) | Expr::Not(_) => None,
+        Expr::Or(a, b) => {
+            match (
+                strip_notification_conjunction(a, notification_predicate),
+                strip_notification_conjunction(b, notification_predicate),
+            ) {
+                (Some((a, None)), Some((b, None))) => {
+                    Some((NotificationPredicate(a.0 | b.0), None))
+                }
+                _ => None,
+            }
+        }
+        Expr::Not(_) => None,
     }
 }
 
@@ -740,26 +831,45 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> String {
     }
 }
 
+/// Renders the document filter as ` AND ...` against the `d` alias.
+/// `id_arrays` binds its runs of document ids as arrays (see
+/// [`document_ids`]); without it every id renders inline, for queries with no
+/// free parameter slots.
 pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     ast: Option<&Expr<DocumentLiteral>>,
+    id_arrays: Option<&mut DocumentIdArrays>,
 ) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
     let expr = push_not_inward(expr, false);
-    let formatting = expr.collapse_frames(|frame| match frame {
-        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
-        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
-        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-        filter_ast::ExprFrame::Literal(DocumentLiteral::FileType(f)) => {
+    let formatting = match id_arrays {
+        Some(id_arrays) => document_ids::render(&expr, id_arrays, document_literal_sql),
+        None => expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
+            filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
+            filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+            filter_ast::ExprFrame::Literal(literal) => document_literal_sql(literal),
+        }),
+    };
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
+}
+
+fn document_literal_sql(literal: DocumentLiteral) -> String {
+    match literal {
+        DocumentLiteral::FileType(f) => {
             format!(r#"d."fileType" = '{f}'"#)
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::Id(i)) => format!("d.id = '{i}'"),
-        filter_ast::ExprFrame::Literal(DocumentLiteral::ProjectId(p)) => {
-            nullable_eq(r#"d."projectId""#, p)
+        DocumentLiteral::Id(i) => format!("d.id = '{i}'"),
+        DocumentLiteral::ProjectId(p) => nullable_eq(r#"d."projectId""#, p),
+        DocumentLiteral::Owner(o) => {
+            format!("d.owner = {}", sql_string_literal(&o.principal_id()))
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => format!("d.owner = '{o}'"),
-        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(true)) => {
+        DocumentLiteral::Importance(true) => {
             // "Important" documents: non-tasks OR tasks where user is an assignee
             r#"(
                 dt.sub_type IS NULL
@@ -768,8 +878,8 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
             )"#
                 .to_string()
         }
-        // filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(false)) => String::new()
-        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(false)) => {
+        // DocumentLiteral::Importance(false) => String::new()
+        DocumentLiteral::Importance(false) => {
             // "Unimportant" documents: tasks where user is NOT an assignee
             r#"(
                 dt.sub_type = 'task'
@@ -779,68 +889,96 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
             )"#
                 .to_string()
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("d.id", "document", done)
+        DocumentLiteral::NotificationState(state) => {
+            build_notification_state_clause("d.id", "document", state)
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("d.id", "document", seen)
-        }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(true)) => {
-            build_task_include_cbm_atm_nc_clause()
-        }
+        DocumentLiteral::IncludeCbmAtmNc(true) => build_task_include_cbm_atm_nc_clause(),
         // false is equivalent to disabled/no-op. Rendered as TRUE (not an
         // empty string): an empty operand inside And/Or/Not produces invalid
         // SQL like `( AND x)` or `(NOT )`, and TRUE also gives NOT the right
         // meaning (a disabled predicate matches everything, its negation
         // nothing).
-        filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(false)) => {
-            "TRUE".to_string()
-        }
+        DocumentLiteral::IncludeCbmAtmNc(false) => "TRUE".to_string(),
         // EXISTS instead of a predicate on the LEFT-JOINed `dt` alias: this
         // keeps the top clause free of the join when only SubType literals
         // are present, and `NOT (EXISTS ...)` becomes a plannable anti-join
         // (the old `(dt.sub_type IS NOT NULL AND ...)` OR-shape collapsed row
         // estimates to ~1 on broad arms, picking pathological nested loops).
-        filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => {
+        DocumentLiteral::SubType(st) => {
             format!(
                 "EXISTS (SELECT 1 FROM document_sub_type dst_f WHERE dst_f.document_id = d.id AND dst_f.sub_type = '{st}')"
             )
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(true)) => {
-            r#"EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
-                .to_string()
+        DocumentLiteral::IsEmailAttachment(true) => {
+            r#"EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#.to_string()
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::IsEmailAttachment(false)) => {
-            r#"NOT EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#
-                .to_string()
+        DocumentLiteral::IsEmailAttachment(false) => {
+            r#"NOT EXISTS(SELECT 1 FROM document_email WHERE document_id = d.id)"#.to_string()
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::CreatedAt(lit)) => {
-            date_predicate(r#"d."createdAt""#, &lit)
+        DocumentLiteral::CreatedAt(lit) => date_predicate(r#"d."createdAt""#, &lit),
+        DocumentLiteral::UpdatedAt(lit) => date_predicate(r#"d."updatedAt""#, &lit),
+        DocumentLiteral::Property(lit) => property_literal_predicate(&lit, "d.id"),
+        DocumentLiteral::EmailAttachmentParticipant(email) => {
+            email_attachment_participant_predicate(&email, "d.id")
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(lit)) => {
-            date_predicate(r#"d."updatedAt""#, &lit)
-        }
-    });
-    if formatting.is_empty() {
-        String::new()
-    } else {
-        format!(" AND {}", formatting)
+        DocumentLiteral::NameContains(name) => format!(
+            "STRPOS(LOWER(d.name), {}) > 0",
+            sql_string_literal(&name.to_lowercase())
+        ),
+        // The Soup domain replaces CRM associations with the associated
+        // document ids before querying, so an unresolved one matches nothing.
+        DocumentLiteral::CrmAssociated(_) => "FALSE".to_string(),
     }
 }
 
-/// A single-quoted SQL string literal with embedded quotes doubled. The
-/// calendar filter inlines caller-supplied strings (statuses, attendee and
-/// organizer emails), which unlike the ids the sibling builders inline are
-/// not shaped by a parser first.
+/// Matches documents uploaded from an email attachment whose message was sent
+/// by, or addressed to, an address matching `email`.
+fn email_attachment_participant_predicate(email: &Email, document_id_sql: &str) -> String {
+    let address_predicate = match email {
+        Email::Complete(address) => format!(
+            "LOWER(c.email_address) = {}",
+            sql_string_literal(&address.0.as_ref().to_lowercase())
+        ),
+        Email::Domain(domain) => format!(
+            "LOWER(SPLIT_PART(c.email_address, '@', 2)) = {}",
+            sql_string_literal(&domain.to_lowercase())
+        ),
+        Email::Partial(fragment) => format!(
+            "STRPOS(LOWER(c.email_address), {}) > 0",
+            sql_string_literal(&fragment.to_lowercase())
+        ),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1
+            FROM document_email de
+            JOIN email_attachments ea ON ea.id = de.email_attachment_id
+            JOIN email_messages m ON m.id = ea.message_id
+            JOIN LATERAL (
+                SELECT m.from_contact_id AS contact_id
+                UNION ALL
+                SELECT r.contact_id FROM email_message_recipients r WHERE r.message_id = m.id
+            ) participant ON TRUE
+            JOIN email_contacts c ON c.id = participant.contact_id
+            WHERE de.document_id = {document_id_sql}
+            AND {address_predicate}
+        )"#
+    )
+}
+
+/// A single-quoted SQL string literal with embedded quotes doubled. Used for
+/// every caller-supplied string these bind-free builders inline: the calendar
+/// filter's statuses and attendee/organizer emails, and the owner principals,
+/// none of which are constrained to the shape of the uuids the sibling
+/// builders inline.
 fn sql_string_literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
-/// Renders the calendar-event filter bind-free, like every other arm of the
-/// hand-numbered grouped query: `push_bind` placeholders would start at `$1`
-/// and collide with the positionally-bound user id. The notification clauses
-/// reference `$1` as the requesting user, which both this query and
-/// `cursor_soup` guarantee.
+/// Renders the calendar-event filter bind-free: in the hand-numbered grouped
+/// query, `push_bind` placeholders would start at `$1` and collide with the
+/// positionally-bound user id. The notification clauses reference `$1` as the
+/// requesting user, which both this query and `cursor_soup` guarantee.
 fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -881,11 +1019,8 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
                 sql_string_literal(&email)
             )
         }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("event.id", "calendar_event", done)
-        }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("event.id", "calendar_event", seen)
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationState(state)) => {
+            build_notification_state_clause("event.id", "calendar_event", state)
         }
     });
     if formatting.is_empty() {
@@ -915,17 +1050,14 @@ pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
         filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => "TRUE".to_string(),
         filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("c.id = '{i}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => {
-            format!(r#"c."userId" = '{o}'"#)
+            format!(r#"c."userId" = {}"#, sql_string_literal(&o.principal_id()))
         }
         // all chats are important
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => "TRUE".to_string(),
         // all chats are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
-        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("c.id", "chat", done)
-        }
-        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("c.id", "chat", seen)
+        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationState(state)) => {
+            build_notification_state_clause("c.id", "chat", state)
         }
         filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(lit)) => {
             date_predicate(r#"c."createdAt""#, &lit)
@@ -959,18 +1091,15 @@ pub(in crate::outbound::pg_soup_repo) fn build_project_filter(
             format!(r#"p.id = '{p}'"#)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => {
-            format!(r#"p."userId" = '{o}'"#)
+            format!(r#"p."userId" = {}"#, sql_string_literal(&o.principal_id()))
         }
         // all projects are important; TRUE (not empty) keeps the literal
         // valid SQL inside And/Or/Not.
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => "TRUE".to_string(),
         // all projects are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("p.id", "project", done)
-        }
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("p.id", "project", seen)
+        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationState(state)) => {
+            build_notification_state_clause("p.id", "project", state)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(lit)) => {
             date_predicate(r#"p."createdAt""#, &lit)
@@ -993,45 +1122,45 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     let Some(expr) = ast else {
         return String::new();
     };
-    let formatting = expr.collapse_frames(|frame| match frame {
-        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
-        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
-        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-        filter_ast::ExprFrame::Literal(PropertiesLiteral {
-            property_definition_id,
-            entity_type,
-            value,
-        }) => {
-            let value_predicate = match value {
-                PropertyMatchValue::SelectOption(option_id) => {
-                    format!("ep_prop.values->'value' ? '{option_id}'")
-                }
-                PropertyMatchValue::EntityRef(entity_id) => {
-                    format!(
-                        "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
-                    )
-                }
-            };
-            let entity_type_clause = match entity_type {
-                Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
-                None => String::new(),
-            };
-            format!(
-                r#"EXISTS (
-                    SELECT 1 FROM entity_properties ep_prop
-                    WHERE ep_prop.entity_id = {entity_id_sql}
-                    {entity_type_clause}
-                    AND ep_prop.property_definition_id = '{property_definition_id}'
-                    AND {value_predicate}
-                )"#
-            )
-        }
-    });
+    let formatting = property_filter::predicate(expr, entity_id_sql);
     if formatting.is_empty() {
         String::new()
     } else {
         format!(" AND {}", formatting)
     }
+}
+
+/// An EXISTS check that the entity identified by `entity_id_sql` has a
+/// property value matching `literal`.
+fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) -> String {
+    let PropertiesLiteral {
+        property_definition_id,
+        entity_type,
+        value,
+    } = literal;
+    let value_predicate = match value {
+        PropertyMatchValue::SelectOption(option_id) => {
+            format!("ep_prop.values->'value' ? '{option_id}'")
+        }
+        PropertyMatchValue::EntityRef(entity_id) => {
+            format!(
+                "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
+            )
+        }
+    };
+    let entity_type_clause = match entity_type {
+        Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
+        None => String::new(),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1 FROM entity_properties ep_prop
+            WHERE ep_prop.entity_id = {entity_id_sql}
+            {entity_type_clause}
+            AND ep_prop.property_definition_id = '{property_definition_id}'
+            AND {value_predicate}
+        )"#
+    )
 }
 
 pub(in crate::outbound::pg_soup_repo) fn document_filter_needs_task_property_joins(
@@ -1108,7 +1237,9 @@ pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
     })
 }
 
-fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn calendar_event_filter_is_impossible(
+    ast: Option<&Expr<CalendarEventLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1267,82 +1398,24 @@ fn project_top_where_clause() -> String {
     )
 }
 
-fn push_accessible_items_cte(
-    builder: &mut QueryBuilder<'_, Postgres>,
-    include_documents: bool,
-    include_chats: bool,
-    include_projects: bool,
-) {
-    let mut entity_types = Vec::with_capacity(3);
-    if include_documents {
-        entity_types.push("'document'");
-    }
-    if include_chats {
-        entity_types.push("'chat'");
-    }
-    if include_projects {
-        entity_types.push("'project'");
-    }
-
-    if entity_types.is_empty() {
-        return;
-    }
-
-    let entity_types = entity_types.join(", ");
-    builder.push(format!(
-        r#"AccessibleItems AS MATERIALIZED (
-        SELECT DISTINCT item_id, item_type
-        FROM (
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM entity_access ea
-            WHERE ea.source_id = $1
-              AND ea.entity_type IN ({entity_types})
-
-            UNION ALL
-
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM comms_channel_participants cp
-            CROSS JOIN LATERAL (
-                SELECT ea.entity_id, ea.entity_type
-                FROM entity_access ea
-                WHERE ea.source_id = cp.channel_id::text
-                  AND ea.entity_type IN ({entity_types})
-                OFFSET 0
-            ) ea
-            WHERE cp.user_id = $1
-              AND cp.left_at IS NULL
-
-            UNION ALL
-
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM team_user t
-            CROSS JOIN LATERAL (
-                SELECT ea.entity_id, ea.entity_type
-                FROM entity_access ea
-                WHERE ea.source_id = t.team_id::text
-                  AND ea.entity_type IN ({entity_types})
-                OFFSET 0
-            ) ea
-            WHERE t.user_id = $1
-        ) accessible
-    ),
-"#
-    ));
-}
-
-fn build_query(
-    filter_ast: &EntityFilterAst,
+fn build_query<'a>(
+    filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort_method: SimpleSortMethod,
-) -> QueryBuilder<'_, Postgres> {
+    document_ids: &mut DocumentIdArrays,
+) -> QueryBuilder<'a, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
+    let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Initiative],
+        );
+    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::DatabaseRow],
+        );
     let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
         && properties_filter_can_apply_to(
             filter_ast.properties_filter.as_deref(),
@@ -1361,22 +1434,19 @@ fn build_query(
 
     let document_notification = filter_ast.document_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
-            DocumentLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
-            DocumentLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            DocumentLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
             _ => None,
         })
     });
     let chat_notification = filter_ast.chat_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
-            ChatLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
-            ChatLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            ChatLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
             _ => None,
         })
     });
     let project_notification = filter_ast.project_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
-            ProjectLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
-            ProjectLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            ProjectLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
             _ => None,
         })
     });
@@ -1454,7 +1524,7 @@ fn build_query(
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
         builder.push(document_top_where_clause(sort_method));
-        builder.push(build_document_filter(document_filter));
+        builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
@@ -1488,6 +1558,30 @@ fn build_query(
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "p.id",
+        ));
+    }
+
+    if include_initiatives {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(initiative_top_clause(sort_method, false));
+        builder.push(build_initiative_filter(
+            filter_ast.initiative_filter.as_deref(),
+        ));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "i.id::text",
+        ));
+    }
+
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(database_row_top_clause(sort_method, false));
+        builder.push(build_database_row_filter(
+            filter_ast.database_row_filter.as_deref(),
+        ));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "r.id::text",
         ));
     }
 
@@ -1544,6 +1638,14 @@ fn build_query(
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(PROJECT_DETAIL_CLAUSE);
     }
+    if include_initiatives {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(INITIATIVE_DETAIL_CLAUSE);
+    }
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(DATABASE_ROW_DETAIL_CLAUSE);
+    }
     if !needs_separator {
         builder.push(
             r#"SELECT
@@ -1560,12 +1662,17 @@ fn build_query(
                 NULL::timestamptz as "updated_at",
                 NULL::text as "project_id",
                 NULL::boolean as "is_persistent",
+                NULL::text as "model",
                 NULL::text as "sha",
                 NULL::document_sub_type_value as "sub_type",
+                false as "is_email_attachment",
+                false as "is_important",
+                ARRAY[]::uuid[] as "status_option_ids",
                 NULL::timestamptz as "viewed_at",
                 NULL::timestamptz as "sort_ts",
                 NULL::boolean as "is_completed",
-                NULL::timestamptz as "deleted_at"
+                NULL::timestamptz as "deleted_at",
+                NULL::jsonb as "database_row"
             WHERE false"#,
         );
     }
@@ -1590,6 +1697,12 @@ struct DocumentRow {
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
     sub_type: Option<DocumentSubType>,
+    #[sqlx(default)]
+    is_email_attachment: bool,
+    #[sqlx(default)]
+    is_important: bool,
+    #[sqlx(default)]
+    status_option_ids: Vec<Uuid>,
     is_completed: Option<bool>,
     deleted_at: Option<DateTime<Utc>>,
 }
@@ -1599,6 +1712,7 @@ struct ChatRow {
     id: String,
     user_id: String,
     name: String,
+    model: Option<String>,
     project_id: Option<String>,
     #[sqlx(default)]
     is_persistent: bool,
@@ -1620,11 +1734,42 @@ struct ProjectRow {
     deleted_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, FromRow)]
+struct InitiativeRow {
+    id: String,
+    user_id: String,
+    name: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    viewed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, FromRow)]
+struct DatabaseRowRow {
+    id: String,
+    user_id: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    database_row: sqlx::types::Json<DatabaseRowPlacement>,
+}
+
+/// Where a row sits, as the detail clauses build it.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DatabaseRowPlacement {
+    table_id: Uuid,
+    database_id: Uuid,
+    position: String,
+    created_by: Option<String>,
+}
+
 #[derive(Debug)]
 enum SoupRow {
     Document(DocumentRow),
     Chat(ChatRow),
     Project(ProjectRow),
+    Initiative(InitiativeRow),
+    DatabaseRow(DatabaseRowRow),
     CalendarEvent(SoupCalendarEvent<()>),
 }
 
@@ -1635,6 +1780,8 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
             "document" => Ok(SoupRow::Document(DocumentRow::from_row(row)?)),
             "chat" => Ok(SoupRow::Chat(ChatRow::from_row(row)?)),
             "project" => Ok(SoupRow::Project(ProjectRow::from_row(row)?)),
+            "initiative" => Ok(SoupRow::Initiative(InitiativeRow::from_row(row)?)),
+            "database_row" => Ok(SoupRow::DatabaseRow(DatabaseRowRow::from_row(row)?)),
             "calendar_event" => {
                 let value: serde_json::Value = row.try_get("calendar_event")?;
                 let event = serde_json::from_value(value)
@@ -1649,6 +1796,30 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
+    fn document_server_facts(&self) -> Option<SoupDocumentServerFacts> {
+        match self {
+            Self::Document(row) => Some(SoupDocumentServerFacts {
+                is_email_attachment: row.is_email_attachment,
+                is_important: row.is_important,
+                status_option_ids: row.status_option_ids.clone(),
+            }),
+            Self::Chat(_)
+            | Self::Project(_)
+            | Self::Initiative(_)
+            | Self::DatabaseRow(_)
+            | Self::CalendarEvent(_) => None,
+        }
+    }
+
+    #[tracing::instrument(err)]
+    fn into_projection_hydration(self) -> Result<SoupProjectionHydration, sqlx::Error> {
+        let document_server_facts = self.document_server_facts();
+        Ok(SoupProjectionHydration {
+            item: self.into_soup_item()?,
+            document_server_facts,
+        })
+    }
+
     #[tracing::instrument(err)]
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
@@ -1667,6 +1838,9 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type,
+                is_email_attachment: _,
+                is_important: _,
+                status_option_ids: _,
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {
@@ -1674,9 +1848,7 @@ impl SoupRow {
                 document_version_id: document_version_id
                     .parse()
                     .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                owner_id: MacroUserIdStr::parse_from_str(&user_id)
-                    .map_err(type_err)?
-                    .into_owned(),
+                owner_id: Owner::from_principal_str(&user_id).map_err(type_err)?,
                 name,
                 file_type,
                 sha,
@@ -1703,6 +1875,7 @@ impl SoupRow {
                 id,
                 user_id,
                 name,
+                model,
                 project_id,
                 is_persistent,
                 created_at,
@@ -1712,9 +1885,8 @@ impl SoupRow {
             }) => SoupItem::Chat(SoupChat {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
-                owner_id: MacroUserIdStr::parse_from_str(&user_id)
-                    .map_err(type_err)?
-                    .into_owned(),
+                model,
+                owner_id: Owner::from_principal_str(&user_id).map_err(type_err)?,
                 project_id: project_id
                     .as_deref()
                     .map(Uuid::parse_str)
@@ -1739,9 +1911,7 @@ impl SoupRow {
             }) => SoupItem::Project(SoupProject {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
-                owner_id: MacroUserIdStr::parse_from_str(&user_id)
-                    .map_err(type_err)?
-                    .into_owned(),
+                owner_id: Owner::from_principal_str(&user_id).map_err(type_err)?,
                 parent_id: project_id
                     .as_deref()
                     .map(Uuid::from_str)
@@ -1753,6 +1923,29 @@ impl SoupRow {
                 deleted_at,
                 extra: (),
             }),
+            SoupRow::Initiative(row) => SoupItem::Initiative(SoupInitiative {
+                id: row.id.parse().map_err(type_err)?,
+                name: row.name,
+                owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                viewed_at: row.viewed_at,
+                extra: (),
+            }),
+            SoupRow::DatabaseRow(row) => {
+                let placement = row.database_row.0;
+                SoupItem::DatabaseRow(SoupDatabaseRow {
+                    id: row.id.parse().map_err(type_err)?,
+                    table_id: placement.table_id,
+                    database_id: placement.database_id,
+                    position: placement.position,
+                    owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
+                    created_by: placement.created_by,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    extra: (),
+                })
+            }
             SoupRow::CalendarEvent(event) => SoupItem::CalendarEvent(event),
         })
     }
@@ -1772,10 +1965,10 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 }
 
 #[tracing::instrument(skip(db), err)]
-pub(crate) async fn expanded_dynamic_cursor_soup(
+async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
-) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
         limit,
@@ -1790,7 +1983,15 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let items = build_query(cursor.filter(), exclude_frecency, *cursor.sort_method())
+    // Document id arrays follow the eight fixed binds.
+    let mut document_ids = DocumentIdArrays::starting_at(9);
+    let mut builder = build_query(
+        cursor.filter(),
+        exclude_frecency,
+        *cursor.sort_method(),
+        &mut document_ids,
+    );
+    let mut query = builder
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
@@ -1799,7 +2000,11 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(cursor_id_str)
         .bind(completed_option_id)
         .bind(status_property_id)
-        .bind(assignees_property_id)
+        .bind(assignees_property_id);
+    for ids in document_ids.into_binds() {
+        query = query.bind(ids);
+    }
+    let items = query
         // Unnamed statement: the SQL text varies per filter shape and per
         // interpolated literal (dates change daily), so a cached prepared
         // statement is rarely reused but flips to a generic plan after five
@@ -1807,11 +2012,34 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         // enough to run 10x slower. Planning with the real bind values every
         // time costs ~1ms and keeps the plan stable.
         .persistent(false)
-        .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
+        .try_map(|row| SoupRow::from_row(&row)?.into_projection_hydration())
         .fetch_all(db)
         .await?;
 
     Ok(items)
+}
+
+/// Execute a flat expanded dynamic query and retain document server facts.
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_dynamic_cursor_soup_hydrated(db, args).await
+}
+
+/// Execute a flat expanded dynamic query without exposing projection metadata.
+#[cfg(test)]
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    Ok(expanded_dynamic_cursor_soup_hydrated(db, args)
+        .await?
+        .into_iter()
+        .map(|hydration| hydration.item)
+        .collect())
 }
 
 // ============================================================================
@@ -1909,10 +2137,22 @@ fn build_grouped_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     grouping: &'a GroupingConfig,
+    sort_method: SimpleSortMethod,
+    document_ids: &mut DocumentIdArrays,
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
     // Determine which entity types to include based on filters (same logic as build_query)
+    let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::Initiative],
+        );
+    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
+        && properties_filter_can_apply_to(
+            filter_ast.properties_filter.as_deref(),
+            &[PropertyEntityType::DatabaseRow],
+        );
     let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
         && properties_filter_can_apply_to(
             filter_ast.properties_filter.as_deref(),
@@ -1938,14 +2178,7 @@ fn build_grouped_query<'a>(
                 &[PropertyEntityType::CalendarEvent],
             );
 
-    push_accessible_items_cte(
-        &mut builder,
-        include_documents,
-        include_chats,
-        include_projects,
-    );
-
-    // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
+    // All matching candidates are needed for exact counts; limits apply after grouping.
     builder.push("TopItems AS (");
     builder.push(
         "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id, all_items.property_entity_type FROM (",
@@ -1955,12 +2188,15 @@ fn build_grouped_query<'a>(
 
     if include_documents {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
+        builder.push(grouped_document_top_clause(sort_method));
         if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
-        builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+        builder.push(document_top_where_clause(sort_method));
+        builder.push(build_document_filter(
+            filter_ast.document_filter.as_deref(),
+            Some(document_ids),
+        ));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
@@ -1969,7 +2205,8 @@ fn build_grouped_query<'a>(
 
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_CHAT_TOP_CLAUSE);
+        builder.push(grouped_chat_top_clause(sort_method));
+        builder.push(chat_top_where_clause());
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -1979,7 +2216,8 @@ fn build_grouped_query<'a>(
 
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_PROJECT_TOP_CLAUSE);
+        builder.push(grouped_project_top_clause(sort_method));
+        builder.push(project_top_where_clause());
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -1989,13 +2227,37 @@ fn build_grouped_query<'a>(
 
     if include_calendar_events {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_CALENDAR_EVENT_TOP_CLAUSE);
+        builder.push(grouped_calendar_event_top_clause(sort_method));
         builder.push(build_calendar_event_filter(
             filter_ast.calendar_event_filter.as_deref(),
         ));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "event.id::text",
+        ));
+    }
+
+    if include_initiatives {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(initiative_top_clause(sort_method, true));
+        builder.push(build_initiative_filter(
+            filter_ast.initiative_filter.as_deref(),
+        ));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "i.id::text",
+        ));
+    }
+
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut needs_separator);
+        builder.push(database_row_top_clause(sort_method, true));
+        builder.push(build_database_row_filter(
+            filter_ast.database_row_filter.as_deref(),
+        ));
+        builder.push(build_properties_filter(
+            filter_ast.properties_filter.as_deref(),
+            "r.id::text",
         ));
     }
 
@@ -2032,8 +2294,7 @@ fn build_grouped_query<'a>(
         builder.push(")");
     }
 
-    // Note: we don't limit TopItems here for grouped queries - limit is applied at the end
-    builder.push(" ORDER BY all_items.sort_ts DESC, all_items.id DESC");
+    // Ranking windows and the final SELECT provide their own ordering.
     builder.push("), ");
 
     // GroupedItems CTE: adds group metadata (and FilteredGroupedItems if not single-group mode)
@@ -2074,6 +2335,20 @@ fn build_grouped_query<'a>(
         push_union_separator(&mut builder, &mut combined_needs_separator);
         builder.push(
             GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_initiatives {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_INITIATIVE_DETAIL_CLAUSE
+                .replace("GroupedItems gi", &format!("{} gi", source_table)),
+        );
+    }
+    if include_database_rows {
+        push_union_separator(&mut builder, &mut combined_needs_separator);
+        builder.push(
+            GROUPED_DATABASE_ROW_DETAIL_CLAUSE
                 .replace("GroupedItems gi", &format!("{} gi", source_table)),
         );
     }
@@ -2128,10 +2403,19 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let (mut query_builder, entity_type_bind) =
-        build_grouped_query(cursor.filter(), exclude_frecency, &grouping);
+    // Document id arrays follow the ten fixed binds.
+    let mut document_ids = DocumentIdArrays::starting_at(11);
+    let (mut query_builder, entity_type_bind) = build_grouped_query(
+        cursor.filter(),
+        exclude_frecency,
+        &grouping,
+        *cursor.sort_method(),
+        &mut document_ids,
+    );
 
-    // $9 is bound unconditionally (NULL when not in single-group mode) so $10 stays aligned.
+    // Keep the reserved $2 sort slot even though candidates now specialize it away.
+    // $9 and $10 are bound unconditionally (NULL when unused) so the document
+    // id arrays after them keep their slots.
     let mut query = query_builder
         .build_query_as::<'_, GroupedSoupRow>()
         .bind(user_id.as_ref())
@@ -2142,11 +2426,11 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         .bind(completed_option_id)
         .bind(status_property_id)
         .bind(assignees_property_id)
-        .bind(grouping.group_key.clone());
-
-    // Bind entity_type as $10 when property grouping with entity_type filter
-    if let Some(ref et) = entity_type_bind {
-        query = query.bind(et.clone());
+        .bind(grouping.group_key.clone())
+        // The entity type of property grouping with an entity type filter.
+        .bind(entity_type_bind);
+    for ids in document_ids.into_binds() {
+        query = query.bind(ids);
     }
 
     let rows: Vec<GroupedSoupRow> = query

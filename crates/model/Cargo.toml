@@ -15,6 +15,7 @@ doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response" }
+model_owner = { path = "../model_owner" }
 model_file_type = { path = "../model_file_type", features = ["utoipa"] }
 model_user = { path = "../model_user" }
 models_bulk_upload = { path = "../models_bulk_upload" }

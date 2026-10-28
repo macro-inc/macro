@@ -1,6 +1,7 @@
 export const CHANNEL_TABS = [
   { value: 'messages', label: 'Messages' },
   { value: 'attachments', label: 'Attachments' },
+  { value: 'calls', label: 'Calls' },
   { value: 'participants', label: 'Participants' },
   { value: 'call', label: 'Call' },
 ] as const;

@@ -1,0 +1,11 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 239
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/multi_turn_2.sse
+---
+
+--- thinking ---
+The user wants me to say only the word "second" and nothing else, without using any tools.
+--- assistant ---
+second

@@ -25,8 +25,8 @@
 		"moduleResolution": "Bundler",
 		"module": "es2022",
 		"noEmit": true,
-		"lib": ["es2022", "dom"],
-		"types": ["./worker-configuration.d.ts", "@types/node", "@types/bun"]
+		"lib": ["es2023", "dom"],
+		"types": ["@types/node", "@types/bun"]
 	},
 	"exclude": ["node_modules", "dist", "tests"],
 	"include": ["src"]

@@ -237,3 +237,149 @@ fn rejects_empty_ranges_duplicate_partitions_and_duplicate_sort_facts() {
     });
     assert_eq!(document.validate(), Err(ValidationError::DuplicateSortFact));
 }
+
+#[test]
+fn set_cardinality_does_not_consume_the_attribute_budget() {
+    let mut doc = document("Document:1", "user-1", 10);
+    doc.exact_facts.extend((0..10_000).map(|i| ExactFact {
+        attribute: token("members"),
+        value: exact(&i.to_string()),
+    }));
+    doc.integer_facts
+        .extend((0..10_000).map(|value| IntegerFact {
+            attribute: token("numbers"),
+            value,
+        }));
+    doc.validate().unwrap();
+
+    let patch = OptimisticProjectionMutation::PatchExact {
+        record_key: doc.record_key.clone(),
+        profile: doc.profile.clone(),
+        partition: doc.partition.clone(),
+        remove: doc.exact_facts.clone(),
+        insert: doc.exact_facts.clone(),
+    };
+    patch.validate().unwrap();
+    assert!(matches!(
+        ExactValue::new(vec![0; MAX_EXACT_VALUE_BYTES + 1]),
+        Err(ValidationError::ExactValueTooLarge(_))
+    ));
+}
+
+#[test]
+fn document_and_patch_attribute_budgets_include_every_fact_family() {
+    let mut doc = document("Document:1", "user-1", 10);
+    doc.exact_facts = (0..MAX_ATTRIBUTES_PER_DOCUMENT - 1)
+        .map(|i| ExactFact {
+            attribute: token(&format!("attribute-{i}")),
+            value: exact("value"),
+        })
+        .collect();
+    // updated-at is shared by integer and sort facts: one attribute name.
+    doc.validate().unwrap();
+    doc.integer_facts.push(IntegerFact {
+        attribute: token("extra"),
+        value: 1,
+    });
+    assert_eq!(doc.validate(), Err(ValidationError::DocumentAttributes));
+
+    let patch = OptimisticProjectionMutation::Patch {
+        record_key: doc.record_key.clone(),
+        profile: doc.profile.clone(),
+        partition: doc.partition.clone(),
+        exact: doc
+            .exact_facts
+            .iter()
+            .map(|fact| ExactAttributePatch {
+                attribute: fact.attribute.clone(),
+                values: vec![fact.value.clone()],
+            })
+            .collect(),
+        integers: doc
+            .integer_facts
+            .iter()
+            .map(|fact| IntegerAttributePatch {
+                attribute: fact.attribute.clone(),
+                values: vec![fact.value],
+            })
+            .collect(),
+        sorts: doc.sort_facts.clone(),
+    };
+    assert_eq!(patch.validate(), Err(ValidationError::DocumentAttributes));
+
+    let patch = OptimisticProjectionMutation::PatchExact {
+        record_key: doc.record_key,
+        profile: doc.profile,
+        partition: doc.partition,
+        remove: doc.exact_facts,
+        insert: vec![
+            ExactFact {
+                attribute: token("updated-at"),
+                value: exact("one"),
+            },
+            ExactFact {
+                attribute: token("extra"),
+                value: exact("two"),
+            },
+        ],
+    };
+    assert_eq!(patch.validate(), Err(ValidationError::DocumentAttributes));
+}
+
+#[test]
+fn uncertainty_can_clear_exact_fields_after_a_wildcard() {
+    let owner = token("owner");
+    let updated_at = token("updated-at");
+    let mut uncertainty = OptimisticUncertainty::default();
+
+    uncertainty.mark(&[]);
+    assert!(uncertainty.affects(&owner));
+    assert!(uncertainty.affects(&updated_at));
+
+    uncertainty.clear([owner.clone()]);
+    assert!(!uncertainty.affects(&owner));
+    assert!(uncertainty.affects(&updated_at));
+
+    uncertainty.mark(std::slice::from_ref(&owner));
+    assert!(uncertainty.affects(&owner));
+    uncertainty.clear([owner.clone(), updated_at]);
+    assert!(!uncertainty.affects(&owner));
+}
+
+#[test]
+fn canonical_documents_are_deterministic_and_deduplicate_membership_facts() {
+    let mut document = document("Document:1", "user-1", 10);
+    document.exact_facts.push(document.exact_facts[0].clone());
+    document
+        .integer_facts
+        .push(document.integer_facts[0].clone());
+    document.exact_facts.push(ExactFact {
+        attribute: token("file-type"),
+        value: exact("pdf"),
+    });
+    document.exact_facts.reverse();
+
+    document.canonicalize();
+
+    assert_eq!(document.exact_facts.len(), 2);
+    assert_eq!(document.integer_facts.len(), 1);
+    assert!(document.validate().is_ok());
+    assert_eq!(document.exact_facts, {
+        let mut expected = document.exact_facts.clone();
+        expected.sort();
+        expected
+    });
+}
+
+#[test]
+fn effective_projection_rejects_an_unassigned_owner() {
+    let projection = EffectiveOptimisticProjection {
+        owner: 0,
+        state: OptimisticProjectionState::Complete(document("Document:1", "user-1", 10)),
+        uncertainty: OptimisticUncertainty::default(),
+    };
+    assert_eq!(
+        projection.validate(),
+        Err(ValidationError::InvalidOptimisticOwner)
+    );
+}

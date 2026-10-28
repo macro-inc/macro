@@ -31,79 +31,18 @@ import {
   PASTE_COMMAND,
   TextNode,
 } from 'lexical';
-import linkify, { type Match } from 'linkify-it';
+import {
+  type AutoLinkMatchMode,
+  findNextAutoLinkMatch,
+  normalizeLinkUrl,
+  strictLinkifier,
+} from './autoLink';
 
-const strictLinkifier = new linkify(undefined, {
-  fuzzyLink: false,
-});
-
-const commonTldLinkifier = new linkify(undefined, {
-  fuzzyLink: true,
-}).tlds(
-  [
-    'app',
-    'biz',
-    'ca',
-    'co',
-    'com',
-    'dev',
-    'edu',
-    'gov',
-    'info',
-    'io',
-    'me',
-    'net',
-    'org',
-    'shop',
-    'site',
-    'store',
-    'tv',
-    'uk',
-    'us',
-    'xyz',
-  ],
-  false
-);
-
-const fuzzyLinkifier = new linkify(undefined, {
-  fuzzyLink: true,
-});
-
-export type AutoLinkMatchMode = 'protocol' | 'common-tlds' | 'fuzzy';
-
-function getAutoLinkifier(mode: AutoLinkMatchMode) {
-  switch (mode) {
-    case 'common-tlds':
-      return commonTldLinkifier;
-    case 'fuzzy':
-      return fuzzyLinkifier;
-    case 'protocol':
-      return strictLinkifier;
-  }
-}
-
-/*
- * Basic URL cleaning.
- */
-function cleanURL(input: string) {
-  let url = input.trim();
-
-  if (!url.match(/^[a-zA-Z]+:\/\//)) {
-    url = 'https://' + url;
-  }
-
-  const [basePath, ...queryParts] = url.split(/([#?])/);
-
-  const encodedBase = basePath
-    .split('/')
-    .map((segment) => (segment.includes(':') ? segment : encodeURI(segment)))
-    .join('/');
-
-  if (queryParts.length) {
-    return encodedBase + queryParts.join('');
-  }
-  return encodedBase;
-}
+export {
+  type AutoLinkMatchMode,
+  findNextAutoLinkMatch,
+  normalizeLinkUrl,
+} from './autoLink';
 
 /**
  * Link information interface between lexical and the UI.
@@ -165,21 +104,6 @@ function getLinkFromDom(
   };
 }
 
-export function findNextAutoLinkMatch(
-  text: string,
-  mode: AutoLinkMatchMode = 'protocol'
-): Match | null {
-  const linkifier = getAutoLinkifier(mode);
-  if (!linkifier.test(text)) return null;
-  const match = linkifier.match(text);
-  if (!match) return null;
-  const firstMatch = match[0];
-  if (firstMatch.schema === '') {
-    firstMatch.url = cleanURL(firstMatch.raw);
-  }
-  return firstMatch;
-}
-
 function $handleAppendToMatch(
   prevSibling: AutoLinkNode,
   textNode: TextNode,
@@ -212,11 +136,39 @@ function $handleAppendToMatch(
     return;
   }
 
-  // append to the autolink node, and shift chars from the text node for each aggregate match
+  // Grow the existing autolink by shifting chars from the following text node.
+  // A non-positive shift means the rematch is not longer than the current
+  // label; applying it would shrink the label (JS substring(n<0) → 0) and can
+  // drop the character the user just typed (e.g. o after j@m.c → m.co).
   const numCharsToShift = rematch.raw.length - prevText.length;
+  if (numCharsToShift <= 0) {
+    return;
+  }
   textNode.setTextContent(nodeText.substring(numCharsToShift));
   prevLinkTextNode.setTextContent(rematch.text);
   prevSibling.setURL(rematch.url);
+}
+
+/**
+ * True when the collapsed caret sits inside or at the end of a match in
+ * `textNode`. Wrapping then fights the keystroke that completed the URL
+ * (j@m.c| → j@m.co|), which can swallow the typed character and blocks
+ * continuing into a longer TLD like .com.
+ */
+function $isCaretInsideAutoLinkMatch(
+  textNode: TextNode,
+  matchOffset: number,
+  matchLength: number
+): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+    return false;
+  }
+  if (selection.anchor.key !== textNode.getKey()) {
+    return false;
+  }
+  const offset = selection.anchor.offset;
+  return offset >= matchOffset && offset <= matchOffset + matchLength;
 }
 
 function $matchAndCreateAutoLink(
@@ -225,7 +177,6 @@ function $matchAndCreateAutoLink(
 ) {
   const nodeText = textNode.getTextContent();
   const matchedLink = findNextAutoLinkMatch(nodeText, autoLinkMatchMode);
-  let currentNode = textNode;
 
   if (!matchedLink) {
     return;
@@ -233,33 +184,51 @@ function $matchAndCreateAutoLink(
 
   const matchOffset = matchedLink.index;
   const matchLength = matchedLink.raw.length;
-  let matchedNode;
 
+  if ($isCaretInsideAutoLinkMatch(textNode, matchOffset, matchLength)) {
+    return;
+  }
+
+  const selection = $getSelection();
+  const restoreAfter =
+    $isRangeSelection(selection) &&
+    selection.isCollapsed() &&
+    selection.anchor.key === textNode.getKey() &&
+    selection.anchor.offset > matchOffset + matchLength
+      ? selection.anchor.offset - (matchOffset + matchLength)
+      : null;
+
+  let matchedNode: TextNode;
+  let afterNode: TextNode | undefined;
   if (matchOffset === 0) {
-    [matchedNode, currentNode] = currentNode.splitText(matchLength);
+    [matchedNode, afterNode] = textNode.splitText(matchLength);
   } else {
-    [, matchedNode, currentNode] = currentNode.splitText(
+    [, matchedNode, afterNode] = textNode.splitText(
       matchOffset,
       matchOffset + matchLength
     );
   }
 
   const linkNode = $createAutoLinkNode(matchedLink.url);
-  linkNode.append($createTextNode(matchedLink.text));
   matchedNode.replace(linkNode);
+  linkNode.append(matchedNode);
+
+  // splitText + replace can drop the caret; put it back in the trailing text.
+  if (restoreAfter !== null && afterNode) {
+    afterNode.select(restoreAfter, restoreAfter);
+  }
 }
 
 function $convertAutoLinkToLinkNode(node: AutoLinkNode): LinkNode {
   const url = node.getURL();
-  const text = node.getTextContent();
   const linkNode = $createLinkNode(url);
-  linkNode.append($createTextNode(text));
+  const children = node.getChildren();
   node.replace(linkNode);
+  linkNode.append(...children);
   return linkNode;
 }
 
-// TODO (seamus): Improve this logic. This function should correctly dissolve any links that
-// are touched by the selection while maintaining all children and text formatting.
+// Dissolve touched links while preserving their labels and text formatting.
 function $unlinkSelection(): boolean {
   const selection = $getSelection();
   let unlinkSuccess = false;
@@ -281,7 +250,7 @@ function $unlinkSelection(): boolean {
   // Process all selected nodes
   nodes.forEach((node) => {
     const parent = node.getParent();
-    if (!node || !parent) return;
+    if (!parent?.isAttached()) return;
 
     if ($isAutoLinkNode(parent)) {
       parent.setIsUnlinked(true);
@@ -292,20 +261,17 @@ function $unlinkSelection(): boolean {
 
     if ($isLinkNode(parent)) {
       unlinkSuccess = true;
-      let newNode;
-      let text = node.getTextContent();
-      if (strictLinkifier.test(text)) {
-        newNode = $createUnlinkedTextNode(text);
-      } else {
-        newNode = $createTextNode(text);
+      // Preserve the explicit removal even when the current editor's URL
+      // policy is narrower than the importer, and retain the whole label.
+      for (const child of parent.getChildren()) {
+        const unlinked = $isTextNode(child)
+          ? $createUnlinkedTextNode().updateFromJSON(child.exportJSON())
+          : child;
+        if (child.getKey() === anchor.key) anchor.key = unlinked.getKey();
+        if (child.getKey() === focus.key) focus.key = unlinked.getKey();
+        parent.insertBefore(unlinked);
       }
-      if (node.getKey() === anchor.key) {
-        anchor.key = newNode.getKey();
-      }
-      if (node.getKey() === focus.key) {
-        focus.key = newNode.getKey();
-      }
-      parent.replace(newNode);
+      parent.remove();
     }
   });
 
@@ -509,10 +475,12 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
         const clipboardText = e.clipboardData?.getData('text/plain');
         if (!clipboardText || !strictLinkifier.matchAtStart(clipboardText))
           return false;
+        const url = normalizeLinkUrl(clipboardText);
+        if (!url) return false;
         const selection = $getSelection();
         if (!$isRangeSelection(selection) || selection.isCollapsed())
           return false;
-        $toggleLink(clipboardText);
+        $toggleLink(url);
         return true;
       },
       COMMAND_PRIORITY_NORMAL
@@ -534,8 +502,8 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
       UPDATE_LINK_URL_COMMAND,
       (payload) => {
         if (payload === null) return false;
-        if (!fuzzyLinkifier.test(payload)) return false;
-        const url = cleanURL(payload);
+        const url = normalizeLinkUrl(payload);
+        if (!url) return false;
 
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return false;
@@ -561,10 +529,8 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
         if (payload.url === undefined || payload.linkText === undefined) {
           return false;
         }
-        const url = cleanURL(payload.url);
-        if (!strictLinkifier.test(url)) {
-          return false;
-        }
+        const url = normalizeLinkUrl(payload.url);
+        if (!url) return false;
 
         const selection = $getSelection();
         if (!$isRangeSelection(selection)) return false;
@@ -613,7 +579,8 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
     editor.registerCommand(
       INSERT_LINK_COMMAND,
       (payload) => {
-        const url = cleanURL(payload.url);
+        const url = normalizeLinkUrl(payload.url);
+        if (!url) return false;
         const linkNode = $createLinkNode(url);
         linkNode.append($createTextNode(payload.linkText));
         $insertNodes([linkNode]);

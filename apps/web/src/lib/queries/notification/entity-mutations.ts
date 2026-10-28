@@ -1,13 +1,18 @@
 import type { UnifiedNotification } from '@notifications/types';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import type {
   GraphqlEntityType,
   NotificationEntityInput,
   NotificationUpdateOperation,
 } from '@service-storage/graphql/generated/graphql';
 import { updateNotificationsForEntities as updateGraphqlNotificationsForEntities } from '@service-storage/graphql-notifications';
-import { mapGraphqlNotification } from '@service-storage/graphql-soup';
+import {
+  graphqlCacheEnabled,
+  mapGraphqlNotification,
+} from '@service-storage/graphql-soup';
 
 type SimpleNotificationEntityType =
+  | 'agent_session'
   | 'calendar_event'
   | 'call'
   | 'channel'
@@ -45,6 +50,7 @@ export function toNotificationEntityRef(
   entity: FrontendNotificationEntity
 ): NotificationEntityRef | undefined {
   switch (entity.type) {
+    case 'agent_session':
     case 'calendar_event':
     case 'call':
     case 'channel':
@@ -75,6 +81,7 @@ export type NotificationEntityUpdateOperation = Exclude<
 >;
 
 const ENTITY_TYPE_TO_GRAPHQL = {
+  agent_session: 'AGENT_SESSION',
   calendar_event: 'CALENDAR_EVENT',
   call: 'CALL',
   channel: 'CHANNEL',
@@ -108,19 +115,30 @@ export function toNotificationEntityInput(
 
 /**
  * Mark all notifications associated with the supplied entities seen or done.
- * The authoritative response updates the normalized GraphQL cache directly;
- * it is deliberately not mirrored into the legacy TanStack notification cache.
- * Returned rows include the exact IDs needed by a later ID-scoped undo.
+ * The changed-row response updates the normalized GraphQL cache and every
+ * reader the cache maintains, and the rest are read again. A Done records the
+ * rows this client showed but the server left out
+ * (`confirmEntityNotificationsDone`); a mark seen that left out an expected
+ * row reads every reader again. Without the cache, mounted readers are read
+ * again. It is deliberately not mirrored into the legacy TanStack
+ * notification cache. Returned rows include only the exact IDs needed by a
+ * later ID-scoped undo.
  */
 export async function updateNotificationsForEntities(args: {
   entities: NotificationEntityRef[];
   operation: NotificationEntityUpdateOperation;
+  /** Notifications this client shows as changing, to detect a stale view. */
+  expectedNotificationIds?: readonly string[];
 }): Promise<UnifiedNotification[]> {
   if (args.entities.length === 0) return [];
 
   const rows = await updateGraphqlNotificationsForEntities({
     entities: args.entities.map(toNotificationEntityInput),
     operation: args.operation,
+    expectedNotificationIds: args.expectedNotificationIds,
   });
+  if (!graphqlCacheEnabled()) {
+    await refreshActiveGraphqlSoupQueries();
+  }
   return rows.map((row) => mapGraphqlNotification(row));
 }

@@ -1,0 +1,507 @@
+import { useListInteractions } from '@app/components/list';
+import {
+  toEntityActionListState,
+  useEntityActionHotkeys,
+} from '@app/features/next-soup/actions';
+import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
+import {
+  type OpenPrLink,
+  PrLinkChips,
+  PrLinksPending,
+  PrPriorityBadge,
+} from '@block-pr/component/PrLinks';
+import { type PrLinks, priorityTaskName } from '@block-pr/data/pr-links';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  EntitySelectionToolbar,
+  type GithubPullRequestEntity,
+  ListEntity,
+  ListLayoutProvider,
+} from '@entity';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import type { GithubLinkStatus } from '@queries/auth/github-link';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { Button } from '@ui';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { buildReviewsRows } from '../core/reviews-rows';
+import type { ReviewsListController } from '../primitives/create-reviews-list-controller';
+import type { useReviewsQuery } from '../queries/use-reviews-query';
+import { isAuthoredBy } from '../reviews-filter';
+import {
+  type ReviewsScope,
+  type ReviewsSortId,
+  scopeMatchesViewerGithubId,
+} from '../reviews-types';
+import { ReviewContextMenuContent } from './ReviewContextMenu';
+import { ReviewsEmptyState } from './ReviewsEmptyState';
+
+/** What each row links to, loaded alongside the list. */
+export type ReviewsListLinks = {
+  linksFor: (review: GithubPullRequestEntity) => PrLinks | undefined;
+  companyName: (id: string) => string | undefined;
+  onOpen: OpenPrLink;
+};
+
+export type ReviewsListProps = {
+  list: ReviewsListController;
+  source: ReturnType<typeof useReviewsQuery>;
+  scope: ReviewsScope;
+  sort: ReviewsSortId;
+  authorLogin?: string;
+  authorId?: string;
+  viewerName?: string;
+  githubIdentityLoading: boolean;
+  githubAccountStatus?: GithubLinkStatus | 'error';
+  search: string;
+  hasFilters: boolean;
+  onClearSearch: () => void;
+  onClearFilters: () => void;
+  onOpen: (foreignEntityId: string, newSplit: boolean) => void;
+  links: ReviewsListLinks;
+};
+
+function ReviewListElement(props: JSX.HTMLAttributes<HTMLUListElement>) {
+  return <ul {...props} aria-label="Pull requests" />;
+}
+
+function ReviewRow(props: {
+  review: GithubPullRequestEntity;
+  authorDisplayName?: string;
+  checked: boolean;
+  onChecked: (checked: boolean, shiftKey: boolean) => void;
+  onOpen: ReviewsListProps['onOpen'];
+  links: ReviewsListLinks;
+  onActivate: (newSplit: boolean) => void;
+  onClick: (event: MouseEvent) => void;
+  onFocus: () => void;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenu.Trigger
+        as="div"
+        class="w-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        role="button"
+        tabIndex={0}
+        aria-label={`${props.review.metadata.name}, ${props.review.metadata.owner}/${props.review.metadata.repo}`}
+        onFocusIn={props.onFocus}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          props.onActivate(event.shiftKey);
+        }}
+      >
+        <ListEntity
+          entity={props.review}
+          authorDisplayName={props.authorDisplayName}
+          checked={props.checked}
+          onChecked={props.onChecked}
+          onClick={props.onClick}
+          titleLeading={
+            <Show when={props.links.linksFor(props.review)}>
+              {(links) => (
+                <PrPriorityBadge
+                  priority={links().priority}
+                  taskName={priorityTaskName(links())}
+                />
+              )}
+            </Show>
+          }
+          meta={
+            <Show
+              when={props.links.linksFor(props.review)}
+              fallback={<PrLinksPending />}
+            >
+              {(links) => (
+                <PrLinkChips
+                  links={links()}
+                  companyName={props.links.companyName}
+                  onOpen={props.links.onOpen}
+                />
+              )}
+            </Show>
+          }
+        />
+      </ContextMenu.Trigger>
+      <ReviewContextMenuContent review={props.review} onOpen={props.onOpen} />
+    </ContextMenu>
+  );
+}
+
+export function ReviewsList(props: ReviewsListProps) {
+  const panel = useSplitPanelOrThrow();
+  const source = props.source;
+  const list = props.list;
+  const reviews = list.items.all;
+  const selectedReviews = list.selection.items;
+  const matchesViewer = () => scopeMatchesViewerGithubId(props.scope);
+  const missingIdentity = () => matchesViewer() && !props.authorId;
+  const [listElement, setListElement] = createSignal<HTMLDivElement>();
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  const listSize = createElementSize(listElement);
+  const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  // Date headings sit among the rows like email's; focus and selection keep
+  // counting pull requests, so their indexes map to rows for scrolling.
+  const rows = createMemo(() =>
+    buildReviewsRows(reviews(), {
+      sort: props.sort,
+      grouped: !props.search.trim(),
+    })
+  );
+  const rowIndexes = createMemo(() => {
+    const indexes: number[] = [];
+    rows().forEach((row, index) => {
+      if (row.kind === 'review') indexes[row.index] = index;
+    });
+    return indexes;
+  });
+  const rowIndex = (reviewIndex: number) =>
+    rowIndexes()[reviewIndex] ?? reviewIndex;
+  const scrollHandle = () => {
+    const handle = virtualizer();
+    return (
+      handle && {
+        scrollToIndex: (
+          index: number,
+          options?: Parameters<VirtualizerHandle['scrollToIndex']>[1]
+        ) => handle.scrollToIndex(rowIndex(index), options),
+      }
+    );
+  };
+  const listInteractions = useListInteractions({
+    controller: list,
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    scrollHandle,
+    activation: {
+      createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
+      alternateDescription: 'Open in new split',
+    },
+  });
+  const actionState = toEntityActionListState({
+    controller: list,
+    getEntity: (review) => review,
+    onFocus: (target) => {
+      if (target)
+        scrollHandle()?.scrollToIndex(target.index, { align: 'nearest' });
+      listElement()?.focus();
+    },
+  });
+  useEntityActionHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    list: actionState,
+    selectedEntities: list.selection.items,
+    focusedEntity: list.focus.item,
+    restoreFocus: () => listElement()?.focus(),
+    viewContext: () => ({
+      supportsMarkDone: false,
+      supportsOpenInNewSplit: true,
+      senderBucket: undefined,
+    }),
+    splitHandle: panel.handle,
+    condition: panel.isPanelActive,
+  });
+  let active = true;
+  onCleanup(() => (active = false));
+  let loadingNextPage = false;
+  const loadMore = async () => {
+    if (loadingNextPage || source.isLoadingMore() || !source.hasMore()) return;
+    loadingNextPage = true;
+    try {
+      await source.loadMore();
+    } catch {
+      // The query owns the page error and exposes a manual retry below the list.
+    } finally {
+      loadingNextPage = false;
+    }
+  };
+  const checkNearEnd = () => {
+    const element = listElement();
+    if (
+      !active ||
+      !element ||
+      missingIdentity() ||
+      source.isLoading() ||
+      source.isLoadingMore() ||
+      source.pageError() ||
+      !source.hasMore() ||
+      (matchesViewer() && props.githubIdentityLoading)
+    )
+      return;
+    if (element.scrollHeight - element.scrollTop - element.clientHeight < 320)
+      fireAndForget(loadMore(), 'reviews-view');
+  };
+
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () =>
+      source.hasMore() && !source.pageError() && !missingIdentity(),
+    isFetchingNextPage: source.isLoadingMore,
+    fetchNextPage: () => fireAndForget(loadMore(), 'reviews-view'),
+    rootMargin: '320px',
+  });
+
+  // The visible rows can be sparser than the fetched pages after a local search.
+  // Measure the scroll area after rendering each page and keep fetching until
+  // the viewport fills, a result is reachable, or pagination ends.
+  createEffect(() => {
+    reviews().length;
+    listSize.height;
+    source.isLoadingMore();
+    source.hasMore();
+    source.pageError();
+    listElement();
+    queueMicrotask(checkNearEnd);
+  });
+
+  return (
+    <section aria-label="Reviews" class="flex size-full min-h-0 flex-col">
+      <Suspense
+        fallback={
+          <div
+            role="status"
+            class="grid flex-1 place-items-center text-ink-muted"
+          >
+            <SpinnerIcon
+              aria-hidden={false}
+              aria-label="Loading reviews"
+              class="size-5 animate-spin"
+            />
+          </div>
+        }
+      >
+        <Switch>
+          <Match
+            when={
+              source.isLoading() ||
+              (matchesViewer() && props.githubIdentityLoading)
+            }
+          >
+            <div
+              role="status"
+              class="grid flex-1 place-items-center text-ink-muted"
+            >
+              <SpinnerIcon
+                aria-hidden={false}
+                aria-label="Loading reviews"
+                class="size-5 animate-spin"
+              />
+            </div>
+          </Match>
+          <Match when={source.error()}>
+            <div
+              role="alert"
+              class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
+            >
+              <span>Reviews couldn’t be loaded.</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => fireAndForget(source.retry(), 'reviews-view')}
+              >
+                Try again
+              </Button>
+            </div>
+          </Match>
+          <Match when={true}>
+            <div
+              ref={setListElement}
+              role="group"
+              aria-label="Pull requests"
+              tabIndex={0}
+              class="min-h-0 flex-1 overflow-auto"
+            >
+              <Show
+                when={reviews().length > 0}
+                fallback={
+                  <Show
+                    when={
+                      source.hasMore() &&
+                      !source.pageError() &&
+                      !missingIdentity()
+                    }
+                    fallback={
+                      <Show
+                        when={source.pageError() && !missingIdentity()}
+                        fallback={
+                          <ReviewsEmptyState
+                            scope={props.scope}
+                            search={props.search}
+                            hasFilters={props.hasFilters}
+                            hasAuthorIdentity={Boolean(props.authorId)}
+                            githubAccountStatus={props.githubAccountStatus}
+                            onClearSearch={props.onClearSearch}
+                            onClearFilters={props.onClearFilters}
+                          />
+                        }
+                      >
+                        <div
+                          role="alert"
+                          class="grid min-h-32 place-items-center text-sm text-ink-muted"
+                        >
+                          More pull requests couldn’t be loaded. Retry below.
+                        </div>
+                      </Show>
+                    }
+                  >
+                    <div
+                      role="status"
+                      class="grid min-h-32 place-items-center text-sm text-ink-muted"
+                    >
+                      Searching more pull requests…
+                    </div>
+                  </Show>
+                }
+              >
+                <ListLayoutProvider ref={listElement}>
+                  <Virtualizer
+                    as={ReviewListElement}
+                    item="li"
+                    data={rows()}
+                    scrollRef={listElement()}
+                    ref={setVirtualizer}
+                    keepMounted={
+                      list.focus.index() >= 0
+                        ? [rowIndex(list.focus.index())]
+                        : undefined
+                    }
+                    bufferSize={320}
+                    itemSize={48}
+                    onScroll={checkNearEnd}
+                  >
+                    {(row) => (
+                      <Switch>
+                        <Match when={row.kind === 'header' ? row : undefined}>
+                          {(header) => (
+                            <DateGroupHeading
+                              label={header().label}
+                              isFirst={rows()[0]?.id === header().id}
+                            />
+                          )}
+                        </Match>
+                        <Match when={row.kind === 'review' ? row : undefined}>
+                          {(item) => {
+                            const review = () => item().review;
+                            return (
+                              <ReviewRow
+                                review={review()}
+                                checked={list.selection.isSelected(review().id)}
+                                authorDisplayName={
+                                  isAuthoredBy(
+                                    review(),
+                                    props.authorLogin,
+                                    props.authorId
+                                  )
+                                    ? props.viewerName
+                                    : undefined
+                                }
+                                onOpen={props.onOpen}
+                                links={props.links}
+                                onChecked={(checked, shiftKey) =>
+                                  listInteractions.selection.set(
+                                    review().id,
+                                    checked,
+                                    {
+                                      range: shiftKey,
+                                    }
+                                  )
+                                }
+                                onFocus={() =>
+                                  list.focus.set(review().id, {
+                                    reason: 'pointer',
+                                  })
+                                }
+                                onClick={(event) => {
+                                  if (event.metaKey || event.ctrlKey) {
+                                    listInteractions.selection.toggle(
+                                      review().id
+                                    );
+                                    return;
+                                  }
+                                  list.activate.key(review().id, {
+                                    reason: 'pointer',
+                                    metadata: { newSplit: event.shiftKey },
+                                  });
+                                }}
+                                onActivate={(newSplit) =>
+                                  list.activate.key(review().id, {
+                                    reason: 'keyboard',
+                                    metadata: { newSplit },
+                                  })
+                                }
+                              />
+                            );
+                          }}
+                        </Match>
+                      </Switch>
+                    )}
+                  </Virtualizer>
+                </ListLayoutProvider>
+              </Show>
+              <Show
+                when={
+                  source.hasMore() && !source.pageError() && !missingIdentity()
+                }
+              >
+                <div ref={setSentinel} aria-hidden="true" class="h-px" />
+              </Show>
+              <Show
+                when={
+                  !missingIdentity() && (source.hasMore() || source.pageError())
+                }
+              >
+                <div class="flex justify-center p-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={source.isLoadingMore()}
+                    onClick={() =>
+                      fireAndForget(
+                        source.hasMore() ? loadMore() : source.retry(),
+                        'reviews-view'
+                      )
+                    }
+                  >
+                    <Show
+                      when={source.isLoadingMore()}
+                      fallback={
+                        source.pageError()
+                          ? source.hasMore()
+                            ? 'Retry loading more'
+                            : 'Retry loading'
+                          : 'Load more'
+                      }
+                    >
+                      <SpinnerIcon class="size-3 animate-spin" /> Loading…
+                    </Show>
+                  </Button>
+                </div>
+              </Show>
+            </div>
+          </Match>
+        </Switch>
+        <Show when={selectedReviews().length > 0}>
+          <EntitySelectionToolbar
+            selected={selectedReviews()}
+            onClear={listInteractions.selection.clear}
+            analyticsSource="reviews"
+          />
+        </Show>
+      </Suspense>
+    </section>
+  );
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM team_joined_macro_email WHERE team_id = $1 AND email = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7bd686869e6f3d54a383eea6e4a5c4a1edc9c137f9076d0ef1389edf8aadccf"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@macro-inc/infra-website",
+  "packageManager": "bun",
+  "private": true,
+  "scripts": {
+    "preview:dev": "pulumi preview --stack macro-inc/dev",
+    "preview:prod": "pulumi preview --stack macro-inc/prod"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.83.0",
+    "@pulumi/command": "^1.1.0",
+    "@pulumi/pulumi": "^3.181.0"
+  }
+}

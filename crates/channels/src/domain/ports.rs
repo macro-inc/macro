@@ -1,28 +1,27 @@
-use crate::domain::events::ChannelEvent;
 #[cfg(feature = "attachment")]
 use crate::domain::models::RecentChannelMessage;
 use crate::domain::models::{
     Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
-    BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
-    ChannelJoinCodeResponse, ChannelMessageFilters, ChannelMetadata, ChannelParticipant,
-    ChannelPreview, ChannelPreviewRow, CountedReaction, CreateChannelRequest,
-    CreateChannelResponse, CreateEntityMentionOptions, CreatedChannel, DeleteMessageQuery,
-    EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
-    MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-    NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelInfo,
+    ChannelJoinCodeResponse, ChannelMetadata, ChannelParticipant, ChannelPreview,
+    ChannelPreviewRow, CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions,
+    CreatedChannel, EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest,
+    GetOrCreatePrivateRequest, PatchChannelRequest, ReferenceShareResult, ReferencedShareItem,
+    RemoveParticipantsRequest, Sender,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
     ChannelMessage, ChannelWithLatest, ChannelWithParticipants, GetChannelsParams,
     GetChannelsRequest, GetThreadReplyRowsParams, GetThreadReplyRowsRequest, LatestMessage,
-    UserName,
+    ReferenceSource, ReferenceTarget, UserName,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
+};
+use crate::domain::{
+    dm::{EnsureDms, EnsureDmsSummary},
+    events::ChannelEvent,
 };
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
@@ -31,6 +30,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
+/// Verified channel participation required to change a channel picture.
+///
+/// The picture is part of the channel identity any participant may edit, so it
+/// carries the same requirement as renaming rather than an admin-only one.
+pub type ChannelPictureAccess = EntityAccessReceipt<MemberParticipantRole>;
 
 /// Repository for channel list persistence and query data.
 #[cfg(feature = "list")]
@@ -58,6 +63,14 @@ pub trait ChannelListRepo: Send + Sync + 'static {
         &self,
         req: GetThreadReplyRowsParams,
     ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
+
+    /// Distinct documents and undeleted messages that currently mention or
+    /// attach any of `targets`. Unauthorized: callers must apply the reading
+    /// user's access to every returned source.
+    fn get_reference_sources(
+        &self,
+        targets: &[ReferenceTarget],
+    ) -> impl Future<Output = Result<Vec<ReferenceSource>, rootcause::Report>> + Send;
 }
 
 /// Repository for user display names needed by channel list rendering.
@@ -91,6 +104,15 @@ pub trait ChannelListService: Send + Sync + 'static {
         req: GetThreadReplyRowsRequest,
     ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
 
+    /// Distinct documents and undeleted messages that currently mention or
+    /// attach any of `targets`. The result is not authorized for any user:
+    /// callers must apply the reader's access to each source before
+    /// exposing it.
+    fn get_reference_sources(
+        &self,
+        targets: &[ReferenceTarget],
+    ) -> impl Future<Output = Result<Vec<ReferenceSource>, rootcause::Report>> + Send;
+
     /// Fetch names for user ids.
     fn get_names(
         &self,
@@ -118,49 +140,54 @@ pub trait ChannelAttachmentRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<RecentChannelMessage>, Self::Err>> + Send;
 }
 
+/// Reserved channel persistence shared by archive and onboarding imports.
+/// Archive operations are silent; onboarding records first-creation activity.
+/// Import authorization and durable provenance belong to the importing domain.
+pub trait HistoricalChannelRepo: Send + Sync + 'static {
+    /// Create an explicit-ID Team/Private channel with its initial members, or return
+    /// the existing compatible target without changing any of its settings or members.
+    fn create_historical_channel(
+        &self,
+        channel: &super::historical::HistoricalChannel,
+    ) -> impl Future<Output = anyhow::Result<super::historical::EnsuredChannel>> + Send;
+
+    /// Ensure a reserved Team channel for onboarding. Initial creation also writes
+    /// the owner's ordinary activity; reuse has no effects. The service authorizes
+    /// team membership and dispatches creation events only for the winning creator.
+    fn create_onboarding_channel(
+        &self,
+        channel: &super::historical::HistoricalChannel,
+    ) -> impl Future<Output = anyhow::Result<super::historical::EnsuredChannel>> + Send;
+
+    /// Insert missing members silently. Never demote roles or reactivate leavers.
+    /// Reject DMs so this operation cannot introduce a third member.
+    fn insert_historical_participants(
+        &self,
+        channel_id: Uuid,
+        participants: &[MacroUserIdStr<'static>],
+        joined_at: DateTime<Utc>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Advance channel activity monotonically without creating ordinary activity rows.
+    fn advance_historical_activity(
+        &self,
+        channel_id: Uuid,
+        activity_at: DateTime<Utc>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait ChannelRepo: Send + Sync + 'static {
-    /// Error type for repo operations.
-    type Err: Into<anyhow::Error> + Send;
-
-    /// Fetch top-level messages (thread_id IS NULL). Cursor-paginated on created_at DESC.
-    ///
-    /// `notification_user_id` is used only when `filters.notification_filters` is non-empty.
-    fn get_top_level_messages(
+    /// Replace or remove the channel's static-file picture reference atomically.
+    /// Returns whether the stored reference changed.
+    fn set_channel_picture(
         &self,
         channel_id: Uuid,
-        query: &Query<Uuid, CreatedAt, ()>,
-        direction: MessagePageDirection,
-        limit: u16,
-        filters: &ChannelMessageFilters,
-        notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> impl Future<Output = Result<TopLevelMessagesQueryResult, Self::Err>> + Send;
-
-    /// Batch-fetch thread data (stats + preview replies) for parent messages in a single query.
-    fn get_thread_data(
-        &self,
-        parent_ids: &[Uuid],
-        preview_count: u16,
-    ) -> impl Future<Output = Result<HashMap<Uuid, ThreadData>, Self::Err>> + Send;
-
-    /// Fetch all non-deleted replies for a parent message, oldest-first.
-    fn get_thread_replies(
-        &self,
-        parent_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ThreadReplyRow>, Self::Err>> + Send;
-
-    /// Batch-fetch reactions for a set of message ids.
-    fn get_reactions_batch(
-        &self,
-        message_ids: &[Uuid],
-    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<CountedReaction>>, Self::Err>> + Send;
-
-    /// Batch-fetch attachments for a set of message ids.
-    fn get_attachments_batch(
-        &self,
-        message_ids: &[Uuid],
-    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageAttachment>>, Self::Err>> + Send;
+        picture_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    /// Error type for repo operations.
+    type Err: Into<anyhow::Error> + Send;
 
     /// Fetch channel-level attachments, cursor-paginated on created_at DESC.
     fn get_channel_attachments(
@@ -177,15 +204,6 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, Self::Err>> + Send;
 
-    /// Fetch messages around a target message in chronological order.
-    fn get_messages_with_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-        after: i64,
-    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, Self::Err>> + Send;
-
     /// Fetch attachment references for an entity, scoped to channels the user belongs to.
     fn get_attachment_references(
         &self,
@@ -194,36 +212,18 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: &str,
     ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, Self::Err>> + Send;
 
-    /// Resolve a message id to its top-level parent row. If the message is a thread reply,
-    /// returns the parent; if already top-level, returns itself. Returns `None` if not found.
-    fn resolve_top_level_parent(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<Option<TopLevelMessageRow>, Self::Err>> + Send;
-
-    /// Resolve a message id to top-level/thread-reply metadata.
-    fn resolve_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ResolvedChannelMessage>, Self::Err>> + Send;
-
-    /// Fetch top-level messages around an anchor, split into before (DESC) and after (ASC).
-    /// Each side is limited to `limit` rows for overfetch; trimming happens in the service.
-    fn get_top_level_messages_around(
-        &self,
-        channel_id: Uuid,
-        anchor_created_at: DateTime<Utc>,
-        anchor_id: Uuid,
-        limit: u16,
-    ) -> impl Future<Output = Result<(Vec<TopLevelMessageRow>, Vec<TopLevelMessageRow>), Self::Err>> + Send;
-
     /// Fetch channel metadata.
     fn get_channel_info(
         &self,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<ChannelInfo, Self::Err>> + Send;
+
+    /// Whether a channel is a direct agent conversation: one user's private
+    /// channel with an agent persona.
+    fn is_direct_agent_conversation(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Atomically assign a channel join code if absent and return the persisted code.
     fn get_or_create_channel_join_code(
@@ -259,6 +259,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         info: &ChannelInfo,
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Profile names (`first last`) for the given users, as the app shows
+    /// them. Users without a name are absent from the map.
+    fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err>> + Send;
 
     /// Check whether a user belongs to a team.
     fn user_has_team(
@@ -304,7 +311,16 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Fetch an existing direct message channel.
+    /// Atomically find or create an exact two-member DM under a normalized pair lock.
+    /// Reuse preserves all settings, roles and timestamps, including historical leavers.
+    /// Historical callers must authorize reuse before writing history into the target.
+    fn ensure_dm(
+        &self,
+        pair: super::dm::DmPair,
+        creation: super::historical::DmCreation,
+    ) -> impl Future<Output = Result<super::historical::EnsuredChannel, Self::Err>> + Send;
+
+    /// Fetch an existing exact two-member DM, deterministically choosing the oldest.
     fn maybe_get_dm<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -350,65 +366,10 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Create a message.
-    ///
-    /// `triggered_by_user_id` is the id of the user who triggered an agent
-    /// (bot) message, persisted to the nullable `triggered_by_user_id` column;
-    /// `None` for ordinary human messages.
-    fn create_message<'a>(
-        &self,
-        channel_id: Uuid,
-        sender_id: ChannelSender<'a>,
-        triggered_by_user_id: Option<String>,
-        content: String,
-        thread_id: Option<Uuid>,
-    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
-
     /// Update the channel activity timestamp.
     fn touch_channel_updated_at(
         &self,
         channel_id: Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Create message mentions.
-    fn create_message_mentions(
-        &self,
-        message_id: Uuid,
-        mentions: Vec<SimpleMention>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Sync message mentions by deleting old mentions and creating new ones.
-    fn sync_message_mentions(
-        &self,
-        message_id: Uuid,
-        mentions: Vec<SimpleMention>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Add attachments to a message.
-    fn add_attachments(
-        &self,
-        message_id: Uuid,
-        channel_id: Uuid,
-        attachments: Vec<NewChannelAttachment>,
-    ) -> impl Future<Output = Result<Vec<MutatedAttachment>, Self::Err>> + Send;
-
-    /// Get all attachments for a message.
-    fn get_message_attachments(
-        &self,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<MutatedAttachment>, Self::Err>> + Send;
-
-    /// Delete attachments by id.
-    fn delete_attachments(
-        &self,
-        attachment_ids: Vec<Uuid>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Delete entity mentions for detached attachment entity ids.
-    fn delete_entity_mentions_for_entities(
-        &self,
-        entity_ids: Vec<String>,
-        source_entity_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Create a single entity mention.
@@ -428,35 +389,6 @@ pub trait ChannelRepo: Send + Sync + 'static {
         &self,
         id: Uuid,
     ) -> impl Future<Output = Result<Option<EntityMention>, Self::Err>> + Send;
-
-    /// Patch message attachment state.
-    fn patch_message_attachments(
-        &self,
-        message_id: Uuid,
-        attachments: Vec<MutatedAttachment>,
-    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
-
-    /// Patch message content within a channel.
-    fn patch_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        content: String,
-    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
-
-    /// Delete a message within a channel.
-    fn delete_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
-
-    /// Fetch the owner of an active (non-deleted) message within a channel.
-    fn get_message_owner(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ChannelSender<'static>>, Self::Err>> + Send;
 
     /// Fetch active participants.
     fn get_participants(
@@ -490,55 +422,16 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
         activity_type: ActivityType,
     ) -> impl Future<Output = Result<Activity, Self::Err>> + Send;
-
-    /// Add a reaction to a message within a channel.
-    fn add_reaction<'a>(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        emoji: String,
-        user_id: ChannelSender<'a>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Remove a reaction from a message within a channel.
-    fn remove_reaction<'a>(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        emoji: String,
-        user_id: ChannelSender<'a>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Get grouped reactions for a message within a channel.
-    fn get_message_reactions(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<CountedReaction>, Self::Err>> + Send;
-
-    /// Batch-fetch public bot profiles by bot id. Includes soft-deleted bots so
-    /// historical messages keep their sender identity.
-    fn get_bot_profiles(
-        &self,
-        bot_ids: &[BotId],
-    ) -> impl Future<Output = Result<HashMap<BotId, BotSenderProfile>, Self::Err>> + Send;
 }
 
 /// Service for channel reads and mutations.
 pub trait ChannelService: Send + Sync + 'static {
-    /// Fetch a page of channel messages with thread previews, reactions, and attachments.
-    ///
-    /// `notification_user_id` is used only when `filters.notification_filters` is non-empty.
-    fn get_channel_messages(
+    /// Set a channel picture using verified channel participation.
+    fn set_channel_picture(
         &self,
-        channel_id: Uuid,
-        query: Query<Uuid, CreatedAt, ()>,
-        direction: MessagePageDirection,
-        limit: u16,
-        filters: &ChannelMessageFilters,
-        notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
-
+        access: ChannelPictureAccess,
+        picture_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
     /// Fetch a paginated page of channel-level attachments.
     fn get_channel_attachments(
         &self,
@@ -553,6 +446,13 @@ pub trait ChannelService: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
+
+    /// Profile names (`first last`) for the given users, as the app shows
+    /// them. Users without a name are absent from the map.
+    fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr>> + Send;
 
     /// Fetch channel metadata (type + resolved display name) from the viewer's perspective.
     fn get_channel_metadata(
@@ -578,18 +478,6 @@ pub trait ChannelService: Send + Sync + 'static {
         async move { Ok(Vec::new()) }
     }
 
-    /// Fetch messages around a target message in chronological order.
-    fn get_message_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-        after: i64,
-    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
-        let _ = (channel_id, before, after);
-        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
-    }
-
     /// Fetch attachment references for an entity visible to a user.
     fn get_attachment_references(
         &self,
@@ -597,48 +485,6 @@ pub trait ChannelService: Send + Sync + 'static {
         entity_id: String,
         user_id: String,
     ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send;
-
-    /// Fetch a centered window of messages around a specific message id.
-    ///
-    /// The result's `has_more_newer` reports whether newer messages exist outside the
-    /// returned window.
-    fn get_channel_messages_around(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
-
-    /// Fetch raw reply rows for the thread identified by `message_id`.
-    ///
-    /// If `message_id` is itself a reply, replies are fetched for its top-level parent.
-    fn get_thread_reply_rows(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ThreadReplyRow>, ChannelMessagesErr>> + Send {
-        let _ = channel_id;
-        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
-    }
-
-    /// Fetch all enriched replies for the thread identified by `message_id`.
-    ///
-    /// If `message_id` is itself a reply, replies are fetched for its top-level parent.
-    fn get_thread_replies(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send;
-
-    /// Resolve whether a message id is top-level or a thread reply.
-    fn resolve_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<ResolvedChannelMessage, ChannelMessagesErr>> + Send {
-        let _ = channel_id;
-        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
-    }
 
     /// Fetch all activities for the user across channels.
     fn get_activities(
@@ -655,6 +501,32 @@ pub trait ChannelService: Send + Sync + 'static {
         &self,
         _actor: Sender,
         _actor_org_id: Option<i64>,
+        _req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Create a channel owned by `owner` on the platform's initiative (e.g.
+    /// signup). The activity is attributed to the system bot acting for
+    /// `owner`; ownership and permissions are unchanged.
+    fn create_system_channel(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        self.create_channel_on_behalf(owner, bot_id::MACRO_SYSTEM_BOT_ID, req)
+    }
+
+    /// Create a channel owned by `owner` with Created attributed to `actor`
+    /// acting for that owner. Ownership and permissions stay with `owner`.
+    fn create_channel_on_behalf(
+        &self,
+        _owner: MacroUserIdStr<'static>,
+        _actor: BotId,
         _req: CreateChannelRequest,
     ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
         async move {
@@ -705,6 +577,18 @@ pub trait ChannelService: Send + Sync + 'static {
         }
     }
 
+    /// Ensure all direct-message pairs in a batch.
+    fn ensure_dms(
+        &self,
+        _command: EnsureDms,
+    ) -> impl Future<Output = Result<EnsureDmsSummary, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
     /// Get or create a direct message channel.
     fn get_or_create_dm(
         &self,
@@ -731,11 +615,32 @@ pub trait ChannelService: Send + Sync + 'static {
         }
     }
 
+    /// Share referenced items with a channel's current members.
+    ///
+    /// The actor must already be allowed to share each item. Calendar events,
+    /// agent sessions, databases, and forms are stored as direct `entity_access`
+    /// channel grants; other items follow the same reference-sharing policy as
+    /// posting them in a message.
+    fn share_referenced_items_with_channel(
+        &self,
+        _actor: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _items: Vec<ReferencedShareItem>,
+    ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel sharing is not configured".to_string(),
+            ))
+        }
+    }
+
     /// Patch a channel.
+    ///
+    /// Name-only updates are allowed for any member receipt. Converting a
+    /// channel or changing auto-join still requires channel admin access.
     fn patch_channel(
         &self,
-        _actor: Sender,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -750,80 +655,6 @@ pub trait ChannelService: Send + Sync + 'static {
         &self,
         _actor: Sender,
         _channel_id: Uuid,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Send a message.
-    fn post_message(
-        &self,
-        _actor: Sender,
-        _channel_id: Uuid,
-        _req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Patch a message.
-    fn patch_message(
-        &self,
-        _actor: Sender,
-        _actor_role: super::models::ParticipantRole,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _req: PatchMessageRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Delete a message.
-    fn delete_message(
-        &self,
-        _actor: Sender,
-        _actor_role: super::models::ParticipantRole,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _query: DeleteMessageQuery,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Mutate a reaction.
-    fn post_reaction(
-        &self,
-        _actor: Sender,
-        _channel_id: Uuid,
-        _req: PostReactionRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Emit a typing update.
-    fn post_typing(
-        &self,
-        _actor: Sender,
-        _channel_id: Uuid,
-        _req: PostTypingRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
@@ -961,27 +792,6 @@ pub trait ChannelService: Send + Sync + 'static {
     }
 }
 
-/// A paginated page of channel messages.
-pub type ChannelMessagesPage =
-    models_pagination::PaginatedCursor<super::models::ChannelMessage, Uuid, CreatedAt, ()>;
-
-/// Result for a cursor-paginated channel messages query.
-#[derive(Debug)]
-pub struct ChannelMessagesQueryResult {
-    /// The page of messages.
-    pub page: ChannelMessagesPage,
-    /// Whether at least one newer message exists before the first item of this page.
-    pub has_more_newer: bool,
-}
-
-/// Result from fetching top-level message rows for pagination.
-pub struct TopLevelMessagesQueryResult {
-    /// Message rows for the requested direction.
-    pub rows: Vec<TopLevelMessageRow>,
-    /// Whether at least one newer message exists before the first returned row.
-    pub has_more_newer: bool,
-}
-
 /// A paginated page of channel attachments.
 pub type ChannelAttachmentsPage =
     models_pagination::PaginatedCursor<ChannelAttachment, Uuid, CreatedAt, ()>;
@@ -995,6 +805,23 @@ pub enum ChannelMessagesErr {
     /// The requested message was not found.
     #[error("message {0} not found")]
     MessageNotFound(Uuid),
+}
+
+/// Decides whether a viewer may see the entity a comment belongs to, so comment
+/// references are authorized by the parent's own permissions rather than by
+/// channel participation.
+///
+/// Object-safe (`async_trait`) because the service holds it as `Arc<dyn _>`.
+#[async_trait::async_trait]
+pub trait CommentParentAccess: Send + Sync + 'static {
+    /// Whether `viewer` may view the stored parent entity; unknown parent types
+    /// and unparseable viewers are not viewable.
+    async fn can_view_parent(
+        &self,
+        viewer: &str,
+        parent_entity_type: &str,
+        parent_entity_id: &str,
+    ) -> anyhow::Result<bool>;
 }
 
 /// Publisher for realtime channel side-effect commands.
@@ -1075,6 +902,26 @@ pub trait ChannelEventDispatcher: Send + Sync + 'static {
     fn dispatch(&self, event: ChannelEvent);
 }
 
+/// Metadata needed to authorize an uploaded channel picture.
+#[derive(Debug, Clone)]
+pub struct ChannelPictureFile {
+    /// User who uploaded the file.
+    pub owner_id: String,
+    /// Whether the file's upload has completed.
+    pub is_uploaded: bool,
+    /// Declared MIME type of the file.
+    pub content_type: String,
+}
+
+/// Fetches static-file facts; the channel service decides whether they permit use.
+pub trait ChannelPictureFiles: Send + Sync + 'static {
+    /// Look up a candidate picture, returning `None` when it does not exist.
+    fn get_picture_file(
+        &self,
+        file_id: Uuid,
+    ) -> impl Future<Output = anyhow::Result<Option<ChannelPictureFile>>> + Send;
+}
+
 /// Allows a boxed dispatcher to be used wherever a `ChannelEventDispatcher` is
 /// expected, so callers (e.g. the AI toolset) can inject a side-effect-wired
 /// dispatcher behind a uniform type.
@@ -1101,31 +948,20 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     /// Error type for reference share-permission operations.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Update channel share permissions for referenced items that `actor` can view.
+    /// Update channel share permissions according to the referenced entity's policy.
     ///
     /// Implementations must not grant access for an item the actor cannot already view.
+    /// Agent sessions require ownership and grant view access; a calendar event requires
+    /// the actor to hold it (owner or linked account) and grants view; PDFs grant comment
+    /// access, capped at the actor's own access; other references grant view. Each item
+    /// is reported as shared or not permitted. An existing direct grant is left unchanged
+    /// and still counts as shared.
     fn update_channel_share_permissions_for_referenced_items(
         &self,
         actor: MacroUserIdStr<'static>,
         channel_id: Uuid,
         items: Vec<ReferencedShareItem>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-}
-
-/// Extractor of the mentions embedded in message content.
-///
-/// The web editor tracks mentions while a user composes a message and sends
-/// them alongside it; bot-authored content arrives as raw macro markdown, so
-/// the service uses this port to derive the equivalent mention list.
-pub trait ChannelMentionExtractor: Send + Sync + 'static {
-    /// Error type for mention extraction.
-    type Err: Into<anyhow::Error> + Send;
-
-    /// Extract the entity mentions embedded in `content`.
-    fn extract_mentions(
-        &self,
-        content: &str,
-    ) -> impl Future<Output = Result<Vec<SimpleMention>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, Self::Err>> + Send;
 }
 
 /// Errors that can occur while mutating channels.

@@ -4,6 +4,7 @@ pub mod android;
 pub mod apple;
 pub mod device;
 pub mod email_notification_digest;
+pub mod entity_query;
 pub mod mobile;
 pub mod push_notification_event;
 pub mod queue_message;
@@ -21,11 +22,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 pub use mobile::{DeviceEndpoint, HashedCollapseKey, NotifCollapseKey};
 use model_entity::Entity;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+pub use notification_state::{NotificationAction, NotificationState};
 pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, collections::HashSet, sync::Arc};
 use uuid::Uuid;
 
 /// Notification ID paired with its APNS collapse key, for push clearing.
@@ -42,15 +44,33 @@ pub struct NotificationIdAndCollapseKey {
 pub struct VoipPushTarget {
     /// Recipient whose VoIP-capable endpoints were resolved.
     pub recipient_id: MacroUserIdStr<'static>,
-    /// SNS endpoints registered for APNS_VOIP delivery.
-    pub endpoint_arns: Vec<String>,
+    /// Registered mobile endpoints, retaining ordinary devices for fallback decisions.
+    pub endpoints: Vec<DeviceEndpoint>,
+}
+
+/// Recipients grouped by mobile platform for delivery or exclusion.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MobilePushRecipients {
+    /// Users whose iOS devices are included.
+    pub ios: HashSet<MacroUserIdStr<'static>>,
+    /// Users whose Android devices are included.
+    pub android: HashSet<MacroUserIdStr<'static>>,
+}
+
+/// Native call delivery results used to select ordinary mobile fallbacks.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NativeCallPushResult {
+    /// Users with a successful native delivery on each platform.
+    pub delivered: MobilePushRecipients,
+    /// Users whose registered mobile platforms were all handled natively.
+    pub fully_delivered: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// A compact patch describing user notification status fields that changed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationStatusPatch {
-    /// Whether the notification is marked as done after the update.
-    pub done: bool,
+    /// The authoritative notification state after the update.
+    pub state: NotificationState,
     /// When the notification was viewed/seen after the update.
     pub viewed_at: Option<DateTime<Utc>>,
     /// The time this status change was persisted.
@@ -88,7 +108,9 @@ pub enum NotificationDelete<I> {
 /// A user-scoped notification update delivered to realtime subscribers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NotificationSubscriptionUpdate<T> {
-    /// A notification was created or updated.
+    /// A notification was newly delivered to the user.
+    New(Arc<UserNotificationRow<T>>),
+    /// An existing notification was updated.
     Updated(Arc<UserNotificationRow<T>>),
     /// A notification should be removed from the normalized cache.
     Deleted(Uuid),
@@ -158,8 +180,8 @@ pub struct UserNotificationRow<T> {
     pub entity: Entity<'static>,
     /// Whether the notification has been sent.
     pub sent: bool,
-    /// Whether the notification is marked as done.
-    pub done: bool,
+    /// The authoritative lifecycle state, independent of viewing timestamps.
+    pub state: NotificationState,
     /// When the notification was created.
     pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
@@ -186,7 +208,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -201,7 +223,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -222,7 +244,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -237,7 +259,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,

@@ -86,6 +86,22 @@
     {
       devShells =
         lib.optionalAttrs isLinux {
+          # WebDriver is installed at a pinned version by the test build script.
+          # Keep display/network isolation tools out of the ordinary desktop shell.
+          tauri-e2e = config.devShells.tauri-linux.overrideAttrs (old: {
+            # Xvfb tests use software rendering. Do not dlopen the host's Mesa,
+            # which may require a newer glibc than this pinned WebKit runtime.
+            __EGL_VENDOR_LIBRARY_FILENAMES = "${tauriPkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
+            buildInputs =
+              (old.buildInputs or [ ])
+              ++ (with tauriPkgs; [
+                dbus
+                iproute2
+                util-linux
+                xvfb-run
+                xorg-server
+              ]);
+          });
           tauri-linux = config.devShells.default.overrideAttrs (old: {
             buildInputs = (old.buildInputs or [ ]) ++ tauriLinuxPackages ++ tauriLinuxLibraries;
             shellHook = (old.shellHook or "") + tauriLinuxShellHook;

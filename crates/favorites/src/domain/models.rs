@@ -1,6 +1,7 @@
 //! Domain models for favorites.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +48,27 @@ impl Favorite {
     }
 }
 
+/// Which of a user's favorites to list.
+///
+/// The two dimensions are independent. Within one, the values are
+/// alternatives. Between them they are both required, so
+/// `entity_types = [document], entity_ids = [a, b]` matches only documents
+/// `a` and `b`. An empty vector constrains nothing, which is why the default
+/// filter lists the whole collection.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "inbound", derive(utoipa::IntoParams, Deserialize))]
+#[cfg_attr(feature = "inbound", into_params(parameter_in = Query))]
+pub struct FavoriteFilter {
+    /// Restrict to favorites whose entity is one of these types.
+    #[cfg_attr(feature = "inbound", serde(default, rename = "entityType"))]
+    #[cfg_attr(feature = "inbound", param(inline, style = Form, explode))]
+    pub entity_types: Vec<EntityType>,
+    /// Restrict to favorites whose entity is one of these ids.
+    #[cfg_attr(feature = "inbound", serde(default, rename = "entityId"))]
+    #[cfg_attr(feature = "inbound", param(style = Form, explode))]
+    pub entity_ids: Vec<String>,
+}
+
 /// The user's favorites, in manual order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -56,12 +78,33 @@ pub struct FavoritesList {
     pub favorites: Vec<Favorite>,
 }
 
+/// Result of setting an entity's membership in the favorites collection.
+#[derive(Clone, Debug)]
+pub struct SetFavoriteResult {
+    /// The entity whose favorite state changed.
+    pub entity: Entity<'static>,
+    /// The persisted favorite after an add, or `None` after a removal.
+    pub favorite: Option<Favorite>,
+}
+
+/// Authenticated actor performing a favorites mutation.
+#[derive(Clone, Debug)]
+pub struct FavoritesMutationActor {
+    /// Stable Macro user id.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Organization id attached to the authenticated request, when present.
+    pub organization_id: Option<i64>,
+}
+
 /// Errors returned by the favorites service.
 #[derive(Debug, thiserror::Error)]
 pub enum FavoritesError {
     /// The favorite (or entity) could not be found in the user's collection.
     #[error("favorite not found")]
     NotFound,
+    /// The entity kind is not supported by the favorites mutation surface.
+    #[error("entities of type {0} cannot be favorited")]
+    UnsupportedEntityType(EntityType),
     /// The request was invalid.
     #[error("{0}")]
     BadRequest(String),

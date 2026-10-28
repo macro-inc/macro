@@ -147,6 +147,33 @@ async fn test_batch_team_link_denies_other_team_user(
     Ok(())
 }
 
+#[sqlx::test(fixtures(
+    path = "../../../../entity_access/fixtures",
+    scripts("typed_owner_team")
+))]
+async fn typed_owner_team_links_match_batch_access(pool: sqlx::PgPool) -> anyhow::Result<()> {
+    let ids: Vec<_> = (31..=37)
+        .map(|suffix| format!("90000000-0000-0000-0000-{suffix:012}"))
+        .collect();
+    for (user, member) in [
+        ("macro|typed-owner@example.com", true),
+        ("macro|typed-other@example.com", false),
+        ("macro|typed-teamless@example.com", false),
+    ] {
+        let levels = get_highest_access_level_for_chats(&pool, &ids, user).await?;
+        for (id, has_team) in ids
+            .iter()
+            .zip([true, false, true, true, true, false, false])
+        {
+            assert_eq!(
+                levels.get(id),
+                Some(&(member && has_team).then_some(AccessLevel::Comment))
+            );
+        }
+    }
+    Ok(())
+}
+
 #[sqlx::test(fixtures(path = "../../../fixtures", scripts("highest_access_level_for_chat")))]
 async fn test_batch_empty_input(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
     // SCENARIO: Test with empty chat_ids vector

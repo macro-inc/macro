@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            sp.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\",\n            owner_team.team_id        AS \"owner_team_id!\"\n        FROM initiative i\n        JOIN \"SharePermission\" sp ON sp.id = i.share_permission_id\n        JOIN team_user owner_team\n          ON owner_team.user_id = i.owner_user_id\n         AND owner_team.team_id::text = ANY($2)\n        WHERE i.id = $1\n          AND sp.\"linkShare\" = 'TEAM'\n          AND sp.\"linkShareAccessLevel\" IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_team_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "208b28f3881a82f50ed877d206912b3b2694558116c70df1e9768f5a16a1c635"
+}

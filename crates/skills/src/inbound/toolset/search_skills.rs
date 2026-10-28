@@ -35,7 +35,7 @@ impl From<SearchSkillsMatchType> for SkillMatchType {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "SearchSkills",
-    description = "Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadContent using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first."
+    description = "Search the user's skills by name. Skills are markdown documents containing instructions for AI to read and follow; when the user references a skill (or a request matches one), find it with this tool and then read its instructions with ReadSkill using the returned document id. This is keyword search against skill names: pass 1-3 targeted keywords that would literally appear in the skill's name, not a natural-language description. Matching defaults to prefix; set matchType to 'exact' for whole-token matching. Only skills the user can access are returned, most recently updated first."
 )]
 pub struct SearchSkills {
     /// The skill name to search.
@@ -57,7 +57,7 @@ pub struct SearchSkills {
 #[serde(rename_all = "camelCase")]
 pub struct SkillSearchResult {
     /// The document id of the skill. Read the skill's instructions with
-    /// ReadContent using this id.
+    /// ReadSkill using this id.
     pub document_id: Uuid,
     /// The name of the skill.
     pub name: String,

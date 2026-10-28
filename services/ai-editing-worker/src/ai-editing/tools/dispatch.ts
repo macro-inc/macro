@@ -8,7 +8,11 @@ import type { Doc } from '../doc';
 import type { DocumentOpQueueParams } from '../queue';
 import type { TokenTracker } from '../token-tracker';
 import { numberLines, serializeWithXml } from '../utils';
-import type { RunCodeToolOptions } from './run-code';
+import {
+  type RunCodeToolOptions,
+  type SnippetPair,
+  snippetsToRecord,
+} from './run-code';
 
 export type { UsageEntry } from '../token-tracker';
 export { TokenTracker } from '../token-tracker';
@@ -460,10 +464,18 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         if (onCoderResult) {
           const codes = result.steps
             .flatMap((step) => step.toolCalls)
-            .filter((call) => call.toolName === 'runCode')
+            // Schema-rejected calls never ran and carry the model's raw input.
+            .filter((call) => call.toolName === 'runCode' && !call.invalid)
             .map((call, i) => {
-              const { code, snippets } = call.input as CoderRunCode;
-              return { code, snippets, result: entry.trace.runCodeResults[i] };
+              const input = call.input as {
+                code: string;
+                snippets?: SnippetPair[];
+              };
+              return {
+                code: input.code,
+                snippets: snippetsToRecord(input.snippets),
+                result: entry.trace.runCodeResults[i],
+              };
             });
           onCoderResult(codes);
         }

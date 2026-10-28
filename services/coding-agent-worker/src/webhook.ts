@@ -1,9 +1,9 @@
-import { Macro } from '@macro/sdk';
+import { Macro } from '@macro-inc/sdk';
 import { env } from './env';
 
 const STATE_FILE = new URL('../.webhook.json', import.meta.url);
 const WEBHOOK_NAME = 'coding-agent-worker';
-const EVENTS = ['channel.message_posted'] as const;
+const EVENTS = ['message.posted'] as const;
 
 type WebhookState = { id: string; secret: string };
 

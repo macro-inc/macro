@@ -7,15 +7,19 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::{
-    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, CommonChannelMetadata, DocumentMentionMetadata,
-    NotificationDocumentSubType,
+    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, CommonChannelMetadata,
+    DocumentMentionMetadata, NotificationDocumentSubType,
 };
+use model_owner::Owner;
 use notification_hex::domain::{
     models::SendNotificationRequestBuilder, service::NotificationIngress,
 };
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Notification ingress adapter for channel notification effects.
 #[derive(Clone)]
@@ -47,6 +51,7 @@ fn to_common_metadata(metadata: ChannelMetadata) -> CommonChannelMetadata {
 }
 
 struct InviteNotificationDelivery {
+    message_id: Option<Uuid>,
     channel_id: Uuid,
     invited_by_user_id: MacroUserIdStr<'static>,
     registered_recipient_ids: HashSet<MacroUserIdStr<'static>>,
@@ -61,6 +66,7 @@ async fn send_invite_notifications(
     delivery: InviteNotificationDelivery,
 ) -> anyhow::Result<()> {
     let InviteNotificationDelivery {
+        message_id,
         channel_id,
         invited_by_user_id,
         registered_recipient_ids,
@@ -69,18 +75,25 @@ async fn send_invite_notifications(
         message_content,
         common,
     } = delivery;
+    let notification = ChannelInviteMetadata {
+        message_id,
+        email_recipient: None,
+        invited_by: invited_by_user_id.clone(),
+        channel_name: common.channel_name,
+        is_direct_message: matches!(
+            common.channel_type,
+            model_notifications::ChannelType::DirectMessage
+        ),
+        sender_profile_picture_url,
+        message_content,
+    };
     let _ = tokio::try_join!(
         ingress.send_notification(
             SendNotificationRequestBuilder {
                 notification_entity: model_entity::EntityType::Channel
                     .with_entity_string(channel_id.to_string()),
                 secondary_notification_entity: None,
-                notification: ChannelInviteMetadata {
-                    invited_by: invited_by_user_id.clone(),
-                    channel_name: common.channel_name.clone(),
-                    sender_profile_picture_url: sender_profile_picture_url.clone(),
-                    message_content: message_content.clone(),
-                },
+                notification: notification.clone(),
                 sender_id: Some(invited_by_user_id.clone()),
                 recipient_ids: registered_recipient_ids,
             }
@@ -88,23 +101,34 @@ async fn send_invite_notifications(
             .with_apns()
             .with_conn_gateway(),
         ),
-        ingress.send_notification(
-            SendNotificationRequestBuilder {
-                notification_entity: model_entity::EntityType::Channel
-                    .with_entity_string(channel_id.to_string()),
-                secondary_notification_entity: None,
-                notification: ChannelInviteMetadata {
-                    invited_by: invited_by_user_id.clone(),
-                    channel_name: common.channel_name.clone(),
-                    sender_profile_picture_url,
-                    message_content,
-                },
-                sender_id: Some(invited_by_user_id.clone()),
-                recipient_ids: unregistered_recipient_ids,
+        async {
+            let mut result = Ok(());
+            for recipient in unregistered_recipient_ids {
+                let mut email_notification = notification.clone();
+                if email_notification.is_direct_message && message_id.is_some() {
+                    email_notification.email_recipient = Some(recipient.clone());
+                }
+                if let Err(error) = ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: None,
+                            notification: email_notification,
+                            sender_id: Some(invited_by_user_id.clone()),
+                            recipient_ids: HashSet::from([recipient]),
+                        }
+                        .into_request()
+                        .with_email(),
+                    )
+                    .await
+                {
+                    tracing::error!(error=?error, %channel_id, "unable to queue recipient invite email");
+                    result = Err(error);
+                }
             }
-            .into_request()
-            .with_email(),
-        )
+            result
+        }
     )
     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
@@ -194,12 +218,15 @@ where
                             secondary_notification_entity,
                             notification: DocumentMentionMetadata {
                                 document_name: document.document_name,
-                                owner: document.owner,
+                                owner: Owner::User(document.owner),
                                 file_type: document.file_type,
                                 sub_type: match document.sub_type.as_deref() {
                                     Some("task") => Some(NotificationDocumentSubType::Task),
                                     Some("snippet") => Some(NotificationDocumentSubType::Snippet),
                                     Some("skill") => Some(NotificationDocumentSubType::Skill),
+                                    Some("initiative_description") => {
+                                        Some(NotificationDocumentSubType::InitiativeDescription)
+                                    }
                                     _ => None,
                                 },
                                 channel: to_channel_mention_metadata(mention),
@@ -291,7 +318,45 @@ where
                     .await
                     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             }
+            ChannelNotificationEffect::Reaction {
+                channel_id,
+                message_id,
+                thread_id,
+                message_content,
+                emoji,
+                sender_id,
+                metadata,
+                sender_profile_picture_url,
+                recipient_id,
+            } => {
+                self.ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: secondary_channel_thread_entity(Some(
+                                thread_id.unwrap_or(message_id),
+                            )),
+                            notification: ChannelMessageReactionMetadata {
+                                message_id: message_id.to_string(),
+                                thread_id: thread_id.map(|id| id.to_string()),
+                                message_content,
+                                emoji,
+                                common: to_common_metadata(metadata),
+                                sender_profile_picture_url,
+                            },
+                            sender_id: Some(sender_id),
+                            recipient_ids: HashSet::from([recipient_id]),
+                        }
+                        .into_request()
+                        .with_apns()
+                        .with_conn_gateway(),
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            }
             ChannelNotificationEffect::Invite {
+                message_id,
                 channel_id,
                 invited_by_user_id,
                 registered_recipient_ids,
@@ -303,6 +368,7 @@ where
                 send_invite_notifications(
                     &*self.ingress,
                     InviteNotificationDelivery {
+                        message_id,
                         channel_id,
                         invited_by_user_id,
                         registered_recipient_ids,

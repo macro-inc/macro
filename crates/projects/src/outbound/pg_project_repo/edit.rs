@@ -11,8 +11,7 @@ pub(super) async fn edit_project(
 ) -> Result<Project, sqlx::Error> {
     // Separate flags make all three parent states compile checked: unchanged,
     // set to an ID, and explicitly cleared to NULL.
-    let project = sqlx::query_as!(
-        Project,
+    let row = sqlx::query!(
         r#"
         UPDATE "Project"
         SET
@@ -37,6 +36,15 @@ pub(super) async fn edit_project(
     )
     .fetch_one(transaction.as_mut())
     .await?;
+    let project = super::map_project(
+        row.id,
+        row.name,
+        row.user_id,
+        row.parent_id,
+        row.created_at,
+        row.updated_at,
+        row.deleted_at,
+    )?;
 
     if let Some(permission) = args.share_permission.as_ref() {
         share::edit_project_share_permission(transaction, &args.project_id, permission).await?;

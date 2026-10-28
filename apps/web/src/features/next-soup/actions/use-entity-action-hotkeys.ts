@@ -1,23 +1,26 @@
-import { isListViewID } from '@app/constants/list-views';
-import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
-import {
-  openEntityInSplitFromUnifiedList,
-  restoreSoupFocus,
-} from '@app/features/next-soup/utils';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
-import { isShareableEntityType } from '@app/features/sharing/global-share-modal/GlobalShareModal';
+import { isShareableEntityType } from '@app/features/sharing/global-share-modal/shareable-entity';
+import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
-import { type EntityData, isTaskEntity } from '@entity';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { onCleanup } from 'solid-js';
-import type { SoupState } from '../create-soup-state';
+import { type Accessor, onCleanup } from 'solid-js';
+import type {
+  EntityActionListState,
+  EntityActionNavigationHandler,
+  EntityActionViewContext,
+} from './entity-action-context';
 import {
   makeAddTagAction,
   makeCopyAction,
@@ -26,33 +29,56 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
-  makeEditReminderAction,
   makeFavoriteAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
   makeMarkReadAction,
   makeMarkUnreadAction,
   makeMoveToProjectAction,
+  makeMuteAction,
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
-  markReminderTargetDone,
 } from './index';
+import type { MarkDoneDelegate } from './mark-done-delegate';
+
+const reportEntityActionError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'entity-actions' });
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
-  soup: SoupState;
-  activeSoupViewTab?: () => string | undefined;
+  list: EntityActionListState;
+  selectedEntities: Accessor<EntityData[]>;
+  focusedEntity: Accessor<EntityData | undefined>;
+  restoreFocus: (entityId?: string) => void | Promise<void>;
+  viewContext: Accessor<EntityActionViewContext>;
   splitHandle?: SplitHandle;
+  createActionNavigationHandler?: () =>
+    | EntityActionNavigationHandler
+    | undefined;
   condition?: () => boolean;
-  /** Fallback entity getter used when soup has no selection/focus (e.g., block views) */
-  getEntityFallback?: () => EntityData | undefined;
+  /** Home previews reserve Delete/Backspace for the open editor. */
+  enableDeleteHotkey?: boolean;
+  /** A list that completes its own rows, such as Home's work feed. */
+  markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** A second key for Favorite, such as Email's `s` star. */
+  extraFavoriteHotkey?: { hotkey: ValidHotkey; hotkeyToken: HotkeyToken };
+  /** A key for Mute, such as Email's `shift+m`. */
+  extraMuteHotkey?: { hotkey: ValidHotkey; hotkeyToken: HotkeyToken };
 };
 
 export const useEntityActionHotkeys = (
   options: UseEntityActionHotkeysOptions
 ) => {
-  const { scopeId, soup, splitHandle, condition, getEntityFallback } = options;
+  const {
+    scopeId,
+    list,
+    selectedEntities,
+    focusedEntity,
+    restoreFocus,
+    splitHandle,
+    condition,
+  } = options;
 
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
@@ -63,6 +89,7 @@ export const useEntityActionHotkeys = (
     userId: () => userId(),
     notificationSource: () => notificationSource,
     hotkeyGroup: group,
+    delegate: options.markDoneDelegate,
   });
 
   const markNotDone = makeMarkNotDoneAction({
@@ -82,55 +109,49 @@ export const useEntityActionHotkeys = (
 
   const copyAction = makeCopyAction();
 
-  const moveToProjectAction = makeMoveToProjectAction();
+  const moveToProjectAction = makeMoveToProjectAction({
+    userId: () => userId(),
+  });
 
   const copyLinkAction = makeCopyLinkAction();
 
   const copyBranchNameAction = makeCopyBranchNameAction();
 
   const copyEntityIdAction = makeCopyEntityIdAction();
-  const editReminderAction = makeEditReminderAction();
 
   const shareAction = makeShareAction();
 
   const favoriteAction = makeFavoriteAction();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
 
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
   const addTagAction = makeAddTagAction();
 
   const getEntitiesForAction = (): EntityData[] => {
-    if (
-      splitHandle?.content().type === 'component' &&
-      isListViewID(splitHandle?.content().id)
-    ) {
-      const selected = soup.selection.selected();
-      if (selected.length > 0) return selected;
-    }
+    const selected = selectedEntities();
+    if (selected.length > 0) return selected;
 
-    const focused = soup.focus.item();
+    const focused = focusedEntity();
     if (focused) return [focused];
-
-    // Fallback: use provided entity getter (e.g., for block views)
-    if (getEntityFallback) {
-      const entity = getEntityFallback();
-      if (entity) return [entity];
-    }
 
     return [];
   };
 
-  const openNextEntity = (entity: EntityData) => {
+  const openNextEntity: EntityActionNavigationHandler = ({ entity }) => {
     if (!splitHandle) return;
-    // Preview Controllers are synchronized centrally by executeWithSoup so
-    // every mark-done entry point, including menus and swipe, behaves alike.
-    if (splitHandle.isControllerSplit()) return;
-    const handleContent = splitHandle.content().type;
+    if (!entity) return;
+
+    const handleContent = splitHandle.content()?.type;
+    if (!handleContent) return;
     if (handleContent === 'component' || handleContent === 'project') return;
     openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
       mergeHistory: true,
       referredFrom: splitHandle.referredFrom(),
-    });
+      notificationSource,
+    }).catch(reportEntityActionError);
   };
 
   /**
@@ -139,19 +160,10 @@ export const useEntityActionHotkeys = (
    * that follows setting a reminder advances on the same answer.
    */
   const marksDoneOnThisView = (): boolean => {
-    const contentId = splitHandle?.content().id;
-    if (!isListViewID(contentId)) return false;
-    const soupViewTab = options.activeSoupViewTab?.();
-    return !soupViewTab || canExecuteMarkDoneOnView(contentId, soupViewTab);
+    return options.viewContext().supportsMarkDone;
   };
 
-  // Declared here rather than with the other actions above because its
-  // mark-done follow-up advances the list the same way 'e' does, through
-  // `openNextEntity`. Setting a reminder puts the row down: it marks it done,
-  // so the list drops it and the reminder is what brings it back.
-  const createReminderAction = makeCreateReminderAction({
-    onCreated: markReminderTargetDone(markDone, openNextEntity),
-  });
+  const createReminderAction = makeCreateReminderAction();
 
   // Property editor setup
   const allProperties = useAllProperties();
@@ -168,7 +180,7 @@ export const useEntityActionHotkeys = (
     const entities = getEntitiesForAction();
     if (entities.length > 0) {
       openPropertyEditor(entities, mode, property, {
-        restoreFocus: () => restoreSoupFocus(entities[0]?.id),
+        restoreFocus: () => restoreFocus(entities[0]?.id),
       });
     }
   };
@@ -177,13 +189,22 @@ export const useEntityActionHotkeys = (
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
     scopeId,
-    description: 'Mark done',
-    keyDownHandler: () => {
+    description: () => t('entityActions.markDoneCommand'),
+    keyDownHandler: (event) => {
+      // A held key auto-repeats; each repeat would archive the next row under
+      // the cursor and refetch the list, so one press marks one selection.
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markDone.canExecute)) return false;
 
-      markDone.executeWithSoup(entities, soup, openNextEntity);
+      markDone
+        .executeWithSoup(
+          entities,
+          list,
+          options.createActionNavigationHandler?.() ?? openNextEntity
+        )
+        .catch(reportEntityActionError);
       return true;
     },
     condition: () => {
@@ -202,27 +223,21 @@ export const useEntityActionHotkeys = (
     hotkey: ['shift+e'],
     hotkeyToken: TOKENS.entity.action.markNotDone,
     scopeId,
-    description: 'Mark as not done',
-    keyDownHandler: () => {
+    description: () => t('entityActions.markAsNotDone'),
+    keyDownHandler: (event) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markNotDone.canExecute)) return false;
 
-      markNotDone.executeWithSoup(entities, soup);
+      markNotDone
+        .executeWithSoup(entities, list)
+        .catch(reportEntityActionError);
       return true;
     },
     condition: () => {
       if (condition && !condition()) return false;
-
-      const contentId = splitHandle?.content().id;
-
-      const soupViewTab = options.activeSoupViewTab?.();
-
-      if (
-        !isListViewID(contentId) ||
-        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
-      )
-        return false;
+      if (!marksDoneOnThisView()) return false;
 
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markNotDone.canExecute);
@@ -236,13 +251,16 @@ export const useEntityActionHotkeys = (
     hotkey: ['u'],
     hotkeyToken: TOKENS.entity.action.markUnread,
     scopeId,
-    description: 'Mark unread',
+    description: () => t('entityActions.markUnreadCommand'),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markUnread.canExecute)) return false;
 
-      markUnread.executeWithSoup(entities, soup);
+      fireAndForget(
+        markUnread.executeWithSoup(entities, list),
+        'entity-actions'
+      );
       return true;
     },
     condition: () => {
@@ -259,13 +277,13 @@ export const useEntityActionHotkeys = (
     hotkey: ['shift+u'],
     hotkeyToken: TOKENS.entity.action.markRead,
     scopeId,
-    description: 'Mark read',
+    description: () => t('entityActions.markReadCommand'),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.some(markRead.canExecute)) return false;
 
-      markRead.executeWithSoup(entities, soup);
+      fireAndForget(markRead.executeWithSoup(entities, list), 'entity-actions');
       return true;
     },
     condition: () => {
@@ -281,74 +299,93 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Delete - 'delete', 'backspace'
-  registerHotkey({
-    hotkey: ['delete', 'backspace'],
-    hotkeyToken: TOKENS.entity.action.delete,
-    scopeId,
-    description: () => {
+  if (options.enableDeleteHotkey !== false) {
+    const deleteDescription = () => {
       const count = getEntitiesForAction().length;
-      return count > 1 ? 'Delete items' : 'Delete item';
-    },
-    keyDownHandler: () => {
+      return count > 1
+        ? t('entityActions.deleteItems')
+        : t('entityActions.deleteItem');
+    };
+    const runDelete = (event?: KeyboardEvent) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(deleteAction.canExecute)) return false;
 
-      deleteAction.executeWithSoup(entities, soup);
+      fireAndForget(
+        deleteAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
       return true;
-    },
-    condition: () => {
+    };
+    const canDelete = () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(deleteAction.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  }).withGroup(group);
+    };
+    const isEmailSelection = () => {
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(isEmailEntity);
+    };
 
-  /**
-   * Whether 'r' should open the reminder editor rather than rename.
-   *
-   * The two are mutually exclusive rather than merely unlikely to overlap:
-   * `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
-   * reminder row's `ownerId` is always `''` while `userId()` is a macro id or
-   * undefined — so rename never claims a reminder, and sharing the key beats
-   * leaving 'r' dead on one. Its name is its description, which only the
-   * reminders API can change.
-   */
-  const editsReminder = (): boolean => {
-    const entities = getEntitiesForAction();
-    return entities.length === 1 && editReminderAction.canExecute(entities[0]);
-  };
+    // Delete - 'delete', 'backspace'. Registered as 'add' so it coexists on
+    // those keys with the email registration below rather than one eclipsing
+    // the other; their conditions are mutually exclusive, so exactly one of
+    // the two is ever live — and the command menu, which dedupes by
+    // description, shows a single Delete row with the key that applies.
+    registerHotkey({
+      hotkey: ['delete', 'backspace'],
+      hotkeyToken: TOKENS.entity.action.delete,
+      scopeId,
+      description: deleteDescription,
+      keyDownHandler: runDelete,
+      condition: () => canDelete() && !isEmailSelection(),
+      registrationType: 'add',
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
 
-  // Rename - 'r'. Edits the reminder instead when the row is one.
+    // Email selections also answer to '#', the key mail clients bind to
+    // Trash, so the same keystroke deletes a thread here and from inside an
+    // open thread. '#' arrives as 'shift+3' and prints back as '#'.
+    registerHotkey({
+      hotkey: ['shift+3', 'delete', 'backspace'],
+      hotkeyToken: TOKENS.email.trash,
+      scopeId,
+      description: deleteDescription,
+      keyDownHandler: runDelete,
+      condition: () => canDelete() && isEmailSelection(),
+      registrationType: 'add',
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+  }
+
+  // Rename - 'r'.
   registerHotkey({
     hotkey: ['r'],
     hotkeyToken: TOKENS.entity.action.rename,
     scopeId,
     description: () => {
-      if (editsReminder()) return 'Edit reminder';
       const count = getEntitiesForAction().length;
-      return count > 1 ? 'Rename items' : 'Rename item';
+      return count > 1
+        ? t('entityActions.renameItems')
+        : t('entityActions.renameItem');
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
 
-      if (editsReminder()) {
-        editReminderAction.executeWithSoup(entities, soup);
-        return true;
-      }
-
       if (!entities.every(renameAction.canExecute)) return false;
 
-      renameAction.executeWithSoup(entities, soup);
+      fireAndForget(
+        renameAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
       return true;
     },
     condition: () => {
       if (condition && !condition()) return false;
-      if (editsReminder()) return true;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(renameAction.canExecute);
     },
@@ -356,24 +393,26 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
-  registerHotkey({
-    hotkey: ['opt+f'],
-    hotkeyToken: TOKENS.entity.action.favorite,
+  const favoriteCommand = {
     scopeId,
     description: () => {
       const entities = getEntitiesForAction();
       const allFavorited =
         entities.length > 0 &&
         entities.every((entity) => favoriteAction.isFavorited(entity));
-      return allFavorited ? 'Unfavorite' : 'Favorite';
+      return allFavorited
+        ? t('entityActions.unfavorite')
+        : t('entityActions.favorite');
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(favoriteAction.canExecute)) return false;
 
-      favoriteAction.executeWithSoup(entities, soup);
+      fireAndForget(
+        favoriteAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
       return true;
     },
     condition: () => {
@@ -381,9 +420,87 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(favoriteAction.canExecute);
     },
+    displayPriority: 10 as const,
+    tags: [HotkeyTags.SelectionModification],
+  };
+  // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
+  registerHotkey({
+    hotkey: 'opt+f',
+    hotkeyToken: TOKENS.entity.action.favorite,
+    ...favoriteCommand,
+  }).withGroup(group);
+  if (options.extraFavoriteHotkey) {
+    // Hidden so the command menu lists Favorite once.
+    registerHotkey({
+      ...options.extraFavoriteHotkey,
+      ...favoriteCommand,
+      hide: true,
+    }).withGroup(group);
+  }
+
+  // Mute notifications (command menu only, no keybinding)
+  registerHotkey({
+    scopeId,
+    description: () => t('entityActions.snoozeNotifications'),
+    keywords: ['pause', 'morning', 'weekend', 'notifications'],
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (!entities.length || !entities.every(muteAction.canExecute))
+        return false;
+      muteAction.snooze(entities);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
+    },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
+
+  const muteCommand = {
+    scopeId,
+    description: () => {
+      const entities = getEntitiesForAction();
+      const allMuted =
+        entities.length > 0 &&
+        entities.every((entity) => muteAction.isMuted(entity));
+      return allMuted
+        ? t('entityActions.unmuteNotifications')
+        : t('entityActions.muteNotifications');
+    },
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(muteAction.canExecute)) return false;
+
+      fireAndForget(
+        muteAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
+    },
+    displayPriority: 10 as const,
+    tags: [HotkeyTags.SelectionModification],
+  };
+  registerHotkey({
+    hotkeyToken: TOKENS.entity.action.mute,
+    ...muteCommand,
+  }).withGroup(group);
+  if (options.extraMuteHotkey) {
+    // Hidden so the command menu lists Mute once.
+    registerHotkey({
+      ...options.extraMuteHotkey,
+      ...muteCommand,
+      hide: true,
+    }).withGroup(group);
+  }
 
   // Copy - 'cmd+d'
   registerHotkey({
@@ -392,14 +509,16 @@ export const useEntityActionHotkeys = (
     scopeId,
     description: () => {
       const count = getEntitiesForAction().length;
-      return count > 1 ? 'Duplicate items' : 'Duplicate item';
+      return count > 1
+        ? t('entityActions.duplicateItems')
+        : t('entityActions.duplicateItem');
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(copyAction.canExecute)) return false;
 
-      copyAction.executeWithSoup(entities, soup);
+      copyAction.executeWithSoup(entities, list).catch(reportEntityActionError);
       return true;
     },
     condition: () => {
@@ -418,14 +537,19 @@ export const useEntityActionHotkeys = (
     scopeId,
     description: () => {
       const count = getEntitiesForAction().length;
-      return count > 1 ? 'Move items to folder' : 'Move to folder';
+      return count > 1
+        ? t('entityActions.moveItemsToFolder')
+        : t('entityActions.moveToFolder');
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(moveToProjectAction.canExecute)) return false;
 
-      moveToProjectAction.executeWithSoup(entities, soup);
+      fireAndForget(
+        moveToProjectAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
       return true;
     },
     condition: () => {
@@ -444,12 +568,14 @@ export const useEntityActionHotkeys = (
     hotkey: ['shift+cmd+c'],
     hotkeyToken: TOKENS.entity.action.copyLink,
     scopeId,
-    description: 'Copy link',
+    description: () => t('entityActions.copyLinkCommand'),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!copyLinkAction.canExecute(entities[0])) return false;
-      copyLinkAction.executeWithSoup(entities, soup);
+      copyLinkAction
+        .executeWithSoup(entities, list)
+        .catch(reportEntityActionError);
       return true;
     },
     condition: () => {
@@ -466,12 +592,15 @@ export const useEntityActionHotkeys = (
     hotkey: ['shift+cmd+b'],
     hotkeyToken: TOKENS.entity.action.copyBranchName,
     scopeId,
-    description: 'Copy branch name',
+    description: () => t('entityActions.copyBranchNameCommand'),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!copyBranchNameAction.canExecute(entities[0])) return false;
-      copyBranchNameAction.executeWithSoup(entities, soup);
+      fireAndForget(
+        copyBranchNameAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
       return true;
     },
     condition: () => {
@@ -489,12 +618,14 @@ export const useEntityActionHotkeys = (
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.copyEntityId,
     scopeId,
-    description: 'Copy ID',
+    description: () => t('entityActions.copyId'),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!copyEntityIdAction.canExecute(entities[0])) return false;
-      copyEntityIdAction.executeWithSoup(entities, soup);
+      copyEntityIdAction
+        .executeWithSoup(entities, list)
+        .catch(reportEntityActionError);
       return true;
     },
     condition: () => {
@@ -508,22 +639,25 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Set a reminder - 'h'. This shares the scope with the list's 'h' ("Collapse
-  // item", handlerPriority 4), so 'add' keeps both registered instead of one
-  // evicting the other. Collapse sorts first and returns false when there is
-  // nothing to collapse, which falls through to here.
+  // H reminds on entity rows. The higher-priority collapse handler consumes
+  // H only on group headers; 'add' keeps both actions in the same scope.
   registerHotkey({
     hotkey: ['h'],
     hotkeyToken: TOKENS.entity.action.createReminder,
     scopeId,
-    description: 'Remind me',
+    description: () => t('entityActions.remindMe'),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length !== 1) return false;
       if (!createReminderAction.canExecute(entities[0])) return false;
-      createReminderAction.executeWithSoup(entities, soup, {
-        advances: marksDoneOnThisView(),
-      });
+      fireAndForget(
+        createReminderAction.executeWithSoup(entities, list, {
+          advances: marksDoneOnThisView(),
+          onNavigate:
+            options.createActionNavigationHandler?.() ?? openNextEntity,
+        }),
+        'entity-actions'
+      );
       return true;
     },
     condition: () => {
@@ -542,12 +676,15 @@ export const useEntityActionHotkeys = (
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.share,
     scopeId,
-    description: 'Share',
+    description: () => t('entityActions.share'),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!shareAction.canExecute(entities[0])) return false;
-      shareAction.executeWithSoup(entities, soup);
+      fireAndForget(
+        shareAction.executeWithSoup(entities, list),
+        'entity-actions'
+      );
       return true;
     },
     condition: () => {
@@ -565,7 +702,7 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.properties,
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
-    description: 'Open property editor',
+    description: () => t('entityActions.openPropertyEditor'),
     keyDownHandler: () => {
       openPropertyEditorIfSelected('selector');
       return true;
@@ -586,13 +723,15 @@ export const useEntityActionHotkeys = (
     displayPriority: 10,
     description: () => {
       const count = getEntitiesForAction().length;
-      return count > 1 ? 'Tag items' : 'Tag item';
+      return count > 1
+        ? t('entityActions.tagItems')
+        : t('entityActions.tagItem');
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       addTagAction.execute(entities, {
-        restoreFocus: () => restoreSoupFocus(entities[0]?.id),
+        restoreFocus: () => restoreFocus(entities[0]?.id),
       });
       return true;
     },
@@ -610,7 +749,7 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.priority,
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
-    description: 'Set priority',
+    description: () => t('entityActions.setPriority'),
     keyDownHandler: () => {
       openPropertyEditorIfSelected('direct', priority());
       return true;
@@ -633,7 +772,7 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.assignee,
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
-    description: 'Set assignee',
+    description: () => t('entityActions.setAssignee'),
     keyDownHandler: () => {
       openPropertyEditorIfSelected('direct', assignees());
       return true;
@@ -656,7 +795,7 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.status,
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
-    description: 'Set status',
+    description: () => t('entityActions.setStatus'),
     keyDownHandler: () => {
       openPropertyEditorIfSelected('direct', status());
       return true;
@@ -674,24 +813,37 @@ export const useEntityActionHotkeys = (
   // Set stage / owner / revenue for CRM companies (command menu only, no
   // keybindings) — company counterpart of the task property commands above.
   const companyPropertyCommands = [
-    { token: TOKENS.entity.action.stage, field: 'stage', label: 'Set stage' },
-    { token: TOKENS.entity.action.owner, field: 'owner', label: 'Set owner' },
+    {
+      token: TOKENS.entity.action.stage,
+      field: 'stage',
+      labelKey: 'entityActions.setStage',
+    },
+    {
+      token: TOKENS.entity.action.owner,
+      field: 'owner',
+      labelKey: 'entityActions.setOwner',
+    },
     {
       token: TOKENS.entity.action.revenue,
       field: 'revenue',
-      label: 'Set revenue',
+      labelKey: 'entityActions.setRevenue',
     },
   ] as const;
-  for (const { token, field, label } of companyPropertyCommands) {
+  for (const { token, field, labelKey } of companyPropertyCommands) {
     registerHotkey({
       hotkeyToken: token,
       tags: [HotkeyTags.SelectionModification],
       displayPriority: 10,
-      description: label,
+      description: () => t(labelKey),
       keyDownHandler: () => {
         const entities = getEntitiesForAction();
         if (entities.length === 0) return false;
-        if (!entities.every(setCompanyPropertyAction.canExecute)) return false;
+        if (
+          !entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
+        )
+          return false;
         setCompanyPropertyAction.execute(entities, field);
         return true;
       },
@@ -700,7 +852,9 @@ export const useEntityActionHotkeys = (
         const entities = getEntitiesForAction();
         return (
           entities.length > 0 &&
-          entities.every(setCompanyPropertyAction.canExecute)
+          entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
         );
       },
       scopeId,

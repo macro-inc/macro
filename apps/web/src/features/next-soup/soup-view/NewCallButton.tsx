@@ -1,20 +1,23 @@
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { NewMeetingButton } from '@channel/Call/NewMeetingButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
-import PhoneCallIcon from '@icon/wide-call.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
-export function NewCallButton() {
+export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
   const [selectedOptions, setSelectedOptions] = createSignal<
@@ -33,6 +36,7 @@ export function NewCallButton() {
   }
 
   async function handleStartCall() {
+    if (isSubmitting()) return;
     const options = selectedOptions();
     if (!options || options.length === 0) {
       setTriedToSubmit(true);
@@ -43,6 +47,10 @@ export function NewCallButton() {
 
     try {
       const destination = getDestinationFromOptions(options);
+      if (destination.type === 'users' && destination.users.length === 0) {
+        setTriedToSubmit(true);
+        return;
+      }
       let channelId: string;
 
       if (destination.type === 'channel') {
@@ -60,33 +68,30 @@ export function NewCallButton() {
           channelId = result.channel_id;
         } catch {
           toast.failure('Failed to create channel for call');
-          setIsSubmitting(false);
           return;
         }
       }
 
+      await joinChannelCall(channelId);
       setIsOpen(false);
       reset();
-
-      await joinChannelCall(channelId);
     } catch (err) {
       console.error('Failed to start call', err);
       toast.failure('Failed to start call');
+    } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
     <>
-      <Button
-        variant="active"
-        class="border-0 rounded-full px-3 py-2 pl-1 font-semibold"
-        size="sm"
-        onClick={() => setIsOpen(true)}
-      >
-        <PlusCircleIcon class="size-3.5 text-accent" />
-        <span>Call</span>
-      </Button>
+      <NewMeetingButton
+        presentation={
+          isTouchDevice() ? undefined : (props.presentation ?? 'toolbar')
+        }
+        onChannelCall={() => setIsOpen(true)}
+        onInstantCall={() => navigate('/meet/new')}
+      />
       <Dialog
         open={isOpen()}
         onOpenChange={(open) => {
@@ -100,7 +105,7 @@ export function NewCallButton() {
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-                  <XIcon />
+                  <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   New Call
@@ -118,7 +123,7 @@ export function NewCallButton() {
                 />
                 <div class="flex justify-end">
                   <Button
-                    variant="base"
+                    variant="primary"
                     size="sm"
                     disabled={isSubmitting()}
                     onClick={handleStartCall}

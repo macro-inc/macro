@@ -42,6 +42,11 @@ name = "search_processing_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+agent_session = { path = "../../crates/agent_session", default-features = false, features = ["outbound"] }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
+agent_fold = { path = "../../crates/folds/agent_fold" }
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
@@ -49,6 +54,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 call = { path = "../../crates/call", default-features = false, optional = true }
 channels = { path = "../../crates/channels", default-features = false, optional = true }
+messages = { path = "../../crates/messages", features = ["broker"] }
 chat = { path = "../../crates/chat", default-features = false, optional = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
@@ -59,7 +65,9 @@ http-body-util = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util", optional = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
@@ -67,6 +75,7 @@ macro_db_client = { path = "../../crates/macro_db_client", optional = true } # M
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+calendar_events = { path = "../../crates/calendar_events" }
 macro_event_broker = { path = "../../crates/macro_event_broker", default-features = false, features = [
   "outbound",
 ], optional = true }
@@ -78,8 +87,12 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 mention_utils = { path = "../../crates/mention_utils" }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", default-features = false, optional = true }
+ai_engine = { path = "../../crates/ai_engine" }
+fig_engine = { path = "../../crates/fig_engine" }
+psd_engine = { path = "../../crates/psd_engine" }
 doppler-config = { workspace = true }
 model = { path = "../../crates/model" }
+model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
 models_email = { path = "../../crates/models_email" }
 model_file_type = { path = "../../crates/model_file_type" }

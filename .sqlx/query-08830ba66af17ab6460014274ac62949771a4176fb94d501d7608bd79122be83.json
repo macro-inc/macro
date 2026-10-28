@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        VALUES ($1, $2, $3, 'user', 'owner')\n        ON CONFLICT (entity_id, entity_type, source_id, source_type)\n        WHERE granted_from_project_id IS NULL\n        DO UPDATE SET access_level = EXCLUDED.access_level\n        WHERE entity_access.access_level = 'owner'\n        RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "08830ba66af17ab6460014274ac62949771a4176fb94d501d7608bd79122be83"
+}

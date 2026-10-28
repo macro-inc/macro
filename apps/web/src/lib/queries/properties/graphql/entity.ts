@@ -12,6 +12,7 @@ import type {
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '@property/types';
+import { withProjectStatusOptions } from '@property/utils/select-options';
 import { isInstantiatedProperty } from '@property/utils/typeGuards';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -22,14 +23,13 @@ import {
   EntityPropertiesDocument,
   type EntityPropertiesQuery,
   type EntityPropertiesQueryVariables,
-  type GraphqlEntityFilterAst,
   type GraphqlEntityReferenceInput,
   type GraphqlPropertyTargetEntityType,
   type GraphqlSetPropertyValue,
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
   type SetEntityPropertyMutationVariables,
-  type SoupInput,
+  type SoupEntityInput,
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlCacheHost,
@@ -39,79 +39,38 @@ import {
 import { CombinedError, type OperationResult } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
+import { v5 as uuidv5 } from 'uuid';
 import {
-  buildOptimisticGroupedPropertyUpdates,
+  type buildOptimisticGroupedPropertyUpdates,
+  createGroupedPropertyPreparation,
   groupedPropertyKeys,
+  type PrepareGroupedPropertyUpdates,
 } from '../../soup/grouped/graphql-optimistic';
 import { buildOptimisticSetEntityProperty } from '../graphql-optimistic';
+import { buildPropertyAssignmentLinks } from './assignment-links';
+import { observePropertyMutationSettlements } from './mutation-settlements';
 
-const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
-
-/**
- * Builds an exact-entity Soup query. Every non-target branch is constrained to
- * the nil UUID because an omitted branch means "unfiltered", not "excluded".
- * Users are not represented in Soup and therefore keep using the REST reader.
- */
+/** Builds the input used to load one entity's properties. */
 export function buildEntityPropertiesInput(
   entityType: EntityType,
   entityId: string
-): SoupInput | undefined {
-  const targetFilter: Partial<GraphqlEntityFilterAst> | undefined = match(
-    entityType
-  )
-    .with('DOCUMENT', 'TASK', () => ({
-      documentFilter: { literal: { id: entityId } },
-    }))
-    .with('PROJECT', () => ({
-      projectFilter: { literal: { projectIdSelf: entityId } },
-    }))
-    .with('CHAT', () => ({
-      chatFilter: { literal: { chatId: entityId } },
-    }))
-    .with('THREAD', () => ({
-      emailFilter: { tree: { literal: { threadId: entityId } } },
-    }))
-    .with('CHANNEL', () => ({
-      channelFilter: { literal: { channelId: entityId } },
-    }))
-    .with('CALL_RECORD', () => ({
-      callFilter: { literal: { callId: entityId } },
-    }))
-    .with('COMPANY', () => ({
-      crmCompanyFilter: { literal: { id: entityId } },
-    }))
-    .with('CALENDAR_EVENT', () => ({
-      calendarEventFilter: { literal: { id: entityId } },
-    }))
-    .with('USER', () => undefined)
-    .exhaustive();
-  if (!targetFilter) return undefined;
-
-  const filters: GraphqlEntityFilterAst = {
-    calendarEventFilter: { literal: { id: NIL_ENTITY_ID } },
-    documentFilter: { literal: { id: NIL_ENTITY_ID } },
-    projectFilter: { literal: { projectIdSelf: NIL_ENTITY_ID } },
-    chatFilter: { literal: { chatId: NIL_ENTITY_ID } },
-    emailFilter: {
-      tree: { literal: { threadId: NIL_ENTITY_ID } },
-    },
-    channelFilter: { literal: { channelId: NIL_ENTITY_ID } },
-    channelThreadFilter: { literal: { threadId: NIL_ENTITY_ID } },
-    callFilter: { literal: { callId: NIL_ENTITY_ID } },
-    crmCompanyFilter: { literal: { id: NIL_ENTITY_ID } },
-    foreignEntityFilter: { literal: { id: NIL_ENTITY_ID } },
-    ...targetFilter,
-  };
-
-  return {
-    initial: {
-      limit: 1,
-      expand: true,
-      sortMethod: 'UPDATED_AT',
-      emailView: 'ALL',
-      filters,
-    },
-  };
+): SoupEntityInput | undefined {
+  const soupEntityType = match(entityType)
+    .returnType<SoupEntityInput['entityType'] | undefined>()
+    .with('DOCUMENT', 'TASK', () => 'DOCUMENT')
+    .with('PROJECT', () => 'PROJECT')
+    .with('CHAT', () => 'CHAT')
+    .with('THREAD', () => 'EMAIL_THREAD')
+    .with('CHANNEL', () => 'CHANNEL')
+    .with('CALL_RECORD', () => 'CALL')
+    .with('COMPANY', () => 'CRM_COMPANY')
+    .with('CALENDAR_EVENT', () => 'CALENDAR_EVENT')
+    .with('INITIATIVE', () => 'INITIATIVE')
+    .with('DATABASE_ROW', () => 'DATABASE_ROW')
+    // Users and CRM contacts carry no Soup properties.
+    .with('USER', 'CONTACT', () => undefined)
+    .exhaustive(() => undefined);
+  return soupEntityType && { entityType: soupEntityType, entityId };
 }
 
 type GraphqlEntityPropertiesQueryOptions = {
@@ -150,7 +109,13 @@ export function createGraphqlEntityPropertiesQuery(
           (property) => {
             try {
               const mapped = soupPropertyToProperty(property);
-              return mapped.isMetadata === true ? [] : [mapped];
+              return mapped.isMetadata === true
+                ? []
+                : [
+                    options.entityType() === 'INITIATIVE'
+                      ? withProjectStatusOptions(mapped)
+                      : mapped,
+                  ];
             } catch (error) {
               console.warn(
                 'Skipping GraphQL property with unsupported type',
@@ -168,6 +133,19 @@ export function createGraphqlEntityPropertiesQuery(
     isEnabled: () => input() !== undefined,
     refetch: () => result.refetch({ requestPolicy: 'network-only' }),
   };
+}
+
+/** Re-read the native property relation, including newly attached values. */
+export async function refetchGraphqlInitiativeProperties(
+  initiativeId: string
+): Promise<void> {
+  await getGraphqlSoupClient()
+    .query(
+      EntityPropertiesDocument,
+      { input: buildEntityPropertiesInput('INITIATIVE', initiativeId)! },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
 }
 
 export type GraphqlEntityPropertyMutationInput =
@@ -214,13 +192,14 @@ function toGraphqlEntityReference(
   };
 }
 
-function toGraphqlSetPropertyValue(
+export function toGraphqlSetPropertyValue(
   value: SetPropertyValue | null
 ): GraphqlSetPropertyValue | null {
   if (value === null) return null;
   return match(value)
     .with({ type: 'boolean' }, (v) => ({ boolean: v.value }))
     .with({ type: 'date' }, (v) => ({ date: v.value }))
+    .with({ type: 'date_range' }, (v) => ({ dateRange: v.value }))
     .with({ type: 'number' }, (v) => ({ number: v.value }))
     .with({ type: 'string' }, (v) => ({ string: v.value }))
     .with({ type: 'select_option' }, (v) => ({ selectOption: v.option_id }))
@@ -235,15 +214,21 @@ function toGraphqlSetPropertyValue(
     }))
     .with({ type: 'link' }, (v) => ({ link: v.url }))
     .with({ type: 'multi_link' }, (v) => ({ multiLink: v.urls }))
-    .exhaustive();
+    .exhaustive(() => {
+      throw new Error(`Unsupported property value type: ${value.type}`);
+    });
 }
 
-function toGraphqlPropertyTargetEntityType(
+/** Maps a REST property target type onto its GraphQL enum. */
+export function toGraphqlPropertyTargetEntityType(
   entityType: EntityType | PropertyTargetEntityType
 ): GraphqlPropertyTargetEntityType {
   if (entityType === 'TASK') return 'DOCUMENT';
   if (entityType === 'CALENDAR_EVENT') {
     throw new Error('calendar events do not support properties');
+  }
+  if (entityType === 'CONTACT') {
+    throw new Error('crm contacts do not support properties');
   }
   return entityType;
 }
@@ -257,7 +242,8 @@ function getPropertyDefinitionId(
 }
 
 async function prepareMutationArgs(
-  input: GraphqlEntityPropertyMutationInput
+  input: GraphqlEntityPropertyMutationInput,
+  prepareGrouped?: PrepareGroupedPropertyUpdates
 ): Promise<SetEntityPropertyArgs> {
   if (input.kind === 'add') {
     return {
@@ -268,32 +254,59 @@ async function prepareMutationArgs(
     };
   }
 
+  const entityType = toGraphqlPropertyTargetEntityType(input.entityType);
+  const propertyDefinitionId = getPropertyDefinitionId(input.property);
   const optimisticProperty = buildOptimisticSetEntityProperty(
     input.property,
-    input.apiValues
+    input.apiValues,
+    { entityType, entityId: input.entityId }
   );
-  let optimisticCache;
-
-  if (isInstantiatedProperty(input.property)) {
-    const host = getGraphqlCacheHost();
-    if (host) {
-      try {
-        const oldGroupKeys = groupedPropertyKeys(input.property);
-        const newGroupKeys = groupedPropertyKeys(input.apiValues);
-        optimisticCache = await buildOptimisticGroupedPropertyUpdates({
-          host,
-          entityId: input.entityId,
-          propertyDefinitionId: input.property.propertyDefinitionId,
-          oldGroupKeys: oldGroupKeys ?? [],
-          newGroupKeys: newGroupKeys ?? [],
-          revalidateOnly:
-            oldGroupKeys === undefined || newGroupKeys === undefined,
-        });
-      } catch (error) {
-        // Relation discovery is an optimization. The normalized property write
-        // remains valid when cache inspection is unavailable.
-        console.warn('Failed to build grouped Soup optimism', error);
+  const optimisticCache: NonNullable<SetEntityPropertyArgs['optimisticCache']> =
+    {
+      updates: [],
+      revalidations: [],
+    };
+  const host = getGraphqlCacheHost();
+  if (host) {
+    try {
+      if (optimisticProperty) {
+        optimisticCache.updates = buildPropertyAssignmentLinks(
+          entityType,
+          input.entityId,
+          optimisticProperty.id,
+          propertyDefinitionId
+        );
+        // Recover a missing/evicted parent after commit (including offline replay)
+        // without ever discovering or refetching unrelated cached pages.
+        const targetInput = buildEntityPropertiesInput(
+          entityType,
+          input.entityId
+        );
+        if (targetInput) {
+          optimisticCache.revalidations.push({
+            document: EntityPropertiesDocument,
+            variables: { input: targetInput },
+            onlyOnLinkFailure: true,
+          });
+        }
       }
+      const oldGroupKeys = groupedPropertyKeys(input.property);
+      const newGroupKeys = groupedPropertyKeys(input.apiValues);
+      const grouped = await (
+        prepareGrouped ?? createGroupedPropertyPreparation(host)
+      )({
+        entityId: input.entityId,
+        propertyDefinitionId,
+        oldGroupKeys: oldGroupKeys ?? [],
+        newGroupKeys: newGroupKeys ?? [],
+        revalidateOnly:
+          oldGroupKeys === undefined || newGroupKeys === undefined,
+      });
+      // Link the assignment before moving its owning row between groups.
+      optimisticCache.updates.push(...grouped.updates);
+      optimisticCache.revalidations.push(...grouped.revalidations);
+    } catch (error) {
+      console.warn('Failed to build property Soup optimism', error);
     }
   }
 
@@ -334,12 +347,40 @@ function mutationDisposition(
   return { kind: 'committed', property: result.data.setEntityProperty };
 }
 
-const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
-  SetEntityPropertyMutation,
-  SetEntityPropertyMutationVariables,
-  GraphqlEntityPropertyMutationInput
-> = async ({ client, mutation, input, context }) => {
-  const args = await prepareMutationArgs(input);
+const ENTITY_PROPERTY_OPTIMISTIC_UUID_NAMESPACE =
+  '1697e6bc-0d9a-4dd2-bc3f-bd33bcb6f607';
+
+/** Stable coalescing UUID for one absolute entity-property value slot. */
+export function entityPropertyOptimisticMutationUuid(args: {
+  entityType: GraphqlPropertyTargetEntityType;
+  entityId: string;
+  propertyDefinitionId: string;
+}): string {
+  return uuidv5(
+    JSON.stringify([
+      'setEntityProperty',
+      args.entityType,
+      args.entityId,
+      args.propertyDefinitionId,
+    ]),
+    ENTITY_PROPERTY_OPTIMISTIC_UUID_NAMESPACE
+  );
+}
+
+type EntityPropertyExecution = Parameters<
+  UrqlMutationExecutor<
+    SetEntityPropertyMutation,
+    SetEntityPropertyMutationVariables,
+    GraphqlEntityPropertyMutationInput
+  >
+>[0];
+
+async function executeGraphqlEntityPropertyMutation(
+  { client, mutation, input, context }: EntityPropertyExecution,
+  onEnqueued?: () => void,
+  prepareGrouped?: PrepareGroupedPropertyUpdates
+) {
+  const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {
     input: {
       entityType: args.entityType,
@@ -355,10 +396,25 @@ const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
         mutation,
         variables,
         { setEntityProperty: args.optimisticProperty },
-        args.optimisticCache
+        {
+          ...args.optimisticCache,
+          uuid: entityPropertyOptimisticMutationUuid(args),
+          onEnqueued,
+        }
       ).toPromise()
     : client.mutation(mutation, variables, context).toPromise());
   const disposition = mutationDisposition(mutationResult);
+  if (
+    disposition.kind === 'queued' &&
+    mutationResult.data == null &&
+    args.optimisticProperty
+  ) {
+    return {
+      ...mutationResult,
+      data: { setEntityProperty: args.optimisticProperty },
+      error: undefined,
+    };
+  }
   if (disposition.kind !== 'permanently-failed' || mutationResult.error) {
     return mutationResult;
   }
@@ -369,7 +425,7 @@ const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
         ? disposition.error
         : new CombinedError({ networkError: disposition.error }),
   };
-};
+}
 
 export type AddEntityPropertyInput = {
   entityType: EntityType | PropertyTargetEntityType;
@@ -459,7 +515,11 @@ type GraphqlBulkMutationOptions<Context> = {
   ) => void | Promise<void>;
 };
 
-/** Creates one callback-driven urql mutation for a bulk property save. */
+/**
+ * Enqueues every optimistic layer before waiting for HTTP, but keeps the bulk
+ * lifecycle pending until queued saves commit or permanently fail. Replayed
+ * saves retain their submission payload; settlement events carry no response.
+ */
 export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
   options: GraphqlBulkMutationOptions<Context> = {}
 ) {
@@ -480,23 +540,70 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
         | undefined;
       let permanentError: Error | undefined;
 
-      // Begin each durable layer sequentially so later relation recipes see
-      // the effective result of earlier property edits.
-      for (const item of input.properties) {
-        latestResult = await executeGraphqlEntityPropertyMutation({
-          client,
-          mutation,
-          input: { kind: 'save', ...item },
-          context,
-        });
-        const disposition = mutationDisposition(latestResult);
-        if (disposition.kind === 'committed') {
-          await options.onCommitted?.(item, disposition);
-        } else if (disposition.kind === 'permanently-failed') {
-          permanentError ??= disposition.error;
+      const pending = [];
+      const host = getGraphqlCacheHost();
+      const prepareGrouped = host
+        ? createGroupedPropertyPreparation(host)
+        : undefined;
+      const settlements = observePropertyMutationSettlements(host);
+      try {
+        for (const item of input.properties) {
+          let acknowledge!: () => void;
+          const enqueued = new Promise<void>((resolve) => {
+            acknowledge = resolve;
+          });
+          async function submitSave() {
+            try {
+              const result = await executeGraphqlEntityPropertyMutation(
+                {
+                  client,
+                  mutation,
+                  input: { kind: 'save', ...item },
+                  context,
+                },
+                acknowledge,
+                prepareGrouped
+              );
+              acknowledge();
+              const disposition = mutationDisposition(result);
+              if (disposition.kind === 'queued') {
+                await settlements.waitForCommit(disposition.transactionId);
+                await options.onCommitted?.(item, { kind: 'committed' });
+              } else if (disposition.kind === 'committed') {
+                await options.onCommitted?.(item, disposition);
+              }
+              return { kind: 'result' as const, result };
+            } catch (error) {
+              return {
+                kind: 'error' as const,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              };
+            } finally {
+              // Plain clients and failed preparation have no cache acknowledgement.
+              acknowledge();
+            }
+          }
+          pending.push(submitSave());
+          // Preserve layer ordering for relation recipes, not HTTP completion.
+          await enqueued;
         }
+        for (const settled of await Promise.all(pending)) {
+          if (settled.kind === 'error') {
+            permanentError ??= settled.error;
+            continue;
+          }
+          latestResult = settled.result;
+          const disposition = mutationDisposition(latestResult);
+          if (disposition.kind === 'permanently-failed') {
+            permanentError ??= disposition.error;
+          }
+        }
+      } finally {
+        settlements.dispose();
       }
 
+      if (!latestResult && permanentError) throw permanentError;
       if (!latestResult) {
         throw new Error(
           'bulk property mutation requires at least one property'
@@ -526,9 +633,7 @@ export function mapGraphqlEntityProperties(
   data: EntityPropertiesQuery | undefined,
   entityId: string
 ): SoupProperty[] | undefined {
-  if (!data) return undefined;
-  const item = data.user.soup.items.find(
-    (candidate) => candidate.id === entityId
-  );
-  return mapGraphqlProperties(item?.properties ?? []);
+  const entity = data?.user?.soupEntity;
+  if (entity === undefined) return undefined;
+  return mapGraphqlProperties(entity?.id === entityId ? entity.properties : []);
 }

@@ -1,13 +1,12 @@
 import { useMaybeBlockId } from '@core/block';
-import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SlidersIcon from '@phosphor/sliders-horizontal.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useCurrentTeamQuery } from '@queries/team/teams';
@@ -24,6 +23,7 @@ import {
   Dialog,
   Hotkey,
   Layer,
+  Tabs,
 } from '@ui';
 import {
   type Component,
@@ -39,6 +39,7 @@ import { useMaybePropertiesContext } from '../../context/PropertiesContext';
 import {
   getPropertyDataTypeDropdownOptions,
   PropertyDataTypeIcon,
+  parseEntityType,
   usePropertyNameFocus,
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
@@ -147,13 +148,14 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               data-option-id={option().id}
             />
             <Button
+              aria-label="Remove option"
+              tooltip="Remove option"
               variant="ghost"
               size="icon-sm"
-              label="Remove option"
               onClick={() => props.onRemove(option().id)}
-              class="shrink-0 rounded-lg text-failure-ink"
+              class="shrink-0 text-failure-ink"
             >
-              <XIcon />
+              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
         )}
@@ -318,6 +320,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       | 'number'
       | 'boolean'
       | 'date'
+      | 'date_range'
       | 'entity'
       | 'select_number'
       | 'select_string'
@@ -325,7 +328,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     specificType?: EntityType | null;
   } => {
     if (value.startsWith('entity:')) {
-      const specificType = value.split(':')[1] as EntityType;
+      const specificType = parseEntityType(value.split(':')[1]) ?? null;
       return { type: 'entity', specificType };
     }
     if (value === 'entity') {
@@ -337,6 +340,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         | 'number'
         | 'boolean'
         | 'date'
+        | 'date_range'
         | 'select_number'
         | 'select_string'
         | 'link',
@@ -367,6 +371,8 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         return { type: 'boolean' };
       case 'date':
         return { type: 'date' };
+      case 'date_range':
+        return { type: 'date_range' };
       case 'link':
         return { type: 'link', multi: isMultiSelect() };
       case 'select_string':
@@ -543,7 +549,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       }}
     >
       <CommandMenuShell depth={2} class="text-sm" onKeyDown={handleKeyDown}>
-        <CommandMenuShell.Header class="my-0 h-13 gap-3 border-b-0 px-4">
+        <CommandMenuShell.Header class="my-0 gap-3 border-b-0">
           <span class="text-ink-muted">
             <SlidersIcon class="size-3.5" />
           </span>
@@ -554,13 +560,14 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             Create property
           </Dialog.Title>
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-sm"
             disabled={pending()}
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </CommandMenuShell.Header>
 
@@ -648,7 +655,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 <Select.Portal>
                   <Layer depth={3}>
                     <Select.Content
-                      class="z-action-menu min-w-56 overflow-y-auto rounded-xl border border-edge bg-surface p-1.5 shadow-menu menu-open-animation"
+                      class="menu-surface z-action-menu min-w-56 overflow-y-auto p-1.5 menu-open-animation"
                       ref={(el) => {
                         const clean = addCtrlJKMenuNavigation(el, () => ({
                           wrap: true,
@@ -665,27 +672,27 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
 
             <Show when={hasTeam()}>
               <EditorRow label="Owner">
-                <TabsInset
-                  depth={0}
-                  list={[
+                <Tabs
+                  aria-label="Owner"
+                  size="sm"
+                  touch="inset"
+                  options={[
                     { value: 'team', label: 'Team' },
                     { value: 'user', label: 'Personal' },
                   ]}
                   value={selectedPropertyScope()}
-                  onChange={(value) => {
-                    if (value === 'user' || value === 'team') {
-                      setPropertyScope(value);
-                    }
-                  }}
+                  onChange={setPropertyScope}
                 />
               </EditorRow>
             </Show>
 
             <Show when={shouldShowMultiSelect()}>
               <EditorRow label="Selection">
-                <TabsInset
-                  depth={0}
-                  list={[
+                <Tabs
+                  aria-label="Selection"
+                  size="sm"
+                  touch="inset"
+                  options={[
                     { value: 'single', label: 'Single' },
                     { value: 'multi', label: 'Multi' },
                   ]}
@@ -759,16 +766,14 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             <Button
               variant="ghost"
               size="sm"
-              class="rounded-lg"
               onClick={close}
               disabled={pending()}
             >
               Cancel
             </Button>
             <Button
-              variant={canSubmit() ? 'active' : 'ghost'}
-              depth={3}
-              class={cn('gap-3 rounded-lg border-0', pending() && 'gap-1.5')}
+              variant="primary"
+              class={cn('gap-3 ', pending() && 'gap-1.5')}
               onClick={handleCreateProperty}
               disabled={!canSubmit()}
             >
@@ -777,7 +782,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 fallback={
                   <>
                     <span class="size-3 animate-spin">
-                      <LoadingSpinner />
+                      <LoadingSpinner class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                     </span>
                     Creating
                   </>

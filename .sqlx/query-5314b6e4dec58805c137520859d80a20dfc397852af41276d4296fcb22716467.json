@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, entity_type, owner_type AS \"owner_type: OwnerType\", owner_id,\n                   created_at, updated_at, deleted_at\n            FROM entity\n            WHERE owner_type = $1 AND owner_id = $2\n              AND deleted_at IS NULL\n              AND ($3::text IS NULL OR entity_type = $3)\n            ORDER BY created_at DESC, id DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_type: OwnerType",
+        "type_info": {
+          "Custom": {
+            "name": "entity_owner_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "bot",
+                "team"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "entity_owner_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "bot",
+                "team"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "5314b6e4dec58805c137520859d80a20dfc397852af41276d4296fcb22716467"
+}

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -18,7 +19,6 @@ export function registerSplitHotkeys(args: {
   splitName: () => string;
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
-  isViewerSplit: () => boolean;
 }) {
   const {
     splitHotkeyScope,
@@ -31,15 +31,14 @@ export function registerSplitHotkeys(args: {
     splitName,
     getSplitCount,
     isNotUnifiedList,
-    isViewerSplit: isPreviewSplit,
     goToList,
   } = args;
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: ['cmd+escape', 'opt+escape'],
-    condition: () =>
-      !isPreviewSplit() && (isNotUnifiedList() || getSplitCount() > 1),
-    description: () => (isNotUnifiedList() ? 'Back to list' : 'Close split'),
+    condition: () => isNotUnifiedList() || getSplitCount() > 1,
+    description: () =>
+      isNotUnifiedList() ? t('commands.backToList') : t('commands.closeSplit'),
     keyDownHandler: () => {
       if (isNotUnifiedList()) {
         goToList();
@@ -57,7 +56,7 @@ export function registerSplitHotkeys(args: {
     scopeId: splitHotkeyScope,
     hotkey: 'shift+escape',
     hotkeyToken: TOKENS.window.spotlight.toggle,
-    description: () => `Maximize ${splitName()}`,
+    description: () => t('commands.maximizeSplit', { name: splitName() }),
     condition: () => {
       const splitManager = globalSplitManager();
       if (!splitManager) return false;
@@ -76,7 +75,7 @@ export function registerSplitHotkeys(args: {
     hotkeyToken: TOKENS.split.go.back,
     hotkey: 'opt+[',
     condition: () => canGoBack(),
-    description: `Go back`,
+    description: () => t('commands.goBack'),
     keyDownHandler: () => {
       goBack();
       return true;
@@ -89,7 +88,7 @@ export function registerSplitHotkeys(args: {
     hotkeyToken: TOKENS.split.go.forward,
     hotkey: 'opt+]',
     condition: () => canGoForward(),
-    description: `Go forward`,
+    description: () => t('commands.goForward'),
     keyDownHandler: () => {
       goForward();
       return true;
@@ -101,7 +100,7 @@ export function registerSplitHotkeys(args: {
     hotkeyToken: TOKENS.window.focusSplitRight,
     hotkey: ['shift+l', 'shift+arrowright'],
     scopeId: splitHotkeyScope,
-    description: 'Focus split right',
+    description: () => t('commands.focusSplitRight'),
     condition: () => getSplitCount() > 1,
     keyDownHandler: () => {
       focusAdjacentSplit('right');
@@ -114,7 +113,7 @@ export function registerSplitHotkeys(args: {
     hotkeyToken: TOKENS.window.focusSplitLeft,
     hotkey: ['shift+h', 'shift+arrowleft'],
     scopeId: splitHotkeyScope,
-    description: 'Focus split left',
+    description: () => t('commands.focusSplitLeft'),
     condition: () => getSplitCount() > 1,
     keyDownHandler: () => {
       focusAdjacentSplit('left');

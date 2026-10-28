@@ -1,4 +1,4 @@
-import { isBotSenderId } from '@queries/channel/message-sender';
+import { isBotSenderId } from '@queries/messages/message-sender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useMessage } from './context';
@@ -16,7 +16,7 @@ export function EditedIndicator(props: EditedIndicatorProps) {
     <Show
       when={message().edited_at != null && !isBotSenderId(message().sender_id)}
     >
-      <span class={cn('text-xs text-ink-placeholder', props.class)}>
+      <span class={cn('text-xs text-ink-extra-muted', props.class)}>
         (edited)
       </span>
     </Show>

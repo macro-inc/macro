@@ -26,6 +26,7 @@ export function oklchToRgb(
     .match(/oklch\(([^)]+)\)/)?.[1]
     .split(/\s+/)
     .map((val) => {
+      if (val === 'none') return 0;
       let isPercentage = val.includes('%');
       let num = parseFloat(val);
       return isPercentage ? num / 100 : num;

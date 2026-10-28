@@ -1,32 +1,111 @@
 //! Bot service implementation.
 
+mod agent_dm;
+
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner,
-        BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
+        BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
+        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
+        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService},
+    ports::{BotError, BotRepo, BotService, McpAppCatalog},
     tokens,
 };
+use bot_token::HashedBotToken;
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{
+    BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+    MemberParticipantRole, ParticipantRole,
+};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Bot service implementation.
+///
+/// `C` answers whether a Pipedream app slug is real. [`UncheckedMcpApps`]
+/// accepts every slug; hosts that configure agents from a conversation pass
+/// a directory-backed catalog instead.
 #[derive(Debug, Clone)]
-pub struct BotServiceImpl<R, B> {
+pub struct BotServiceImpl<R, B, C = UncheckedMcpApps> {
     repo: R,
     event_broker: B,
+    mcp_apps: C,
 }
 
-impl<R, B> BotServiceImpl<R, B> {
-    /// Create a bot service.
-    pub fn new(repo: R, event_broker: B) -> Self {
-        Self { repo, event_broker }
+/// Accepts every MCP app slug without asking Pipedream.
+///
+/// For hosts that have no app directory. A host that applies an agent's
+/// choice of apps must pass a directory-backed catalog, which refuses a slug
+/// it cannot confirm.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UncheckedMcpApps;
+
+impl McpAppCatalog for UncheckedMcpApps {
+    async fn is_connectable_app(&self, _slug: &str) -> Result<bool, BotError> {
+        Ok(true)
     }
+}
+
+impl<R, B, C> BotServiceImpl<R, B, C> {
+    /// Swap the MCP app directory this service consults.
+    pub fn with_mcp_apps<D>(self, mcp_apps: D) -> BotServiceImpl<R, B, D> {
+        BotServiceImpl {
+            repo: self.repo,
+            event_broker: self.event_broker,
+            mcp_apps,
+        }
+    }
+}
+
+impl<R, B> BotServiceImpl<R, B, UncheckedMcpApps> {
+    /// Create a bot service that does not check MCP app slugs against Pipedream.
+    pub fn new(repo: R, event_broker: B) -> Self {
+        Self {
+            repo,
+            event_broker,
+            mcp_apps: UncheckedMcpApps,
+        }
+    }
+}
+
+/// The charset a Pipedream app slug may use. Mirrors the egress proxy's
+/// `McpServerSlug::parse` (restated here because bots must not depend on
+/// agent_egress): a slug that fails this could never be dialed, so it is
+/// refused where it is written rather than dropped where it is advertised.
+fn is_app_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
+}
+
+fn validate_mcp_servers(mcp: &AgentMcpServers) -> Result<(), BotError> {
+    let mut seen = std::collections::HashSet::new();
+    for server in mcp.servers() {
+        if !is_app_slug(&server.app_slug) {
+            return Err(BotError::BadRequest(format!(
+                "MCP server slug {:?} must be lowercase ascii, digits, '-' or '_'",
+                server.app_slug
+            )));
+        }
+        if server.server_name.trim().is_empty() {
+            return Err(BotError::BadRequest(format!(
+                "MCP server {} must have a name",
+                server.app_slug
+            )));
+        }
+        if !seen.insert(server.app_slug.as_str()) {
+            return Err(BotError::BadRequest(format!(
+                "MCP server {} is listed more than once",
+                server.app_slug
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_handle(handle: &str) -> Result<(), BotError> {
@@ -43,6 +122,124 @@ fn validate_handle(handle: &str) -> Result<(), BotError> {
     Ok(())
 }
 
+/// The fields create and update requests share, borrowed for validation so
+/// both paths run the exact same checks without repeating the field list.
+struct AgentFields<'a> {
+    name: &'a str,
+    handle: &'a str,
+    harness: &'a str,
+    harness_id: Option<HarnessId>,
+    default_model: &'a str,
+    channel_scope: AgentChannelScope,
+    channel_ids: &'a [Uuid],
+    mcp: &'a AgentMcpServers,
+}
+
+impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
+    fn from(req: &'a CreateAgentRequest) -> Self {
+        Self {
+            name: &req.name,
+            handle: &req.handle,
+            harness: &req.harness,
+            harness_id: req.harness_id,
+            default_model: &req.default_model,
+            channel_scope: req.channel_scope,
+            channel_ids: &req.channel_ids,
+            mcp: &req.mcp,
+        }
+    }
+}
+
+impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
+    fn from(req: &'a UpdateAgentRequest) -> Self {
+        Self {
+            name: &req.name,
+            handle: &req.handle,
+            harness: &req.harness,
+            harness_id: req.harness_id,
+            default_model: &req.default_model,
+            channel_scope: req.channel_scope,
+            channel_ids: &req.channel_ids,
+            mcp: &req.mcp,
+        }
+    }
+}
+
+fn validate_agent_fields(
+    AgentFields {
+        name,
+        handle,
+        harness,
+        harness_id,
+        default_model,
+        channel_scope,
+        channel_ids,
+        mcp,
+    }: AgentFields<'_>,
+) -> Result<(), BotError> {
+    validate_mcp_servers(mcp)?;
+    validate_handle(handle)?;
+    if name.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent name must not be empty".to_string(),
+        ));
+    }
+    if harness.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent harness must not be empty".to_string(),
+        ));
+    }
+    // The `macrod` slug and a registered harness travel together: the slug
+    // selects the external runtime path, the id says whose daemon serves it.
+    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
+        (true, None) => {
+            return Err(BotError::BadRequest(
+                "agents on the macrod harness must reference a registered harness".to_string(),
+            ));
+        }
+        (false, Some(_)) => {
+            return Err(BotError::BadRequest(
+                "harness_id applies only to the macrod harness".to_string(),
+            ));
+        }
+        _ => {}
+    }
+    if default_model.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent default model must not be empty".to_string(),
+        ));
+    }
+
+    match channel_scope {
+        AgentChannelScope::All if !channel_ids.is_empty() => Err(BotError::BadRequest(
+            "global agents must not include channel ids".to_string(),
+        )),
+        AgentChannelScope::Selected if channel_ids.is_empty() => Err(BotError::BadRequest(
+            "channel-specific agents require at least one channel".to_string(),
+        )),
+        AgentChannelScope::Selected
+            if channel_ids
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                != channel_ids.len() =>
+        {
+            Err(BotError::BadRequest(
+                "agent channel ids must be unique".to_string(),
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
+fn validate_agent_request(req: &CreateAgentRequest) -> Result<(), BotError> {
+    validate_agent_fields(req.into())
+}
+
+fn validate_update_agent_request(req: &UpdateAgentRequest) -> Result<(), BotError> {
+    validate_agent_fields(req.into())
+}
+
 fn token_candidate_is_valid(candidate: &BotTokenCandidate, now: &DateTime<Utc>) -> bool {
     candidate.token.revoked_at.is_none()
         && candidate
@@ -57,7 +254,7 @@ struct ValidatedBotToken {
     token_id: Uuid,
 }
 
-impl<R, B> BotServiceImpl<R, B>
+impl<R, B, C> BotServiceImpl<R, B, C>
 where
     R: BotRepo,
     B: MacroEventBroker,
@@ -88,6 +285,115 @@ where
         Ok(BotOwner::User {
             user_id: caller.as_ref().to_string(),
         })
+    }
+
+    async fn agent_owner_for_request(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Option<Uuid>,
+    ) -> Result<BotOwner, BotError> {
+        if let Some(team_id) = team_id {
+            if !self
+                .repo
+                .user_has_team(caller.clone(), team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+            {
+                return Err(BotError::Unauthorized);
+            }
+            return Ok(BotOwner::Team { team_id });
+        }
+
+        Ok(BotOwner::User {
+            user_id: caller.as_ref().to_string(),
+        })
+    }
+
+    /// Ensure the resolved agent owner may run agents on a registered harness.
+    ///
+    /// A team agent must run on its own team's harness - never on a private
+    /// one, so a teammate's mention can never execute on a machine only one
+    /// person controls. A private agent may run on the caller's own harness
+    /// or on a team harness of a team the caller belongs to.
+    async fn ensure_harness_usable(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        owner: &BotOwner,
+        harness_id: Option<HarnessId>,
+        auto_accept_permissions: Option<bool>,
+    ) -> Result<(), BotError> {
+        let Some(harness_id) = harness_id else {
+            return Ok(());
+        };
+        let harness_owner = self
+            .repo
+            .get_harness_facts(harness_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::BadRequest("unknown harness".to_string()))?;
+
+        validate_permission_bypass(
+            harness_owner.allow_permission_bypass,
+            auto_accept_permissions,
+        )?;
+        let usable = match (owner, harness_owner.owner) {
+            (
+                BotOwner::Team { team_id },
+                HarnessOwner::Team {
+                    team_id: harness_team,
+                },
+            ) => *team_id == harness_team,
+            (BotOwner::Team { .. }, HarnessOwner::User { .. }) => false,
+            (
+                BotOwner::User { user_id },
+                HarnessOwner::User {
+                    user_id: harness_user,
+                },
+            ) => *user_id == harness_user,
+            (
+                BotOwner::User { .. },
+                HarnessOwner::Team {
+                    team_id: harness_team,
+                },
+            ) => self
+                .repo
+                .user_has_team(caller, harness_team)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?,
+        };
+        if !usable {
+            return Err(BotError::Unauthorized);
+        }
+        Ok(())
+    }
+
+    async fn owner_for_agent_update(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        current: &Bot,
+        requested_team_id: Option<Uuid>,
+    ) -> Result<BotOwner, BotError> {
+        match (current.owner.as_ref(), requested_team_id) {
+            (Some(BotOwner::User { .. }), team_id) => {
+                self.agent_owner_for_request(caller, team_id).await
+            }
+            (
+                Some(BotOwner::Team {
+                    team_id: current_team_id,
+                }),
+                Some(requested_team_id),
+            ) if *current_team_id == requested_team_id => Ok(BotOwner::Team {
+                team_id: requested_team_id,
+            }),
+            (Some(BotOwner::Team { .. }), None)
+                if current.created_by.as_deref() == Some(caller.as_ref()) =>
+            {
+                Ok(BotOwner::User {
+                    user_id: caller.as_ref().to_string(),
+                })
+            }
+            _ => Err(BotError::Unauthorized),
+        }
     }
 
     async fn ensure_manageable(
@@ -125,6 +431,64 @@ where
         }
     }
 
+    /// Replace a manageable agent's configuration with `req`, `current` being
+    /// the bot [`Self::ensure_manageable`] returned for it.
+    async fn replace_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        current: &Bot,
+        req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        validate_update_agent_request(&req)?;
+        if req.channel_scope == AgentChannelScope::Selected
+            && !self
+                .repo
+                .user_has_channels(caller.clone(), &req.channel_ids)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
+
+        let owner = self
+            .owner_for_agent_update(caller.clone(), current, req.team_id)
+            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
+        let requested_name = req.name.clone();
+        let requested_handle = req.handle.clone();
+        let requested_description = req.description.clone();
+        let requested_avatar_url = req.avatar_url.clone();
+        let agent = self
+            .repo
+            .update_agent(current.id, owner, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+
+        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
+            bot_id: agent.bot.id,
+            owner: agent
+                .bot
+                .owner
+                .clone()
+                .expect("owned agent bot must have an owner"),
+            actor_user_id: caller,
+            name: Some(requested_name),
+            handle: Some(requested_handle),
+            description: requested_description,
+            avatar_url: requested_avatar_url,
+            updated_at: agent.bot.updated_at,
+        }));
+
+        Ok(agent)
+    }
+
     async fn authenticate_candidate(
         &self,
         candidate: Option<BotTokenCandidate>,
@@ -150,11 +514,123 @@ where
     }
 }
 
-impl<R, B> BotService for BotServiceImpl<R, B>
+impl<R, B, C> BotService for BotServiceImpl<R, B, C>
 where
     R: BotRepo,
     B: MacroEventBroker + Clone,
+    C: McpAppCatalog,
 {
+    async fn create_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        validate_agent_request(&req)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, &[]).await?;
+        if req.channel_scope == AgentChannelScope::Selected
+            && !self
+                .repo
+                .user_has_channels(caller.clone(), &req.channel_ids)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
+
+        let owner = self
+            .agent_owner_for_request(caller.clone(), req.team_id)
+            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
+        let created_by_user_id = caller.clone();
+        let agent = self
+            .repo
+            .create_agent(owner, caller, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+
+        self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
+            bot_id: agent.bot.id,
+            kind: agent.bot.kind,
+            owner: agent
+                .bot
+                .owner
+                .clone()
+                .expect("owned agent bot must have an owner"),
+            name: agent.bot.name.clone(),
+            handle: agent.bot.handle.clone(),
+            description: agent.bot.description.clone(),
+            avatar_url: agent.bot.avatar_url.clone(),
+            created_by_user_id,
+            channel_id: None,
+            created_at: agent.bot.created_at,
+        }));
+
+        Ok(agent)
+    }
+
+    async fn update_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        let current = self.ensure_manageable(caller.clone(), bot_id).await?;
+        let existing = self
+            .repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        validate_update_agent_request(&req)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
+        self.replace_agent(caller, &current, req).await
+    }
+
+    async fn manageable_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        self.ensure_manageable(caller, bot_id).await?;
+        self.repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))
+    }
+
+    async fn patch_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchAgentRequest,
+    ) -> Result<Agent, BotError> {
+        let current = self.ensure_manageable(caller.clone(), bot_id).await?;
+        let agent = self
+            .repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        let update = req.apply_to(&agent);
+        validate_update_agent_request(&update)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;
+        self.replace_agent(caller, &current, update).await
+    }
+
+    async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        self.repo
+            .list_manageable_agents(caller)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))
+    }
+
     async fn create_bot(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -198,10 +674,16 @@ where
         let generated_token = tokens::generate_token();
         let (bot, token) = self
             .repo
-            .create_channel_scoped_bot(owner, caller, channel_id, generated_token, req)
+            .create_channel_scoped_bot(
+                owner,
+                caller,
+                channel_id,
+                HashedBotToken::from_raw(&generated_token),
+                req,
+            )
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        let bot_token = token.token.clone();
+        let bot_token = generated_token;
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: bot.id,
@@ -236,6 +718,29 @@ where
         bot_id: BotId,
     ) -> Result<Bot, BotError> {
         self.ensure_manageable(caller, bot_id).await
+    }
+
+    async fn get_owner_profiles(&self, ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        if ids.len() > MAX_BOT_OWNER_PROFILE_IDS {
+            return Err(BotError::BadRequest(format!(
+                "at most {MAX_BOT_OWNER_PROFILE_IDS} bot profile ids may be requested"
+            )));
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let found = self
+            .repo
+            .get_owner_profiles(ids)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        let mut seen = std::collections::HashSet::new();
+        Ok(ids
+            .iter()
+            .filter(|id| seen.insert(**id))
+            .filter_map(|id| found.get(id).cloned())
+            .collect())
     }
 
     async fn get_self(&self, bot_id: BotId) -> Result<Bot, BotError> {
@@ -288,6 +793,21 @@ where
         bot_id: BotId,
     ) -> Result<(), BotError> {
         let bot = self.ensure_manageable(caller.clone(), bot_id).await?;
+        if let Some(BotOwner::Team { team_id }) = &bot.owner
+            && bot.created_by.as_deref() != Some(caller.as_ref())
+        {
+            let allowed = if bot.has_agent {
+                self.repo
+                    .user_can_administer_team(caller.clone(), *team_id)
+                    .await
+            } else {
+                self.repo.user_owns_team(caller.clone(), *team_id).await
+            }
+            .map_err(|err| BotError::Repo(err.into()))?;
+            if !allowed {
+                return Err(BotError::Unauthorized);
+            }
+        }
         if !self
             .repo
             .delete_bot(bot_id)
@@ -308,10 +828,20 @@ where
 
     async fn add_bot_to_channel(
         &self,
-        caller: MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         bot_id: BotId,
     ) -> Result<(), BotError> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(BotError::BadRequest(
+                "channel access receipt required".to_string(),
+            ));
+        }
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| BotError::BadRequest(error.to_string()))?;
+        let caller = access
+            .get_authenticated_user()
+            .cloned()
+            .map_err(|_| BotError::Unauthorized)?;
         self.ensure_manageable(caller, bot_id).await?;
         self.repo
             .add_bot_to_channel(channel_id, bot_id)
@@ -376,14 +906,13 @@ where
         let generated_token = tokens::generate_token();
         let token = self
             .repo
-            .create_token(bot_id, generated_token, req)
+            .create_token(bot_id, HashedBotToken::from_raw(&generated_token), req)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        let bearer_token = token.token.clone();
 
         Ok(super::models::CreateBotTokenResponse {
             token,
-            bearer_token,
+            bearer_token: generated_token,
         })
     }
 
@@ -419,9 +948,11 @@ where
     }
 
     async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+        // A direct agent conversation is answered the same as a channel the
+        // bot is not in, so the answer does not tell which channels are one.
         if self
             .repo
-            .bot_active_in_channel(channel_id, bot_id)
+            .bot_may_post_in_channel(channel_id, bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {
@@ -429,6 +960,26 @@ where
         } else {
             Err(BotError::Unauthorized)
         }
+    }
+
+    async fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
+        self.ensure_bot_in_channel(bot_id, channel_id).await?;
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            BotReceiptScope::Channel { channel_id },
+            Entity {
+                entity_id: channel_id.to_string(),
+                entity_type: EntityType::Channel,
+            },
+            EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
+        )
+        .map_err(|_| BotError::Unauthorized)
     }
 
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {
@@ -453,3 +1004,41 @@ where
         Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 }
+
+/// Refuse a selected MCP app Pipedream does not list.
+///
+/// Slugs already stored on the agent are left alone, so editing instructions
+/// does not depend on the directory staying reachable. A newly named slug
+/// that the directory rejects is a bad request; a directory that cannot be
+/// asked fails the write rather than storing the slug unverified.
+async fn reject_unknown_mcp_apps<C: McpAppCatalog>(
+    catalog: &C,
+    mcp: &AgentMcpServers,
+    already: &[AgentMcpServer],
+) -> Result<(), BotError> {
+    for server in mcp.servers() {
+        if already.iter().any(|kept| kept.app_slug == server.app_slug) {
+            continue;
+        }
+        if !catalog.is_connectable_app(&server.app_slug).await? {
+            return Err(BotError::BadRequest(format!(
+                "MCP server slug {:?} is not a Pipedream app",
+                server.app_slug
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// A persona cannot override its harness operator's permission policy.
+fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<(), BotError> {
+    if requested == Some(true) && !allowed {
+        return Err(BotError::BadRequest(
+            "this harness requires permission prompts".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test;

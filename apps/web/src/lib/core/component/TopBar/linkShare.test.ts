@@ -2,11 +2,51 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLinkSharePayload,
   buildLinkShareScopePayload,
+  buildTeamSharePayload,
   getLinkShareScope,
   getLinkShareScopeCopy,
+  getShareItemNoun,
   getShareStatus,
+  getTeamShareScope,
+  isTeamShareSupportedForItem,
   LINK_SHARE_SCOPE_OPTIONS,
+  TEAM_SHARE_SCOPE_OPTIONS,
+  teamShareScopeOptionsForItem,
 } from './linkShare';
+
+describe('isTeamShareSupportedForItem', () => {
+  it.each([
+    'document',
+    'chat',
+    'call',
+    'project',
+    'agent_session',
+    'initiative',
+  ] as const)('supports %s', (itemType) => {
+    expect(isTeamShareSupportedForItem(itemType)).toBe(true);
+  });
+
+  it.each(['email'] as const)(
+    'does not offer team access for %s',
+    (itemType) => {
+      expect(isTeamShareSupportedForItem(itemType)).toBe(false);
+    }
+  );
+});
+
+describe('getShareItemNoun', () => {
+  it.each([
+    ['document', 'document'],
+    ['chat', 'chat'],
+    ['call', 'call'],
+    ['email', 'email thread'],
+    ['agent_session', 'agent session'],
+    ['project', 'folder'],
+    ['initiative', 'project'],
+  ] as const)('names %s as "%s"', (itemType, noun) => {
+    expect(getShareItemNoun(itemType)).toBe(noun);
+  });
+});
 
 describe('getLinkShareScope', () => {
   it.each([null, undefined])('maps %s to NONE', (linkShare) => {
@@ -63,16 +103,16 @@ describe('buildLinkShareScopePayload', () => {
 describe('link share copy', () => {
   it('provides None, Public, and Team selector options', () => {
     expect(LINK_SHARE_SCOPE_OPTIONS).toEqual([
-      { value: 'NONE', label: 'None' },
-      { value: 'PUBLIC', label: 'Public' },
-      { value: 'TEAM', label: 'Team' },
+      { value: 'NONE', label: 'Only people with access' },
+      { value: 'PUBLIC', label: 'Anyone with the link' },
+      { value: 'TEAM', label: 'Team members with the link' },
     ]);
   });
 
   it('explains public links', () => {
     expect(getLinkShareScopeCopy('PUBLIC')).toEqual({
-      label: 'Public',
-      title: 'Public link',
+      label: 'Anyone with the link',
+      title: 'Anyone with the link',
       description: 'Anyone with the link can access this item.',
     });
   });
@@ -80,11 +120,62 @@ describe('link share copy', () => {
   it('distinguishes team links from explicit team or channel sharing', () => {
     const copy = getLinkShareScopeCopy('TEAM');
 
-    expect(copy.title).toBe('Team link');
+    expect(copy.title).toBe('Team members with the link');
     expect(copy.description).toContain("Members of the owner's team");
-    expect(copy.description).toContain(
-      'does not share it directly with a team or channel'
-    );
+    expect(copy.description).toContain('Others need to be added separately');
+  });
+});
+
+describe('team share payload', () => {
+  it('lists None plus the allowed team levels', () => {
+    expect(TEAM_SHARE_SCOPE_OPTIONS).toEqual([
+      { value: 'NONE', label: 'No team access' },
+      { value: 'view', label: 'Can view' },
+      { value: 'comment', label: 'Can comment' },
+      { value: 'edit', label: 'Can edit' },
+    ]);
+  });
+
+  it('limits calls to None and View', () => {
+    expect(teamShareScopeOptionsForItem('call')).toEqual([
+      { value: 'NONE', label: 'No team access' },
+      { value: 'view', label: 'Can view' },
+    ]);
+    expect(teamShareScopeOptionsForItem('document')).toEqual([
+      { value: 'NONE', label: 'No team access' },
+      { value: 'view', label: 'Can view' },
+      { value: 'comment', label: 'Can comment' },
+      { value: 'edit', label: 'Can edit' },
+    ]);
+    expect(teamShareScopeOptionsForItem('project')).toEqual([
+      { value: 'NONE', label: 'No team access' },
+      { value: 'view', label: 'Can view' },
+      { value: 'comment', label: 'Can comment' },
+      { value: 'edit', label: 'Can edit' },
+    ]);
+  });
+
+  it.each([undefined, null, 'owner'] as const)(
+    'treats %s as no explicit team share',
+    (level) => {
+      expect(getTeamShareScope(level)).toBe('NONE');
+    }
+  );
+
+  it.each(['view', 'comment', 'edit'] as const)(
+    'preserves explicit %s team access',
+    (level) => {
+      expect(getTeamShareScope(level)).toBe(level);
+      expect(buildTeamSharePayload(level)).toEqual({
+        teamShareAccessLevel: level,
+      });
+    }
+  );
+
+  it('clears team sharing with an explicit null', () => {
+    expect(buildTeamSharePayload('NONE')).toEqual({
+      teamShareAccessLevel: null,
+    });
   });
 });
 
@@ -108,4 +199,12 @@ describe('getShareStatus', () => {
       getLinkShareScopeCopy('TEAM').description
     );
   });
+});
+
+it('reports default team sharing instead of claiming the project is private', () => {
+  expect(getShareStatus(null, false, 'view')).toEqual({
+    label: 'Team',
+    tooltip: "Shared directly with the owner's team.",
+  });
+  expect(getShareStatus('PUBLIC', false, 'view').label).toBe('Public');
 });

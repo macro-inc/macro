@@ -6,29 +6,42 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+/// User-scoped accessible folders query for the Drive sidebar.
+mod folders;
 /// GraphQL inputs and conversion into Soup domain requests.
 mod inputs;
 /// DataLoader-backed hydration for realtime Soup patches.
 mod loaders;
+/// Primary-backed email snapshots used only for mutation replies.
+mod mutation_thread;
 /// GraphQL objects representing Soup pages and entities.
 mod objects;
 /// Top-level Soup query resolver.
 mod resolvers;
 
+pub use folders::{
+    FoldersQuery, FoldersQueryError, FoldersQueryReader, NoOpFoldersQueryReader, resolve_folders,
+};
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use loaders::{
-    EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader, SoupItemLoader,
-    SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
+    AgentSessionEntityLoader, EntityAccessEmailThreadReader, PrimarySoupItemLoader,
+    SoupEmailThreadReader, SoupItemDataLoader, SoupItemLoader, SoupItemLoaderError,
+    SoupItemLoaderKey, soup_item_loader, soup_item_loader_with_team_access,
+};
+pub use mutation_thread::{
+    EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,
 };
 pub use objects::{
-    GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
-    GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupDocument,
-    GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
-    GraphqlSoupForeignEntity, GraphqlSoupProject, GroupedSoup, SoupEntityEdges, SoupPage,
+    GraphqlReminderScheduleType, GraphqlSoupAgentSession, GraphqlSoupBin, GraphqlSoupCall,
+    GraphqlSoupChannel, GraphqlSoupChannelMessage, GraphqlSoupChannelMessagePreview,
+    GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupCrmContact, GraphqlSoupDatabaseRow,
+    GraphqlSoupDocument, GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
+    GraphqlSoupForeignEntity, GraphqlSoupInitiative, GraphqlSoupProject, GraphqlSoupReminder,
+    GraphqlSoupReminderReference, GroupedSoup, SoupCacheProjection, SoupEntityEdges, SoupPage,
     SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
-    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread,
-    resolve_soup_updates,
+    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
+    resolve_soup_email_thread, resolve_soup_entity, resolve_soup_updates,
 };

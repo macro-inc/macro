@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT entity_type, entity_id, count(*)::bigint AS \"n!\"\n            FROM activity_events\n            WHERE subject_id = $2\n              AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)\n                               - INTERVAL '26 hours'\n              AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)\n              AND (occurred_at AT TIME ZONE $1)::date >= $3::date\n              AND (occurred_at AT TIME ZONE $1)::date <  $4::date\n              AND entity_type = ANY($5::text[])\n            GROUP BY 1, 2\n            ORDER BY count(*) DESC, entity_type ASC, entity_id ASC\n            LIMIT $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "n!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "5c3341265fb2a05418e502d92e81ca02d2c51f7e6b1f2b10db9eb21a21163501"
+}

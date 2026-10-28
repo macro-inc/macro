@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentAction } from './agentAction';
+import type { ControlRequestAllOf } from './controlRequestAllOf';
 
 /**
  * Request body for a control operation on a live session.
@@ -16,4 +17,4 @@ credentials, so that a caller cannot attribute an operation to someone else.
 
 Clients serialize this, so both derives are used.
  */
-export type ControlRequest = AgentAction;
+export type ControlRequest = AgentAction & ControlRequestAllOf;

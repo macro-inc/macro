@@ -51,11 +51,15 @@ where
             return Ok(None);
         }
 
-        if manifest.min_native_build > native_build {
+        let Some(min_native_build) = manifest.minimum_for(target) else {
+            return Ok(None);
+        };
+
+        if min_native_build > native_build {
             return Ok(Some(BundleAction::NativeUpdateRequired(
                 BundleNativeUpdateRequired {
                     bundle_build: manifest.bundle_build,
-                    min_native_build: manifest.min_native_build,
+                    min_native_build,
                 },
             )));
         }
@@ -73,7 +77,7 @@ where
             .await?;
         Ok(Some(BundleAction::Update(BundleUpdate {
             bundle_build: manifest.bundle_build,
-            min_native_build: manifest.min_native_build,
+            min_native_build,
             notes: None,
             url: self.bundle_fetcher.get_app_bundle_path(),
             checksum,

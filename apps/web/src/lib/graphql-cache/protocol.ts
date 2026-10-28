@@ -1,3 +1,12 @@
+/** Explicit local entities resolved atomically from a committed mutation response. */
+export type IdentityBindingWire = {
+  deleteRecord?: boolean;
+  localKey: string;
+  responsePath: string[];
+  referenceFields?: string[];
+  revalidationVariables?: string[];
+};
+
 import type { EntityResolverWire } from './exchange/entity-resolvers';
 
 /**
@@ -13,6 +22,53 @@ import type { EntityResolverWire } from './exchange/entity-resolvers';
  */
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
+
+/** Paths come from the schema-aware engine projection, including aliases. */
+export type QueryFieldPatch = { path: (string | number)[]; value: unknown };
+export type QueryUpdate =
+  | { kind: 'hit'; data: unknown; revision: CacheRevision }
+  | { kind: 'patch'; patches: QueryFieldPatch[]; revision: CacheRevision }
+  | { kind: 'miss'; revision: CacheRevision }
+  | { kind: 'unsupported' };
+
+/** Opaque in-memory revision of one live cache engine generation. */
+export type CacheRevision = string & {
+  readonly __cacheRevision: unique symbol;
+};
+
+const MAX_CACHE_REVISION = 18_446_744_073_709_551_615n;
+
+/** Validates the canonical unsigned-decimal Rust `u64` wire representation. */
+export function isCacheRevision(value: unknown): value is CacheRevision {
+  return (
+    typeof value === 'string' &&
+    /^(0|[1-9][0-9]*)$/.test(value) &&
+    BigInt(value) <= MAX_CACHE_REVISION
+  );
+}
+
+/** Parses an untrusted cache revision at protocol ingress. */
+export function parseCacheRevision(value: unknown): CacheRevision {
+  if (!isCacheRevision(value)) {
+    throw new TypeError('invalid cache revision');
+  }
+  return value;
+}
+
+export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
+
+/** Validates the durable database-generation UUID shared by cache hosts. */
+export function parseStorageGeneration(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      value
+    )
+  ) {
+    throw new TypeError('invalid cache storage generation');
+  }
+  return value;
+}
 
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
@@ -51,18 +107,168 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
-/** Exact initial-page request over the canonical GraphQL Soup filter input. */
+/** Maximum server-page membership evidence in one reconciliation request. */
+export const MAX_RECONCILIATION_BASELINE = 5_000;
+
+/** Initial-page candidates, optionally reconciled with same-query server pages. */
 export type EntityFilterCacheArgs = {
+  /** Opt into an engine-maintained fragment view and incremental results. */
+  liveQuery?: {
+    id: string;
+    document: string;
+    fragmentName: string;
+    since?: CacheRevision;
+    release?: boolean;
+  };
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
   sortDirection: 'ASC' | 'DESC';
   limit: number;
+  /** Omit for exact evaluation; even an empty array requests reconciliation. */
+  baseline?: Array<{ key: string; sortTimestamp: string }>;
+  /** Explicit cached-Mail pagination, independent of server cursors. */
+  mail?: {
+    view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT';
+    /** Continue after this row. Valid across writes; not with `through`. */
+    cursor?: string;
+    /** A page's `endCursor`: read from the top through that row instead of `limit` rows. */
+    through?: string;
+  };
 };
 
 export type EntityFilterCacheResult =
-  | { kind: 'complete'; keys: string[]; optimistic: boolean }
+  | LiveQueryUpdate
+  | {
+      kind: 'mail-page';
+      revision: CacheRevision;
+      keys: string[];
+      /** View-correct timestamps aligned with keys, independent of cached previews. */
+      sortTimestamps: string[];
+      nextCursor: string | null;
+      /** Position of the last row. Absent from native engines that predate `through`. */
+      endCursor?: string | null;
+      optimistic: boolean;
+    }
+  /** The cursor's engine generation or query changed; on native engines that predate `through`, any write. */
+  | { kind: 'stale-cursor'; revision: CacheRevision }
+  | {
+      kind: 'reconciled';
+      revision: CacheRevision;
+      keys: string[];
+      /** Survivors backed only by previous server membership evidence. */
+      retainedKeys: string[];
+      optimistic: boolean;
+    }
+  | {
+      kind: 'complete';
+      revision: CacheRevision;
+      keys: string[];
+      optimistic: boolean;
+    }
   | { kind: 'unsupported' }
-  | { kind: 'incomplete' };
+  | { kind: 'incomplete'; revision: CacheRevision };
+
+export type LiveQueryUpdate = {
+  kind: 'live-query';
+  revision: CacheRevision;
+  reset: boolean;
+  /** Omitted when the existing order remains valid. */
+  keys?: string[];
+  upserts: SelectedRecordByKeyWire[];
+  patches: Array<{
+    recordKey: string;
+    fields: Array<{ path: Array<string | number>; value: unknown }>;
+    identity: { mutationUuid: string | null; pending: boolean };
+  }>;
+  removed: string[];
+  retainedKeys: string[];
+  optimistic: boolean;
+};
+
+/** Unit of a calendar span: UTC milliseconds, or local days since 1970-01-01. */
+export type CalendarSpanKind = 'timed' | 'allDay';
+
+/** Half-open `[start, end)` calendar span. */
+export type CalendarSpanWire = {
+  kind: CalendarSpanKind;
+  start: number;
+  end: number;
+};
+
+/** Applied change-log position of one email link; `seq` is a decimal i64. */
+export type CalendarLinkWatermarkWire = { linkId: string; seq: string };
+
+export type CalendarFreshness = 'fresh' | 'stale' | 'unknown';
+
+/**
+ * One calendar viewport over both span kinds. Empty spans read only the sync
+ * state (freshness and watermark).
+ */
+export type CalendarRangeCacheArgs = {
+  startMs: number;
+  endMs: number;
+  startDay: number;
+  endDay: number;
+  /** Restricts occurrences to one `GraphqlCalendarEvent:{id}` key. */
+  eventKey?: string;
+};
+
+export type CalendarRangeCacheResult =
+  | {
+      kind: 'range';
+      revision: CacheRevision;
+      /** `GraphqlCalendarOccurrence` keys ordered by kind, start, and key. */
+      occurrenceKeys: string[];
+      /** Requested spans never fetched from the server. */
+      gaps: CalendarSpanWire[];
+      freshness: CalendarFreshness;
+      /** Events whose occurrence set is unknown until a pending mutation settles. */
+      uncertainEventKeys: string[];
+      /** Whether a pending optimistic mutation shaped this result. */
+      optimistic: boolean;
+      /** Null until a commit carries a watermark. */
+      watermark: CalendarLinkWatermarkWire[] | null;
+    }
+  /** The native host predates calendar ranges; read calendars from the network. */
+  | { kind: 'unsupported' };
+
+/**
+ * `merge` lowers each link to a page's pre-read watermark; `advance` moves
+ * links still at `since` to the delta's `to` and keeps concurrent lowerings.
+ */
+export type CalendarWatermarkUpdateWire =
+  | { kind: 'merge'; links: CalendarLinkWatermarkWire[] }
+  | {
+      kind: 'advance';
+      since: CalendarLinkWatermarkWire[];
+      to: CalendarLinkWatermarkWire[];
+    };
+
+/** One atomic change to calendar coverage, cached calendar records, and sync state. */
+export type CalendarCommitArgs = {
+  /** Spans whose occurrences were fully fetched and written. */
+  coverage?: CalendarSpanWire[];
+  /** Events whose cached occurrences outside `occurrenceKeys` are deleted. */
+  replacedEvents?: Array<{ eventKey: string; occurrenceKeys: string[] }>;
+  /** Events deleted with every cached occurrence. */
+  deletedEventKeys?: string[];
+  deletedCalendarKeys?: string[];
+  /** Links no longer visible: their occurrences, events, and calendars are deleted. */
+  removedLinkIds?: string[];
+  watermark?: CalendarWatermarkUpdateWire;
+  freshness?: 'fresh' | 'stale';
+  /** Deletes every cached occurrence, event, coverage span, and the watermark first. */
+  reset?: boolean;
+};
+
+export type CalendarCommitCacheResult =
+  | {
+      kind: 'committed';
+      revision: CacheRevision;
+      /** Records the commit deleted. */
+      changed: string[];
+    }
+  | { kind: 'unsupported' };
 
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
@@ -74,11 +280,28 @@ export type ReadRecordsByKeysArgs = {
 };
 
 export type SelectedRecordByKeyWire = {
+  identity?: { mutationUuid: string | null; pending: boolean };
   recordKey: string;
   record: unknown;
 };
 
+export type ReadRecordsByKeysResult = {
+  revision: CacheRevision;
+  records: SelectedRecordByKeyWire[];
+};
+
+export type AffectedOperationsResult = {
+  revision: CacheRevision;
+  affectedOps: string[];
+};
+
+export type CacheRevisionResult = {
+  revision: CacheRevision;
+};
+
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+/** The most rows a Mail read `through` a position returns, as the engine caps it. */
+export const MAX_MAIL_THROUGH_ROWS = 5_000;
 export const MAX_CACHE_SEARCH_QUERY_BYTES = 512;
 export const MAX_NORMALIZED_RECORD_KEY_LENGTH = 1024;
 
@@ -144,6 +367,118 @@ export function isValidCacheSearchCursor(
   );
 }
 
+const hasOnlyCalendarKeys = (
+  value: Record<string, unknown>,
+  keys: readonly string[]
+): boolean => Object.keys(value).every((key) => keys.includes(key));
+
+const isCalendarSpanWire = (value: unknown): value is CalendarSpanWire =>
+  isRecord(value) &&
+  hasOnlyCalendarKeys(value, ['kind', 'start', 'end']) &&
+  (value.kind === 'timed' || value.kind === 'allDay') &&
+  Number.isSafeInteger(value.start) &&
+  Number.isSafeInteger(value.end);
+
+const isCalendarWatermarkWire = (
+  value: unknown
+): value is CalendarLinkWatermarkWire[] =>
+  Array.isArray(value) &&
+  value.every(
+    (link) =>
+      isRecord(link) &&
+      hasOnlyCalendarKeys(link, ['linkId', 'seq']) &&
+      typeof link.linkId === 'string' &&
+      link.linkId.length > 0 &&
+      typeof link.seq === 'string' &&
+      /^[0-9]{1,19}$/.test(link.seq)
+  );
+
+const isOptionalWireArray = (
+  value: unknown,
+  item: (entry: unknown) => boolean
+): boolean =>
+  value === undefined || (Array.isArray(value) && value.every(item));
+
+const isCalendarWatermarkUpdateWire = (value: unknown): boolean =>
+  isRecord(value) &&
+  ((value.kind === 'merge' &&
+    hasOnlyCalendarKeys(value, ['kind', 'links']) &&
+    isCalendarWatermarkWire(value.links)) ||
+    (value.kind === 'advance' &&
+      hasOnlyCalendarKeys(value, ['kind', 'since', 'to']) &&
+      isCalendarWatermarkWire(value.since) &&
+      isCalendarWatermarkWire(value.to)));
+
+/** Non-throwing calendar range validation for wire ingress. */
+export function isValidCalendarRangeArgs(
+  value: unknown
+): value is CalendarRangeCacheArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'startMs',
+      'endMs',
+      'startDay',
+      'endDay',
+      'eventKey',
+    ]) &&
+    Number.isSafeInteger(value.startMs) &&
+    Number.isSafeInteger(value.endMs) &&
+    Number.isSafeInteger(value.startDay) &&
+    Number.isSafeInteger(value.endDay) &&
+    (value.startMs as number) <= (value.endMs as number) &&
+    (value.startDay as number) <= (value.endDay as number) &&
+    (value.eventKey === undefined || isValidNormalizedRecordKey(value.eventKey))
+  );
+}
+
+/**
+ * Non-throwing calendar commit shape validation for wire ingress. The engine
+ * still validates typenames, duplicates, and size bounds.
+ */
+export function isValidCalendarCommitArgs(
+  value: unknown
+): value is CalendarCommitArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'coverage',
+      'replacedEvents',
+      'deletedEventKeys',
+      'deletedCalendarKeys',
+      'removedLinkIds',
+      'watermark',
+      'freshness',
+      'reset',
+    ]) &&
+    isOptionalWireArray(value.coverage, isCalendarSpanWire) &&
+    isOptionalWireArray(
+      value.replacedEvents,
+      (event) =>
+        isRecord(event) &&
+        hasOnlyCalendarKeys(event, ['eventKey', 'occurrenceKeys']) &&
+        isValidNormalizedRecordKey(event.eventKey) &&
+        Array.isArray(event.occurrenceKeys) &&
+        event.occurrenceKeys.every(isValidNormalizedRecordKey)
+    ) &&
+    isOptionalWireArray(value.deletedEventKeys, isValidNormalizedRecordKey) &&
+    isOptionalWireArray(
+      value.deletedCalendarKeys,
+      isValidNormalizedRecordKey
+    ) &&
+    isOptionalWireArray(
+      value.removedLinkIds,
+      (linkId) => typeof linkId === 'string' && linkId.length > 0
+    ) &&
+    (value.watermark === undefined ||
+      isCalendarWatermarkUpdateWire(value.watermark)) &&
+    (value.freshness === undefined ||
+      value.freshness === 'fresh' ||
+      value.freshness === 'stale') &&
+    (value.reset === undefined || typeof value.reset === 'boolean')
+  );
+}
+
 export function validateRecordSelectionKeys(keys: string[]): string[] {
   if (keys.length > MAX_RECORD_SELECTION_PAGE_SIZE) {
     throw new RangeError(
@@ -196,6 +531,8 @@ export function validateCacheSearchArgs(
 export type QueryRevalidationWire = {
   query: string;
   operationName?: string;
+  /** Run only if the mutation's relation recipes could not all be applied. */
+  onlyOnLinkFailure?: boolean;
   /** Canonical JSON object, kept as text in the durable queue. */
   variablesJson: string;
 };
@@ -210,9 +547,11 @@ export type EmbeddedLinkPathSegment =
     };
 
 export type OptimisticLinkPatchWire = {
-  /** Generated GraphQL operation used as the typed graph entrypoint. */
+  /** Generated query, or fragment document when recordRoot is present. */
   query: string;
   operationName?: string;
+  /** Explicit normalized parent; absent for legacy query-rooted recipes. */
+  recordRoot?: { fragmentName: string; entityKey: string };
   /** Variables for the entrypoint operation. */
   variablesJson: string;
   /** Response-key path beginning at the query root. */
@@ -220,6 +559,12 @@ export type OptimisticLinkPatchWire = {
   operation:
     | { kind: 'remove'; entityKey: string }
     | { kind: 'prependUnique'; entityKey: string }
+    | {
+        kind: 'upsertByField';
+        entityKey: string;
+        whereField: string;
+        equals: string | number | boolean | null;
+      }
     | {
         kind: 'removeEmbeddedLink';
         listItem: {
@@ -253,11 +598,35 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
   value?: unknown;
 };
 
-export type HydrationResult =
-  | { kind: 'data'; data: unknown }
-  | { kind: 'void' };
+/** Missing metadata means unknown (older runtimes); [] proves no search change. */
+export type HydrationSearchChanges = {
+  searchChangedBuckets?: string[];
+};
 
-export type WriteResult = {
+export type HydrationResult = HydrationSearchChanges &
+  (
+    | { kind: 'data'; data: unknown; revision: CacheRevision }
+    | { kind: 'void'; revision: CacheRevision }
+  );
+
+export type RecordFieldChange =
+  | {
+      kind: 'fields';
+      key: string;
+      fields: Record<string, string | number | boolean | null>;
+    }
+  | { kind: 'invalidate'; key: string };
+
+export type WriteResult = HydrationSearchChanges & {
+  /** Effective view changes. Missing metadata requires a conservative reread. */
+  fieldChanges?: RecordFieldChange[];
+  /** Bindings omitted while committing an otherwise normalizable response. */
+  identityErrors?: string[];
+  mutationUuid?: string;
+  /** Effective-view revision installed by this logical mutation. */
+  revision: CacheRevision;
+  /** Whether this write advanced `revision`. */
+  revisionAdvanced: boolean;
   /** Entity keys whose records changed. */
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */
@@ -268,7 +637,7 @@ export type WriteResult = {
    * then contains every registered operation except the origin.
    */
   reset: boolean;
-  /** Present on successful optimistic settlement; empty otherwise. */
+  /** Recovery queries for terminal settlement; skip superseded outcomes. */
   revalidations?: QueryRevalidationWire[];
 };
 
@@ -282,9 +651,33 @@ export type OptimisticWriteResult = WriteResult & {
   transactionId: string;
 };
 
+/** How a caller UUID changed the durable queue. */
+export type MutationUpsertKind =
+  | { kind: 'inserted' }
+  | { kind: 'replaced-pending'; removedTransactionId: string }
+  | { kind: 'appended-after-active'; activeTransactionId: string };
+
+/** Read-only request snapshot; never contains a settlement lease token. */
+export type MutationInspection = Pick<
+  ClaimedMutation,
+  | 'transactionId'
+  | 'uuid'
+  | 'superseded'
+  | 'query'
+  | 'operationName'
+  | 'variables'
+  | 'clientMetadata'
+  | 'enqueuedAtMs'
+> & { optimisticData: unknown };
+
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
+  clientMetadata?: Record<string, unknown> | null;
   transactionId: string;
+  uuid: string;
+  superseded: boolean;
+  /** Must recover a server identity before a newer edit/discard can run. */
+  requiresConfirmation: boolean;
   leaseGeneration: string;
   query: string;
   operationName?: string;
@@ -292,6 +685,14 @@ export type ClaimedMutation = {
   /** Identity witness captured at enqueue time. */
   identity?: string;
   attemptCount: number;
+  /** Retryable server failures; transport failures do not consume this budget. */
+  serverFailureCount: number;
+  /**
+   * Durable first-enqueue wall-clock time in epoch ms, kept when a write
+   * replaces an unsent one for the same UUID. Native claims and hosts built
+   * before this field omit it, so it is unknown rather than zero.
+   */
+  enqueuedAtMs?: number;
 };
 
 /** Outcome of the strict-head claim attempted immediately after enqueue. */
@@ -302,6 +703,7 @@ export type InitialMutationClaim =
 
 /** Result returned after enqueue and the initial claim attempt complete. */
 export type EnqueueOptimisticMutationResult = OptimisticWriteResult & {
+  upsertKind: MutationUpsertKind;
   initialClaim: InitialMutationClaim;
 };
 
@@ -311,19 +713,60 @@ export type MutationClaim = {
   generation: string;
 };
 
+/** Result of deferring a retryable attempt. */
+export type DeferOptimisticWriteResult =
+  | { kind: 'deferred' }
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of committing a current or superseded attempt. */
+export type CommitOptimisticWriteResult =
+  | (WriteResult & {
+      kind: 'failed';
+      error: string;
+      replacementTransactionId?: string;
+    })
+  | (WriteResult & { kind: 'committed' })
+  | (WriteResult & {
+      kind: 'committed-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of rolling back a failed attempt. */
+export type RollbackOptimisticWriteResult =
+  | (WriteResult & { kind: 'rolled-back' })
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
 /** Final settlement of a previously queued optimistic mutation. */
-export type MutationSettlement =
+export type MutationSettlement = { mutationUuid?: string } & (
   | { transactionId: string; status: 'committed' }
+  | {
+      transactionId: string;
+      status: 'superseded';
+      replacementTransactionId: string;
+    }
   | {
       transactionId: string;
       status: 'permanently-failed';
       error: string;
-    };
+      errorCode?: string;
+    }
+);
 
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
+  | { kind: 'current-revision' }
+  | { kind: 'current-storage-generation' }
+  | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
+      /** Incremental projection; requires a namespaced operation id. */
+      watch?: { since?: CacheRevision };
       opId?: string;
       query: string;
       operationName?: string;
@@ -352,6 +795,7 @@ export type CacheRequest = { id: number } & (
       identity?: string;
     }
   | {
+      /** Background cache warming; ordinary writes do not publish pushes. */
       kind: 'hydrate';
       query: string;
       operationName?: string;
@@ -363,12 +807,16 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'enqueue-optimistic-mutation';
       originOpId?: string;
+      uuid: string;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
       linkPatches?: OptimisticLinkPatchWire[];
       revalidations?: QueryRevalidationWire[];
+      clientMetadata?: Record<string, unknown>;
+      identityBindings?: IdentityBindingWire[];
+      uncertainCalendarEventKeys?: string[];
       createdAtMs: number;
       owner: string;
       nowMs: number;
@@ -387,6 +835,7 @@ export type CacheRequest = { id: number } & (
       leaseGeneration: string;
       nextAttemptAtMs: number;
       error: string;
+      serverFailure?: boolean;
     }
   /** Atomically replace a claimed layer with the real network response. */
   | {
@@ -406,6 +855,7 @@ export type CacheRequest = { id: number } & (
       leaseOwner: string;
       leaseGeneration: string;
       error: string;
+      errorCode?: string;
     }
   | {
       kind: 'read-records-by-keys';
@@ -420,6 +870,15 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'entity-filter';
       request: EntityFilterCacheArgs;
+    }
+  | {
+      kind: 'calendar-range';
+      request: CalendarRangeCacheArgs;
+    }
+  /** Atomically apply calendar coverage, deletions, and sync state. */
+  | {
+      kind: 'calendar-commit';
+      commit: CalendarCommitArgs;
     }
   | {
       kind: 'inspect-query';
@@ -448,13 +907,22 @@ export type CacheRequest = { id: number } & (
 /** Stable machine-readable cache RPC rejection codes. */
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
+  | 'owner-lock-unavailable'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
 export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
   'owner-epoch-lost';
 
-/** An enqueue send was admitted before its unfenced transport became uncertain. */
+/**
+ * Another context holds the database, so this page's cache stays off until
+ * reload: typically another deployed build keeps its owner lock, or a closing
+ * tab's worker still has its files open. The request never reached an engine.
+ */
+export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
+  'owner-lock-unavailable';
+
+/** An admitted enqueue lost its reply and may already be durably queued. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
   'admitted-enqueue-uncertain';
 
@@ -478,8 +946,17 @@ export type CachePush =
       opIds: string[];
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
+      fieldChanges?: RecordFieldChange[];
     }
-  | { kind: 'cache-changed' }
+  | ({
+      kind: 'cache-changed';
+      revision: CacheRevision;
+      reset?: boolean;
+    } & HydrationSearchChanges)
+  | ({
+      kind: 'cache-hydrated';
+      revision: CacheRevision;
+    } & HydrationSearchChanges)
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -502,6 +979,7 @@ export const isCacheResponseErrorCode = (
   value: unknown
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
+  value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -512,7 +990,15 @@ export const isOwnerEpochLostError = (
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
-/** Identifies the host-only uncertainty result for an admitted enqueue send. */
+/** Identifies a request refused because another context holds the database. */
+export const isOwnerLockUnavailableError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+
+/** Identifies an admitted enqueue whose durable outcome is unknown. */
 export const isAdmittedEnqueueUncertainError = (
   value: unknown
 ): value is Error & { errorCode: 'admitted-enqueue-uncertain' } =>
@@ -543,34 +1029,104 @@ export function isCacheResponse(value: unknown): value is CacheResponse {
   );
 }
 
+/** Validates patches before they can be applied to live query objects. */
+export function isRecordFieldChanges(
+  value: unknown
+): value is RecordFieldChange[] {
+  return (
+    Array.isArray(value) &&
+    value.every((change) => {
+      if (!isWireRecord(change) || typeof change.key !== 'string') return false;
+      if (change.kind === 'invalidate')
+        return hasOnlyWireKeys(change, ['kind', 'key']);
+      return (
+        change.kind === 'fields' &&
+        hasOnlyWireKeys(change, ['kind', 'key', 'fields']) &&
+        isWireRecord(change.fields) &&
+        Object.values(change.fields).every(
+          (field) =>
+            field === null ||
+            typeof field === 'string' ||
+            typeof field === 'boolean' ||
+            (typeof field === 'number' && Number.isFinite(field))
+        )
+      );
+    })
+  );
+}
+
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
   switch (value.kind) {
     case 'ops-affected':
       return (
-        hasOnlyWireKeys(value, ['kind', 'opIds', 'keys']) &&
+        hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&
         isWireStringArray(value.opIds) &&
-        isWireStringArray(value.keys)
+        isWireStringArray(value.keys) &&
+        (value.fieldChanges === undefined ||
+          isRecordFieldChanges(value.fieldChanges))
       );
     case 'cache-changed':
-      return hasOnlyWireKeys(value, ['kind']);
+      return (
+        hasOnlyWireKeys(value, [
+          'kind',
+          'revision',
+          'reset',
+          'searchChangedBuckets',
+        ]) &&
+        isCacheRevision(value.revision) &&
+        (value.reset === undefined || typeof value.reset === 'boolean') &&
+        (value.searchChangedBuckets === undefined ||
+          isWireStringArray(value.searchChangedBuckets))
+      );
+    case 'cache-hydrated':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'revision', 'searchChangedBuckets']) &&
+        isCacheRevision(value.revision) &&
+        (value.searchChangedBuckets === undefined ||
+          isWireStringArray(value.searchChangedBuckets))
+      );
     case 'mutation-settled': {
       const settlement = value.settlement;
       if (
         !hasOnlyWireKeys(value, ['kind', 'settlement']) ||
         !isWireRecord(settlement) ||
-        typeof settlement.transactionId !== 'string'
+        typeof settlement.transactionId !== 'string' ||
+        (settlement.mutationUuid !== undefined &&
+          typeof settlement.mutationUuid !== 'string')
       ) {
         return false;
       }
       if (settlement.status === 'committed') {
-        return hasOnlyWireKeys(settlement, ['transactionId', 'status']);
+        return hasOnlyWireKeys(settlement, [
+          'transactionId',
+          'status',
+          'mutationUuid',
+        ]);
+      }
+      if (settlement.status === 'superseded') {
+        return (
+          hasOnlyWireKeys(settlement, [
+            'transactionId',
+            'mutationUuid',
+            'status',
+            'replacementTransactionId',
+          ]) && typeof settlement.replacementTransactionId === 'string'
+        );
       }
       return (
         settlement.status === 'permanently-failed' &&
-        hasOnlyWireKeys(settlement, ['transactionId', 'status', 'error']) &&
-        typeof settlement.error === 'string'
+        hasOnlyWireKeys(settlement, [
+          'transactionId',
+          'mutationUuid',
+          'status',
+          'error',
+          'errorCode',
+        ]) &&
+        typeof settlement.error === 'string' &&
+        (settlement.errorCode === undefined ||
+          typeof settlement.errorCode === 'string')
       );
     }
     default:

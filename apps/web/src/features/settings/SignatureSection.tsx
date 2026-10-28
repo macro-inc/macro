@@ -1,55 +1,24 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import { useEmailSignature } from '@queries/email/link';
-import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
+import {
+  traceSignatureMutation,
+  useImportGmailSignatureMutation,
+  useUpdateEmailSettingsMutation,
+} from '@queries/email/settings';
 import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { Button, ToggleSwitch } from '@ui';
-import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { createSignal } from 'solid-js';
+import { SignatureForm } from './components/signature-form';
 
-// Quill (and its CSS) is heavy and only needed once a signature section is
-// expanded, so load it as its own chunk on demand instead of in the settings
-// bundle.
-const SignatureEditor = lazy(() => import('./SignatureEditor'));
-
-// Unsaved signature drafts and per-inbox expanded state, keyed by link id and
-// held at module scope. The settings panel unmounts the Connected Accounts tab
-// when you switch away (and the links query can recreate an inbox row on
-// refetch); keeping this outside that subtree means tabbing away and back no
-// longer closes the editor or discards unsaved edits.
+// Keep drafts when navigating away from Email settings. Quill loads on demand.
 const [signatureDrafts, setSignatureDrafts] = createSignal<
-  Record<string, string>
+  Record<string, { html: string }>
 >({});
-const [signatureExpanded, setSignatureExpanded] = createSignal<
-  Record<string, boolean>
->({});
-
-/** Whether an inbox's signature editor is expanded (reactive). */
-export function isSignatureExpanded(linkId: string): boolean {
-  return signatureExpanded()[linkId] ?? false;
-}
-
-/** Toggles an inbox's signature editor open/closed. */
-export function toggleSignatureExpanded(linkId: string): void {
-  setSignatureExpanded((prev) => ({
-    ...prev,
-    [linkId]: !isSignatureExpanded(linkId),
-  }));
-}
-
-/**
- * Drops a link's draft + expanded entries so the module store doesn't retain
- * state for an inbox that no longer exists (called when an inbox is removed).
- */
 export function clearSignatureState(linkId: string): void {
   setSignatureDrafts((prev) => {
-    const next = { ...prev };
-    delete next[linkId];
-    return next;
-  });
-  setSignatureExpanded((prev) => {
     const next = { ...prev };
     delete next[linkId];
     return next;
@@ -68,12 +37,12 @@ function saveSignatureErrorMessage(error: Error): string {
       : undefined;
   if (!unresolved) return 'Failed to save signature. Please try again.';
 
-  return 'Unable to save images. Use the image button to add images.';
+  return 'Unable to save images. Add accessible image URLs in HTML, or use the image button in Rich text.';
 }
 
 /**
  * Per-inbox signature editor. Reads the persisted signature from the links
- * query (no extra fetch) into the Quill editor, tracks an unsaved draft, and
+ * query (no extra fetch) into an HTML preview, tracks an unsaved draft, and
  * patches `email_settings` on save. The "replies & forwards" toggle patches
  * immediately (the backend patch is partial, so it leaves the signature alone).
  */
@@ -81,16 +50,10 @@ export function SignatureSection(props: { link: EmailLink }) {
   const signature = useEmailSignature(() => props.link.id);
   // Draft lives in the module-level store (keyed by link id) so it survives the
   // settings tab unmounting; `null` means "no unsaved edit".
-  const draft = () => signatureDrafts()[props.link.id] ?? null;
-  const setDraft = (html: string | null) =>
-    setSignatureDrafts((prev) => {
-      if (html === null) {
-        const next = { ...prev };
-        delete next[props.link.id];
-        return next;
-      }
-      return { ...prev, [props.link.id]: html };
-    });
+  const draft = () => signatureDrafts()[props.link.id]?.html ?? null;
+  // A fresh snapshot distinguishes a new edit even when its HTML is identical.
+  const setDraft = (html: string) =>
+    setSignatureDrafts((prev) => ({ ...prev, [props.link.id]: { html } }));
 
   const persisted = () => signature() ?? '';
   const isDirty = () => draft() !== null && draft() !== persisted();
@@ -98,7 +61,6 @@ export function SignatureSection(props: { link: EmailLink }) {
   // "Remove" stays available even after the user manually empties the editor.
   const hasContent = () => persisted().length > 0 || (draft()?.length ?? 0) > 0;
 
-  const updateSettings = useUpdateEmailSettingsMutation();
   // Imperative handle to the editor, so Save/Remove sync its content directly
   // (the reactive `value` path alone didn't reliably clear the box on Remove).
   let editorApi: { setContent: (html: string) => void } | undefined;
@@ -108,25 +70,68 @@ export function SignatureSection(props: { link: EmailLink }) {
   // Cleared when the user edits, starts a new save, or removes the signature.
   const [saveError, setSaveError] = createSignal<string | null>(null);
 
+  // Updating the links cache can remount this row. Hook callbacks still run
+  // after that; callbacks passed to mutate would leave the old draft behind.
+  const updateSettings = useUpdateEmailSettingsMutation({
+    onMutate: () => signatureDrafts()[props.link.id],
+    onSuccess: (data, { linkId, settings }, submittedDraft) => {
+      if (settings.signature === undefined) return;
+      // A user may reopen settings and start another draft while this finishes.
+      if (signatureDrafts()[linkId] === submittedDraft) {
+        clearSignatureState(linkId);
+        editorApi?.setContent(data.settings.signature ?? '');
+      }
+      toast.success(
+        settings.signature ? 'Signature saved' : 'Signature removed'
+      );
+    },
+    onError: (error, { settings }) => {
+      if (settings.signature === undefined) {
+        toast.failure('Failed to update setting.');
+      } else if (settings.signature === '') {
+        toast.failure('Failed to remove signature. Please try again.');
+      } else {
+        setSaveError(saveSignatureErrorMessage(error));
+      }
+    },
+  });
+
+  const importGmailSignature = useImportGmailSignatureMutation({
+    onMutate: () => signatureDrafts()[props.link.id],
+    onSuccess: (result, { linkId }, submittedDraft) => {
+      if (result.success) {
+        if (signatureDrafts()[linkId] === submittedDraft) {
+          clearSignatureState(linkId);
+          editorApi?.setContent(result.settings.signature ?? '');
+        }
+        toast.success('Signature imported from Gmail');
+      } else if (result.reason === 'no_signature') {
+        toast.failure('No signature found in Gmail');
+      } else if (result.reason === 'unresolved_images') {
+        setSaveError(
+          "Couldn't import images from your Gmail signature. Add accessible image URLs in HTML, or use the image button in Rich text."
+        );
+      } else {
+        toast.failure('Failed to import signature. Please try again.');
+      }
+    },
+    onError: () =>
+      toast.failure('Failed to import signature. Please try again.'),
+  });
+
   const saveSignature = () => {
     const next = draft();
     if (next === null) return;
     setSaveError(null);
-    updateSettings.mutate(
-      { linkId: props.link.id, settings: { signature: next } },
-      {
-        onSuccess: (data) => {
-          setDraft(null);
-          editorApi?.setContent(data.settings.signature ?? '');
-          toast.success('Signature saved');
-        },
-        // The backend rejects the whole patch (HTTP 422, nothing persisted) when
-        // a signature has images that won't render for recipients — e.g. pasted
-        // from another webmail account, so reachable only by that session. Show
-        // the (long) message inline below the buttons and keep the draft so the
-        // user can re-add those images and retry.
-        onError: (error) => setSaveError(saveSignatureErrorMessage(error)),
-      }
+    fireAndForget(
+      traceSignatureMutation('save', props.link.id, (span) =>
+        updateSettings.mutateAsync({
+          span,
+          linkId: props.link.id,
+          settings: { signature: next },
+        })
+      ),
+      'email-signature'
     );
   };
 
@@ -134,100 +139,59 @@ export function SignatureSection(props: { link: EmailLink }) {
   // "clear" contract; the editor reseeds to empty once the cache updates.
   const removeSignature = () => {
     setSaveError(null);
-    updateSettings.mutate(
-      { linkId: props.link.id, settings: { signature: '' } },
-      {
-        onSuccess: () => {
-          setDraft(null);
-          editorApi?.setContent('');
-          toast.success('Signature removed');
-        },
-        onError: () =>
-          toast.failure('Failed to remove signature. Please try again.'),
-      }
+    fireAndForget(
+      traceSignatureMutation('clear', props.link.id, (span) =>
+        updateSettings.mutateAsync({
+          span,
+          linkId: props.link.id,
+          settings: { signature: '' },
+        })
+      ),
+      'email-signature'
+    );
+  };
+
+  // The backend fetches the Gmail signature and saves it, so on success the
+  // editor shows the persisted value and any unsaved draft is discarded.
+  const importFromGmail = () => {
+    setSaveError(null);
+    fireAndForget(
+      traceSignatureMutation('import', props.link.id, (span) =>
+        importGmailSignature.mutateAsync({ linkId: props.link.id, span })
+      ),
+      'email-signature'
     );
   };
 
   const setOnRepliesForwards = (checked: boolean) => {
-    updateSettings.mutate(
-      {
-        linkId: props.link.id,
-        settings: { signature_on_replies_forwards: checked },
-      },
-      { onError: () => toast.failure('Failed to update setting.') }
-    );
+    updateSettings.mutate({
+      linkId: props.link.id,
+      settings: { signature_on_replies_forwards: checked },
+    });
   };
 
   return (
-    <div class="flex flex-col gap-3 rounded-xl border border-edge-muted p-3">
-      {/* Editing (Quill) is desktop-only; on mobile the section still offers
-          the replies/forwards toggle and Remove, with a pointer to desktop. */}
-      <Show
-        when={!isMobile()}
-        fallback={
-          <div class="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-edge-muted px-3 py-6 text-center">
-            <SignatureIcon class="size-5 text-ink-muted" />
-            <p class="text-sm text-ink-muted">
-              Update your signature on desktop.
-            </p>
-          </div>
-        }
-      >
-        <Suspense
-          fallback={
-            <div class="h-44 animate-pulse rounded-lg border border-edge-muted" />
-          }
-        >
-          <SignatureEditor
-            value={draft() ?? persisted()}
-            onInput={(html) => {
-              setDraft(html);
-              setSaveError(null);
-            }}
-            onReady={(api) => {
-              editorApi = api;
-            }}
-          />
-        </Suspense>
-      </Show>
-      {/* Stacks on narrow screens so the toggle label and buttons never
-          crowd each other onto wrapped lines. */}
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <ToggleSwitch
-          checked={props.link.settings.signature_on_replies_forwards ?? false}
-          onChange={setOnRepliesForwards}
-          label={
-            <span class="text-sm text-ink-muted">
-              Add to replies & forwards
-            </span>
-          }
-        />
-        <div class="flex items-center justify-end gap-2">
-          <Button
-            variant="base"
-            size="sm"
-            depth={3}
-            disabled={!hasContent() || updateSettings.isPending}
-            onClick={removeSignature}
-          >
-            Remove
-          </Button>
-          <Show when={!isMobile()}>
-            <Button
-              variant="active"
-              size="sm"
-              depth={3}
-              disabled={!isDirty() || updateSettings.isPending}
-              onClick={saveSignature}
-            >
-              Save
-            </Button>
-          </Show>
-        </div>
-      </div>
-      <Show when={saveError()}>
-        {(msg) => <p class="text-right text-sm text-failure-ink">{msg()}</p>}
-      </Show>
-    </div>
+    <SignatureForm
+      email={props.link.email_address}
+      value={isMobile() ? persisted() : (draft() ?? persisted())}
+      onInput={(html) => {
+        setDraft(html);
+        setSaveError(null);
+      }}
+      onReady={(api) => {
+        editorApi = api;
+      }}
+      onSave={saveSignature}
+      onClear={removeSignature}
+      onImport={importFromGmail}
+      importing={importGmailSignature.isPending}
+      dirty={isDirty()}
+      hasContent={hasContent()}
+      pending={updateSettings.isPending}
+      replies={props.link.settings.signature_on_replies_forwards ?? false}
+      onRepliesChange={setOnRepliesForwards}
+      error={saveError()}
+      mobile={isMobile()}
+    />
   );
 }

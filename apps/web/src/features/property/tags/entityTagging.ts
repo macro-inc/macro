@@ -28,6 +28,7 @@ export function tagEntityType(
   return match(entity.type)
     .with('document', () => EntityType.DOCUMENT)
     .with('email', () => EntityType.THREAD)
+    .with('initiative', () => EntityType.INITIATIVE)
     .with('project', () => EntityType.PROJECT)
     .with('chat', () => EntityType.CHAT)
     .with('call', () => EntityType.CALL_RECORD)
@@ -38,10 +39,12 @@ export function tagEntityType(
         'channel_thread',
         'crm_company',
         'crm_contact',
-        'automation',
-        'reminder',
+        'agent_session',
+        'routine',
         'calendar_event',
-        'foreign'
+        'foreign',
+        'database',
+        'form'
       ),
       () => undefined
     )

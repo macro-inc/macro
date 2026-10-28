@@ -1,23 +1,27 @@
-//! `soup-flat-v1` eligibility and compilation into the generic predicate IR.
+//! Versioned flat Soup eligibility and compilation into the generic predicate IR.
 #![deny(missing_docs)]
 
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
+    agent_session::AgentSessionLiteral,
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
     chat::ChatLiteral,
     crm_company::CrmCompanyLiteral,
+    crm_contact::CrmContactLiteral,
+    database_row::{DatabaseRowLiteral, database_rows_requested},
     date::DateLiteral,
     document::DocumentLiteral,
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
+    properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
 use predicate_index::{
-    ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, RangeBound, SortDirection, Token,
-    ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
+    ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
+    Token, ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -25,14 +29,32 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// Stable profile name.
+mod channels;
+mod document;
+pub mod mail;
+pub mod properties;
+
+/// Stable direct-field profile name retained for existing browser projections.
 pub const SOUP_FLAT_V1: &str = "soup-flat-v1";
+/// Stable server-minted profile containing exact derived document facts.
+pub const SOUP_FLAT_V2: &str = "soup-flat-v2";
+/// Stable server-minted profile containing viewer-relative task facts.
+pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
+/// Browser-composed profile with complete active-notification membership.
+pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
+/// Host-composed profile with complete selectable property snapshots.
+pub const SOUP_FLAT_V6: &str = "soup-flat-v6";
+
+// Keep this lightweight crate wasm-compatible instead of depending on the
+// native `system_properties` crate. A native test locks this stable UUID to
+// `SystemPropertyKey::STATUS_UUID`.
+const STATUS_PROPERTY_DEFINITION_ID: Uuid = Uuid::from_u128(0x00000001_0000_0000_0000_000000000002);
 
 /// Opaque vocabulary shared with direct Soup projection generation.
 pub mod vocabulary {
     use predicate_index::{Profile, Token};
 
-    use crate::SOUP_FLAT_V1;
+    use crate::{SOUP_FLAT_V1, SOUP_FLAT_V2, SOUP_FLAT_V3};
 
     fn token(value: &str) -> Token {
         Token::new(value).expect("static item-filter-index token is valid")
@@ -41,6 +63,36 @@ pub mod vocabulary {
     /// `soup-flat-v1` profile.
     pub fn profile() -> Profile {
         Profile::new(token(SOUP_FLAT_V1))
+    }
+
+    /// Server-minted `soup-flat-v2` profile.
+    pub fn profile_v2() -> Profile {
+        Profile::new(token(SOUP_FLAT_V2))
+    }
+
+    /// Server-minted `soup-flat-v3` profile.
+    pub fn profile_v3() -> Profile {
+        Profile::new(token(SOUP_FLAT_V3))
+    }
+
+    /// Browser-composed active-notification profile.
+    pub fn profile_v4() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V4))
+    }
+
+    /// Host-composed property and favorite-aware Soup profile.
+    pub fn profile_v6() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V6))
+    }
+
+    /// IDs of unseen notifications for the viewer and primary entity.
+    pub fn notification_unseen() -> Token {
+        token("notification-unseen")
+    }
+
+    /// IDs of seen, still-active notifications for the viewer and primary entity.
+    pub fn notification_seen() -> Token {
+        token("notification-seen")
     }
 
     /// Document partition.
@@ -58,6 +110,41 @@ pub mod vocabulary {
         token("chat")
     }
 
+    /// Channel partition in the browser-composed profile.
+    pub fn channel_partition() -> Token {
+        token("channel")
+    }
+
+    /// Database row partition in the browser-composed profile.
+    pub fn database_row_partition() -> Token {
+        token("database_row")
+    }
+
+    /// The table a database row belongs to.
+    pub fn table_id() -> Token {
+        token("table-id")
+    }
+
+    /// Canonical channel type.
+    pub fn channel_type() -> Token {
+        token("channel-type")
+    }
+
+    /// Channel team UUID, when present.
+    pub fn channel_team() -> Token {
+        token("channel-team")
+    }
+
+    /// Channel organization ID as a signed 64-bit big-endian integer.
+    pub fn channel_organization() -> Token {
+        token("channel-organization")
+    }
+
+    /// Whether the viewer is an active channel participant.
+    pub fn channel_participant() -> Token {
+        token("channel-participant")
+    }
+
     /// Record identity attribute.
     pub fn id() -> Token {
         token("id")
@@ -73,9 +160,29 @@ pub mod vocabulary {
         token("owner")
     }
 
-    /// Document file-type attribute.
+    /// Raw stored document file-type text; absent for SQL NULL.
     pub fn file_type() -> Token {
         token("file-type")
+    }
+
+    /// Canonical document subtype attribute.
+    pub fn document_sub_type() -> Token {
+        token("document-sub-type")
+    }
+
+    /// Explicit document email-attachment Boolean attribute.
+    pub fn email_attachment() -> Token {
+        token("email-attachment")
+    }
+
+    /// Viewer-relative document importance Boolean attribute.
+    pub fn importance() -> Token {
+        token("importance")
+    }
+
+    /// One authoritative task status select-option UUID.
+    pub fn task_status_option() -> Token {
+        token("task-status-option")
     }
 
     /// Creation timestamp and sort attribute.
@@ -96,7 +203,7 @@ pub enum SoupIndexSort {
     CreatedAt,
     /// Update timestamp.
     UpdatedAt,
-    /// A server sort not supported by `soup-flat-v1`.
+    /// A server sort not supported by the local flat Soup profiles.
     Unsupported,
 }
 
@@ -154,15 +261,86 @@ pub enum CompileError {
     Validation(#[from] ValidationError),
 }
 
-/// Check the complete materialized forest and request options without compiling leaves.
+/// Check the complete materialized forest against the direct-field v1 profile.
 pub fn check_soup_flat_v1(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
+    check_soup_flat(ast, request, supported_document_literal_v1, false, false)
+}
+
+/// Check the complete materialized forest against the server-minted v2 profile.
+pub fn check_soup_flat_v2(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
+    check_soup_flat(ast, request, supported_document_literal_v2, false, false)
+}
+
+/// Check the complete materialized forest against the server-minted v3 profile.
+pub fn check_soup_flat_v3(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
+    check_soup_flat(ast, request, supported_document_literal_v3, true, false)
+}
+
+fn check_soup_flat(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+    supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
+    supports_status_properties: bool,
+    supports_notifications: bool,
+) -> Eligibility {
+    if ast.initiative_filter.is_some() {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("initiative"));
+    }
+    // Rows are opt-in, so a filter that names no table (or only negates one)
+    // selects none of them and needs no rows partition.
+    if !supports_notifications && database_rows_requested(ast.database_row_filter.as_deref()) {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("database_row"));
+    }
+    if ast.favorites_only == Some(true) {
+        return Eligibility::Unsupported(UnsupportedReason::Literal("favorites"));
+    }
+    // Association membership is resolved by the server from CRM records,
+    // properties, and references that no local row carries.
+    if ast.crm_association.is_some() {
+        return Eligibility::Unsupported(UnsupportedReason::Literal("crm_association"));
+    }
     if request.has_cursor {
         return Eligibility::Unsupported(UnsupportedReason::Cursor);
     }
     if request.sort == SoupIndexSort::Unsupported {
         return Eligibility::Unsupported(UnsupportedReason::Sort);
     }
-    if ast.properties_filter.is_some() {
+    if let Some(properties_filter) = ast.properties_filter.as_deref()
+        && (!supports_status_properties
+            || !supported_expr(Some(properties_filter), supported_status_property_literal)
+            || !ast.project_filter.as_deref().is_some_and(|expr| {
+                proves_none(expr, |literal| {
+                    matches!(
+                        literal,
+                        ProjectLiteral::ProjectId(id) | ProjectLiteral::ProjectIdSelf(id)
+                            if id.is_nil()
+                    )
+                })
+            })
+            || !ast.chat_filter.as_deref().is_some_and(|expr| {
+                proves_none(expr, |literal| {
+                    matches!(
+                        literal,
+                        ChatLiteral::ChatId(id) | ChatLiteral::ProjectId(id) if id.is_nil()
+                    )
+                })
+            }))
+    {
+        // v3 carries task status facts only for Documents. Requiring the other
+        // locally indexed partitions to be provably empty preserves the
+        // server's global property-filter semantics without fabricating facts.
+        return Eligibility::Unsupported(UnsupportedReason::GlobalProperties);
+    }
+
+    if supports_notifications
+        && ast.properties_filter.is_some()
+        && unsupported_partition(
+            ast.channel_filter.as_deref(),
+            "channel",
+            |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
+        )
+        .is_err()
+    {
         return Eligibility::Unsupported(UnsupportedReason::GlobalProperties);
     }
 
@@ -182,15 +360,19 @@ pub fn check_soup_flat_v1(ast: &EntityFilterAst, request: SoupFlatRequest) -> El
         } else {
             Ok(())
         },
-        unsupported_partition(
-            ast.channel_filter.as_deref(),
-            "channel",
-            |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
-        ),
+        if supports_notifications {
+            channels::check(ast.channel_filter.as_deref())
+        } else {
+            unsupported_partition(
+                ast.channel_filter.as_deref(),
+                "channel",
+                |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
+            )
+        },
         unsupported_partition(
             ast.channel_thread_filter.as_deref(),
             "channelThread",
-            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) if id.is_nil()),
+            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) | ChannelThreadLiteral::ChannelId(id) if id.is_nil()),
         ),
         unsupported_partition(
             ast.call_filter.as_deref(),
@@ -213,30 +395,163 @@ pub fn check_soup_flat_v1(ast: &EntityFilterAst, request: SoupFlatRequest) -> El
         }
     }
 
-    // Reminders are uniquely excluded by Soup when their tree is omitted.
-    if ast.reminder_filter.is_some() {
-        return Eligibility::Unsupported(UnsupportedReason::Partition("reminder"));
+    if ast.github_pull_request_filter.is_some() {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("githubPullRequest"));
     }
 
-    if !supported_expr(ast.document_filter.as_deref(), supported_document_literal) {
+    // These opt-in partitions are empty when omitted. The UI's confine()
+    // also excludes them with a positive nil ID. Accept only proven emptiness,
+    // not arbitrary trees over partitions that have no local index.
+    if ast.crm_contact_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, CrmContactLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("crmContact"));
+    }
+    if ast.agent_session_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, AgentSessionLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("agent_session"));
+    }
+
+    if !supported_expr(ast.document_filter.as_deref(), supported_document_literal)
+        || (supports_status_properties
+            && !supported_v3_importance_shape(ast.document_filter.as_deref(), false))
+    {
         return Eligibility::Unsupported(UnsupportedReason::Literal("document"));
     }
-    if !supported_expr(ast.project_filter.as_deref(), supported_project_literal) {
+    if !supported_expr(ast.project_filter.as_deref(), |lit| {
+        supported_project_literal(lit)
+            || (supports_notifications
+                && matches!(lit, ProjectLiteral::NotificationState(state) if active_notification_state(state)))
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("project"));
     }
-    if !supported_expr(ast.chat_filter.as_deref(), supported_chat_literal) {
+    if !supported_expr(ast.chat_filter.as_deref(), |lit| {
+        supported_chat_literal(lit)
+            || (supports_notifications
+                && matches!(lit, ChatLiteral::NotificationState(state) if active_notification_state(state)))
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("chat"));
     }
 
     Eligibility::Supported
 }
 
-/// Compile a request only after complete-profile eligibility succeeds.
+/// Compile a request against the direct-field v1 profile.
 pub fn compile_soup_flat_v1(
     ast: &EntityFilterAst,
     request: SoupFlatRequest,
 ) -> Result<LocalCompileOutcome, CompileError> {
-    if let Eligibility::Unsupported(reason) = check_soup_flat_v1(ast, request) {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile(),
+        supported_document_literal_v1,
+        compile_document_literal_v1,
+        None,
+        false,
+    )
+}
+
+/// Compile a request against the server-minted v2 profile.
+pub fn compile_soup_flat_v2(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+) -> Result<LocalCompileOutcome, CompileError> {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile_v2(),
+        supported_document_literal_v2,
+        compile_document_literal_v2,
+        None,
+        false,
+    )
+}
+
+/// Compile a request against the viewer-relative server-minted v3 profile.
+pub fn compile_soup_flat_v3(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+) -> Result<LocalCompileOutcome, CompileError> {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile_v3(),
+        supported_document_literal_v3,
+        compile_document_literal_v3,
+        Some(compile_status_property_literal),
+        false,
+    )
+}
+
+/// Compile participant-scoped Channels and exact UNSEEN/SEEN notification
+/// predicates in addition to v3 literals. DONE is intentionally unsupported:
+/// the active edge contains no done history.
+pub fn compile_soup_flat_v4(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+) -> Result<LocalCompileOutcome, CompileError> {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile_v4(),
+        |lit| {
+            supported_document_literal_v3(lit)
+                || matches!(lit, DocumentLiteral::NotificationState(state) if active_notification_state(state))
+        },
+        |lit| match lit {
+            DocumentLiteral::NotificationState(state) => Ok(notification_state_expr(state)),
+            _ => compile_document_literal_v3(lit),
+        },
+        Some(compile_status_property_literal),
+        true,
+    )
+}
+
+fn active_notification_state(state: &item_filters::NotificationState) -> bool {
+    matches!(
+        state,
+        item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen
+    )
+}
+
+fn notification_state_expr(state: &item_filters::NotificationState) -> PredicateExpr {
+    PredicateExpr::ExactExists {
+        attribute: match state {
+            item_filters::NotificationState::Unseen => vocabulary::notification_unseen(),
+            item_filters::NotificationState::Seen => vocabulary::notification_seen(),
+            item_filters::NotificationState::Done => {
+                unreachable!("eligibility excludes done history")
+            }
+        },
+    }
+}
+
+type PropertyLiteralCompiler = fn(&PropertiesLiteral) -> Result<PredicateExpr, CompileError>;
+
+fn compile_soup_flat(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+    profile: Profile,
+    supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
+    compile_document_literal: impl Fn(&DocumentLiteral) -> Result<PredicateExpr, CompileError> + Copy,
+    compile_properties_literal: Option<PropertyLiteralCompiler>,
+    supports_notifications: bool,
+) -> Result<LocalCompileOutcome, CompileError> {
+    if let Eligibility::Unsupported(reason) = check_soup_flat(
+        ast,
+        request,
+        supported_document_literal,
+        compile_properties_literal.is_some(),
+        supports_notifications,
+    ) {
         return Ok(LocalCompileOutcome::Unsupported(reason));
     }
 
@@ -245,20 +560,44 @@ pub fn compile_soup_flat_v1(
         SoupIndexSort::UpdatedAt => vocabulary::updated_at(),
         SoupIndexSort::Unsupported => unreachable!("eligibility checked sort"),
     };
+    let mut document_predicate =
+        document::compile(ast.document_filter.as_deref(), compile_document_literal)?;
+    if let Some(properties_filter) = ast.properties_filter.as_deref() {
+        let compile_properties_literal =
+            compile_properties_literal.expect("eligibility checked property support");
+        document_predicate = PredicateExpr::And(
+            Box::new(document_predicate),
+            Box::new(compile_expr(
+                Some(properties_filter),
+                compile_properties_literal,
+            )?),
+        );
+    }
+
     let query = IndexQuery {
-        profile: vocabulary::profile(),
+        profile,
         partitions: vec![
             PartitionPredicate {
                 partition: vocabulary::document_partition(),
-                predicate: compile_expr(ast.document_filter.as_deref(), compile_document_literal)?,
+                predicate: document_predicate,
             },
             PartitionPredicate {
                 partition: vocabulary::project_partition(),
-                predicate: compile_expr(ast.project_filter.as_deref(), compile_project_literal)?,
+                predicate: compile_expr(ast.project_filter.as_deref(), |lit| match lit {
+                    ProjectLiteral::NotificationState(state) if supports_notifications => {
+                        Ok(notification_state_expr(state))
+                    }
+                    _ => compile_project_literal(lit),
+                })?,
             },
             PartitionPredicate {
                 partition: vocabulary::chat_partition(),
-                predicate: compile_expr(ast.chat_filter.as_deref(), compile_chat_literal)?,
+                predicate: compile_expr(ast.chat_filter.as_deref(), |lit| match lit {
+                    ChatLiteral::NotificationState(state) if supports_notifications => {
+                        Ok(notification_state_expr(state))
+                    }
+                    _ => compile_chat_literal(lit),
+                })?,
             },
         ],
         sort_attribute,
@@ -267,6 +606,22 @@ pub fn compile_soup_flat_v1(
         limit: request.limit,
     };
 
+    let mut query = query;
+    if supports_notifications {
+        query
+            .partitions
+            .push(channels::compile(ast.channel_filter.as_deref())?);
+        query.partitions.push(PartitionPredicate {
+            partition: vocabulary::database_row_partition(),
+            predicate: if database_rows_requested(ast.database_row_filter.as_deref()) {
+                compile_expr(ast.database_row_filter.as_deref(), |literal| {
+                    Ok(compile_database_row_literal(literal))
+                })?
+            } else {
+                PredicateExpr::None
+            },
+        });
+    }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
         query,
     )?))
@@ -304,7 +659,7 @@ fn supported_expr<T>(expr: Option<&Expr<T>>, supported: impl Fn(&T) -> bool + Co
     }
 }
 
-fn supported_document_literal(literal: &DocumentLiteral) -> bool {
+fn supported_document_literal_v1(literal: &DocumentLiteral) -> bool {
     matches!(
         literal,
         DocumentLiteral::Id(_)
@@ -314,6 +669,39 @@ fn supported_document_literal(literal: &DocumentLiteral) -> bool {
             | DocumentLiteral::CreatedAt(_)
             | DocumentLiteral::UpdatedAt(_)
     )
+}
+
+fn supported_document_literal_v2(literal: &DocumentLiteral) -> bool {
+    supported_document_literal_v1(literal)
+        || matches!(
+            literal,
+            DocumentLiteral::SubType(_) | DocumentLiteral::IsEmailAttachment(_)
+        )
+}
+
+fn supported_document_literal_v3(literal: &DocumentLiteral) -> bool {
+    supported_document_literal_v2(literal) || matches!(literal, DocumentLiteral::Importance(true))
+}
+
+fn supported_v3_importance_shape(expr: Option<&Expr<DocumentLiteral>>, negated: bool) -> bool {
+    match expr {
+        None => true,
+        Some(Expr::Literal(DocumentLiteral::Importance(value))) => *value && !negated,
+        Some(Expr::Literal(_)) => true,
+        Some(Expr::And(left, right) | Expr::Or(left, right)) => {
+            supported_v3_importance_shape(Some(left), negated)
+                && supported_v3_importance_shape(Some(right), negated)
+        }
+        Some(Expr::Not(expr)) => supported_v3_importance_shape(Some(expr), !negated),
+    }
+}
+
+fn supported_status_property_literal(literal: &PropertiesLiteral) -> bool {
+    literal.property_definition_id == STATUS_PROPERTY_DEFINITION_ID
+        && literal
+            .entity_type
+            .is_none_or(|entity_type| entity_type == PropertyEntityType::Task)
+        && matches!(literal.value, PropertyMatchValue::SelectOption(_))
 }
 
 fn supported_project_literal(literal: &ProjectLiteral) -> bool {
@@ -357,7 +745,23 @@ fn compile_expr<T>(
     })
 }
 
-fn compile_document_literal(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+fn compile_document_literal_v1(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+    compile_document_literal(literal, false, false)
+}
+
+fn compile_document_literal_v2(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+    compile_document_literal(literal, true, false)
+}
+
+fn compile_document_literal_v3(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+    compile_document_literal(literal, true, true)
+}
+
+fn compile_document_literal(
+    literal: &DocumentLiteral,
+    supports_v2_facts: bool,
+    supports_v3_facts: bool,
+) -> Result<PredicateExpr, CompileError> {
     Ok(match literal {
         DocumentLiteral::Id(id) => exact_uuid(vocabulary::id(), id),
         DocumentLiteral::FileType(file_type) => {
@@ -365,12 +769,34 @@ fn compile_document_literal(literal: &DocumentLiteral) -> Result<PredicateExpr, 
         }
         DocumentLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         DocumentLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
+        DocumentLiteral::SubType(sub_type) if supports_v2_facts => {
+            return exact_utf8(vocabulary::document_sub_type(), sub_type.to_string());
+        }
+        DocumentLiteral::IsEmailAttachment(value) if supports_v2_facts => PredicateExpr::Exact {
+            attribute: vocabulary::email_attachment(),
+            value: ExactValue::new([u8::from(*value)])
+                .expect("canonical Boolean exact value is bounded"),
+        },
+        DocumentLiteral::Importance(value) if supports_v3_facts => PredicateExpr::Exact {
+            attribute: vocabulary::importance(),
+            value: ExactValue::new([u8::from(*value)])
+                .expect("canonical Boolean exact value is bounded"),
+        },
         DocumentLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         DocumentLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
         _ => unreachable!("eligibility checked document literal"),
     })
+}
+
+fn compile_status_property_literal(
+    literal: &PropertiesLiteral,
+) -> Result<PredicateExpr, CompileError> {
+    let PropertyMatchValue::SelectOption(option_id) = &literal.value else {
+        unreachable!("eligibility checked status property value");
+    };
+    Ok(exact_uuid(vocabulary::task_status_option(), option_id))
 }
 
 fn compile_project_literal(literal: &ProjectLiteral) -> Result<PredicateExpr, CompileError> {
@@ -378,7 +804,7 @@ fn compile_project_literal(literal: &ProjectLiteral) -> Result<PredicateExpr, Co
         ProjectLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         ProjectLiteral::ProjectIdSelf(id) => exact_uuid(vocabulary::id(), id),
         ProjectLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         ProjectLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ProjectLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
@@ -391,12 +817,20 @@ fn compile_chat_literal(literal: &ChatLiteral) -> Result<PredicateExpr, CompileE
         ChatLiteral::ChatId(id) => exact_uuid(vocabulary::id(), id),
         ChatLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         ChatLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         ChatLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ChatLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
         _ => unreachable!("eligibility checked chat literal"),
     })
+}
+
+fn compile_database_row_literal(literal: &DatabaseRowLiteral) -> PredicateExpr {
+    match literal {
+        DatabaseRowLiteral::Include => PredicateExpr::All,
+        DatabaseRowLiteral::TableId(id) => exact_uuid(vocabulary::table_id(), id),
+        DatabaseRowLiteral::Id(id) => exact_uuid(vocabulary::id(), id),
+    }
 }
 
 fn exact_uuid(attribute: Token, value: &Uuid) -> PredicateExpr {

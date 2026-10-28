@@ -1,6 +1,7 @@
 use anyhow::Context;
 use documents_hex::domain::ports::editing::EditingWorkerService;
 use entity_access::domain::models::EntityType;
+use model_owner::Owner;
 use properties::{EditReceipt, PropertiesService as _};
 
 use super::DeleteDocumentWorkerContext;
@@ -12,28 +13,15 @@ pub async fn handle(
 ) -> anyhow::Result<()> {
     tracing::debug!("processing delete document message");
 
-    let (document_id, mut user_id) = if let Some(attributes) = message.message_attributes.as_ref() {
-        let document_id = attributes
-            .get("document_id")
-            .map(|document_id| {
-                tracing::trace!(document_id=?document_id, "found document_id in message attributes");
-                document_id.string_value().unwrap_or_default()
-            })
-            .context("document_id should be a message attribute")?;
-
-        let user_id = attributes.get("user_id").map(|user_id| {
-            tracing::trace!(user_id=?user_id, "found user_id in message attributes");
-            user_id.string_value().unwrap_or_default().to_string()
-        });
-
-        (document_id, user_id)
+    let (document_id, mut owner) = if let Some(attributes) = message.message_attributes.as_ref() {
+        document_and_owner(attributes)?
     } else {
         ctx.worker.cleanup_message(message).await?;
         anyhow::bail!("message attributes not found")
     };
 
-    // Only need to get and delete document from macrodb if the user_id is not present in the message attributes
-    if user_id.is_none() {
+    // Only need to get and delete document from macrodb if the owner is not present in the message attributes
+    if owner.is_none() {
         tracing::info!(document_id=%document_id, "starting delete process for document");
 
         let document = macro_db_client::document::get_deleted_document_info(&ctx.db, document_id)
@@ -42,10 +30,9 @@ pub async fn handle(
                 |e| tracing::error!(error=?e, document_id=%document_id, "unable to get document"),
             )?;
 
-        let shared_document = document.clone();
-        user_id = Some(shared_document.owner.to_string());
+        owner = Some(document.owner.clone());
 
-        tracing::trace!(document_id=%document_id, user_id=?user_id, file_type=?document.file_type, "retrieved document");
+        tracing::trace!(document_id=%document_id, owner=?owner, file_type=?document.file_type, "retrieved document");
 
         if let Some(file_type) = document.file_type
             && file_type.as_str() == "docx"
@@ -81,12 +68,12 @@ pub async fn handle(
         tracing::warn!(error=?e, "could not delete entity mentions for document");
     });
 
-    let user_id = user_id.context("user_id should be some")?;
+    let owner = owner.context("owner should be some")?;
 
     // Delete files from s3
-    tracing::trace!(user_id=%user_id, document_id=%document_id, "deleting files from s3");
+    tracing::trace!(owner=%owner, document_id=%document_id, "deleting files from s3");
     ctx.s3_client
-        .delete_document(&user_id, document_id)
+        .delete_document(&owner, document_id)
         .await
         .context("failed to delete files from s3")?;
     tracing::trace!(document_id=%document_id, "deleted files from s3");
@@ -125,6 +112,25 @@ pub async fn handle(
     });
 
     Ok(())
+}
+
+pub(super) fn document_and_owner(
+    attributes: &std::collections::HashMap<String, aws_sdk_sqs::types::MessageAttributeValue>,
+) -> anyhow::Result<(&str, Option<Owner>)> {
+    let document_id = attributes
+        .get("document_id")
+        .map(|document_id| document_id.string_value().unwrap_or_default())
+        .context("document_id should be a message attribute")?;
+
+    // The `user_id` attribute carries the owner principal (`macro|<email>`,
+    // `bot|<uuid>`, or a team UUID); it keeps its historical name on the wire.
+    let owner = attributes
+        .get("user_id")
+        .map(|owner| Owner::from_principal_str(owner.string_value().unwrap_or_default()))
+        .transpose()
+        .context("user_id message attribute should be an owner principal")?;
+
+    Ok((document_id, owner))
 }
 
 pub(crate) fn document_cleanup_receipt(document_id: &str) -> EditReceipt {

@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, share_token, user_id, title, scheduled_start, scheduled_end, channel_id, channel_call_id, active_call_id\n               FROM call_meetings\n               WHERE (active_call_id = $1 OR id = (SELECT meeting_id FROM call_records WHERE id = $1))\n                 AND ($2 OR cancelled_at IS NULL)\n               ORDER BY created_at DESC\n               LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "share_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "scheduled_start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "scheduled_end",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel_call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "active_call_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "938854c732c857ddc6ea7085d7a8f26ae1641ccd562a271a5de5d588fece2a6c"
+}

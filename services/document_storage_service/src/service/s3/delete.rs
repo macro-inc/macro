@@ -1,5 +1,7 @@
 use aws_sdk_s3 as s3;
+use model_owner::Owner;
 use s3::types::{Delete, ObjectIdentifier};
+use s3_key::build_cloud_storage_bucket_document_prefix;
 use tracing::instrument;
 
 #[instrument(skip(client))]
@@ -37,12 +39,12 @@ pub(in crate::service::s3) async fn delete_objects(
     Ok(())
 }
 
-/// Deletes all document instances stored under a user's document
+/// Deletes all document instances stored under an owner's document
 #[instrument(skip(client))]
 pub(in crate::service::s3) async fn delete_document(
     client: &s3::Client,
     bucket: &str,
-    user_id: &str,
+    owner: &Owner,
     document_id: &str,
 ) -> anyhow::Result<()> {
     if cfg!(feature = "local") {
@@ -51,7 +53,7 @@ pub(in crate::service::s3) async fn delete_document(
 
     let mut to_delete: Vec<String> = Vec::new();
 
-    let prefix = format!("{}/{}", user_id, document_id);
+    let prefix = build_cloud_storage_bucket_document_prefix(owner, document_id);
     let resp = client
         .list_objects_v2()
         .bucket(bucket)
@@ -74,17 +76,19 @@ pub(in crate::service::s3) async fn delete_document(
 #[cfg(test)]
 mod tests {
     use mockall::predicate::eq;
+    use model_owner::Owner;
 
     use crate::service::s3::S3;
 
     #[tokio::test]
     async fn test_delete_document() {
+        let owner = Owner::from_principal_str("macro|user@example.com").unwrap();
         let mut mock = S3::default();
         mock.expect_delete_document()
-            .with(eq("user_id"), eq("document_id"))
+            .with(eq(owner.clone()), eq("document_id"))
             .return_once(|_, _| Ok(()));
 
-        let result = mock.delete_document("user_id", "document_id").await;
+        let result = mock.delete_document(&owner, "document_id").await;
 
         assert!(result.is_ok());
     }

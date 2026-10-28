@@ -22,6 +22,9 @@ Here because a client renders those messages and cannot otherwise work
 out who sent them: the sender of an agent message is this session's
 bot, and nothing else names it. */
   bot: SessionBot;
-  /** Every logged frame, oldest first. Folding depends on this order. */
+  /** Effective history in ascending `(createdAt, id)` order.
+The first row is the inclusive history boundary cursor: buffered rows
+before it are obsolete. Reconcile snapshot overlap by row ID, never content.
+An empty history has no boundary or overlapping rows. */
   entries: AgentSessionLogEntryDto[];
 }

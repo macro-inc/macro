@@ -1,7 +1,68 @@
 import { createScrollIntentTracker } from '@core/util/scroll-intent';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+function scrollSurface(onUserIntent: () => void) {
+  const tracker = createScrollIntentTracker(onUserIntent);
+  const element = document.createElement('div');
+  for (const [name, handler] of Object.entries(tracker.handlers)) {
+    element.addEventListener(
+      name.slice(2).toLowerCase(),
+      handler as EventListener
+    );
+  }
+  const dispatch = (type: string, properties: Record<string, unknown> = {}) =>
+    element.dispatchEvent(Object.assign(new Event(type), properties));
+  return { tracker, dispatch };
+}
 
 describe('createScrollIntentTracker', () => {
+  it('does not cancel navigation for a touch tap with small finger movement', () => {
+    const onUserIntent = vi.fn();
+    const { dispatch } = scrollSurface(onUserIntent);
+    dispatch('pointerdown', { pointerType: 'touch', clientY: 100 });
+    dispatch('touchmove', { touches: [{ clientY: 98 }] });
+    dispatch('pointerup', { pointerType: 'touch' });
+    dispatch('touchend');
+    expect(onUserIntent).not.toHaveBeenCalled();
+  });
+
+  it('tracks a native touch drag after the browser cancels pointer events', () => {
+    const onUserIntent = vi.fn();
+    const { tracker, dispatch } = scrollSurface(onUserIntent);
+    dispatch('pointerdown', { pointerType: 'touch', clientY: 100 });
+    // Native panning cancels Pointer Events; Touch Events continue until lift.
+    dispatch('pointercancel', { pointerType: 'touch' });
+    dispatch('touchmove', { touches: [{ clientY: 75 }] });
+    expect(onUserIntent).toHaveBeenCalledOnce();
+    expect(tracker.lastDirection()).toBe('down');
+    expect(tracker.isUserInteracting(Date.now() + 1000)).toBe(true);
+    dispatch('touchend');
+    expect(tracker.isUserInteracting(Date.now() + 1000)).toBe(false);
+  });
+
+  it('keeps pagination intent through a fling and expires after native scrolling stops', () => {
+    vi.useFakeTimers();
+    try {
+      const onUserIntent = vi.fn();
+      const { tracker, dispatch } = scrollSurface(onUserIntent);
+      dispatch('pointerdown', { pointerType: 'touch', clientY: 100 });
+      dispatch('touchmove', { touches: [{ clientY: 150 }] });
+      dispatch('touchend');
+      for (let i = 0; i < 10; i++) {
+        vi.advanceTimersByTime(100);
+        tracker.observeScroll();
+        expect(tracker.lastDirection()).toBe('up');
+      }
+      expect(onUserIntent).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(301);
+      expect(tracker.isUserInteracting()).toBe(false);
+      tracker.observeScroll();
+      expect(tracker.isUserInteracting()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('is not interacting by default', () => {
     const tracker = createScrollIntentTracker();
     expect(tracker.isUserInteracting()).toBe(false);

@@ -1,37 +1,52 @@
 import type {
+  CommitOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   ReadResult,
   WriteResult,
 } from '../protocol';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({
+  revision: INITIAL_CACHE_REVISION,
+  revisionAdvanced: false,
   changed: [],
   affectedOps: [],
   reset: false,
 });
 
 /**
- * CacheHost used when the platform cannot run the shared cache engine.
- * It never stores data. Its disabled marker makes the exchange bypass
- * optimistic persistence and forward mutations directly.
+ * CacheHost used when the platform cannot run the shared cache engine, or
+ * after a page stops using it. It never stores data. Its disabled marker
+ * makes the exchange bypass optimistic persistence and forward mutations
+ * directly.
  */
-export function createNoopCacheHost(reason: string): CacheHost {
-  console.warn(`[graphql-cache] disabled: ${reason}`);
-
+export function createNoopCacheHost(): CacheHost {
   return {
     clientId: 'noop',
     disabled: true,
+    async currentRevision() {
+      return INITIAL_CACHE_REVISION;
+    },
+    async currentStorageGeneration() {
+      throw new Error('normalized GraphQL cache is unavailable');
+    },
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
     async readRecordsByKeys() {
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, records: [] };
     },
     async search() {
       return { documents: [], nextCursor: null };
     },
     async entityFilter() {
+      return { kind: 'unsupported' };
+    },
+    async calendarRange() {
+      return { kind: 'unsupported' };
+    },
+    async calendarCommit() {
       return { kind: 'unsupported' };
     },
     async writeQuery(): Promise<WriteResult> {
@@ -52,25 +67,32 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async claimNextMutation() {
       return undefined;
     },
-    async deferOptimisticWrite(): Promise<void> {},
-    async commitOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async deferOptimisticWrite() {
+      return { kind: 'deferred' } as const;
     },
-    async rollbackOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async commitOptimisticWrite(): Promise<CommitOptimisticWriteResult> {
+      return { kind: 'committed', ...emptyWriteResult() };
     },
-    async invalidate(): Promise<string[]> {
-      return [];
+    async rollbackOptimisticWrite() {
+      return { kind: 'rolled-back' as const, ...emptyWriteResult() };
     },
-    async deleteRecords(): Promise<string[]> {
-      return [];
+    async invalidate() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    },
+    async deleteRecords() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
     async teardown(): Promise<void> {},
-    async clear(): Promise<void> {},
+    async clear() {
+      return INITIAL_CACHE_REVISION;
+    },
     onOpsAffected() {
       return () => undefined;
     },
     onCacheChanged() {
+      return () => undefined;
+    },
+    onCacheGenerationChanged() {
       return () => undefined;
     },
     onMutationSettled() {

@@ -75,6 +75,8 @@ def askama_to_jinja2(src: str) -> str:
         src,
     )
 
+    src = src.replace("unsubscribe_url.as_ref()", "unsubscribe_url")
+
     # Askama uses `!expr` for logical negation; Jinja2 uses `not expr`
     # Only touch it inside block tags ({% … %})
     def replace_bang(m: re.Match) -> str:
@@ -94,11 +96,15 @@ def main() -> None:
     raw = TEMPLATE_PATH.read_text(encoding="utf-8")
     converted = askama_to_jinja2(raw)
 
-    env = Environment(autoescape=False)
+    env = Environment(autoescape=True)
     tmpl = env.from_string(converted)
 
-    html = tmpl.render(notifs=DUMMY_NOTIFS)
-
+    html = tmpl.render(
+        notifs=DUMMY_NOTIFS,
+        total_count=len(DUMMY_NOTIFS),
+        num_truncated=0,
+        unsubscribe_url="https://example.com/unsubscribe",
+    )
     # Write to a temp file that persists until the script exits
     with tempfile.NamedTemporaryFile(
         mode="w",

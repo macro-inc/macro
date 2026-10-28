@@ -1,7 +1,8 @@
 import { envsafe, str } from 'envsafe';
+import type { CanvasBrowserConfig } from './canvas/render';
 import type { D1Database } from './traces-db';
 
-export type Bindings = {
+export type Bindings = CanvasBrowserConfig & {
   /** Tags exported spans with deployment.environment (matches DD_ENV). */
   ENVIRONMENT: string | undefined;
   /** OTLP/HTTP traces endpoint; unset disables trace export. */
@@ -12,6 +13,8 @@ export type Bindings = {
   ANTHROPIC_API_KEY: string | undefined;
   CEREBRAS_API_KEY: string | undefined;
   OPENAI_API_KEY: string | undefined;
+  /** Optional: only needed when a request names the `google` provider. */
+  GOOGLE_GENERATIVE_AI_API_KEY: string | undefined;
   SYNC_WS_BASE: string;
   /** D1 database storing edit-session traces. Absent in envs without the binding. */
   TRACES_DB: D1Database | undefined;
@@ -29,6 +32,7 @@ function validateEnv(rawEnv: Bindings) {
     ANTHROPIC_API_KEY,
     CEREBRAS_API_KEY,
     OPENAI_API_KEY,
+    GOOGLE_GENERATIVE_AI_API_KEY,
     SYNC_WS_BASE,
     TRACE_ADMIN_KEY,
     INTERNAL_API_KEY,
@@ -38,6 +42,9 @@ function validateEnv(rawEnv: Bindings) {
       ANTHROPIC_API_KEY: str({ allowEmpty: false }),
       CEREBRAS_API_KEY: str({ allowEmpty: false }),
       OPENAI_API_KEY: str({ allowEmpty: false }),
+      // Empty when unset; resolving a `google` model then fails loudly at
+      // request time instead of blocking every other request at boot.
+      GOOGLE_GENERATIVE_AI_API_KEY: str({ default: '', allowEmpty: true }),
       SYNC_WS_BASE: str({ allowEmpty: false }),
       // Empty when unset; the trace-read endpoint stays closed until it's set.
       TRACE_ADMIN_KEY: str({ default: '', allowEmpty: true }),
@@ -49,6 +56,7 @@ function validateEnv(rawEnv: Bindings) {
         ANTHROPIC_API_KEY,
         CEREBRAS_API_KEY,
         OPENAI_API_KEY,
+        GOOGLE_GENERATIVE_AI_API_KEY,
         SYNC_WS_BASE,
         TRACE_ADMIN_KEY,
         INTERNAL_API_KEY,

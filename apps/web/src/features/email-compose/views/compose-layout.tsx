@@ -1,0 +1,300 @@
+import { CircleSpinner } from '@core/component/CircleSpinner';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+
+import { Button, cn } from '@ui';
+import {
+  type Component,
+  createSignal,
+  type JSX,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { FromInboxSelector } from '../components/from-inbox-selector';
+import { useCompose } from '../context/compose-context';
+import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
+import { ComposeBody } from './compose-body';
+import { ComposeRecipients } from './compose-recipients';
+import { ComposeSubject } from './compose-subject';
+
+type ComposeLayoutRefs = {
+  directRecipientsSelector: HTMLElement | undefined;
+  ccRecipientsSelector: HTMLElement | undefined;
+  bccRecipientsSelector: HTMLElement | undefined;
+  containerRef: HTMLElement | undefined;
+  subjectInput: HTMLElement | undefined;
+  messageInput: HTMLElement | undefined;
+};
+
+/**
+ * Pure UI layout for the email compose form.
+ * Renders recipients, subject, body, and toolbar.
+ * Does NOT render any split-panel chrome — the caller is responsible for that.
+ */
+export function ComposeLayout(props: {
+  as?: Component<
+    Pick<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'class' | 'ref'>
+  >;
+  toolbar?: JSX.Element;
+  header?: JSX.Element;
+  notice?: JSX.Element;
+  class?: string;
+  bodyDebugName?: string;
+}) {
+  const ctx = useCompose();
+
+  const [refs, setRefs] = createSignal<ComposeLayoutRefs>({
+    directRecipientsSelector: undefined,
+    ccRecipientsSelector: undefined,
+    bccRecipientsSelector: undefined,
+    containerRef: undefined,
+    subjectInput: undefined,
+    messageInput: undefined,
+  });
+
+  let mobileScrollRef: HTMLDivElement | undefined;
+
+  const registerRef = (name: keyof ComposeLayoutRefs) => {
+    return (el: HTMLElement) => {
+      setRefs((p) => ({ ...p, [name]: el }));
+    };
+  };
+
+  const [attachComposeHotkeys, composeHotkeyScope] =
+    useHotkeyDOMScope('compose-email');
+
+  const [showCc, setShowCc] = createSignal(false);
+  const [showBcc, setShowBcc] = createSignal(false);
+
+  const isCcVisible = () => showCc() || ctx.recipients().cc.length > 0;
+  const isBccVisible = () => showBcc() || ctx.recipients().bcc.length > 0;
+
+  onMount(() => {
+    const container = refs().containerRef;
+    if (!container) return;
+    attachComposeHotkeys(container);
+  });
+
+  // --- Hotkeys ---
+
+  registerHotkey({
+    hotkey: 'shift+cmd+o',
+    scopeId: composeHotkeyScope,
+    description: 'Edit "To" recipients',
+    keyDownHandler: () => {
+      if (ctx.disabled()) return false;
+      refs()?.directRecipientsSelector?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.recipients,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerCcBccHotkeys({
+    scopeId: composeHotkeyScope,
+    disabled: ctx.disabled,
+    cc: {
+      reveal: () => setShowCc(true),
+      input: () => refs().ccRecipientsSelector,
+    },
+    bcc: {
+      reveal: () => setShowBcc(true),
+      input: () => refs().bccRecipientsSelector,
+    },
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+s',
+    scopeId: composeHotkeyScope,
+    description: 'Edit subject',
+    keyDownHandler: () => {
+      if (ctx.disabled()) return false;
+      refs()?.subjectInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.subject,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+m',
+    scopeId: composeHotkeyScope,
+    description: 'Edit message',
+    keyDownHandler: () => {
+      if (ctx.disabled()) return false;
+      refs()?.messageInput?.focus();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.email.compose.edit.message,
+    shouldReturnFocusOnClose: false,
+  });
+
+  registerDraftActionHotkeys({
+    scopeId: composeHotkeyScope,
+    disabled: ctx.disabled,
+    discard: () => ctx.onDelete?.(),
+    attach: ctx.hideAttachments ? undefined : ctx.onAddAttachments,
+  });
+
+  registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: composeHotkeyScope,
+    description: 'Send email',
+    keyDownHandler: () => {
+      // Pointer and keyboard submission always enter the same controller. It
+      // snapshots whether this is Send, Schedule send, or Update schedule.
+      ctx.onSend();
+      return true;
+    },
+    runWithInputFocused: true,
+    hotkeyToken: 'email.send',
+    displayPriority: 10,
+  });
+  // On mobile the Cc/Bcc/From rows fold back into the combined row when the
+  // user moves focus on without having added any Cc/Bcc recipients.
+  // Uncommitted text in either field also blocks the fold so it isn't
+  // silently discarded.
+  const collapseCcBccIfEmpty = () => {
+    if (!ctx.isMobile()) return;
+    if (ctx.recipients().cc.length > 0 || ctx.recipients().bcc.length > 0)
+      return;
+    const hasPendingInput = [
+      refs().ccRecipientsSelector,
+      refs().bccRecipientsSelector,
+    ].some(
+      (el) => el instanceof HTMLInputElement && el.value.trim().length > 0
+    );
+    if (hasPendingInput) return;
+    setShowCc(false);
+    setShowBcc(false);
+  };
+
+  return (
+    <Dynamic
+      component={props.as ?? 'div'}
+      ref={registerRef('containerRef')}
+      class={cn(
+        'touch:pt-[calc(var(--mobile-content-inset-top)+.5rem)]',
+        props.class
+      )}
+    >
+      <div class="pb-1 w-full h-max shrink-0">
+        <Suspense fallback={<CircleSpinner class="size-4 animate-spin" />}>
+          <Show
+            when={
+              props.header ||
+              (!ctx.isMobile() &&
+                (ctx.fromInboxes?.().length || ctx.fromAddress?.()))
+            }
+          >
+            <div
+              role="group"
+              aria-label="Sending inbox"
+              class="min-h-12 flex items-center gap-2 border-b border-edge-muted"
+            >
+              <Show
+                when={props.header}
+                fallback={
+                  <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
+                    <span class="w-14 shrink-0 text-sm text-ink-placeholder">
+                      From
+                    </span>
+                    <Show
+                      when={ctx.fromInboxes?.().length}
+                      fallback={
+                        <span class="truncate text-sm">
+                          {ctx.fromAddress?.()}
+                        </span>
+                      }
+                    >
+                      <FromInboxSelector
+                        pill
+                        class="min-w-0"
+                        disabled={ctx.disabled()}
+                        links={ctx.fromInboxes?.() ?? []}
+                        activeInboxId={ctx.selectedInboxId?.()}
+                        activeEmail={ctx.fromAddress?.()}
+                        onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
+                      />
+                    </Show>
+                  </div>
+                }
+              >
+                {props.header}
+              </Show>
+            </div>
+          </Show>
+        </Suspense>
+
+        <Show when={ctx.validationError('no_link')}>
+          {(error) => (
+            <div role="alert" class="text-failure-ink text-sm mt-1">
+              {error().message}
+            </div>
+          )}
+        </Show>
+
+        <Show when={props.notice}>
+          <div class="mb-4">{props.notice}</div>
+        </Show>
+
+        <ComposeRecipients
+          toRef={registerRef('directRecipientsSelector')}
+          ccRef={registerRef('ccRecipientsSelector')}
+          bccRef={registerRef('bccRecipientsSelector')}
+          showCc={showCc}
+          setShowCc={setShowCc}
+          showBcc={showBcc}
+          setShowBcc={setShowBcc}
+          onToRowFocusIn={collapseCcBccIfEmpty}
+          actions={
+            <Show when={!ctx.isMobile()}>
+              <div class="flex shrink-0 items-center">
+                <Show when={!isCcVisible()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCc(true)}
+                    disabled={ctx.disabled()}
+                  >
+                    Cc
+                  </Button>
+                </Show>
+                <Show when={!isBccVisible()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowBcc(true)}
+                    disabled={ctx.disabled()}
+                  >
+                    Bcc
+                  </Button>
+                </Show>
+              </div>
+            </Show>
+          }
+        />
+
+        <div onFocusIn={collapseCcBccIfEmpty}>
+          <ComposeSubject inputRef={registerRef('subjectInput')} />
+        </div>
+      </div>
+
+      <div class="size-full flex flex-col min-h-0 mt-4">
+        <ComposeBody
+          debugName={props.bodyDebugName}
+          inputRef={registerRef('messageInput')}
+          mobileScrollRef={() => mobileScrollRef}
+          onAddFiles={ctx.onAddAttachments}
+        />
+        {props.toolbar}
+      </div>
+    </Dynamic>
+  );
+}

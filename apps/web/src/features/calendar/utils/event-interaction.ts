@@ -1,7 +1,9 @@
+import { formatLocalDate } from '@core/util/local-date';
 import type { EventApi } from '@fullcalendar/core';
-import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { CalendarEvent } from '../types';
-import { formatLocalDate } from './calendar-date';
+import { isTimedPointEvent } from './calendar-date';
+import { guestEditsRestricted } from './event-guest-editing';
 
 interface FullCalendarEventRange {
   allDay: boolean;
@@ -17,11 +19,40 @@ export function calendarEventRenderId(
   return typeof calendarEventId === 'string' ? calendarEventId : event.id;
 }
 
+/**
+ * Every occurrence id a rendered bar stands in for. A merged working-location
+ * run covers several days, only one of which has a chip, so selection, focus,
+ * and chip registration key off all of them.
+ */
+export function calendarEventRenderIds(
+  event: Pick<EventApi, 'extendedProps' | 'id'>
+): string[] {
+  const merged = event.extendedProps.mergedOccurrenceIds;
+  return Array.isArray(merged) && merged.length > 0
+    ? merged
+    : [calendarEventRenderId(event)];
+}
+
+/** Whether the viewer may delete an occurrence from their calendar. */
+export function canDeleteCalendarEvent(event: CalendarEvent) {
+  return !event.teamProjection && !event.isReadOnly && !event.isCancelled;
+}
+
+/**
+ * Whether an occurrence opens in the event composer. A snapshot of a shared
+ * meeting does not: it keeps the organizer's details, and a composer that
+ * could change only its reminders reads as editing the meeting itself.
+ */
+export function canEditCalendarEvent(event: CalendarEvent) {
+  return canDeleteCalendarEvent(event) && !event.isSnapshot;
+}
+
 /** Whether an occurrence can safely be moved or resized from the calendar. */
 export function canEditCalendarEventTime(event: CalendarEvent) {
   return (
-    !event.isReadOnly &&
-    !event.isCancelled &&
+    canEditCalendarEvent(event) &&
+    !guestEditsRestricted(event) &&
+    !isTimedPointEvent(event) &&
     event.recurrenceLines.length === 0 &&
     event.recurrenceId === undefined
   );

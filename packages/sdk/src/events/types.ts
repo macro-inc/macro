@@ -4,8 +4,10 @@
 // `metadata`, handlers get ORM handles for every entity the payload names.
 
 import type { WebhookEvent } from '../../generated/storage/types.gen';
+import type { hydrateAgentSessionEvent } from './hydrate/agentSession';
 import type { hydrateChannelEvent } from './hydrate/channel';
 import type { hydrateDocumentEvent } from './hydrate/document';
+import type { hydrateMessageEvent } from './hydrate/message';
 
 /** A webhook delivery body, exactly as Macro serializes it. */
 export type MacroEvent = WebhookEvent;
@@ -27,8 +29,10 @@ export type EventPayload<E extends EventName> = Extract<
  * rather than restating the mapping.
  */
 type HydratedEvent =
+  | ReturnType<typeof hydrateAgentSessionEvent>
   | ReturnType<typeof hydrateChannelEvent>
-  | ReturnType<typeof hydrateDocumentEvent>;
+  | ReturnType<typeof hydrateDocumentEvent>
+  | ReturnType<typeof hydrateMessageEvent>;
 
 /**
  * What a handler receives, per event: the raw `metadata` plus the ORM handles

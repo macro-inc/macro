@@ -66,6 +66,7 @@ function syncEventForMessage(message: FromRemote): SyncSourceEvent | null {
 interface MessageWaiter {
   match: (message: FromRemote) => boolean;
   resolve: (message: FromRemote) => void;
+  cancelOnDisconnect?: () => void;
 }
 
 export interface SyncServiceSourceOptions {
@@ -119,7 +120,6 @@ export class SyncServiceSource implements LiveSyncSource {
     // `doInitialSync()` just returns the cached promise; if it's called late,
     // it still resolves because the listener captured the message.
     this.initialSyncPromise = this.awaitInitialSync().map((message) => {
-      this.initialSyncReceived = true;
       logSyncService({
         documentId,
         level: 'debug',
@@ -180,7 +180,8 @@ export class SyncServiceSource implements LiveSyncSource {
     // can't be missed.
     const acked = this.awaitMessage(
       (message) => message.isRemoteUpdateAck() && message.value.id === id,
-      TIMEOUTS.ACK
+      TIMEOUTS.ACK,
+      true
     ).then(
       () => true,
       () => false
@@ -286,11 +287,18 @@ export class SyncServiceSource implements LiveSyncSource {
    */
   private awaitMessage(
     match: (message: FromRemote) => boolean,
-    timeoutMs: number
+    timeoutMs: number,
+    cancelOnDisconnect = false
   ): Promise<FromRemote> {
     const { promise, resolve, reject } = Promise.withResolvers<FromRemote>();
     const waiter: MessageWaiter = {
       match,
+      cancelOnDisconnect: cancelOnDisconnect
+        ? () => {
+            remove();
+            reject(SyncError.connectionFailed());
+          }
+        : undefined,
       resolve: (message) => {
         remove();
         resolve(message);
@@ -316,10 +324,21 @@ export class SyncServiceSource implements LiveSyncSource {
     const message = event.data;
     const syncEvent = syncEventForMessage(message);
     if (syncEvent) this.emit(syncEvent);
-    // Resolve every pending request whose predicate matches this message.
-    for (const waiter of [...this.waiters]) {
-      if (waiter.match(message)) waiter.resolve(message);
+    const waiting = [...this.waiters].filter((waiter) => waiter.match(message));
+    if (message.isRemoteInitialSync()) this.initialSyncReceived = true;
+    if (message.isRemoteInitialSync() && waiting.length === 0) {
+      // An offline bootstrap (or a slow reconnect) can outlive the initial
+      // waiter. Accept the eventual authorized connection and converge the
+      // locally seeded document instead of permanently blocking WAL replay.
+      this.ws.startHeartbeat();
+      const sync = message.value as InitialSync;
+      this.emit({
+        type: 'reconnect',
+        snapshot: sync.snapshot,
+        awareness: sync.awareness,
+      });
     }
+    for (const waiter of waiting) waiter.resolve(message);
   };
 
   private onClose: WebsocketEventListener<
@@ -327,6 +346,10 @@ export class SyncServiceSource implements LiveSyncSource {
     IFromPeer,
     FromRemote
   > = (_ws, event) => {
+    this.initialSyncReceived = false;
+    // Release pending WAL pushes before a fast reconnect can request replay.
+    // A disconnected socket cannot supply a durable acknowledgement.
+    for (const waiter of [...this.waiters]) waiter.cancelOnDisconnect?.();
     logSyncService({
       documentId: this.documentId,
       level: 'warn',

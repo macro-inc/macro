@@ -1,14 +1,26 @@
+mod access_request;
+mod calendar_join_request;
+mod channel_push;
+pub use access_request::{
+    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
+};
+pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
-pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
+pub use invite_email::{
+    ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
+};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
+use model_owner::Owner;
 pub use notification::domain::models::NotificationTitle;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos,
-    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
+    apple::{
+        APNSPushNotification, Alert, AlertDictionary, Aps, InterruptionLevel, PushNotificationData,
+    },
 };
 use rootcause::Report;
 use rootcause::report;
@@ -538,6 +550,29 @@ pub struct ChannelMessageSendMetadata {
     pub sender_profile_picture_url: Option<String>,
 }
 
+/// Metadata for a reaction added to one of the recipient's channel messages.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMessageReactionMetadata {
+    /// The reacted-to message id.
+    #[serde(alias = "message_id")]
+    pub message_id: String,
+    /// The thread root id when the reacted-to message is a reply.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "thread_id")]
+    pub thread_id: Option<String>,
+    /// The reacted-to message content.
+    #[serde(alias = "message_content")]
+    pub message_content: String,
+    /// The emoji added by the reactor.
+    pub emoji: String,
+    #[serde(flatten)]
+    pub common: CommonChannelMetadata,
+    /// Optional reactor profile picture URL.
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
+}
+
 /// Metadata for when a item is shared with a user
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -629,6 +664,7 @@ pub enum NotificationDocumentSubType {
     Task,
     Snippet,
     Skill,
+    InitiativeDescription,
 }
 
 /// Someone mentioned a document in a channel
@@ -640,7 +676,7 @@ pub struct DocumentMentionMetadata {
     pub document_name: String,
     /// The owner of the document
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,
@@ -708,12 +744,25 @@ impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 }
 
+impl NewEmailMetadata {
+    /// Lock-screen title: the sender's display name (or email), when present.
+    fn sender_line(&self) -> Option<&str> {
+        self.sender
+            .as_deref()
+            .map(str::trim)
+            .filter(|sender| !sender.is_empty())
+    }
+}
+
 impl NotificationTitle for NewEmailMetadata {
     fn format_title(
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok(self.subject.clone())
+        Ok(self
+            .sender_line()
+            .unwrap_or(self.subject.trim())
+            .to_string())
     }
 
     fn format_body(
@@ -724,12 +773,43 @@ impl NotificationTitle for NewEmailMetadata {
     }
 }
 
+impl NotificationExtIos for NewEmailMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        // Collapse on the thread so a new message replaces the unread
+        // lock-screen alert for that conversation.
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.thread_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let mut apns = alert_apns(self, sender_id, notification_id, None).ok()?;
+        if let Some(Alert::Dictionary(alert)) = &mut apns.aps.alert {
+            let subject = self.subject.trim();
+            if self.sender_line().is_some() && !subject.is_empty() {
+                alert.subtitle = Some(subject.to_string());
+            }
+        }
+        apns.aps.thread_id = Some(self.thread_id.clone());
+        Some(apns)
+    }
+}
+
 impl notification::domain::models::Notification for AiResponseMetadata {
     const TYPE_NAME: &'static str = "ai_response";
 }
 
 impl notification::domain::models::Notification for ChannelMessageSendMetadata {
     const TYPE_NAME: &'static str = "channel_message_send";
+}
+
+impl notification::domain::models::Notification for ChannelMessageReactionMetadata {
+    const TYPE_NAME: &'static str = "channel_message_reaction";
 }
 
 impl notification::domain::models::Notification for ChannelMentionMetadata {
@@ -820,15 +900,52 @@ impl NotificationTitle for ChannelMessageSendMetadata {
     }
 }
 
+const CHANNEL_REACTION_EXCERPT_MAX_CHARS: usize = 80;
+
+impl NotificationTitle for ChannelMessageReactionMetadata {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let sender = sender_id
+            .map(|sender| sender.email_part().local_part().to_string())
+            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
+        let message = parse_message_plain_text(&self.message_content)?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let excerpt: String = message
+            .chars()
+            .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
+            .collect();
+        let suffix = if message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS {
+            "…"
+        } else {
+            ""
+        };
+        Ok(format!(
+            "{sender} reacted with {} to “{excerpt}{suffix}”",
+            self.emoji
+        ))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.common.channel_type {
+            ChannelType::DirectMessage => "Direct message".to_string(),
+            _ => format!("#{}", self.common.channel_name),
+        })
+    }
+}
+
 impl NotificationTitle for MentionedInDocumentCommentMetadata {
     fn format_title(
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = comment_sender_label(sender_id, self.sender_display_name.as_deref());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} mentioned you in {}.{ft}", self.document_name),
             None => format!("{sender} mentioned you in {}", self.document_name),
@@ -940,6 +1057,8 @@ fn alert_apns<T: NotificationTitle>(
         push_notification_data: PushNotificationData {
             notification_id,
             sender_profile_picture_url,
+            recipient_id: None,
+            navigation: None,
         },
     })
 }
@@ -986,11 +1105,44 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            None,
+        )
+    }
+}
+
+impl NotificationExtIos for ChannelMessageReactionMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id).append(&self.emoji)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            self.sender_profile_picture_url.clone(),
+            entity,
+            &self.message_id,
+            self.thread_id.as_deref(),
+        )
     }
 }
 
@@ -1004,11 +1156,19 @@ impl NotificationExtIos for ChannelMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            self.thread_id.as_deref(),
+        )
     }
 }
 
@@ -1022,11 +1182,19 @@ impl NotificationExtIos for ChannelReplyMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            Some(&self.thread_id),
+        )
     }
 }
 
@@ -1040,11 +1208,19 @@ impl NotificationExtIos for DocumentMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.channel.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.channel.message_id,
+            self.channel.thread_id.as_deref(),
+        )
     }
 }
 
@@ -1094,15 +1270,63 @@ impl NotificationExtIos for TaskAssignedMetadata {
     }
 }
 
+/// Identity of a document comment or its thread. Comments written before the
+/// shared message store carry the legacy numeric ids; comments in the shared
+/// store carry the message and root UUIDs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(untagged)]
+pub enum CommentRef {
+    /// Legacy `Comment.id` or `Thread.id`.
+    Legacy(i64),
+    /// Message or root id in the shared message store.
+    Message(Uuid),
+}
+
+impl From<i64> for CommentRef {
+    fn from(id: i64) -> Self {
+        Self::Legacy(id)
+    }
+}
+
+impl From<Uuid> for CommentRef {
+    fn from(id: Uuid) -> Self {
+        Self::Message(id)
+    }
+}
+
+impl std::fmt::Display for CommentRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Legacy(id) => write!(f, "{id}"),
+            Self::Message(id) => write!(f, "{id}"),
+        }
+    }
+}
+
+/// Sender wording shared by the document comment notifications: the acting
+/// user's email, then a bot's public name, then a generic agent label.
+fn comment_sender_label(
+    sender_id: Option<MacroUserIdStr<'_>>,
+    sender_display_name: Option<&str>,
+) -> String {
+    sender_id
+        .map(|id| id.0.email_part().email_str().to_owned())
+        .or_else(|| sender_display_name.map(str::to_owned))
+        .unwrap_or_else(|| "Agent".to_owned())
+}
+
 /// Notification sent when a user is mentioned in a document comment.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MentionedInDocumentCommentMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document.
     pub file_type: Option<String>,
     /// The sub type of the document (e.g. task).
@@ -1112,9 +1336,9 @@ pub struct MentionedInDocumentCommentMetadata {
     /// The mention ID.
     pub mention_id: String,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: CommentRef,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: CommentRef,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1148,11 +1372,14 @@ impl NotificationExtIos for MentionedInDocumentCommentMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RepliedToDocumentCommentThreadMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document.
     pub file_type: Option<String>,
     /// The sub type of the document (e.g. task).
@@ -1160,9 +1387,9 @@ pub struct RepliedToDocumentCommentThreadMetadata {
     #[serde(default)]
     pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: CommentRef,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: CommentRef,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1178,10 +1405,7 @@ impl NotificationTitle for RepliedToDocumentCommentThreadMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = comment_sender_label(sender_id, self.sender_display_name.as_deref());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} replied in {}.{ft}", self.document_name),
             None => format!("{sender} replied in {}", self.document_name),
@@ -1220,11 +1444,14 @@ impl NotificationExtIos for RepliedToDocumentCommentThreadMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentedOnDocumentMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document.
     pub file_type: Option<String>,
     /// The sub type of the document (e.g. task).
@@ -1232,9 +1459,9 @@ pub struct CommentedOnDocumentMetadata {
     #[serde(default)]
     pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: CommentRef,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: CommentRef,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1250,10 +1477,7 @@ impl NotificationTitle for CommentedOnDocumentMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = comment_sender_label(sender_id, self.sender_display_name.as_deref());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} commented on {}.{ft}", self.document_name),
             None => format!("{sender} commented on {}", self.document_name),
@@ -1374,7 +1598,8 @@ impl NotificationTitle for ReminderMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok("Reminder".to_string())
+        let subject: String = self.description.chars().take(128).collect();
+        Ok(format!("Reminder: {subject}"))
     }
 
     fn format_body(
@@ -1510,6 +1735,39 @@ impl NotificationTitle for CalendarEventReminderMetadata {
     }
 }
 
+impl notification::domain::models::NotificationExtEmail for CalendarEventReminderMetadata {
+    fn format_email(&self) -> notification::domain::models::queue_message::EmailContent {
+        let title = self
+            .format_title(None)
+            .unwrap_or_else(|_| "Calendar reminder".into());
+        let when = self.format_body(None).unwrap_or_default();
+        notification::domain::models::queue_message::EmailContent {
+            subject: format!("Reminder: {}", title.replace(['\r', '\n'], " ")),
+            body: format!(
+                "<p>{}</p><p>{}</p><p>Calendar reminder from Macro.</p>",
+                html_escape::encode_text(&title),
+                html_escape::encode_text(&when)
+            ),
+        }
+    }
+    fn rate_limit_config() -> notification::domain::models::RateLimitConfig {
+        notification::domain::models::RateLimitConfig {
+            max_count: 1,
+            window: std::time::Duration::from_secs(86400),
+        }
+    }
+    fn rate_limit_key(&self) -> notification::domain::models::RateLimitKey {
+        notification::domain::models::RateLimitKey::from_str_hashed(&format!(
+            "calendar-reminder:{}:{}:{}:{:?}:{:?}",
+            self.event_id,
+            self.occurrence_key,
+            self.minutes_before,
+            self.starts_at,
+            self.start_date
+        ))
+    }
+}
+
 impl NotificationExtIos for CalendarEventReminderMetadata {
     type NotifData = PushNotificationData;
 
@@ -1520,6 +1778,300 @@ impl NotificationExtIos for CalendarEventReminderMetadata {
             .append(&self.event_id.to_string())
             .append(&self.occurrence_key)
             .append(&self.minutes_before.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}
+
+/// The most of an agent's prose a lock-screen alert or inbox row shows.
+const AGENT_EXCERPT_MAX_CHARS: usize = 280;
+
+/// The session an agent-session notification is about, and where its magic
+/// chip lives when it was opened from a thread.
+///
+/// The conversation an agent session was opened from: a channel, document,
+/// or initiative. Spelled like the message API's parent for client routing.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+pub struct AgentSessionOriginParent {
+    /// `channel`, `document`, or `initiative`.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// The parent entity id.
+    pub id: String,
+}
+
+/// Flattened into each agent-session kind so the wire keeps these keys at the
+/// top level of the metadata, the way [`CommonChannelMetadata`] does.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionNotificationRef {
+    /// The session; what a click opens.
+    pub session_id: Uuid,
+    /// The session's name at the time of the event.
+    pub session_name: String,
+    /// The bot the session runs for. A string on the wire: system bots have
+    /// fixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not
+    /// RFC 4122 uuids and fail a `format: uuid` check on the client.
+    #[schema(value_type = String)]
+    pub bot_id: Uuid,
+    /// The bot's display name; agent notifications have no user sender, so
+    /// this is who they read as being from.
+    pub bot_name: String,
+    /// The channel or document the session was opened from, when it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<AgentSessionOriginParent>,
+    /// The channel the session was opened from, when it was opened from a
+    /// channel thread.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<Uuid>,
+    /// The thread the session was opened from, when it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<Uuid>,
+    /// The magic-chip message for the turn in question, when one was posted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announcement_message_id: Option<Uuid>,
+}
+
+/// An agent finished a turn with nothing queued behind it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionSettledMetadata {
+    #[serde(flatten)]
+    pub session: AgentSessionNotificationRef,
+    /// The turn that ended.
+    pub turn: u32,
+    /// Who prompted the turn, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// The ACP stop reason, or `error`.
+    pub stop_reason: String,
+    /// The agent's last prose in the turn, whole; `None` when it wrote none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excerpt: Option<String>,
+}
+
+/// An agent is blocked on a question only the session's owner can answer.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionWaitingForInputMetadata {
+    #[serde(flatten)]
+    pub session: AgentSessionNotificationRef,
+    /// The turn asking.
+    pub turn: u32,
+    /// The question, as the agent phrased it.
+    pub question: String,
+}
+
+/// Someone named the recipient in a prompt to an agent session.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionMentionedMetadata {
+    #[serde(flatten)]
+    pub session: AgentSessionNotificationRef,
+    /// Who wrote the prompt, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub mentioned_by: Option<MacroUserIdStr<'static>>,
+    /// The action carrying the prompt.
+    pub action_id: Uuid,
+}
+
+impl Notification for AgentSessionSettledMetadata {
+    const TYPE_NAME: &'static str = "agent_session_settled";
+}
+
+impl Notification for AgentSessionWaitingForInputMetadata {
+    const TYPE_NAME: &'static str = "agent_session_waiting_for_input";
+}
+
+impl Notification for AgentSessionMentionedMetadata {
+    const TYPE_NAME: &'static str = "agent_session_mentioned";
+}
+
+/// The first `AGENT_EXCERPT_MAX_CHARS` of an agent's prose, on one line.
+fn agent_excerpt(text: &str) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() <= AGENT_EXCERPT_MAX_CHARS {
+        return flat;
+    }
+    let mut cut: String = flat.chars().take(AGENT_EXCERPT_MAX_CHARS - 1).collect();
+    cut.push('…');
+    cut
+}
+
+impl NotificationTitle for AgentSessionSettledMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("{} finished", self.session.bot_name))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.excerpt.as_deref().map(str::trim) {
+            Some(excerpt) if !excerpt.is_empty() => agent_excerpt(excerpt),
+            _ => self.session.session_name.clone(),
+        })
+    }
+}
+
+impl NotificationTitle for AgentSessionWaitingForInputMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("{} needs an answer", self.session.bot_name))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(agent_excerpt(&self.question))
+    }
+}
+
+impl NotificationTitle for AgentSessionMentionedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match &self.mentioned_by {
+            Some(author) => format!(
+                "{} mentioned you in {}",
+                author.email_part().local_part(),
+                self.session.session_name
+            ),
+            None => format!("You were mentioned in {}", self.session.session_name),
+        })
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("An agent session with {}", self.session.bot_name))
+    }
+}
+
+/// The alert for an agent-session kind: title and body from the metadata,
+/// grouped with the chip's thread on the lock screen when there is one.
+fn agent_session_apns<T: NotificationTitle>(
+    notif: &T,
+    session: &AgentSessionNotificationRef,
+    sender_id: Option<MacroUserIdStr<'_>>,
+    notification_id: Uuid,
+) -> Option<APNSPushNotification<PushNotificationData>> {
+    let mut apns = alert_apns(notif, sender_id, notification_id, None).ok()?;
+    apns.aps.thread_id = session.thread_id.map(|thread| thread.to_string());
+    Some(apns)
+}
+
+impl NotificationExtIos for AgentSessionSettledMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        // One alert per session: the next turn's replaces the last one's.
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.session.session_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        agent_session_apns(self, &self.session, sender_id, notification_id)
+    }
+}
+
+impl NotificationExtIos for AgentSessionWaitingForInputMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.session.session_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let mut apns = agent_session_apns(self, &self.session, sender_id, notification_id)?;
+        // A machine is blocked on a person: worth breaking through Focus.
+        apns.aps.interruption_level = Some(InterruptionLevel::TimeSensitive);
+        Some(apns)
+    }
+}
+
+impl NotificationExtIos for AgentSessionMentionedMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        // Each prompt that names you is its own alert.
+        NotifCollapseKey::new(Self::TYPE_NAME).append(&self.action_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        agent_session_apns(self, &self.session, sender_id, notification_id)
+    }
+}
+mod initiative_discussion;
+pub use initiative_discussion::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
+mod crm_discussion;
+pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};
+
+/// A live message in an independently shared external chat.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalChatMessageMetadata {
+    /// The messaging service the chat lives in.
+    pub provider: model_entity::ExternalChatProvider,
+    /// The chat's name.
+    pub chat_name: String,
+    /// Stable message id; retries use it as their notification id.
+    pub message_id: Uuid,
+}
+impl Notification for ExternalChatMessageMetadata {
+    const TYPE_NAME: &'static str = "external_chat_message";
+}
+impl NotificationTitle for ExternalChatMessageMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.chat_name.clone())
+    }
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("New {} message", self.provider.label()))
+    }
+}
+
+impl NotificationExtIos for ExternalChatMessageMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new("external_chat").append(&entity.entity_id)
     }
 
     fn as_apns<'a>(

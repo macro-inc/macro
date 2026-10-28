@@ -2,7 +2,7 @@
 //! it is missing, and publishes the same image to GHCR. Generated into
 //! `ensure_daytona_snapshot.yml`.
 //!
-//! Local stacks and Fly previews `docker build` this image themselves (BuildKit
+//! Local stacks `docker build` this image themselves (BuildKit
 //! cache is the freshness check). GHCR is the published copy for `main`
 //! (`:latest`) and for verifying the image on PRs (`:$SHA` only).
 
@@ -12,6 +12,22 @@ use gh_workflow::{
 };
 
 use crate::workflows::{runners, steps, vars};
+
+const SANDBOX_SIZES_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../../crates/agent_harness/sandbox_sizes.json"
+));
+
+fn snapshot_quota() -> (String, String, String) {
+    let sizes: serde_json::Value =
+        serde_json::from_str(SANDBOX_SIZES_JSON).expect("sandbox_sizes.json should parse");
+    let snapshot = &sizes["snapshot"];
+    (
+        snapshot["cpu"].to_string(),
+        snapshot["memoryGib"].to_string(),
+        snapshot["diskGib"].to_string(),
+    )
+}
 
 #[cfg(test)]
 mod test;
@@ -36,10 +52,11 @@ fn image_source_pull_request() -> PullRequest {
     pr
 }
 
-fn image_source_paths() -> [xtask_paths::RepoGlob<'static>; 5] {
+fn image_source_paths() -> [xtask_paths::RepoGlob<'static>; 6] {
     [
         xtask_paths::repo_glob!("crates/agent_harness/container/**"),
         xtask_paths::repo_glob!("crates/agent_harness/justfile"),
+        xtask_paths::repo_glob!("crates/agent_harness/sandbox_sizes.json"),
         xtask_paths::repo_glob!("nix/cloud-storage.nix"),
         xtask_paths::repo_glob!(
             "tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs"
@@ -69,6 +86,7 @@ pub fn ensure_daytona_snapshot() -> Workflow {
 }
 
 fn ensure_snapshot() -> Job {
+    let (cpu, memory, disk) = snapshot_quota();
     Job::default()
         .name("Ensure macro-agent-harness snapshot")
         .runs_on(runners::Runner::Small.to_string())
@@ -87,16 +105,20 @@ fn ensure_snapshot() -> Job {
                       exit 1
                     fi
                     daytona login --api-key "$DAYTONA_API_KEY"
+                    echo "ensuring Daytona snapshot at --cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"
                     just --justfile crates/agent_harness/justfile ensure-daytona
                 "#})
                 .shell("bash")
-                .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY)),
+                .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY))
+                .add_env(("DAYTONA_SNAPSHOT_CPU", cpu))
+                .add_env(("DAYTONA_SNAPSHOT_MEMORY", memory))
+                .add_env(("DAYTONA_SNAPSHOT_DISK", disk)),
         )
 }
 
 /// GHCR publish. Runs on Mid with Namespace remote buildx: the Dockerfile
 /// bakes two nix shells, which is too large for the Small Daytona job's local
-/// daemon. linux/amd64 only — Daytona snapshots and Fly preview machines are
+/// daemon. linux/amd64 only — Daytona snapshots are
 /// amd64. Local `docker build` is unpinned so Apple Silicon / ARM Linux bake
 /// native `aarch64-linux` from the same flake. PRs push `:$SHA` only so they
 /// cannot clobber `:latest`.

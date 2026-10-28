@@ -1,7 +1,5 @@
 import {
   type EntityData,
-  getCompanyOwnerId,
-  getCompanyStageOptionId,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
   isGithubPrEntity,
@@ -13,7 +11,6 @@ import {
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { NO_ASSIGNEE, NO_STAGE } from './configs/base';
 
 function getPredicateNotifications(
   entity: EntityData,
@@ -38,7 +35,7 @@ function getPredicateNotifications(
  *
  * Entity-specific logic:
  * - Emails: Uses `isRead` boolean field
- * - Everything else: Has at least one notification with viewedAt === null
+ * - Everything else: Has at least one notification in the unseen state
  */
 export function unreadFilter(notificationSource: NotificationSource) {
   return function (entity: EntityData): boolean {
@@ -48,7 +45,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
 
     const notifications = getPredicateNotifications(entity, notificationSource);
 
-    return notifications?.some((n) => !n.viewed_at) ?? false;
+    return notifications?.some((n) => n.state === 'unseen') ?? false;
   };
 }
 
@@ -57,7 +54,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
  *
  * Entity-specific logic:
  * - Emails: Uses `done` field (derived from !inboxVisible - email is "not done" when in inbox)
- * - Everything else: Has at least one notification with done === false
+ * - Everything else: Has at least one notification in an active state
  */
 export function notDoneFilter(notificationSource: NotificationSource) {
   return function (entity: WithNotification<EntityData>) {
@@ -65,16 +62,16 @@ export function notDoneFilter(notificationSource: NotificationSource) {
 
     const notifications = getPredicateNotifications(entity, notificationSource);
 
-    return notifications?.some(({ done }) => !done);
+    return notifications?.some(({ state }) => state !== 'done');
   };
 }
 
-/** Document filter (markdown, canvas) - excludes tasks */
+/** Native document filter (markdown, canvas, spreadsheets) - excludes tasks */
 export function documentFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   if (entity.subType?.type === 'task') return false;
   const fileType = entity.fileType ?? '';
-  return fileType === 'md' || fileType === 'canvas';
+  return ['md', 'canvas', 'spreadsheet'].includes(fileType);
 }
 
 export function taskFilter(entity: EntityData): boolean {
@@ -104,11 +101,11 @@ export function teamsFilter(entity: EntityData): boolean {
 }
 
 export function agentFilter(entity: EntityData): boolean {
-  return entity.type === 'chat';
+  return entity.type === 'chat' || entity.type === 'agent_session';
 }
 
-export function automationFilter(entity: EntityData): boolean {
-  return entity.type === 'automation';
+export function routineFilter(entity: EntityData): boolean {
+  return entity.type === 'routine';
 }
 
 export function projectFilter(entity: EntityData): boolean {
@@ -118,7 +115,7 @@ export function projectFilter(entity: EntityData): boolean {
 export function fileFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   const fileType = entity.fileType ?? '';
-  return !['md', 'canvas'].includes(fileType);
+  return !['md', 'canvas', 'spreadsheet'].includes(fileType);
 }
 
 export function githubPrFilter(entity: EntityData): boolean {
@@ -137,45 +134,8 @@ export function callsFilter(entity: EntityData): boolean {
   return entity.type === 'call';
 }
 
-export function crmCompanyFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company';
-}
-
-export function remindersFilter(entity: EntityData): boolean {
-  return entity.type === 'reminder';
-}
-
-/**
- * Reminders that have fired and are waiting on their owner.
- *
- * `completedAt` means the owner has dealt with the reminder, and firing
- * deliberately does not set it — so a fired one is outstanding, not finished.
- * The `nextRunAt` test is what separates these from reminders that simply have
- * not come due yet; those live in Scheduled.
- */
-export function firedRemindersFilter(entity: EntityData): boolean {
-  return (
-    entity.type === 'reminder' &&
-    !entity.completedAt &&
-    new Date(entity.nextRunAt).getTime() <= Date.now()
-  );
-}
-
-/**
- * Reminders set for the future, which have not fired yet. Recurring reminders
- * never complete, so between firings they sit here pointing at their next run.
- */
-export function scheduledRemindersFilter(entity: EntityData): boolean {
-  return (
-    entity.type === 'reminder' &&
-    !entity.completedAt &&
-    new Date(entity.nextRunAt).getTime() > Date.now()
-  );
-}
-
-/** Reminders the owner has marked as dealt with. */
-export function doneRemindersFilter(entity: EntityData): boolean {
-  return entity.type === 'reminder' && !!entity.completedAt;
+export function calendarEventFilter(entity: EntityData): boolean {
+  return entity.type === 'calendar_event';
 }
 
 /**
@@ -192,69 +152,24 @@ export function searchSupportedFilter(entity: EntityData): boolean {
   );
 }
 
-export function crmCompanyActiveFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company' && !entity.hidden;
-}
-
-export function crmCompanyHiddenFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company' && entity.hidden;
-}
-
-/**
- * Stage filter for companies, driven by the view's stage selection
- * (`ctx.stages`). `NO_STAGE` matches companies without a Stage set. Stage
- * resolution goes through `resolveStage` (the team's active deal-stage
- * set, from `ctx.resolveCompanyStage`) when supplied, so the filter
- * buckets companies exactly like the kanban — legacy system-stage values
- * included; otherwise it falls back to the raw system Stage value.
- */
-export function companyStageFilter(
-  stageIds: () => string[] | undefined,
-  resolveStage?: (entity: EntityData) => string | undefined
-) {
-  return (entity: EntityData): boolean => {
-    const stages = stageIds();
-    if (!stages?.length) return true;
-    if (entity.type !== 'crm_company') return false;
-    const stageId = resolveStage
-      ? resolveStage(entity)
-      : getCompanyStageOptionId(entity);
-    return stages.some((id) =>
-      id === NO_STAGE ? stageId === undefined : stageId === id
-    );
-  };
-}
-
-/**
- * Owner filter for companies, driven by the view's owner selection
- * (`ctx.owners`). `NO_OWNER` matches companies without an Owner set.
- */
-export function companyOwnedByUsersFilter(
-  ownerIds: () => string[] | undefined
-) {
-  return (entity: EntityData): boolean => {
-    const owners = ownerIds();
-    if (!owners?.length) return true;
-    if (entity.type !== 'crm_company') return false;
-    const ownerId = getCompanyOwnerId(entity);
-    return owners.some((id) =>
-      id === NO_ASSIGNEE ? ownerId === undefined : ownerId === id
-    );
-  };
-}
-
 export function filesAndFolderFilter(entity: EntityData): boolean {
   if (entity.type !== 'project' && entity.type !== 'document') return false;
 
   if (entity.type === 'document') {
     const fileType = entity.fileType ?? '';
-    return !['md', 'canvas'].includes(fileType);
+    return !['md', 'canvas', 'spreadsheet'].includes(fileType);
   }
 
   return true;
 }
 
 export function activeAgentFilter(entity: EntityData): boolean {
+  if (entity.type === 'agent_session')
+    return (
+      entity.status !== 'no_messages' &&
+      entity.status !== 'disconnected' &&
+      entity.status !== 'session/end'
+    );
   if (entity.type !== 'chat') return false;
 
   // [TODO] Check status of agent

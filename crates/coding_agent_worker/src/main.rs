@@ -1,124 +1,246 @@
-//! The coding agent daemon: serve a bot's agent sessions from this machine.
+//! The agent harness daemon: serve a registered harness's agent sessions from
+//! this machine.
 //!
-//! Boots a signed-webhook receiver and waits. Each `agent_trigger.new`
-//! delivery opens a session over the harness service's API, dials its
-//! runtime gateway, spawns the configured harness in ACP mode, bridges its
-//! stdio to the websocket, and forwards the mention as the first prompt;
-//! `agent_trigger.existing` deliveries forward follow-up messages, redialing
-//! first when the bridge is gone.
+//! `macrod` is one process and one command: the serving core (SSE listener,
+//! harness bridge) running inside a terminal control panel that shows what
+//! it is serving - the registration, the agents bound to it, their sessions,
+//! and the daemon's own logs - and manages its own pairing, config, and
+//! retirement.
+//!
+//! A first run starts unpaired: the panel offers pairing (press `p`), the
+//! user approves the printed code in the web app, and the minted harness
+//! credential is embedded in the sensitive `macrod.toml`. Once paired, the
+//! daemon connects to the runtime gateway and bridges the configured ACP
+//! harness, making model discovery available before any agents exist. Each
+//! `agent_trigger.new` delivery opens a session and forwards the first prompt;
+//! `agent_trigger.existing` deliveries forward follow-up messages.
 
 mod config;
+mod daemon;
 mod dispatch;
+mod executable;
 mod harness;
+#[cfg(unix)]
+mod herdr;
 mod outbound;
+mod repository;
 mod runtime;
-mod webhook;
+mod self_knowledge;
+mod service;
+mod trigger;
+mod tui;
 
 use clap::Parser;
-use config::Config;
-use rootcause::prelude::ResultExt as _;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
-use crate::dispatch::Dispatcher;
-use crate::outbound::agent_session::HarnessApi;
-use crate::outbound::registration::FeedReconciler;
-use crate::runtime::Runtime;
-use crate::webhook::{WebhookState, webhook_router};
-
-/// Serve a bot's agent sessions: host the webhook receiver, bridge each
-/// triggered session to a harness.
+/// Serve a harness's agent sessions inside the control panel: registration,
+/// bound agents, live sessions, config editing, pairing, removal, and logs -
+/// one process.
 #[derive(Parser)]
 #[command(name = "macrod", version)]
 struct Args {
-    /// Path to the daemon's TOML config.
-    #[arg(long, default_value = "macro.toml")]
-    config: PathBuf,
+    /// Internal browser helper, isolated so terminal browsers cannot claim the TUI's stdin.
+    #[arg(long, hide = true)]
+    open_url: Option<String>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Show one agent session live inside a herdr window. macrod opens these
+    /// itself when it runs inside herdr.
+    #[cfg(unix)]
+    #[command(hide = true)]
+    HerdrPane {
+        /// The running macrod's window socket.
+        #[arg(long)]
+        socket: std::path::PathBuf,
+        /// The ACP session to follow.
+        #[arg(long)]
+        session: String,
+    },
+    /// Serve ACP on stdio with each session as a live coding-agent TUI in
+    /// its own herdr window. Set as the harness of a macrod run inside herdr.
+    #[cfg(unix)]
+    HerdrAcp {
+        /// Private storage for this paired macrod instance.
+        #[arg(long)]
+        state_dir: Option<std::path::PathBuf>,
+        /// Native model ID for new sessions.
+        #[arg(long)]
+        model: Option<String>,
+        /// Open sessions in dispatcher-managed worktrees.
+        #[arg(long, hide = true)]
+        managed_worktrees: bool,
+        /// Which agent TUI each session runs.
+        #[arg(long, value_enum, default_value_t)]
+        kind: herdr::acp_agent::TuiAgent,
+        /// Claude Code's `--permission-mode` for every session, e.g.
+        /// `acceptEdits` or `bypassPermissions`.
+        #[arg(long)]
+        permission_mode: Option<String>,
+        /// Open each session's tab in the background rather than switching
+        /// herdr to it.
+        #[arg(long)]
+        no_focus: bool,
+        /// Extra arguments for every agent launch, e.g. `-- -s workspace-write`.
+        #[arg(last = true)]
+        agent_args: Vec<String>,
+    },
+    /// Run headless, managed by an embedding app such as the Macro desktop
+    /// app: no terminal panel, state changes as JSON lines on stdout, and
+    /// shutdown on SIGTERM, Ctrl-C, or stdin closing.
+    Service {
+        /// Config file; defaults to `~/.macrod/macrod.toml`, created when the
+        /// setup flags are given.
+        #[arg(long)]
+        config: Option<std::path::PathBuf>,
+        /// Agent preset id from `detect-agents`, e.g. `claude-code`.
+        #[arg(long)]
+        agent: Option<String>,
+        /// Absolute directory sessions run in; created when missing.
+        #[arg(long)]
+        workspace: Option<std::path::PathBuf>,
+        /// Requested display name for the next pairing.
+        #[arg(long)]
+        name: Option<String>,
+        /// Requested ownership for the next pairing.
+        #[arg(long, value_enum)]
+        scope: Option<service::ServiceScope>,
+        /// Whether the next pairing may enable permission bypass.
+        #[arg(long)]
+        allow_permission_bypass: Option<bool>,
+    },
+    /// List the ACP agents installed on this machine as JSON.
+    DetectAgents,
+    /// Report the service config's state as JSON without running anything.
+    Inspect {
+        /// Config file; defaults to `~/.macrod/macrod.toml`.
+        #[arg(long)]
+        config: Option<std::path::PathBuf>,
+    },
 }
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
     // Dialing a `wss` gateway needs a process-wide provider, and rustls
     // installs none by itself. Before any dial, and idempotent: an error only
     // means somebody already did this.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let args = Args::parse();
-    match run(&args.config).await {
+    if let Some(url) = args.open_url {
+        return match webbrowser::open(&url) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("could not open browser: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    match args.command {
+        Some(Command::Service {
+            config,
+            agent,
+            workspace,
+            name,
+            scope,
+            allow_permission_bypass,
+        }) => {
+            // stdout is the event protocol: logs go to stderr, like herdr-acp.
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match service::run(service::ServiceOptions {
+                config,
+                agent,
+                workspace,
+                name,
+                scope,
+                allow_permission_bypass,
+            })
+            .await
+            {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    service::emit_fatal(&format!("{error}"));
+                    eprintln!("macrod service: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        Some(Command::DetectAgents) => {
+            println!("{}", service::detect_agents_json());
+            return ExitCode::SUCCESS;
+        }
+        Some(Command::Inspect { config }) => {
+            return match service::inspect_json(config) {
+                Ok(inspection) => {
+                    println!("{inspection}");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("macrod inspect: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
+        Some(Command::HerdrPane { socket, session }) => {
+            return match tui::run_herdr_pane(&socket, &session).await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod herdr-pane: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
+        Some(Command::HerdrAcp {
+            state_dir,
+            model,
+            managed_worktrees,
+            kind,
+            permission_mode,
+            no_focus,
+            agent_args,
+        }) => {
+            // stdout is the protocol: logs go to stderr, which macrod drains.
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
+                state_dir,
+                model,
+                managed_worktrees,
+                kind,
+                permission_mode,
+                no_focus,
+                agent_args,
+            })
+            .await
+            {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod herdr-acp: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        None => {}
+    }
+    let config_path = std::path::Path::new("macrod.toml");
+
+    // The TUI owns the terminal, so its logs go to a ring buffer it renders.
+    let logs = tui::LogBuffer::install();
+    match tui::run(config_path, logs).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            tracing::error!(error = ?error, "daemon exited with an error");
+            // The ring buffer dies with the process and the terminal is
+            // restored by now, so the exit error goes straight to stderr.
+            eprintln!("macrod exited with an error: {error:?}");
             ExitCode::FAILURE
         }
     }
-}
-
-async fn run(config_path: &std::path::Path) -> rootcause::Result<()> {
-    let config = Config::load(config_path)?;
-
-    // The ACP launch config carries command, args, and env but no working
-    // directory, and every session this daemon serves runs in the one
-    // configured workspace - so the daemon's own cwd is the harness's cwd.
-    std::env::set_current_dir(&config.workspace.path).context(format!(
-        "failed to enter the workspace directory {}",
-        config.workspace.path.display()
-    ))?;
-
-    // The feed: make sure one exists, points here, and we hold its secret.
-    // An explicit config secret skips registration entirely (manual setups).
-    let reconciler = FeedReconciler::new(&config.macro_api, &config.server, config_path);
-    let (signing_secret, needs_validation) = match &config.server.signing_secret {
-        Some(secret) => (secret.clone(), None),
-        None => {
-            let feed = reconciler
-                .ensure_feed()
-                .await
-                .context("failed to register this bot's trigger feed")?;
-            let needs_validation = (!feed.is_valid).then_some(feed.webhook_id);
-            (feed.signing_secret, needs_validation)
-        }
-    };
-
-    let api = HarnessApi::new(&config.macro_api);
-    let runtime = Runtime::new(config.macro_api.clone(), config.harness.clone());
-    let app = webhook_router(WebhookState {
-        executor: Dispatcher::new(api, runtime, config.workspace.clone()),
-        signing_secret,
-    });
-
-    let port = config.server.port;
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
-        .await
-        .context(format!("failed to bind the webhook server to port {port}"))?;
-    tracing::info!(
-        port,
-        api = %config.macro_api.api_url,
-        harness = %config.harness.command,
-        workspace = %config.workspace.path.display(),
-        "daemon listening for agent triggers"
-    );
-
-    // Validation probes the endpoint, so it can only pass once we serve;
-    // request it from the side once the listener is up.
-    if let Some(webhook_id) = needs_validation {
-        tokio::spawn(async move { reconciler.request_validation(&webhook_id).await });
-    }
-
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("the webhook server stopped")?;
-    Ok(())
-}
-
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
-    tracing::info!("shutting down");
 }

@@ -1,0 +1,43 @@
+mutation SaveEmailDraft($input: SaveEmailDraftInput!) {
+	saveEmailDraft(input: $input) {
+		draftId
+		draft {
+			...EmailThreadMessageFields
+		}
+		thread {
+			...EmailDraftThreadFields
+		}
+	}
+}
+
+# Keep these arguments aligned with the normal initial thread page so a newly
+# created thread can be read before its first network query.
+fragment EmailDraftAggregateFields on GraphqlMailDraftAggregate {
+    messageCount inboxVisible isRead isSignal hasCalendarAttachment
+    latestInboundMessageTs latestNonSpamMessageTs latestOutboundMessageTs
+    previewTs preview { ...MailPreviewFields }
+}
+
+fragment EmailDraftStateFields on GraphqlMailDraftState {
+    baseline { ...EmailDraftAggregateFields }
+    drafts { id macroDraft facts { ...EmailDraftAggregateFields } }
+}
+
+fragment EmailDraftThreadFields on GraphqlSoupEmailThread {
+	...SoupItemFields
+	viewerPermission {
+		__typename
+		... on GraphqlAccessLevelPermission { accessLevel }
+	}
+	messages(offset: 0, limit: 20) { ...EmailThreadMessageFields }
+}
+
+mutation DeleteEmailDraft($input: DeleteEmailDraftInput!) {
+	deleteEmailDraft(input: $input) {
+		draftId
+		deleted
+		threadDeleted
+        threadId
+        thread { ...EmailDraftThreadFields }
+	}
+}

@@ -1,24 +1,22 @@
 import type {
   CommentId,
-  IComment,
   Reply,
   Root,
   ThreadId,
 } from '@core/comments/commentType';
+import type { Message } from '@service-storage/messages';
 import type { NodeKey } from 'lexical';
 
 export type MarkId = string; // uuid
 
 export type ThreadPayload = {
-  threadId: number;
-  rootId: number;
+  threadId: ThreadId;
+  rootId: CommentId;
   anchorId: string; // uuid
-  comments: IComment[];
+  comments: Message[];
+  /** Total live replies when the source reports it; comments holds the loaded preview. */
+  replyCount?: number;
   isResolved: boolean;
-};
-
-export type ThreadMetadata = {
-  markId: MarkId;
 };
 
 type MarkNodeStore = Partial<Record<NodeKey, HTMLElement>>;

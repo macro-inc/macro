@@ -12,13 +12,16 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use super::property_option_queries;
-use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
+use crate::domain::model::{
+    CRM_TEAM_STAGE_DEFINITION_NAME, EntityPropertyInfo, PropertyOptionInfo,
+};
 
 /// Database row from the joined query.
 struct PropertyRow {
     property_definition_id: Uuid,
     team_id: Option<Uuid>,
     user_id: Option<String>,
+    database_id: Option<Uuid>,
     display_name: String,
     data_type: DataType,
     is_multi_select: bool,
@@ -53,6 +56,7 @@ pub async fn get_entity_properties(
             ep.property_definition_id,
             pd.team_id,
             pd.user_id,
+            pd.database_id,
             pd.display_name,
             pd.data_type as "data_type: DataType",
             pd.is_multi_select,
@@ -155,6 +159,7 @@ pub async fn get_entity_properties(
             owner: models_properties::PropertyOwner::from_optional_ids(
                 row.team_id,
                 row.user_id,
+                row.database_id,
                 row.is_system,
             ),
             display_name: row.display_name,
@@ -179,6 +184,7 @@ struct EntityPropertyRow {
     entity_property_updated_at: chrono::DateTime<chrono::Utc>,
     definition_team_id: Option<Uuid>,
     definition_user_id: Option<String>,
+    definition_database_id: Option<Uuid>,
     display_name: String,
     data_type: DataType,
     is_multi_select: bool,
@@ -196,6 +202,7 @@ fn row_to_entity_property_with_definition(
     let owner = models_properties::PropertyOwner::from_optional_ids(
         row.definition_team_id,
         row.definition_user_id,
+        row.definition_database_id,
         row.definition_is_system,
     );
 
@@ -480,6 +487,7 @@ SELECT
     ep.updated_at as entity_property_updated_at,
     pd.team_id as definition_team_id,
     pd.user_id as definition_user_id,
+    pd.database_id as definition_database_id,
     pd.display_name,
     pd.data_type as "data_type: DataType",
     pd.is_multi_select,
@@ -509,6 +517,7 @@ WHERE ep.entity_id = $1 AND ep.entity_type = $2
                 entity_property_updated_at: row.entity_property_updated_at,
                 definition_team_id: row.definition_team_id,
                 definition_user_id: row.definition_user_id,
+                definition_database_id: row.definition_database_id,
                 display_name: row.display_name,
                 data_type: row.data_type,
                 is_multi_select: row.is_multi_select,
@@ -558,6 +567,7 @@ SELECT
     ep.updated_at as entity_property_updated_at,
     pd.team_id as definition_team_id,
     pd.user_id as definition_user_id,
+    pd.database_id as definition_database_id,
     pd.display_name,
     pd.data_type as "data_type: DataType",
     pd.is_multi_select,
@@ -592,6 +602,7 @@ WHERE (ep.entity_id, ep.entity_type) IN (
             entity_property_updated_at: row.entity_property_updated_at,
             definition_team_id: row.definition_team_id,
             definition_user_id: row.definition_user_id,
+            definition_database_id: row.definition_database_id,
             display_name: row.display_name,
             data_type: row.data_type,
             is_multi_select: row.is_multi_select,
@@ -627,17 +638,18 @@ WHERE (ep.entity_id, ep.entity_type) IN (
 
 /// Gets entity properties with their definitions and values for multiple entities, filtered by property definition IDs.
 /// Returns a HashMap where the key is the entity_id and the value is Vec<EntityPropertyWithDefinition>.
-/// Only returns properties matching the specified property_ids. When `tag_viewer_user_id` is set,
-/// also returns TAG properties whose definition is owned by that user or their team.
+/// Only returns properties matching the specified property_ids. When `viewer_user_id` is set,
+/// also returns TAG properties owned by that user or their team, and the team's CRM stage
+/// definition ([`CRM_TEAM_STAGE_DEFINITION_NAME`]).
 #[tracing::instrument(skip(pool))]
 pub async fn get_bulk_entity_properties_values_filtered(
     pool: &Pool<Postgres>,
     entity_refs: &[EntityReference],
     property_ids: &[Uuid],
-    tag_viewer_user_id: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
+    viewer_user_id: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
 ) -> anyhow::Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
-    let tag_viewer_user_id: Option<&str> = tag_viewer_user_id.map(|u| u.as_ref());
-    if entity_refs.is_empty() || (property_ids.is_empty() && tag_viewer_user_id.is_none()) {
+    let viewer_user_id: Option<&str> = viewer_user_id.map(|u| u.as_ref());
+    if entity_refs.is_empty() || (property_ids.is_empty() && viewer_user_id.is_none()) {
         // If no property_ids specified, return empty map for each entity
         let mut result = HashMap::new();
         for entity_ref in entity_refs {
@@ -661,6 +673,7 @@ SELECT
     ep.updated_at as entity_property_updated_at,
     pd.team_id as definition_team_id,
     pd.user_id as definition_user_id,
+    pd.database_id as definition_database_id,
     pd.display_name,
     pd.data_type as "data_type: DataType",
     pd.is_multi_select,
@@ -683,13 +696,23 @@ AND (
             OR pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $4)
         )
     )
+    OR (
+        $4::text IS NOT NULL
+        AND pd.is_system = FALSE
+        AND pd.is_multi_select = FALSE
+        AND pd.data_type = $6
+        AND pd.display_name = $7
+        AND pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $4)
+    )
 )
         "#,
         &entity_ids,
         &entity_types as &[EntityType],
         &property_ids,
-        tag_viewer_user_id,
-        DataType::Tag as DataType
+        viewer_user_id,
+        DataType::Tag as DataType,
+        DataType::SelectString as DataType,
+        CRM_TEAM_STAGE_DEFINITION_NAME
     )
     .fetch_all(pool)
     .await?;
@@ -708,6 +731,7 @@ AND (
             entity_property_updated_at: row.entity_property_updated_at,
             definition_team_id: row.definition_team_id,
             definition_user_id: row.definition_user_id,
+            definition_database_id: row.definition_database_id,
             display_name: row.display_name,
             data_type: row.data_type,
             is_multi_select: row.is_multi_select,
@@ -799,6 +823,9 @@ fn flatten_property_for_index(
         PropertyValue::Bool(b) => property.values = vec![b.to_string()],
         PropertyValue::Num(n) => property.number_value = Some(n),
         PropertyValue::Date(d) => property.date_value = Some(d.timestamp_millis()),
+        PropertyValue::DateRange(range) => {
+            property.date_value = Some(range.start().timestamp_millis())
+        }
     }
     if property.is_empty() {
         return None;

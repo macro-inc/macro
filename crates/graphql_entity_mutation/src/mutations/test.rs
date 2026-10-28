@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_graphql::{
     Context, EmptySubscription, MaybeUndefined, Object, Request, Schema, SimpleObject, value,
@@ -11,6 +11,14 @@ use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
+use tracing::{
+    field::{Field, Visit},
+    span::{Attributes, Id, Record},
+};
+use tracing_subscriber::{
+    Layer, Registry,
+    layer::{Context as LayerContext, SubscriberExt},
+};
 
 /// Minimal composed Soup edge object used by the isolated mutation schema.
 #[derive(Clone, SimpleObject)]
@@ -26,18 +34,52 @@ struct TestEmailThreadEdges {
     available: bool,
 }
 
+/// Minimal agent-session-specific edge object used by the isolated schema.
+#[derive(Clone, SimpleObject)]
+struct TestAgentSessionEdges {
+    /// Keeps the GraphQL object non-empty.
+    available: bool,
+}
+
 impl SoupEntityEdges for TestSoupEdges {
     type Property = String;
     type Notification = String;
+    type NotificationFilter = String;
     type ActivityEvent = String;
     type EmailThreadEdges = TestEmailThreadEdges;
+    type CrmRecordEdges = TestEmailThreadEdges;
+    type InitiativeEdges = TestEmailThreadEdges;
+    type AgentSessionEdges = TestAgentSessionEdges;
 
     fn from_entity(_entity: Entity<'static>) -> Self {
         Self { available: true }
     }
 
+    fn initiative_edges(_initiative_id: uuid::Uuid) -> Self::InitiativeEdges {
+        TestEmailThreadEdges { available: true }
+    }
+
     fn email_thread_edges(_email_thread_id: uuid::Uuid) -> Self::EmailThreadEdges {
         TestEmailThreadEdges { available: true }
+    }
+
+    fn crm_record_edges(_record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+        TestEmailThreadEdges { available: true }
+    }
+
+    async fn resolve_email_cache_projection(
+        &self,
+        _ctx: &Context<'_>,
+        _email_thread_id: uuid::Uuid,
+    ) -> async_graphql::Result<Option<String>> {
+        Ok(None)
+    }
+
+    fn agent_session_edges(
+        _session_id: uuid::Uuid,
+        _bot_id: uuid::Uuid,
+    ) -> Self::AgentSessionEdges {
+        TestAgentSessionEdges { available: true }
     }
 
     async fn resolve_properties(
@@ -50,6 +92,8 @@ impl SoupEntityEdges for TestSoupEdges {
     async fn resolve_notifications(
         &self,
         _ctx: &Context<'_>,
+        _filter: Option<String>,
+        _limit: Option<i32>,
     ) -> async_graphql::Result<Vec<Self::Notification>> {
         Ok(Vec::new())
     }
@@ -82,6 +126,17 @@ impl QueryRoot {
     /// Return a trivial value so the test schema has a valid query root.
     async fn health(&self) -> bool {
         true
+    }
+
+    /// Exercise input coercion, adapter validation, and conversion without a domain service.
+    async fn convert_share_policy(
+        &self,
+        input: super::UpdateEntitySharePolicyInput,
+    ) -> async_graphql::Result<
+        async_graphql::Json<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    > {
+        super::validate_share_policy_inputs(std::slice::from_ref(&input))?;
+        Ok(async_graphql::Json(input.into_model()?.policy))
     }
 
     /// Return a successful domain outcome whose deletion cannot be represented by Soup.
@@ -199,6 +254,98 @@ fn batch_validation_rejects_oversized_and_duplicate_requests() {
     assert!(error.message.contains("duplicate entity"));
 }
 
+#[tokio::test]
+async fn graphql_team_share_variables_preserve_undefined_null_and_values() {
+    let schema = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription).finish();
+    for (variables, expected) in [
+        (value!({}), value!({ "channelSharePermissions": null })),
+        (
+            value!({ "teamShareAccessLevel": null }),
+            value!({ "teamShareAccessLevel": null, "channelSharePermissions": null }),
+        ),
+        (
+            value!({ "teamShareAccessLevel": "VIEW" }),
+            value!({ "teamShareAccessLevel": "view", "channelSharePermissions": null }),
+        ),
+        (
+            value!({ "teamShareAccessLevel": "COMMENT" }),
+            value!({ "teamShareAccessLevel": "comment", "channelSharePermissions": null }),
+        ),
+        (
+            value!({ "teamShareAccessLevel": "EDIT" }),
+            value!({ "teamShareAccessLevel": "edit", "channelSharePermissions": null }),
+        ),
+        // The adapter forwards OWNER so the domain can reject it per entity.
+        (
+            value!({ "teamShareAccessLevel": "OWNER" }),
+            value!({ "teamShareAccessLevel": "owner", "channelSharePermissions": null }),
+        ),
+    ] {
+        let response = schema
+            .execute(
+                Request::new(
+                    r#"query($policy: EntitySharePolicyInput!) {
+                        convertSharePolicy(input: {
+                            entity: { type: DOCUMENT, id: "document-1" }
+                            policy: $policy
+                        })
+                    }"#,
+                )
+                .variables(async_graphql::Variables::from_value(
+                    value!({ "policy": variables }),
+                )),
+            )
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data, value!({ "convertSharePolicy": expected }));
+    }
+}
+
+#[tokio::test]
+async fn graphql_team_share_literals_are_independent_of_link_sharing() {
+    let schema = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription).finish();
+    for (policy, expected) in [
+        ("{}", value!({ "channelSharePermissions": null })),
+        (
+            "{ teamShareAccessLevel: null, linkShare: PUBLIC, linkShareAccessLevel: VIEW }",
+            value!({
+                "teamShareAccessLevel": null,
+                "linkShare": "PUBLIC",
+                "linkShareAccessLevel": "view",
+                "channelSharePermissions": null,
+            }),
+        ),
+        (
+            "{ teamShareAccessLevel: EDIT, linkShare: null, linkShareAccessLevel: null }",
+            value!({
+                "teamShareAccessLevel": "edit",
+                "linkShare": null,
+                "linkShareAccessLevel": null,
+                "channelSharePermissions": null,
+            }),
+        ),
+        (
+            "{ linkShare: TEAM, linkShareAccessLevel: COMMENT }",
+            value!({
+                "linkShare": "TEAM",
+                "linkShareAccessLevel": "comment",
+                "channelSharePermissions": null,
+            }),
+        ),
+    ] {
+        let response = schema
+            .execute(format!(
+                r#"{{ convertSharePolicy(input: {{
+                    entity: {{ type: DOCUMENT, id: "document-1" }}
+                    policy: {policy}
+                }}) }}"#,
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data, value!({ "convertSharePolicy": expected }));
+    }
+}
+
 fn share_policy_input(
     link_share: MaybeUndefined<super::GraphqlLinkShare>,
     link_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
@@ -206,6 +353,7 @@ fn share_policy_input(
     super::EntitySharePolicyInput {
         link_share,
         link_share_access_level,
+        team_share_access_level: MaybeUndefined::Undefined,
         channel_share_permissions: None,
     }
 }
@@ -305,6 +453,7 @@ fn share_policy_validation_requires_access_levels_for_channel_grants() {
         policy: super::EntitySharePolicyInput {
             link_share: MaybeUndefined::Undefined,
             link_share_access_level: MaybeUndefined::Undefined,
+            team_share_access_level: MaybeUndefined::Undefined,
             channel_share_permissions: Some(vec![super::ChannelSharePolicyInput {
                 operation: super::GraphqlSharePolicyOperation::Add,
                 channel_id: "channel-1".into(),
@@ -314,4 +463,79 @@ fn share_policy_validation_requires_access_levels_for_channel_grants() {
     }];
     let error = super::validate_share_policy_inputs(&inputs).unwrap_err();
     assert!(error.message.contains("accessLevel is required"));
+}
+
+/// Captures every span field value, including values recorded after creation.
+#[derive(Clone, Default)]
+struct RecordedSpanFields(Arc<Mutex<Vec<(String, String)>>>);
+
+impl RecordedSpanFields {
+    fn get(&self, name: &str) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|(field, _)| field == name)
+            .map(|(_, value)| value.clone())
+    }
+}
+
+impl Visit for RecordedSpanFields {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.0
+            .lock()
+            .unwrap()
+            .push((field.name().to_string(), format!("{value:?}")));
+    }
+}
+
+impl<S: tracing::Subscriber> Layer<S> for RecordedSpanFields {
+    fn on_new_span(&self, attrs: &Attributes<'_>, _id: &Id, _ctx: LayerContext<'_, S>) {
+        attrs.record(&mut self.clone());
+    }
+
+    fn on_record(&self, _id: &Id, values: &Record<'_>, _ctx: LayerContext<'_, S>) {
+        values.record(&mut self.clone());
+    }
+}
+
+#[tokio::test]
+async fn batch_span_records_per_item_failures() {
+    let fields = RecordedSpanFields::default();
+    let _guard = tracing::subscriber::set_default(Registry::default().with(fields.clone()));
+    let actor = EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+        organization_id: Some(42),
+    };
+    let response = Schema::build(
+        QueryRoot,
+        crate::EntityMutationRoot::<UnavailableEntityMutationService, TestSoupEdges>::new(),
+        EmptySubscription,
+    )
+    .finish()
+    .execute(
+        Request::new(
+            r#"mutation {
+              trashEntities(entities: [
+                { type: DOCUMENT, id: "document-1" }
+                { type: DOCUMENT, id: "document-2" }
+              ]) { results { __typename } }
+            }"#,
+        )
+        .data(Arc::new(UnavailableEntityMutationService))
+        .data(actor),
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(fields.get("entity_mutation.count").as_deref(), Some("2"));
+    assert_eq!(
+        fields.get("entity_mutation.failed_count").as_deref(),
+        Some("2")
+    );
+    assert_eq!(
+        fields.get("entity_mutation.error_code").as_deref(),
+        Some("UnsupportedOperation")
+    );
 }

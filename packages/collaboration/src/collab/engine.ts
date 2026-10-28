@@ -27,7 +27,7 @@ import { peerCounterAttr, telemetrySpan } from './telemetry';
 // SnapshotStore in the engine is always Loro updates — RawUpdate.
 type LoroSnapshotStore = SnapshotStore<RawUpdate>;
 
-import type { LiveSyncSource, SyncSourceEvent, TimeoutError } from './source';
+import type { LiveSyncSource, SyncError, SyncSourceEvent } from './source';
 import type { WALSyncer } from './wal';
 
 const SNAPSHOT_INTERVAL_MS = 5_000;
@@ -64,7 +64,7 @@ export type SyncEngineParams<S extends GenericRootSchema, D> = {
   makeChatter?: (documentId: string) => Chatter;
 };
 
-type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
+type SnapshotThunk = () => ResultAsync<Uint8Array, SyncError>;
 
 export class SyncEngine<S extends GenericRootSchema, D> {
   private _isRunning = false;
@@ -149,7 +149,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         .with({ type: 'awareness' }, (m) =>
           this.awareness.importRemoteAwareness(m.data)
         )
-        .exhaustive()
+        .exhaustive(() =>
+          this.log('warn', 'engine.chatter: unknown message ignored')
+        )
     );
 
     this._isRunning = true;
@@ -228,10 +230,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     if (wasRunning) {
       this.stop();
     }
+    const generation = this.lifecycleGeneration;
 
     await this.syncLock.runExclusive(async () => {
+      if (generation !== this.lifecycleGeneration) return;
       this.log('info', 'engine.reset: starting');
       const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
+      if (generation !== this.lifecycleGeneration) return;
       if (snapshot.isErr()) {
         this.log('error', 'engine.reset: failed to get snapshot', {
           err: String(snapshot.error),
@@ -248,7 +253,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       }
     });
 
-    if (wasRunning) {
+    if (wasRunning && generation === this.lifecycleGeneration) {
       this.start();
     }
   }
@@ -286,7 +291,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     try {
       const doc = this.loroManager.doc;
-      this.log('debug', 'engine: persisting snapshot', { doc: doc.toJSON() });
+      this.log('debug', 'engine: persisting snapshot', {
+        operations: doc.opCount(),
+      });
       const snapshot = doc.export({
         mode: 'shallow-snapshot',
         frontiers: doc.oplogFrontiers(),
@@ -307,41 +314,49 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private async handleRemoteUpdate(
     update: RawUpdate
   ): Promise<'applied' | 'pending' | 'reset'> {
-    return this.syncLock.runExclusive(() =>
-      telemetrySpan(this.syncs.live.documentId, 'edit.apply', async (span) => {
-        span.setAttr('update.bytes', update.length);
-        const importResult = this.loroManager.importUpdate(update);
-        await Promise.resolve();
-        if (importResult.isErr()) {
-          const pendingOnly = importResult.error.every(
-            (e) => e.code === LoroManagerError.ImportPending
-          );
-          if (pendingOnly) {
-            // Loro retains causally-ahead updates. Pull the missing operations
-            // rather than resetting the document.
-            this.log('debug', 'engine: remote update pending on missing ops');
-            span.setAttr('outcome', 'pending');
-            void this.convergeFromServer();
-            return 'pending';
-          }
-
-          this.log(
-            'error',
-            'engine: failed to import remote update, resetting',
-            {
-              err: JSON.stringify(importResult.error),
+    const generation = this.lifecycleGeneration;
+    return this.syncLock.runExclusive(() => {
+      // A queued packet can outlive stop/reset and its document's WASM owner.
+      if (!this.isActiveGeneration(generation)) return 'applied';
+      return telemetrySpan(
+        this.syncs.live.documentId,
+        'edit.apply',
+        async (span) => {
+          span.setAttr('update.bytes', update.length);
+          const importResult = this.loroManager.importUpdate(update);
+          await Promise.resolve();
+          if (!this.isActiveGeneration(generation)) return 'applied';
+          if (importResult.isErr()) {
+            const pendingOnly = importResult.error.every(
+              (e) => e.code === LoroManagerError.ImportPending
+            );
+            if (pendingOnly) {
+              // Loro retains causally-ahead updates. Pull the missing operations
+              // rather than resetting the document.
+              this.log('debug', 'engine: remote update pending on missing ops');
+              span.setAttr('outcome', 'pending');
+              void this.convergeFromServer();
+              return 'pending';
             }
-          );
-          span.error(importResult.error);
-          span.setAttr('outcome', 'reset');
-          this.reset();
-          return 'reset';
+
+            this.log(
+              'error',
+              'engine: failed to import remote update, resetting',
+              {
+                err: JSON.stringify(importResult.error),
+              }
+            );
+            span.error(importResult.error);
+            span.setAttr('outcome', 'reset');
+            this.reset();
+            return 'reset';
+          }
+          span.setAttr('outcome', 'applied');
+          span.setAttr('did_change', importResult.value);
+          return 'applied';
         }
-        span.setAttr('outcome', 'applied');
-        span.setAttr('did_change', importResult.value);
-        return 'applied';
-      })
-    );
+      );
+    });
   }
 
   private handleSourceEvent(event: SyncSourceEvent) {
@@ -471,7 +486,7 @@ export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   start: () => void;
   stop: () => void;
   reset: (
-    snapshotThunk?: () => ResultAsync<Uint8Array, TimeoutError>
+    snapshotThunk?: () => ResultAsync<Uint8Array, SyncError>
   ) => Promise<void>;
   syncStateToLoro: (state: InferType<S>) => Promise<void>;
   syncAwarenessToLoro: (awareness: D) => void;

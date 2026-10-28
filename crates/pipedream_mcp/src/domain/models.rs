@@ -1,22 +1,5 @@
-use rmcp::RoleClient;
-use rmcp::model::{ClientInfo, Implementation};
-use rmcp::service::RunningService;
-
 pub use macro_user_id::user_id::MacroUserIdStr;
-
-/// Our MCP client publishes this name to servers on-connect.
-pub const MCP_CLIENT_NAME: &str = "Macro";
-
-/// A connected MCP server session.
-pub type McpServer = RunningService<RoleClient, ClientInfo>;
-
-/// Build the client info sent to MCP servers during initialization.
-pub fn client_info() -> ClientInfo {
-    ClientInfo::new(
-        Default::default(),
-        Implementation::new(MCP_CLIENT_NAME, env!("CARGO_PKG_VERSION")),
-    )
-}
+pub use mcp_toolset::{MCP_CLIENT_NAME, McpServer, client_info};
 
 /// An MCP connector a user has connected through Pipedream.
 ///
@@ -35,6 +18,20 @@ pub struct PipedreamConnection {
     pub account_id: String,
     /// Whether the connector is enabled for tool use.
     pub enabled: bool,
+}
+
+/// A catalog app that connects through the native MCP stack instead of
+/// Pipedream: the vendor's own MCP server, authorized with our OAuth client
+/// (dynamic or metadata-document registration).
+///
+/// The app still appears in the catalog under its Pipedream slug, but
+/// Pipedream never holds a grant for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConnectorOverlay {
+    /// Pipedream app name slug, e.g. `sentry`.
+    pub app_slug: String,
+    /// The vendor's MCP server URL, e.g. `https://mcp.sentry.dev/mcp`.
+    pub server_url: String,
 }
 
 /// A short-lived token for opening Pipedream's hosted Connect UI.
@@ -61,6 +58,8 @@ pub struct PipedreamAccount {
     pub app_name: String,
     /// Whether Pipedream considers the account's credentials healthy.
     pub healthy: bool,
+    /// When Pipedream created the account, if it reported it.
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// One connectable app advertised in the catalog.
@@ -74,9 +73,8 @@ pub struct CatalogEntry {
     pub description: Option<String>,
     /// URL of the app's icon, when the directory provides one.
     pub icon_url: Option<String>,
-    /// Whether this is a curated priority connector, ranked above organic
-    /// directory results (and renderable as its own section).
-    pub priority: bool,
+    /// Categories assigned by the Pipedream app directory.
+    pub categories: Vec<String>,
 }
 
 /// One page of catalog results.
@@ -89,12 +87,4 @@ pub struct CatalogPage {
 }
 
 /// Errors from Pipedream MCP tool dispatch.
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    /// The requested tool was not found on any connected server.
-    #[error("unknown tool: {0}")]
-    UnknownTool(String),
-    /// A tool invocation failed.
-    #[error("tool call failed: {0}")]
-    ToolCall(String),
-}
+pub use mcp_toolset::Error;

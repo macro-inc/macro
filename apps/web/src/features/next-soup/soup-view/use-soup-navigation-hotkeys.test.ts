@@ -20,13 +20,21 @@ vi.mock('@core/mobile/inputModality', () => ({
 }));
 
 vi.mock('@app/features/next-soup/utils', () => ({
-  isDuplicatePreviewEntityOpen: vi.fn(() => false),
-  notifyDuplicateContentOpen: vi.fn(),
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
 
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => undefined,
+}));
+
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  withSplitPanelOwner: vi.fn((_name: string, factory: () => unknown) =>
+    factory()
+  ),
+}));
+
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({ bulkMarkAsRead: vi.fn() }),
 }));
 
 vi.mock('@core/hotkey/hotkeys', () => {
@@ -50,13 +58,21 @@ vi.mock('@core/hotkey/tokens', () => ({
     unifiedList: {
       navigation: {
         parent: 'unifiedList.navigation.parent',
+        collapseGroup: 'unifiedList.navigation.collapseGroup',
         child: 'unifiedList.navigation.child',
       },
     },
   },
 }));
 
+import {
+  getListNavigationSource,
+  listNavigationSourceId,
+  withListNavigationSource,
+} from '@app/features/soup/collection/list-navigation-source';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import { withSplitPanelOwner } from '@components/app/split-layout/layoutUtils';
+import { createOwnedSlots } from '@components/app/split-layout/utils/createOwnedSlots';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
@@ -80,7 +96,7 @@ const createTestGroup = (key: string, count: number): GroupMeta => ({
   label: key,
   value: key,
   count,
-  isExpanded: () => true,
+  isExpanded: vi.fn(() => true),
   toggle: () => {},
 });
 
@@ -117,8 +133,7 @@ const createSplitHandleStub = () =>
     id: 'split-test',
     content: () => ({ type: 'component', id: 'tasks' }),
     referredFrom: () => undefined,
-    isControllerSplit: () => false,
-    viewerId: () => undefined,
+    registerEntryStateCaptor: () => () => {},
   }) as unknown as SplitHandle;
 
 const handlerFor = (key: ValidHotkey) => {
@@ -150,6 +165,154 @@ const setupHotkeys = () =>
 describe('useSoupNavigationHotkeys', () => {
   beforeEach(() => {
     vi.mocked(registerHotkey).mockClear();
+    vi.mocked(withSplitPanelOwner).mockImplementation((_name, factory) =>
+      factory()
+    );
+  });
+
+  it('reserves H for reminders on child rows while ArrowLeft collapses their group', () => {
+    const { soup, dispose } = setupHotkeys();
+    try {
+      soup.focus.set('a1');
+      const group = soup.focus.row()!.group!;
+      const toggle = vi.spyOn(group, 'toggle');
+      expect(handlerFor('h')()).toBe(false);
+      expect(toggle).not.toHaveBeenCalled();
+      expect(soup.focus.id()).toBe('a1');
+      expect(handlerFor('arrowleft')()).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+      expect(soup.focus.id()).toBe('header:a');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('collapses task groups with H without consuming H on emails', () => {
+    const { soup, dispose } = setupHotkeys();
+    try {
+      soup.focus.set('a1');
+      const row = soup.focus.row()!;
+      const toggle = vi.spyOn(row.group!, 'toggle');
+      soup.setRows(
+        soup.rows().map((r) => ({
+          ...r,
+          original:
+            r.id === 'a1'
+              ? ({ ...r.original, type: 'email' } as EntityData)
+              : r.original,
+        }))
+      );
+      expect(
+        handlerFor('arrowleft')(new KeyboardEvent('keydown', { key: 'h' }))
+      ).toBe(false);
+      expect(toggle).not.toHaveBeenCalled();
+      soup.setRows(
+        soup.rows().map((r) => ({
+          ...r,
+          original:
+            r.id === 'a1'
+              ? ({
+                  ...r.original,
+                  type: 'document',
+                  fileType: 'md',
+                  subType: { type: 'task', is_completed: false },
+                } as EntityData)
+              : r.original,
+        }))
+      );
+      expect(
+        handlerFor('arrowleft')(new KeyboardEvent('keydown', { key: 'h' }))
+      ).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+      expect(soup.focus.id()).toBe('header:a');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('consumes H on expanded and collapsed headers', () => {
+    const { soup, dispose } = setupHotkeys();
+    try {
+      soup.focus.set('header:a');
+      const group = soup.focus.row()!.group!;
+      const toggle = vi.spyOn(group, 'toggle');
+      expect(handlerFor('h')()).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+      vi.mocked(group.isExpanded).mockReturnValue(false);
+      expect(handlerFor('h')()).toBe(true);
+      expect(toggle).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('makes the legacy list available to a separate native detail split', async () => {
+    let finishLoading!: () => void;
+    const fetchNextPage = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLoading = resolve;
+        })
+    );
+    const { soup, source, dispose } = createRoot((dispose) => {
+      const slots = createOwnedSlots();
+      vi.mocked(withSplitPanelOwner).mockImplementation(slots.replace);
+      const soup = createSoupState();
+      setGroupedRows(soup);
+      const list = createSplitHandleStub();
+      list.content = () => ({ type: 'component', id: 'mail' });
+      const disposeView = createRoot((disposeView) => {
+        useSoupNavigationHotkeys({
+          scopeId: 'test-scope',
+          soup,
+          splitHandle: list,
+          virtualizerHandle: () => undefined,
+          hasNextPage: () => true,
+          fetchNextPage,
+        });
+        return disposeView;
+      });
+      disposeView();
+      const detail = {
+        ...list,
+        id: 'native-detail' as SplitHandle['id'],
+        content: () =>
+          withListNavigationSource({ type: 'email', id: 'a1' }, list),
+      };
+      const source = getListNavigationSource(listNavigationSourceId(detail));
+      return { soup, source, dispose };
+    });
+    try {
+      expect(source?.viewId).toBe('mail');
+      expect(source?.entities().map((entity) => entity.id)).toEqual([
+        'a1',
+        'a2',
+        'b1',
+        'b2',
+      ]);
+      expect(source?.hasMore()).toBe(true);
+      let loaded = false;
+      const loading = (async () => {
+        await source!.loadMore();
+        loaded = true;
+      })();
+      await Promise.resolve();
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      expect(loaded).toBe(false);
+      soup.setRows([
+        soup.buildRow({
+          id: 'next',
+          index: 0,
+          original: createTestEntity('next'),
+        }),
+      ]);
+      finishLoading();
+      await loading;
+      expect(source?.entities().map((entity) => entity.id)).toEqual(['next']);
+    } finally {
+      dispose();
+    }
+    expect(getListNavigationSource('split-test')).toBeUndefined();
   });
 
   it('j and k step through entities without focusing group headers', () => {
@@ -172,6 +335,39 @@ describe('useSoupNavigationHotkeys', () => {
     expect(soup.focus.id()).toBe('a2');
 
     dispose();
+  });
+
+  it('keeps detail navigation without reading the unmounted list virtualizer', () => {
+    const virtualizer = vi.fn(() => undefined);
+    const { soup, dispose, disposeView } = createRoot((dispose) => {
+      const slots = createOwnedSlots();
+      vi.mocked(withSplitPanelOwner).mockImplementation(slots.replace);
+      const soup = createSoupState();
+      setGroupedRows(soup);
+      const disposeView = createRoot((disposeView) => {
+        useSoupNavigationHotkeys({
+          scopeId: 'test-scope',
+          soup,
+          splitHandle: createSplitHandleStub(),
+          virtualizerHandle: virtualizer,
+        });
+        return disposeView;
+      });
+      return { soup, dispose, disposeView };
+    });
+    try {
+      handlerFor('j')();
+      expect(virtualizer).toHaveBeenCalled();
+      disposeView();
+      virtualizer.mockClear();
+      handlerFor('j')();
+      expect(soup.focus.id()).toBe('a2');
+      handlerFor('k')();
+      expect(soup.focus.id()).toBe('a1');
+      expect(virtualizer).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 
   it('arrow keys share the header-skipping navigation', () => {

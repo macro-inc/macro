@@ -32,11 +32,28 @@ impl ActivityReads for FakeReads {
         unreachable!()
     }
 
+    async fn teammate_feed(
+        &self,
+        _viewer_id: &str,
+        _cursor: Option<(DateTime<Utc>, Uuid)>,
+        _limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, Self::Err> {
+        unreachable!()
+    }
+
     async fn entity_activity(
         &self,
         _keys: &[(crate::EntityType, String)],
         _per_entity_limit: u32,
     ) -> Result<EntityActivityMap, Self::Err> {
+        unreachable!()
+    }
+
+    async fn subject_overview(
+        &self,
+        _subject_id: &str,
+        _window: crate::domain::overview::ActivityWindow,
+    ) -> Result<crate::domain::overview::ActivityOverview, Self::Err> {
         unreachable!()
     }
 

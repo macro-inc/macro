@@ -15,6 +15,7 @@ use macro_authorization::{
     AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
     OptionalMacroAuthorizationExtractor,
 };
+use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -52,7 +53,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
@@ -67,6 +68,7 @@ where
         let chat_context: Extension<ChatBasic> = parts
             .extract()
             .await
+            .inspect_err(|error| tracing::error!(error=?error, "chat context missing"))
             .map_err(|_| ExtractorError::Internal)?;
 
         if let Some(MacroAuthorization::Bot(authentication)) = authorization.as_ref() {
@@ -124,7 +126,7 @@ where
 
         // Bots always resolve ownership through the scoped domain policy.
         if let Some(ref user_id) = macro_user_id
-            && chat_context.user_id == *user_id
+            && chat_context.user_id.is_user(user_id)
         {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {

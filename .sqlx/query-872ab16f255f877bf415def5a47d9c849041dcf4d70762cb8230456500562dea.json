@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, agent_session_id, user_id AS \"user_id: MacroUserIdStr\",\n                   direction, content, created_at\n            FROM agent_session_log\n            WHERE agent_session_id = $1\n              AND EXISTS (\n                  SELECT 1 FROM agent_session_log AS prompt\n                  WHERE prompt.agent_session_id = $1\n                    AND prompt.direction IN ('to_runtime', 'notification')\n                    AND prompt.content->>'method' = 'session/prompt'\n                    AND prompt.content->>'id' = $2\n              )\n            ORDER BY created_at, id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id: MacroUserIdStr",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "872ab16f255f877bf415def5a47d9c849041dcf4d70762cb8230456500562dea"
+}

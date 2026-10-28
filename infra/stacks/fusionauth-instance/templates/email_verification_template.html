@@ -1,135 +1,212 @@
 [#setting url_escaping_charset="UTF-8"]
-<!DOCTYPE html>
-<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
-<head>
-  <meta charset="utf-8" />
-  <meta name="x-apple-disable-message-reformatting" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta
-    name="format-detection"
-    content="telephone=no, date=no, address=no, email=no"
-  />
-  <meta name="color-scheme" content="dark" />
-  <meta name="supported-color-schemes" content="dark" />
-  <title>Verify your email</title>
-  <!--[if mso]><style>body{font-family:Helvetica,Arial,sans-serif}</style><![endif]-->
-</head>
-
-<body>
-<div
-  role="article"
-  aria-roledescription="email"
-  aria-label="Verify your email"
-  lang="en"
-  style="background-color: #030303; width: 100%; font-family: 'Rajdhani', Helvetica, Arial, sans-serif"
->
-  <table
-    cellpadding="0"
-    cellspacing="0"
-    role="presentation"
-    style="width: 100%; max-width: 640px; margin: 0 auto; background-color: #030303"
+<!doctype html>
+<html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta
+      name="format-detection"
+      content="telephone=no, date=no, address=no, email=no"
+    />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <title>Verify your email</title>
+    <!--[if mso]>
+      <noscript
+        ><xml
+          ><o:OfficeDocumentSettings
+            ><o:PixelsPerInch>96</o:PixelsPerInch
+            ><o:AllowPNG /></o:OfficeDocumentSettings></xml
+      ></noscript>
+    <![endif]-->
+    <style>
+      @media screen and (max-width: 600px) {
+        .email-page {
+          padding: 24px 12px !important;
+        }
+        .email-content {
+          padding: 28px 24px !important;
+        }
+        .email-heading {
+          font-size: 26px !important;
+          line-height: 34px !important;
+        }
+      }
+    </style>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background-color: #f5f5f4;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    "
   >
-    <tr>
-      <td align="center" style="padding: 56px 0 32px">
-        <a href="https://macro.com">
-          <img
-            src="https://macro.com/logo-256px.png"
-            width="128"
-            alt="Macro"
-            style="border: 0; max-width: 100%"
-          />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <div style="background-color: #090909; border-radius: 5px; padding: 56px 40px; margin: 0 16px; border: 1px solid #484848">
-          <h1
-            style="
-                    margin: 0 0 16px;
-                    text-align: center;
-                    font-size: 36px;
-                    font-weight: 450;
-                    font-family: 'Roboto Slab', Rockwell, Georgia, serif;
-                    letter-spacing: -0.02em;
-                    color: #f2f2f2;
-                  "
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        mso-hide: all;
+      "
+    >
+      Confirm your email address for Macro.
+    </div>
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      bgcolor="#f5f5f4"
+      style="
+        font-family: Arial, Helvetica, sans-serif;
+        color: #222222;
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      "
+    >
+      <tr>
+        <td class="email-page" align="center" style="padding: 48px 20px">
+          <!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            style="max-width: 560px; table-layout: fixed"
           >
-            Verify your email
-          </h1>
-          <p
-            style="
-                    margin: 0;
-                    text-align: center;
-                    font-size: 16px;
-                    color: #aeaeae;
-                    font-family: 'Rajdhani', Helvetica, Arial, sans-serif;
-                  "
-          >
-            Click the button below to verify your email address.
-          </p>
-          <div style="text-align: center; margin: 56px 0">
-            <a
-              href="{{AUTH_SERVICE_URL}}/email/verify/fusionauth/${verificationId}"
-              style="
-                      display: inline-block;
-                      background-color: #ff8f00;
-                      color: #090909;
-                      text-decoration: none;
-                      padding: 16px 32px;
-                      border-radius: 3px;
-                      font-size: 16px;
-                      font-family: 'Rajdhani', Helvetica, Arial, sans-serif;
-                      font-weight: 600;
-                    "
-            >
-              Verify
-            </a>
-          </div>
-          <!--[if mso]>
-          <table cellpadding="0" cellspacing="0" role="presentation" style="margin: 56px auto;">
             <tr>
-              <td style="background-color: #ff8f00; border-radius: 3px;">
-                <a href="{{AUTH_SERVICE_URL}}/email/verify/fusionauth/${verificationId}" style="color: #090909; text-decoration: none; display: block; padding: 16px 32px; font-size: 16px; font-weight: 600; font-family: 'Rajdhani', Helvetica, Arial, sans-serif;">
-                  Verify Email
-                </a>
+              <td
+                class="email-content"
+                bgcolor="#ffffff"
+                style="
+                  padding: 36px 40px 40px;
+                  border: 1px solid #e7e7e5;
+                  border-radius: 12px;
+                  overflow-wrap: break-word;
+                  word-wrap: break-word;
+                "
+              >
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  style="margin-bottom: 36px"
+                >
+                  <tr>
+                    <td width="36" style="vertical-align: middle">
+                      <a href="https://macro.com" style="text-decoration: none"
+                        ><img
+                          src="https://macro.com/app/macro-email-logo.png"
+                          width="36"
+                          height="36"
+                          alt="Macro"
+                          style="
+                            display: block;
+                            border: 0;
+                            background-color: #ffffff;
+                            -ms-interpolation-mode: bicubic;
+                          "
+                      /></a>
+                    </td>
+                  </tr>
+                </table>
+                <h1
+                  class="email-heading"
+                  style="
+                    margin: 0 0 16px;
+                    font-size: 28px;
+                    line-height: 36px;
+                    font-weight: 600;
+                    letter-spacing: -0.5px;
+                    color: #222222;
+                  "
+                >
+                  Verify your email
+                </h1>
+                <p
+                  style="
+                    margin: 0 0 20px;
+                    font-size: 16px;
+                    line-height: 26px;
+                    color: #525252;
+                  "
+                >
+                  Confirm your email address to continue to Macro.
+                </p>
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  style="margin: 28px 0 8px; max-width: 100%"
+                >
+                  <tr>
+                    <td
+                      bgcolor="#222222"
+                      style="
+                        border-radius: 6px;
+                        text-align: center;
+                        mso-padding-alt: 14px 24px;
+                      "
+                    >
+                      <a
+                        href="{{AUTH_SERVICE_URL}}/email/verify/fusionauth/${verificationId}"
+                        style="
+                          display: inline-block;
+                          padding: 14px 24px;
+                          border: 1px solid #222222;
+                          border-radius: 6px;
+                          color: #ffffff;
+                          background-color: #222222;
+                          font-size: 15px;
+                          line-height: 20px;
+                          font-weight: 600;
+                          text-decoration: none;
+                          mso-padding-alt: 0;
+                        "
+                        >Verify email</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+                <p
+                  style="
+                    margin: 28px 0 0;
+                    font-size: 14px;
+                    line-height: 22px;
+                    color: #737373;
+                  "
+                >
+                  If you didn't request this, you can safely ignore this email.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  padding: 24px 16px 0;
+                  text-align: center;
+                  font-size: 12px;
+                  line-height: 20px;
+                  color: #737373;
+                "
+              >
+                Need a hand?
+                <a
+                  href="mailto:support@macro.com"
+                  style="color: #525252; text-decoration: underline"
+                  >Contact support</a
+                >
               </td>
             </tr>
           </table>
-          <![endif]-->
-          <p
-            style="
-                    text-align: center;
-                    font-size: 16px;
-                    color: #aeaeae;
-                    font-family: 'Rajdhani', Helvetica, Arial, sans-serif;
-                  "
-          >
-            If you didn't request this, you can safely ignore this email.
-          </p>
-        </div>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 48px 0; text-align: center">
-        <p
-          style="
-                  margin: 0;
-                  font-size: 14px;
-                  color: #484848;
-                  font-family: 'Rajdhani', Helvetica, Arial, sans-serif;
-                "
-        >
-          Questions? Email us at
-          <a
-            href="mailto:support@macro.com"
-            style="color: #aeaeae; text-decoration: none"
-          >support@macro.com</a
-          >
-        </p>
-      </td>
-    </tr>
-  </table>
-</div>
-</body>
+          <!--[if mso]></td></tr></table><![endif]-->
+        </td>
+      </tr>
+    </table>
+  </body>
 </html>

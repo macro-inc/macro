@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT de.document_id\n        FROM document_email de\n        JOIN \"Document\" d ON d.id = de.document_id\n        WHERE de.email_attachment_id = $1\n        ORDER BY (d.\"deletedAt\" IS NULL) DESC, de.document_id\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "39fbfe86d9b8ee884383c557bbd3f2030bef31de3a9f3430f8b440a098f86e8f"
+}

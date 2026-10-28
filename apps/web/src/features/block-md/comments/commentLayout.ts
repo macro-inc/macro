@@ -6,24 +6,22 @@ import type {
   ThreadHeights,
   ThreadPositions,
 } from '@block-md/comments/commentType';
-import { mdStore } from '@block-md/signal/markdownBlockData';
-import {
-  createBlockEffect,
-  createBlockMemo,
-  createBlockSignal,
-  createBlockStore,
-  useBlockName,
-} from '@core/block';
 import {
   autoRegister,
   registerEditorWidthObserver,
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins';
-import { getScrollParentElement } from '@core/util/scrollParent';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
-import { onCleanup, untrack } from 'solid-js';
-import { activeMarkIdsSignal, markStore } from './commentStore';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 // how much to pad the container for the "show more" buttons
 const CONTAINER_PADDING = 0;
@@ -34,316 +32,231 @@ export const MIN_THREAD_GAP = 10;
 // the throttle time for layout updates.
 const LAYOUT_THROTTLE = 60;
 
-const notebookSize = createBlockMemo(() => {
-  const notebook = mdStore.get.notebook;
-  if (!notebook) return;
-  const size = createElementSize(notebook);
-  return size;
-});
+type StackInput<T> = CommentViewerInitialLayout<T> & { height: number };
 
-export const notebookHeight = createBlockMemo(() => {
-  return notebookSize()?.height;
-});
+/**
+ * Stacks margin threads (sorted by their marks' positions) so no two cards
+ * overlap and none starts above the top of the margin, where it could never
+ * be scrolled to. The anchor (the active thread) sits beside its mark, moved
+ * up only as far as it takes to end inside the page; threads above it are
+ * pushed up and threads below it are pushed down. When the threads above do
+ * not fit between the top of the page and the anchor, the whole stack is
+ * pushed down instead. Threads below may run past the page's bottom; the
+ * document scrolls to them.
+ */
+export function stackMarginThreads<T>(
+  threads: readonly StackInput<T>[],
+  anchorIndex: number,
+  pageHeight: number
+): Array<CommentLayout<T>> {
+  const anchor = threads[anchorIndex];
+  if (!anchor) return [];
+  const tops = threads.map((thread) => thread.layout.originalYPosition);
 
-export const threadHeightStore = createBlockStore<ThreadHeights>({});
-export const threadsPositionStore = createBlockStore<ThreadPositions>({});
-const markLocationTopStore = createBlockStore<Partial<Record<MarkId, number>>>(
-  {}
-);
-
-const marginTopSignal = createBlockSignal(0);
-const scrollYSignal = createBlockSignal(0);
-
-createBlockEffect(() => {
-  const setMarginTop = marginTopSignal.set;
-  const setScrollY = scrollYSignal.set;
-  const commentMargin = mdStore.get.commentMargin;
-
-  if (!commentMargin) {
-    return;
-  }
-
-  // Track the top of the bounding NON-scrolling element.
-  const blockContent = commentMargin.closest('[data-block-content]');
-  if (blockContent) {
-    const resizeObserver = new ResizeObserver(() => {
-      const top = blockContent?.getBoundingClientRect().top ?? 0;
-      setMarginTop(top);
-    });
-    resizeObserver.observe(blockContent);
-    onCleanup(() => {
-      resizeObserver.disconnect();
-    });
-  }
-
-  // Track the scroll top of the bounding scrolling element.
-  const scrollParent = getScrollParentElement(commentMargin);
-  if (scrollParent) {
-    const updateScrollY = () => {
-      const scrollTop = scrollParent.scrollTop;
-      setScrollY(scrollTop);
-    };
-    scrollParent.addEventListener('scroll', updateScrollY, { passive: true });
-    onCleanup(() => {
-      scrollParent.removeEventListener('scroll', updateScrollY);
-    });
-  }
-});
-
-// Sort comments by their marks' positions.
-function markElementSort(a: HTMLElement, b: HTMLElement) {
-  const { left: aLeft, top: aTop } = a.getBoundingClientRect();
-  const { left: bLeft, top: bTop } = b.getBoundingClientRect();
-  if (aTop === bTop) {
-    return aLeft - bLeft;
-  }
-  return aTop - bTop;
-}
-
-createBlockEffect(() => {
-  const setMarkTop = markLocationTopStore.set;
-  const marks = markStore.get;
-  const md = mdStore.get;
-  const scrollY = scrollYSignal.get;
-
-  const updateMarkPositions = () => {
-    for (const markId in marks) {
-      const mark = marks[markId];
-      if (!mark) continue;
-
-      const markEls = Object.values(mark.markNodes).filter((el) => !!el);
-      if (markEls.length === 0) continue;
-
-      // attach the comment layout to the top element of the mark
-      const topEl = markEls.sort(markElementSort)[0];
-      const top = topEl.getBoundingClientRect().top + scrollY();
-      setMarkTop(markId, top);
-    }
-  };
-
-  updateMarkPositions();
-
-  const throttledUpdate = leadingAndTrailing(
-    throttle,
-    updateMarkPositions,
-    LAYOUT_THROTTLE
+  tops[anchorIndex] = Math.max(
+    0,
+    Math.min(tops[anchorIndex], pageHeight - anchor.height)
   );
-
-  // Throttle updates on comment positions. Update on (1) editor updates, (2)
-  // internal layout shifts causes by non-updating element height changed to
-  // embeds and media and (3) editor width changes.
-  if (md.editor) {
-    autoRegister(
-      md.editor.registerUpdateListener(() => {
-        throttledUpdate();
-      }),
-      registerInternalLayoutShiftListener(md.editor, throttledUpdate),
-      registerEditorWidthObserver(md.editor, throttledUpdate)
+  for (let i = anchorIndex + 1; i < threads.length; i++) {
+    const previousEnd = tops[i - 1] + threads[i - 1].height;
+    tops[i] = Math.max(tops[i], previousEnd + MIN_THREAD_GAP);
+  }
+  for (let i = anchorIndex - 1; i >= 0; i--) {
+    tops[i] = Math.min(
+      tops[i],
+      tops[i + 1] - threads[i].height - MIN_THREAD_GAP
     );
   }
-});
 
-type MarkLayout = {
-  id: MarkId;
-  layout?: {
-    top: number;
-  };
-};
-
-const markLayoutsSignal = createBlockSignal<MarkLayout[]>([]);
-
-createBlockEffect(() => {
-  const setMarkLayouts = markLayoutsSignal.set;
-  const marks = markStore.get;
-  const marginTop = marginTopSignal();
-
-  const layouts = Object.values(marks)
-    .filter((m) => m !== undefined)
-    .map((m) => {
-      const top = markLocationTopStore.get[m.id];
-      if (top != null) {
-        return {
-          id: m.id,
-          layout: {
-            top: top - marginTop,
-          },
-        };
-      }
-
-      return {
-        id: m.id,
-      };
-    });
-
-  setMarkLayouts(layouts);
-});
-
-function computeLayout<T>({
-  initialAnchor,
-  input,
-  direction,
-  containerHeight,
-  containerPadding = 0,
-}: {
-  initialAnchor: number;
-  input: (CommentViewerInitialLayout<T> & { height: number })[];
-  direction: 'up' | 'down';
-  containerHeight: number;
-  containerPadding?: number;
-}): Array<CommentLayout<T>> {
-  let anchor = initialAnchor;
-  if (direction === 'up') {
-    input.reverse();
+  // Threads pushed above the top come back down, and push the rest down.
+  let floor = 0;
+  for (let i = 0; i < threads.length; i++) {
+    tops[i] = Math.max(tops[i], floor);
+    floor = tops[i] + threads[i].height + MIN_THREAD_GAP;
   }
-  const out = input.map((i): CommentLayout<T> => {
-    let calculatedYPos = 0;
-    if (direction === 'up') {
-      calculatedYPos = Math.min(
-        anchor - i.height - MIN_THREAD_GAP,
-        i.layout.originalYPosition
-      );
-      anchor = calculatedYPos;
-    } else {
-      calculatedYPos = Math.max(
-        anchor + MIN_THREAD_GAP,
-        i.layout.originalYPosition
-      );
-      anchor = calculatedYPos + i.height;
-    }
 
-    let overflow: Overflow = null;
-    if (calculatedYPos <= 0 + containerPadding) overflow = 'top';
-    if (anchor >= containerHeight - containerPadding) overflow = 'bottom';
+  return threads.map((thread, i): CommentLayout<T> => {
+    const end = tops[i] + thread.height;
+    const overflow: Overflow =
+      end >= pageHeight ? 'bottom' : tops[i] <= 0 ? 'top' : null;
     return {
-      ...i,
-      layout: {
-        height: i.height,
-        calculatedYPos,
-        overflow,
-      },
+      ...thread,
+      layout: { height: thread.height, calculatedYPos: tops[i], overflow },
     };
   });
-  if (direction === 'up') {
-    out.reverse();
-  }
-  return out;
 }
 
-createBlockEffect(() => {
-  // TODO: use a createMdBlockEffect
-  const blockName = useBlockName();
-  if (blockName !== 'md') return;
+export function createCommentLayout() {
+  const { state } = useMarkdownDocument();
+  const commentState = state.comments;
+  const md = state.editor.md;
 
-  const setStore = threadsPositionStore.set;
-  const activeMarkIds = activeMarkIdsSignal.get;
-  const pageHeight = notebookHeight();
-  const marks = markStore.get;
+  const notebookSize = createElementSize(() => md.notebook);
+  const notebookHeight = createMemo(() => notebookSize.height);
 
-  // there are no bounds for the container, cant compute position
-  if (!pageHeight) {
-    console.error('no page height');
-    return;
-  }
-
-  const markLayouts = markLayoutsSignal.get;
-
-  const sortedThreadsByOriginalPosition = (markLayouts() ?? [])
-    .flatMap((l) => {
-      if (!l.layout) return [];
-      let threadHeight = 0;
-      const mark = marks[l.id];
-      const threadId = mark?.thread?.threadId;
-      if (threadId) {
-        threadHeight = threadHeightStore.get[threadId] ?? 0;
-      }
-
-      return [
-        {
-          id: l.id,
-          height: threadHeight,
-          layout: { originalYPosition: l.layout.top },
-        },
-      ];
-    })
-    .sort((a, b) => a.layout.originalYPosition - b.layout.originalYPosition);
-
-  // there are no comment threads on this page, cant position nothing
-  if (sortedThreadsByOriginalPosition.length === 0) {
-    return;
-  }
-
-  // if no threads is active by default
-  // position threads as if the first one is active
-  const activeMarkIds_ = untrack(activeMarkIds);
-  const middleMarkId = activeMarkIds_[Math.floor(activeMarkIds_.length / 2)];
-  const anchorPositionId =
-    middleMarkId ?? sortedThreadsByOriginalPosition[0].id;
-  if (!anchorPositionId) return;
-
-  let sliceTo = sortedThreadsByOriginalPosition.findIndex(
-    (t) => t.id === anchorPositionId
+  const [threadHeights, setThreadHeights] = createStore<ThreadHeights>({});
+  const [threadPositions, setThreadPositions] = createStore<ThreadPositions>(
+    {}
   );
-  if (sliceTo === -1) {
-    sliceTo = 0;
-  }
-  const sliceFrom = sliceTo + 1;
+  const [markLocationTops, setMarkLocationTops] = createStore<
+    Partial<Record<MarkId, number>>
+  >({});
 
-  // all threads on page above the anchor with height
-  const sliceAboveAnchor = sortedThreadsByOriginalPosition.slice(0, sliceTo);
-  // all threads on page below the anchor with height
-  const sliceBelowAnchor = sortedThreadsByOriginalPosition.slice(sliceFrom);
-
-  // calculate closest fit for anchor within bounds of container
-  const anchorElement = sortedThreadsByOriginalPosition[sliceTo];
-  const anchorHeight = anchorElement.height;
-
-  // check if original y plus height fits inside bounds for anchor
-  const paddedHeight = pageHeight - CONTAINER_PADDING;
-  let anchorTop = anchorElement.layout.originalYPosition;
-  let anchorEnd = anchorTop + anchorHeight;
-  if (anchorEnd > paddedHeight) {
-    const anchorOverflow = anchorEnd - paddedHeight;
-    anchorTop -= anchorOverflow;
+  // Sort comments by their marks' positions.
+  function markElementSort(a: HTMLElement, b: HTMLElement) {
+    const { left: aLeft, top: aTop } = a.getBoundingClientRect();
+    const { left: bLeft, top: bTop } = b.getBoundingClientRect();
+    if (aTop === bTop) {
+      return aLeft - bLeft;
+    }
+    return aTop - bTop;
   }
 
-  // handle edge case where anchor element is larger than container
-  if (anchorTop < 0) {
-    anchorTop = 0;
-  }
-  anchorEnd = anchorTop + anchorHeight;
+  createEffect(() => {
+    const commentMargin = md.commentMargin;
+    if (!commentMargin) return;
 
-  const layoutAboveAnchor = computeLayout({
-    initialAnchor: anchorTop,
-    direction: 'up',
-    input: sliceAboveAnchor,
-    containerHeight: pageHeight,
-    containerPadding: CONTAINER_PADDING,
+    // Measure marks against the margin itself: it scrolls with the document,
+    // so the offsets hold at any scroll position without tracking scrollTop.
+    const updateMarkPositions = () => {
+      const marginTop = commentMargin.getBoundingClientRect().top;
+      for (const markId in commentState.marks) {
+        const mark = commentState.marks[markId];
+        if (!mark) continue;
+
+        const markEls = Object.values(mark.markNodes).filter((el) => !!el);
+        if (markEls.length === 0) continue;
+
+        // attach the comment layout to the top element of the mark
+        const topEl = markEls.sort(markElementSort)[0];
+        const top = topEl.getBoundingClientRect().top - marginTop;
+        setMarkLocationTops(markId, top);
+      }
+    };
+
+    updateMarkPositions();
+
+    const throttledUpdate = leadingAndTrailing(
+      throttle,
+      updateMarkPositions,
+      LAYOUT_THROTTLE
+    );
+
+    // The margin is display:none until the document has a comment; re-measure
+    // once it is laid out.
+    // ResizeObserver runs before paint. Keep geometry changes synchronous:
+    // scroll anchoring can hold the text still while a resizing embed moves
+    // the margin, so throttling here paints cards at stale document offsets.
+    const marginResizeObserver = new ResizeObserver(updateMarkPositions);
+    marginResizeObserver.observe(commentMargin);
+    onCleanup(() => marginResizeObserver.disconnect());
+
+    // Coalesce editor updates, but measure layout shifts and editor resizes
+    // immediately so the margin and its text anchors move in the same frame.
+    if (md.editor) {
+      autoRegister(
+        md.editor.registerUpdateListener(() => {
+          throttledUpdate();
+        }),
+        registerInternalLayoutShiftListener(md.editor, updateMarkPositions),
+        registerEditorWidthObserver(md.editor, updateMarkPositions)
+      );
+    }
   });
 
-  const layoutBelowAnchor = computeLayout({
-    initialAnchor: anchorEnd,
-    direction: 'down',
-    input: sliceBelowAnchor,
-    containerHeight: pageHeight,
-    containerPadding: CONTAINER_PADDING,
+  type MarkLayout = {
+    id: MarkId;
+    layout?: {
+      top: number;
+    };
+  };
+
+  const [markLayouts, setMarkLayouts] = createSignal<MarkLayout[]>([]);
+
+  createEffect(() => {
+    const layouts = Object.values(commentState.marks)
+      .filter((m) => m !== undefined)
+      .map((m) => {
+        const top = markLocationTops[m.id];
+        if (top != null) {
+          return {
+            id: m.id,
+            layout: {
+              top,
+            },
+          };
+        }
+
+        return {
+          id: m.id,
+        };
+      });
+
+    setMarkLayouts(layouts);
   });
 
-  // the positioning of all threads on the page
-  const out: CommentLayout<{ id: MarkId }>[] = [
-    ...layoutAboveAnchor,
-    {
-      ...anchorElement,
-      layout: {
-        height: anchorHeight,
-        calculatedYPos: anchorTop,
-        overflow: null,
-      },
-    },
-    ...layoutBelowAnchor,
-  ];
+  createEffect(() => {
+    const pageHeight = notebookHeight();
 
-  for (const layout of out) {
-    const markId = layout.id;
-    setStore(markId, layout);
-  }
-});
+    // there are no bounds for the container, cant compute position
+    if (!pageHeight) {
+      console.error('no page height');
+      return;
+    }
+
+    const sortedThreadsByOriginalPosition = markLayouts()
+      .flatMap((layout) => {
+        if (!layout.layout) return [];
+        let threadHeight = 0;
+        const mark = commentState.marks[layout.id];
+        const threadId = mark?.thread?.threadId;
+        if (threadId) {
+          threadHeight = threadHeights[threadId] ?? 0;
+        }
+
+        return [
+          {
+            id: layout.id,
+            height: threadHeight,
+            layout: { originalYPosition: layout.layout.top },
+          },
+        ];
+      })
+      .sort((a, b) => a.layout.originalYPosition - b.layout.originalYPosition);
+
+    // there are no comment threads on this page, cant position nothing
+    if (sortedThreadsByOriginalPosition.length === 0) {
+      return;
+    }
+
+    // if no threads is active by default
+    // position threads as if the first one is active
+    const activeMarkIdsValue = untrack(() => commentState.activeMarkIds);
+    const middleMarkId =
+      activeMarkIdsValue[Math.floor(activeMarkIdsValue.length / 2)];
+    const anchorPositionId =
+      middleMarkId ?? sortedThreadsByOriginalPosition[0].id;
+    if (!anchorPositionId) return;
+
+    const anchorIndex = Math.max(
+      0,
+      sortedThreadsByOriginalPosition.findIndex(
+        (thread) => thread.id === anchorPositionId
+      )
+    );
+    const out = stackMarginThreads(
+      sortedThreadsByOriginalPosition,
+      anchorIndex,
+      pageHeight - CONTAINER_PADDING
+    );
+
+    for (const layout of out) {
+      setThreadPositions(layout.id, layout);
+    }
+  });
+
+  return {
+    setThreadHeights,
+    threadPositions,
+  };
+}

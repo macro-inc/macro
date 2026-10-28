@@ -1,0 +1,474 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 210
+expression: updates(sse)
+input_file: crates/cursor_acp/fixtures/real/cancelled.sse
+---
+[
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll list every file"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " in this repository "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "one by one using shell"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " commands."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nThis is a large Rust"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " workspace with over"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " 80 crates, so the repository"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " likely contains tens"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " of thousands of files."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " I'll use `find` or "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "a similar command to"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " generate the complete"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " list."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nI'll check if this"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " is a git repository"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " first. I'll include"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " all paths, including"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " .git, since the user"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " asked for every single"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " file."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nI'll run `find` directly"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and capture the full"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " output. The listing"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " may be extremely large."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " list"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " every"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " file"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " in"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " repository"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " with"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " shell"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " commands"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " starting"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " from"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " workspace"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " root"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " so"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " listing"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " complete"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-d0d6a774-6582-405a-9664-0b9bbb41bdbc-0 fc_d2e50e4e-15ef-9ef9-b89e-bd6c3438561e_0",
+    "title": "run_terminal_cmd",
+    "kind": "execute",
+    "status": "in_progress",
+    "rawInput": {
+      "command": "pwd && ls -la && find . -print | wc -l",
+      "timeout": 600000,
+      "toolCallId": "call-d0d6a774-6582-405a-9664-0b9bbb41bdbc-0\nfc_d2e50e4e-15ef-9ef9-b89e-bd6c3438561e_0",
+      "simpleCommands": [
+        "pwd",
+        "ls",
+        "find",
+        "wc"
+      ],
+      "parsingResult": {
+        "executableCommands": [
+          {
+            "name": "pwd",
+            "fullText": "pwd"
+          },
+          {
+            "name": "ls",
+            "args": [
+              {
+                "type": "word",
+                "value": "-la"
+              }
+            ],
+            "fullText": "ls -la"
+          },
+          {
+            "name": "find",
+            "args": [
+              {
+                "type": "word",
+                "value": "."
+              },
+              {
+                "type": "word",
+                "value": "-print"
+              }
+            ],
+            "fullText": "find . -print"
+          },
+          {
+            "name": "wc",
+            "args": [
+              {
+                "type": "word",
+                "value": "-l"
+              }
+            ],
+            "fullText": "wc -l"
+          }
+        ]
+      },
+      "fileOutputThresholdBytes": "40000",
+      "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+      "hardTimeout": 86400000,
+      "description": "Check workspace root and file count",
+      "closeStdin": true,
+      "conversationId": "bc-2f45db68-5984-44d1-9167-c143ce4f2deb"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-d0d6a774-6582-405a-9664-0b9bbb41bdbc-0 fc_d2e50e4e-15ef-9ef9-b89e-bd6c3438561e_0",
+    "kind": "execute",
+    "status": "completed",
+    "title": "run_terminal_cmd",
+    "rawInput": {
+      "command": "pwd && ls -la && find . -print | wc -l",
+      "timeout": 600000,
+      "toolCallId": "call-d0d6a774-6582-405a-9664-0b9bbb41bdbc-0\nfc_d2e50e4e-15ef-9ef9-b89e-bd6c3438561e_0",
+      "simpleCommands": [
+        "pwd",
+        "ls",
+        "find",
+        "wc"
+      ],
+      "parsingResult": {
+        "executableCommands": [
+          {
+            "name": "pwd",
+            "fullText": "pwd"
+          },
+          {
+            "name": "ls",
+            "args": [
+              {
+                "type": "word",
+                "value": "-la"
+              }
+            ],
+            "fullText": "ls -la"
+          },
+          {
+            "name": "find",
+            "args": [
+              {
+                "type": "word",
+                "value": "."
+              },
+              {
+                "type": "word",
+                "value": "-print"
+              }
+            ],
+            "fullText": "find . -print"
+          },
+          {
+            "name": "wc",
+            "args": [
+              {
+                "type": "word",
+                "value": "-l"
+              }
+            ],
+            "fullText": "wc -l"
+          }
+        ]
+      },
+      "fileOutputThresholdBytes": "40000",
+      "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+      "hardTimeout": 86400000,
+      "description": "Check workspace root and file count",
+      "closeStdin": true,
+      "conversationId": "bc-2f45db68-5984-44d1-9167-c143ce4f2deb"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "command": "pwd && ls -la && find . -print | wc -l",
+          "stdout": "/workspace\ntotal 1388\ndrwxr-xr-x   1 ubuntu ubuntu   4096 Aug 21 16:52 .\ndrwxr-xr-x   1 root   root     4096 Aug 21 16:52 ..\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 .agents\nlrwxrwxrwx   1 ubuntu ubuntu      9 Jan  1  1970 AGENTS.md -> CLAUDE.md\ndrwxr-xr-x   4 ubuntu ubuntu   4096 Jan  1  1970 apps\n-rw-r--r--   1 ubuntu ubuntu   2192 Jan  1  1970 biome.base.jsonc\n-rw-r--r--   1 ubuntu ubuntu     54 Jan  1  1970 bunfig.toml\n-rw-r--r--   1 ubuntu ubuntu 469407 Jan  1  1970 bun.lock\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .cargo\n-rw-r--r--   1 ubuntu ubuntu 390414 Jan  1  1970 Cargo.lock\n-rw-r--r--   1 ubuntu ubuntu  11150 Jan  1  1970 Cargo.toml\ndrwxr-xr-x   4 ubuntu ubuntu   4096 Jan  1  1970 .claude\n-rw-r--r--   1 ubuntu ubuntu  14418 Jan  1  1970 CLAUDE.md\n-rw-r--r--   1 ubuntu ubuntu    318 Jan  1  1970 clippy.toml\n-rw-r--r--   1 ubuntu ubuntu     17 Jan  1  1970 codebook.toml\n-rw-r--r--   1 ubuntu ubuntu   7370 Jan  1  1970 .coderabbit.yaml\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .config\n-rw-r--r--   1 ubuntu ubuntu   2874 Jan  1  1970 CONTRIBUTING.md\ndrwxr-xr-x 192 ubuntu ubuntu  12288 Jan  1  1970 crates\n-rw-r--r--   1 ubuntu ubuntu    251 Jan  1  1970 Cross.toml\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 .cursor\n-rw-r--r--   1 ubuntu ubuntu  20025 Jan  1  1970 deny.toml\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 docker\n-rw-r--r--   1 ubuntu ubuntu    824 Jan  1  1970 .dockerignore\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 docs\n-rw-r--r--   1 ubuntu ubuntu   8578 Jan  1  1970 flake.lock\n-rw-r--r--   1 ubuntu ubuntu    635 Jan  1  1970 flake.nix\ndrwxr-xr-x   1 ubuntu ubuntu   4096 Aug 21 16:52 .git\n-rw-r--r--   1 ubuntu ubuntu    669 Jan  1  1970 .gitattributes\ndrwxr-xr-x   7 ubuntu ubuntu   4096 Jan  1  1970 .github\n-rw-r--r--   1 ubuntu ubuntu    582 Jan  1  1970 .gitignore\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .helix\ndrwxr-xr-x   7 ubuntu ubuntu   4096 Jan  1  1970 infra\n-rw-r--r--   1 ubuntu ubuntu   6236 Jan  1  1970 justfile\n-rw-r--r--   1 ubuntu ubuntu  34523 Jan  1  1970 LICENSE.txt\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 nix\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 nix-support\ndrwxr-xr-x 939 ubuntu ubuntu  36864 Jan  1  1970 node_modules\n-rw-r--r--   1 ubuntu ubuntu    307 Jan  1  1970 opencode.json\n-rw-r--r--   1 ubuntu ubuntu   2691 Jan  1  1970 package.json\ndrwxr-xr-x   7 ubuntu ubuntu   4096 Jan  1  1970 packages\ndrwxr-xr-x   5 ubuntu ubuntu   4096 Jan  1  1970 .pi\n-rw-r--r--   1 ubuntu ubuntu  19987 Jan  1  1970 README.md\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 rules\n-rw-r--r--   1 ubuntu ubuntu    789 Jan  1  1970 rust-toolchain.toml\ndrwxr-xr-x  49 ubuntu ubuntu   4096 Jan  1  1970 services\n-rw-r--r--   1 ubuntu ubuntu    570 Jan  1  1970 sgconfig.yml\ndrwxr-xr-x   2 ubuntu ubuntu 208896 Jan  1  1970 .sqlx\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 static_assets\n-rw-r--r--   1 ubuntu ubuntu     55 Jan  1  1970 .taplo.toml\nlrwxrwxrwx   1 ubuntu ubuntu     38 Aug 21 16:52 target -> /home/ubuntu/.cache/macro-cloud/target\ndrwxr-xr-x   8 ubuntu ubuntu   4096 Jan  1  1970 tooling\n-rw-r--r--   1 ubuntu ubuntu     13 Jan  1  1970 VERSION\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .zed\n143237\n",
+          "executionTime": 703,
+          "interleavedOutput": "/workspace\ntotal 1388\ndrwxr-xr-x   1 ubuntu ubuntu   4096 Aug 21 16:52 .\ndrwxr-xr-x   1 root   root     4096 Aug 21 16:52 ..\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 .agents\nlrwxrwxrwx   1 ubuntu ubuntu      9 Jan  1  1970 AGENTS.md -> CLAUDE.md\ndrwxr-xr-x   4 ubuntu ubuntu   4096 Jan  1  1970 apps\n-rw-r--r--   1 ubuntu ubuntu   2192 Jan  1  1970 biome.base.jsonc\n-rw-r--r--   1 ubuntu ubuntu     54 Jan  1  1970 bunfig.toml\n-rw-r--r--   1 ubuntu ubuntu 469407 Jan  1  1970 bun.lock\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .cargo\n-rw-r--r--   1 ubuntu ubuntu 390414 Jan  1  1970 Cargo.lock\n-rw-r--r--   1 ubuntu ubuntu  11150 Jan  1  1970 Cargo.toml\ndrwxr-xr-x   4 ubuntu ubuntu   4096 Jan  1  1970 .claude\n-rw-r--r--   1 ubuntu ubuntu  14418 Jan  1  1970 CLAUDE.md\n-rw-r--r--   1 ubuntu ubuntu    318 Jan  1  1970 clippy.toml\n-rw-r--r--   1 ubuntu ubuntu     17 Jan  1  1970 codebook.toml\n-rw-r--r--   1 ubuntu ubuntu   7370 Jan  1  1970 .coderabbit.yaml\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .config\n-rw-r--r--   1 ubuntu ubuntu   2874 Jan  1  1970 CONTRIBUTING.md\ndrwxr-xr-x 192 ubuntu ubuntu  12288 Jan  1  1970 crates\n-rw-r--r--   1 ubuntu ubuntu    251 Jan  1  1970 Cross.toml\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 .cursor\n-rw-r--r--   1 ubuntu ubuntu  20025 Jan  1  1970 deny.toml\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 docker\n-rw-r--r--   1 ubuntu ubuntu    824 Jan  1  1970 .dockerignore\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 docs\n-rw-r--r--   1 ubuntu ubuntu   8578 Jan  1  1970 flake.lock\n-rw-r--r--   1 ubuntu ubuntu    635 Jan  1  1970 flake.nix\ndrwxr-xr-x   1 ubuntu ubuntu   4096 Aug 21 16:52 .git\n-rw-r--r--   1 ubuntu ubuntu    669 Jan  1  1970 .gitattributes\ndrwxr-xr-x   7 ubuntu ubuntu   4096 Jan  1  1970 .github\n-rw-r--r--   1 ubuntu ubuntu    582 Jan  1  1970 .gitignore\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .helix\ndrwxr-xr-x   7 ubuntu ubuntu   4096 Jan  1  1970 infra\n-rw-r--r--   1 ubuntu ubuntu   6236 Jan  1  1970 justfile\n-rw-r--r--   1 ubuntu ubuntu  34523 Jan  1  1970 LICENSE.txt\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 nix\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 nix-support\ndrwxr-xr-x 939 ubuntu ubuntu  36864 Jan  1  1970 node_modules\n-rw-r--r--   1 ubuntu ubuntu    307 Jan  1  1970 opencode.json\n-rw-r--r--   1 ubuntu ubuntu   2691 Jan  1  1970 package.json\ndrwxr-xr-x   7 ubuntu ubuntu   4096 Jan  1  1970 packages\ndrwxr-xr-x   5 ubuntu ubuntu   4096 Jan  1  1970 .pi\n-rw-r--r--   1 ubuntu ubuntu  19987 Jan  1  1970 README.md\ndrwxr-xr-x   3 ubuntu ubuntu   4096 Jan  1  1970 rules\n-rw-r--r--   1 ubuntu ubuntu    789 Jan  1  1970 rust-toolchain.toml\ndrwxr-xr-x  49 ubuntu ubuntu   4096 Jan  1  1970 services\n-rw-r--r--   1 ubuntu ubuntu    570 Jan  1  1970 sgconfig.yml\ndrwxr-xr-x   2 ubuntu ubuntu 208896 Jan  1  1970 .sqlx\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 static_assets\n-rw-r--r--   1 ubuntu ubuntu     55 Jan  1  1970 .taplo.toml\nlrwxrwxrwx   1 ubuntu ubuntu     38 Aug 21 16:52 target -> /home/ubuntu/.cache/macro-cloud/target\ndrwxr-xr-x   8 ubuntu ubuntu   4096 Jan  1  1970 tooling\n-rw-r--r--   1 ubuntu ubuntu     13 Jan  1  1970 VERSION\ndrwxr-xr-x   2 ubuntu ubuntu   4096 Jan  1  1970 .zed\n143237\n",
+          "localExecutionTimeMs": 405
+        },
+        "isBackground": false
+      }
+    }
+  }
+]

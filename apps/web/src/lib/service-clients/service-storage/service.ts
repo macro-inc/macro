@@ -4,7 +4,6 @@ import {
   PdfSegmentSchema as TSegmentSchema,
 } from '@coparse/document-processing-types';
 import {
-  asRawShape,
   fetchErrorsSvc,
   nonNullShape,
   type ServiceClient,
@@ -39,29 +38,12 @@ const GetWriterPartsResponse = z.object({
 
 const AnnotationsSvc = new Svc('Annotations Service')
   .use('fetchErrors', fetchErrorsSvc)
-  .fn('getComments', {
-    description: schemas.getDocumentCommentsParams.description!,
-    args: {
-      documentId: schemas.getDocumentCommentsParams.shape.document_id,
-    },
-    result: schemas.getDocumentCommentsResponse.shape,
-    throws: withFetchErrors(),
-  })
   .fn('getAnchors', {
     description: schemas.getDocumentAnchorsParams.description!,
     args: {
       documentId: schemas.getDocumentAnchorsParams.shape.document_id,
     },
     result: schemas.getDocumentAnchorsResponse.shape,
-    throws: withFetchErrors(),
-  })
-  .fn('createComment', {
-    description: schemas.createCommentParams.description!,
-    args: {
-      documentId: schemas.createCommentParams.shape.document_id,
-      body: schemas.createCommentBody,
-    },
-    result: asRawShape(schemas.createCommentResponse),
     throws: withFetchErrors(),
   })
   .fn('createAnchor', {
@@ -73,30 +55,10 @@ const AnnotationsSvc = new Svc('Annotations Service')
     result: schemas.createAnchorResponse,
     throws: withFetchErrors(),
   })
-  .fn('deleteComment', {
-    description: schemas.deleteCommentParams.description!,
-    args: {
-      commentId: schemas.deleteCommentParams.shape.comment_id,
-      body: schemas.deleteCommentBody,
-    },
-    result: asRawShape(schemas.deleteCommentResponse),
-    throws: withFetchErrors(),
-    modifies: true,
-  })
   .fn('deleteAnchor', {
     description: schemas.deleteAnchorBody.description!,
     args: { body: schemas.deleteAnchorBody },
     result: schemas.deleteAnchorResponse,
-    throws: withFetchErrors(),
-    modifies: true,
-  })
-  .fn('editComment', {
-    description: schemas.editCommentParams.description!,
-    args: {
-      commentId: schemas.editCommentParams.shape.comment_id,
-      body: schemas.editCommentBody,
-    },
-    result: asRawShape(schemas.editCommentResponse),
     throws: withFetchErrors(),
     modifies: true,
   })
@@ -290,19 +252,34 @@ const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
     throws: withFetchErrors(),
   });
 
-const InstructionsSvc = new Svc('Instructions Service')
+const CollabSurfacesSvc = new Svc('Collab Surfaces Service')
   .use('fetchErrors', fetchErrorsSvc)
-  .fn('create', {
-    description: schemas.createInstructionsHandlerResponse.description!,
-    args: {},
-    result: schemas.createInstructionsHandlerResponse.shape,
+  .fn('ensure', {
+    description:
+      'idempotently ensures a collab surface exists (load-or-create) attached to a parent entity, with its sync-service session initialized',
+    args: schemas.ensureCollabSurfaceBody.extend(
+      schemas.ensureCollabSurfaceParams.shape
+    ).shape,
+    result: schemas.ensureCollabSurfaceResponse.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
   .fn('get', {
-    description: schemas.getInstructionsHandlerResponse.description!,
-    args: {},
-    result: schemas.getInstructionsHandlerResponse.shape,
+    description: 'fetches a collab surface',
+    args: schemas.getCollabSurfaceParams.shape,
+    result: schemas.getCollabSurfaceResponse.shape,
+    throws: withFetchErrors(),
+  })
+  .fn('createToken', {
+    description: 'mints a sync-service connection token for a collab surface',
+    args: schemas.createCollabSurfaceTokenParams.shape,
+    result: schemas.createCollabSurfaceTokenResponse.shape,
+    throws: withFetchErrors(),
+  })
+  .fn('delete', {
+    description: 'soft-deletes a collab surface',
+    args: schemas.deleteCollabSurfaceParams.shape,
+    modifies: true,
     throws: withFetchErrors(),
   });
 
@@ -311,6 +288,12 @@ export type GetDocumentPermissionsTokenResponse = z.infer<
 >;
 export type ValidateDocumentPermissionsTokenResponse = z.infer<
   typeof schemas.validateDocumentPermissionsTokenResponse
+>;
+export type CollabSurfaceResponse = z.infer<
+  typeof schemas.getCollabSurfaceResponse
+>;
+export type CollabSurfaceTokenResponse = z.infer<
+  typeof schemas.createCollabSurfaceTokenResponse
 >;
 
 export const StorageService = new Svc('Document++ Storage Service API')
@@ -463,6 +446,21 @@ export const StorageService = new Svc('Document++ Storage Service API')
         schemas.createDocumentResponse.shape.data._def.right.shape.contentType,
       fileType:
         schemas.createDocumentResponse.shape.data._def.right.shape.fileType,
+    },
+    modifies: true,
+    throws: withFetchErrors('INVALID_RESPONSE'),
+  })
+  .fn('createSpreadsheetDocument', {
+    description: 'Create a native spreadsheet with content in sync-service.',
+    args: {
+      documentName: z.string(),
+      projectId: z.string().optional(),
+      sha: z.string(),
+    },
+    result: {
+      metadata:
+        schemas.createDocumentResponse.shape.data._def.left.shape
+          .documentMetadata,
     },
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),
@@ -725,7 +723,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
   .use('annotations', AnnotationsSvc)
   .use('projects', ProjectsSvc)
   .use('permissionsTokens', PermissionsTokensSvc)
-  .use('instructions', InstructionsSvc)
+  .use('collabSurfaces', CollabSurfacesSvc)
   .use('views', ViewsSvc)
   .use('favorites', FavoritesSvc);
 

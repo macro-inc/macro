@@ -1,11 +1,16 @@
-import { partialMatchKey } from '@tanstack/query-core';
+import {
+  keepPreviousData,
+  partialMatchKey,
+  QueryObserver,
+} from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
 import { channelKeys } from './channel/keys';
+import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
 import type {
-  PerQueryPersistence,
+  ClearablePerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
 import {
@@ -16,8 +21,9 @@ import {
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => true,
 }));
+vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => true }));
 
-function createMockStore(): PerQueryPersistence & {
+function createMockStore(): ClearablePerQueryPersistence & {
   entries: Map<string, PersistedQueryEntry>;
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
@@ -35,12 +41,15 @@ function createMockStore(): PerQueryPersistence & {
       entries.delete(hash);
     }),
     flush: vi.fn(async () => {}),
+    clear: vi.fn(async () => {
+      entries.clear();
+    }),
   };
 }
 
 function createScope(
   prefix: readonly unknown[],
-  store: PerQueryPersistence,
+  store: ClearablePerQueryPersistence,
   overrides?: Partial<PersistScope>
 ): PersistScope {
   return {
@@ -61,7 +70,9 @@ describe('setupQueryPersistence', () => {
       true
     );
     expect(
-      shouldPersistChannelQuery(channelKeys.messages('a', null).queryKey)
+      shouldPersistChannelQuery(
+        messageKeys.messages({ type: 'channel', id: 'a' }, null).queryKey
+      )
     ).toBe(false);
     expect(shouldPersistChannelQuery(['channel', 'future-family', 'a'])).toBe(
       false
@@ -150,7 +161,7 @@ describe('setupQueryPersistence', () => {
 
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: messageQueryKey,
       queryFn: () => new Promise(() => {}),
     });
@@ -190,7 +201,7 @@ describe('setupQueryPersistence', () => {
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger an 'added' event by fetching (prefetchQuery triggers added)
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'a'],
       queryFn: () => new Promise(() => {}), // never resolves
     });
@@ -220,7 +231,7 @@ describe('setupQueryPersistence', () => {
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger added event
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'a'],
       queryFn: () => new Promise(() => {}),
     });
@@ -268,7 +279,7 @@ describe('setupQueryPersistence', () => {
     });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'old'],
       queryFn: () => new Promise(() => {}),
     });
@@ -297,7 +308,7 @@ describe('setupQueryPersistence', () => {
     const scope = createScope(['identity'], store, { maxAge: undefined });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['identity', 'user'],
       queryFn: () => new Promise(() => {}),
     });
@@ -309,6 +320,112 @@ describe('setupQueryPersistence', () => {
       authenticated: true,
     });
     expect(store.remove).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { id: '', authenticated: false },
+    { id: 'viewer', authenticated: false },
+    { id: '', authenticated: true },
+    { authenticated: true },
+    { id: 42, authenticated: true },
+    null,
+  ])(
+    'does not hydrate a non-identity native user-info record: %j',
+    async (data) => {
+      const queryClient = new QueryClient();
+      const store = createMockStore();
+      const queryKey = authKeys.userInfo.queryKey;
+      const queryHash = JSON.stringify(queryKey);
+      const scope = createQueryPersistenceScopes('test').find((scope) =>
+        scope.shouldPersist(queryKey)
+      )!;
+      store.entries.set(queryHash, {
+        queryHash,
+        queryKey,
+        data,
+        dataUpdatedAt: Date.now(),
+        persistedAt: Date.now(),
+        buster: 'test',
+      });
+      const persistence = setupQueryPersistence({
+        queryClient,
+        scopes: [{ ...scope, store }],
+      });
+      await persistence.restoreQuery(queryKey);
+      expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+      expect(store.remove).toHaveBeenCalledWith(queryHash);
+      expect(store.set).not.toHaveBeenCalled();
+      persistence.dispose();
+      queryClient.clear();
+    }
+  );
+
+  it('persists logout over the previous identity but treats that marker as a cache miss on restart', async () => {
+    const store = createMockStore();
+    const queryKey = authKeys.userInfo.queryKey;
+    const queryHash = JSON.stringify(queryKey);
+    const scope = {
+      ...createQueryPersistenceScopes('test').find((scope) =>
+        scope.shouldPersist(queryKey)
+      )!,
+      store,
+    };
+    const firstClient = new QueryClient();
+    const first = setupQueryPersistence({
+      queryClient: firstClient,
+      scopes: [scope],
+    });
+    firstClient.setQueryData(queryKey, {
+      id: 'old-viewer',
+      authenticated: true,
+    });
+    firstClient.setQueryData(queryKey, { id: '', authenticated: false });
+    expect(store.entries.get(queryHash)?.data).toEqual({
+      id: '',
+      authenticated: false,
+    });
+    first.dispose();
+    firstClient.clear();
+    const queryClient = new QueryClient();
+    const restarted = setupQueryPersistence({ queryClient, scopes: [scope] });
+    await restarted.restoreQuery(queryKey);
+    expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+    expect(store.entries.has(queryHash)).toBe(false);
+    restarted.dispose();
+    queryClient.clear();
+  });
+
+  it('does not remove a new identity when an old logout marker finishes restoring', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+    store.get.mockReturnValue(read.promise);
+    const queryKey = authKeys.userInfo.queryKey;
+    const queryHash = JSON.stringify(queryKey);
+    const scope = createQueryPersistenceScopes('test').find((scope) =>
+      scope.shouldPersist(queryKey)
+    )!;
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [{ ...scope, store }],
+    });
+    const restored = persistence.restoreQuery(queryKey);
+    const identity = { id: 'new-viewer', authenticated: true };
+    queryClient.setQueryData(queryKey, identity);
+    read.resolve({
+      queryHash,
+      queryKey,
+      data: { id: '', authenticated: false },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    });
+    await restored;
+    expect(queryClient.getQueryData(queryKey)).toEqual(identity);
+    expect(store.entries.get(queryHash)?.data).toEqual(identity);
+    expect(store.remove).not.toHaveBeenCalled();
+    persistence.dispose();
+    queryClient.clear();
   });
 
   it('configures only native user-info persistence without an expiry', () => {
@@ -342,7 +459,7 @@ describe('setupQueryPersistence', () => {
     const scope = createScope(['channel'], store, { buster: 'new-buster' });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'v'],
       queryFn: () => new Promise(() => {}),
     });
@@ -359,7 +476,7 @@ describe('setupQueryPersistence', () => {
     const store = createMockStore();
     const scope = createScope(['channel'], store);
 
-    const unsubscribe = setupQueryPersistence({
+    const persistence = setupQueryPersistence({
       queryClient,
       scopes: [scope],
     });
@@ -367,10 +484,123 @@ describe('setupQueryPersistence', () => {
     queryClient.setQueryData(['channel', 'a'], { value: 1 });
     expect(store.set).toHaveBeenCalledTimes(1);
 
-    unsubscribe();
+    persistence.dispose();
 
     queryClient.setQueryData(['channel', 'b'], { value: 2 });
     expect(store.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares an awaitable restore without starting or waiting for a network fetch', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+    store.get.mockReturnValue(read.promise);
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['identity'], store)],
+    });
+    const queryKey = ['identity', 'user'];
+    const first = persistence.restoreQuery(queryKey);
+    const second = persistence.restoreQuery(queryKey);
+    expect(first).toBe(second);
+    expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('idle');
+    queryClient.prefetchQuery({
+      queryKey,
+      queryFn: () => new Promise(() => {}),
+    });
+    read.resolve({
+      queryHash: JSON.stringify(queryKey),
+      queryKey,
+      data: { id: 'viewer' },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    });
+    await first;
+    expect(store.get).toHaveBeenCalledOnce();
+    expect(queryClient.getQueryData(queryKey)).toEqual({ id: 'viewer' });
+    expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('fetching');
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it.each([
+    'removed',
+    'recreated',
+    'disposed',
+    'logged-out',
+    'denied',
+  ] as const)(
+    'fences a pending restore when the query is %s',
+    async (change) => {
+      const queryClient = new QueryClient();
+      const store = createMockStore();
+      const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+      store.get
+        .mockReturnValueOnce(read.promise)
+        .mockImplementation(() => new Promise(() => {}));
+      let allowed = true;
+      const persistence = setupQueryPersistence({
+        queryClient,
+        scopes: [
+          createScope(['identity'], store, { shouldRestore: () => allowed }),
+        ],
+      });
+      const queryKey = ['identity', 'user'];
+      const pending = persistence.restoreQuery(queryKey);
+      if (change === 'removed' || change === 'recreated')
+        queryClient.removeQueries({ queryKey });
+      if (change === 'recreated')
+        queryClient.getQueryCache().build(queryClient, { queryKey });
+      if (change === 'disposed') persistence.dispose();
+      if (change === 'logged-out')
+        queryClient.setQueryData(queryKey, { authenticated: false });
+      if (change === 'denied') allowed = false;
+      read.resolve({
+        queryHash: JSON.stringify(queryKey),
+        queryKey,
+        data: { id: 'old-viewer' },
+        dataUpdatedAt: Date.now(),
+        persistedAt: Date.now(),
+        buster: 'test',
+      });
+      await pending;
+      expect(queryClient.getQueryData(queryKey)).toEqual(
+        change === 'logged-out' ? { authenticated: false } : undefined
+      );
+      expect(store.set).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { id: 'old-viewer' } })
+      );
+      persistence.dispose();
+      queryClient.clear();
+    }
+  );
+
+  it('does not remove a newer persisted value when an old read has the wrong buster', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const read = Promise.withResolvers<PersistedQueryEntry | undefined>();
+    store.get.mockReturnValue(read.promise);
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['identity'], store)],
+    });
+    const queryKey = ['identity', 'user'];
+    const pending = persistence.restoreQuery(queryKey);
+    queryClient.setQueryData(queryKey, { id: 'new-viewer' });
+    read.resolve({
+      queryHash: JSON.stringify(queryKey),
+      queryKey,
+      data: { id: 'old-viewer' },
+      dataUpdatedAt: 1,
+      persistedAt: 1,
+      buster: 'old-buster',
+    });
+    await pending;
+    expect(queryClient.getQueryData(queryKey)).toEqual({ id: 'new-viewer' });
+    expect(store.remove).not.toHaveBeenCalled();
+    persistence.dispose();
+    queryClient.clear();
   });
 
   it('removes entry from store on query removal', () => {
@@ -385,5 +615,168 @@ describe('setupQueryPersistence', () => {
 
     queryClient.removeQueries({ queryKey: ['channel', 'a'] });
     expect(store.remove).toHaveBeenCalledWith('["channel","a"]');
+  });
+});
+
+describe('account persistence reset', () => {
+  it('clears entries that were never hydrated and fences a pending old-account read', async () => {
+    const store = createMockStore();
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], store)],
+    });
+    const entry: PersistedQueryEntry = {
+      queryHash: '["private","alice"]',
+      queryKey: ['private', 'alice'],
+      data: { owner: 'alice' },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    };
+    store.entries.set(entry.queryHash, entry);
+    store.entries.set('["private","unhydrated"]', {
+      ...entry,
+      queryHash: '["private","unhydrated"]',
+      queryKey: ['private', 'unhydrated'],
+    });
+    let finishRead!: (entry: PersistedQueryEntry) => void;
+    store.get.mockImplementationOnce(
+      () =>
+        new Promise<PersistedQueryEntry>((resolve) => {
+          finishRead = resolve;
+        })
+    );
+    const restore = persistence.restoreQuery(entry.queryKey);
+    await persistence.clear();
+    queryClient.setQueryData(entry.queryKey, { owner: 'bob' });
+    finishRead(entry);
+    await restore;
+    expect(queryClient.getQueryData(entry.queryKey)).toEqual({ owner: 'bob' });
+    expect(store.entries.has('["private","unhydrated"]')).toBe(false);
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it('keeps mounted observers receiving query updates across a reset', async () => {
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], createMockStore())],
+    });
+    const queryKey = ['session', 'user'];
+    queryClient.setQueryData(queryKey, { owner: 'alice' });
+    queryClient.setQueryData(['session', 'unobserved'], { owner: 'alice' });
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn: () => new Promise<never>(() => {}),
+      enabled: false,
+    });
+    const results: unknown[] = [];
+    const unsubscribe = observer.subscribe((result) => {
+      results.push(result.data);
+    });
+
+    await persistence.clear();
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    expect(
+      queryClient.getQueryCache().find({ queryKey: ['session', 'unobserved'] })
+    ).toBeUndefined();
+
+    queryClient.setQueryData(queryKey, { owner: 'bob' });
+    expect(observer.getCurrentResult().data).toEqual({ owner: 'bob' });
+    expect(results.at(-1)).toEqual({ owner: 'bob' });
+    unsubscribe();
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it('removes account seeds without refetching or stranding mounted observers', async () => {
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], createMockStore())],
+    });
+    const queryKey = ['private', 'seeded'];
+    const queryFn = vi.fn(async () => ({ owner: 'bob' }));
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn,
+      initialData: { owner: 'alice' },
+      placeholderData: { owner: 'alice' },
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    expect(observer.getCurrentResult().data).toEqual({ owner: 'alice' });
+
+    await persistence.clear();
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    expect(queryFn).not.toHaveBeenCalled();
+    observer.setOptions(observer.options);
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    observer.setOptions({
+      ...observer.options,
+      placeholderData: keepPreviousData,
+    });
+    expect(observer.getCurrentResult().data).toBeUndefined();
+
+    // A later ordinary reset must not restore the old constructor's seed.
+    observer.setOptions({ ...observer.options, enabled: false });
+    await queryClient.resetQueries({ queryKey });
+    expect(observer.getCurrentResult().data).toBeUndefined();
+
+    queryClient.setQueryData(queryKey, { owner: 'bob' });
+    expect(observer.getCurrentResult().data).toEqual({ owner: 'bob' });
+    unsubscribe();
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it('keeps periodic refetches working after clearing an observed query', async () => {
+    vi.useFakeTimers();
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], createMockStore())],
+    });
+    const queryFn = vi.fn(async () => ({ owner: 'bob' }));
+    const observer = new QueryObserver(queryClient, {
+      queryKey: ['private', 'polling'],
+      queryFn,
+      initialData: { owner: 'alice' },
+      staleTime: Infinity,
+      refetchInterval: 1_000,
+      refetchIntervalInBackground: true,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await persistence.clear();
+      expect(queryFn).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(queryFn).toHaveBeenCalledOnce();
+      expect(observer.getCurrentResult().data).toEqual({ owner: 'bob' });
+    } finally {
+      unsubscribe();
+      persistence.dispose();
+      queryClient.clear();
+      vi.useRealTimers();
+    }
+  });
+
+  it('attempts every durable wipe even when one store fails', async () => {
+    const failing = createMockStore();
+    failing.clear = vi.fn(async () => {
+      throw new Error('disk failure');
+    });
+    const other = createMockStore();
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['a'], failing), createScope(['b'], other)],
+    });
+    await expect(persistence.clear()).rejects.toThrow('disk failure');
+    expect(other.entries.size).toBe(0);
+    persistence.dispose();
+    queryClient.clear();
   });
 });

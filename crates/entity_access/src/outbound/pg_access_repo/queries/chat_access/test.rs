@@ -160,6 +160,34 @@ async fn insert_explicit_access(
     Ok(())
 }
 
+/// A canonical team share: the grant `share_permission_db_utils::team_share`
+/// writes for the owner's team.
+async fn insert_team_access(
+    pool: &PgPool,
+    chat_id: Uuid,
+    team_id: Uuid,
+    access_level: AccessLevel,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (
+            entity_id,
+            entity_type,
+            source_id,
+            source_type,
+            access_level
+        )
+        VALUES ($1, 'chat', $2, 'team', $3)
+        "#,
+        chat_id,
+        team_id.to_string(),
+        access_level as AccessLevel,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn enforces_complete_link_access_matrix(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITH_TEAM).await?;
@@ -233,6 +261,49 @@ async fn takes_maximum_of_link_and_explicit_access(pool: PgPool) -> anyhow::Resu
     assert_eq!(
         get_chat_access(&pool, &link_wins_chat, &requester).await?,
         Some(AccessLevel::Edit),
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn explicit_team_grant_allows_team_members_only(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER_WITH_TEAM).await?;
+    add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
+    let chat_id = insert_chat(&pool, OWNER_WITH_TEAM, None, None).await?;
+    insert_team_access(&pool, chat_id, OWNER_TEAM, AccessLevel::Comment).await?;
+
+    let anonymous = SourceIds(vec![]);
+    let other_team = SourceIds(vec![REQUESTER.to_string(), OTHER_TEAM.to_string()]);
+    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+
+    assert_eq!(get_chat_access(&pool, &chat_id, &anonymous).await?, None);
+    assert_eq!(get_chat_access(&pool, &chat_id, &other_team).await?, None);
+    assert_eq!(
+        get_chat_access(&pool, &chat_id, &same_team).await?,
+        Some(AccessLevel::Comment)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn takes_maximum_of_explicit_team_grant_and_link(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER_WITH_TEAM).await?;
+    add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
+    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+
+    let team_grant_wins = insert_chat(&pool, OWNER_WITH_TEAM, Some("PUBLIC"), Some("view")).await?;
+    insert_team_access(&pool, team_grant_wins, OWNER_TEAM, AccessLevel::Edit).await?;
+
+    let link_wins = insert_chat(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("edit")).await?;
+    insert_team_access(&pool, link_wins, OWNER_TEAM, AccessLevel::View).await?;
+
+    assert_eq!(
+        get_chat_access(&pool, &team_grant_wins, &same_team).await?,
+        Some(AccessLevel::Edit)
+    );
+    assert_eq!(
+        get_chat_access(&pool, &link_wins, &same_team).await?,
+        Some(AccessLevel::Edit)
     );
     Ok(())
 }

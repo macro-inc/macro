@@ -1,71 +1,34 @@
-import { analytics } from '@app/lib/analytics';
-import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import PhoneIcon from '@icon/wide-call.svg';
-import { useActiveCallQuery } from '@queries/call/call';
-import { Button, cn } from '@ui';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import { cn } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { Show } from 'solid-js';
-import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
-import { useCall } from './use-call';
+import { CHANNEL_TOUR } from '../tour';
+import { useStartChannelCall } from './use-start-channel-call';
 
-export function ChannelCallButton(props: { channelId: string }) {
-  const { setActiveTab } = useChannelTab();
-  const call = useCall(() => props.channelId, {
-    onJoin: () => setActiveTab(getCallJoinTab()),
-    onLeave: () => setActiveTab(getCallLeaveTab()),
-  });
+export function ChannelCallButton(props: {
+  channelId: string;
+  grouped?: boolean;
+}) {
+  const call = useStartChannelCall(() => props.channelId);
 
-  const activeCallQuery = useActiveCallQuery(() => props.channelId);
-  const isCallInProgress = () => !!activeCallQuery.data;
-
-  const tooltip = () => (isCallInProgress() ? 'Join Call' : 'Start Call');
-  const label = () => (isCallInProgress() ? 'Join' : 'Call');
-
-  const variant = () => {
-    if (isTouchDevice()) return 'ghost';
-    if (isCallInProgress()) return 'success';
-    return 'base';
-  };
-
-  const handleClick = async () => {
-    if (call.isJoining()) return;
-    const wasExistingCall = isCallInProgress();
-    analytics.track('call_action', {
-      action: 'join_clicked',
-      channelId: props.channelId,
-      isExistingCall: wasExistingCall,
-    });
-    try {
-      await call.joinCall();
-      // A successful join with no call previously in progress means this user
-      // started the call. Fires once, from the starter's client.
-      if (!wasExistingCall) {
-        analytics.track('call_action', {
-          action: 'started',
-          channelId: props.channelId,
-        });
-      }
-    } catch (e) {
-      console.error('Call action failed', e);
-    }
-  };
+  const tooltip = () => (call.isCallInProgress() ? 'Join Call' : 'Start Call');
+  const label = () => (call.isCallInProgress() ? 'Join' : 'Call');
 
   return (
     <Show when={!call.isInThisChannel()}>
-      <Button
-        onClick={handleClick}
+      <HeaderActionButton
+        grouped={props.grouped}
+        ref={tourTarget(CHANNEL_TOUR.call)}
+        onClick={() => fireAndForget(call.start(), 'channel-call')}
         tooltip={tooltip()}
-        variant={variant()}
-        size="sm"
-        depth={2}
-        class={cn(
-          !isCallInProgress() && !isTouchDevice() && 'bg-surface',
-          isTouchDevice() && 'active:bg-transparent'
-        )}
-      >
-        <PhoneIcon />
-        <span>{label()}</span>
-      </Button>
+        label={label()}
+        icon={
+          <PhoneIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+        }
+        class={cn(call.isCallInProgress() && 'text-success')}
+      />
     </Show>
   );
 }

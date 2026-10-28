@@ -20,6 +20,12 @@ type HotkeyPriority = (typeof HOTKEY_TYPE)[number];
 export interface HotkeyCommand {
   // Used to identify the hotkey in UI elements. Needs to be unique to a particular scope.
   hotkeyToken?: HotkeyToken;
+  // How this command was registered. An 'override' command eclipses every
+  // command registered before it on the same key — they stop running until it
+  // is disposed, then become effective again (see getEffectiveCommands). An
+  // 'add' command coexists with earlier ones. Undefined counts as 'override',
+  // the registration default.
+  registrationType?: 'add' | 'override';
   // What scope does this hotkey belong to
   scopeId: string;
   // The hotkey strings, e.g. ['cmd+j', 'ctrl+j']
@@ -56,6 +62,9 @@ export interface HotkeyCommand {
   tags?: string[];
   // Optional related search terms for the command palette.
   keywords?: string[];
+  // The shortcut sheet section, when the scope does not say: a key a view
+  // registers in an app-wide leader scope (g then a letter) is the view's.
+  sheetSection?: 'view';
   // If true, command palette search also includes one level of nested commands.
   surfaceNestedCommands?: boolean;
   /**
@@ -199,6 +208,11 @@ export interface HotkeyRegistrationOptions {
    */
   keywords?: string[];
   /**
+   * List this key under the current view in the shortcut sheet, for a view's
+   * key registered in an app-wide leader scope.
+   */
+  sheetSection?: 'view';
+  /**
    * If true, command palette search also includes one level of nested commands.
    */
   surfaceNestedCommands?: boolean;
@@ -217,6 +231,18 @@ export interface HotkeyRegistrationOptions {
    * palette with its shortcut while another system owns the actual keystroke.
    */
   proxiedHotkey?: boolean;
+
+  /**
+   * By default a registration made under a reactive owner is disposed with
+   * that owner. Set false for a registration that must intentionally outlive
+   * its registrant — e.g. soup's j/k stay registered on the split scope after
+   * the list view unmounts so they keep navigating the originating list from
+   * the opened entity. The handler must only close over state that outlives
+   * the registrant, and the caller owns disposal: via the returned disposer,
+   * or by the scope's own teardown.
+   * @default true
+   */
+  disposeWithOwner?: boolean;
 }
 
 export type HotkeyGroup = {
@@ -242,10 +268,11 @@ export type ScopeNodeBase = {
   description?: string;
   parentScopeId?: string;
   childScopeIds: string[];
-  // Map of hotkey -> array of commands (multiple handlers can be registered for the same hotkey)
-  hotkeyCommands: Map<ValidHotkey, HotkeyCommand[]>;
-  // A list of commands that don't have hotkeys.
-  unkeyedCommands: HotkeyCommand[];
+  // Every command registered to this scope, in registration order — the
+  // single source of truth. Keyed lookups (dispatch, hotkey UI) derive from
+  // it via getCommandsForHotkey; commands without hotkeys (command-palette
+  // only) are the entries whose `hotkeys` is undefined.
+  commands: HotkeyCommand[];
   // If true, this scope is detached from the DOM tree, it's parent is global.
   detached: boolean;
 };
@@ -452,6 +479,4 @@ export interface KeypressContext {
   commandCaptured: HotkeyCommand | undefined;
   /** The event type ('keydown' or 'keyup') */
   eventType: 'keydown' | 'keyup';
-  /** Whether the keypress includes a non-modifier key */
-  isNonModifierKeypress: boolean;
 }

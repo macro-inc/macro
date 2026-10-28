@@ -2,6 +2,7 @@
 // bun run scripts/generate-api-schema.ts <service-name> // generate for specific service
 // bun run scripts/generate-api-schema.ts               // generate for all services
 // bun run scripts/generate-api-schema.ts --check       // verify types are up to date (for CI)
+// bun run scripts/generate-api-schema.ts --print-cargo-bins // print the `--bin` args phase 1 builds (for CI)
 //
 // This script generates OpenAPI schemas by running the local Rust binaries
 // instead of fetching from deployed services.
@@ -13,11 +14,11 @@ import { type Service, services } from "./services";
 const elapsed = (start: number) =>
 	`${((performance.now() - start) / 1000).toFixed(1)}s`;
 
-// Map service names to Rust crate names
+// Map API names to their OpenAPI binary prefixes (several share the harness crate).
 const serviceToCrate: Record<string, string> = {
 	"cloud-storage": "document_storage_service",
 	"properties-service": "properties_service",
-	"document-cognition": "document_cognition_service",
+	"document-cognition": "agent_harness_cognition",
 	"auth-service": "authentication_service",
 	"notification-service": "notification_service",
 	"static-files": "static_file_service",
@@ -25,6 +26,7 @@ const serviceToCrate: Record<string, string> = {
 	"contacts-service": "contacts_service",
 	"unfurl-service": "unfurl_service",
 	"agent-harness": "agent_harness_service",
+	"calendar-service": "calendar_service",
 	"email-service": "email_service",
 	"search-service": "search_service",
 	"scheduled-action": "scheduled_action"
@@ -36,7 +38,12 @@ const getServiceClientsDir = () =>
 	path.resolve(import.meta.dirname, "../src/lib/service-clients");
 // Parse arguments
 const getTargetServices = () =>
-	process.argv.slice(2).filter((arg) => arg !== "--check");
+	process.argv
+		.slice(2)
+		.filter((arg) => arg !== "--check" && arg !== "--print-cargo-bins");
+
+const openApiBinArgs = (crateNames: string[]) =>
+	crateNames.flatMap((crate) => ["--bin", `${crate}_openapi`]);
 
 // Build all OpenAPI binaries in a single cargo invocation (cargo parallelizes internally).
 async function buildOpenApiBinaries(
@@ -45,7 +52,7 @@ async function buildOpenApiBinaries(
 ): Promise<void> {
 	if (crateNames.length === 0) return;
 
-	const binArgs = crateNames.flatMap((crate) => ["--bin", `${crate}_openapi`]);
+	const binArgs = openApiBinArgs(crateNames);
 
 	console.log(`Building ${crateNames.length} OpenAPI binaries...`);
 	console.log(`cargo build args: ${binArgs.join(" ")}`);
@@ -168,6 +175,10 @@ const processService = async (
 		await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 		console.log(`[${service.name}] Orval finished (${elapsed(stepStart)})`);
 
+		if (service.name === "notification-service") {
+			await $`bun ${path.resolve(import.meta.dirname, "generate-push-schema.ts")}`;
+		}
+
 		// Orval bug workaround: with input.filters, excluded schemas are not
 		// generated, but the schemas barrel still re-exports them. Drop barrel
 		// exports whose target file does not exist.
@@ -214,6 +225,13 @@ async function main() {
 	const crateNames = servicesToProcess
 		.map((s) => serviceToCrate[s.name])
 		.filter((crate): crate is string => !!crate);
+
+	// CI builds these together with other schema binaries in one cargo
+	// invocation, so the phase 1 build below finds them fresh.
+	if (process.argv.includes("--print-cargo-bins")) {
+		console.log(openApiBinArgs(crateNames).join(" "));
+		return;
+	}
 
 	console.log(`\nProcessing ${servicesToProcess.length} service(s)...\n`);
 

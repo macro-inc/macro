@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, time::SystemTime};
 
 /// Upstream OAuth access token.
 #[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -85,9 +85,76 @@ impl fmt::Debug for RefreshToken {
     }
 }
 
+/// A token grant obtained from the upstream OAuth provider.
+#[derive(Debug)]
+pub struct UpstreamTokens {
+    /// The upstream access token.
+    pub access_token: AccessToken,
+    /// The upstream refresh token.
+    pub refresh_token: RefreshToken,
+    /// Seconds until `access_token` expires, as reported by the provider.
+    pub expires_in: u64,
+}
+
+/// An MCP client created through dynamic client registration.
+#[derive(Clone, Debug)]
+pub struct RegisteredClient {
+    /// Broker-assigned client identifier.
+    pub client_id: String,
+    /// Human-readable name submitted at registration.
+    pub client_name: String,
+    /// The redirect URIs submitted at registration. Nothing outside this set
+    /// may receive an authorization code for this client.
+    pub redirect_uris: Vec<String>,
+}
+
+impl RegisteredClient {
+    /// Returns whether `uri` is one of this client's registered redirect URIs.
+    ///
+    /// Compared as an exact string, as RFC 6749 section 3.1.2.3 requires for
+    /// redirect URIs that are not loopback addresses. Loopback ports vary per
+    /// launch, but MCP clients re-register per port, so exact comparison holds
+    /// for them too.
+    pub fn permits_redirect_uri(&self, uri: &str) -> bool {
+        self.redirect_uris
+            .iter()
+            .any(|registered| registered == uri)
+    }
+}
+
+/// A dynamic client registration request from an MCP client.
+#[derive(Debug, Deserialize)]
+pub struct ClientRegistrationRequest {
+    /// Human-readable client name.
+    #[serde(default)]
+    pub client_name: Option<String>,
+    /// The redirect URIs the client will use.
+    #[serde(default)]
+    pub redirect_uris: Vec<String>,
+}
+
+/// The registration response returned to an MCP client.
+#[derive(Debug, Serialize)]
+pub struct ClientRegistrationResponse {
+    /// Broker-assigned client identifier.
+    pub client_id: String,
+    /// Human-readable client name.
+    pub client_name: String,
+    /// The registered redirect URIs.
+    pub redirect_uris: Vec<String>,
+    /// Grant types this client may use.
+    pub grant_types: [&'static str; 2],
+    /// Response types this client may use.
+    pub response_types: [&'static str; 1],
+    /// Public clients hold no credential.
+    pub token_endpoint_auth_method: &'static str,
+}
+
 /// A pending OAuth authorization flow initiated by the client.
 #[derive(Clone)]
 pub struct PendingAuthorization {
+    /// The registered client that started the flow.
+    pub client_id: String,
     /// PKCE S256 code challenge from the client.
     pub code_challenge: String,
     /// The client's original `state` parameter.
@@ -99,6 +166,9 @@ pub struct PendingAuthorization {
 /// An authorization code issued by this broker and backed by an upstream token.
 #[derive(Clone)]
 pub struct IssuedAuthorizationCode {
+    /// The registered client this code was issued to. Only that client may
+    /// redeem it.
+    pub client_id: String,
     /// The access token obtained from the upstream provider.
     pub access_token: AccessToken,
     /// The refresh token obtained from the upstream provider.
@@ -108,6 +178,8 @@ pub struct IssuedAuthorizationCode {
     /// The redirect URI from the authorization request, used for exact-match
     /// validation during token exchange.
     pub redirect_uri: String,
+    /// When `access_token` expires.
+    pub access_token_expires_at: SystemTime,
 }
 
 /// OAuth authorize request from the MCP client.
@@ -116,7 +188,6 @@ pub struct AuthorizeRequest {
     /// Expected to be `code`.
     pub response_type: String,
     /// Dynamically registered client id.
-    #[allow(dead_code)]
     pub client_id: String,
     /// Loopback callback URI owned by the MCP client.
     pub redirect_uri: String,
@@ -166,14 +237,18 @@ pub struct TokenRequest {
     /// Redirect URI from the original authorization request.
     #[serde(default)]
     pub redirect_uri: Option<String>,
-    /// Optional client id.
+    /// The client redeeming the code or refresh token. Required: public clients
+    /// hold no credential, so this is the only client identity the broker gets,
+    /// and it must match the client the grant was issued to.
     #[serde(default)]
-    #[allow(dead_code)]
     pub client_id: Option<String>,
 }
 
 /// OAuth token response returned to the MCP client.
-#[derive(Serialize)]
+///
+/// The token fields redact themselves when formatted, so `Debug` here does not
+/// expose a credential.
+#[derive(Debug, Serialize)]
 pub struct TokenResponse {
     /// Bearer access token.
     pub access_token: AccessToken,
@@ -181,4 +256,35 @@ pub struct TokenResponse {
     pub refresh_token: RefreshToken,
     /// OAuth token type.
     pub token_type: &'static str,
+    /// Seconds until `access_token` expires, so clients can refresh before it
+    /// does. Revocation does not cut an access token short, so this is also the
+    /// longest it stays usable after its grant is revoked.
+    pub expires_in: u64,
+}
+
+/// The client and grant an outstanding refresh token belongs to.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefreshTokenBinding {
+    /// The client that obtained the refresh token.
+    pub client_id: String,
+    /// The authorization this refresh token descends from. Every token rotated
+    /// out of one authorization code shares it, so revoking it revokes the
+    /// whole family.
+    pub grant_id: String,
+}
+
+/// RFC 7009 token revocation request from the MCP client.
+///
+/// `token_type_hint` is accepted and ignored: RFC 7009 makes it optional, and
+/// the broker looks the token up the same way whatever its type.
+#[derive(Deserialize)]
+pub struct RevocationRequest {
+    /// The token to revoke.
+    #[serde(default)]
+    pub token: Option<RefreshToken>,
+    /// The client revoking the token. Public clients hold no credential, so
+    /// this is the client authentication RFC 7009 requires, and it must match
+    /// the client the token was issued to.
+    #[serde(default)]
+    pub client_id: Option<String>,
 }

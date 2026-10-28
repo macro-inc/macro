@@ -1,5 +1,12 @@
 import { $dfsIterator } from '@lexical/utils';
 import { $getRoot, type LexicalNode } from 'lexical';
+import { match, P } from 'ts-pattern';
+import {
+  $isAgentSessionMentionNode,
+  type AgentSessionMentionInfo,
+  type AgentSessionMentionNode,
+  buildAgentSessionMentionMarkdown,
+} from '../nodes/AgentSessionMentionNode';
 import {
   $isContactMentionNode,
   type ContactMentionInfo,
@@ -10,6 +17,7 @@ import {
   type DateMentionInfo,
   type DateMentionNode,
 } from '../nodes/DateMentionNode';
+import { $isDocumentCardNode } from '../nodes/DocumentCardNode';
 import {
   $isDocumentMentionNode,
   type DocumentMentionInfo,
@@ -31,6 +39,7 @@ import {
   type UserMentionNode,
 } from '../nodes/UserMentionNode';
 import { wrapXml } from '../transformers/transformers';
+import { messageReference } from './message-references';
 
 function dropKey<T extends object, K extends keyof T>(
   obj: T,
@@ -45,6 +54,7 @@ export type MentionNode =
   | DocumentMentionNode
   | ContactMentionNode
   | DateMentionNode
+  | AgentSessionMentionNode
   | PullRequestMentionNode
   | GroupMentionNode;
 
@@ -54,6 +64,7 @@ export function $isMentionNode(node: LexicalNode): node is MentionNode {
     $isDocumentMentionNode(node) ||
     $isContactMentionNode(node) ||
     $isDateMentionNode(node) ||
+    $isAgentSessionMentionNode(node) ||
     $isPullRequestMentionNode(node) ||
     $isGroupMentionNode(node)
   );
@@ -83,54 +94,72 @@ export type ChannelMention = {
  * `document`.
  */
 function documentMentionEntityType(blockName: string): string {
-  switch (blockName) {
-    case 'channel':
-      return 'channel';
-    case 'project':
-      return 'project';
-    case 'chat':
-      return 'chat';
-    case 'email':
-      return 'thread';
-    case 'call':
-      return 'call';
-    case 'calendar':
-      return 'calendar_event';
-    case 'automation':
-      return 'automation';
-    case 'company':
-      return 'crm_company';
-    case 'contact':
-      return 'crm_contact';
-    default:
-      return 'document';
-  }
+  return (
+    match(blockName)
+      .with(
+        P.union(
+          'channel',
+          'project',
+          'chat',
+          'call',
+          'automation',
+          'form',
+          'database',
+          'external_chat'
+        ),
+        (kind) => kind
+      )
+      // A routine is still referenced under its old item type.
+      .with('routine', () => 'automation')
+      .with('email', () => 'thread')
+      .with('calendar', () => 'calendar_event')
+      .with('company', () => 'crm_company')
+      .with('contact', () => 'crm_contact')
+      // A task project. Not a message reference type, so it is dropped below.
+      .with('initiative', () => 'initiative')
+      // Dropped below for the same reason.
+      .with('pipeline', () => 'crm_pipeline')
+      .with(P._, () => 'document')
+      .exhaustive()
+  );
 }
 
 /**
  * Extracts the mentions in the current editor state as `ChannelMention`s,
  * the way the web editor tracks them while composing a channel message.
  * Document mentions map by block name; user mentions are re-tagged `bot`
- * when they target a bot principal. Contact, date, group, and PR mentions
- * carry no referencable entity and are skipped. Duplicates are dropped.
+ * when they target a bot principal. Contact, date, and PR mentions
+ * carry no referencable entity and are skipped. Project (initiative) and CRM
+ * pipeline mentions are skipped too: channel references auto-share their
+ * target with members.
+ * Authored group mentions are preserved. Duplicates are dropped.
  */
 export function $extractChannelMentions(): ChannelMention[] {
   const out: ChannelMention[] = [];
   const seen = new Set<string>();
-  const push = (mention: ChannelMention) => {
-    if (!mention.entityId) return;
+  const push = (raw: ChannelMention) => {
+    const mention = messageReference(raw.entityType, raw.entityId);
+    if (!mention?.entityId) return;
     const key = `${mention.entityType}:${mention.entityId}`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push(mention);
   };
 
-  for (const node of $extractAllMentions()) {
-    if ($isDocumentMentionNode(node)) {
+  for (const { node } of $dfsIterator($getRoot())) {
+    if (
+      $isDocumentMentionNode(node) ||
+      ($isDocumentCardNode(node) &&
+        (node.getBlockName() === 'form' || node.getBlockName() === 'database'))
+    ) {
       push({
         entityType: documentMentionEntityType(node.getBlockName()),
         entityId: node.getDocumentId(),
       });
+    } else if ($isAgentSessionMentionNode(node)) {
+      push({ entityType: 'agent_session', entityId: node.getId() });
+    } else if ($isGroupMentionNode(node)) {
+      push({ entityType: 'group', entityId: node.getGroupAlias() });
     } else if ($isUserMentionNode(node)) {
       const userId = node.getUserId();
       push({
@@ -145,6 +174,7 @@ export function $extractChannelMentions(): ChannelMention[] {
 export type MentionInfo =
   | (UserMentionInfo & { type: 'user' })
   | (DocumentMentionInfo & { type: 'document' })
+  | (AgentSessionMentionInfo & { type: 'agent_session' })
   | (PullRequestMentionInfo & { type: 'pr' })
   | (ContactMentionInfo & { type: 'contact' })
   | (DateMentionInfo & { type: 'date' })
@@ -156,6 +186,8 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
       return wrapXml('m-user-mention', dropKey(info, 'type'));
     case 'document':
       return wrapXml('m-document-mention', dropKey(info, 'type'));
+    case 'agent_session':
+      return buildAgentSessionMentionMarkdown(dropKey(info, 'type'));
     case 'pr':
       return wrapXml('m-pr-mention', dropKey(info, 'type'));
     case 'contact':
@@ -176,6 +208,7 @@ export {
   parseGroupMentions,
   parseLinks,
   parsePullRequestMentions,
+  parseReplyTargets,
   parseTagMentions,
   parseUserMentions,
 } from './parsers';

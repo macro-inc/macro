@@ -4,17 +4,13 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationFiltersDone } from './notificationFiltersDone';
-import type { NotificationFiltersSeen } from './notificationFiltersSeen';
+import type { NotificationState } from './notificationState';
 
 /**
  * Notification-level filters that apply to an entity type.
  */
 export interface NotificationFilters {
-  /** Filter by notification done state.
-None to ignore, true to include only done notifications, false to include only not-done notifications. */
-  done?: NotificationFiltersDone;
-  /** Filter by notification seen state.
-None to ignore, true to include only seen notifications, false to include only unseen notifications. */
-  seen?: NotificationFiltersSeen;
+  /** Include entities with a non-deleted notification in any of these exact states.
+Empty means no notification restriction. Active means `[unseen, seen]`. */
+  states?: NotificationState[];
 }

@@ -15,9 +15,9 @@ use tokio_util::sync::CancellationToken;
 
 use super::jobs::JobProgress;
 use super::models::{
-    BackfillError, BackfillReceipt, CallBackfillRequest, ChannelBackfillRequest,
-    ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillRequest,
-    PropertiesBackfillRequest, PropertySourcePage, SourcePage,
+    BackfillError, BackfillReceipt, CalendarEventBackfillRequest, CallBackfillRequest,
+    ChannelBackfillRequest, ChatBackfillRequest, DocumentBackfillRequest, EmailBackfillRequest,
+    ProjectBackfillRequest, PropertiesBackfillRequest, PropertySourcePage, SourcePage,
 };
 use super::ports::{BackfillSource, PropertyBackfillIndexer, SearchEventPublisher};
 
@@ -108,6 +108,12 @@ pub trait BackfillService: Send + Sync + 'static {
     fn backfill_projects(
         &self,
         req: ProjectBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
+    ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
+    fn backfill_calendar_events(
+        &self,
+        req: CalendarEventBackfillRequest,
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> impl Future<Output = Result<BackfillReceipt, BackfillError>> + Send;
@@ -257,8 +263,11 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, &progress, &cancel, |offset| {
-            self.source.fetch_channels(&req, offset)
+        if req.channel_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Ok(BackfillReceipt { enqueued: 0 });
+        }
+        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+            self.source.fetch_channels(&req, cursor)
         })
         .await
     }
@@ -307,6 +316,18 @@ where
     ) -> Result<BackfillReceipt, BackfillError> {
         drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
             self.source.fetch_projects(&req, cursor)
+        })
+        .await
+    }
+
+    async fn backfill_calendar_events(
+        &self,
+        req: CalendarEventBackfillRequest,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
+    ) -> Result<BackfillReceipt, BackfillError> {
+        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+            self.source.fetch_calendar_events(&req, cursor)
         })
         .await
     }

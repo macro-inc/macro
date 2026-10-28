@@ -103,7 +103,7 @@ export async function uploadInputAttachments(options: {
 
       if (result.failed) {
         options.tracker.removeAttachment(pendingId);
-        toast.failure(`Failed to upload ${file.name}`);
+        toast.failure(result.reason ?? `Failed to upload ${file.name}`);
         continue;
       }
 
@@ -118,6 +118,8 @@ export async function uploadInputAttachments(options: {
       if (previewSrc && uploaded.kind !== 'document') {
         uploaded.previewSrc = previewSrc;
       }
+      if (file.type) uploaded.mimeType = file.type;
+      uploaded.size = uploadSource.size;
       if (dimensions) {
         uploaded.width = dimensions.width;
         uploaded.height = dimensions.height;

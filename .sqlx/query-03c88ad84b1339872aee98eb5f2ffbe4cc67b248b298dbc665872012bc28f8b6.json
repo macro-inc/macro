@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE gtm_invite_link\n            SET open_count = open_count + 1,\n                first_opened_at = COALESCE(first_opened_at, $2)\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03c88ad84b1339872aee98eb5f2ffbe4cc67b248b298dbc665872012bc28f8b6"
+}

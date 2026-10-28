@@ -1,21 +1,27 @@
 use std::sync::Arc;
 
+use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
     CrmScope, EntityFilterAst,
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
+    chat::ChatLiteral,
     crm_company::CrmCompanyLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
-    properties::{PropertiesLiteral, PropertyMatchValue},
+    project::ProjectLiteral,
+    properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
 use predicate_index::{PredicateExpr, RangeBound};
 
 use super::*;
+
+mod channels;
+mod confinement;
 
 fn request() -> SoupFlatRequest {
     SoupFlatRequest {
@@ -26,18 +32,53 @@ fn request() -> SoupFlatRequest {
     }
 }
 
+#[test]
+fn favorite_filter_requires_current_projection_and_constrains_each_partition() {
+    let mut ast = excluded_deferred_partitions();
+    ast.favorites_only = Some(true);
+    assert!(matches!(
+        compile_soup_flat_v4(&ast, request()).unwrap(),
+        LocalCompileOutcome::Unsupported(_)
+    ));
+    let LocalCompileOutcome::Supported(query) = properties::compile_soup(&ast, request()).unwrap()
+    else {
+        panic!("current compiler must support favorites");
+    };
+    fn requires_favorite(predicate: &PredicateExpr) -> bool {
+        predicate == &PredicateExpr::None
+            || predicate == &mail::boolean("is-favorited", true)
+            || matches!(predicate, PredicateExpr::And(a, b) if requires_favorite(a) || requires_favorite(b))
+    }
+    for partition in &query.as_query().partitions {
+        assert!(
+            requires_favorite(&partition.predicate),
+            "{:?}",
+            partition.predicate
+        );
+    }
+}
+
 fn excluded_deferred_partitions() -> EntityFilterAst {
-    let mut ast = EntityFilterAst::default();
-    ast.calendar_event_filter = Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil()))));
+    let mut ast = EntityFilterAst {
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
+        channel_filter: Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil())))),
+        channel_thread_filter: Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
+            Uuid::nil(),
+        )))),
+        call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil())))),
+        crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+        foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
+        ..EntityFilterAst::default()
+    };
     ast.email_filter.tree = Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))));
-    ast.channel_filter = Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))));
-    ast.channel_thread_filter = Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
+    ast
+}
+
+fn excluded_non_document_local_partitions(ast: &mut EntityFilterAst) {
+    ast.project_filter = Some(Arc::new(Expr::val(ProjectLiteral::ProjectIdSelf(
         Uuid::nil(),
     ))));
-    ast.call_filter = Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))));
-    ast.crm_company_filter = Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil()))));
-    ast.foreign_entity_filter = Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))));
-    ast
+    ast.chat_filter = Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))));
 }
 
 #[test]
@@ -74,24 +115,217 @@ fn compiles_complete_supported_forest_after_eligibility() {
 }
 
 #[test]
-fn unsupported_supported_partition_literals_never_disappear() {
+fn crm_document_literals_always_fall_back_to_the_server() {
+    use item_filters::ast::{
+        email::Email,
+        properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue},
+    };
+    for literal in [
+        DocumentLiteral::Property(PropertiesLiteral {
+            property_definition_id: uuid::Uuid::from_u128(0xc),
+            entity_type: None,
+            value: PropertyMatchValue::EntityRef(EntityRefId::new("company".to_string()).unwrap()),
+        }),
+        DocumentLiteral::EmailAttachmentParticipant(Email::Domain("acme.com".to_string())),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(Expr::val(literal)));
+        for outcome in [
+            compile_soup_flat_v1(&ast, request()).unwrap(),
+            compile_soup_flat_v2(&ast, request()).unwrap(),
+            compile_soup_flat_v3(&ast, request()).unwrap(),
+            compile_soup_flat_v4(&ast, request()).unwrap(),
+        ] {
+            assert_eq!(
+                outcome,
+                LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
+            );
+        }
+    }
+}
+
+#[test]
+fn production_documents_membership_literals_require_and_compile_in_v2() {
+    for literal in [
+        DocumentLiteral::IsEmailAttachment(false),
+        DocumentLiteral::IsEmailAttachment(true),
+        DocumentLiteral::SubType(DocumentSubType::Task),
+        DocumentLiteral::SubType(DocumentSubType::Snippet),
+        DocumentLiteral::SubType(DocumentSubType::Skill),
+        DocumentLiteral::SubType(DocumentSubType::InitiativeDescription),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(Expr::val(literal)));
+        assert_eq!(
+            compile_soup_flat_v1(&ast, request()).unwrap(),
+            LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
+        );
+        let LocalCompileOutcome::Supported(query) = compile_soup_flat_v2(&ast, request()).unwrap()
+        else {
+            panic!("v2 document membership literal fell back");
+        };
+        assert_eq!(query.as_query().profile, vocabulary::profile_v2());
+    }
+}
+
+#[test]
+fn v2_subtype_and_attachment_preserve_direct_and_or_not_shapes() {
+    let mut ast = excluded_deferred_partitions();
+    ast.document_filter = Some(Arc::new(Expr::and(
+        Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
+        Expr::or(
+            Expr::val(DocumentLiteral::IsEmailAttachment(true)),
+            Expr::is_not(Expr::val(DocumentLiteral::SubType(
+                DocumentSubType::Snippet,
+            ))),
+        ),
+    )));
+
+    let LocalCompileOutcome::Supported(query) = compile_soup_flat_v2(&ast, request()).unwrap()
+    else {
+        panic!("supported v2 Boolean tree fell back");
+    };
+    assert_eq!(
+        query.as_query().partitions[0].predicate,
+        PredicateExpr::And(
+            Box::new(PredicateExpr::Exact {
+                attribute: vocabulary::document_sub_type(),
+                value: ExactValue::utf8("task").unwrap(),
+            }),
+            Box::new(PredicateExpr::Or(
+                Box::new(PredicateExpr::Exact {
+                    attribute: vocabulary::email_attachment(),
+                    value: ExactValue::new([1]).unwrap(),
+                }),
+                Box::new(PredicateExpr::Not(Box::new(PredicateExpr::Exact {
+                    attribute: vocabulary::document_sub_type(),
+                    value: ExactValue::utf8("snippet").unwrap(),
+                }))),
+            )),
+        )
+    );
+
+    let mut ast = excluded_deferred_partitions();
+    ast.document_filter = Some(Arc::new(Expr::val(DocumentLiteral::IsEmailAttachment(
+        false,
+    ))));
+    let LocalCompileOutcome::Supported(query) = compile_soup_flat_v2(&ast, request()).unwrap()
+    else {
+        panic!("direct v2 attachment literal fell back");
+    };
+    assert_eq!(
+        query.as_query().partitions[0].predicate,
+        PredicateExpr::Exact {
+            attribute: vocabulary::email_attachment(),
+            value: ExactValue::new([0]).unwrap(),
+        }
+    );
+}
+
+#[test]
+fn v3_compiles_my_tasks_importance_and_status_membership() {
+    assert_eq!(
+        STATUS_PROPERTY_DEFINITION_ID,
+        system_properties::SystemPropertyKey::STATUS_UUID
+    );
+
+    let not_started = Uuid::from_u128(11);
+    let in_progress = Uuid::from_u128(12);
+    let mut ast = excluded_deferred_partitions();
+    excluded_non_document_local_partitions(&mut ast);
+    ast.document_filter = Some(Arc::new(Expr::and(
+        Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
+        Expr::val(DocumentLiteral::Importance(true)),
+    )));
+    ast.properties_filter = Some(Arc::new(Expr::or(
+        Expr::val(PropertiesLiteral {
+            property_definition_id: STATUS_PROPERTY_DEFINITION_ID,
+            entity_type: None,
+            value: PropertyMatchValue::SelectOption(not_started),
+        }),
+        Expr::val(PropertiesLiteral {
+            property_definition_id: STATUS_PROPERTY_DEFINITION_ID,
+            entity_type: Some(PropertyEntityType::Task),
+            value: PropertyMatchValue::SelectOption(in_progress),
+        }),
+    )));
+
+    assert_eq!(
+        compile_soup_flat_v2(&ast, request()).unwrap(),
+        LocalCompileOutcome::Unsupported(UnsupportedReason::GlobalProperties)
+    );
+    let LocalCompileOutcome::Supported(query) = compile_soup_flat_v3(&ast, request()).unwrap()
+    else {
+        panic!("My Tasks v3 request fell back");
+    };
+    assert_eq!(query.as_query().profile, vocabulary::profile_v3());
+    let document = &query.as_query().partitions[0].predicate;
+    assert!(format!("{document:?}").contains("importance"));
+    assert!(format!("{document:?}").contains("task-status-option"));
+}
+
+#[test]
+fn v3_rejects_non_status_properties_and_unrestricted_local_partitions() {
+    for importance in [
+        Expr::val(DocumentLiteral::Importance(false)),
+        Expr::is_not(Expr::val(DocumentLiteral::Importance(true))),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(importance));
+        assert_eq!(
+            check_soup_flat_v3(&ast, request()),
+            Eligibility::Unsupported(UnsupportedReason::Literal("document"))
+        );
+    }
+
+    let mut ast = excluded_deferred_partitions();
+    ast.properties_filter = Some(Arc::new(Expr::val(PropertiesLiteral {
+        property_definition_id: Uuid::from_u128(99),
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::from_u128(1)),
+    })));
+    excluded_non_document_local_partitions(&mut ast);
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::GlobalProperties)
+    );
+
+    ast.properties_filter = Some(Arc::new(Expr::val(PropertiesLiteral {
+        property_definition_id: STATUS_PROPERTY_DEFINITION_ID,
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::from_u128(1)),
+    })));
+    ast.project_filter = None;
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::GlobalProperties)
+    );
+}
+
+#[test]
+fn unsupported_supported_partition_literals_force_v1_and_v2_network_fallback() {
     for expression in [
         Expr::and(
-            Expr::val(DocumentLiteral::Id(Uuid::nil())),
+            Expr::val(DocumentLiteral::IsEmailAttachment(false)),
             Expr::val(DocumentLiteral::Importance(true)),
         ),
         Expr::or(
-            Expr::val(DocumentLiteral::Id(Uuid::nil())),
+            Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
             Expr::val(DocumentLiteral::Importance(true)),
         ),
         Expr::is_not(Expr::val(DocumentLiteral::Importance(true))),
     ] {
         let mut ast = excluded_deferred_partitions();
         ast.document_filter = Some(Arc::new(expression));
-        assert_eq!(
+        for outcome in [
             compile_soup_flat_v1(&ast, request()).unwrap(),
-            LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
-        );
+            compile_soup_flat_v2(&ast, request()).unwrap(),
+        ] {
+            assert_eq!(
+                outcome,
+                LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
+            );
+        }
     }
 }
 
@@ -141,12 +375,12 @@ fn every_deferred_partition_must_be_proven_empty() {
     );
 
     let mut ast = excluded_deferred_partitions();
-    ast.reminder_filter = Some(Arc::new(Expr::val(
-        item_filters::ast::reminder::ReminderLiteral::Include,
+    ast.agent_session_filter = Some(Arc::new(Expr::val(
+        item_filters::ast::agent_session::AgentSessionLiteral::Include,
     )));
     assert_eq!(
         check_soup_flat_v1(&ast, request()),
-        Eligibility::Unsupported(UnsupportedReason::Partition("reminder"))
+        Eligibility::Unsupported(UnsupportedReason::Partition("agent_session"))
     );
 
     let mut ast = excluded_deferred_partitions();
@@ -209,4 +443,123 @@ fn invalid_limit_is_a_validation_error_not_unsupported() {
         ),
         Err(CompileError::Validation(ValidationError::Limit(0)))
     );
+}
+
+#[test]
+fn initiative_queries_use_server_instead_of_incomplete_local_index() {
+    let mut ast = excluded_deferred_partitions();
+    ast.initiative_filter = Some(Arc::new(Expr::val(
+        item_filters::ast::initiative::InitiativeLiteral::Include,
+    )));
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("initiative"))
+    );
+    ast.favorites_only = Some(true);
+    assert_eq!(
+        properties::compile_soup(&ast, request()).unwrap(),
+        LocalCompileOutcome::Unsupported(UnsupportedReason::Partition("initiative"))
+    );
+}
+
+#[test]
+fn a_tables_rows_compile_to_the_database_row_partition() {
+    use item_filters::ast::database_row::DatabaseRowLiteral;
+    let deals = Uuid::from_u128(0x7ab00000_0000_0000_0000_000000000001);
+    let stage = Uuid::from_u128(0x5e1ec700_0000_0000_0000_000000000001);
+    let won = Uuid::from_u128(0x0e000000_0000_0000_0000_000000000001);
+    let rows_partition = |ast: &EntityFilterAst| {
+        let LocalCompileOutcome::Supported(query) =
+            properties::compile_soup(ast, request()).unwrap()
+        else {
+            panic!("rows compile locally")
+        };
+        query
+            .as_query()
+            .partitions
+            .iter()
+            .find(|partition| partition.partition == vocabulary::database_row_partition())
+            .expect("the current profile always has a rows partition")
+            .predicate
+            .clone()
+    };
+
+    let mut ast = excluded_deferred_partitions();
+    ast.database_row_filter = Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(deals))));
+    ast.properties_filter = Some(Arc::new(Expr::val(PropertiesLiteral {
+        property_definition_id: stage,
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(won),
+    })));
+    assert_eq!(
+        rows_partition(&ast),
+        PredicateExpr::And(
+            Box::new(PredicateExpr::Exact {
+                attribute: vocabulary::table_id(),
+                value: predicate_index::ExactValue::new(deals.as_bytes()).unwrap(),
+            }),
+            Box::new(PredicateExpr::Exact {
+                attribute: properties::select_attribute(stage),
+                value: predicate_index::ExactValue::new(won.as_bytes()).unwrap(),
+            }),
+        )
+    );
+
+    let mut all_rows = excluded_deferred_partitions();
+    all_rows.database_row_filter = Some(Arc::new(Expr::val(DatabaseRowLiteral::Include)));
+    assert_eq!(rows_partition(&all_rows), PredicateExpr::All);
+    assert_eq!(
+        check_soup_flat_v3(&all_rows, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("database_row"))
+    );
+
+    let without_rows = excluded_deferred_partitions();
+    assert_eq!(rows_partition(&without_rows), PredicateExpr::None);
+
+    let mut only_negated = excluded_deferred_partitions();
+    only_negated.database_row_filter = Some(Arc::new(Expr::is_not(Expr::val(
+        DatabaseRowLiteral::TableId(deals),
+    ))));
+    assert_eq!(rows_partition(&only_negated), PredicateExpr::None);
+
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("database_row"))
+    );
+}
+
+#[test]
+fn contact_queries_require_server_authorization_and_deduplication() {
+    let mut ast = excluded_deferred_partitions();
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Include)));
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("crmContact"))
+    );
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Id(Uuid::nil()))));
+    assert_eq!(check_soup_flat_v3(&ast, request()), Eligibility::Supported);
+}
+
+#[test]
+fn crm_associations_use_server_membership() {
+    use item_filters::ast::crm_association::CrmAssociation;
+    let record = CrmAssociation::Company(Uuid::from_u128(0xc0));
+    let mut ast = excluded_deferred_partitions();
+    ast.crm_association = Some(record);
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Literal("crm_association"))
+    );
+
+    for literal in [
+        DocumentLiteral::CrmAssociated(record),
+        DocumentLiteral::NameContains("renewal".into()),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(Expr::val(literal)));
+        assert_eq!(
+            check_soup_flat_v3(&ast, request()),
+            Eligibility::Unsupported(UnsupportedReason::Literal("document"))
+        );
+    }
 }

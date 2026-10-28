@@ -1,32 +1,31 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
-import { clearLocalAuthSession } from '@core/auth/logout';
+import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
+import {
+  getCurrentQueryString,
+  SessionExpiredRedirect,
+} from '@components/app/SessionExpiredRedirect';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
-import { confirmSessionExpired } from '@core/util/fetchWithToken';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { releaseNotificationCover } from '@macro/tauri/push-api';
 import {
-  authKeys,
-  invalidateUserInfo,
-  useUserInfoQuery,
-} from '@queries/auth/user-info';
-import { queryClient } from '@queries/client';
-import { Navigate, useSearchParams } from '@solidjs/router';
+  notificationLaunchPath,
+  pendingNotificationNavigation,
+} from '@notifications/notification-navigation-intent';
+import { useUserInfoQuery } from '@queries/auth/user-info';
+import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import { Button } from '@ui';
 import {
-  createResource,
+  createEffect,
   createSignal,
   Match,
+  on,
   onMount,
-  Show,
   Switch,
 } from 'solid-js';
-
-function getCurrentQueryString() {
-  const params = new URLSearchParams(window.location.search);
-  return params.toString().length > 0 ? `?${params.toString()}` : '';
-}
 
 function shouldShowNativeSessionVerificationFallback(
   userInfoQuery: ReturnType<typeof useUserInfoQuery>
@@ -43,6 +42,9 @@ function shouldShowNativeSessionVerificationFallback(
 function SessionVerificationFallback(props: {
   onRetry: () => Promise<unknown>;
 }) {
+  onMount(() =>
+    fireAndForget(releaseNotificationCover(), 'notification-launch')
+  );
   const [retrying, setRetrying] = createSignal(false);
 
   const handleRetry = async () => {
@@ -61,7 +63,7 @@ function SessionVerificationFallback(props: {
         class="mt-2"
         disabled={retrying()}
         onClick={handleRetry}
-        variant="base"
+        variant="secondary"
       >
         {retrying() ? 'Retrying…' : 'Retry'}
       </Button>
@@ -69,46 +71,47 @@ function SessionVerificationFallback(props: {
   );
 }
 
-function SessionExpiredRedirect() {
-  // The UNAUTHORIZED that got us here can come from a latched refresh failure
-  // without the server ever being consulted, so confirm with a fresh refresh
-  // before destroying local session state. If the session turns out to be
-  // alive, refetch user-info instead and only treat a repeat 401 as real.
-  const [expired] = createResource(async () => {
-    if (!(await confirmSessionExpired())) {
-      await invalidateUserInfo();
-      const stillUnauthorized = thrownResultErrorHasCode(
-        queryClient.getQueryState(authKeys.userInfo.queryKey)?.error,
-        'UNAUTHORIZED'
-      );
-      if (!stillUnauthorized) return false;
-    }
-    await clearLocalAuthSession().catch((error) => {
-      console.error('Failed to clear local auth session', error);
-    });
-    return true;
-  });
-
-  return (
-    <Show when={expired()}>
-      <Navigate href={`/welcome${getCurrentQueryString()}`} />
-    </Show>
-  );
+function AuthenticatedDestination(props: {
+  fallback: string;
+  recipientId: string;
+}) {
+  const pending = isNativeMobilePlatform() ? consumePostLoginRedirect() : null;
+  const notificationPath = notificationLaunchPath(props.recipientId);
+  const target = pendingNotificationNavigation()?.target;
+  if (notificationPath && target) {
+    fireAndForget(
+      prefetchChannelTarget(target.channelId, {
+        messageId: target.messageId,
+        threadId: target.threadId ?? target.messageId,
+      }),
+      'notification-navigation'
+    );
+  }
+  return <Navigate href={notificationPath ?? pending ?? props.fallback} />;
 }
 
 export function BasePathComponent() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const userInfoQuery = useUserInfoQuery();
   const checkoutRefreshPending = useCheckoutCompletionListener();
 
-  onMount(() => {
-    if (searchParams.upgrade === 'true') {
-      sessionStorage.setItem('showUpgradeModal', 'true');
-    }
-  });
+  createEffect(
+    on(
+      () => searchParams.upgrade,
+      (upgrade) => {
+        if (upgrade === 'true')
+          sessionStorage.setItem('showUpgradeModal', 'true');
+      }
+    )
+  );
 
   // check session storage for redirect url
-  const redirectUrl = consumePostLoginRedirect();
+  // Native destinations survive process death and must remain pending until
+  // identity is known; consuming during the unauthenticated launch loses them.
+  const redirectUrl = isNativeMobilePlatform()
+    ? null
+    : consumePostLoginRedirect();
   if (redirectUrl) {
     const relativeUrl = redirectUrl.replace(window.location.origin, '');
     window.location.href = relativeUrl;
@@ -116,8 +119,8 @@ export function BasePathComponent() {
   }
 
   // Preserve existing query parameters when redirecting
-  const queryString = getCurrentQueryString();
-  const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
+  const queryString = () => getCurrentQueryString(location.search);
+  const redirectPath = () => `${DEFAULT_ROUTE}${queryString()}`;
 
   return (
     <Switch>
@@ -133,7 +136,10 @@ export function BasePathComponent() {
         <SessionExpiredRedirect />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
-        <Navigate href={redirectPath} />
+        <AuthenticatedDestination
+          fallback={redirectPath()}
+          recipientId={userInfoQuery.data!.userId}
+        />
       </Match>
       {/* A failed remote check does not make an authenticated cached session
           unusable: the data branch above enters the local app first. Block only
@@ -156,7 +162,7 @@ export function BasePathComponent() {
       <Match
         when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
       >
-        <Navigate href={`/welcome${queryString}`} />
+        <Navigate href={`/welcome${queryString()}`} />
       </Match>
     </Switch>
   );

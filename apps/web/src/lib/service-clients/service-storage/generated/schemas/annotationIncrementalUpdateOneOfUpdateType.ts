@@ -10,5 +10,5 @@ export type AnnotationIncrementalUpdateOneOfUpdateType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AnnotationIncrementalUpdateOneOfUpdateType = {
-  'create-comment': 'create-comment',
+  'create-anchor': 'create-anchor',
 } as const;

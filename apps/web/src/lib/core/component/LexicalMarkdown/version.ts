@@ -15,5 +15,26 @@
  * Version 2.2 - Jul 13, 2026. Added optional adaptColors display hint to HtmlRenderNode.
  * Version 2.3 - Jul 15, 2026. Added TagMentionNode.
  * Version 2.4 - Aug 2026. MagicChipNode: block response surface, channelId optional for standalone sessions.
+ * Version 2.5 - Aug 2026. Added expandable AgentContextNode.
+ * Version 2.6 - Aug 2026. PasteNode origin: pasted (default) or referenced.
+ * Version 3.0 - Sep 2026. Added ReplyTargetNode.
+ * Version 4.0 - Sep 2026. Added AgentSessionMentionNode.
+ * Version 3.1 - Sep 2026. Added ConnectAppNode (agent "connect this app" chip).
+ * Version 4.1 - Sep 2026. Expandable session mentions reuse Magic Chip with a null message lock for the latest turn.
+ * Version 4.2 - Sep 2026. ConnectAppNode: optional `target` (connections | harness) so the chip can connect Cursor.
+ * Version 4.3 - Sep 2026. ReplyTargetNode references a message parent (channel or document) instead of a channel id.
+ * Version 4.4 - Sep 2026. Expanded agent session mentions are block decorators with node selection.
+ * Version 5.0 - Sep 2026. Added CursorSystemNotificationNode (Cursor `<system_notification>` event cards).
+ * Version 6.0 - Oct 2026. Added source-only DatabaseQueryNode: a live database answer pointing at a saved query (`queryId`), with its table, title, and table or chart display (bar, line, area, scatter, pie; optional `color` and `stack`).
+ * Version 6.1 - Oct 2026. ReplyTargetNode accepts call, initiative, and CRM message parents.
+ * Version 6.2 - Oct 2026. DocumentCardNode preview data can reserve poll height using its option count.
+ * Version 7.0 - Oct 2026. Added TaskListNode: replaces ListNode at runtime, serializes as
+ *   `task-list` with the `list` wire shape plus optional `$.taskListView` node state
+ *   (persisted check-list task filters).
+ * Version 7.1 - Oct 2026. PullRequestMentionNode: optional GitHub `url`; `id` may be empty
+ *   when an agent mentions a PR by URL, and the decorator resolves the synced PR.
+ * Version 8.0 - Oct 2026. Added BookingLinkMentionNode for Macro `/app/book/…` URLs.
+ * Version 9.0 - Oct 2026. Added AgentActivityNode: the steps of an agent's reply between two passages, with a snapshot of its rows and live rendering where the session is readable.
+ * Version 9.1 - Oct 2026. Markdown m-link payloads preserve explicit unlinking; bare URLs import as links.
  */
-export const MARKDOWN_VERSION_COUNTER = 2.4;
+export const MARKDOWN_VERSION_COUNTER = 9.1;

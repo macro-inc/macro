@@ -1,6 +1,6 @@
 import { XMLBuilder } from 'fast-xml-parser';
 import type { SerializedEditorState } from 'lexical';
-import { serializeNode } from './codecs';
+import { type FxpNode, serializeNode } from './codecs';
 import type { SerNode } from './nodes';
 
 export type { SerializedEditorState } from 'lexical';
@@ -14,6 +14,11 @@ const builder = new XMLBuilder({
   format: true,
   indentBy: '  ',
 });
+
+/** Render element trees with the same builder the document XML uses. */
+export function buildXml(nodes: FxpNode[]): string {
+  return builder.build(nodes);
+}
 
 export function toXml(state: SerializedEditorState): string {
   const root = state.root as unknown as { children: SerNode[] };

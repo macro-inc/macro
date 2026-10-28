@@ -10,13 +10,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, ToolCalendarEvent,
-    mutation_tool_error,
+    AttendeeInput, CalendarLabels, CalendarToolContext, CopyChange, EventRemindersInput,
+    EventTimeInput, OutOfOfficeInput, ToolCalendarEvent, confirm_copy, mutation_tool_error,
 };
 use crate::domain::{
-    models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange},
+    models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange, GuestPolicy},
     ports::{
         CalendarMutationService, CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
+        MeetingLinkProvider,
     },
 };
 
@@ -24,6 +25,10 @@ use crate::domain::{
 #[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ConferenceChangeInput {
+    /// Attach the selected calendar's default conferencing provider.
+    ProviderDefault,
+    /// Attach Microsoft Teams on an eligible Outlook calendar.
+    MicrosoftTeams,
     /// Generate a new Google Meet conference and attach it.
     GoogleMeet,
     /// Detach whatever conference is currently attached.
@@ -33,6 +38,8 @@ pub enum ConferenceChangeInput {
 impl From<ConferenceChangeInput> for ConferenceChange {
     fn from(input: ConferenceChangeInput) -> Self {
         match input {
+            ConferenceChangeInput::ProviderDefault => Self::ProviderDefault,
+            ConferenceChangeInput::MicrosoftTeams => Self::MicrosoftTeams,
             ConferenceChangeInput::GoogleMeet => Self::GoogleMeet,
             ConferenceChangeInput::Remove => Self::Removed,
         }
@@ -77,8 +84,20 @@ pub enum UpdateScopeInput {
 #[schemars(
     title = "UpdateCalendarEvent",
     description = "\
-Update an existing calendar event. Only the supplied fields change; omitted fields keep \
-their current values. The change is written to Google immediately and attendees are \
+Update an existing calendar event.\n\
+\n\
+A meeting on more than one of the user's inboxes is one ListCalendarEvents entry per inbox. \
+Before changing its details, guests or guest permissions, ask the user which inbox's copy to \
+change, then pass that copy's `inbox`. Never choose between the user's inboxes yourself, \
+whatever they look like: a test, secondary or unfamiliar address is still the user's own \
+inbox. Skip the question only when the user already named the inbox, when only one copy's \
+`viewerCan` allows the change (use it and say why), or when adding guests to a meeting the \
+user organizes from one of the inboxes (add them from that copy and say why). Reminders may \
+go to one copy and an `rsvp` to the copy where the user is a guest, naming the inbox in your \
+reply. Without `inbox` the tool refuses, lists each copy and gives the question to ask. One \
+call changes one copy, so an edit on one copy and an `rsvp` on another take two calls.\n\
+\n\
+Only the supplied fields change; omitted fields keep their current values. The change is written to the calendar provider immediately and attendees are \
 notified of it, so confirm details with the user first. Get the `eventId` from \
 ListCalendarEvents.\n\
 \n\
@@ -91,17 +110,50 @@ update: end the series with DeleteCalendarEvent's \"this_and_following\" and cre
 event instead.\n\
 \n\
 Passing `attendees` replaces the full attendee list — include everyone who should remain, \
-not just additions. An empty string for `description` or `location` clears it. Fails on \
-events from calendars the user cannot edit.\n\
+not just additions. That holds when `viewerCan.removeGuests` from ListCalendarEvents is \
+true (the user organizes the event, or the organizer lets guests modify it). When it is \
+false, the list may only grow: pass the current attendees plus the additions; the additions \
+are invited without touching anyone else, and dropping any guest fails. Adding guests then \
+needs `viewerCan.inviteGuests`; otherwise the organizer doesn't let guests invite others \
+or hides the guest list, or the event is an Outlook meeting the user doesn't organize. \
+An empty string for `description` or `location` clears it. Fails on events from calendars \
+the user cannot edit.\n\
+\n\
+A guest without modify rights (`viewerCan.editDetails` false while `viewerCan.rsvp` is \
+true) may only change their own `reminders`, add guests where `viewerCan.inviteGuests` \
+allows it, and answer with `rsvp`; changing the title, time, description, location, \
+recurrence or conference fails because the organizer doesn't let guests change the \
+event.\n\
 \n\
 `rsvp` sets the user's own response to an invitation and is independent of the field \
 edits — it can be the only thing this call changes. It applies at the same `scope` as \
-the rest of the call, and only works on events the user is actually an attendee of."
+the rest of the call and answers as the connected inbox the event's copy belongs to, so \
+it only works when that inbox is an attendee."
 )]
 pub struct UpdateCalendarEvent {
     /// Event to update.
     #[schemars(description = "The event's id, from ListCalendarEvents or CreateCalendarEvent.")]
     pub event_id: uuid::Uuid,
+
+    /// Calendar whose copy of the event is updated.
+    #[schemars(
+        description = "The `calendarId` of the copy to update, from the `copies` of its \
+                       ListCalendarEvents entry, for an event synced from more than one \
+                       calendar. Omit to update the event's primary copy."
+    )]
+    #[serde(default)]
+    pub calendar_id: Option<uuid::Uuid>,
+
+    /// Inbox holding the copy this call changes.
+    #[schemars(
+        description = "The `inbox` of the copy this call changes, from its ListCalendarEvents \
+                       entry. Required when the meeting is on more than one of the user's \
+                       inboxes and the call changes anything but `reminders` or `rsvp`: the \
+                       tool refuses without it and lists each copy. It must be the inbox \
+                       holding the copy `eventId` names."
+    )]
+    #[serde(default)]
+    pub inbox: Option<String>,
 
     /// Update scope.
     #[schemars(
@@ -153,7 +205,8 @@ pub struct UpdateCalendarEvent {
     /// Replacement attendee list.
     #[schemars(
         description = "Replacement attendee list — replaces all current attendees, so include \
-                       everyone who should remain. Omit to leave attendees unchanged."
+                       everyone who should remain. When `viewerCan.removeGuests` is false, it \
+                       may only add to the current list. Omit to leave attendees unchanged."
     )]
     #[serde(default)]
     pub attendees: Option<Vec<AttendeeInput>>,
@@ -169,9 +222,10 @@ pub struct UpdateCalendarEvent {
 
     /// Conference change.
     #[schemars(
-        description = "Change the event's video conference: \"google_meet\" attaches a fresh \
-                       Google Meet, \"remove\" detaches the current conference. Omit to leave \
-                       it untouched."
+        description = "Change the event's video conference: \"provider_default\" uses the calendar's \
+                       supported provider; \"google_meet\" or \"microsoft_teams\" selects one explicitly. \
+                       \"remove\" detaches the conference only where supported. Check ListCalendars \
+                       capabilities first. Omit to preserve the current conference."
     )]
     #[serde(default)]
     pub conference: Option<ConferenceChangeInput>,
@@ -194,6 +248,28 @@ pub struct UpdateCalendarEvent {
     )]
     #[serde(default)]
     pub rsvp: Option<RsvpResponseInput>,
+
+    /// Replacement out-of-office decline behavior.
+    #[schemars(
+        description = "Adjust out-of-office decline behavior; only valid on an event that is \
+                       already out of office (its event type cannot be changed). Replaces the \
+                       whole block: set `autoDeclineMode` (\"decline_none\", \"decline_all\", \
+                       or \"decline_new_only\") and optionally `declineMessage`. Omit to leave \
+                       it untouched."
+    )]
+    #[serde(default)]
+    pub out_of_office: Option<OutOfOfficeInput>,
+
+    /// Replacement guest policy.
+    #[schemars(
+        description = "Replace what guests may do: `canModify` (change the event; implies \
+                       `canInviteOthers`), `canInviteOthers` and `canSeeOtherGuests`, all three \
+                       required. Only the organizer of a Google event may set it \
+                       (`viewerCan.setGuestPolicy`), and only with scope \"all\": it belongs to \
+                       the whole series. Outlook events have none. Omit to leave it untouched."
+    )]
+    #[serde(default)]
+    pub guest_policy: Option<GuestPolicy>,
 }
 
 impl ToolAnnotated for UpdateCalendarEvent {
@@ -201,17 +277,18 @@ impl ToolAnnotated for UpdateCalendarEvent {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for UpdateCalendarEvent
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for UpdateCalendarEvent
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ToolCalendarEvent;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(
@@ -219,6 +296,7 @@ where
             scope=?self.scope,
             attendee_count=?self.attendees.as_ref().map(Vec::len),
             rsvp=?self.rsvp,
+            inbox_confirmed=self.inbox.is_some(),
             "Update calendar event"
         );
 
@@ -267,7 +345,25 @@ where
             transparency: None,
             reminders: self.reminders.clone().map(Into::into),
             conference: self.conference.map(Into::into),
+            out_of_office: self.out_of_office.clone().map(Into::into),
+            guest_policy: self.guest_policy,
         };
+
+        // Reminders and the user's own answer belong to one copy; anything
+        // else reaches the meeting, so the agent must have chosen the copy
+        // when the meeting is on several of the user's inboxes.
+        if patch.reaches_meeting() || self.inbox.is_some() {
+            confirm_copy(
+                &*service_context.occurrences,
+                &requester_id,
+                self.event_id,
+                self.inbox.as_deref(),
+                CopyChange::Update {
+                    changes_guests: patch.attendees.is_some(),
+                },
+            )
+            .await?;
+        }
 
         // An RSVP is its own provider call, so a call carrying only one runs
         // only that half. Answering after the patch keeps a replaced attendee
@@ -278,7 +374,13 @@ where
             Some(
                 service_context
                     .mutations
-                    .update_event(&requester_id, self.event_id, patch, scope.clone())
+                    .update_event(
+                        &requester_id,
+                        self.event_id,
+                        self.calendar_id,
+                        patch,
+                        scope.clone(),
+                    )
                     .await
                     .map_err(|error| mutation_tool_error("update the calendar event", error))?,
             )
@@ -294,7 +396,14 @@ where
                 };
                 service_context
                     .mutations
-                    .respond_to_event(&requester_id, self.event_id, rsvp.into(), rsvp_scope)
+                    .respond_to_event(
+                        &requester_id,
+                        self.event_id,
+                        self.calendar_id,
+                        rsvp.into(),
+                        rsvp_scope,
+                        None,
+                    )
                     .await
                     .map_err(|error| {
                         let action = if patched.is_some() {
@@ -315,6 +424,7 @@ where
             })?,
         };
 
-        Ok(ToolCalendarEvent::from_event(&event))
+        let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+        Ok(ToolCalendarEvent::from_event(&event, &labels))
     }
 }

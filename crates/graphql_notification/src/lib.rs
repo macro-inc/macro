@@ -11,12 +11,14 @@ mod mutations;
 mod notification_event;
 /// GraphQL notification object and edge resolver.
 mod objects;
+/// Filter and limit arguments for notification edges.
+mod query;
 /// GraphQL realtime notification subscription adapter.
 mod subscriptions;
 
 pub use loaders::{
-    EntityNotificationsLoader, NoOpSoupNotificationEdgeReader, SoupNotificationEdgeReader,
-    entity_notifications_loader,
+    EntityNotificationsKey, EntityNotificationsLoader, NoOpSoupNotificationEdgeReader,
+    SoupNotificationEdgeReader, entity_notifications_loader,
 };
 pub use mutations::{
     GraphqlNotificationUpdateOperation, NoOpNotificationMutationService, NotificationEntityInput,
@@ -25,6 +27,8 @@ pub use mutations::{
 };
 pub use notification_event::GraphqlNotifEvent;
 pub use objects::{GraphqlNotification, load_entity_notifications};
+pub use query::GraphqlNotificationFilter;
 pub use subscriptions::{
-    GraphqlNotificationPatch, NotificationSubscriptionRoot, subscribe_to_notifications,
+    GraphqlNewNotification, GraphqlNotificationPatch, GraphqlUpdatedNotification,
+    NotificationSubscriptionRoot, subscribe_to_notifications,
 };

@@ -1,5 +1,4 @@
 import { v7 as uuid7 } from 'uuid';
-import type { PageModel } from './Page';
 
 function decodeHTMLString(strToDecode: string): string {
   const parser = new DOMParser();
@@ -24,8 +23,6 @@ export interface ISection {
   numRefs: number;
   showBookmark: boolean;
   bookmarkTitle: string | null;
-  nextSection?: ISection | null;
-  prevSection?: ISection | null;
   cloned?: boolean;
   uuid?: string;
 }
@@ -68,15 +65,11 @@ class Section {
   public fullTitle: string;
   public numRefs: number;
   public uuid: string;
-  public nextSection: ISection | null;
-  public prevSection: ISection | null;
   public fullDescriptor: string;
   public lowerCaseFullDescriptor: string;
   public showBookmark: boolean;
   public bookmarkTitle: string | null;
   public cloned: boolean = false;
-
-  public pages: PageModel[] | null;
 
   constructor({
     id,
@@ -90,8 +83,6 @@ class Section {
     numRefs,
     showBookmark = true,
     bookmarkTitle = null,
-    nextSection = null,
-    prevSection = null,
     cloned = false,
     uuid,
   }: ISection) {
@@ -106,9 +97,6 @@ class Section {
     this.type = type;
     this.numRefs = numRefs;
     this.showBookmark = showBookmark;
-
-    this.nextSection = nextSection; // Set after construction if not provided
-    this.prevSection = prevSection; // Set after construction if not provided
 
     // Derived props
     this.typeCased = cloned
@@ -136,8 +124,6 @@ class Section {
               this.titleCased ? `: ${this.titleCased}` : ''
             }`
           : this.titleCased;
-
-    this.pages = null;
   }
 
   public static parseSegmentType(
@@ -195,8 +181,6 @@ class Section {
       numRefs,
       showBookmark,
       bookmarkTitle,
-      nextSection,
-      prevSection,
     } = this;
     const clone = new Section({
       id,
@@ -210,8 +194,6 @@ class Section {
       numRefs,
       showBookmark,
       bookmarkTitle,
-      nextSection,
-      prevSection,
       cloned: true,
     });
     clone.titleCased = this.titleCased;
@@ -221,64 +203,6 @@ class Section {
     clone.bookmarkTitle = this.bookmarkTitle;
 
     return clone;
-  }
-
-  public static appearsBefore(
-    section: Pick<Section, 'page' | 'y'>,
-    otherSection: Pick<Section, 'page' | 'y'>
-  ) {
-    return (
-      section.page < otherSection.page ||
-      (section.page === otherSection.page && section.y < otherSection.y)
-    );
-  }
-
-  public shouldDisplay({
-    page,
-    yPos,
-  }: {
-    page: number;
-    yPos: number;
-  }): boolean {
-    const bufferedY = yPos;
-    const { page: nextPage, y: nextY } = this.nextSection ?? {};
-
-    // Should not display if section is on a later page
-    if (this.page > page) {
-      return false;
-    }
-
-    if (page === this.page) {
-      // On same page as section
-      if (bufferedY > this.y) {
-        // Currently below section title
-        if (nextPage === page && nextY != null) {
-          // Next section is on same page
-          // Return true if next section is below the current y-position
-          return bufferedY < nextY;
-        } else {
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-    // On page after section
-    // If this is the last section
-    if (nextPage == null || nextY == null) {
-      // Last section
-      return true;
-    } else if (page < nextPage) {
-      // Current page between this section and next section
-      return true;
-    } else if (nextPage === page) {
-      // Next section is on current page
-      // return yPos + buffer < this.nextY
-      return bufferedY < nextY;
-    }
-
-    return false;
   }
 
   static getFullTitle(sectionNode: Element): string {
@@ -304,13 +228,3 @@ class Section {
 }
 
 export default Section;
-
-/**
- * Stringifyable version of a Section object
- *
- * Specifically, this is used for searching sections
- */
-export type StringifyableSection = Pick<
-  Section,
-  'lowerCaseFullDescriptor' | 'id' | 'numRefs' | 'fullTitle' | 'page' | 'y'
->;

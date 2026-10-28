@@ -1,0 +1,34 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 237
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/file_edits.sse
+---
+
+--- thinking ---
+I'll add a comment line to the top of README.md using file editing tools.
+
+I'll also create docs/PROBE.md with one line of text. Both changes will be shown. No commits, pushes, or PRs will be made. I'll read the README first.
+--- assistant ---
+I'll add a top-line comment to `README.md` and create `docs/PROBE.md` with file tools only, then show both changes. No git commit, push, or PR.
+--- thinking ---
+Adding a comment to the top of README.md.
+
+An HTML comment will be inserted since the README begins with HTML. A one-line docs/PROBE.md will also be created. Both files will be read afterward to display the changes. The docs directory needs to be checked first.
+--- assistant ---
+I'll insert an HTML comment at the top of `README.md` and add `docs/PROBE.md` with a single line.
+--- thinking ---
+Both files were written. Now reading them to display the changes.Both files are updated. The README.md comment and the new docs/PROBE.md line have been added.
+--- assistant ---
+Added a comment at the top of `README.md` and created `docs/PROBE.md`. Nothing was committed, pushed, or opened as a PR.
+
+**`README.md` (new first line):**
+```1:2:/workspace/README.md
+<!-- probe: comment added at top of README.md -->
+<div align="center">
+```
+
+**`docs/PROBE.md` (new file):**
+```1:1:/workspace/docs/PROBE.md
+This is a probe file with one line of text.
+```

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_financial_invocation (invocation_id, rate_version, occurred_at, request)\n                   VALUES ($1, $2, $3, $4) ON CONFLICT (invocation_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb237f2550e3837f292dbb66ccc8cf198d6ca6f0928a31372d48c4a2d81ebc13"
+}

@@ -1,0 +1,210 @@
+id: tsx-feature-layers-use-context
+language: tsx
+# Twin of ts-feature-layers-use-context — ast-grep rules are single-language,
+# and `typescript` only scans .ts files.
+severity: warning
+message: Supply app capabilities through feature-owned contracts; construct production adapters at the feature root.
+note: |-
+  Rule FE-33 in docs/development/style-guide.md. Inside a layered feature, `queries/`,
+  `primitives/`, `components/`, and `views/` never import the app's singletons
+  or context hooks (GraphQL soup client, user context, display names,
+  entity display, openDocument, PostHog). Those arrive through the
+  feature's `Context` record so every layer runs against mocks in tests. Keep `context/` free of production imports. Only production entry points
+  and adapters at the feature root construct app capabilities. The pure
+  `@core/user/macroId` identity helpers are a documented exception. Adopting features add their layer paths to
+  `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
+  presentation and `component/` for composition.
+files:
+  - apps/web/src/features/command/queries/**
+  - apps/web/src/features/document-composer/queries/**
+  - apps/web/src/features/task-composer/queries/**
+  - apps/web/src/features/command/primitives/**
+  - apps/web/src/features/document-composer/primitives/**
+  - apps/web/src/features/task-composer/primitives/**
+  - apps/web/src/features/command/components/**
+  - apps/web/src/features/document-composer/components/**
+  - apps/web/src/features/task-composer/components/**
+  - apps/web/src/features/command/views/**
+  - apps/web/src/features/document-composer/views/**
+  - apps/web/src/features/task-composer/views/**
+  - apps/web/src/features/command/context/**
+  - apps/web/src/features/document-composer/context/**
+  - apps/web/src/features/task-composer/context/**
+  - apps/web/src/features/universal-input/queries/**
+  - apps/web/src/features/universal-input/primitives/**
+  - apps/web/src/features/universal-input/components/**
+  - apps/web/src/features/universal-input/views/**
+  - apps/web/src/features/universal-input/context/**
+  - apps/web/src/features/saved-views/context/**
+  - apps/web/src/features/saved-views/queries/**
+  - apps/web/src/features/saved-views/primitives/**
+  - apps/web/src/features/saved-views/components/**
+  - apps/web/src/features/saved-views/views/**
+  - apps/web/src/features/calendar-notes/queries/**
+  - apps/web/src/features/calendar-notes/primitives/**
+  - apps/web/src/features/calendar-notes/components/**
+  - apps/web/src/features/calendar-notes/views/**
+  - apps/web/src/features/access-requests/primitives/**
+  - apps/web/src/features/access-requests/views/**
+  - apps/web/src/features/agent-activity/queries/**
+  - apps/web/src/features/agent-dms/queries/**
+  - apps/web/src/features/agent-conversations/queries/**
+  - apps/web/src/features/local-runtime/queries/**
+  - apps/web/src/features/agent-activity/primitives/**
+  - apps/web/src/features/agent-dms/primitives/**
+  - apps/web/src/features/agent-conversations/primitives/**
+  - apps/web/src/features/local-runtime/primitives/**
+  - apps/web/src/features/agent-activity/components/**
+  - apps/web/src/features/agent-dms/components/**
+  - apps/web/src/features/agent-conversations/components/**
+  - apps/web/src/features/local-runtime/components/**
+  - apps/web/src/features/agent-activity/views/**
+  - apps/web/src/features/agent-dms/views/**
+  - apps/web/src/features/agent-conversations/views/**
+  - apps/web/src/features/local-runtime/views/**
+  - apps/web/src/features/agent-interactions/queries/**
+  - apps/web/src/features/agent-interactions/primitives/**
+  - apps/web/src/features/agent-interactions/components/**
+  - apps/web/src/features/agent-interactions/views/**
+  - apps/web/src/features/billing-lab/context/**
+  - apps/web/src/features/billing-lab/queries/**
+  - apps/web/src/features/billing-lab/primitives/**
+  - apps/web/src/features/billing-lab/components/**
+  - apps/web/src/features/billing-lab/views/**
+  - apps/web/src/features/settings/context/billing-context.ts
+  - apps/web/src/features/settings/views/billing-settings*
+  - apps/web/src/features/calendar-team/queries/**
+  - apps/web/src/features/calendar-team/primitives/**
+  - apps/web/src/features/calendar-team/components/**
+  - apps/web/src/features/calendar-team/views/**
+  - apps/web/src/features/tasks-view/queries/task-board*
+  - apps/web/src/features/tasks-view/primitives/create-task-board*
+  - apps/web/src/features/tasks-view/components/task-board*
+  - apps/web/src/features/tasks-view/views/task-board*
+  - apps/web/src/features/tasks-view/context/task-board*
+  - apps/web/src/features/routines/queries/**
+  - apps/web/src/features/routines/primitives/**
+  - apps/web/src/features/routines/components/**
+  - apps/web/src/features/routines/views/**
+  - apps/web/src/features/scheduling/context/**
+  - apps/web/src/features/scheduling/queries/**
+  - apps/web/src/features/scheduling/primitives/**
+  - apps/web/src/features/scheduling/components/**
+  - apps/web/src/features/scheduling/views/**
+  - apps/web/src/features/usage/queries/**
+  - apps/web/src/features/usage/primitives/**
+  - apps/web/src/features/usage/components/**
+  - apps/web/src/features/usage/views/**
+  - apps/web/src/features/usage/context/**
+  - apps/web/src/features/crm/queries/**
+  - apps/web/src/features/crm/primitives/**
+  - apps/web/src/features/crm/components/**
+  - apps/web/src/features/crm/views/**
+  - apps/web/src/features/crm/context/**
+  - apps/web/src/features/slack-import/queries/**
+  - apps/web/src/features/slack-import/primitives/**
+  - apps/web/src/features/slack-import/components/**
+  - apps/web/src/features/slack-import/views/**
+  - apps/web/src/features/channels-view/queries/channel-detail-source*
+  - apps/web/src/features/channels-view/primitives/create-channel-detail*
+  - apps/web/src/features/channels-view/context/channel-detail-source*
+  - apps/web/src/features/channels-view/components/ChannelDetailView*
+  - apps/web/src/features/channel/queries/channel-invite*
+  - apps/web/src/features/channel/primitives/create-channel-invites*
+  - apps/web/src/features/channel/components/channel-invite*
+  - apps/web/src/features/channel/views/channel-invite*
+  - apps/web/src/features/projects/queries/**
+  - apps/web/src/features/projects/primitives/**
+  - apps/web/src/features/projects/components/**
+  - apps/web/src/features/projects/views/**
+  - apps/web/src/features/projects/context/**
+  - apps/web/src/features/channel/Call/chat/queries/**
+  - apps/web/src/features/channel/Call/chat/primitives/**
+  - apps/web/src/features/channel/Call/chat/components/**
+  - apps/web/src/features/channel/Call/chat/views/**
+  - apps/web/src/features/block-agent/queries/**
+  - apps/web/src/features/block-agent/primitives/**
+  - apps/web/src/features/block-agent/ui/**
+  - apps/web/src/features/block-agent/component/**
+  - apps/web/src/features/block-ai/queries/**
+  - apps/web/src/features/block-ai/primitives/**
+  - apps/web/src/features/block-ai/components/**
+  - apps/web/src/features/block-ai/views/**
+  - apps/web/src/features/block-ai/context/**
+  - apps/web/src/features/block-psd/queries/**
+  - apps/web/src/features/block-psd/primitives/**
+  - apps/web/src/features/block-psd/components/**
+  - apps/web/src/features/block-psd/views/**
+  - apps/web/src/features/block-psd/context/**
+  - apps/web/src/features/meetings/queries/**
+  - apps/web/src/features/meetings/primitives/**
+  - apps/web/src/features/meetings/components/**
+  - apps/web/src/features/meetings/views/**
+  - apps/web/src/features/block-spreadsheet/queries/**
+  - apps/web/src/features/block-spreadsheet/primitives/**
+  - apps/web/src/features/block-spreadsheet/components/**
+  - apps/web/src/features/block-spreadsheet/views/**
+  - apps/web/src/features/property/tags/components/**
+  - apps/web/src/features/property/tags/queries/**
+  - apps/web/src/features/property/tags/primitives/**
+  - apps/web/src/features/property/tags/views/**
+  - apps/web/src/features/activity/components/**
+  - apps/web/src/features/drive-view/components/**
+  - apps/web/src/features/activity/queries/**
+  - apps/web/src/features/drive-view/queries/**
+  - apps/web/src/features/activity/primitives/**
+  - apps/web/src/features/drive-view/primitives/**
+  - apps/web/src/features/activity/views/**
+  - apps/web/src/features/drive-view/views/**
+  - apps/web/src/features/email-message/components/**
+  - apps/web/src/features/email-message/queries/**
+  - apps/web/src/features/email-message/primitives/**
+  - apps/web/src/features/email-message/views/**
+  - apps/web/src/features/email-thread/components/**
+  - apps/web/src/features/email-thread/queries/**
+  - apps/web/src/features/email-thread/primitives/**
+  - apps/web/src/features/email-thread/views/**
+  - apps/web/src/features/email-compose/components/**
+  - apps/web/src/features/email-compose/queries/**
+  - apps/web/src/features/email-compose/primitives/**
+  - apps/web/src/features/email-compose/views/**
+  - apps/web/src/features/changes/components/**
+  - apps/web/src/features/changes/queries/**
+  - apps/web/src/features/changes/primitives/**
+  - apps/web/src/features/changes/views/**
+  - apps/web/src/features/block-write/queries/**
+  - apps/web/src/features/block-write/primitives/**
+  - apps/web/src/features/block-write/components/**
+  - apps/web/src/features/block-write/views/**
+  - apps/web/src/features/block-write/context/**
+  - apps/web/src/features/onboarding/primitives/**
+  - apps/web/src/features/onboarding/components/**
+  - apps/web/src/features/onboarding/views/**
+  - apps/web/src/features/auth/primitives/**
+  - apps/web/src/features/auth/components/**
+  - apps/web/src/features/auth/views/**
+  - apps/web/src/features/auth/queries/**
+  - apps/web/src/features/block-form/context/**
+  - apps/web/src/features/block-form/queries/**
+  - apps/web/src/features/block-form/primitives/**
+  - apps/web/src/features/block-form/components/**
+  - apps/web/src/features/block-form/views/**
+rule:
+  kind: string
+  regex: ^['"](@service-storage/graphql-soup|@core/context/user|@core/user|@property/hooks|@property/editor/hooks|@core/component/LexicalMarkdown/component/core/BlockLink|@app/lib/analytics/posthog)
+  not:
+    regex: ^['"]@core/user/macroId['"]
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

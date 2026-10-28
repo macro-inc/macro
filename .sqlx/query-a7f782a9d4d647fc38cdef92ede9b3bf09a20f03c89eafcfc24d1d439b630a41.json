@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id,\n                team_role as \"team_role!: TeamRole\",\n                plan as \"plan!: SeatPlan\"\n            FROM team_user\n            WHERE team_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_role!: TeamRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "plan!: SeatPlan",
+        "type_info": {
+          "Custom": {
+            "name": "seat_plan",
+            "kind": {
+              "Enum": [
+                "premium",
+                "max"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a7f782a9d4d647fc38cdef92ede9b3bf09a20f03c89eafcfc24d1d439b630a41"
+}

@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+notification_state = { path = "../notification_state", features = ["graphql"] }
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-stream = { workspace = true }
 graphql_common = { path = "../graphql_common" }

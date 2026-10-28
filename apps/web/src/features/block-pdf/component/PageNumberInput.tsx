@@ -1,14 +1,12 @@
-import { blockElementSignal } from '@core/signal/blockElement';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
-import {
-  pageCount,
-  useCurrentPageNumber,
-  useGetRootViewer,
-} from '../signal/pdfViewer';
+import { usePdfViewer } from '../context/pdf-viewer-context';
+import { useCurrentPageNumber, useGetRootViewer } from '../signal/pdfViewer';
 
 export function PageNumberInput() {
+  const pdfViewer = usePdfViewer();
   // const context = useContext(BarContext);
   // if (!context) throw new Error('PageNumberInput must be used within a Bar');
   // const truncation = context.truncation;
@@ -19,7 +17,7 @@ export function PageNumberInput() {
   const [intermediateVal, setIntermediate] = createSignal<string>('');
 
   const inputValue = () => intermediateVal() || currentPageNumber();
-  const getPageCount = () => pageCount() ?? 1;
+  const getPageCount = () => pdfViewer.root.pageCount() ?? 1;
 
   const getWidthClass = (value: number | string) => {
     const strLength = value.toString().length;
@@ -31,7 +29,7 @@ export function PageNumberInput() {
   const onBlur = createCallback((_e: FocusEvent) => {
     const pageNumber = parseInt(intermediateVal(), 10);
     if (Number.isInteger(pageNumber)) {
-      getRootViewer()?.scrollTo({ pageNumber });
+      fireAndForget(getRootViewer()?.scrollTo({ pageNumber }), 'pdf-viewer');
     } else if (inputRef) {
       inputRef.value = currentPageNumber().toString();
     }
@@ -46,9 +44,8 @@ export function PageNumberInput() {
     }
   });
 
-  const blockElement = blockElementSignal.get;
   createEffect(() => {
-    const element = blockElement();
+    const element = pdfViewer.rootElement();
     if (!element) return;
 
     element.addEventListener('keydown', handleKeyDown);

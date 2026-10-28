@@ -5,12 +5,12 @@ mod test;
 
 use std::collections::HashSet;
 
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::EntityAccessReceipt;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use crate::domain::models::{Favorite, FavoritesError};
-use crate::domain::ports::{FavoritesRepo, FavoritesService};
+use crate::domain::models::{Favorite, FavoriteFilter, FavoritesError};
+use crate::domain::ports::{FavoriteView, FavoritesRepo, FavoritesService};
 
 /// Upper bound on favorites per user; keeps reorder payloads and sidebar
 /// lists sane.
@@ -78,7 +78,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn add_favorite(
         &self,
-        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+        receipt: &EntityAccessReceipt<FavoriteView>,
     ) -> Result<Favorite, FavoritesError> {
         let user_id = receipt
             .get_authenticated_user()
@@ -103,10 +103,11 @@ where
     async fn list_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> Result<Vec<Favorite>, FavoritesError> {
         Ok(self
             .repo
-            .list_favorites(user_id)
+            .list_favorites(user_id, filter)
             .await
             .map_err(anyhow::Error::from)?)
     }

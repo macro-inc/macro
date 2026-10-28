@@ -1,7 +1,12 @@
 import type { DateValue } from '@core/util/date';
 import {
+  differenceInDays,
   differenceInHours,
+  differenceInMilliseconds,
   differenceInMinutes,
+  differenceInMonths,
+  differenceInWeeks,
+  differenceInYears,
   format,
   isSameYear,
   isToday,
@@ -70,8 +75,39 @@ export function formatRelativeTimestamp(
 }
 
 /**
+ * The shortest relative age for dense rows: `now`, `5m`, `17h`, `8d`, `3w`,
+ * `1mo`, `2y`. An unparseable value is returned as is.
+ */
+export function formatCompactRelativeTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const now = new Date();
+  const ageMs = Math.max(0, differenceInMilliseconds(now, date));
+  const seconds = Math.floor(ageMs / 1000);
+  if (seconds < 60) return 'now';
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+
+  const days = differenceInDays(now, date);
+  if (days < 7) return `${Math.max(1, days)}d`;
+
+  const weeks = differenceInWeeks(now, date);
+  if (weeks < 5) return `${Math.max(1, weeks)}w`;
+
+  const months = differenceInMonths(now, date);
+  if (months < 12) return `${Math.max(1, months)}mo`;
+
+  return `${Math.max(1, differenceInYears(now, date))}y`;
+}
+
+/**
  * Formats a date + time in a single concise line, e.g. "Apr 15, 2:30 PM" or
- * "1/27/24, 2:30 PM". Used when a row needs both pieces (e.g. automation
+ * "1/27/24, 2:30 PM". Used when a row needs both pieces (e.g. routine
  * next-run times).
  */
 export function formatDateAndTime(date: DateValue): string {

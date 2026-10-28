@@ -1,6 +1,7 @@
 import { debounce } from '@core/util/debounce';
 
 import { authServiceClient } from '@service-auth/client';
+import { until } from '@solid-primitives/promise';
 import {
   type Accessor,
   createEffect,
@@ -53,7 +54,14 @@ async function fetchProfilePictures(
   });
   if (result.isErr()) {
     console.error('Failed to fetch user profile pictures');
-    return [];
+    // Mark as not-loading with an expired timestamp so the next access
+    // retries the fetch instead of getting stuck forever (see
+    // `useProfilePictureUrl`'s `cacheExpired` check).
+    return ids.map((id) => ({
+      _createdAt: new Date(0),
+      id,
+      loading: false,
+    }));
   }
 
   const { pictures } = result.value;
@@ -144,4 +152,16 @@ export function useProfilePictureUrl(id?: string): ProfilePictureUrlFetcher {
   };
 
   return [accessor, controls];
+}
+
+/** A user's profile picture URL from the shared cache, fetched if needed. */
+export async function getProfilePictureUrl(
+  id: string
+): Promise<string | undefined> {
+  useProfilePictureUrl(id);
+  const item = await until(() => {
+    const item = userProfilePictures[id];
+    return item && !item.loading ? item : undefined;
+  });
+  return item.url;
 }

@@ -1,19 +1,25 @@
 //! Implementation for TeamRepository using MacroDB.
 use crate::domain::{
     model::{
-        AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
+        AcceptedTeamInvite, CreateTeamError, DueInviteReminder, InviteUsersToTeamError,
+        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
+        TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
     },
+    owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
+    team_service::invite_resend_interval,
 };
+use entity_access_db_utils::{EntityAccessSourceType, delete_source_grants, team_share};
 use macro_user_id::{
     cowlike::CowLike,
     email::{Email, ReadEmailParts},
     lowercased::Lowercase,
     user_id::MacroUserIdStr,
 };
+use model_owner::Owner;
+use model_user::Language;
 use models_permissions::share_permission::LinkShare;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -25,6 +31,7 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     }
 }
 
+mod invite_link;
 #[cfg(test)]
 mod test;
 
@@ -65,27 +72,6 @@ impl TeamRepositoryImpl {
         Ok(())
     }
 
-    /// Gets the owner of a team
-    #[tracing::instrument(skip(self), err)]
-    async fn get_team_owner(
-        &self,
-        team_id: &uuid::Uuid,
-    ) -> Result<MacroUserIdStr<'_>, anyhow::Error> {
-        let owner_id = sqlx::query!(
-            r#"
-            SELECT owner_id
-            FROM team
-            WHERE id = $1
-        "#,
-            team_id,
-        )
-        .map(|row| row.owner_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(MacroUserIdStr::parse_from_str(owner_id.as_str()).map(|id| id.into_owned())?)
-    }
-
     #[tracing::instrument(skip(self), err)]
     async fn create_team_inner(
         &self,
@@ -93,6 +79,7 @@ impl TeamRepositoryImpl {
         team_name: &str,
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
+        owner_plan: SeatPlan,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
 
@@ -103,7 +90,8 @@ impl TeamRepositoryImpl {
             INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
             VALUES ($1, $2, $3, $4, 1, $5, $6)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
-                default_link_share as "default_link_share: LinkShare"
+                default_link_share as "default_link_share: LinkShare",
+                language as "language: Language"
             "#,
             id,
             team_name,
@@ -127,6 +115,7 @@ impl TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&mut *transaction)
@@ -134,11 +123,12 @@ impl TeamRepositoryImpl {
 
         sqlx::query!(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role)
-            VALUES ($1, $2, 'owner')
+            INSERT INTO team_user (team_id, user_id, team_role, plan)
+            VALUES ($1, $2, 'owner', $3)
             "#,
             &team.id,
             user_id.as_ref(),
+            owner_plan as _,
         )
         .execute(&mut *transaction)
         .await?;
@@ -331,18 +321,41 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_team_owner(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<MacroUserIdStr<'static>, TeamError> {
+        let owner_id = sqlx::query!(
+            r#"
+            SELECT owner_id
+            FROM team
+            WHERE id = $1
+        "#,
+            team_id,
+        )
+        .map(|row| row.owner_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        MacroUserIdStr::parse_from_str(owner_id.as_str())
+            .map(|id| id.into_owned())
+            .map_err(|error| TeamError::StorageLayerError(error.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
+        owner_plan: SeatPlan,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, team_slug, subscription_id)
+        self.create_team_inner(user_id, team_name, team_slug, subscription_id, owner_plan)
             .await
             .map_err(|e| e.into())
     }
@@ -428,17 +441,19 @@ impl TeamRepository for TeamRepositoryImpl {
     .fetch_all(&mut *transaction)
     .await?;
 
-        // Also re-send existing invites whose rate limit window has passed
+        // Also re-send existing invites whose email rate limit has passed;
+        // sooner, the email would be dropped while `last_sent_at` moved on.
         let resent_invites: Vec<(uuid::Uuid, uuid::Uuid, String)> = sqlx::query!(
             r#"
             SELECT id, team_id, email
             FROM team_invite
             WHERE team_id = $1
               AND email = ANY($2::text[])
-              AND last_sent_at < NOW() - INTERVAL '5 minutes'
+              AND last_sent_at <= NOW() - make_interval(secs => $3)
             "#,
             team_id,
             &email_strings[..],
+            invite_resend_interval().as_secs_f64(),
         )
         .map(|r| (r.id, r.team_id, r.email))
         .fetch_all(&mut *transaction)
@@ -535,6 +550,80 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), fields(claimed = tracing::field::Empty), err)]
+    async fn claim_due_invite_reminders(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<DueInviteReminder>, TeamError> {
+        // The first reminder goes 3 days after the last email, the second 4
+        // days after the first. Invites older than 14 days are left alone, so
+        // a deploy never reminds people about invites from long ago. Skips
+        // invites the invitee could not accept (the team stopped paying for
+        // its subscription), already-members, and invites whose sender left
+        // the team, since the email is written in the sender's name.
+        let reminders = sqlx::query!(
+            r#"
+            WITH due AS (
+                SELECT ti.id
+                FROM team_invite ti
+                JOIN team t ON t.id = ti.team_id
+                WHERE ti.created_at > NOW() - INTERVAL '14 days'
+                  AND (
+                      (ti.reminders_sent = 0 AND ti.last_sent_at <= NOW() - INTERVAL '3 days')
+                      OR (ti.reminders_sent = 1 AND ti.last_sent_at <= NOW() - INTERVAL '4 days')
+                  )
+                  AND (t.enterprise OR t.paying OR t.subscription_id IS NULL)
+                  AND EXISTS (
+                      SELECT 1 FROM team_user tu
+                      WHERE tu.team_id = ti.team_id AND tu.user_id = ti.invited_by
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM team_user tu
+                      WHERE tu.team_id = ti.team_id AND tu.user_id = 'macro|' || ti.email
+                  )
+                ORDER BY ti.created_at
+                LIMIT $1
+                FOR UPDATE OF ti SKIP LOCKED
+            )
+            UPDATE team_invite ti
+            SET reminders_sent = ti.reminders_sent + 1,
+                last_sent_at = NOW()
+            FROM due, team t
+            WHERE ti.id = due.id AND t.id = ti.team_id
+            RETURNING
+                ti.id,
+                ti.team_id,
+                t.name AS team_name,
+                ti.email,
+                ti.invited_by,
+                ti.reminders_sent,
+                t.enterprise,
+                t.paying,
+                t.subscription_id IS NOT NULL AS "has_subscription!"
+            "#,
+            limit,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|r| {
+            Ok(DueInviteReminder {
+                team_invite_id: r.id,
+                team_id: r.team_id,
+                team_name: r.team_name,
+                email: r.email,
+                invited_by: r.invited_by,
+                reminder_number: u8::try_from(r.reminders_sent).map_err(anyhow::Error::from)?,
+                enterprise: r.enterprise,
+                paying: r.paying,
+                has_subscription: r.has_subscription,
+            })
+        })
+        .collect::<Result<Vec<_>, TeamError>>()?;
+        tracing::Span::current().record("claimed", reminders.len());
+        Ok(reminders)
+    }
+
     #[tracing::instrument(skip(self), err)]
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn remove_user_from_team(
@@ -554,7 +643,7 @@ impl TeamRepository for TeamRepositoryImpl {
             r#"
             DELETE FROM team_user
             WHERE team_id = $1 AND user_id = $2
-            RETURNING team_role
+            RETURNING team_role, plan
             "#,
         )
         .bind(team_id)
@@ -570,6 +659,7 @@ impl TeamRepository for TeamRepositoryImpl {
             team_id: *team_id,
             user_id: user_id.clone().into_owned(),
             role: row.try_get("team_role")?,
+            plan: row.try_get("plan")?,
         };
 
         TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, -1).await?;
@@ -686,9 +776,26 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
-    async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
+    #[tracing::instrument(skip(self, cleared), fields(team_id = %cleared.team_id()), err)]
+    async fn delete_team(&self, cleared: &ClearedTeam) -> Result<(), TeamError> {
+        let team_id = cleared.team_id();
         let mut transaction = self.pool.begin().await?;
+        team_share::acquire_guard(&mut transaction).await?;
+
+        delete_source_grants(
+            &mut *transaction,
+            EntityAccessSourceType::Team,
+            &Owner::Team(team_id).principal_id(),
+        )
+        .await?;
+        for bot_id in cleared.bot_ids() {
+            delete_source_grants(
+                &mut *transaction,
+                EntityAccessSourceType::Bot,
+                &Owner::Bot(*bot_id).principal_id(),
+            )
+            .await?;
+        }
 
         sqlx::query!(
             r#"
@@ -724,7 +831,8 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole"
+                team_role as "team_role!: TeamRole",
+                plan as "plan!: SeatPlan"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -743,6 +851,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     Ok(TeamMember {
                         user_id,
                         role: row.team_role,
+                        plan: row.plan,
                         team_id: *team_id,
                     })
                 } else {
@@ -810,7 +919,7 @@ impl TeamRepository for TeamRepositoryImpl {
             r#"
             INSERT INTO team_user (team_id, user_id, team_role)
             VALUES ($1, $2, $3)
-            RETURNING user_id, team_role, team_id
+            RETURNING user_id, team_role, team_id, plan
             "#,
         )
         .bind(invite_snapshot.team_id)
@@ -843,6 +952,7 @@ impl TeamRepository for TeamRepositoryImpl {
             .map(|id| id.into_owned())
             .map_err(|e| TeamError::StorageLayerError(e.into()))?,
             role: team_member.try_get("team_role")?,
+            plan: team_member.try_get("plan")?,
             team_id,
         };
 
@@ -913,14 +1023,15 @@ impl TeamRepository for TeamRepositoryImpl {
 
         let inserted = sqlx::query(
             r#"
-            INSERT INTO team_user (team_id, user_id, team_role)
-            VALUES ($1, $2, $3)
+            INSERT INTO team_user (team_id, user_id, team_role, plan)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(removed_member.team_id)
         .bind(removed_member.user_id.as_ref())
         .bind(removed_member.role)
+        .bind(removed_member.plan)
         .execute(&mut *transaction)
         .await?;
 
@@ -961,7 +1072,8 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole"
+                team_role as "team_role!: TeamRole",
+                plan as "plan!: SeatPlan"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -980,6 +1092,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     Ok(TeamMember {
                         user_id,
                         role: row.team_role,
+                        plan: row.plan,
                         team_id: *team_id,
                     })
                 } else {
@@ -1042,6 +1155,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1062,6 +1176,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_one(&self.pool)
@@ -1070,7 +1185,8 @@ impl TeamRepository for TeamRepositoryImpl {
         let members = sqlx::query!(
             r#"
             SELECT user_id,
-                team_role as "team_role!: TeamRole"
+                team_role as "team_role!: TeamRole",
+                plan as "plan!: SeatPlan"
             FROM team_user
             WHERE team_id = $1
             "#,
@@ -1086,13 +1202,18 @@ impl TeamRepository for TeamRepositoryImpl {
                     .map(|id| TeamMember {
                         user_id: id.into_owned(),
                         role: row.team_role,
+                        plan: row.plan,
                         team_id: *team_id,
                     })
                     .ok()
             })
             .collect();
 
-        Ok(TeamWithMembers { team, members })
+        Ok(TeamWithMembers {
+            team,
+            members,
+            scheduled_seat_plans: None,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1102,6 +1223,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.language as "language: Language",
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1123,6 +1245,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                language: row.language,
             })
         })
         .fetch_all(&self.pool)
@@ -1233,15 +1356,23 @@ impl TeamRepository for TeamRepositoryImpl {
         // "keep".
         let default_link_share_provided = req.default_link_share.is_some();
         let default_link_share = req.default_link_share.flatten();
+        // Same for language: NULL lets each member's browser decide.
+        let language_provided = req.language.is_some();
+        let language = req.language.flatten();
 
-        if req.name.is_some() || normalized_slug.is_some() || default_link_share_provided {
+        if req.name.is_some()
+            || normalized_slug.is_some()
+            || default_link_share_provided
+            || language_provided
+        {
             let result = sqlx::query!(
                 r#"
                 UPDATE team
                 SET
                     name = COALESCE($2, name),
                     slug = COALESCE($3, slug),
-                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END
+                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,
+                    language = CASE WHEN $6 THEN $7 ELSE language END
                 WHERE id = $1
                 "#,
                 team_id,
@@ -1249,6 +1380,8 @@ impl TeamRepository for TeamRepositoryImpl {
                 normalized_slug.as_deref(),
                 default_link_share_provided,
                 default_link_share as Option<LinkShare>,
+                language_provided,
+                language as Option<Language>,
             )
             .execute(&self.pool)
             .await?;
@@ -1292,7 +1425,8 @@ impl TeamRepository for TeamRepositoryImpl {
         let member = sqlx::query!(
             r#"
             SELECT user_id, 
-                team_role as "team_role!: TeamRole"
+                team_role as "team_role!: TeamRole",
+                plan as "plan!: SeatPlan"
             FROM team_user
             WHERE team_id = $1
             AND user_id = $2
@@ -1307,6 +1441,7 @@ impl TeamRepository for TeamRepositoryImpl {
                     .into_owned(),
                 team_id: *team_id,
                 role: r.team_role,
+                plan: r.plan,
             })
         })
         .fetch_one(&self.pool)
@@ -1332,6 +1467,34 @@ impl TeamRepository for TeamRepositoryImpl {
             team_id,
             user_id.as_ref(),
             team_role as _,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(TeamError::TeamMemberNotFound(*team_id));
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn patch_team_member_plan(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        plan: SeatPlan,
+    ) -> Result<(), TeamError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE team_user
+            SET plan = $3
+            WHERE team_id = $1
+            AND user_id = $2
+            "#,
+            team_id,
+            user_id.as_ref(),
+            plan as _,
         )
         .execute(&self.pool)
         .await?;
@@ -1458,6 +1621,36 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Option<TeamInviteLinkToken>, TeamError> {
+        invite_link::get_team_invite_link(&self.pool, team_id).await
+    }
+
+    #[tracing::instrument(skip(self, token), err)]
+    async fn set_team_invite_link(
+        &self,
+        team_id: &uuid::Uuid,
+        token: &TeamInviteLinkToken,
+    ) -> Result<(), TeamError> {
+        invite_link::set_team_invite_link(&self.pool, team_id, token).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_team_invite_link(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
+        invite_link::delete_team_invite_link(&self.pool, team_id).await
+    }
+
+    #[tracing::instrument(skip(self, token), err)]
+    async fn get_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> Result<Option<TeamInviteLinkTeam>, TeamError> {
+        invite_link::get_team_by_invite_link(&self.pool, token).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_allow_non_admin_invites(
         &self,
         team_id: &uuid::Uuid,
@@ -1539,7 +1732,29 @@ impl TeamRepository for TeamRepositoryImpl {
             team_id: *team_id,
             user_id: user_id.clone().into_owned(),
             role: TeamRole::Member,
+            plan: SeatPlan::Premium,
         }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_team_ids_after(
+        &self,
+        after_team_id: Option<uuid::Uuid>,
+        limit: u32,
+    ) -> Result<Vec<uuid::Uuid>, TeamError> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM team
+            WHERE $1::uuid IS NULL OR id > $1
+            ORDER BY id
+            LIMIT $2
+            "#,
+            after_team_id,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?)
     }
 
     #[tracing::instrument(skip(self), err)]

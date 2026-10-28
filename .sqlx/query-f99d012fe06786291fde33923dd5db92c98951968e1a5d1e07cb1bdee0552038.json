@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cp.role::text as \"role?\",\n            c.channel_type::text as \"channel_type!\",\n            c.org_id as \"org_id?\",\n            c.team_id as \"team_id?\",\n            EXISTS (\n                SELECT 1\n                FROM team_user tu\n                WHERE tu.user_id = $2 AND tu.team_id = c.team_id\n            ) as \"is_team_member!\"\n        FROM comms_channels c\n        LEFT JOIN comms_channel_participants cp\n            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL\n        WHERE c.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_team_member!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "f99d012fe06786291fde33923dd5db92c98951968e1a5d1e07cb1bdee0552038"
+}

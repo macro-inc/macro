@@ -21,6 +21,10 @@ use call::{
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
+use channel_labels::{
+    domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
+    outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
+};
 use channels::{
     domain::{
         list_service::ChannelListServiceImpl,
@@ -41,9 +45,13 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
-use documents_hex::domain::ports::TaskPropertiesPort;
+use documents_hex::domain::ports::{TaskPropertiesPort, task_property_edit_receipt};
+use documents_hex::domain::purge::DocumentPurger;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
+use documents_hex::outbound::document_purge::{
+    LegacyDocumentPurgeRepository, RedisDocxPartReferences, SqsDocumentPurgeQueue,
+};
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
@@ -51,26 +59,58 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{
-    domain::{
-        models::EditAccessLevel, ports::EntityAccessService as _, service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
-};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use favorites::{
-    domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
+    domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
+    inbound::axum_router::FavoritesRouterState,
     outbound::pg_favorites_repo::PgFavoritesRepo,
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use user_api_key::{
+    domain::service::UserApiKeyServiceImpl, inbound::axum_router::UserApiKeyRouterState,
+    outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+};
 
+use agent_session::{
+    domain::search::{AgentSessionSearchMetadataService, AgentSessionSearchMetadataServiceImpl},
+    outbound::postgres::PgAgentSessionRepo,
+};
+use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
+use databases::{
+    inbound::axum_router::DatabasesRouterState,
+    outbound::gateway_event_publisher::GatewayTableEventPublisher, wiring::PgDatabasesService,
+};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
-use github::domain::service::GithubSyncServiceImpl;
+use github::domain::service::{GithubSyncServiceImpl, PullRequestIndexService};
+use github::inbound::pull_request_index_router::PullRequestIndexRouterState;
+use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
+use github_pull_requests::{
+    domain::service::{
+        GithubPullRequestChangesServiceImpl, GithubPullRequestChangesetStore,
+        GithubPullRequestServiceImpl,
+    },
+    inbound::{
+        axum_router::GithubPullRequestRouterState,
+        changes_router::GithubPullRequestChangesRouterState,
+    },
+    outbound::{
+        pg_github_pull_request_repo::PgGithubPullRequestRepo,
+        s3_patch_store::S3GithubPullRequestPatchStore,
+    },
+};
+use initiative::{
+    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
+    outbound::PgInitiativeRepo,
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
@@ -94,8 +134,7 @@ use properties::{
 };
 use readonly_pool::ReadOnlyPool;
 use reminders::{
-    domain::service::RemindersServiceImpl, inbound::axum_router::RemindersRouterState,
-    outbound::pg_reminders_repo::PgRemindersRepo,
+    inbound::axum_router::RemindersRouterState, outbound::pg_reminders_repo::PgRemindersRepo,
 };
 use search_service::SearchHandlerState;
 use soup::{
@@ -115,7 +154,9 @@ use system_properties::{
 use tokio_util::task::TaskTracker;
 use webhook::{
     domain::service::WebhookServiceImpl,
+    domain::stream::WebhookEventStreamServiceImpl,
     inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
+    inbound::stream_router::WebhookStreamRouterState,
     outbound::{
         http_validator::ReqwestWebhookValidationClient,
         pg_repository::PgRepository as PgWebhookRepo,
@@ -141,8 +182,28 @@ pub(crate) type DssEmailService = EmailServiceImpl<
 >;
 
 /// CRM router state.
+pub(crate) type DssCrmStageService = crm::domain::stages::CrmStageServiceImpl<
+    crm::outbound::companies_repo::CompaniesRepositoryImpl,
+    crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
+>;
+
+pub(crate) type DssPipelineService = crm::domain::pipelines::PipelineServiceImpl<
+    crm::outbound::pipelines::PgPipelineRepo<
+        databases::outbound::pg_cell_store::PgCellStore<PropertiesPgRepo>,
+    >,
+    DatabasesServiceType,
+    EntityAccessService,
+    crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
+>;
+pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
+    DssPipelineService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
+    DssCrmStageService,
     EntityAccessService,
     AuthorizationService,
 >;
@@ -154,8 +215,7 @@ pub(crate) type DssSoupService = SoupImpl<
     ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
-    ForeignEntityServiceType,
-    RemindersServiceType,
+    GithubPullRequestServiceType,
 >;
 
 type DssSoupState =
@@ -173,6 +233,10 @@ pub(crate) type DssNotificationRealtimeService =
         model_notifications::NotifEvent,
     >;
 
+/// Realtime activity consumer service used by GraphQL subscriptions.
+pub(crate) type DssActivityRealtimeService =
+    activity::ActivityRealtimeConsumerService<activity::ActivityTopicConsumer>;
+
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
 /// routes, lazily, against the stored request parts.
@@ -180,12 +244,14 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
     DssSoupRealtimeService,
     DssNotificationRealtimeService,
+    DssActivityRealtimeService,
     DssEmailService,
     EntityAccessService,
     AuthorizationService,
     ApiContext,
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
     DssEntityMutationService,
+    FavoritesMutationServiceType,
     DssChannelService,
     ai_tools::ToolNotificationService,
     Arc<ai_tools::ToolNotificationService>,
@@ -197,8 +263,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 >;
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
-pub(crate) type DssActivityReader =
-    complete_graph::ActivityPortReader<activity::outbound::pg_activity_repo::PgActivityRepo>;
+pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
+    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        EntityAccessService,
+    >,
+>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -221,6 +291,22 @@ pub(crate) type DssCalendarService = CalendarService<PgCalendarRepository>;
 
 /// Calendar occurrence router state.
 pub(crate) type DssCalendarState = CalendarRouterState<DssCalendarService, AuthorizationService>;
+
+/// Service for asking to join calendar events shared with a channel.
+pub(crate) type DssCalendarJoinRequestService =
+    calendar_events::domain::join_requests::CalendarJoinRequestServiceImpl<
+        PgCalendarRepository,
+        calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
+            NotificationIngressType,
+        >,
+    >;
+
+/// Calendar join-request router state.
+pub(crate) type DssCalendarJoinRequestState =
+    calendar_events::inbound::join_request_router::CalendarJoinRequestRouterState<
+        DssCalendarJoinRequestService,
+        AuthorizationService,
+    >;
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
 pub(crate) struct TaskPropertiesAdapter {
@@ -249,24 +335,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
-        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-
-        let entity_access_receipt = self
-            .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &user_id,
-                None,
-                entity_id,
-                model_entity::EntityType::Document,
-            )
-            .await?;
+        let entity_access_receipt =
+            task_property_edit_receipt(self.entity_access_service.as_ref(), principal, entity_id)
+                .await?;
         self.properties
             .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
@@ -294,17 +372,34 @@ pub(crate) type EntityAccessManagementService =
     >;
 
 pub(crate) type DocumentService = DocumentServiceImpl<
-    PgDocumentRepo,
+    PgDocumentRepo<PgBotsRepo>,
     S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
     DssEventBroker,
+    sync_service_client::SyncServiceClient,
+>;
+
+/// Permanent document purge wired into DSS.
+pub(crate) type DssDocumentPurger = DocumentPurger<
+    LegacyDocumentPurgeRepository,
+    SqsDocumentPurgeQueue,
+    RedisDocxPartReferences,
+    DssEventBroker,
 >;
 
 /// Type alias for the authorization service.
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
+
+pub(crate) type AccessRequestsState =
+    access_requests::inbound::axum_router::AccessRequestsRouterState<
+        access_requests::outbound::postgres::PgRequestRepository,
+        EntityAccessService,
+        access_requests::domain::ports::SystemClock,
+        AuthorizationService,
+    >;
 
 /// Type alias for the documents router state.
 pub(crate) type DocumentsState =
@@ -312,7 +407,7 @@ pub(crate) type DocumentsState =
 
 /// Concrete project service wired into DSS.
 pub(crate) type ProjectService = ProjectServiceImpl<
-    PgProjectRepo,
+    PgProjectRepo<PgBotsRepo>,
     S3ProjectUploadAdapter,
     DynamoBulkUploadAdapter,
     ShaCountAdapter,
@@ -346,7 +441,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
-    lexical_mention_extractor::LexicalMentionExtractor,
+    channels::outbound::static_file_pictures::StaticFileChannelPictures,
 >;
 
 /// Type alias for the channels router state.
@@ -354,18 +449,47 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo, DssEventBroker>;
+pub(crate) type DssBotService =
+    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
     BotsRouterState<DssBotService, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the harnesses service wired into DSS.
+pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
+    harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+>;
+
+/// Type alias for the harnesses router state.
+pub(crate) type DssHarnessesState =
+    harnesses::inbound::axum_router::HarnessesRouterState<DssHarnessService, AuthorizationService>;
+
 /// Type alias for the channel bot webhook router state.
-pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
-    DssBotService,
-    Arc<DssChannelService>,
+pub(crate) type DssChannelBotWebhookState =
+    ChannelBotWebhookRouterState<DssBotService, EntityAccessService, AuthorizationService>;
+
+/// Shared messages use the same parent access and authentication services as DSS.
+pub(crate) type DssMessagesState =
+    messages::inbound::axum_router::MessagesRouterState<EntityAccessService, AuthorizationService>;
+
+/// Document discussion delivery shared by the message service and PDF annotation edits.
+pub(crate) type DssDiscussionDelivery = messages::domain::delivery::DiscussionDelivery<
+    messages::outbound::pg_discussion_context::ParentDiscussionContext<
+        initiative::domain::lookup::InitiativeLookup<initiative::outbound::PgInitiativeRepo>,
+        PropertiesService,
+    >,
+    messages::outbound::entity_access_audience::EntityAccessMessageAudience<EntityAccessService>,
+    messages::outbound::connection_gateway::ConnectionGatewayMessages,
+    messages::outbound::notification_sender::MessageNotificationSender<NotificationIngressType>,
+    messages::outbound::pg_discussion_context::PgDiscussionContext,
+>;
+
+/// PDF annotation geometry edits and deletes authorized through document access.
+pub(crate) type DssAnnotationService = messages::domain::annotations::AnnotationService<
+    macro_db_client::annotations::repository::PgAnnotationRepository,
     EntityAccessService,
-    AuthorizationService,
+    DssDiscussionDelivery,
 >;
 
 /// Type alias for the call connection service.
@@ -376,7 +500,7 @@ pub(crate) type CallConnectionService =
 pub(crate) type DssVoipPushSender = Option<
     notification::domain::service::VoipPushServiceImpl<
         notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
-        aws_sdk_sns::Client,
+        notification::outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
     >,
 >;
 
@@ -406,10 +530,24 @@ pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
 /// Chat service used by the unified entity mutation adapter.
 pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo,
+    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
 >;
+
+/// Chat service for owner-checked permanent deletes. Unlike
+/// [`DssChatMutationService`] it publishes chat events, which is how search
+/// and activity learn a chat is gone.
+pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
+    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+    (),
+    EntityAccessManagementService,
+    DssEventBroker,
+>;
+
+/// State of `DELETE /internal/owned/{entity_type}/{entity_id}`.
+pub(crate) type DssOwnedPurgeState =
+    super::internal::OwnedPurgeState<DssDocumentPurger, DssChatPurgeService, ProjectService>;
 
 /// Concrete unified entity mutation service wired into GraphQL.
 pub(crate) type DssEntityMutationService =
@@ -420,24 +558,206 @@ pub(crate) type DssEntityMutationService =
         DssCallService,
         DssEmailService,
         ProjectService,
+        DatabasesServiceType,
+        FormsServiceType,
         EntityAccessService,
-        FavoritesServiceType,
         crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
     >;
 
 /// Type alias for the favorites service.
 pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 
+/// Authorized favorites mutation service wired into GraphQL.
+pub(crate) type FavoritesMutationServiceType =
+    FavoritesMutationServiceImpl<FavoritesServiceType, EntityAccessService>;
+
+/// Type alias for the channel labels service.
+pub(crate) type ChannelLabelsServiceType = ChannelLabelsServiceImpl<PgChannelLabelsRepo>;
+
+/// Type alias for the channel labels router state.
+pub(crate) type DssChannelLabelsState =
+    ChannelLabelsRouterState<ChannelLabelsServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the user API key service.
+pub(crate) type UserApiKeyServiceType = UserApiKeyServiceImpl<PgUserApiKeysRepo>;
+
+/// Type alias for the user API key router state.
+pub(crate) type DssUserApiKeyState =
+    UserApiKeyRouterState<UserApiKeyServiceType, AuthorizationService>;
+
+/// Type alias for the databases service.
+pub(crate) type DatabasesServiceType =
+    PgDatabasesService<GatewayTableEventPublisher, DssEventBroker, EntityAccessService>;
+
+/// HTTP SQL queries over the same database, access and Soup services.
+pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterState<
+    DatabasesServiceType,
+    EntityAccessService,
+    DssSoupService,
+    contacts::domain::service::ContactsDomainService<
+        contacts::outbound::repository::DbContactsRepository,
+        Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    >,
+    AuthorizationService,
+>;
+
+/// Type alias for the databases router state.
+pub(crate) type DssDatabasesState =
+    DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
+
+/// Webhooks insert rows through the databases domain service, so they keep its validation and events.
+pub(crate) type DatabaseWebhooksServiceType =
+    database_webhooks::wiring::PgDatabaseWebhooksService<DatabasesServiceType, EntityAccessService>;
+
+/// Webhooks use the same authentication and entity-access services as databases.
+pub(crate) type DssDatabaseWebhooksState =
+    database_webhooks::inbound::axum_router::DatabaseWebhooksRouterState<
+        DatabaseWebhooksServiceType,
+        EntityAccessService,
+        AuthorizationService,
+    >;
+
+/// Forms compose the databases domain service, so row writes retain its validation and events.
+pub(crate) type FormsServiceType = forms::wiring::PgFormsService<
+    DatabasesServiceType,
+    EntityAccessService,
+    forms::outbound::gateway_event_publisher::GatewayFormEventPublisher,
+    DssEventBroker,
+    CollabSurfaceServiceType,
+>;
+
+/// Forms use the same authentication and entity-access services as databases.
+pub(crate) type DssFormsState = forms::inbound::axum_router::FormsRouterState<
+    FormsServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
+/// Database onboarding composes transaction-capable owning domain adapters.
+pub(crate) type DssDatabaseStarterState =
+    databases::inbound::starter_router::DatabaseStarterRouterState<
+        databases::domain::starter::DatabaseStarterServiceImpl<
+            databases::outbound::pg_starter::PgDatabaseStarterRepo<
+                properties::outbound::properties_pg_repo::PropertiesPgRepo,
+            >,
+            DssEventBroker,
+        >,
+        AuthorizationService,
+    >;
+
+/// HTTP-only authorization adapter: revalidates notification recipients. DSS
+/// never authorizes worker targets; that capability fails closed here.
+pub(crate) struct SlackAdminAuthorizer(
+    pub Arc<EntityAccessService>,
+    pub entity_access::outbound::PgAccessRepository,
+);
+
+impl slack_integration::domain::ports::ImportProgressAccess for SlackAdminAuthorizer {
+    async fn participating_targets(
+        &self,
+        viewer: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        targets: &[uuid::Uuid],
+    ) -> slack_integration::domain::ports::PortResult<Vec<uuid::Uuid>> {
+        use entity_access::domain::ports::AccessRepository as _;
+        self.1
+            .check_user_channel_membership(Some(&viewer.0), targets)
+            .await
+            .map_err(|error| {
+                rootcause::Report::new(error)
+                    .context(slack_integration::domain::models::ImportError::Retryable)
+            })
+    }
+}
+
+impl slack_integration::domain::ports::ImportAuthorizer for SlackAdminAuthorizer {
+    async fn require_admin(
+        &self,
+        team: slack_integration::domain::models::TeamId,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> slack_integration::domain::ports::PortResult<()> {
+        use entity_access::domain::{
+            models::{AdminTeamRole, EntityType},
+            ports::EntityAccessService as _,
+        };
+        self.0
+            .generate_entity_access_receipt::<AdminTeamRole>(
+                &user.0,
+                None,
+                &team.to_string(),
+                EntityType::Team,
+            )
+            .await
+            .map_err(|_| slack_integration::domain::models::ImportError::AdminRequired)?;
+        Ok(())
+    }
+
+    async fn require_target(
+        &self,
+        _: slack_integration::domain::models::TeamId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: &slack_integration::domain::models::ConversationMetadata,
+        _: uuid::Uuid,
+    ) -> slack_integration::domain::ports::PortResult<()> {
+        Err(slack_integration::domain::models::ImportError::Unavailable.into())
+    }
+}
+
+pub(crate) type SlackService = slack_integration::domain::service::SlackImportService<
+    slack_integration::outbound::pg_slack_import_repo::PgSlackImportRepo,
+    slack_integration::outbound::s3_storage::S3ImportStorage,
+    slack_integration::outbound::import_ledger::CanonicalImportLedger<
+        import::outbound::pg_import_repo::PgImportRepo,
+    >,
+    slack_integration::outbound::gateway_notifier::GatewayImportNotifier,
+    SlackAdminAuthorizer,
+    Box<dyn Fn(slack_integration::domain::models::TeamId) -> bool + Send + Sync>,
+>;
+
+pub(crate) type DssSlackState = slack_integration::inbound::axum_router::SlackRouterState<
+    SlackService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 /// Type alias for the reminders service.
-pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
+pub(crate) type RemindersServiceType =
+    reminders::domain::email_followup::reminder_service::EmailRemindersService<
+        PgRemindersRepo,
+        DssEmailService,
+        reminders::domain::ports::SystemClock,
+        EntityAccessService,
+    >;
 
 /// Type alias for the reminders router state.
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
+
+/// Initiative description surfaces, backed by the shared collab-surface service.
+pub(crate) type InitiativeDescriptionSurfacesType =
+    initiative_description::InitiativeDescriptionSurfacesAdapter<CollabSurfaceServiceType>;
+
+/// Type alias for the initiative service.
+pub(crate) type InitiativeServiceType =
+    InitiativeServiceImpl<PgInitiativeRepo, InitiativeDescriptionSurfacesType>;
+
+/// Type alias for the initiative router state.
+pub(crate) type DssInitiativeState =
+    InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
+
+/// Type alias for the collab-surface service.
+pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService<
+    forms::outbound::collaborative_layout::RepositoryFormIds<
+        forms::outbound::pg_forms_repo::PgFormsRepo,
+    >,
+>;
+
+/// Type alias for the collab-surface router state.
+pub(crate) type DssCollabSurfaceState =
+    CollabSurfaceRouterState<CollabSurfaceServiceType, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
@@ -446,14 +766,51 @@ pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEnt
 pub(crate) type DssForeignEntityState =
     ForeignEntityRouterState<ForeignEntityServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the GitHub pull request service.
+pub(crate) type GithubPullRequestServiceType =
+    GithubPullRequestServiceImpl<ForeignEntityServiceType, PgGithubPullRequestRepo>;
+
+/// Type alias for the GitHub pull request router state.
+pub(crate) type DssGithubPullRequestState = GithubPullRequestRouterState<
+    GithubPullRequestServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
+/// Type alias for the store of GitHub pull request changesets and their patches.
+pub(crate) type GithubPullRequestChangesetStoreType = GithubPullRequestChangesetStore<
+    GithubPullRequestDiffClient<PgGithubSyncRepo, GithubSyncClientImpl>,
+    PgGithubPullRequestRepo,
+    S3GithubPullRequestPatchStore,
+>;
+
+/// Type alias for the GitHub pull request changes router state.
+pub(crate) type DssGithubPullRequestChangesState = GithubPullRequestChangesRouterState<
+    GithubPullRequestChangesServiceImpl<
+        GithubPullRequestServiceType,
+        GithubPullRequestChangesetStoreType,
+    >,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     DocumentService,
     PgGithubSyncRepo,
     GithubSyncClientImpl,
-    ForeignEntityServiceType,
+    GithubPullRequestServiceType,
     NotificationIngressType,
+    ConnectionGatewayGithubRealtime,
 >;
+
+/// Type alias for the GitHub pull request index service.
+pub(crate) type GithubPullRequestIndexServiceType =
+    PullRequestIndexService<PgGithubSyncRepo, GithubSyncClientImpl, GithubPullRequestServiceType>;
+
+/// Type alias for the GitHub pull request index router state.
+pub(crate) type DssGithubPullRequestIndexState =
+    PullRequestIndexRouterState<GithubPullRequestIndexServiceType, AuthorizationService>;
 
 /// Type alias for the cal.com webhook service.
 pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSink>;
@@ -473,30 +830,78 @@ pub(crate) type DssWebhookRateLimiter =
 pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
+/// Type alias for the service backing the webhook-event SSE endpoint.
+pub(crate) type DssSseStreamService =
+    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+
+/// Type alias for the webhook-event SSE router state.
+pub(crate) type DssSseStreamState =
+    WebhookStreamRouterState<DssSseStreamService, AuthorizationService>;
+
+/// Type alias for the dictation router state; shares the webhook Redis limiter.
+pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRouterState<
+    dictation::domain::DictationServiceImpl<
+        dictation::outbound::WhisperTranscriber,
+        dictation::outbound::SymphoniaRecordingInspector,
+    >,
+    DssWebhookRateLimiter,
+    AuthorizationService,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
     pub redis_client: Arc<Redis>,
     pub s3_client: Arc<S3>,
     pub github_sync_service: Arc<GithubSyncServiceType>,
+    pub github_pull_request_index_state: DssGithubPullRequestIndexState,
+    pub github_pull_request_state: DssGithubPullRequestState,
+    pub github_pull_request_changes_state: DssGithubPullRequestChangesState,
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
+    pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
+    pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
+    pub channel_labels_state: DssChannelLabelsState,
+    pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
+    pub access_requests_state: AccessRequestsState,
+    pub slack_state: DssSlackState,
+    pub external_chat_state: crate::external_chat::State,
+    pub initiative_state: DssInitiativeState,
+    pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
+    pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
+    pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
+    pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
+    pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
+    pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
+    pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
+    pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
+    pub graphql_soup_item_loader: graphql_soup::SoupItemDataLoader,
+    pub databases_state: DssDatabasesState,
+    pub sql_state: DssSqlState,
+    pub database_webhooks_state: DssDatabaseWebhooksState,
+    pub forms_state: DssFormsState,
+    pub database_starter_state: DssDatabaseStarterState,
+    pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
     pub sqs_client: Arc<sqs_client::SQS>,
+    pub document_purger: Arc<DssDocumentPurger>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
+    pub sync_sessions: sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
@@ -510,21 +915,30 @@ pub(crate) struct ApiContext {
     pub channel_list_state: DssChannelListState,
     pub entity_access_service: Arc<EntityAccessService>,
     pub calendar_state: DssCalendarState,
+    pub calendar_join_request_state: DssCalendarJoinRequestState,
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
+    pub messages_state: DssMessagesState,
+    pub guest_chat_service: Arc<dyn messages::domain::service::guest_chat::GuestChatApi>,
+    pub annotation_service: Arc<DssAnnotationService>,
     /// Shared channel service, for calling channel domain operations outside
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,
     pub bots_state: DssBotsState,
+    pub harnesses_state: DssHarnessesState,
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
+    pub call_public_rate_limiter: DssWebhookRateLimiter,
     pub webhook_state: DssWebhookState,
+    pub sse_stream_state: DssSseStreamState,
     pub call_internal_state: DssCallInternalState,
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub owned_purge_state: DssOwnedPurgeState,
+    pub pipeline_state: DssPipelineState,
 }
 
 env_var! {
@@ -539,6 +953,9 @@ impl From<&ApiContext> for PropertiesHandlerState {
             ctx.entity_access_service.clone(),
             ctx.authorization_state.clone(),
         )
+        .with_managed_team_definitions([
+            crm::domain::stages::CRM_TEAM_STAGE_DEFINITION_NAME.to_string(),
+        ])
     }
 }
 
@@ -555,6 +972,16 @@ impl From<&ApiContext> for SearchHandlerState {
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
+            agent_session_search_metadata: Arc::new(AgentSessionSearchMetadataServiceImpl::new(
+                PgAgentSessionRepo::new(
+                    ctx.db.clone(),
+                    OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(
+                        ctx.db.clone(),
+                    ))),
+                ),
+            ))
+                as Arc<dyn AgentSessionSearchMetadataService>,
+            calendar_search_enabled: ctx.config.calendar_search_enabled,
         }
     }
 }

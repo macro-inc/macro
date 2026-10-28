@@ -1,0 +1,218 @@
+import { batch, createEffect, on } from 'solid-js';
+import { DEFAULT_DARK_THEME } from '../constants/themeConstants';
+import { themeReactive } from '../signals/themeReactive';
+import {
+  currentThemeId,
+  darkModeTheme,
+  lightModeTheme,
+  setCurrentThemeId,
+  setIsThemeSaved,
+  setUserThemes,
+  systemMode,
+  themeShouldMatchSystem,
+  themes,
+  userThemes,
+} from '../signals/themeSignals';
+import type { ThemeV1, ThemeV1Tokens } from '../types/themeTypes';
+
+export function exportTheme() {
+  let id = currentThemeId();
+  let theme = JSON.stringify(themes().find((t) => t.id === id));
+  navigator.clipboard.writeText(theme);
+}
+
+export function systemThemeEffect() {
+  createEffect(
+    on(
+      [themeShouldMatchSystem, systemMode, darkModeTheme, lightModeTheme],
+      () => {
+        if (themeShouldMatchSystem()) {
+          applyTheme(
+            systemMode() === 'dark' ? darkModeTheme() : lightModeTheme()
+          );
+        }
+      },
+      { defer: true }
+    )
+  );
+}
+
+export function applyTheme(id: string): void {
+  let theme = themes().find((t) => t.id === id);
+  if (!theme) {
+    console.error(`theme not found: ${id}`);
+    theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
+  }
+  setCurrentThemeId(theme.id);
+
+  batch(() => {
+    (Object.keys(theme!.tokens) as Array<keyof ThemeV1Tokens>).forEach(
+      (tokenKey) => {
+        (
+          Object.keys(theme!.tokens[tokenKey]) as Array<'l' | 'c' | 'h'>
+        ).forEach((prop) => {
+          themeReactive[tokenKey][prop][1](theme!.tokens[tokenKey][prop]);
+        });
+      }
+    );
+    queueMicrotask(() => {
+      /* scuffed af */
+      setIsThemeSaved(true);
+    });
+  });
+}
+
+export function invertTheme(): void {
+  batch(() => {
+    themeReactive.b0.l[1](1 - themeReactive.b0.l[0]());
+    themeReactive.b2.l[1](1 - themeReactive.b2.l[0]());
+    themeReactive.b1.l[1](1 - themeReactive.b1.l[0]());
+    themeReactive.b3.l[1](1 - themeReactive.b3.l[0]());
+    themeReactive.b4.l[1](1 - themeReactive.b4.l[0]());
+    themeReactive.c0.l[1](1 - themeReactive.c0.l[0]());
+    themeReactive.c1.l[1](1 - themeReactive.c1.l[0]());
+    themeReactive.c2.l[1](1 - themeReactive.c2.l[0]());
+    themeReactive.c3.l[1](1 - themeReactive.c3.l[0]());
+    themeReactive.c4.l[1](1 - themeReactive.c4.l[0]());
+  });
+}
+
+function getCurrentTokens(): ThemeV1Tokens {
+  const themeTokens: ThemeV1Tokens = {
+    a0: {
+      l: themeReactive.a0.l[0](),
+      c: themeReactive.a0.c[0](),
+      h: themeReactive.a0.h[0](),
+    },
+    a1: {
+      l: themeReactive.a1.l[0](),
+      c: themeReactive.a1.c[0](),
+      h: themeReactive.a1.h[0](),
+    },
+    a2: {
+      l: themeReactive.a2.l[0](),
+      c: themeReactive.a2.c[0](),
+      h: themeReactive.a2.h[0](),
+    },
+    a3: {
+      l: themeReactive.a3.l[0](),
+      c: themeReactive.a3.c[0](),
+      h: themeReactive.a3.h[0](),
+    },
+    a4: {
+      l: themeReactive.a4.l[0](),
+      c: themeReactive.a4.c[0](),
+      h: themeReactive.a4.h[0](),
+    },
+    b0: {
+      l: themeReactive.b0.l[0](),
+      c: themeReactive.b0.c[0](),
+      h: themeReactive.b0.h[0](),
+    },
+    b1: {
+      l: themeReactive.b1.l[0](),
+      c: themeReactive.b1.c[0](),
+      h: themeReactive.b1.h[0](),
+    },
+    b2: {
+      l: themeReactive.b2.l[0](),
+      c: themeReactive.b2.c[0](),
+      h: themeReactive.b2.h[0](),
+    },
+    b3: {
+      l: themeReactive.b3.l[0](),
+      c: themeReactive.b3.c[0](),
+      h: themeReactive.b3.h[0](),
+    },
+    b4: {
+      l: themeReactive.b4.l[0](),
+      c: themeReactive.b4.c[0](),
+      h: themeReactive.b4.h[0](),
+    },
+    c0: {
+      l: themeReactive.c0.l[0](),
+      c: themeReactive.c0.c[0](),
+      h: themeReactive.c0.h[0](),
+    },
+    c1: {
+      l: themeReactive.c1.l[0](),
+      c: themeReactive.c1.c[0](),
+      h: themeReactive.c1.h[0](),
+    },
+    c2: {
+      l: themeReactive.c2.l[0](),
+      c: themeReactive.c2.c[0](),
+      h: themeReactive.c2.h[0](),
+    },
+    c3: {
+      l: themeReactive.c3.l[0](),
+      c: themeReactive.c3.c[0](),
+      h: themeReactive.c3.h[0](),
+    },
+    c4: {
+      l: themeReactive.c4.l[0](),
+      c: themeReactive.c4.c[0](),
+      h: themeReactive.c4.h[0](),
+    },
+  };
+  return themeTokens;
+}
+
+export function saveTheme(name: string): void {
+  const id = crypto.randomUUID();
+  const tokens = getCurrentTokens();
+  const newTheme: ThemeV1 = {
+    id: id,
+    name: name,
+    version: 1,
+    tokens: tokens,
+  };
+  setUserThemes([...userThemes(), newTheme]);
+  setCurrentThemeId(id);
+  setIsThemeSaved(true);
+}
+
+export function copyThemeToClipboard(name: string) {
+  const tokens = getCurrentTokens();
+  const themeString = `{
+  id: '${crypto.randomUUID()}',
+  name: '${name}',
+  version: 1,
+  tokens: {
+    a0: { l: ${tokens.a0.l.toFixed(2)}, c: ${tokens.a0.c.toFixed(2)}, h: ${tokens.a0.h.toFixed(0)} },
+    a1: { l: ${tokens.a1.l.toFixed(2)}, c: ${tokens.a1.c.toFixed(2)}, h: ${tokens.a1.h.toFixed(0)} },
+    a2: { l: ${tokens.a2.l.toFixed(2)}, c: ${tokens.a2.c.toFixed(2)}, h: ${tokens.a2.h.toFixed(0)} },
+    a3: { l: ${tokens.a3.l.toFixed(2)}, c: ${tokens.a3.c.toFixed(2)}, h: ${tokens.a3.h.toFixed(0)} },
+    a4: { l: ${tokens.a4.l.toFixed(2)}, c: ${tokens.a4.c.toFixed(2)}, h: ${tokens.a4.h.toFixed(0)} },
+    b0: { l: ${tokens.b0.l.toFixed(2)}, c: ${tokens.b0.c.toFixed(2)}, h: ${tokens.b0.h.toFixed(0)} },
+    b1: { l: ${tokens.b1.l.toFixed(2)}, c: ${tokens.b1.c.toFixed(2)}, h: ${tokens.b1.h.toFixed(0)} },
+    b2: { l: ${tokens.b2.l.toFixed(2)}, c: ${tokens.b2.c.toFixed(2)}, h: ${tokens.b2.h.toFixed(0)} },
+    b3: { l: ${tokens.b3.l.toFixed(2)}, c: ${tokens.b3.c.toFixed(2)}, h: ${tokens.b3.h.toFixed(0)} },
+    b4: { l: ${tokens.b4.l.toFixed(2)}, c: ${tokens.b4.c.toFixed(2)}, h: ${tokens.b4.h.toFixed(0)} },
+    c0: { l: ${tokens.c0.l.toFixed(2)}, c: ${tokens.c0.c.toFixed(2)}, h: ${tokens.c0.h.toFixed(0)} },
+    c1: { l: ${tokens.c1.l.toFixed(2)}, c: ${tokens.c1.c.toFixed(2)}, h: ${tokens.c1.h.toFixed(0)} },
+    c2: { l: ${tokens.c2.l.toFixed(2)}, c: ${tokens.c2.c.toFixed(2)}, h: ${tokens.c2.h.toFixed(0)} },
+    c3: { l: ${tokens.c3.l.toFixed(2)}, c: ${tokens.c3.c.toFixed(2)}, h: ${tokens.c3.h.toFixed(0)} },
+    c4: { l: ${tokens.c4.l.toFixed(2)}, c: ${tokens.c4.c.toFixed(2)}, h: ${tokens.c4.h.toFixed(0)} },
+  }
+}`;
+  navigator.clipboard.writeText(themeString);
+}
+
+export function deleteTheme(id: string): void {
+  setUserThemes(userThemes().filter((theme) => theme.id !== id));
+  setIsThemeSaved(false);
+  setCurrentThemeId('');
+}
+
+/** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */
+export function ensureMinimalThemeContrast() {
+  const spec = themes().find((t) => t.id === currentThemeId())?.tokens;
+  if (!spec) {
+    return;
+  } // Check if the contrast is too low, so that users can't get stuck with an unreadable theme
+  const lowContrastTheme = Math.abs(spec.c0.l - spec.b0.l) < 0.2;
+  if (lowContrastTheme) {
+    applyTheme(DEFAULT_DARK_THEME);
+  }
+}

@@ -5,8 +5,11 @@ use std::sync::{
 };
 
 use email::domain::{
-    models::{EmailErr, EmailThreadMetadata},
-    ports::EmailThreadMetadataService,
+    models::{
+        EmailErr, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
+        EmailThreadMetadata,
+    },
+    ports::{EmailThreadMailProjectionService, EmailThreadMetadataService},
 };
 use entity_access::domain::{
     models::{
@@ -27,6 +30,25 @@ struct RecordingReader {
     calls: Arc<AtomicUsize>,
     metadata_calls: Arc<AtomicUsize>,
     metadata_batches: Arc<Mutex<Vec<Vec<Uuid>>>>,
+    mail_projection_calls: Arc<AtomicUsize>,
+}
+
+fn mail_projection(thread_id: Uuid) -> EmailThreadMailProjection {
+    EmailThreadMailProjection {
+        thread_id,
+        cache_facts: EmailThreadMailCacheFacts {
+            latest_non_spam_message_ts: None,
+            latest_outbound_message_ts: None,
+            has_calendar_attachment: false,
+            has_thread_share: false,
+        },
+        draft_state: None,
+        previews: EmailThreadMailPreviews {
+            all: None,
+            draft: None,
+            sent: None,
+        },
+    }
 }
 
 impl SoupEmailThreadMetadataEdgeReader for RecordingReader {
@@ -49,7 +71,29 @@ impl SoupEmailThreadMetadataEdgeReader for RecordingReader {
                         thread_id,
                         link_id: Uuid::from_u128(100 + thread_id.as_u128()),
                         latest_inbound_message_ts: None,
+                        latest_outbound_message_ts: None,
+                        latest_non_spam_message_ts: None,
+                        reminder_returned_at: None,
                     }),
+                )
+            })
+            .collect()
+    }
+}
+
+impl SoupEmailThreadMailProjectionEdgeReader for RecordingReader {
+    async fn get_email_thread_mail_projections(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> HashMap<Uuid, EmailThreadMailProjectionLoad> {
+        self.mail_projection_calls.fetch_add(1, Ordering::SeqCst);
+        thread_ids
+            .into_iter()
+            .map(|thread_id| {
+                (
+                    thread_id,
+                    EmailThreadMailProjectionLoad::Found(Arc::new(mail_projection(thread_id))),
                 )
             })
             .collect()
@@ -99,7 +143,7 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_access_level(
@@ -108,7 +152,7 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn check_access(
@@ -118,7 +162,7 @@ impl EntityAccessService for TestAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn check_public_access(
@@ -127,7 +171,7 @@ impl EntityAccessService for TestAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_entity_permission(
@@ -137,7 +181,7 @@ impl EntityAccessService for TestAccessService {
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -146,7 +190,7 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_users_by_entity(
@@ -154,39 +198,43 @@ impl EntityAccessService for TestAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_call_channel_by_channel_id(
         &self,
         _channel_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_user_team(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Option<UserTeamInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 }
 
 #[derive(Default)]
 struct RecordingContentService {
     metadata_calls: AtomicUsize,
+    mail_projection_calls: AtomicUsize,
     latest_calls: AtomicUsize,
     latest_full_calls: AtomicUsize,
     page_calls: AtomicUsize,
     page_full_calls: AtomicUsize,
     pagination: Mutex<Vec<(i64, i64)>>,
+    /// Return no metadata rows, as for an authorized thread the email
+    /// service has no row for.
+    no_metadata_rows: bool,
 }
 
 impl EmailThreadMetadataService for RecordingContentService {
@@ -195,6 +243,9 @@ impl EmailThreadMetadataService for RecordingContentService {
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
         self.metadata_calls.fetch_add(1, Ordering::SeqCst);
+        if self.no_metadata_rows {
+            return Ok(HashMap::new());
+        }
         Ok(receipts
             .into_iter()
             .map(|receipt| {
@@ -205,8 +256,28 @@ impl EmailThreadMetadataService for RecordingContentService {
                         thread_id,
                         link_id: Uuid::from_u128(500 + thread_id.as_u128()),
                         latest_inbound_message_ts: None,
+                        latest_outbound_message_ts: None,
+                        latest_non_spam_message_ts: None,
+                        reminder_returned_at: None,
                     },
                 )
+            })
+            .collect())
+    }
+}
+
+impl EmailThreadMailProjectionService for RecordingContentService {
+    async fn get_email_thread_mail_projections(
+        &self,
+        _viewer: MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr> {
+        self.mail_projection_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(receipts
+            .into_iter()
+            .map(|receipt| {
+                let thread_id = Uuid::parse_str(&receipt.entity().entity_id).unwrap();
+                (thread_id, mail_projection(thread_id))
             })
             .collect())
     }
@@ -281,7 +352,7 @@ async fn batches_distinct_threads_in_one_reader_call() {
 async fn batches_email_thread_metadata_in_one_reader_call() {
     let reader = RecordingReader::default();
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
-    let loader = email_thread_metadata_loader(user_id, reader.clone());
+    let loader = email_thread_metadata_loader(user_id, None, reader.clone());
     let first = Uuid::from_u128(1);
     let second = Uuid::from_u128(2);
 
@@ -301,6 +372,29 @@ async fn batches_email_thread_metadata_in_one_reader_call() {
         loaded.get(&second),
         Some(EmailThreadMetadataLoad::Found(metadata))
             if metadata.link_id == Uuid::from_u128(102)
+    ));
+}
+
+#[tokio::test]
+async fn batches_email_thread_mail_projections_in_one_reader_call() {
+    let reader = RecordingReader::default();
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let loader = email_thread_mail_projection_loader(user_id, None, reader.clone());
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+
+    let loaded = loader.load_many(vec![first, second]).await.unwrap();
+
+    assert_eq!(reader.mail_projection_calls.load(Ordering::SeqCst), 1);
+    assert!(matches!(
+        loaded.get(&first),
+        Some(EmailThreadMailProjectionLoad::Found(projection))
+            if projection.thread_id == first
+    ));
+    assert!(matches!(
+        loaded.get(&second),
+        Some(EmailThreadMailProjectionLoad::Found(projection))
+            if projection.thread_id == second
     ));
 }
 
@@ -380,6 +474,55 @@ async fn authorized_metadata_keys_reach_the_email_domain_in_bulk() {
 }
 
 #[tokio::test]
+async fn authorized_mail_projection_keys_reach_the_email_domain_in_bulk() {
+    let content = Arc::new(RecordingContentService::default());
+    let reader = EmailServiceEmailContentReader::new(
+        content.clone(),
+        Arc::new(TestAccessService { allow: true }),
+    );
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let first = Uuid::from_u128(1);
+    let second = Uuid::from_u128(2);
+
+    let loaded = reader
+        .get_email_thread_mail_projections(&user_id, vec![first, second])
+        .await;
+
+    assert_eq!(content.mail_projection_calls.load(Ordering::SeqCst), 1);
+    assert!(matches!(
+        loaded.get(&first),
+        Some(EmailThreadMailProjectionLoad::Found(projection)) if projection.thread_id == first
+    ));
+    assert!(matches!(
+        loaded.get(&second),
+        Some(EmailThreadMailProjectionLoad::Found(projection)) if projection.thread_id == second
+    ));
+}
+
+#[tokio::test]
+async fn unauthorized_mail_projection_keys_do_not_reach_the_email_domain() {
+    let content = Arc::new(RecordingContentService::default());
+    let reader = EmailServiceEmailContentReader::new(
+        content.clone(),
+        Arc::new(TestAccessService { allow: false }),
+    );
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let requested = Uuid::from_u128(1);
+
+    let loaded = reader
+        .get_email_thread_mail_projections(&user_id, vec![requested])
+        .await;
+
+    assert_eq!(content.mail_projection_calls.load(Ordering::SeqCst), 0);
+    assert!(matches!(
+        loaded.get(&requested),
+        Some(EmailThreadMailProjectionLoad::Unavailable(
+            EmailThreadUnavailable::NoAccess
+        ))
+    ));
+}
+
+#[tokio::test]
 async fn unauthorized_metadata_keys_do_not_reach_the_email_domain() {
     let content = Arc::new(RecordingContentService::default());
     let reader = EmailServiceEmailContentReader::new(
@@ -396,8 +539,118 @@ async fn unauthorized_metadata_keys_do_not_reach_the_email_domain() {
     assert_eq!(content.metadata_calls.load(Ordering::SeqCst), 0);
     assert!(matches!(
         loaded.get(&requested),
-        Some(EmailThreadMetadataLoad::Missing)
+        Some(EmailThreadMetadataLoad::Unavailable(
+            EmailThreadUnavailable::NoAccess
+        ))
     ));
+}
+
+#[tokio::test]
+async fn authorized_threads_without_a_metadata_row_report_no_row() {
+    let content = Arc::new(RecordingContentService {
+        no_metadata_rows: true,
+        ..Default::default()
+    });
+    let reader =
+        EmailServiceEmailContentReader::new(content, Arc::new(TestAccessService { allow: true }));
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let requested = Uuid::from_u128(1);
+
+    let loaded = reader
+        .get_email_thread_metadata(&user_id, vec![requested])
+        .await;
+
+    assert!(matches!(
+        loaded.get(&requested),
+        Some(EmailThreadMetadataLoad::Unavailable(
+            EmailThreadUnavailable::NoRow
+        ))
+    ));
+}
+
+#[derive(Clone, Default)]
+struct CapturedLogs(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for CapturedLogs {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl CapturedLogs {
+    fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+    }
+}
+
+#[tokio::test]
+async fn unavailable_threads_are_logged_in_the_request_span_with_the_reason_and_opaque_viewer() {
+    let logs = CapturedLogs::default();
+    let writer = logs.clone();
+    let _guard = tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_ansi(false)
+            .with_writer(move || writer.clone())
+            .finish(),
+    );
+    tracing::callsite::rebuild_interest_cache();
+    let denying_reader = || {
+        EmailServiceEmailContentReader::new(
+            Arc::new(RecordingContentService::default()),
+            Arc::new(TestAccessService { allow: false }),
+        )
+    };
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let viewer_id = Uuid::from_u128(77);
+    let thread_id = Uuid::from_u128(1);
+    let metadata_loader =
+        email_thread_metadata_loader(user_id.clone(), Some(viewer_id), denying_reader());
+    let projection_loader =
+        email_thread_mail_projection_loader(user_id, Some(viewer_id), denying_reader());
+
+    let (metadata, projection) = async {
+        (
+            metadata_loader.load_one(thread_id).await.unwrap(),
+            projection_loader.load_one(thread_id).await.unwrap(),
+        )
+    }
+    .instrument(tracing::info_span!("graphql_request"))
+    .await;
+
+    assert!(matches!(
+        metadata,
+        Some(EmailThreadMetadataLoad::Unavailable(
+            EmailThreadUnavailable::NoAccess
+        ))
+    ));
+    assert!(matches!(
+        projection,
+        Some(EmailThreadMailProjectionLoad::Unavailable(
+            EmailThreadUnavailable::NoAccess
+        ))
+    ));
+    let logs = logs.text();
+    for message in [
+        "email thread metadata unavailable",
+        "email thread Mail projection unavailable",
+    ] {
+        let line = logs
+            .lines()
+            .find(|line| line.contains(message))
+            .unwrap_or_else(|| panic!("no {message:?} warning in {logs}"));
+        assert!(line.contains("WARN"), "{line}");
+        // The fmt subscriber prefixes an event with the spans it fired in.
+        assert!(line.contains("graphql_request:"), "{line}");
+        assert!(line.contains(&format!("thread_id={thread_id}")), "{line}");
+        assert!(line.contains(&format!("viewer_id={viewer_id}")), "{line}");
+        assert!(line.contains("reason=NoAccess"), "{line}");
+    }
+    assert!(!logs.contains("reader@example.com"), "{logs}");
 }
 
 #[tokio::test]

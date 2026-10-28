@@ -1,0 +1,41 @@
+import type { ServerOptions } from 'vite';
+
+/** The stack's backend address is server-only; browsers use the Vite origin. */
+export function localDevServer(
+  env: Record<string, string | undefined>
+): Pick<ServerOptions, 'hmr' | 'proxy' | 'allowedHosts'> {
+  // Browser dev follows the page's host, port and ws/wss protocol, including
+  // reverse proxies. Native development can still supply its device host.
+  const hmr: ServerOptions['hmr'] = env.TAURI_DEV_HOST
+    ? { host: env.TAURI_DEV_HOST, protocol: 'ws' }
+    : undefined;
+  const target = env.MACRO_LOCAL_BACKEND_PROXY;
+  if (!target) return { hmr };
+
+  const routes = env.MACRO_LOCAL_BACKEND_ROUTES?.split(',');
+  if (
+    !routes?.length ||
+    routes.some((route) => !/^\/[a-z0-9-]+$/.test(route))
+  ) {
+    throw new Error(
+      'MACRO_LOCAL_BACKEND_ROUTES must list backend path prefixes'
+    );
+  }
+
+  return {
+    hmr,
+    // The launcher calls hostname; localhost and IPs remain Vite defaults.
+    allowedHosts: env.MACRO_LOCAL_HOSTNAME
+      ? [env.MACRO_LOCAL_HOSTNAME.toLowerCase()]
+      : [],
+    proxy: Object.fromEntries(
+      routes.map((route) => [
+        // Include bare WebSocket paths, but not /authentic or /sync-other.
+        `^${route}(?:/|\\?|$)`,
+        // Use the backend hostname for TLS SNI/certificate verification;
+        // xfwd still records the browser's original host.
+        { target, ws: true, xfwd: true, changeOrigin: true },
+      ])
+    ),
+  };
+}

@@ -1,0 +1,74 @@
+# agent
+
+## What it is
+
+Part of AI: the model-agnostic turn runner every AI surface in the product
+builds on — agent sessions, document AI, and background AI features all
+run a turn through this crate's loop, with a shared model/speed vocabulary
+and usage metering.
+
+## Start here
+
+- `src/agent_loop.rs`: `AgentLoop`/`Session` — runs a turn, dispatches tool
+  calls, loops until a final response.
+- `src/model/`: provider adapters (`anthropic.rs`, `openai.rs`, `gemini.rs`)
+  behind `model/router.rs`, plus `predefined_model.rs`/`speed.rs` (the
+  product-facing model/speed vocabulary) and `metering.rs` (usage recording
+  hook into `ai_usage`).
+- `src/stream.rs`: `StreamPart`/`ChatCompletionStream`, the wire shape
+  callers consume.
+- `src/completion.rs`: one-shot, non-looping completions (no tools).
+- `src/tool_result_limit.rs`: `ToolResultLimit` cuts tool results too long for
+  the model (in the hook and on replay through `to_rig_messages_limited`) and
+  keeps them for the `ReadToolResult` pager tool; opt in with
+  `AgentLoop::with_tool_result_limit`.
+- `src/structured_output.rs`: prompted JSON generation with offline schema
+  preflight and result validation; external schema references are rejected.
+- `src/tool_media.rs`: promotes explicit top-level `modelMedia` results to
+  bounded native PNG blocks for both tool adapters and history replay; nested
+  content stays JSON and remote image URLs are rejected. Keep the public JSON
+  envelope in streamed results/history while excluding pixels from model text.
+
+## Scope
+
+- Owns: the turn loop, provider routing/model selection, streaming parts,
+  and metering integration.
+- Not here: tool definitions and schemas → `ai_toolset`, `ai_tools`; usage
+  pricing/billing → `ai_usage`, `ai_billing`.
+
+## Boundaries
+
+- Depends on: `ai_usage` (metering), `ai_toolset` (tool adapter trait),
+  `attachment`, `genai_telemetry`, `prompt`, `rig-core`/`rig-agent`.
+- Used by: `agent_inmem`, `ai_tools`, `ai_projections` (`agent` feature),
+  and most AI-surface crates that run a turn (directly or via `ai_tools`).
+
+## Recipes
+
+- Add a model: `src/model/predefined_model.rs` (enum variant) →
+  `src/model/router.rs` (dispatch) → provider adapter in `src/model/` →
+  pricing in `ai_usage`.
+- Add a stream part / tool-call shape change: `src/stream.rs` → `src/convert.rs`
+  (rig message conversion) → `src/accumulator.rs` (accumulation across chunks).
+
+## Checks
+
+- `cargo test -p agent` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- `rig-core`/`rig-agent` are pinned exact versions (not workspace deps);
+  bump both together and check `test-utils` feature compatibility.
+- `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls
+  (native Anthropic/OpenAI); call it after `with_model`. Tools and
+  `complete*` still use the deployment's keys.
+
+## Related
+
+- Rules: `.agents/rules/rust/architecture.md` · Skill: `upgrade-model`
+
+Canvas native image results remain native through tool output and history replay.
+Compatible Chat Completions provider requests omit those unsupported tool images
+with an explicit explanation; they never stringify encoded pixels into prompts.
+Model-request telemetry records native image counts without requiring content
+capture; image pixels remain excluded by genai_telemetry.

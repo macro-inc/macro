@@ -1,4 +1,4 @@
-//! Idempotent LocalStack provisioning (S3 / SQS / DynamoDB), replacing the
+//! Idempotent LocalStack provisioning (S3 / SQS / DynamoDB / KMS), replacing the
 //! `tooling/just/local_stack.just` recipes. Uses the AWS SDK (the dev shell ships no `aws`
 //! CLI) and runs the three independent resource groups concurrently.
 
@@ -25,24 +25,97 @@ async fn provision_async(url: &str) -> Result<()> {
 
     let sqs = aws_sdk_sqs::Client::new(&cfg);
     let ddb = aws_sdk_dynamodb::Client::new(&cfg);
+    let kms = aws_sdk_kms::Client::new(&cfg);
     let s3 = aws_sdk_s3::Client::from_conf(
         aws_sdk_s3::config::Builder::from(&cfg)
             .force_path_style(true)
             .build(),
     );
 
-    // The three groups are independent — run them concurrently.
-    let (q, t, b) = tokio::join!(
+    // The four groups are independent — run them concurrently.
+    let (q, t, b, k) = tokio::join!(
         create_queues(&sqs),
         create_tables(&ddb),
-        create_buckets(&s3)
+        create_buckets(&s3),
+        create_kms_keys(&kms)
     );
     q?;
     t?;
     b?;
+    k?;
 
     // Dependent: wire doc-storage ObjectCreated -> document-upload-finalizer-queue.
     wire_upload_finalizer(&sqs, &s3).await?;
+    Ok(())
+}
+
+/// The KMS key that encrypts users' Cursor API keys, addressed by a stable
+/// alias so the compose env can name it.
+///
+/// Idempotent by checking the alias first rather than by swallowing a
+/// create-alias conflict: `CreateKey` always succeeds and always mints a new
+/// key, so an unconditional call would orphan one key per run.
+///
+/// A local key is disposable. Tearing LocalStack down loses it, and any
+/// `cursor_api_keys` rows encrypted under it become permanently undecryptable —
+/// the rows survive in Postgres but their CMK does not. That is fine for local
+/// (paste the key again) and is deliberately not repaired here: clearing user
+/// rows from a dev provisioning script would be a surprising place to delete
+/// data.
+///
+/// LocalStack does enforce the encryption context, which was worth checking
+/// rather than assuming: probed against `localstack/localstack:4`, a `Decrypt`
+/// with a different context — or with none — fails with
+/// `InvalidCiphertextException`, exactly as real KMS does. So the binding that
+/// stops one user's ciphertext decrypting under another user's id is live
+/// locally too, and a local stack is a fair test of it.
+async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
+    let existing = kms
+        .list_aliases()
+        .send()
+        .await
+        .context("listing kms aliases")?;
+    for (alias, description) in [
+        (
+            resources::CURSOR_API_KEY_KMS_ALIAS,
+            "Cursor API key encryption key (local)",
+        ),
+        (
+            resources::CODEX_OAUTH_KMS_ALIAS,
+            "ChatGPT OAuth envelope encryption key (local)",
+        ),
+        (
+            resources::WHATSAPP_SESSION_KMS_ALIAS,
+            "WhatsApp session data key encryption key (local)",
+        ),
+    ] {
+        if existing
+            .aliases()
+            .iter()
+            .any(|entry| entry.alias_name() == Some(alias))
+        {
+            continue;
+        }
+        let key = kms
+            .create_key()
+            .description(description)
+            .send()
+            .await
+            .context("creating local kms key")?;
+        let key_id = key
+            .key_metadata()
+            .map(|metadata| metadata.key_id())
+            .context("kms create_key returned no key metadata")?;
+        ignore_exists(
+            kms.create_alias()
+                .alias_name(alias)
+                .target_key_id(key_id)
+                .send()
+                .await
+                .map(|_| ()),
+            &format!("kms alias {alias}"),
+        )?;
+    }
     Ok(())
 }
 
@@ -54,6 +127,19 @@ async fn create_queues(sqs: &aws_sdk_sqs::Client) -> Result<()> {
             request = request.attributes(aws_sdk_sqs::types::QueueAttributeName::FifoQueue, "true");
         }
         ignore_exists(request.send().await.map(|_| ()), &format!("queue {name}"))?;
+    }
+    // Update existing queues too; do not rely on CreateQueue accepting changed attributes.
+    for queue in resources::QUEUES {
+        let attributes = queue.attributes();
+        if attributes.is_empty() {
+            continue;
+        }
+        sqs.set_queue_attributes()
+            .queue_url(resources::queue_url(queue.name))
+            .set_attributes(Some(attributes))
+            .send()
+            .await
+            .with_context(|| format!("setting attributes on {}", queue.name))?;
     }
     Ok(())
 }

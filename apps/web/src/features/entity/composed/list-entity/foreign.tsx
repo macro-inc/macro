@@ -1,10 +1,10 @@
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import Check from '@icon/system/regular/check.svg';
+import CircleDashed from '@icon/system/regular/circle-dashed.svg';
+import MinusCircle from '@icon/system/regular/minus-circle.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import Check from '@phosphor/check.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
-import MinusCircle from '@phosphor/minus-circle.svg';
-import X from '@phosphor/x.svg';
 import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
 import XCircle from '@phosphor-icons/core/assets/fill/x-circle-fill.svg?component-solid';
 import { Button, cn, Layer, Surface } from '@ui';
@@ -17,21 +17,19 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { rowPillClasses } from '../../components/row-pill';
 import type { GithubPullRequestEntity } from '../../types/entity';
+import { PrAgentSessionsChip } from '../../views/PrAgentSessionsChip';
 
 type PillProps = {
   children: JSX.Element;
   class?: string;
+  title?: string;
 };
 
 function Pill(props: PillProps) {
   return (
-    <span
-      class={cn(
-        'min-w-0 rounded-full inline-flex items-center gap-1 px-1.5 py-1 leading-tight text-xs font-medium border border-edge bg-surface/50',
-        props.class
-      )}
-    >
+    <span title={props.title} class={rowPillClasses(props.class)}>
       {props.children}
     </span>
   );
@@ -211,6 +209,7 @@ function checkDurationText(
 function CheckStateIcon(props: {
   state: CheckVisualState;
   circle?: boolean;
+  size?: 'md';
   class?: string;
 }) {
   return (
@@ -223,14 +222,41 @@ function CheckStateIcon(props: {
       <Show when={props.state === 'success'}>
         <Show
           when={props.circle}
-          fallback={<Check class="size-3 text-success" />}
+          fallback={
+            <Check
+              class={cn(
+                props.size === 'md' ? 'size-4' : 'size-3',
+                'text-success'
+              )}
+            />
+          }
         >
-          <CheckCircle class="size-5 text-success" />
+          <CheckCircle
+            class={cn(
+              props.size === 'md' ? 'size-4' : 'size-5',
+              'text-success'
+            )}
+          />
         </Show>
       </Show>
       <Show when={props.state === 'failure'}>
-        <Show when={props.circle} fallback={<X class="size-3 text-failure" />}>
-          <XCircle class="size-5 text-failure" />
+        <Show
+          when={props.circle}
+          fallback={
+            <X
+              class={cn(
+                props.size === 'md' ? 'size-4' : 'size-3',
+                'text-failure'
+              )}
+            />
+          }
+        >
+          <XCircle
+            class={cn(
+              props.size === 'md' ? 'size-4' : 'size-5',
+              'text-failure'
+            )}
+          />
         </Show>
       </Show>
       <Show when={props.state === 'pending'}>
@@ -256,7 +282,12 @@ function CheckStateIcon(props: {
         </div>
       </Show>
       <Show when={props.state === 'skipped'}>
-        <MinusCircle class="size-5 text-ink-extra-muted/50" />
+        <MinusCircle
+          class={cn(
+            props.size === 'md' ? 'size-4' : 'size-5',
+            'text-ink-extra-muted/50'
+          )}
+        />
       </Show>
       <Show when={props.state === 'none'}>
         <div class="relative size-4 inline-flex items-center justify-center">
@@ -284,7 +315,8 @@ function GithubPullRequestChecksPopover(props: {
       <div class="flex items-start gap-2 py-2 pl-4 border-b border-b-edge">
         <CheckStateIcon
           state={checkState(props.entity)}
-          class="mt-1 [&_svg]:size-4"
+          size="md"
+          class="mt-1"
         />
         <div class="flex min-w-0 flex-col">
           <div
@@ -393,11 +425,10 @@ export function GithubPullRequestChecksIndicator(props: {
         type="button"
         variant="ghost"
         size="icon-sm"
-        noTouchResize={true}
-        class="[&_:where(svg)]:size-4 shrink-0"
+        class="shrink-0"
         onClick={(event) => event.stopPropagation()}
       >
-        <CheckStateIcon state={checkState(props.entity)} />
+        <CheckStateIcon state={checkState(props.entity)} size="md" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
@@ -405,8 +436,9 @@ export function GithubPullRequestChecksIndicator(props: {
           onClick={(event) => event.stopPropagation()}
         >
           <Surface
-            class="flex items-stretch justify-start rounded-xl w-full"
+            class="menu-surface flex items-stretch justify-start w-full"
             depth={3}
+            hideBorder
           >
             <GithubPullRequestChecksPopover entity={props.entity} />
           </Surface>
@@ -416,8 +448,46 @@ export function GithubPullRequestChecksIndicator(props: {
   );
 }
 
+export function GithubAuthorBadge(props: {
+  entity: GithubPullRequestEntity;
+  displayName?: string;
+}) {
+  const login = () =>
+    props.entity.metadata.authorLogin?.replace(/\[bot\]$/, '');
+  const name = () => props.displayName || login() || 'GitHub user';
+  const avatarUrl = () => {
+    const id = props.entity.metadata.authorId;
+    if (id !== undefined)
+      return `https://avatars.githubusercontent.com/u/${id}?s=48&v=4`;
+    const githubLogin = login();
+    return githubLogin
+      ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=48`
+      : undefined;
+  };
+  return (
+    <span
+      class="inline-flex min-w-0 items-center gap-1.5"
+      title={`Authored by ${name()}`}
+    >
+      <Show when={avatarUrl()}>
+        {(url) => (
+          <img
+            src={url()}
+            alt=""
+            loading="lazy"
+            class="size-4 shrink-0 rounded-full"
+          />
+        )}
+      </Show>
+      <span data-pill-text class="min-w-0 truncate">
+        {name()}
+      </span>
+    </span>
+  );
+}
 export function GithubPullRequestPills(props: {
   entity: GithubPullRequestEntity;
+  authorDisplayName?: string;
 }) {
   const additions = () => props.entity.metadata.additions;
   const deletions = () => props.entity.metadata.deletions;
@@ -426,6 +496,18 @@ export function GithubPullRequestPills(props: {
 
   return (
     <>
+      <Show
+        when={
+          props.entity.metadata.authorLogin || props.entity.metadata.authorId
+        }
+      >
+        <Pill class="max-w-32 text-ink-muted">
+          <GithubAuthorBadge
+            entity={props.entity}
+            displayName={props.authorDisplayName}
+          />
+        </Pill>
+      </Show>
       <Pill class="tabular-nums">
         <span
           class={cn(
@@ -448,6 +530,7 @@ export function GithubPullRequestPills(props: {
         <ChatCircle class="size-3 shrink-0" />
         {numberFormatter.format(props.entity.metadata.comments.length)}
       </Pill>
+      <PrAgentSessionsChip url={props.entity.metadata.url} />
     </>
   );
 }

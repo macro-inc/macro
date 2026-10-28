@@ -72,6 +72,9 @@ pub struct SoupCalendarEvent<T = ()> {
     pub created_at: DateTime<Utc>,
     /// Entity update timestamp.
     pub updated_at: DateTime<Utc>,
+    /// When this event's most recent reminder notification was delivered.
+    #[serde(default)]
+    pub last_reminder_fired_at: Option<DateTime<Utc>>,
     /// Additional enriched data such as properties.
     pub extra: T,
 }

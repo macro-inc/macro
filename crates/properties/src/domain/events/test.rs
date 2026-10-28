@@ -160,6 +160,8 @@ fn topic_events(
                 entity_type: EntityType::Document,
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
+                on_behalf_of: None,
                 value: Some(PropertyValue::SelectOption(vec![uuid(OPTION_ID)])),
                 previous_value: None,
                 updated_at: timestamp(UPDATED_AT),
@@ -188,6 +190,8 @@ fn topic_events(
                 entity_type: EntityType::Document,
                 property_definition_id: uuid(PROPERTY_DEFINITION_ID),
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
+                on_behalf_of: None,
             }),
             json!({
                 "event_type": "entity_property.deleted",
@@ -205,6 +209,8 @@ fn topic_events(
                 entity_id: ENTITY_ID.to_string(),
                 entity_type: EntityType::Document,
                 actor_user_id,
+                actor: None,
+                on_behalf_of: None,
             }),
             json!({
                 "event_type": "entity_properties.cleared",
@@ -297,6 +303,33 @@ fn constructors_use_exact_bare_keys_topic_and_schema_version() {
         assert_eq!(event.topic(), "macro.properties");
         assert_eq!(event.event().schema_version, 1);
     }
+}
+
+#[test]
+fn entity_property_updated_decodes_without_actor_fields() {
+    let json = json!({
+        "event_type": "entity_property.updated",
+        "metadata": {
+            "entity_property_id": ENTITY_PROPERTY_ID,
+            "entity_id": ENTITY_ID,
+            "entity_type": "DOCUMENT",
+            "property_definition_id": PROPERTY_DEFINITION_ID,
+            "actor_user_id": "macro|editor@acme.com",
+            "value": null,
+            "previous_value": null,
+            "updated_at": UPDATED_AT
+        }
+    });
+    let event: PropertyTopicEvent = serde_json::from_value(json).expect("decodable event");
+    let PropertyTopicEvent::EntityPropertyUpdated(metadata) = event else {
+        panic!("expected entity_property.updated");
+    };
+    assert_eq!(metadata.actor, None);
+    assert_eq!(metadata.on_behalf_of, None);
+    assert_eq!(
+        metadata.actor_user_id,
+        Some(user_id("macro|editor@acme.com"))
+    );
 }
 
 #[test]

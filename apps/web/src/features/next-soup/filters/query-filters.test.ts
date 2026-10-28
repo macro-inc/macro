@@ -156,6 +156,126 @@ describe('filterSoupItemByRequestBody', () => {
       })
     ).toBe(false);
   });
+
+  it('only accepts agent sessions when the body opts into them', () => {
+    const session = {
+      tag: 'agentSession',
+      data: { id: 'session-1', ownerId: 'macro|a@macro.com' },
+    } as unknown as SoupApiItem;
+
+    expect(filterSoupItemByRequestBody(session, {})).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(session, { ...QUERY_FILTERS_BASE })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(session, {
+        agent_session_filters: { include: true },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(session, {
+        agent_session_filters: { owners: ['macro|a@macro.com'] },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(session, {
+        agent_session_filters: { include: true, owners: ['macro|b@macro.com'] },
+      })
+    ).toBe(false);
+  });
+});
+
+describe('initiative cache membership', () => {
+  const initiative: SoupApiItem = {
+    tag: 'initiative',
+    is_favorited: false,
+    frecency_score: 0,
+    data: {
+      id: 'initiative',
+      name: 'Launch',
+      ownerId: 'owner',
+      createdAt: '2026-09-01',
+      updatedAt: '2026-09-26',
+      properties: [],
+    },
+  };
+  it('requires explicit initiative inclusion and never confuses projects with folders', () => {
+    expect(filterSoupItemByRequestBody(initiative, {})).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, { ...QUERY_FILTERS_BASE })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        project_filters: { project_ids: ['initiative'] },
+      })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { initiative_ids: ['initiative'] },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { initiative_ids: ['another'] },
+      })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { include: true, owners: ['owner'] },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { include: true, owners: ['another'] },
+      })
+    ).toBe(false);
+  });
+
+  it.each([
+    { name: 'launch' },
+    { name: '' },
+    { due_after: '2026-09-01T00:00:00Z' },
+    { due_before: '2026-09-30T00:00:00Z' },
+  ])('retains initiatives requested by %j', (filters) => {
+    // Each present value expands to a positive server literal. An empty name
+    // is still a literal, and include:false does not negate the other filters.
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: filters,
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { include: false, ...filters },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { ...filters, initiative_ids: ['another'] },
+      })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { ...filters, owners: ['another'] },
+      })
+    ).toBe(false);
+  });
+
+  it.each([
+    {},
+    { include: false },
+    { initiative_ids: [], owners: [] },
+    { name: null, due_after: null, due_before: null },
+  ])(
+    'keeps initiatives excluded when filters have no literals: %j',
+    (filters) => {
+      expect(
+        filterSoupItemByRequestBody(initiative, {
+          initiative_filters: filters,
+        })
+      ).toBe(false);
+    }
+  );
 });
 
 describe('soupItemMatchesProjectMembership', () => {

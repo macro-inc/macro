@@ -1,11 +1,9 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { ViewSwitcherContext } from '@app/components/view-shell';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
 import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
-import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
-import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
 import { CommandMenu } from '@app/features/command';
 import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
@@ -14,8 +12,10 @@ import {
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
-import { CreateContactModal } from '@app/features/companies/CreateContactModal';
+import {
+  companyCreation,
+  contactCreation,
+} from '@app/features/crm/creation-adapter';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -23,375 +23,123 @@ import {
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
-import { Paywall } from '@app/features/paywall/Paywall';
-import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
-import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
-import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
-import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
+import { onboardingRedirectPath } from '@app/features/onboarding/core/next-target';
+import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
+import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
+import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
+import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { AutomationComposer } from '@block-automation/component';
-import { useCallContextOptional } from '@channel/Call/CallContext';
-import { InCallPanel } from '@channel/Call/InCallPanel';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
-import {
-  AppSidebar,
-  GoToHotkeys,
-  type SidebarState,
-} from '@components/app/app-sidebar/sidebar';
+import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
+import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { SidebarPrefsProvider } from '@components/app/sidebar-next/use-sidebar-prefs';
+import { ViewSwitcher } from '@components/app/sidebar-next/view-switcher';
 import {
   isSidebarVisible,
-  SidebarCollapseContext,
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import {
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { UserCardDrawer } from '@core/component/UserCardDrawer';
+import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
+import { enableDatabases } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { updateCookie } from '@core/util/cookies';
+import { hasLoginCookie, updateCookie } from '@core/util/cookies';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { isDesktopPlatform, isPlatform } from '@core/util/platform';
+import { useDesktopZoom } from '@macro/tauri/zoom';
 import { useUserInfoQuery } from '@queries/auth/user-info';
-import { makePersisted } from '@solid-primitives/storage';
-import {
-  type RouteSectionProps,
-  useLocation,
-  useNavigate,
-} from '@solidjs/router';
-import { cn, ImperativeDialogHost } from '@ui';
-import { ScreencastHotkeys } from '@ui/components/ScreencastHotkeys';
+import { queryClient } from '@queries/client';
+import { useLocation, useNavigate } from '@solidjs/router';
+import { type as osType } from '@tauri-apps/plugin-os';
+import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
-  createSignal,
-  type JSX,
+  lazy,
   onCleanup,
   onMount,
+  type ParentProps,
   Show,
   Suspense,
 } from 'solid-js';
+import { installIconMotion } from '../icon/system/icon-motion';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
+import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardingModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
+import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
-import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
+import { SessionExpiredRedirect } from './SessionExpiredRedirect';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
-const AUTH_URLS = [
-  `${ROUTER_BASE_CONCAT}login`,
-  `${ROUTER_BASE_CONCAT}login/popup`,
-  `${ROUTER_BASE_CONCAT}login/popup/success`,
-  `${ROUTER_BASE_CONCAT}onboarding`,
-  `${ROUTER_BASE_CONCAT}setup`,
-  `${ROUTER_BASE_CONCAT}signup`,
-  `${ROUTER_BASE_CONCAT}email-signup-callback`,
-  `${ROUTER_BASE_CONCAT}welcome`,
-  `${ROUTER_BASE_CONCAT}mobile-email-signup`,
-  `${ROUTER_BASE_CONCAT}team-invite`,
-];
+const StarterDatabase = lazy(async () => {
+  const module = await import(
+    '../../features/block-database/views/starter-database'
+  );
+  return { default: module.StarterDatabase };
+});
 
-const [sidebarState, setSidebarState] = makePersisted(
-  createSignal<SidebarState>(!isTouchDevice() ? 'expanded' : 'hidden'),
-  {
-    name: 'sidebar-state',
-  }
+// Modals and mobile-only surfaces stay out of the entry chunk; each one
+// renders inside a Suspense boundary and loads when it first mounts.
+const Paywall = lazyNamed(
+  () => import('@app/features/paywall/Paywall'),
+  'Paywall'
+);
+const LocalRuntimeHost = lazyNamed(
+  () => import('@app/features/local-runtime/local-runtime-host'),
+  'LocalRuntimeHost'
+);
+const PropertyEditorModal = lazyNamed(
+  () => import('@app/features/property/editor/PropertyEditorModal'),
+  'PropertyEditorModal'
+);
+const MobileSettings = lazyNamed(
+  () => import('@app/features/settings/MobileSettings'),
+  'MobileSettings'
+);
+// The CRM create dialogs pull in the database views and table model.
+const CreateCompanyModal = lazyNamed(
+  () => import('@app/features/crm/crm-create'),
+  'CreateCompanyModal'
+);
+const CreateContactModal = lazyNamed(
+  () => import('@app/features/crm/crm-create'),
+  'CreateContactModal'
 );
 
-export function Layout(props: RouteSectionProps) {
-  const isAuthenticated = useIsAuthenticated();
-  const location = useLocation();
-  const sidebarVisible = createMemo(
-    () =>
-      !isTouchDevice() &&
-      isAuthenticated() === true &&
-      !AUTH_URLS.includes(location.pathname) &&
-      // Settings-as-the-sole-split has its own tab nav — hide app chrome.
-      !isSoloSettings()
-  );
-
-  return (
-    <SidebarVisibilityContext.Provider value={sidebarVisible}>
-      <SidebarCollapseContext.Provider
-        value={{
-          isCollapsed: () => sidebarVisible() && sidebarState() === 'slim',
-          expand: () => setSidebarState('expanded'),
-        }}
-      >
-        <LayoutInner {...props} />
-      </SidebarCollapseContext.Provider>
-    </SidebarVisibilityContext.Provider>
-  );
-}
-
-function DraggableCallWidget(props: {
-  visible: boolean;
-  dragLabel: string;
-  defaultBottomGap?: number;
-  children: JSX.Element;
-}) {
-  const EDGE_GAP = 12;
-  const [root, setRoot] = createSignal<HTMLDivElement>();
-  const [dragging, setDragging] = createSignal(false);
-  const [position, setPosition] = createSignal<{ left: number; top: number }>();
-  const defaultBottomGap = () => props.defaultBottomGap ?? 12;
-
-  const clampPosition = (next: { left: number; top: number }) => {
-    const el = root();
-    if (!el) return next;
-
-    const maxLeft = Math.max(
-      EDGE_GAP,
-      window.innerWidth - el.offsetWidth - EDGE_GAP
-    );
-    const maxTop = Math.max(
-      EDGE_GAP,
-      window.innerHeight - el.offsetHeight - EDGE_GAP
-    );
-
-    return {
-      left: Math.min(Math.max(next.left, EDGE_GAP), maxLeft),
-      top: Math.min(Math.max(next.top, EDGE_GAP), maxTop),
-    };
-  };
-
-  const resetToDefaultPosition = (bottomGap = defaultBottomGap()) => {
-    const el = root();
-    if (!el) return;
-    setPosition(
-      clampPosition({
-        left: Math.round((window.innerWidth - el.offsetWidth) / 2),
-        top: window.innerHeight - el.offsetHeight - bottomGap,
-      })
-    );
-  };
-
-  createEffect(() => {
-    if (!props.visible) return;
-    const bottomGap = defaultBottomGap();
-    requestAnimationFrame(() => resetToDefaultPosition(bottomGap));
-  });
-
-  createEffect(() => {
-    if (!props.visible || !position()) return;
-
-    const handleResize = () => {
-      const next = position();
-      if (!next) return;
-      setPosition(clampPosition(next));
-    };
-
-    window.addEventListener('resize', handleResize);
-    window.visualViewport?.addEventListener('resize', handleResize);
-    onCleanup(() => {
-      window.removeEventListener('resize', handleResize);
-      window.visualViewport?.removeEventListener('resize', handleResize);
-    });
-  });
-
-  // Set while a drag is in flight so hiding/unmounting can tear it down; a
-  // cancelled pointer (touch interrupted, pointer takeover) never fires
-  // pointerup, which would otherwise leave the move listener stuck on window.
-  let stopActiveDrag: (() => void) | undefined;
-
-  const startDrag: JSX.EventHandler<HTMLButtonElement, PointerEvent> = (e) => {
-    if (!e.isPrimary || e.button !== 0) return;
-
-    const el = root();
-    if (!el) return;
-
-    stopActiveDrag?.();
-    e.preventDefault();
-    const rect = el.getBoundingClientRect();
-    const pointerStartX = e.clientX;
-    const pointerStartY = e.clientY;
-    const origin = { left: rect.left, top: rect.top };
-
-    setDragging(true);
-    setPosition(origin);
-
-    const handleMove = (moveEvent: PointerEvent) => {
-      setPosition(
-        clampPosition({
-          left: origin.left + (moveEvent.clientX - pointerStartX),
-          top: origin.top + (moveEvent.clientY - pointerStartY),
-        })
-      );
-    };
-
-    const stopDrag = () => {
-      setDragging(false);
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', stopDrag);
-      window.removeEventListener('pointercancel', stopDrag);
-      if (stopActiveDrag === stopDrag) stopActiveDrag = undefined;
-    };
-    stopActiveDrag = stopDrag;
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', stopDrag);
-    window.addEventListener('pointercancel', stopDrag);
-  };
-
-  createEffect(() => {
-    if (!props.visible) stopActiveDrag?.();
-  });
-  onCleanup(() => stopActiveDrag?.());
-
-  return (
-    <Show when={props.visible}>
-      <div
-        ref={setRoot}
-        class="fixed z-float w-72 max-w-[calc(100vw-1.5rem)] pointer-events-auto"
-        style={{
-          left: position() ? `${position()!.left}px` : '50%',
-          top: position() ? `${position()!.top}px` : undefined,
-          bottom: position() ? undefined : `${defaultBottomGap()}px`,
-          transform: position() ? undefined : 'translateX(-50%)',
-        }}
-      >
-        <div class="relative rounded-xl border border-edge-muted bg-surface shadow-menu p-1">
-          <button
-            type="button"
-            aria-label={props.dragLabel}
-            class={cn(
-              'absolute left-1 right-10 top-1 z-10 h-8 rounded-t-lg rounded-b-md bg-transparent select-none',
-              dragging() ? 'cursor-grabbing' : 'cursor-grab'
-            )}
-            onPointerDown={startDrag}
-          />
-          {props.children}
-        </div>
-      </div>
-    </Show>
-  );
-}
-
-function CollapsedSidebarCallWidget(props: { visible: boolean }) {
-  return (
-    <DraggableCallWidget
-      visible={props.visible}
-      dragLabel="Drag to move active call controls"
-    >
-      <InCallPanel isSlim={() => false} />
-    </DraggableCallWidget>
-  );
-}
-
-function CollapsedSidebarIncomingCallWidget(props: {
-  visible: boolean;
-  activeCallWidgetVisible: boolean;
-}) {
-  return (
-    <DraggableCallWidget
-      visible={props.visible}
-      dragLabel="Drag to move incoming calls"
-      defaultBottomGap={props.activeCallWidgetVisible ? 168 : 12}
-    >
-      <SidebarActiveCallWidget sidebarState="expanded" />
-    </DraggableCallWidget>
-  );
+/** True from the first time `opened` is, so a dialog loads on first open and can animate closed. */
+function hasOpened(opened: () => boolean) {
+  return createMemo((seen: boolean) => seen || opened(), false);
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding.
- * Fires from anywhere in the app (marketing SSO lands on /app, not /login),
- * but never off auth/full-screen routes — /onboarding itself included.
+ * The frame every page renders in: the macOS title bar, dialogs that can open
+ * anywhere (the paywall reads mobile settings), and the page itself. App chrome lives in `AppChrome`, inside the
+ * routes that show it.
  */
-function NewOnboardingRedirect() {
-  const userInfoQuery = useUserInfoQuery();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const onboardingV4 = useOnboardingV4Flag();
-
-  createEffect(() => {
-    if (!onboardingV4().enabled || isMobile() || isNativeMobilePlatform()) {
-      return;
-    }
-    const data = userInfoQuery.data;
-    if (data?.authenticated !== true || data.tutorialComplete !== false) {
-      return;
-    }
-    if (AUTH_URLS.includes(location.pathname)) return;
-    // Preserve the deep link the user arrived on (a shared doc, an invite):
-    // /setup carries it as ?next and its finish() returns there instead of
-    // the post-setup landing. Base-relative so navigate() can resolve it
-    // against the router.
-    const target =
-      location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
-    const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
-    navigate(
-      isGenericEntry
-        ? '/onboarding'
-        : `/onboarding?next=${encodeURIComponent(target)}`,
-      { replace: true }
-    );
-  });
-
-  return null;
-}
-
-function LayoutInner(props: RouteSectionProps) {
-  const isAuthenticated = useIsAuthenticated();
+export function RootFrame(props: ParentProps) {
+  const hasOverlayTitleBar = isPlatform('desktop') && osType() === 'macos';
   const { paywallOpen, showPaywall } = usePaywallState();
+  const { usageLimitOpen } = useAiUsageLimitState();
   const location = useLocation();
-  const [sidebarOverlayOpen, setSidebarOverlayOpen] = createSignal(false);
-  const [sidebarOverlayTriggerHovered, setSidebarOverlayTriggerHovered] =
-    createSignal(false);
-  const callCtx = useCallContextOptional();
-  const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
-  const sidebarCollapsed = createMemo(
-    () => isSidebarVisible() && sidebarState() === 'slim'
-  );
-  const activeCallWidgetVisible = createMemo(
-    () =>
-      isSidebarVisible() &&
-      sidebarState() === 'slim' &&
-      !!callCtx?.isInCall() &&
-      !callCtx?.isCallPage()
-  );
-  let sidebarOverlayCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const clearSidebarOverlayCloseTimer = () => {
-    if (sidebarOverlayCloseTimer === undefined) return;
-    clearTimeout(sidebarOverlayCloseTimer);
-    sidebarOverlayCloseTimer = undefined;
-  };
-
-  const setSidebarOverlayOpenGuarded = (open: boolean) => {
-    clearSidebarOverlayCloseTimer();
-    if (open) {
-      setSidebarOverlayOpen(true);
-      return;
-    }
-
-    sidebarOverlayCloseTimer = setTimeout(() => {
-      sidebarOverlayCloseTimer = undefined;
-      if (!sidebarOverlayTriggerHovered()) setSidebarOverlayOpen(false);
-    }, 120);
-  };
-
-  createEffect(() => {
-    if (!sidebarCollapsed()) {
-      clearSidebarOverlayCloseTimer();
-      setSidebarOverlayTriggerHovered(false);
-      setSidebarOverlayOpen(false);
-    }
-  });
-
-  onCleanup(clearSidebarOverlayCloseTimer);
+  onCleanup(observeAiUsageLimitMutations(queryClient));
 
   useAppSquishHandlers();
+  // Here rather than in GlobalShortcuts so zoom also works on the pages that
+  // render without app chrome (login, booking, meetings).
+  useDesktopZoom();
 
   // save last_path to cookie
   createEffect(() => {
@@ -410,6 +158,8 @@ function LayoutInner(props: RouteSectionProps) {
   });
 
   onMount(() => {
+    onCleanup(installGlassPress());
+    onCleanup(installIconMotion());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -418,27 +168,111 @@ function LayoutInner(props: RouteSectionProps) {
 
   mountGlobalFocusListener();
 
-  // Route mailto: links (via openExternalUrl) to the in-app email composer.
-  registerMailtoComposerHandler();
-
   attachGlobalDOMScope(document.body);
 
   return (
-    <div
-      class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
-      )}
-    >
-      <ImperativeDialogHost />
-      <BundleUpdateProgressBar />
+    <MobileSettingsProvider>
+      <div
+        class={cn(
+          'relative flex flex-col justify-between not-touch:bg-page w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
+          hasOverlayTitleBar && 'pt-[40px]'
+        )}
+      >
+        <Show when={hasOverlayTitleBar}>
+          <DesktopTitleBar />
+        </Show>
+        <BundleUpdateProgressBar />
+        <Show when={paywallOpen()}>
+          <Suspense>
+            <Paywall />
+          </Suspense>
+        </Show>
+        <Show when={usageLimitOpen()}>
+          <AiUsageLimitDialog />
+        </Show>
+        <div class="min-h-0 flex-1 flex flex-col">
+          {/* Route loading must not detach the frame. Routes draw their own
+                loading state, so the frame adds none. */}
+          <Suspense>{props.children}</Suspense>
+        </div>
+        <SwipeDownDismissKeyboard />
+        <DevStatusBar />
+      </div>
+    </MobileSettingsProvider>
+  );
+}
+
+/** A page's content area: the space the app chrome or a full-screen shell leaves. */
+export function PageContent(props: ParentProps) {
+  return (
+    <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
+      {props.children}
+    </div>
+  );
+}
+
+/**
+ * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * App chrome runs it, so it fires on any app destination (marketing SSO lands
+ * on /app, not /login) and never on the onboarding pages themselves.
+ */
+function useNewOnboardingRedirect() {
+  const userInfoQuery = useUserInfoQuery();
+  const navigate = useNavigate();
+  const location = useLocation();
+  createEffect(() => {
+    if (isMobile() || isNativeMobilePlatform()) return;
+    // A pending read would suspend the chrome; wait for the user instead.
+    const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
+    if (data?.authenticated !== true || data.tutorialComplete !== false) {
+      return;
+    }
+    // Preserve the deep link the user arrived on (a shared doc, an invite)
+    // as ?next, and a lifecycle-email ?step, so finish() and the flow can
+    // resume. Base-relative so navigate() can resolve it against the router.
+    const target =
+      location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
+    navigate(onboardingRedirectPath(target), { replace: true });
+  });
+}
+
+/**
+ * The app's chrome — rail, hotkeys, command menu, launcher, global modals,
+ * and the mobile dock — around a page. Route shells supply the providers and
+ * content; auth, booking, and meeting pages render without this chrome.
+ */
+export function AppChrome(props: ParentProps) {
+  const isAuthenticated = useIsAuthenticated();
+  // A login cookie shows the rail while sign-in is confirmed; a stale one
+  // goes through SessionExpiredRedirect instead of leaving the app blank.
+  const sidebarVisible = () =>
+    !isTouchDevice() &&
+    (isAuthenticated() === true ||
+      (isAuthenticated() === undefined && hasLoginCookie()));
+
+  // Route mailto: links (via openExternalUrl) to the in-app email composer.
+  registerMailtoComposerHandler();
+  useNewOnboardingRedirect();
+
+  const companyDialogUsed = hasOpened(companyCreation.open);
+  const contactDialogUsed = hasOpened(
+    () => contactCreation.target() !== undefined
+  );
+
+  return (
+    <SidebarVisibilityContext.Provider value={sidebarVisible}>
+      <Show when={isAuthenticated() === true}>
+        <ShowFeatureFlag flag={enableDatabases}>
+          <Suspense>
+            <StarterDatabase />
+          </Suspense>
+        </ShowFeatureFlag>
+      </Show>
       <Suspense>
         <Show when={isAuthenticated()}>
-          <NewOnboardingRedirect />
-          <Show when={!AUTH_URLS.includes(location.pathname)}>
-            <GithubReauthenticationPrompt />
-            <GmailReauthenticationPrompt />
-            <CalendarPermissionPrompt />
-          </Show>
+          <GithubReauthenticationPrompt />
+          <GmailReauthenticationPrompt />
+          <CalendarPermissionPrompt />
           <GlobalShortcuts />
           <Show when={!isTouchDevice()}>
             <GoToHotkeys />
@@ -451,97 +285,65 @@ function LayoutInner(props: RouteSectionProps) {
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
-          <GlobalShareModal />
-          <IosShareSheet />
+          <Show when={isDesktopPlatform()}>
+            <LocalRuntimeHost />
+          </Show>
+          <NativeShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
-          <CreateCompanyModal />
-          <CreateContactModal />
-          {/* Reactive, unlike the imperative ENABLE_REMINDERS() gate on the
-              action: this decides whether the composer is mounted at all, so it
-              has to pick up a late PostHog answer. */}
-          <ShowFeatureFlag
-            key={ENABLE_REMINDERS_FLAG}
-            enabledOverride={ENABLE_REMINDERS_OVERRIDE}
-          >
-            <ReminderComposerModal />
-          </ShowFeatureFlag>
+          <Show when={companyDialogUsed()}>
+            <Suspense>
+              <CreateCompanyModal />
+            </Suspense>
+          </Show>
+          <Show when={contactDialogUsed()}>
+            <Suspense>
+              <CreateContactModal />
+            </Suspense>
+          </Show>
           <Show when={isAddInboxDialogOpen()}>
             <AddInboxDialog />
           </Show>
         </Show>
-        <Show
-          when={
-            isAuthenticated() === false &&
-            !AUTH_URLS.includes(location.pathname)
-          }
-        >
-          <Banner />
+        <Show when={isAuthenticated() === false}>
+          <Show when={hasLoginCookie()} fallback={<Banner />}>
+            <SessionExpiredRedirect />
+          </Show>
         </Show>
       </Suspense>
-      {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>
-        <Onboarding />
-      </Show> */}
-
-      <Show when={paywallOpen()}>
-        <Paywall />
-      </Show>
-      <div class="max-h-full grow flex">
-        {/* The provider spans the sidebar too so its favorites can register
-            sortables with the same drag-drop context as the entity drags. */}
+      <div class="min-h-0 flex-1 flex">
         <ItemDndProvider>
-          <Show when={isSidebarVisible()}>
-            <AppSidebar
-              sidebarState={sidebarState()}
-              overlayOpen={sidebarOverlayOpen()}
-              onOverlayOpenChange={setSidebarOverlayOpenGuarded}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
-                  return;
-                }
-
-                setSidebarState('expanded');
-              }}
-            />
-          </Show>
-          <Show when={sidebarCollapsed()}>
-            <div
-              class="fixed left-0 inset-y-0 z-modal-content w-[8px]"
-              onPointerEnter={() => {
-                setSidebarOverlayTriggerHovered(true);
-                setSidebarOverlayOpenGuarded(true);
-              }}
-              onPointerLeave={() => {
-                setSidebarOverlayTriggerHovered(false);
-                setSidebarOverlayOpenGuarded(false);
-              }}
-            />
-          </Show>
-
-          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
-            {props.children}
-          </div>
+          {/* The rail and each view's switcher share the rail preferences. */}
+          <SidebarPrefsProvider>
+            <ViewSwitcherContext.Provider value={ViewSwitcher}>
+              <Show when={isSidebarVisible()}>
+                <SidebarRail />
+              </Show>
+              <PageContent>
+                {/* Route loading must not detach the chrome or mobile
+                    navigation; the route draws its own loading state. */}
+                <Suspense>{props.children}</Suspense>
+              </PageContent>
+            </ViewSwitcherContext.Provider>
+          </SidebarPrefsProvider>
         </ItemDndProvider>
       </div>
-      <CollapsedSidebarIncomingCallWidget
-        visible={
-          isSidebarVisible() &&
-          sidebarState() === 'slim' &&
-          incomingCallWidgetVisible()
-        }
-        activeCallWidgetVisible={activeCallWidgetVisible()}
-      />
-      <CollapsedSidebarCallWidget visible={activeCallWidgetVisible()} />
-      <Show
-        when={
-          isTouchDevice() &&
-          isAuthenticated() &&
-          !AUTH_URLS.includes(location.pathname)
-        }
-      >
+      <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
-        <MobileViewsRow />
+        <Suspense>
+          <UserCardDrawer />
+        </Suspense>
+        <Show when={isMobile()}>
+          <Suspense>
+            <MobileSettings />
+          </Suspense>
+        </Show>
+        {/* Search owns its filters at the top; suppress background composers. */}
+        <FloatRegion
+          region="accessory"
+          priority={100}
+          active={SearchState.isOpen}
+        />
         <FloatRegion
           region="dock"
           active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
@@ -549,17 +351,12 @@ function LayoutInner(props: RouteSectionProps) {
           <MobileDockRow />
         </FloatRegion>
       </Show>
-      <SwipeDownDismissKeyboard />
+      <InitialInteractiveOnboardingModal />
       <Suspense>
-        <Show
-          when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
-        >
+        <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-          <AutomationComposer />
         </Show>
       </Suspense>
-      <DevStatusBar />
-      <ScreencastHotkeys />
-    </div>
+    </SidebarVisibilityContext.Provider>
   );
 }

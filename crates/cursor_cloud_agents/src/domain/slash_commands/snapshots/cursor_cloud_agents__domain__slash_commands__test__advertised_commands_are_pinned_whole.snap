@@ -1,0 +1,95 @@
+---
+source: crates/cursor_cloud_agents/src/domain/slash_commands/test.rs
+expression: commands
+---
+[
+  {
+    "name": "autopilot",
+    "description": "Keep a PR merge-ready by triaging comments, resolving conflicts, and fixing CI."
+  },
+  {
+    "name": "canvas",
+    "description": "Create a durable standalone canvas artifact beside the chat."
+  },
+  {
+    "name": "create-hook",
+    "description": "Create Cursor hooks for agent lifecycle events."
+  },
+  {
+    "name": "create-rule",
+    "description": "Create Cursor rules for persistent AI guidance."
+  },
+  {
+    "name": "create-skill",
+    "description": "Create a Cursor Agent Skill (SKILL.md)."
+  },
+  {
+    "name": "create-subagent",
+    "description": "Create a custom subagent with a focused system prompt."
+  },
+  {
+    "name": "deploy-with-vercel",
+    "description": "Link this repository to Vercel and deploy it."
+  },
+  {
+    "name": "env-setup",
+    "description": "Explain, inspect, or improve a Cloud Agent environment."
+  },
+  {
+    "name": "goal",
+    "description": "Set a goal that Cursor will pursue to completion.",
+    "input": {
+      "hint": "<objective>"
+    }
+  },
+  {
+    "name": "loop",
+    "description": "Run a prompt or skill on a recurring interval.",
+    "input": {
+      "hint": "[interval] <prompt>"
+    }
+  },
+  {
+    "name": "migrate-to-builds",
+    "description": "Test that a Cloud Agent environment works with prebuilt builds."
+  },
+  {
+    "name": "migrate-to-skills",
+    "description": "Convert Cursor rules and slash commands to Agent Skills."
+  },
+  {
+    "name": "review",
+    "description": "Review code changes with Bugbot or Security Review."
+  },
+  {
+    "name": "review-bugbot",
+    "description": "Review code changes with the Bugbot subagent."
+  },
+  {
+    "name": "review-security",
+    "description": "Review code changes with the Security Review subagent."
+  },
+  {
+    "name": "sdk",
+    "description": "Guide integrations on the Cursor TypeScript or Python SDK."
+  },
+  {
+    "name": "shell",
+    "description": "Run the rest of the prompt as a literal shell command.",
+    "input": {
+      "hint": "<command>"
+    }
+  },
+  {
+    "name": "split-to-prs",
+    "description": "Split current work into small reviewable PRs."
+  },
+  {
+    "name": "subscribe",
+    "description": "Wait for GitHub, Origin, Slack, or Linear events instead of polling."
+  },
+  {
+    "name": "walkthrough-artifacts",
+    "description": "Create walkthrough screenshots and recordings of working changes."
+  }
+]

@@ -1,5 +1,7 @@
 import { formatOrdinal, plural } from '@core/util/string';
-import { format } from 'date-fns';
+import { TZDateMini } from '@date-fns/tz';
+import { format, parseISO } from 'date-fns';
+import type { CalendarEvent } from '../types';
 
 const POSITIVE_INTEGER_REGEX = /^\d+$/;
 const BYDAY_VALUE_REGEX = /^([+-]?\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$/i;
@@ -366,6 +368,30 @@ function parseUntilDate(value: string) {
 export interface RecurrenceDescriptionOptions {
   /** Locale used for weekday, month, date, and list formatting. */
   locale?: Intl.LocalesArgument;
+  /**
+   * Where the series starts, in the zone its rule is expressed in. A weekly
+   * rule without BYDAY repeats on this weekday (RFC 5545), so the
+   * description names it, as the composer's weekly preset does.
+   */
+  start?: Date;
+}
+
+function withImpliedWeekday(
+  rule: ParsedRecurrenceRule,
+  start: Date | undefined
+): ParsedRecurrenceRule {
+  if (
+    rule.frequency !== 'WEEKLY' ||
+    rule.byDay.length > 0 ||
+    !start ||
+    Number.isNaN(start.getTime())
+  ) {
+    return rule;
+  }
+  return {
+    ...rule,
+    byDay: [{ weekday: WEEKDAY_CODES[start.getDay()] as WeekdayCode }],
+  };
 }
 
 /** Formats recurrence properties as concise, human-readable text. */
@@ -376,7 +402,7 @@ export function formatRecurrenceDescription(
   const { locale } = options;
   const parsed = parseRecurrenceLines(lines);
   let description = parsed.rule
-    ? formatRuleDetails(parsed.rule, locale)
+    ? formatRuleDetails(withImpliedWeekday(parsed.rule, options.start), locale)
     : undefined;
 
   if (!description && parsed.additionalDates.length > 0) {
@@ -460,14 +486,18 @@ const NEVER: RecurrenceEnds = { kind: 'never' };
  * all-day rules carry the plain date, timed rules the local end-of-day
  * instant rendered in UTC.
  */
-function untilValue(date: string, allDay: boolean) {
+function untilValue(date: string, allDay: boolean, timeZone?: string) {
   if (allDay) return date.replaceAll('-', '');
-  const endOfDay = new Date(`${date}T23:59:59`);
+  const [year, month, day] = date.split('-').map(Number);
+  const endOfDay =
+    timeZone && year !== undefined && month !== undefined && day !== undefined
+      ? new TZDateMini(year, month - 1, day, 23, 59, 59, timeZone)
+      : new Date(`${date}T23:59:59`);
   return `${endOfDay.toISOString().slice(0, 19).replaceAll(/[-:]/g, '')}Z`;
 }
 
 /** The local calendar date a stored `UNTIL` value ends on (inclusive). */
-function untilDate(value: string): string | undefined {
+function untilDate(value: string, timeZone?: string): string | undefined {
   const match = value.match(
     /^(\d{4})-?(\d{2})-?(\d{2})(?:T(\d{2}):?(\d{2}):?(\d{2})Z)?$/
   );
@@ -483,13 +513,17 @@ function untilDate(value: string): string | undefined {
       Number(match[6])
     )
   );
-  return format(instant, 'yyyy-MM-dd');
+  return format(
+    timeZone ? TZDateMini.tz(timeZone, instant) : instant,
+    'yyyy-MM-dd'
+  );
 }
 
 /** Serialize a config into a single-`RRULE` recurrence property list. */
 export function buildRecurrenceLines(
   config: RecurrenceConfig,
-  allDay: boolean
+  allDay: boolean,
+  timeZone?: string
 ): string[] {
   const parts = [`FREQ=${config.frequency}`];
   if (config.interval > 1) {
@@ -505,7 +539,7 @@ export function buildRecurrenceLines(
     );
   }
   if (config.ends.kind === 'on') {
-    parts.push(`UNTIL=${untilValue(config.ends.date, allDay)}`);
+    parts.push(`UNTIL=${untilValue(config.ends.date, allDay, timeZone)}`);
   } else if (config.ends.kind === 'after') {
     parts.push(`COUNT=${config.ends.count}`);
   }
@@ -518,7 +552,8 @@ export function buildRecurrenceLines(
  * selectors beyond its vocabulary), which the UI keeps untouched instead.
  */
 export function parseRecurrenceConfig(
-  lines: string[]
+  lines: string[],
+  timeZone?: string
 ): RecurrenceConfig | undefined {
   if (lines.length === 0) return undefined;
   const parsed = parseRecurrenceLines(lines);
@@ -567,7 +602,7 @@ export function parseRecurrenceConfig(
   if (rule.count !== undefined) {
     ends = { kind: 'after', count: rule.count };
   } else if (rule.until !== undefined) {
-    const date = untilDate(rule.until);
+    const date = untilDate(rule.until, timeZone);
     if (date === undefined) return undefined;
     ends = { kind: 'on', date };
   }
@@ -677,4 +712,37 @@ export function defaultCustomConfig(start: Date): RecurrenceConfig {
     byDay: [WEEKDAY_CODES[start.getDay()] as WeekdayCode],
     ends: NEVER,
   };
+}
+
+/**
+ * Where an occurrence sits in its series: its original start (the occurrence
+ * key, which a moved occurrence keeps), in the event's own zone.
+ */
+function occurrenceSlotStart(
+  event: Pick<CalendarEvent, 'occurrenceKey' | 'allDay' | 'timeZone'>
+): Date | undefined {
+  const slot = event.allDay
+    ? parseISO(event.occurrenceKey)
+    : new Date(event.occurrenceKey);
+  if (Number.isNaN(slot.getTime())) return undefined;
+  return !event.allDay && event.timeZone
+    ? TZDateMini.tz(event.timeZone, slot)
+    : slot;
+}
+
+/** How an event repeats, as event details describe it; undefined for a one-off event. */
+export function eventRecurrenceDescription(
+  event: Pick<
+    CalendarEvent,
+    'recurrenceLines' | 'recurrenceId' | 'occurrenceKey' | 'allDay' | 'timeZone'
+  >
+): string | undefined {
+  const description = formatRecurrenceDescription(event.recurrenceLines, {
+    start: occurrenceSlotStart(event),
+  });
+  if (description) return description;
+
+  return event.recurrenceLines.length > 0 || event.recurrenceId !== undefined
+    ? 'Recurring event'
+    : undefined;
 }

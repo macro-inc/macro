@@ -10,5 +10,5 @@ export type SoupItemOneOfOnethreeTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupItemOneOfOnethreeTag = {
-  call: 'call',
+  channelThread: 'channelThread',
 } as const;

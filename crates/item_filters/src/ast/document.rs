@@ -1,15 +1,18 @@
 use crate::{
     DocumentFilters,
-    ast::{ExpandErr, date::DateLiteral},
+    ast::{
+        ExpandErr, crm_association::CrmAssociation, date::DateLiteral, email::Email,
+        properties::PropertiesLiteral,
+    },
 };
 use document_sub_type::DocumentSubType;
 use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_file_type::{
     Archive, Audio, Canvas, Code, Data, Database, Document, Executable, FileAssociation, FileType,
     Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
 };
+use model_owner::Owner;
 use nom::{
     Finish, IResult, Parser, branch::alt, bytes::complete::tag, combinator::eof,
     sequence::separated_pair,
@@ -34,16 +37,13 @@ pub enum DocumentLiteral {
     ProjectId(Uuid),
     /// this node value filters by document owner
     #[serde(rename = "o")]
-    Owner(MacroUserIdStr<'static>),
+    Owner(Owner),
     /// this node value filters by document importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
-    /// this node value filters by notification done state for the document.
-    #[serde(rename = "nd")]
-    NotificationDone(bool),
-    /// this node value filters by notification seen state for the document.
+    /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
-    NotificationSeen(bool),
+    NotificationState(crate::NotificationState),
     /// include tasks that are created by me, assigned to me, and not completed.
     #[serde(rename = "cbm")]
     IncludeCbmAtmNc(bool),
@@ -59,6 +59,25 @@ pub enum DocumentLiteral {
     /// this node value filters by document updatedAt timestamp
     #[serde(rename = "ua")]
     UpdatedAt(DateLiteral),
+    /// an entity-property condition on the document or task, e.g. its
+    /// Companies property referencing a CRM company. Unlike the top-level
+    /// properties filter, it composes with the other document literals.
+    #[serde(rename = "prop")]
+    Property(PropertiesLiteral),
+    /// the document was uploaded from an email attachment whose message was
+    /// sent by, or addressed to, a matching email address or domain
+    #[serde(rename = "eap")]
+    EmailAttachmentParticipant(Email),
+    /// the document or task is associated with a CRM record through its
+    /// Companies or Contacts property or a reference to the record. Soup
+    /// resolves the record before querying; it composes with the other
+    /// document literals the way [`DocumentLiteral::Property`] does. Only
+    /// expanded, timestamp-sorted queries accept it.
+    #[serde(rename = "crm")]
+    CrmAssociated(CrmAssociation),
+    /// case-insensitive substring of the document name
+    #[serde(rename = "nc")]
+    NameContains(String),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {
@@ -102,6 +121,7 @@ fn expand_file_association(association: FileAssociation) -> impl Iterator<Item =
 /// not pdf,
 /// not md,
 /// not canvas,
+/// not native spreadsheets,
 /// not code,
 /// not video
 /// yes this is kinda weird
@@ -110,15 +130,16 @@ fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
         .map(|_| {
             FileType::iter().filter(|ty| {
                 let association = ty.macro_app_path();
-                !matches!(
-                    association,
-                    FileAssociation::Write(_)
-                        | FileAssociation::Pdf(_)
-                        | FileAssociation::Md(_)
-                        | FileAssociation::Canvas(_)
-                        | FileAssociation::Code(_)
-                        | FileAssociation::Video(_)
-                )
+                *ty != FileType::Spreadsheet
+                    && !matches!(
+                        association,
+                        FileAssociation::Write(_)
+                            | FileAssociation::Pdf(_)
+                            | FileAssociation::Md(_)
+                            | FileAssociation::Canvas(_)
+                            | FileAssociation::Code(_)
+                            | FileAssociation::Video(_)
+                    )
             })
         })
         .parse(s)
@@ -206,17 +227,16 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
 
         let owners = owners
             .iter()
-            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .map(|s| Owner::from_principal_str(s))
             .try_expand(|r| r.map(DocumentLiteral::Owner), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(DocumentLiteral::Importance(imp)));
 
-        let notification_done_node = notification_filters
-            .done
-            .map(|done| Expr::Literal(DocumentLiteral::NotificationDone(done)));
-        let notification_seen_node = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(DocumentLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(DocumentLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         let sub_types_node = sub_types
             .iter()
@@ -232,8 +252,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             project_ids,
             owners,
             importance_node,
-            notification_done_node,
-            notification_seen_node,
+            notification_state_node,
             sub_types_node,
             is_email_attachment_node,
         ]

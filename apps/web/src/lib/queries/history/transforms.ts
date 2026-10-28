@@ -50,5 +50,11 @@ export function transformHistoryItem(item: Item): HistoryItem {
 export function transformHistoryResponse(
   response: HistoryQueryResponse
 ): HistoryItem[] {
-  return response.data.map(transformHistoryItem);
+  return response.data
+    .filter(
+      (item) =>
+        item.type !== 'document' ||
+        item.subType?.type !== 'initiative_description'
+    )
+    .map(transformHistoryItem);
 }

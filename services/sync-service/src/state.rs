@@ -1,0 +1,448 @@
+use std::{borrow::Cow, collections::HashSet, sync::Mutex};
+
+use loro::{
+    Container, ContainerID, ExportMode, Frontiers, ID, IdSpan, JsonMapOp, JsonMovableListOp,
+    JsonOpContent, LoroDoc, LoroValue, ToJson, VersionVector,
+};
+use tracing::debug;
+use web_time::Instant;
+use worker::Result;
+
+use crate::error::ResultExt;
+
+#[cfg(test)]
+mod test;
+
+const FROM_CLIENT_TAG: &str = "from_client";
+const FROM_SERVICE_TAG: &str = "from_service";
+const FRONTIERS_ID_SEPERATOR: &str = "|";
+/// The Lexical `type` of the node that wraps text carrying a comment mark.
+const COMMENT_NODE_TYPE: &str = "comment";
+
+/// Result of applying an update, before any persistence awaits.
+pub struct ImportedUpdate {
+    /// Whether the operation log gained new operations.
+    pub changed: bool,
+    /// Lexical node IDs the update edited, for blame tracking. Empty when the
+    /// update only adds or removes a comment mark.
+    pub touched_nodes: Vec<String>,
+}
+
+/// The Lexical root of a document before and after a client's updates.
+#[derive(Debug, PartialEq)]
+pub struct RootChange {
+    pub before: serde_json::Value,
+    pub after: serde_json::Value,
+}
+
+#[derive(Debug)]
+pub struct DocumentState {
+    pub loro_doc: LoroDoc,
+    pub last_update: Mutex<Option<Instant>>,
+    pub last_export: Mutex<Option<Instant>>,
+}
+
+impl DocumentState {
+    pub fn new() -> Self {
+        Self {
+            loro_doc: LoroDoc::new(),
+            last_update: Mutex::new(None),
+            last_export: Mutex::new(None),
+        }
+    }
+
+    /// Initialize the document state from a snapshot
+    pub fn try_from_snapshot(snapshot: &[u8]) -> Result<Self> {
+        let loro_doc = LoroDoc::new();
+        let status = loro_doc
+            .import_with(snapshot, FROM_SERVICE_TAG)
+            .context("failed to import snapshot")?;
+
+        let (sf, of) = (loro_doc.state_frontiers(), loro_doc.state_frontiers());
+        debug!(state_frontiers =? sf, oplog_frontiers =? of,"loaded new DocumentState");
+        if status.pending.is_some() {
+            return Err(worker::Error::from("failed to import snapshot"));
+        }
+
+        Ok(Self {
+            loro_doc,
+            last_update: Mutex::new(None),
+            last_export: Mutex::new(None),
+        })
+    }
+
+    /// Get: `(state_frontiers, oplog_frotiers)`
+    pub fn frontiers(&self) -> (Frontiers, Frontiers) {
+        (
+            self.loro_doc.state_frontiers(),
+            self.loro_doc.oplog_frontiers(),
+        )
+    }
+
+    pub fn get_json(&self) -> String {
+        self.loro_doc.get_deep_value().to_json()
+    }
+
+    pub fn should_save(&self) -> bool {
+        let Some(up) = *self
+            .last_update
+            .lock()
+            .unwrap_context("last_update mutex poisoned")
+        else {
+            return false;
+        };
+        match *self
+            .last_export
+            .lock()
+            .unwrap_context("last_export mutex poisoned")
+        {
+            Some(exp) => up > exp,
+            None => true,
+        }
+    }
+
+    pub fn mark_exported(&self) {
+        *self
+            .last_export
+            .lock()
+            .unwrap_context("last_export mutex poisoned") = Some(Instant::now());
+    }
+
+    /// Import an update and report whether it changed the operation log plus
+    /// the deduplicated Lexical node IDs used by blame tracking.
+    pub fn import(&self, update: &[u8]) -> Result<ImportedUpdate> {
+        let before = self.loro_doc.oplog_vv();
+        self.loro_doc
+            .import_with(update, FROM_CLIENT_TAG)
+            .context("failed to import update")?;
+        let after = self.loro_doc.oplog_vv();
+
+        *self
+            .last_update
+            .lock()
+            .unwrap_context("last_update mutex poisoned") = Some(Instant::now());
+
+        Ok(ImportedUpdate {
+            changed: before != after,
+            touched_nodes: self.touched_lexical_ids(&before, &after),
+        })
+    }
+
+    /// The Lexical root before and after `updates`, leaving this document
+    /// unchanged. `None` when the updates write outside the root, or depend on
+    /// operations this document lacks and so could not be checked.
+    pub fn root_change(&self, updates: &[&[u8]]) -> Result<Option<RootChange>> {
+        let preview = self.loro_doc.fork();
+        for update in updates {
+            let status = preview
+                .import_with(update, FROM_CLIENT_TAG)
+                .context("failed to import update")?;
+            if status.pending.is_some() {
+                return Ok(None);
+            }
+        }
+        let mut before = deep_json(&self.loro_doc)?;
+        let mut after = deep_json(&preview)?;
+        let (Some(before_root), Some(after_root)) = (
+            before
+                .as_object_mut()
+                .and_then(|value| value.remove("root")),
+            after.as_object_mut().and_then(|value| value.remove("root")),
+        ) else {
+            return Ok(None);
+        };
+        Ok((before == after).then_some(RootChange {
+            before: before_root,
+            after: after_root,
+        }))
+    }
+
+    /// The deduplicated Lexical node IDs whose backing containers were written
+    /// by operations in `after` but not in `before`. This runs on every update,
+    /// so it reads only those operations: diffing the two versions checks the
+    /// document out and costs time that grows with its history.
+    fn touched_lexical_ids(&self, before: &VersionVector, after: &VersionVector) -> Vec<String> {
+        let spans: Vec<IdSpan> = after.sub_iter(before).collect();
+        if spans.iter().any(|span| self.changes_comment_marks(*span)) {
+            debug!("update adds or removes a comment mark; recording no blame");
+            return Vec::new();
+        }
+        let mut containers = HashSet::new();
+        for span in spans {
+            let Ok(len) = usize::try_from(span.counter.end - span.counter.start) else {
+                continue;
+            };
+            containers.extend(
+                self.loro_doc
+                    .get_changed_containers_in(ID::new(span.peer, span.counter.start), len),
+            );
+        }
+        let mut touched: Vec<String> = containers
+            .iter()
+            .filter_map(|cid| self.find_lexical_id(cid))
+            .collect();
+        touched.sort();
+        touched.dedup();
+        touched
+    }
+
+    /// Whether the operations in `span` add or remove a comment mark. Lexical
+    /// moves marked text into a `comment` node, which the client's mirror
+    /// writes as recreated or split text nodes; removing the mark merges them
+    /// back. Neither writes new text, so it must not take over the text's blame.
+    fn changes_comment_marks(&self, span: IdSpan) -> bool {
+        self.loro_doc
+            .export_json_in_id_span(span)
+            .iter()
+            .flat_map(|change| &change.ops)
+            .any(|op| match &op.content {
+                JsonOpContent::Map(JsonMapOp::Insert { key, value }) => {
+                    key == "type" && is_comment_type(value)
+                }
+                JsonOpContent::MovableList(JsonMovableListOp::Delete { len, start_id, .. }) => {
+                    (0..len.abs()).any(|offset| self.is_comment_node(start_id.inc(offset)))
+                }
+                _ => false,
+            })
+    }
+
+    /// Whether the list item created by the operation `item` holds a comment
+    /// node. Loro keeps a deleted container's state, so this also answers for
+    /// items the update removed. Items moved within their list, or older than
+    /// a shallow snapshot, read as not comments.
+    fn is_comment_node(&self, item: ID) -> bool {
+        let inserted = self
+            .loro_doc
+            .export_json_in_id_span(IdSpan::new(item.peer, item.counter, item.counter + 1))
+            .into_iter()
+            .flat_map(|change| change.ops)
+            .find_map(|op| match op.content {
+                JsonOpContent::MovableList(JsonMovableListOp::Insert { value, .. }) => {
+                    let index = usize::try_from(item.counter - op.counter).ok()?;
+                    value.into_iter().nth(index)
+                }
+                _ => None,
+            });
+        let Some(LoroValue::Container(container_id)) = inserted else {
+            return false;
+        };
+        let Some(Container::Map(node)) = self.loro_doc.get_container(container_id) else {
+            return false;
+        };
+        node.get("type")
+            .and_then(|kind| kind.into_value().ok())
+            .is_some_and(|kind| is_comment_type(&kind))
+    }
+
+    /// Walk from a changed container up to the nearest ancestor LoroMap whose
+    /// `$` submap has an `id` — that string is the Lexical node ID.
+    fn find_lexical_id(&self, container_id: &ContainerID) -> Option<String> {
+        // Real Lexical docs never nest this deep; cap as a safety net against
+        // unexpectedly large paths from Loro.
+        const MAX_DEPTH: usize = 100;
+
+        // Start with the container itself, then walk its ancestors.
+        let mut candidates: Vec<ContainerID> = vec![container_id.clone()];
+        if let Some(path) = self.loro_doc.get_path_to_container(container_id) {
+            for (cid, _) in path.into_iter().rev() {
+                candidates.push(cid);
+            }
+        }
+
+        for cid in candidates.into_iter().take(MAX_DEPTH) {
+            let Some(container) = self.loro_doc.get_container(cid) else {
+                continue;
+            };
+            let Container::Map(map) = container else {
+                continue;
+            };
+            let Some(meta_voc) = map.get("$") else {
+                continue;
+            };
+            let Some(Container::Map(meta_map)) = meta_voc.into_container().ok() else {
+                continue;
+            };
+            let Some(id_voc) = meta_map.get("id") else {
+                continue;
+            };
+            let Some(LoroValue::String(id)) = id_voc.into_value().ok() else {
+                continue;
+            };
+
+            return Some(id.to_string());
+        }
+        None
+    }
+
+    /// Export the document state as a snapshot
+    pub fn export_snapshot(&self, export_mode: Option<ExportMode>) -> Result<Vec<u8>> {
+        let export_mode = export_mode.unwrap_or(ExportMode::Snapshot);
+        self.loro_doc
+            .export(export_mode)
+            .context("failed to export snapshot")
+    }
+
+    pub fn export_shallow_snapshot(&self) -> Result<Vec<u8>> {
+        self.loro_doc
+            .export(ExportMode::ShallowSnapshot(Cow::Borrowed(
+                &self.loro_doc.state_frontiers(),
+            )))
+            .context("failed to export snapshot")
+    }
+    pub fn version_id(&self) -> String {
+        self.loro_doc
+            .state_frontiers()
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(FRONTIERS_ID_SEPERATOR)
+    }
+
+    pub fn export_updates_since(&self, vv: &VersionVector) -> Result<Vec<u8>> {
+        self.loro_doc
+            .export(ExportMode::Updates {
+                from: std::borrow::Cow::Borrowed(vv),
+            })
+            .context("failed to export updates")
+    }
+
+    /// Batch import a list of pending operations/updates into the document state
+    pub fn replay_pending_operations(&self, updates: &[Vec<u8>]) -> Result<()> {
+        self.loro_doc
+            .import_batch(updates)
+            .context("failed to batch import pending updates")?;
+
+        Ok(())
+    }
+}
+
+fn is_comment_type(value: &LoroValue) -> bool {
+    matches!(value, LoroValue::String(kind) if kind.as_str() == COMMENT_NODE_TYPE)
+}
+
+fn deep_json(doc: &LoroDoc) -> Result<serde_json::Value> {
+    serde_json::from_str(&doc.get_deep_value().to_json()).context("failed to read document json")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_import_snapshot() {
+        let loro_doc = LoroDoc::new();
+        let text = loro_doc.get_text("content");
+        text.push_str("hello world").unwrap();
+        let snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+        let state = DocumentState::try_from_snapshot(snapshot.as_slice()).unwrap();
+        let text = state.loro_doc.get_text("content");
+        assert_eq!(text.to_string(), "hello world");
+    }
+
+    #[test]
+    fn test_import_update() {
+        let loro_doc = LoroDoc::new();
+        let text = loro_doc.get_text("content");
+        text.push_str("01").unwrap();
+
+        let initial_snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+
+        let state = DocumentState::try_from_snapshot(initial_snapshot.as_slice()).unwrap();
+
+        let state_vv = loro_doc.state_vv();
+        text.push_str("234").unwrap();
+
+        let update = loro_doc
+            .export(ExportMode::Updates {
+                from: std::borrow::Cow::Borrowed(&state_vv),
+            })
+            .unwrap();
+
+        let imported = state.import(update.as_slice()).unwrap();
+        assert!(imported.changed);
+        assert!(
+            imported.touched_nodes.is_empty(),
+            "plain text has no Lexical IDs"
+        );
+        assert!(!state.import(update.as_slice()).unwrap().changed);
+
+        let text = state.loro_doc.get_text("content");
+        assert_eq!(text.to_string(), "01234");
+    }
+
+    #[test]
+    fn test_should_save() {
+        let loro_doc = LoroDoc::new();
+        let text = loro_doc.get_text("content");
+        text.push_str("012").unwrap();
+
+        let initial_snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+
+        let state = DocumentState::try_from_snapshot(initial_snapshot.as_slice()).unwrap();
+        assert!(!state.should_save());
+
+        let state_vv = loro_doc.state_vv();
+        text.push_str("234").unwrap();
+
+        let update = loro_doc
+            .export(ExportMode::Updates {
+                from: std::borrow::Cow::Borrowed(&state_vv),
+            })
+            .unwrap();
+
+        state.import(update.as_slice()).unwrap();
+
+        assert!(state.should_save());
+        // do export here
+        state.mark_exported();
+        assert!(!state.should_save());
+    }
+
+    #[test]
+    fn test_replay_pending_operations() {
+        let loro_doc = LoroDoc::new();
+        let text = loro_doc.get_text("content");
+        text.push_str("012").unwrap();
+
+        let initial_snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+
+        let state = DocumentState::try_from_snapshot(initial_snapshot.as_slice()).unwrap();
+
+        let mut updates = vec![];
+
+        let version_vector = loro_doc.state_vv();
+        text.push_str("3").unwrap();
+        updates.push(
+            loro_doc
+                .export(ExportMode::Updates {
+                    from: std::borrow::Cow::Borrowed(&version_vector),
+                })
+                .unwrap(),
+        );
+
+        text.push_str("4").unwrap();
+        updates.push(
+            loro_doc
+                .export(ExportMode::Updates {
+                    from: std::borrow::Cow::Borrowed(&version_vector),
+                })
+                .unwrap(),
+        );
+
+        text.push_str("5").unwrap();
+        let update5 = loro_doc
+            .export(ExportMode::Updates {
+                from: std::borrow::Cow::Borrowed(&version_vector),
+            })
+            .unwrap();
+
+        updates.push(update5.clone());
+        // Test to ensure that duplicate updates don't affect the state
+        updates.push(update5.clone());
+
+        state.replay_pending_operations(&updates).unwrap();
+
+        let text = state.loro_doc.get_text("content");
+        assert_eq!(text.to_string(), "012345");
+    }
+}

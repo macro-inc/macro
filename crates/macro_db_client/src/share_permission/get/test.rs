@@ -6,6 +6,45 @@ use sqlx::{Pool, Postgres};
 use super::*;
 
 #[sqlx::test(fixtures(path = "../../../fixtures", scripts("channel_share_permissions")))]
+async fn fresh_permission_reads_distinguish_team_share_levels(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_id = uuid::Uuid::now_v7();
+    for level in [
+        None,
+        Some(AccessLevel::View),
+        Some(AccessLevel::Comment),
+        Some(AccessLevel::Edit),
+        None,
+    ] {
+        sqlx::query!(
+            r#"
+            UPDATE "SharePermission"
+            SET team_share_access_level = $1,
+                team_share_team_id = $2
+            WHERE id IN ('sp-d1', 'sp-c1')
+            "#,
+            level as _,
+            level.map(|_| team_id),
+        )
+        .execute(&pool)
+        .await?;
+
+        for permission in [
+            get_document_share_permission(&pool, "d1").await?,
+            get_chat_share_permission(&pool, "c1").await?,
+        ] {
+            assert_eq!(permission.team_share_access_level, level);
+            assert_eq!(permission.link_share, Some(LinkShare::Public));
+            assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
+            assert_eq!(permission.owner, "macro|user@user.com");
+            assert_eq!(permission.channel_share_permissions.unwrap().len(), 2);
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(fixtures(path = "../../../fixtures", scripts("channel_share_permissions")))]
 async fn get_document_share_permission_reads_link_fields(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

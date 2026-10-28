@@ -50,15 +50,37 @@ fn bot_id_str(input: &str) -> IResult<&str, BotIdStorage<ArcCowStr<'_>>> {
     ))
 }
 
-/// Stable [`BotId`] for the first-party "Macro AI" system bot.
+/// Stable [`BotId`] for the classic first-party "Macro" system bot.
+///
+/// Mentioning it answers with the classic in-channel chat reply (the
+/// `channel_bots` agent loop in `document_storage_service`). Agent sessions
+/// belong to [`MACRO_NEW_BOT_ID`] instead.
 pub const MACRO_AI_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a1a1));
 
-/// Stable handle for the "Macro AI" system bot (used for `@` mentions).
+/// Stable handle for the classic "Macro" system bot (used for `@` mentions).
 pub const MACRO_AI_HANDLE: &str = "macro";
 
-/// Display name for the "Macro" system bot.
+/// Display name for Macro, shared by both of its bot ids.
 pub const MACRO_AI_NAME: &str = "Macro";
+
+/// Stable [`BotId`] for the agent-session half of Macro.
+///
+/// Mentioning it opens an agent session served by the in-process (in-memory)
+/// agent harness, which answers with the Macro product toolset. A separate bot
+/// from [`MACRO_AI_BOT_ID`] because one id cannot mean both a chat reply and a
+/// session - but the same persona to a reader: both are named "Macro", and the
+/// web client's chat-v3 rollout decides which of the two a single `@macro`
+/// mention targets.
+pub const MACRO_NEW_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a2a2));
+
+/// Stable handle for the agent-session Macro bot.
+///
+/// Distinct from [`MACRO_AI_HANDLE`] only because handles identify a bot;
+/// nothing offers it as a second `@` entry. The display name is
+/// [`MACRO_AI_NAME`], the same as the classic bot's.
+pub const MACRO_NEW_HANDLE: &str = "macro-new";
 
 /// Stable [`BotId`] for autonomous Macro platform operations.
 pub const MACRO_SYSTEM_BOT_ID: BotId =
@@ -69,9 +91,9 @@ pub const MACRO_SYSTEM_NAME: &str = "Macro System";
 
 /// Stable [`BotId`] for the "Macro Coder" system bot, our coding-agent harness.
 ///
-/// Distinct from [`MACRO_AI_BOT_ID`] on purpose: mentioning Macro AI answers in
-/// chat, while mentioning this one opens a sandboxed agent session, and one id
-/// cannot mean both.
+/// Distinct from [`MACRO_AI_BOT_ID`] on purpose: the Macro bot's sessions run
+/// in-process on the in-memory harness, while this one's run in a provisioned
+/// sandbox, and one id cannot mean both.
 pub const MACRO_CODER_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a9e7));
 
@@ -80,6 +102,144 @@ pub const MACRO_CODER_HANDLE: &str = "coder";
 
 /// Display name for the "Macro Coder" system bot.
 pub const MACRO_CODER_NAME: &str = "Macro Coder";
+
+/// Stable [`BotId`] for the "Cursor" system bot.
+///
+/// Mentioning it opens an agent session like [`MACRO_CODER_BOT_ID`] does, but
+/// the session is served by a Cursor cloud agent rather than a Macro-managed
+/// sandbox.
+pub const CURSOR_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_c5c5));
+
+/// Stable handle for the "Cursor" system bot (used for `@` mentions).
+pub const CURSOR_HANDLE: &str = "cursor";
+
+/// Display name for the "Cursor" system bot.
+pub const CURSOR_NAME: &str = "Cursor";
+
+/// Stable identity for the per-owner Codex cloud agent.
+pub const CODEX_BOT_ID: BotId = BotId::new_from_uuid(Uuid::from_u128(0xc0de));
+/// Mention handle for Codex.
+pub const CODEX_HANDLE: &str = "codex";
+/// Display name for Codex.
+pub const CODEX_NAME: &str = "Codex";
+
+/// Stable handle for the autonomous Macro platform principal.
+pub const MACRO_SYSTEM_HANDLE: &str = "macro-system";
+
+/// A first-party bot.
+///
+/// System bots live here rather than in the `bots` table. Their ids are
+/// compile-time constants, so a row would only be a second copy of this one
+/// that an environment could be missing - which is exactly how a deployment
+/// ends up serving a bot it cannot look up. Only user- and team-owned bots
+/// are rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SystemBot {
+    /// Stable id.
+    pub id: BotId,
+    /// Display name.
+    pub name: &'static str,
+    /// Handle used for `@` mentions.
+    pub handle: &'static str,
+    /// Whether mentioning this bot opens an agent session.
+    pub has_agent: bool,
+}
+
+/// Every first-party bot.
+pub const SYSTEM_BOTS: &[SystemBot] = &[
+    // Answers in channel via the classic `channel_bots` reply loop, which
+    // needs no agent session; its next-generation replacement below is the
+    // one whose mentions open sessions.
+    SystemBot {
+        id: MACRO_AI_BOT_ID,
+        name: MACRO_AI_NAME,
+        handle: MACRO_AI_HANDLE,
+        has_agent: false,
+    },
+    // The same persona as the bot above, under a second id because only this
+    // one opens sessions. It carries the same name for the same reason.
+    SystemBot {
+        id: MACRO_NEW_BOT_ID,
+        name: MACRO_AI_NAME,
+        handle: MACRO_NEW_HANDLE,
+        has_agent: true,
+    },
+    SystemBot {
+        id: MACRO_CODER_BOT_ID,
+        name: MACRO_CODER_NAME,
+        handle: MACRO_CODER_HANDLE,
+        has_agent: true,
+    },
+    SystemBot {
+        id: CURSOR_BOT_ID,
+        name: CURSOR_NAME,
+        handle: CURSOR_HANDLE,
+        has_agent: true,
+    },
+    SystemBot {
+        id: CODEX_BOT_ID,
+        name: CODEX_NAME,
+        handle: CODEX_HANDLE,
+        has_agent: true,
+    },
+    // Posts as itself for autonomous platform operations, but nothing mentions
+    // it and it opens no sessions.
+    SystemBot {
+        id: MACRO_SYSTEM_BOT_ID,
+        name: MACRO_SYSTEM_NAME,
+        handle: MACRO_SYSTEM_HANDLE,
+        has_agent: false,
+    },
+];
+
+/// The first-party bot with this id, when it is one.
+#[must_use]
+pub fn system_bot(id: BotId) -> Option<&'static SystemBot> {
+    SYSTEM_BOTS.iter().find(|bot| bot.id == id)
+}
+
+/// The first-party bot with this handle, when it is one.
+#[must_use]
+pub fn system_bot_by_handle(handle: &str) -> Option<&'static SystemBot> {
+    SYSTEM_BOTS.iter().find(|bot| bot.handle == handle)
+}
+
+/// The handle users type to reach the bot `id`, whose own handle is `handle`.
+///
+/// Macro's agent-session bot is reached through `@macro`; its own handle,
+/// [`MACRO_NEW_HANDLE`], only tells it apart from the classic bot.
+#[must_use]
+pub fn mention_handle(id: BotId, handle: &str) -> &str {
+    if id == MACRO_NEW_BOT_ID {
+        MACRO_AI_HANDLE
+    } else {
+        handle
+    }
+}
+
+/// Whether `id` is a first-party bot, and so has no `bots` row.
+#[must_use]
+pub fn is_system_bot(id: BotId) -> bool {
+    system_bot(id).is_some()
+}
+
+/// A bot id that is not in [`SYSTEM_BOTS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NonSystemBotId(BotId);
+
+impl NonSystemBotId {
+    /// Accept `id` only when it is not a first-party bot.
+    #[must_use]
+    pub fn new(id: BotId) -> Option<Self> {
+        (!is_system_bot(id)).then_some(Self(id))
+    }
+
+    /// Return the underlying bot id.
+    pub const fn get(self) -> BotId {
+        self.0
+    }
+}
 
 /// A bot id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

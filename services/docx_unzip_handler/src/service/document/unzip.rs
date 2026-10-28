@@ -30,7 +30,7 @@ pub fn unzip(document_content: Vec<u8>) -> Result<Vec<DocumentBomPart>, anyhow::
 
         document_bom_parts.push(DocumentBomPart {
             sha: sha_hash,
-            path: file.name().to_string(),
+            path: file.name()?.into_owned(),
             content: file_contents,
         });
     }

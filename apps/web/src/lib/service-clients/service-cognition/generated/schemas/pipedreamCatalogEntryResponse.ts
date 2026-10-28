@@ -13,13 +13,12 @@ import type { PipedreamCatalogEntryResponseIconUrl } from './pipedreamCatalogEnt
 export interface PipedreamCatalogEntryResponse {
   /** Pipedream app name slug — pass this to the connect flow. */
   app_slug: string;
+  /** Categories assigned by Pipedream. */
+  categories?: string[];
   /** One-line description of the app. */
   description?: PipedreamCatalogEntryResponseDescription;
   /** Human-readable name to display. */
   display_name: string;
   /** URL of the app's icon, when available. */
   icon_url?: PipedreamCatalogEntryResponseIconUrl;
-  /** Curated priority connectors rank first and may be rendered as their
-own featured section. */
-  priority: boolean;
 }

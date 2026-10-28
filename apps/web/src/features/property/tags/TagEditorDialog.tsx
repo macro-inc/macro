@@ -1,7 +1,6 @@
-import { TabsInset } from '@core/component/TabsInset';
-import TagIcon from '@phosphor/tag-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   type CreateTagResult,
   useCreateTagMutation,
@@ -10,11 +9,11 @@ import {
 } from '@queries/properties/tags';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
-import { Button, CommandMenuShell, cn, Dialog, Hotkey, Tooltip } from '@ui';
+import { Button, CommandMenuShell, Dialog, Hotkey, Tabs } from '@ui';
 import type { JSX } from 'solid-js';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import { TagDot } from './TagDot';
-import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from './tagColors';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { ColorSwatches } from './components/color-swatches';
+import { DEFAULT_TAG_COLOR } from './tagColors';
 
 export type EditableTag = {
   scope: TagScope;
@@ -91,12 +90,6 @@ export function TagEditorDialog(props: {
         ? 'user'
         : initialScope(mode)
     );
-
-    if (mode.type === 'create') {
-      requestAnimationFrame(() => {
-        nameInputRef?.focus();
-      });
-    }
   });
 
   const title = () =>
@@ -183,9 +176,14 @@ export function TagEditorDialog(props: {
       open={props.open}
       onOpenChange={(open) => !open && close()}
       onCloseAutoFocus={props.onCloseAutoFocus}
+      onOpenAutoFocus={(event) => {
+        if (props.mode?.type !== 'create') return;
+        event.preventDefault();
+        nameInputRef?.focus();
+      }}
     >
       <CommandMenuShell depth={2} class="text-sm" onKeyDown={handleKeyDown}>
-        <CommandMenuShell.Header class="my-0 h-13 gap-3 border-b-0 px-4">
+        <CommandMenuShell.Header class="my-0 gap-3 border-b-0">
           <span class="text-ink-muted">
             <TagIcon class="size-3.5" />
           </span>
@@ -196,13 +194,14 @@ export function TagEditorDialog(props: {
             {title()}
           </Dialog.Title>
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-sm"
             disabled={pending()}
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </CommandMenuShell.Header>
         <CommandMenuShell.Body>
@@ -210,7 +209,6 @@ export function TagEditorDialog(props: {
             <EditorRow label="Name">
               <input
                 ref={nameInputRef}
-                autofocus={props.mode?.type === 'create'}
                 value={label()}
                 onInput={(event) => setLabel(event.currentTarget.value)}
                 onKeyDown={(event) => {
@@ -222,44 +220,28 @@ export function TagEditorDialog(props: {
             </EditorRow>
 
             <EditorRow label="Color">
-              <div class="flex flex-wrap items-center gap-2">
-                <For each={TAG_COLOR_OPTIONS}>
-                  {(option) => (
-                    <Tooltip label={option.name}>
-                      <button
-                        type="button"
-                        aria-label={option.name}
-                        onClick={() => setColor(option.color)}
-                        class={cn(
-                          'flex size-7 items-center justify-center rounded-md border outline-none hover:bg-hover focus-visible:border-accent',
-                          color() === option.color
-                            ? 'border-accent bg-accent-bg'
-                            : 'border-edge-muted'
-                        )}
-                      >
-                        <TagDot color={option.color} class="size-3.5" />
-                      </button>
-                    </Tooltip>
-                  )}
-                </For>
-              </div>
+              <ColorSwatches
+                value={color()}
+                onChange={(option) => setColor(option.color)}
+              />
             </EditorRow>
 
             <Show when={props.mode?.type === 'create'}>
               <EditorRow label="Sharing">
-                <TabsInset
-                  depth={0}
-                  list={[
-                    { value: 'team', label: 'Team' },
+                <Tabs
+                  aria-label="Sharing"
+                  size="sm"
+                  touch="inset"
+                  options={[
+                    {
+                      value: 'team',
+                      label: 'Team',
+                      disabled: !props.teamAvailable,
+                    },
                     { value: 'user', label: 'Personal' },
                   ]}
                   value={scope()}
-                  onChange={(value) => {
-                    if (value === 'team' && !props.teamAvailable) return;
-                    if (value === 'team' || value === 'user') {
-                      setScope(value);
-                    }
-                  }}
+                  onChange={setScope}
                 />
               </EditorRow>
             </Show>
@@ -270,7 +252,6 @@ export function TagEditorDialog(props: {
             <Button
               variant="danger"
               size="sm"
-              class="rounded-lg"
               disabled={pending()}
               onClick={remove}
             >
@@ -282,16 +263,14 @@ export function TagEditorDialog(props: {
             <Button
               variant="ghost"
               size="sm"
-              class="rounded-lg"
               disabled={pending()}
               onClick={close}
             >
               Cancel
             </Button>
             <Button
-              variant={canSubmit() ? 'active' : 'ghost'}
-              depth={3}
-              class="gap-3 rounded-lg border-0"
+              variant="primary"
+              class="gap-3 "
               disabled={!canSubmit() || pending()}
               onClick={submit}
             >

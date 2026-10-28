@@ -2,9 +2,9 @@ use agent_client_protocol::schema::v1::{PromptRequest, RequestId, SessionId};
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tokio::net::{TcpListener, TcpStream};
 
 use super::*;
+use tokio::net::{TcpListener, TcpStream};
 
 /// One ACP frame built from the protocol's typed request.
 fn frame() -> RawJsonRpcMessage {

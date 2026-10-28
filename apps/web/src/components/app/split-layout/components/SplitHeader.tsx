@@ -1,56 +1,56 @@
+import type { ListDetailNavigationTarget } from '@app/components/list';
+import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { driveLocationLabel } from '@app/features/drive-view/core/location-label';
+import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
-import { useSidebarCollapse } from '@components/app/sidebarVisibility';
-import type { BlockName } from '@core/block';
-import {
-  ContextMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/ContextMenu';
-import { toast } from '@core/component/Toast/Toast';
+import { projectRouteId } from '@app/features/projects/core/route';
+import { t } from '@app/lib/i18n';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
-import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
-import SplitIcon from '@icon/wide-newSplit.svg';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import CollapseIcon from '@phosphor/arrows-in.svg';
-import ExpandIcon from '@phosphor/arrows-out.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CollapseIcon from '@icon/system/regular/arrows-in.svg';
+import ExpandIcon from '@icon/system/regular/arrows-out.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { Button, cn } from '@ui';
+import { Button, ButtonGroup, cn } from '@ui';
 import {
   createMemo,
-  createSignal,
+  onCleanup,
   type ParentProps,
   type Setter,
   Show,
   useContext,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { splitBackInterceptor } from '../back-interceptor';
+import { match, P } from 'ts-pattern';
+import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import {
+  closeSplitOrReturnToList,
+  shouldShowSplitCloseButton,
+} from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
   type PriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from './PriorityCollapseOverflowSensor';
+import { SplitHeaderContextMenu } from './SplitHeaderContextMenu';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   | {
@@ -58,35 +58,68 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
       id: string;
     }
   | undefined {
-  if (data.type === 'document') {
-    return {
-      type: fileTypeToBlockName(data.subType?.type ?? data.fileType) as
-        | BlockName
-        | 'unknown',
-      id: data.id,
-    };
-  }
+  return (
+    match(data)
+      .returnType<{ type: SplitContent['type']; id: string } | undefined>()
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
+      .with({ type: 'document' }, (entity) => ({
+        type: fileTypeToBlockName(entity.subType?.type ?? entity.fileType) as
+          | BlockName
+          | 'unknown',
+        id: entity.id,
+      }))
+      .with(
+        { type: P.union('channel_message', 'channel_thread') },
+        (entity) => ({
+          type: 'channel',
+          id: entity.channelId,
+        })
+      )
+      .with({ type: 'agent_session' }, (entity) => ({
+        type: 'agent',
+        id: entity.id,
+      }))
+      // Reminders open their referenced entity rather than a block of their own.
+      .with({ type: 'foreign' }, () => undefined)
+      // The full calendar opening path supplies the event range to focus.
+      .with({ type: 'calendar_event' }, () => ({
+        type: 'component',
+        id: CALENDAR_VIEW_ID,
+      }))
+      .with({ type: 'crm_company' }, (entity) => ({
+        type: 'company',
+        id: entity.id,
+      }))
+      .with({ type: 'crm_contact' }, (entity) => ({
+        type: 'contact',
+        id: entity.id,
+      }))
+      .with(
+        {
+          type: P.union(
+            'channel',
+            'chat',
+            'email',
+            'project',
+            'call',
+            'routine',
+            'database',
+            'form'
+          ),
+        },
+        (entity) => ({ type: entity.type, id: entity.id })
+      )
+      .exhaustive()
+  );
+}
 
-  if (data.type === 'channel_message' || data.type === 'channel_thread') {
-    return { type: 'channel', id: data.channelId };
-  }
-
-  if (data.type === 'foreign') return undefined;
-
-  // A reminder has no block of its own — it is opened through the entity it
-  // references, which the caller navigates to instead.
-  if (data.type === 'reminder') return undefined;
-
-  // Calendar events open the singleton calendar block; the full opening path
-  // supplies the event range used to focus the requested occurrence.
-  if (data.type === 'calendar_event')
-    return { type: 'calendar', id: CALENDAR_BLOCK_ID };
-
-  // CRM entity types map to their dedicated blocks (entity type !== block name).
-  if (data.type === 'crm_company') return { type: 'company', id: data.id };
-  if (data.type === 'crm_contact') return { type: 'contact', id: data.id };
-
-  return { type: data.type, id: data.id };
+function hasAgentsBackFallback(content: SplitContent) {
+  return (
+    content.type === 'agent' || (isTouchDevice() && content.type === 'chat')
+  );
 }
 
 function SplitBackButton() {
@@ -94,72 +127,33 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 rounded-lg touch:active:bg-transparent"
-      label="Go Back"
-      hotkey={TOKENS.split.go.back}
-      disabled={!context.handle.canGoBack()}
-      onClick={() => {
-        if (splitBackInterceptor()?.()) return;
-        context.handle.goBack();
-      }}
+      variant="ghost"
+      aria-label={t('splitMenu.goBack')}
+      tooltip={{ content: t('splitMenu.goBack'), hotkey: TOKENS.split.go.back }}
+      size="icon-sm"
+      class="p-1 touch:active:bg-transparent"
+      disabled={
+        !context.handle.canGoBack() &&
+        !hasAgentsBackFallback(context.handle.content())
+      }
+      onClick={() =>
+        runSplitBack({
+          canGoBack: () =>
+            context.handle.canGoBack() ||
+            hasAgentsBackFallback(context.handle.content()),
+          goBack: () => {
+            if (!context.handle.canGoBack()) {
+              context.handle.replace({
+                next: { type: 'component', id: 'agents' },
+                mergeHistory: true,
+              });
+            } else context.handle.goBack();
+          },
+        })
+      }
     >
-      <CaretLeft class="h-4" />
+      <CaretLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
-  );
-}
-
-function SplitForwardButton() {
-  const context = useContext(SplitPanelContext);
-  if (!context) return '';
-  return (
-    <Button
-      label="Go Forward"
-      hotkey={TOKENS.split.go.forward}
-      disabled={!context.handle.canGoForward()}
-      onClick={context.handle.goForward}
-      class={cn('p-1 rounded-lg')}
-    >
-      <CaretRight class="h-4" />
-    </Button>
-  );
-}
-
-function SidebarExpandButton() {
-  const panel = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  const sidebar = useSidebarCollapse();
-  const [hovering, setHovering] = createSignal(false);
-
-  const isLeftmostSplit = () =>
-    layout?.manager.splits()[0]?.id === panel?.handle.id;
-  const visible = () => sidebar.isCollapsed() && isLeftmostSplit();
-
-  return (
-    <div
-      class={cn(
-        'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible()
-          ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0'
-          : 'w-0 opacity-0 mr-0'
-      )}
-      aria-hidden={!visible()}
-    >
-      <Button
-        class="p-1 rounded-lg"
-        label="Expand Sidebar"
-        hotkey={TOKENS.global.toggleSidebar}
-        disabled={!visible()}
-        tabindex={visible() ? undefined : -1}
-        onClick={() => sidebar.expand()}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
-      >
-        <AnimatedSquareSidebarIcon
-          class="size-4"
-          triggerAnimation={hovering()}
-        />
-      </Button>
-    </div>
   );
 }
 
@@ -170,11 +164,19 @@ function _SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-lg hidden"
-        label={
-          context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
+        variant="ghost"
+        aria-label={
+          context.handle.isSpotLight()
+            ? t('splitMenu.minimizeSplit')
+            : t('splitMenu.spotlightSplit')
         }
-        hotkey={TOKENS.window.spotlight.toggle}
+        tooltip={{
+          content: context.handle.isSpotLight()
+            ? t('splitMenu.minimizeSplit')
+            : t('splitMenu.spotlightSplit'),
+          hotkey: TOKENS.window.spotlight.toggle,
+        }}
+        class="p-1 hidden"
         onClick={() => context.handle.toggleSpotlight()}
       >
         {context.handle.isSpotLight() ? (
@@ -193,35 +195,86 @@ function SplitCloseButton() {
   if (!context || !layout) return null;
 
   const label = createMemo(() => {
-    const isOnlySplit = layout.manager.splits().length === 1;
+    const isOnlySplit = !shouldShowSplitCloseButton(layout.manager);
     const isNotUnifiedList = !isListViewID(context.handle.content().id);
-    return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
+    return isOnlySplit && isNotUnifiedList
+      ? t('splitMenu.returnToList')
+      : t('splitMenu.close');
   });
 
-  // A Viewer has no close affordance or close hotkey: it closes with its
-  // Controller, when its Preview Pair dissolves (external navigation or the
-  // Controller leaving its list view), or via the preview toggle.
-  const isPreviewViewer = () => context.handle.isViewerSplit();
-
-  // A Preview Pair occupies two split slots but is a single logical split: its
-  // Viewer isn't independently closable. Subtract one slot per pair so that
-  // when the only splits open are a single Preview Pair, the Controller hides
-  // its close button — just like a lone split does.
-  const hasMultipleSplits = createMemo(
-    () =>
-      layout.manager.splits().length - layout.manager.previewPairs().length > 1
+  return (
+    <Show
+      when={
+        (isTouchDevice() && shouldShowSplitCloseButton(layout.manager)) ||
+        (!shouldShowSplitCloseButton(layout.manager) &&
+          !isListViewID(context.handle.content().id))
+      }
+    >
+      <Button
+        aria-label={label()}
+        tooltip={{ content: label(), hotkey: TOKENS.split.close }}
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}
+      >
+        <CloseIcon class="size-3.5" />
+      </Button>
+    </Show>
   );
+}
+
+function SplitDriveReturnButton() {
+  const panel = useContext(SplitPanelContext);
+  const layout = useContext(SplitLayoutContext);
+  if (!panel || !layout) return null;
+
+  const sourceList = createMemo(() =>
+    panel.handle
+      .history()
+      .slice(0, -1)
+      .reverse()
+      .find(
+        (content) => content.type === 'component' && isListViewID(content.id)
+      )
+  );
+  const isDrive = (content: SplitContent) =>
+    content.type === 'component' && content.id === LIST_VIEW_ID.documents;
+  const currentIsDriveItem = () => {
+    const content = panel.handle.content();
+    return (
+      content.type !== 'component' &&
+      (content.type === 'project' ||
+        !NonDocumentBlockTypes.includes(content.type))
+    );
+  };
+  const sourceLabel = () => {
+    const state = sourceList()?.state;
+    const label = state?.['drive.returnLabel'];
+
+    if (typeof label === 'string') return label;
+
+    const driveState = state?.['drive.view.v2'] as DriveState | undefined;
+    return driveState ? driveLocationLabel(driveState.location) : 'My Files';
+  };
+  const returnToDrive = () => {
+    if (panel.handle.goBackTo(isDrive)) return;
+    const driveSplit = layout.manager
+      .splits()
+      .find((split) => isDrive(split.content));
+    if (driveSplit) layout.manager.getSplit(driveSplit.id)?.activate();
+  };
 
   return (
-    <Show when={hasMultipleSplits() && !isPreviewViewer()}>
-      <Button
-        class="p-1 rounded-lg"
-        label={label()}
-        hotkey={TOKENS.split.close}
-        onClick={context.handle.close}
+    <Show
+      when={sourceList()?.id === LIST_VIEW_ID.documents && currentIsDriveItem()}
+    >
+      <ViewBreadcrumbs.ReturnButton
+        onClick={returnToDrive}
+        tooltip={sourceLabel()}
       >
-        <CloseIcon class="size-4" />
-      </Button>
+        {sourceLabel()}
+      </ViewBreadcrumbs.ReturnButton>
+      <ViewBreadcrumbs.Separator class="ml-1" />
     </Show>
   );
 }
@@ -229,6 +282,7 @@ function SplitCloseButton() {
 function SoupNavigationButtons() {
   const context = useContext(SplitPanelContext);
   const soup = useSoup();
+  const notificationSource = useGlobalNotificationSource();
   if (!context) return null;
 
   const rows = createMemo(() => soup.rows());
@@ -236,7 +290,7 @@ function SoupNavigationButtons() {
 
   const navigationReferredFrom = createMemo(() => {
     const referredFrom = context.handle.referredFrom();
-    if (referredFrom !== 'inbox' && referredFrom !== 'mail') {
+    if (referredFrom !== 'home' && referredFrom !== 'mail') {
       return;
     }
 
@@ -250,7 +304,7 @@ function SoupNavigationButtons() {
 
     const referredFrom = navigationReferredFrom();
     const isNavigableListView =
-      referredFrom === 'inbox' || referredFrom === 'mail';
+      referredFrom === 'home' || referredFrom === 'mail';
 
     return isNavigableListView && rows().length > 0;
   });
@@ -267,197 +321,72 @@ function SoupNavigationButtons() {
     const next = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!next) return;
 
-    void openEntityInSplitFromUnifiedList(next.row.original, {
-      splitHandle: context.handle,
-      mergeHistory: true,
-      referredFrom: navigationReferredFrom(),
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(next.row.original, {
+        splitHandle: context.handle,
+        mergeHistory: true,
+        referredFrom: navigationReferredFrom(),
+        notificationSource,
+      }),
+      'open-entity-in-split'
+    );
   };
 
   return (
     <Show when={shouldShow()}>
-      <div class="flex items-center gap-0.5">
-        <Button
-          class="p-1 rounded-lg"
-          label="Previous item"
-          hotkey={TOKENS.entity.step.start}
-          disabled={!canNavigateUp()}
-          onClick={() => navigate(-1)}
-        >
-          <CaretUp class="size-4" />
-        </Button>
-        <Button
-          class="p-1 rounded-lg"
-          label="Next item"
-          hotkey={TOKENS.entity.step.end}
-          disabled={!canNavigateDown()}
-          onClick={() => navigate(1)}
-        >
-          <CaretDown class="size-4" />
-        </Button>
-      </div>
+      <ListNavigationButtons
+        navigation={{
+          canPrevious: canNavigateUp,
+          canNext: canNavigateDown,
+          previous: () => navigate(-1),
+          next: () => navigate(1),
+        }}
+      />
     </Show>
   );
 }
 
-function SplitHeaderContextMenu(props: ParentProps) {
-  const panel = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  if (!panel || !layout) return props.children;
-
-  const splitIndex = createMemo(() =>
-    layout.manager.splits().findIndex((split) => split.id === panel.handle.id)
-  );
-  const hasOtherSplits = createMemo(() => layout.manager.splits().length > 1);
-  const canDuplicateSplit = createMemo(
-    () => panel.handle.content().type === 'component'
-  );
-  const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
-  const canSwapWith = (direction: 'left' | 'right') =>
-    layout.manager.canSwapSplit(panel.handle.id, direction);
-
-  const newSplitContent = () => ({
-    type: 'component' as const,
-    id: LIST_VIEW_ID.inbox,
-  });
-
-  const duplicateContent = (): SplitContent => ({ ...panel.handle.content() });
-
-  const insertSplitBeside = (side: 'left' | 'right', content: SplitContent) => {
-    const index = splitIndex();
-    if (index < 0) return;
-
-    const insertIndex = side === 'left' ? index : index + 1;
-
-    layout.manager.createNewSplit({
-      content,
-      activate: true,
-      allowDuplicate: true,
-      insertIndex,
-      referredFrom: null,
-    });
-  };
-
-  const copyDebugInfo = async () => {
-    try {
-      const splits = layout.manager.splits();
-      await navigator.clipboard.writeText(
-        JSON.stringify(
-          {
-            activeSplitId: layout.manager.activeSplitId(),
-            currentSplitId: panel.handle.id,
-            currentSplitIndex: splitIndex(),
-            currentSplitUrl: panel.handle.getUrl(),
-            splits: splits.map((split, index) => ({
-              index,
-              id: split.id,
-              content: split.content,
-              referredFrom: split.referredFrom,
-              isCurrent: split.id === panel.handle.id,
-            })),
-          },
-          null,
-          2
-        )
-      );
-      toast.success('Debug info copied to clipboard');
-    } catch (error) {
-      console.error('Failed to copy split debug info', error);
-      toast.failure('Failed to copy debug info');
-    }
-  };
-
+/** Shared header controls; each host supplies its current list navigation. */
+export function ListNavigationButtons(props: {
+  navigation: ListDetailNavigationTarget;
+  class?: string;
+  size?: 'sm' | 'md';
+}) {
+  const iconSize = () =>
+    isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
   return (
-    <ContextMenu>
-      <ContextMenu.Trigger class="contents">
-        {props.children}
-      </ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenuContent class="w-60">
-          <MenuItem
-            icon={SplitIcon}
-            iconClass="rotate-180"
-            text="New split left"
-            disabled={!layout.manager.canAppendSplit()}
-            onClick={() => insertSplitBeside('left', newSplitContent())}
-          />
-          <MenuItem
-            icon={SplitIcon}
-            text="New split right"
-            disabled={!layout.manager.canAppendSplit()}
-            onClick={() => insertSplitBeside('right', newSplitContent())}
-          />
-          <MenuItem
-            icon={CopyIcon}
-            text="Duplicate split"
-            disabled={!layout.manager.canAppendSplit() || !canDuplicateSplit()}
-            onClick={() => insertSplitBeside('right', duplicateContent())}
-          />
-          <MenuSeparator />
-          <MenuItem
-            icon={ArrowLeft}
-            text="Swap split left"
-            disabled={!canSwapWith('left')}
-            onClick={() => layout.manager.swapSplit(panel.handle.id, 'left')}
-          />
-          <MenuItem
-            icon={ArrowRight}
-            text="Swap split right"
-            disabled={!canSwapWith('right')}
-            onClick={() => layout.manager.swapSplit(panel.handle.id, 'right')}
-          />
-          <MenuSeparator />
-          <MenuItem
-            icon={panel.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
-            hotkeyToken={TOKENS.window.spotlight.toggle}
-            text={
-              panel.handle.isSpotLight() ? 'Minimize split' : 'Spotlight split'
-            }
-            disabled={!canToggleSpotlight()}
-            onClick={() => panel.handle.toggleSpotlight()}
-          />
-          <MenuSeparator />
-          <MenuItem
-            icon={CloseIcon}
-            text="Close other splits"
-            disabled={!hasOtherSplits()}
-            onClick={() => {
-              const currentSplitId = panel.handle.id;
-              // A Preview Pair is one unit: keep the current split's partner so
-              // closing "other" splits from a Viewer doesn't strand it by
-              // removing its Controller (or vice versa).
-              const partnerId =
-                layout.manager.controllerOf(currentSplitId) ??
-                layout.manager.viewerOf(currentSplitId);
-              const kept = new Set([currentSplitId, partnerId]);
-
-              const otherSplitIds = layout.manager
-                .splits()
-                .map((split) => split.id)
-                .filter((id) => !kept.has(id));
-
-              for (const splitId of otherSplitIds) {
-                layout.manager.removeSplit(splitId);
-              }
-
-              layout.manager.activateSplit(currentSplitId);
-            }}
-          />
-          <MenuItem
-            icon={ArrowClockwise}
-            text="Reset sizes"
-            disabled={!hasOtherSplits()}
-            onClick={() => layout.manager.resizeContext()?.reset()}
-          />
-          <MenuSeparator />
-          <MenuItem
-            icon={CopyIcon}
-            text="Copy debug info"
-            onClick={copyDebugInfo}
-          />
-        </ContextMenuContent>
-      </ContextMenu.Portal>
-    </ContextMenu>
+    <HeaderActionGroup label={t('splitMenu.itemNavigation')} size={props.size}>
+      <div class={cn('flex items-center touch:gap-0.5', props.class)}>
+        <ButtonGroup.Button
+          aria-label={t('splitMenu.previousItem')}
+          tooltip={{
+            content: t('splitMenu.previousItem'),
+            hotkey: TOKENS.entity.step.start,
+          }}
+          variant="ghost"
+          size={iconSize()}
+          disabled={!props.navigation.canPrevious()}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={props.navigation.previous}
+        >
+          <CaretUp class="size-4" />
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label={t('splitMenu.nextItem')}
+          tooltip={{
+            content: t('splitMenu.nextItem'),
+            hotkey: TOKENS.entity.step.end,
+          }}
+          variant="ghost"
+          size={iconSize()}
+          disabled={!props.navigation.canNext()}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={props.navigation.next}
+        >
+          <CaretDown class="size-4" />
+        </ButtonGroup.Button>
+      </div>
+    </HeaderActionGroup>
   );
 }
 
@@ -466,9 +395,19 @@ export function SplitHeader(props: {
   collapseController: PriorityCollapseController;
 }) {
   const panel = useContext(SplitPanelContext);
+  const notificationSource = useGlobalNotificationSource();
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
+
+  const hideMobileBack = () => {
+    const content = panel.handle.content();
+    return (
+      isListViewID(content.id) ||
+      (content.type === 'component' &&
+        (content.id === 'booking-links' || content.id === 'external'))
+    );
+  };
 
   const droppableId = `split-header-${panel.handle.id}`;
   const droppable = createDroppable(droppableId, {
@@ -499,10 +438,14 @@ export function SplitHeader(props: {
     if (!next) return;
     if (current.type === next.type && current.id === next.id) return;
 
-    void openEntityInSplitFromUnifiedList(data, {
-      splitHandle: panel.handle,
-      allowDuplicate: true,
-    });
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(data, {
+        splitHandle: panel.handle,
+        allowDuplicate: true,
+        notificationSource,
+      }),
+      'open-entity-in-split'
+    );
   });
 
   return (
@@ -527,12 +470,12 @@ export function SplitHeader(props: {
             <Portal mount={panelRef()}>
               <Show when={isEntityDraggingOver()}>
                 <div
-                  class="pointer-events-none absolute inset-0 rounded-xl z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted flex items-center justify-center"
+                  class="pointer-events-none absolute inset-0 z-modal-overlay bg-modal-overlay flex items-center justify-center"
                   data-split-header-drop-overlay
                 >
-                  <div class="max-w-[min(28rem,calc(100%-3rem))] min-w-0 bg-surface border border-edge rounded-lg shadow-lg shadow-drop-shadow px-4 py-3 flex items-center gap-2 text-sm text-ink">
+                  <div class="max-w-[min(28rem,calc(100%-3rem))] min-w-0 bg-surface border border-edge rounded-full shadow-lg shadow-drop-shadow px-4 py-2 flex items-center gap-2 font-sans text-xs text-ink">
                     <span class="shrink-0 text-ink-muted">
-                      Open in this split
+                      {t('splitMenu.openInThisSplit')}
                     </span>
                   </div>
                 </div>
@@ -540,35 +483,32 @@ export function SplitHeader(props: {
             </Portal>
           )}
         </Show>
+        {/* pl-1 + the close wrapper's pl-2 insets the 24px close button 12px
+            from the left, matching its inset from the top of the 48px header. */}
         <div
-          class="absolute inset-0 flex justify-start items-center touch:px-(--mobile-chrome-gutter) touch:gap-2"
+          class="absolute inset-0 flex justify-start items-center not-touch:pl-1 touch:px-(--mobile-chrome-gutter) touch:gap-2"
           ref={props.collapseController.setRow}
         >
           <Show
             when={isTouchDevice()}
             fallback={
               <div class="relative flex items-center pl-2 h-full">
-                <SidebarExpandButton />
                 <SplitCloseButton />
-                <div class="flex items-center @max-[380px]/split-header:hidden">
-                  <SplitBackButton />
-                  <SplitForwardButton />
-                </div>
+                <SplitDriveReturnButton />
               </div>
             }
           >
-            {/* Back/forward island. List views never render the back button
-                (their header hosts the filter pills instead), so the island
-                hides for them even when history allows going back. */}
+            {/* List views and Scheduling use navigation islands instead of Back. */}
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                (!panel.handle.canGoBack() ||
-                  isListViewID(panel.handle.content().id)) &&
+                ((!panel.handle.canGoBack() &&
+                  !hasAgentsBackFallback(panel.handle.content())) ||
+                  hideMobileBack()) &&
                   'hidden'
               )}
             >
-              <Show when={!isListViewID(panel.handle.content().id)}>
+              <Show when={!hideMobileBack()}>
                 <SplitBackButton />
               </Show>
             </HeaderIsland>
@@ -585,14 +525,24 @@ export function SplitHeader(props: {
             contentClass="h-full flex items-center gap-0.5 pl-2 touch:pl-0 touch:gap-2 touch:max-w-full"
             contentRef={(element) => {
               panel.layoutRefs.headerLeft = element;
+              onCleanup(() => {
+                if (panel.layoutRefs.headerLeft === element) {
+                  panel.layoutRefs.headerLeft = undefined;
+                }
+              });
             }}
           />
 
-          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
+          <div class="header-actions h-full grow shrink flex items-center justify-end gap-2 px-2 touch:px-0">
             <div
               class="contents"
               ref={(ref) => {
                 panel.layoutRefs.headerRight = ref;
+                onCleanup(() => {
+                  if (panel.layoutRefs.headerRight === ref) {
+                    panel.layoutRefs.headerRight = undefined;
+                  }
+                });
               }}
             />
             <SoupNavigationButtons />

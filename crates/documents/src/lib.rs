@@ -17,6 +17,7 @@ pub mod inbound;
 
 #[cfg(any(
     feature = "outbound",
+    feature = "service",
     feature = "markdown_init",
     feature = "document_create_adapters"
 ))]

@@ -1,3 +1,5 @@
+pub mod agent_session;
+pub mod calendar_event;
 pub mod call_record;
 pub mod channel;
 pub mod chat;

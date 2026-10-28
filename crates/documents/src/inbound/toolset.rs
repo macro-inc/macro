@@ -1,0 +1,440 @@
+//! Toolset inbound adapter for Documents.
+
+mod canvas;
+mod comment_on_text;
+mod create_document;
+mod create_skill;
+mod design;
+mod edit_document;
+mod illustrator;
+mod photoshop;
+mod presentation;
+mod read_content;
+mod read_metadata;
+mod rename_document;
+mod spreadsheet;
+mod upload_file;
+mod word_document;
+
+#[cfg(test)]
+mod comment_test;
+#[cfg(test)]
+mod test;
+
+use crate::{
+    domain::comments::{DocumentCommentReader, DocumentComments},
+    domain::create::DocumentCreator,
+    domain::design::{DesignFiles, DesignService, NoDesignFiles},
+    domain::illustrator::{IllustratorFiles, IllustratorService, NoIllustratorFiles},
+    domain::photoshop::{NoPhotoshopFiles, PhotoshopFiles, PhotoshopService},
+    domain::ports::DocumentService,
+    domain::ports::create::DocumentCreationService,
+    domain::ports::editing::{EditingWorkerService, EditorName},
+    domain::ports::mentions::NoOpDocumentMentionTracker,
+    domain::presentation::{NoPresentationFiles, PresentationFiles, PresentationService},
+    domain::word_document::WordDocumentFiles,
+    inbound::toolset::{
+        canvas::{ApplyCanvasEdits, EditCanvas, ReadCanvas, RenderCanvas},
+        comment_on_text::CommentOnText,
+        create_document::CreateDocument,
+        create_skill::CreateSkill,
+        design::ReadDesign,
+        edit_document::EditDocument,
+        illustrator::ReadIllustratorDocument,
+        photoshop::ReadPhotoshopDocument,
+        presentation::{EditPresentation, ReadPresentation},
+        read_content::ReadContent,
+        read_metadata::ReadMetadata,
+        rename_document::RenameDocument,
+        spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
+        upload_file::UploadFile,
+        word_document::{EditWordDocument, ReadWordDocument},
+    },
+    outbound::{
+        document_bytes_upload::ReqwestDocumentBytesUploader,
+        lexical_comment_marks::LexicalCommentMarks, markdown_init::LexicalSyncMarkdownInitializer,
+    },
+};
+use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
+use bot_id::BotId;
+use entity_access::domain::{
+    models::{AccessError, BotAccessScope, EntityAccessReceipt, EntityType},
+    ports::EntityAccessService,
+};
+use lexical_client::LexicalClient;
+use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::{api::MessageServiceApi, ports::MessageError, service::MessageWrite};
+use model_owner::CreationPrincipal;
+use std::sync::Arc;
+use sync_service_client::SyncServiceClient;
+use uuid::Uuid;
+
+/// Default backend-owned document creation use case for document tools.
+pub type DefaultDocumentToolCreator<DSvc> = DocumentCreator<
+    Arc<DSvc>,
+    LexicalSyncMarkdownInitializer,
+    ReqwestDocumentBytesUploader,
+    NoOpDocumentMentionTracker,
+>;
+
+/// Service context for document AI tools
+pub struct DocumentToolContext<
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+> {
+    /// The document service instance
+    pub service: Arc<DSvc>,
+    /// The entity access service instance
+    pub entity_access_service: Arc<ESvc>,
+
+    /// The lexical client
+    pub lexical_client: Arc<LexicalClient>,
+
+    /// The sync-service client
+    pub sync_service_client: Arc<SyncServiceClient>,
+
+    /// Backend-owned document creation use case.
+    pub creator: DefaultDocumentToolCreator<DSvc>,
+
+    /// Editing worker service for the EditDocument tool.
+    pub editing: Arc<EDSvc>,
+
+    /// A document's comment threads, read by the ReadContent tool.
+    pub comments: Arc<dyn DocumentComments>,
+
+    /// Shared message service the comment tools reply and resolve through.
+    pub messages: Arc<dyn MessageServiceApi>,
+
+    /// Permission-scoped deterministic spreadsheet workflows.
+    pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
+
+    /// Reading and editing uploaded Word documents through their live copy.
+    /// Hosts without a file store keep the default, which cannot seed a
+    /// document nobody has opened yet; wire one with
+    /// [`Self::with_word_document_files`].
+    pub word_documents:
+        Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc, SyncServiceClient>>,
+
+    /// Reading and editing PowerPoint presentations. Hosts without a file
+    /// store keep the default, whose calls fail with a clear message; wire
+    /// one with [`Self::with_presentation_files`].
+    pub presentations: Arc<PresentationService>,
+
+    /// Reading Figma designs. Hosts without a file store keep the default,
+    /// whose calls fail with a clear message; wire one with
+    /// [`Self::with_design_files`].
+    pub designs: Arc<DesignService>,
+
+    /// Reading Photoshop documents. Hosts without a file store keep the
+    /// default, whose calls fail with a clear message; wire one with
+    /// [`Self::with_photoshop_files`].
+    pub photoshop_documents: Arc<PhotoshopService>,
+
+    /// Reading Illustrator documents. Hosts without a file store keep the
+    /// default, whose calls fail with a clear message; wire one with
+    /// [`Self::with_illustrator_files`].
+    pub illustrator_documents: Arc<IllustratorService>,
+
+    /// JWT secret used to mint document permission tokens for the editing worker.
+    pub document_permission_jwt_secret: String,
+
+    /// Shared admission used by the domain AI-editing use case.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+
+    /// Records the token usage the editing worker reports. Defaults to a no-op;
+    /// the chat path injects the real (Postgres-backed) recorder per request.
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+
+    /// The bot these tools act as, on behalf of the requesting user. Defaults
+    /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
+    pub actor: BotId,
+
+    /// The display name of [`Self::actor`] as the host knows it, set with
+    /// [`Self::with_actor_name`]. First-party bots need none: their names are
+    /// compile-time constants. A user- or team-owned bot is a row the host has
+    /// already read, so it hands the name over rather than have every tool
+    /// look it up again.
+    actor_name: Option<EditorName>,
+}
+
+impl<
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+> Clone for DocumentToolContext<DSvc, ESvc, EDSvc>
+{
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            entity_access_service: self.entity_access_service.clone(),
+            lexical_client: self.lexical_client.clone(),
+            sync_service_client: self.sync_service_client.clone(),
+            creator: self.creator.clone(),
+            editing: self.editing.clone(),
+            comments: self.comments.clone(),
+            messages: self.messages.clone(),
+            spreadsheet: self.spreadsheet.clone(),
+            word_documents: self.word_documents.clone(),
+            presentations: self.presentations.clone(),
+            designs: self.designs.clone(),
+            photoshop_documents: self.photoshop_documents.clone(),
+            illustrator_documents: self.illustrator_documents.clone(),
+            document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            admission: self.admission.clone(),
+            recorder: self.recorder.clone(),
+            actor: self.actor,
+            actor_name: self.actor_name.clone(),
+        }
+    }
+}
+
+impl<
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+> DocumentToolContext<DSvc, ESvc, EDSvc>
+{
+    /// Create a new document tool context
+    pub fn new(
+        service: DSvc,
+        entity_access_service: ESvc,
+        lexical_client: LexicalClient,
+        sync_service_client: SyncServiceClient,
+        editing: EDSvc,
+        document_permission_jwt_secret: String,
+        messages: Arc<dyn MessageServiceApi>,
+    ) -> Self {
+        let service = Arc::new(service);
+        let lexical_client = Arc::new(lexical_client);
+        let sync_service_client = Arc::new(sync_service_client);
+        let creator = DocumentCreator::new(
+            service.clone(),
+            LexicalSyncMarkdownInitializer::detached(
+                lexical_client.as_ref().clone(),
+                sync_service_client.as_ref().clone(),
+            ),
+            ReqwestDocumentBytesUploader::default(),
+            NoOpDocumentMentionTracker,
+        );
+        let comments = Arc::new(DocumentCommentReader::new(
+            messages.clone(),
+            LexicalCommentMarks::new(lexical_client.clone()),
+        ));
+        let editing = Arc::new(editing);
+        let spreadsheet = Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
+            service.clone(),
+            editing.clone(),
+            document_permission_jwt_secret.clone(),
+        ));
+        let word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
+            service.clone(),
+            editing.clone(),
+            sync_service_client.clone(),
+            Arc::new(crate::domain::word_document::NoWordDocumentFiles),
+            document_permission_jwt_secret.clone(),
+        ));
+
+        Self {
+            service,
+            entity_access_service: Arc::new(entity_access_service),
+            lexical_client,
+            sync_service_client,
+            creator,
+            editing,
+            comments,
+            messages,
+            spreadsheet,
+            word_documents,
+            presentations: Arc::new(PresentationService::new(Arc::new(NoPresentationFiles))),
+            designs: Arc::new(DesignService::new(Arc::new(NoDesignFiles))),
+            photoshop_documents: Arc::new(PhotoshopService::new(Arc::new(NoPhotoshopFiles))),
+            illustrator_documents: Arc::new(IllustratorService::new(Arc::new(NoIllustratorFiles))),
+            document_permission_jwt_secret,
+            admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            recorder: Arc::new(ai_usage::NoOpUsageRecorder),
+            actor: bot_id::MACRO_AI_BOT_ID,
+            actor_name: None,
+        }
+    }
+
+    /// Configure admission for AI edits; deterministic operations do not use it.
+    pub fn with_admission(
+        mut self,
+        admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    ) -> Self {
+        self.admission = admission;
+        self
+    }
+
+    /// The AI-editing use case using the currently injected services.
+    pub fn ai_editing(&self) -> crate::domain::ai_editing::AiEditingService<EDSvc> {
+        crate::domain::ai_editing::AiEditingService::new(
+            self.editing.clone(),
+            self.admission.clone(),
+            self.recorder.clone(),
+        )
+    }
+
+    /// Store presentations the presentation tools read and edit through `files`.
+    pub fn with_presentation_files(mut self, files: Arc<dyn PresentationFiles>) -> Self {
+        self.presentations = Arc::new(PresentationService::new(files));
+        self
+    }
+
+    /// Read uploaded Word files through `files`, so the Word tools can seed a
+    /// document nobody has opened yet.
+    pub fn with_word_document_files(mut self, files: Arc<dyn WordDocumentFiles>) -> Self {
+        self.word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
+            self.service.clone(),
+            self.editing.clone(),
+            self.sync_service_client.clone(),
+            files,
+            self.document_permission_jwt_secret.clone(),
+        ));
+        self
+    }
+
+    /// Read designs the design tools describe through `files`.
+    pub fn with_design_files(mut self, files: Arc<dyn DesignFiles>) -> Self {
+        self.designs = Arc::new(DesignService::new(files));
+        self
+    }
+
+    /// Read the Photoshop documents the Photoshop tools describe through
+    /// `files`.
+    pub fn with_photoshop_files(mut self, files: Arc<dyn PhotoshopFiles>) -> Self {
+        self.photoshop_documents = Arc::new(PhotoshopService::new(files));
+        self
+    }
+
+    /// Read the Illustrator documents the Illustrator tools describe through
+    /// `files`.
+    pub fn with_illustrator_files(mut self, files: Arc<dyn IllustratorFiles>) -> Self {
+        self.illustrator_documents = Arc::new(IllustratorService::new(files));
+        self
+    }
+
+    /// Set the usage recorder the EditDocument tool logs worker token usage to.
+    pub fn with_recorder(mut self, recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
+        self.recorder = recorder;
+        self
+    }
+
+    /// Set the bot these tools act as.
+    pub fn with_actor(mut self, actor: BotId) -> Self {
+        self.actor = actor;
+        self
+    }
+
+    /// Set the display name of the bot these tools act as. A blank name is
+    /// no name: the actor's own is used, when it has one.
+    pub fn with_actor_name(mut self, name: &str) -> Self {
+        self.actor_name = EditorName::new(name);
+        self
+    }
+
+    /// The name readers see on what these tools write as it happens - the
+    /// label on the cursor the editing worker draws: the host-supplied name,
+    /// else the first-party bot's own. `None` for a user- or team-owned bot
+    /// the host did not name.
+    pub fn actor_editor_name(&self) -> Option<EditorName> {
+        self.actor_name
+            .clone()
+            .or_else(|| bot_id::system_bot(self.actor).and_then(|bot| EditorName::new(bot.name)))
+    }
+
+    /// Mint the bot's comment capability on the document on behalf of the
+    /// requesting user: the same comment access the web composer requires.
+    pub async fn require_comment_write(
+        &self,
+        request_context: &RequestContext,
+        document_id: Uuid,
+    ) -> Result<EntityAccessReceipt<MessageWrite>, ToolCallError> {
+        self.entity_access_service
+            .generate_bot_entity_access_receipt::<MessageWrite>(
+                self.actor,
+                BotAccessScope::user(request_context.user_id.clone()),
+                &document_id.to_string(),
+                EntityType::Document,
+            )
+            .await
+            .map_err(comment_access_error)
+    }
+
+    /// Who these tools create entities as when acting for `user`.
+    pub fn creation_principal(&self, user: MacroUserIdStr<'static>) -> CreationPrincipal {
+        CreationPrincipal::BotForUser {
+            bot: self.actor,
+            user,
+        }
+    }
+}
+
+/// Create a document toolset
+pub fn document_toolset<DSvc, ESvc, EDSvc>()
+-> AsyncToolCollection<DocumentToolContext<DSvc, ESvc, EDSvc>>
+where
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+{
+    AsyncToolCollection::new()
+        .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CreateSkill, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<RenderCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ApplyCanvasEdits, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CommentOnText, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadDesign, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadPhotoshopDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadIllustratorDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+}
+
+fn comment_access_error(err: AccessError) -> ToolCallError {
+    let description = match err {
+        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+            "you need comment access to the document to comment on it"
+        }
+        AccessError::NotFound(_) => "document not found",
+        AccessError::BadRequest(_) => "invalid document id",
+        AccessError::Unavailable(_) | AccessError::Internal(_) => {
+            "failed to verify access to the document"
+        }
+    };
+    ToolCallError {
+        description: description.to_string(),
+        internal_error: err.into(),
+    }
+}
+
+fn comment_error(description: &'static str) -> impl FnOnce(MessageError) -> ToolCallError {
+    move |err| {
+        let description = match &err {
+            MessageError::NotFound => "comment thread not found on this document".to_string(),
+            MessageError::Forbidden => {
+                "you need comment access to the document to comment on it".to_string()
+            }
+            MessageError::Invalid(reason) => format!("{description}: {reason}"),
+            MessageError::Conflict => format!("{description}: message id already exists"),
+            MessageError::Repository(_) => description.to_string(),
+        };
+        ToolCallError {
+            description,
+            internal_error: anyhow::Error::new(err),
+        }
+    }
+}

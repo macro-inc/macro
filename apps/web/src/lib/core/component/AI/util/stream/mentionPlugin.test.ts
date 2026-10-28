@@ -15,6 +15,7 @@ const OTHER_MACRO_XML_TAGS = [
   '<m-contact-mention>{"contactId":"c1","name":"Ness Chu"}</m-contact-mention>',
   '<m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>',
   '<m-group-mention>{"groupAlias":"here"}</m-group-mention>',
+  '<m-agent-session-mention>{"id":"sess-1","label":"Fix login"}</m-agent-session-mention>',
   '<m-theme-mention>{"name":"onboarding","data":{}}</m-theme-mention>',
   '<m-tag>{"optionId":"tag-1","propertyDefinitionId":"prop-1","scope":"team","name":"Launch"}</m-tag>',
   '<m-await>{"awaitId":"a1","text":"Waiting","inline":true}</m-await>',

@@ -4,10 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateUnthreadedAnchorResponse } from './createUnthreadedAnchorResponse';
+import type { EditAnchorResponse } from './editAnchorResponse';
 
 export type AnnotationIncrementalUpdateOneOfFourPayload = {
   documentId: string;
-  response: CreateUnthreadedAnchorResponse;
+  response: EditAnchorResponse;
   sender: string;
 };

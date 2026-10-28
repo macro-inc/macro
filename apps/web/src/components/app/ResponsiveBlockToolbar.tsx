@@ -1,14 +1,17 @@
+import type { Permissions } from '@core/component/SharePermissions';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
-import { Button, cn } from '@ui';
+import { Button, ButtonGroup, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { HeaderActionGroup } from './HeaderActionGroup';
+import { SidePanel } from './side-panel';
 import { HeaderIsland } from './split-layout/components/HeaderIsland';
 import {
+  BlockSplitFileMenu,
   type FileOperation,
-  SplitFileMenu,
 } from './split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -18,7 +21,6 @@ import {
   SplitPermissionsBadge,
   SplitTitleFileMenu,
 } from './split-layout/components/SplitLabel';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type {
   SplitFileMenuAction,
   SplitFileMenuActionGroup,
@@ -31,36 +33,39 @@ export type BlockTool = {
   children?: SplitFileMenuAction[];
   condition?: () => boolean;
   isActive?: () => boolean;
-  buttonComponent?: () => JSX.Element;
+  buttonComponent?: Component<{ grouped?: boolean }>;
   focusTarget?: () => HTMLElement | null;
   hotkeyToken?: HotkeyToken;
   /** Menu section this tool renders in when shown in the title file menu. */
   group?: SplitFileMenuActionGroup;
 };
 
-export function ToolButton(props: { tool: BlockTool }) {
+export function ToolButton(props: { tool: BlockTool; grouped?: boolean }) {
   const label = () =>
     typeof props.tool.label === 'function'
       ? props.tool.label()
       : props.tool.label;
 
+  const Control = props.grouped ? ButtonGroup.Button : Button;
   return (
-    <Button
+    <Control
+      variant="ghost"
+      aria-label={label()}
+      tooltip={{ content: label(), hotkey: props.tool.hotkeyToken }}
       onClick={props.tool.action}
-      label={label()}
-      hotkey={props.tool.hotkeyToken}
       class={cn(
         'px-1',
         props.tool.isActive?.() && 'bg-accent/20 hover:bg-accent/30 text-accent'
       )}
-      size="icon-sm"
+      size={isTouchDevice() || props.grouped ? 'icon-sm' : 'icon-md'}
     >
       <Dynamic
         component={
           props.tool.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
         }
+        class="size-4 shrink-0 touch:size-3.5"
       />
-    </Button>
+    </Control>
   );
 }
 
@@ -101,6 +106,8 @@ interface BlockToolbarProps {
    * id/name/blockName alone (e.g. calls need their channelId).
    */
   entity?: EntityData;
+  /** Feature-owned access when the session loads outside legacy Block state. */
+  permissions?: Permissions;
 }
 
 /**
@@ -139,7 +146,21 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
       fallback={
         <>
           <SplitHeaderRight>
-            <div class="order-[1000] flex items-center gap-1">
+            <div class="order-[1000] flex items-center gap-2">
+              <Show when={activeToolbarTools().length > 0}>
+                <HeaderActionGroup label="Document actions">
+                  <For each={activeToolbarTools()}>
+                    {(tool) =>
+                      tool.buttonComponent ? (
+                        <tool.buttonComponent grouped />
+                      ) : (
+                        <ToolButton tool={tool} grouped />
+                      )
+                    }
+                  </For>
+                </HeaderActionGroup>
+              </Show>
+              <SidePanel.HeaderActionsOutlet />
               <For each={headerTools()}>
                 {(tool) => (
                   <Show when={!tool.condition || tool.condition()}>
@@ -154,7 +175,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
             </div>
           </SplitHeaderRight>
           <SplitTitleFileMenu>
-            <SplitFileMenu
+            <BlockSplitFileMenu
               id={props.id}
               itemType={props.itemType}
               name={props.name}
@@ -162,29 +183,20 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
               ops={props.ops}
               tools={fileMenuTools()}
               entity={props.entity}
+              permissions={props.permissions}
               buttonClass="order-first"
             />
           </SplitTitleFileMenu>
-          <Show when={activeToolbarTools().length > 0}>
-            <SplitToolbarRight>
-              <For each={activeToolbarTools()}>
-                {(tool) => (
-                  <>
-                    {tool.buttonComponent ? (
-                      <tool.buttonComponent />
-                    ) : (
-                      <ToolButton tool={tool} />
-                    )}
-                  </>
-                )}
-              </For>
-            </SplitToolbarRight>
-          </Show>
         </>
       }
     >
+      <SplitHeaderRight>
+        <HeaderIsland class="has-[[data-side-panel-header-actions]:empty]:hidden">
+          <SidePanel.HeaderActionsOutlet />
+        </HeaderIsland>
+      </SplitHeaderRight>
       <SplitTitleFileMenu>
-        <SplitFileMenu
+        <BlockSplitFileMenu
           id={props.id}
           itemType={props.itemType}
           name={props.name}
@@ -192,6 +204,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
           ops={props.ops}
           tools={fileMenuTools()}
           entity={props.entity}
+          permissions={props.permissions}
           buttonClass="order-last"
         />
       </SplitTitleFileMenu>

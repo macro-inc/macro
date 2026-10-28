@@ -9,7 +9,7 @@ import {
   onMount,
   Suspense,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import {
   type BlockAlias,
@@ -92,6 +92,7 @@ type BlockInstance = {
   type: BlockName;
   id: string;
   element: () => JSXElement;
+  isMounted: () => boolean;
   nested?: NestedState<any>;
   handle: OwnedBlockHandle<any>;
 };
@@ -104,7 +105,7 @@ type CreateBlockOptions<Name extends BlockName = BlockName> = {
   aliasContext?: BlockAliasContext;
 };
 
-type UnmanagedBlockInstance = Omit<BlockInstance, 'handle'>;
+type UnmanagedBlockInstance = Omit<BlockInstance, 'handle' | 'isMounted'>;
 
 /**
  * Creates an unmanaged block instance
@@ -218,7 +219,9 @@ function createBlockElement({
           id={id}
           handle={ownedHandle}
         />
-        <Suspense fallback={<LoadingBlock />}>
+        <Suspense
+          fallback={<Dynamic component={definition.loading ?? LoadingBlock} />}
+        >
           <Dynamic component={definition.component} {...opts?.params} />
         </Suspense>
         <BlockEffectRunner />
@@ -309,6 +312,8 @@ type CreateBlockInstanceFn = (
 ) => BlockInstance;
 
 export type BlockOrchestrator = {
+  /** Whether a managed block is currently mounted in any surface. */
+  isBlockMounted: (type: BlockName, id: string) => boolean;
   /** Get a publicly accessible handle to a block instance */
   getBlockHandle: GetBlockHandleFn;
   /**
@@ -327,6 +332,34 @@ export type BlockOrchestrator = {
    *  @returns A managed block instance
    */
   createBlockInstance: CreateBlockInstanceFn;
+  /**
+   * Re-file a mounted instance under a new id, keeping the instance itself
+   * alive.
+   *
+   * For a block whose id is not knowable at mount time: the agent block opens
+   * on a client-minted placeholder and learns its real session id when the
+   * create resolves (`features/block-agent/context/pending-session.ts`). The
+   * mount must survive that — the user is already typing into it — so the
+   * registry is re-keyed rather than the block re-created. The element keeps
+   * the id it closed over, so `useBlockId()` still reports the placeholder;
+   * that is what the block resolves through the pending registry.
+   *
+   * A no-op when nothing is registered under `fromId`, or when `toId` is
+   * already taken.
+   */
+  rekeyBlockInstance: (type: BlockName, fromId: string, toId: string) => void;
+  /**
+   * Registers a handle for block content mounted without a block container,
+   * such as an entity detail view, so openers that navigate through
+   * [getBlockHandle] reach it. The handle is removed when the calling owner
+   * is disposed.
+   *
+   * Returns undefined while another block holds the id.
+   */
+  registerBlockHandle: <T extends BlockName>(
+    type: T,
+    id: string
+  ) => OwnedBlockHandle<BlockMethodsFor<T>> | undefined;
 };
 
 export function createBlockOrchestrator(): BlockOrchestrator {
@@ -359,9 +392,17 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     return ownedHandle;
   };
 
+  /** Placeholder id -> the id its instance was re-filed under. */
+  const rekeyed = new Map<string, string>();
+
   const deregisterBlock = (type: BlockName, id: string) => {
-    instances.delete(keyOf(type, id));
-    setBlocks(id, undefined!);
+    // The element closed over the id it mounted with, so a re-keyed instance
+    // asks to be torn down under its placeholder. Follow the move, or the
+    // real entry outlives the mount.
+    const current = rekeyed.get(keyOf(type, id)) ?? id;
+    rekeyed.delete(keyOf(type, id));
+    instances.delete(keyOf(type, current));
+    setBlocks(current, undefined!);
   };
 
   const getBlockHandle: GetBlockHandleFn = async function (
@@ -387,7 +428,7 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     opts?: CreateBlockOptions
   ): BlockInstance {
     const key = keyOf(type, id);
-    let existing = instances.get(key);
+    const existing = instances.get(key);
     if (existing) return existing;
 
     const ownedHandle = registerBlock(type, id);
@@ -411,11 +452,29 @@ export function createBlockOrchestrator(): BlockOrchestrator {
       },
     });
 
+    let mounted = false;
+    const mountOnce = () => {
+      if (mounted) {
+        return (
+          <div class="flex size-full items-center justify-center text-sm text-ink-muted">
+            Content already open.
+          </div>
+        );
+      }
+
+      mounted = true;
+      onCleanup(() => {
+        mounted = false;
+      });
+      return element();
+    };
+
     const instance: BlockInstance = {
       key,
       type,
       id,
-      element,
+      element: mountOnce,
+      isMounted: () => mounted,
       nested: opts?.nested,
       handle: ownedHandle,
     };
@@ -424,9 +483,41 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     return instance;
   }
 
+  function rekeyBlockInstance(type: BlockName, fromId: string, toId: string) {
+    if (fromId === toId) return;
+    const from = keyOf(type, fromId);
+    const to = keyOf(type, toId);
+    const instance = instances.get(from);
+    if (!instance || instances.has(to)) return;
+
+    instances.delete(from);
+    instances.set(to, { ...instance, key: to, id: toId });
+    rekeyed.set(from, toId);
+
+    // The handle's `block.id` is what `getBlockHandle` resolves and what
+    // method registrations are looked up by, so it moves with the instance.
+    const existing = (blocks as any)[fromId] as BlockWithHandle | undefined;
+    if (!existing) return;
+    setBlocks(fromId, undefined!);
+    setBlocks(toId, { ...existing, id: toId });
+  }
+
+  function registerBlockHandle<T extends BlockName>(type: T, id: string) {
+    if (unwrap(blocks)[id]) return;
+    const handle = registerBlock(type, id);
+    onCleanup(() => {
+      if (unwrap(blocks)[id]?.handle === handle) setBlocks(id, undefined!);
+    });
+    return handle;
+  }
+
   return {
+    isBlockMounted: (type, id) =>
+      instances.get(keyOf(type, id))?.isMounted() ?? false,
     getBlockHandle,
     createBlockInstance: createManagedBlockInstance,
+    rekeyBlockInstance,
+    registerBlockHandle,
   };
 }
 

@@ -10,6 +10,7 @@
 
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { ControlRequest } from '@service-agent-harness/generated/schemas';
+import { ok } from 'neverthrow';
 
 type Client = typeof agentHarnessServiceClient;
 
@@ -37,6 +38,11 @@ function ensurePatched(): void {
     if (backend) return backend.control(request);
     return real.control(sessionId, request);
   };
+  // Replay has no server-side queue: every control acks as `sent`, so the
+  // queue is always empty rather than a fall-through to a session the
+  // service has never heard of.
+  agentHarnessServiceClient.queue = async (sessionId) =>
+    backends.has(sessionId) ? ok({ entries: [] }) : real.queue(sessionId);
   // `delete` stays real: a replay session has nothing behind it to delete.
 }
 

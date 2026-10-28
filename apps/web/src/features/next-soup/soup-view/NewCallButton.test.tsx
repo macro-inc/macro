@@ -2,17 +2,42 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { type JSX, Show } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NewCallButton } from './NewCallButton';
 
 const mocks = vi.hoisted(() => ({
   joinChannelCall: vi.fn<(_: string) => Promise<void>>(),
+  navigate: vi.fn<(_: string) => void>(),
 }));
 
 vi.mock('@channel/Call/join-channel-call', () => ({
   joinChannelCall: mocks.joinChannelCall,
+}));
+
+vi.mock('@solidjs/router', () => ({ useNavigate: () => mocks.navigate }));
+
+vi.mock('@channel/Call/NewMeetingButton', () => ({
+  NewMeetingButton: (props: {
+    onChannelCall: () => void;
+    onInstantCall: () => void;
+  }) => (
+    <>
+      <button type="button" onClick={props.onChannelCall}>
+        New channel call
+      </button>
+      <button type="button" onClick={props.onInstantCall}>
+        New instant call
+      </button>
+    </>
+  ),
 }));
 
 vi.mock('@core/component/RecipientSelector', () => ({
@@ -60,7 +85,9 @@ vi.mock('@ui', () => {
       {props.children}
     </button>
   );
-  const Dialog = (props: ChildrenProps) => <>{props.children}</>;
+  const Dialog = (props: ChildrenProps & { open: boolean }) => (
+    <Show when={props.open}>{props.children}</Show>
+  );
   Dialog.CloseButton = Button;
   Dialog.Title = (props: ChildrenProps) => <span>{props.children}</span>;
 
@@ -74,12 +101,23 @@ vi.mock('@ui', () => {
 beforeEach(() => {
   mocks.joinChannelCall.mockReset();
   mocks.joinChannelCall.mockResolvedValue();
+  mocks.navigate.mockReset();
 });
+afterEach(cleanup);
 
 describe('NewCallButton', () => {
+  it('opens instant call setup without creating a channel call', () => {
+    render(() => <NewCallButton />);
+    fireEvent.click(screen.getByRole('button', { name: 'New instant call' }));
+
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('/meet/new');
+    expect(mocks.joinChannelCall).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Start Call' })).toBeNull();
+  });
+
   it('starts the selected channel through the mounted-channel call flow', async () => {
     render(() => <NewCallButton />);
-
+    fireEvent.click(screen.getByRole('button', { name: 'New channel call' }));
     fireEvent.click(screen.getByRole('button', { name: 'Choose channel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Start Call' }));
 

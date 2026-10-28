@@ -1,44 +1,40 @@
+import {
+  ChatWithAgentButton,
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { SplitToolbarRight } from '@components/app/split-layout/components/SplitToolbar';
-import { useIsAuthenticated } from '@core/auth';
-import { useBlockId } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
-import {
-  REFERENCES_DRAWER_ID,
-  ReferencesButton,
-} from '@core/component/ReferencesModal';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
-import { blockTextSignal } from '@core/signal/load';
+import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
-import Download from '@phosphor/download-simple.svg';
-import Info from '@phosphor/info.svg';
-import Quotes from '@phosphor/quotes.svg';
+import IconShared from '@icon/share.svg';
+import Download from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { TabbedControl } from '@ui';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
-import type { CodeBlockMode } from './Block';
+import type { CodeBlockMode } from './CodeContent';
 import { CodeFileTypeChip } from './CodeFileTypeChip';
+import { CodeModeControl } from './CodeModeControl';
 
 export const TopBar: Component<{
   isHtmlFile: boolean;
@@ -47,31 +43,31 @@ export const TopBar: Component<{
 }> = (props) => {
   const analytics = useAnalytics();
 
-  const isAuth = useIsAuthenticated();
-
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
 
-  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
-  const shareCtx = useShareDialogContext();
+  const blockAlias = useBlockAliasedName();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias,
+    itemType: 'document',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const downloadDocument = createCallback(() => {
     const content = text();
     if (!text || !name) return;
     const file = new Blob([content ?? ''], { type: 'text/plain' });
-    downloadFile(file, downloadName());
+    fireAndForget(downloadFile(file, downloadName()), 'code-top-bar');
     analytics.track('download', { blockType: 'code' });
   });
 
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
@@ -84,17 +80,23 @@ export const TopBar: Component<{
     { op: 'delete' },
   ];
 
+  const chatEntity = () => ({
+    type: 'document' as const,
+    id: blockId,
+    name: name() ?? '',
+    fileType: 'code',
+  });
+
   const tools: BlockTool[] = [
     {
-      label: 'References',
-      icon: Quotes,
-      action: referencesControl.toggle,
-      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
-      buttonComponent: () => (
-        <ReferencesButton
-          documentId={blockId}
-          documentName={name()}
-          buttonSize="sm"
+      label: 'Ask Macro',
+      icon: ChatWithAgentIcon,
+      action: () => openChatWithAgent(chatEntity()),
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={chatEntity()}
+          label="Ask Macro"
         />
       ),
     },
@@ -102,8 +104,8 @@ export const TopBar: Component<{
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
@@ -112,22 +114,17 @@ export const TopBar: Component<{
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel badges={<CodeFileTypeChip />} />
+        <Show when={props.isHtmlFile && !isMobile()}>
+          <div class="ph-no-capture mx-2 h-full min-w-0 shrink-0">
+            <CodeModeControl
+              mode={props.mode}
+              onModeChange={props.onModeChange}
+            />
+          </div>
+        </Show>
       </SplitHeaderLeft>
 
       <ResponsivePermissionsBadge />
-
-      <Show when={props.isHtmlFile && !isMobile()}>
-        <SplitToolbarRight order={-1}>
-          <TabbedControl
-            list={[
-              { value: 'render', label: 'Render' },
-              { value: 'code', label: 'Code' },
-            ]}
-            value={props.mode}
-            onChange={(value) => props.onModeChange(value as CodeBlockMode)}
-          />
-        </SplitToolbarRight>
-      </Show>
 
       <ResponsiveBlockToolbar
         tools={tools}

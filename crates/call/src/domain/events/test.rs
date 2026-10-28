@@ -30,7 +30,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::Started(CallStartedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 created_by: user_id("macro|creator@example.com"),
                 created_at: timestamp("2026-07-27T18:01:02Z"),
                 recording_enabled: true,
@@ -49,12 +49,16 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 created_by: user_id("macro|creator@example.com"),
                 started_at: timestamp("2026-07-27T18:01:02Z"),
                 ended_at: timestamp("2026-07-27T18:03:07Z"),
                 duration_ms: None,
-                participant_count: 4,
+                participant_count: 2,
+                participants: vec![
+                    user_id("macro|creator@example.com"),
+                    user_id("macro|guest@example.com"),
+                ],
                 has_recording: true,
                 archive_reason: CallArchiveReason::LastParticipantLeft,
             }),
@@ -67,7 +71,8 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
                     "started_at": "2026-07-27T18:01:02Z",
                     "ended_at": "2026-07-27T18:03:07Z",
                     "duration_ms": null,
-                    "participant_count": 4,
+                    "participant_count": 2,
+                    "participants": ["macro|creator@example.com", "macro|guest@example.com"],
                     "has_recording": true,
                     "archive_reason": "last_participant_left",
                 },
@@ -76,7 +81,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordUpdated(CallRecordUpdatedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 actor_user_id: Some(user_id("macro|editor@example.com")),
                 custom_name: Some("Weekly planning".to_string()),
                 share_with_team: None,
@@ -95,7 +100,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordDeleted(CallRecordDeletedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 actor_user_id: None,
             }),
             json!({
@@ -110,7 +115,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordSummarized(CallRecordSummarizedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 ai_name_generated: true,
             }),
             json!({
@@ -125,13 +130,26 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordingReady(CallRecordingReadyMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
             }),
             json!({
                 "event_type": "call.recording_ready",
                 "metadata": {
                     "call_id": CALL_ID,
                     "channel_id": CHANNEL_ID,
+                },
+            }),
+        ),
+        (
+            CallTopicEvent::RecordImported(CallRecordImportedMetadata {
+                call_id: uuid(CALL_ID),
+                owner: user_id("macro|owner@example.com"),
+            }),
+            json!({
+                "event_type": "call.record_imported",
+                "metadata": {
+                    "call_id": CALL_ID,
+                    "owner": "macro|owner@example.com",
                 },
             }),
         ),
@@ -150,6 +168,7 @@ fn macro_events() -> Vec<CallMacroEvent> {
                 CallMacroEvent::record_summarized(metadata)
             }
             CallTopicEvent::RecordingReady(metadata) => CallMacroEvent::recording_ready(metadata),
+            CallTopicEvent::RecordImported(metadata) => CallMacroEvent::record_imported(metadata),
         })
         .collect()
 }
@@ -193,6 +212,33 @@ fn constructors_use_calls_topic_bare_call_id_key_and_schema_version_one() {
         assert_eq!(event.topic(), "macro.calls");
         assert_eq!(event.event().schema_version, 1);
     }
+}
+
+#[test]
+fn archived_events_published_before_participants_decode_without_them() {
+    let payload = json!({
+        "event_id": EVENT_ID,
+        "schema_version": 1,
+        "event_type": "call.record_archived",
+        "metadata": {
+            "call_id": CALL_ID,
+            "channel_id": CHANNEL_ID,
+            "created_by": "macro|creator@example.com",
+            "started_at": "2026-07-27T18:01:02Z",
+            "ended_at": "2026-07-27T18:03:07Z",
+            "duration_ms": 125_000,
+            "participant_count": 3,
+            "has_recording": false,
+            "archive_reason": "room_finished",
+        },
+    });
+    let decoded = CallMacroEvent::decode(CALL_ID, &serde_json::to_vec(&payload).unwrap())
+        .expect("decodable event");
+    let CallTopicEvent::RecordArchived(metadata) = &decoded.event().event else {
+        panic!("expected an archived call");
+    };
+    assert_eq!(metadata.participant_count, 3);
+    assert!(metadata.participants.is_empty());
 }
 
 #[test]

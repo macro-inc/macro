@@ -1,0 +1,536 @@
+//! A session after it is open: control events from the app, sandbox sizing,
+//! turn boundaries, and teardown.
+
+use agent_fold::domain::model::TurnSignal;
+use agent_session::domain::session::StopReason;
+use model_owner::Owner;
+use shared_entity_registry::OwnedPurgeOutcome;
+
+use super::*;
+
+/// The harness is what holds a session's live resources, so it is what the
+/// control routes notify. Both operations go through the per-session queue, so
+/// a teardown cannot land in the middle of an open and a model change cannot
+/// overtake the prompt it was meant to follow.
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> AgentSessionNotificationRecipient
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    async fn present_tool(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: agent_session::domain::model::SessionToolPresentation,
+    ) -> agent_session::domain::error::Result<()> {
+        // Authorize before forwarding, and allow acknowledgment recovery even if
+        // the actor disconnected after persisting the original presentation.
+        if self
+            .inner
+            .sessions
+            .tool_presentation_persisted(id, actor.clone(), presentation.clone())
+            .await?
+        {
+            return Ok(());
+        }
+        self.execute(
+            id,
+            HarnessCommand::PresentTool {
+                actor: actor.clone(),
+                presentation: presentation.clone(),
+            },
+        )
+        .await
+        .map_err(into_session_error)?;
+        // A remote queue acknowledges publication before its actor runs. Confirm
+        // durable frames before the caller marks the presentation delivered.
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if self
+                    .inner
+                    .sessions
+                    .tool_presentation_persisted(id, actor.clone(), presentation.clone())
+                    .await?
+                {
+                    return Ok(());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .map_err(|_| AgentSessionError::DeliveryTimedOut(id))?
+    }
+
+    async fn delete_user_sessions(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> agent_session::domain::error::Result<()> {
+        loop {
+            let sessions = self
+                .inner
+                .sessions
+                .sessions_for_user_cleanup(&owner)
+                .await?;
+            if sessions.is_empty() {
+                return Ok(());
+            }
+            for session in sessions {
+                // Fail closed if a repository ever returns another principal's row.
+                if !session.owner_id.is_user(&owner) {
+                    return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                        "account cleanup returned a session owned by another principal"
+                    )));
+                }
+                // Includes replica forwarding and the per-session command queue.
+                // Teardown failure leaves the durable row available for a retry.
+                self.session_deleted(session.id).await?;
+            }
+        }
+    }
+
+    async fn session_deleted(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::Delete)
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, expected_owner),
+        fields(%id, owner.kind = ?expected_owner.owner_type())
+    )]
+    async fn purge_owned_session(
+        &self,
+        id: AgentSessionId,
+        expected_owner: &Owner,
+    ) -> agent_session::domain::error::Result<OwnedPurgeOutcome> {
+        let Some(session) = self.inner.sessions.find_session(id).await? else {
+            return Ok(OwnedPurgeOutcome::Purged);
+        };
+        if session.owner_id != *expected_owner {
+            return Ok(OwnedPurgeOutcome::OwnedElsewhere);
+        }
+        self.session_deleted(id).await?;
+        Ok(OwnedPurgeOutcome::Purged)
+    }
+
+    async fn control_event(
+        &self,
+        id: AgentSessionId,
+        event: ControlEvent,
+    ) -> agent_session::domain::error::Result<AcceptedControl> {
+        let action = DeliverAction::control(event);
+        let action_id = action.id;
+        let outcome = self
+            .execute(id, HarnessCommand::Deliver(action))
+            .await
+            .map_err(into_session_error)?;
+        Ok(AcceptedControl {
+            action_id,
+            disposition: match outcome {
+                CommandOutcome::Completed => ControlDisposition::Sent,
+                CommandOutcome::Queued => ControlDisposition::Queued,
+            },
+        })
+    }
+
+    /// The durable queue, so any replica can answer. Waiting actions live in
+    /// the session store; the managing replica's in-memory copy is a cache.
+    async fn queued_controls(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<Vec<QueuedControl>> {
+        Ok(self
+            .inner
+            .sessions
+            .list_queued_actions(id)
+            .await?
+            .iter()
+            .map(QueuedControl::from)
+            .collect())
+    }
+
+    async fn edit_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        prompt: String,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(
+            id,
+            HarnessCommand::EditQueued {
+                action_id,
+                prompt,
+                actor,
+            },
+        )
+        .await
+        .map(drop)
+        .map_err(into_session_error)
+    }
+
+    async fn remove_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::RemoveQueued { action_id, actor })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
+    async fn steer_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::SteerQueued { action_id, actor })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
+    async fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::SetSandboxSize(size))
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
+    async fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<Option<harness_id::HarnessId>> {
+        // The row is the source of truth for which bot the session runs, and
+        // the binding resolves the bot's current harness the same way `bind`
+        // does at delivery time.
+        let session = self.inner.sessions.get_session(id).await?;
+        self.inner
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)
+    }
+}
+
+/// The queue drains on the session's own command worker, so both signals
+/// only admit an internal command there and return. Admission is synchronous
+/// inside [`AgentHarnessService::execute_here`]; the returned future only
+/// awaits the completion, which nothing here needs.
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> agent_session::domain::ports::SessionTurnObserver
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        drop(self.execute_here(id, HarnessCommand::Turn(signal)));
+    }
+
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        drop(self.execute_here(
+            id,
+            HarnessCommand::SessionStopped {
+                reason: reason.to_string(),
+            },
+        ));
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> crate::domain::ports::HeldToolCallObserver
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Through [`execute`](AgentHarnessService::execute), not `execute_here`:
+    /// the call may have been held on any replica, and only the one managing
+    /// the session knows the turn whose reply to change.
+    fn changed(&self, id: AgentSessionId, change: crate::domain::model::ToolApprovalChange) {
+        drop(self.execute(id, HarnessCommand::ToolApproval(change)));
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Resolve current permission policy, failing closed if lookup fails.
+    pub(super) async fn permission_policy_for(&self, bot: BotId) -> PermissionPolicy {
+        self.permission_policies.permission_policy(bot).await.inspect_err(|error| {
+            tracing::warn!(error = ?error, %bot, "could not resolve permission policy; prompting");
+        }).map(crate::domain::model::PermissionPolicyConfig::resolve)
+            .unwrap_or(PermissionPolicy::Prompt)
+    }
+
+    /// Conversation sessions keep the adopted persona choice across reconnects. Current
+    /// harness operator restrictions can always tighten that choice.
+    pub(super) async fn permission_policy_for_session(
+        &self,
+        session: AgentSessionId,
+        bot: BotId,
+    ) -> agent_session::domain::error::Result<PermissionPolicy> {
+        if let Some(policy) = &self.conversations
+            && policy.is_conversation_session(session).await?
+            && let Some(store) = &self.conversation_turns
+        {
+            let Some(settings) = store.settings(session).await? else {
+                return Ok(PermissionPolicy::Prompt);
+            };
+            let current = self.permission_policies.permission_policy(bot).await;
+            return Ok(match current {
+                Ok(crate::domain::model::PermissionPolicyConfig::Persona {
+                    harness_allows_bypass: Some(false),
+                    ..
+                })
+                | Err(_) => PermissionPolicy::Prompt,
+                Ok(_) => settings.permissions.resolve(),
+            });
+        }
+        Ok(self.permission_policy_for(bot).await)
+    }
+
+    /// The MCP servers to advertise when reattaching to an existing container.
+    ///
+    /// The raw session token exists in exactly one place after spawn - the
+    /// container's own environment - so it is read back from there and wrapped
+    /// in a fresh listing of the owner's connected servers. A container that
+    /// holds no token (a provider whose sessions carry no egress environment,
+    /// or a sandbox from before tokens existed) gets no servers, which is
+    /// also everything it could do with them.
+    ///
+    /// The in-process agent is the exception. Its token lives only in the
+    /// process that spawned it, so a resume after a restart finds none, and
+    /// every turn refreshes its tools with the advertised credential: without
+    /// one it could not take a turn at all. It gets a new token instead, and
+    /// the old one stops working with its hash.
+    #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner))]
+    pub(super) async fn resumed_mcp_servers(
+        &self,
+        session_id: AgentSessionId,
+        kind: AgentKind,
+        owner: &MacroUserIdStr<'static>,
+        selection: &AgentMcpServers,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
+        if let Some(session_token) = self.containers.session_token(session_id).await? {
+            return Ok(self
+                .egress
+                .restore(owner, session_token, selection)
+                .await?
+                .acp_servers());
+        }
+        if kind == AgentKind::InMemory {
+            let egress = self.egress.provision(session_id, owner, selection).await?;
+            self.sessions
+                .set_egress_token_hash(session_id, &egress.session_token_hash)
+                .await?;
+            return Ok(egress.sandbox.acp_servers());
+        }
+        tracing::debug!("container holds no egress token; restoring no MCP servers");
+        Ok(Vec::new())
+    }
+
+    /// Release everything the session holds, then delete it.
+    ///
+    /// The durable delete goes last on purpose. Crashing between the two
+    /// leaves a session whose container is gone, which `resume` heals by
+    /// spawning a new one; the other order leaves a paid sandbox that nothing
+    /// knows to reap.
+    #[tracing::instrument(err, skip(self), fields(%session_id))]
+    pub(super) async fn delete(&self, session_id: AgentSessionId) -> Result<()> {
+        self.sessions.close_session(session_id).await?;
+        self.containers.teardown(session_id).await?;
+        self.sessions.delete_session(session_id).await?;
+        Ok(())
+    }
+
+    /// Apply `size` to this session's sandbox and remember it as the owner's default.
+    ///
+    /// The container manager reports whether the change is in-place, needs a
+    /// stop, or is unsupported. Disk is never changed.
+    #[tracing::instrument(err, skip(self), fields(%session_id, %size))]
+    pub(super) async fn apply_sandbox_size(
+        &self,
+        session_id: AgentSessionId,
+        size: SandboxSize,
+    ) -> Result<()> {
+        let session = self.sessions.get_session(session_id).await?;
+        // The size is remembered as the owner's preference, so this is a
+        // person's operation: asked first, before anything is closed.
+        let owner = session.owner_user()?;
+        let effect = self.containers.resize_effect(session.sandbox_size, size);
+        // Only a sandboxed coder has a sandbox to act on: a Cursor session
+        // runs in Cursor's cloud, the in-memory bot has no sandbox, and an
+        // external bot provisions its own. For all three, the size is only
+        // recorded below as a preference.
+        if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::SandboxedCoder
+            && effect != SandboxResizeEffect::NoOp
+        {
+            if effect == SandboxResizeEffect::Restart {
+                self.sessions.close_session(session_id).await?;
+            }
+            self.containers.resize(session_id, size).await?;
+            if effect == SandboxResizeEffect::Restart {
+                let container = self.containers.resume(session_id).await?;
+                let mcp_servers = self
+                    .resumed_mcp_servers(
+                        session_id,
+                        AgentKind::SandboxedCoder,
+                        owner,
+                        &session.mcp_servers,
+                    )
+                    .await?;
+                let permission_policy = self
+                    .permission_policy_for_session(session_id, session.bot_id)
+                    .await?;
+                self.sessions
+                    .attach_session(
+                        session_id,
+                        container
+                            .mcp_servers(mcp_servers)
+                            .permission_policy(permission_policy),
+                    )
+                    .await?;
+                self.restore_queue(session_id).await?;
+            }
+        }
+        self.sessions.set_sandbox_size(session_id, size).await?;
+        self.sessions.set_user_sandbox_size(owner, size).await?;
+        Ok(())
+    }
+}

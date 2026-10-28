@@ -1,7 +1,8 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
+    BotOwnerProfile, CreateAgentRequest, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse, PatchAgentRequest,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -11,8 +12,9 @@ use axum::{
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityPermission,
-        EntityType, ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -20,7 +22,8 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer, ValidatedIdentity,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
@@ -52,6 +55,8 @@ struct TestBotService {
     remove_calls: Arc<AtomicUsize>,
     list_bot_channels_calls: Arc<AtomicUsize>,
     list_channel_bots_calls: Arc<AtomicUsize>,
+    owner_profiles: Vec<BotOwnerProfile>,
+    owner_profile_calls: Arc<AtomicUsize>,
 }
 
 impl TestBotService {
@@ -83,6 +88,15 @@ impl TestBotService {
             remove_calls: Arc::new(AtomicUsize::new(0)),
             list_bot_channels_calls: Arc::new(AtomicUsize::new(0)),
             list_channel_bots_calls: Arc::new(AtomicUsize::new(0)),
+            owner_profiles: Vec::new(),
+            owner_profile_calls: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    fn with_owner_profiles(owner_profiles: Vec<BotOwnerProfile>) -> Self {
+        Self {
+            owner_profiles,
+            ..Self::new(TestBotMode::Ok)
         }
     }
 
@@ -95,6 +109,44 @@ impl TestBotService {
 }
 
 impl BotService for TestBotService {
+    async fn create_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn manageable_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn patch_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: PatchAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -124,6 +176,19 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn get_owner_profiles(&self, ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        self.owner_profile_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(ids
+            .iter()
+            .filter_map(|id| {
+                self.owner_profiles
+                    .iter()
+                    .find(|profile| profile.id == *id)
+                    .cloned()
+            })
+            .collect())
+    }
+
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
         self.result()?;
         self.self_bot
@@ -150,8 +215,7 @@ impl BotService for TestBotService {
 
     async fn add_bot_to_channel(
         &self,
-        _caller: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _bot_id: BotId,
     ) -> Result<(), BotError> {
         self.add_calls.fetch_add(1, Ordering::SeqCst);
@@ -207,6 +271,17 @@ impl BotService for TestBotService {
         _bot_id: BotId,
         _token_id: Uuid,
     ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn channel_message_access(
+        &self,
+        _bot_id: BotId,
+        _channel_id: Uuid,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        BotError,
+    > {
         unimplemented!()
     }
 
@@ -344,16 +419,23 @@ impl EntityAccessService for TestAccessService {
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         if jwt == INVALID_BEARER_TOKEN {
             return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
         }
 
-        Ok(ValidatedIdentity {
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -368,6 +450,7 @@ fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
             default_user_id: None,
         },
         NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -410,6 +493,7 @@ fn authorization_state_with_bot(
             default_user_id: None,
         },
         SelfBotAuthorizer { bot_id },
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -684,6 +768,70 @@ async fn bot_owner_can_list_bot_channels_via_http() {
 }
 
 #[tokio::test]
+async fn bots_profiles_requires_credentials_without_invoking_service() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::with_owner_profiles(vec![BotOwnerProfile {
+        id: bot_id,
+        name: "Datadog Alerts".to_string(),
+        avatar_url: None,
+        deleted_at: None,
+        owner: None,
+    }]);
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/profiles?ids={bot_id}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router_without_credentials(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.owner_profile_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn bots_profiles_returns_owner_profile_json() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::with_owner_profiles(vec![BotOwnerProfile {
+        id: bot_id,
+        name: "Datadog Alerts".to_string(),
+        avatar_url: None,
+        deleted_at: None,
+        owner: None,
+    }]);
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/profiles?ids={bot_id}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let profiles: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        profiles,
+        serde_json::json!([{
+            "id": bot_id,
+            "name": "Datadog Alerts",
+            "avatar_url": null,
+            "deleted_at": null,
+            "owner": null
+        }])
+    );
+    assert_eq!(service.owner_profile_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn bot_route_requires_credentials_without_invoking_service() {
     let service = TestBotService::new(TestBotMode::Ok);
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
@@ -832,7 +980,20 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
         .await?;
 
     bot_service
-        .add_bot_to_channel(macro_user_id(BOT_OWNER_ID), channel_id, bot.id)
+        .add_bot_to_channel(
+            EntityAccessReceipt::try_new_authenticated_user(
+                macro_user_id(BOT_OWNER_ID),
+                Entity {
+                    entity_id: channel_id.to_string(),
+                    entity_type: EntityType::Channel,
+                },
+                EntityPermission::ChannelRole {
+                    role: EntityParticipantRole::Member,
+                },
+            )
+            .expect("member role satisfies channel membership"),
+            bot.id,
+        )
         .await?;
 
     let bot_principal_id = bot.id.into_storage_id().to_string();

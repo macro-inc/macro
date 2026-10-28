@@ -1,3 +1,6 @@
+mod publication;
+mod state;
+
 use crate::domain::models::{Notification, request::NotificationCategory};
 
 use super::*;
@@ -459,7 +462,7 @@ async fn test_get_notification_ids_for_entities_matches_multiple_primary_and_sec
         EntityType::Project.with_entity_str("entity-1"),
     ];
     let notification_ids = pool
-        .get_notification_ids_for_entities(&user, &entities)
+        .get_notification_ids_for_entities(&user, &entities, &NotificationStatus::Seen)
         .await
         .unwrap()
         .into_iter()
@@ -498,6 +501,7 @@ async fn test_get_notification_ids_for_entities_matches_task_entity(pool: Pool<P
         .get_notification_ids_for_entities(
             &user,
             &[EntityType::Document.with_entity_str(task_entity_id)],
+            &NotificationStatus::Seen,
         )
         .await
         .unwrap();
@@ -526,6 +530,7 @@ async fn test_get_notification_ids_for_entities_matches_message_entity(pool: Poo
         .get_notification_ids_for_entities(
             &user,
             &[EntityType::ChannelMessage.with_entity_str(&message_id)],
+            &NotificationStatus::Seen,
         )
         .await
         .unwrap();
@@ -582,6 +587,7 @@ async fn test_get_notification_ids_for_entities_matches_foreign_entities_includi
         .get_notification_ids_for_entities(
             &user,
             &[EntityType::ForeignEntity.with_entity_str(&foreign_entity_id)],
+            &NotificationStatus::Seen,
         )
         .await
         .unwrap();
@@ -630,7 +636,10 @@ async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool
         rows.iter()
             .all(|notification| notification.owner_id == user)
     );
-    assert!(rows.iter().all(|notification| notification.done));
+    assert!(
+        rows.iter()
+            .all(|notification| notification.state == NotificationState::Done)
+    );
 }
 
 #[sqlx::test(
@@ -775,7 +784,7 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
     );
     assert_eq!(row.entity.entity_type, EntityType::Document);
     assert!(!row.sent);
-    assert!(!row.done);
+    assert_eq!(row.state, NotificationState::Unseen);
     assert_eq!(row.notification_metadata.message, "hello");
 }
 
@@ -783,7 +792,7 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("user_notifications"))
 )]
-async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>) {
+async fn test_get_user_notifications_filters_exact_states(pool: Pool<Postgres>) {
     let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
     let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
 
@@ -805,21 +814,20 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
         .unwrap();
     assert!(active.is_empty());
 
-    let done_and_seen: Vec<UserNotificationRow<TestNotification>> = pool
+    let done: Vec<UserNotificationRow<TestNotification>> = pool
         .get_user_notifications(
             user.clone(),
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(true),
-                seen: Some(true),
+                states: vec![NotificationState::Done],
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
         )
         .await
         .unwrap();
-    assert_eq!(done_and_seen.len(), 1);
+    assert_eq!(done.len(), 1);
 
     let unseen: Vec<UserNotificationRow<TestNotification>> = pool
         .get_user_notifications(
@@ -827,8 +835,7 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: None,
-                seen: Some(false),
+                states: vec![NotificationState::Unseen],
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
@@ -851,8 +858,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![crate::domain::models::request::NotificationCategory::Document],
                 entities: Vec::new(),
             },
@@ -867,8 +873,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![crate::domain::models::request::NotificationCategory::Email],
                 entities: Vec::new(),
             },
@@ -883,8 +888,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::Document.with_entity_string("item-1".to_string())],
             },
@@ -899,8 +903,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::EmailThread.with_entity_string("item-1".to_string())],
             },
@@ -942,7 +945,11 @@ async fn test_get_entity_notifications_batch_matches_channel_thread_secondary_en
     let thread_ref = EntityType::ChannelMessage.with_entity_string(thread_id);
     let other_thread_ref = EntityType::ChannelMessage.with_entity_string(other_thread_id);
     let result = pool
-        .get_entity_notifications_batch(user, vec![thread_ref.clone(), other_thread_ref.clone()])
+        .get_entity_notifications_batch(
+            user,
+            vec![thread_ref.clone(), other_thread_ref.clone()],
+            Default::default(),
+        )
         .await
         .unwrap();
 
@@ -1028,7 +1035,11 @@ async fn test_get_entity_notifications_batch_preserves_canonical_entity_identity
     .unwrap();
 
     let result = pool
-        .get_entity_notifications_batch(user, vec![task_entity.clone(), foreign_entity.clone()])
+        .get_entity_notifications_batch(
+            user,
+            vec![task_entity.clone(), foreign_entity.clone()],
+            Default::default(),
+        )
         .await
         .unwrap();
 
@@ -1115,8 +1126,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![NotificationCategory::Github],
                 entities: Vec::new(),
             },
@@ -1166,8 +1176,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![
                     EntityType::ForeignEntity.with_entity_string(foreign_entity_id.clone()),
@@ -1191,8 +1200,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![
                     EntityType::ForeignEntity
@@ -1222,8 +1230,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::Document.with_entity_string(foreign_entity_id)],
             },
@@ -1338,6 +1345,10 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
         .await
         .unwrap();
     assert!(result.is_some());
+
+    pool.complete_notification_publication(notification_id)
+        .await
+        .unwrap();
 
     // Second creation with same ID should return None
     let result = pool
@@ -1501,4 +1512,35 @@ async fn test_delete_all_user_notifications_does_not_affect_other_users(pool: Po
     .unwrap()
     .unwrap();
     assert_eq!(other_count, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_devices"))
+)]
+async fn android_native_call_capability_round_trips_and_can_be_cleared(pool: Pool<Postgres>) {
+    use crate::domain::models::device::DeviceType;
+    use crate::outbound::device_registration::DeviceRegistrationDbOps;
+    let user = test_user("user1@test.com");
+    for capable in [true, false] {
+        pool.upsert_device(
+            user.clone(),
+            "native-token",
+            "native-endpoint",
+            &DeviceType::Android,
+            capable,
+        )
+        .await
+        .unwrap();
+        let devices = pool
+            .get_device_endpoints(std::slice::from_ref(&user))
+            .await
+            .unwrap();
+        let endpoints = &devices[&user];
+        assert!(endpoints.iter().any(|endpoint| match endpoint {
+            DeviceEndpoint::AndroidNativeCall(arn) => capable && arn == "native-endpoint",
+            DeviceEndpoint::Android(arn) => !capable && arn == "native-endpoint",
+            _ => false,
+        }));
+    }
 }

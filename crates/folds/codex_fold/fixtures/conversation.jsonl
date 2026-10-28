@@ -1,0 +1,12 @@
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u1","content":[{"type":"Text","text":"Read the file."}]}}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"Reasoning","id":"r1","summary_text":["I will inspect it."]}}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"t1","command":["bash","-lc","cat a.txt"],"parsed_cmd":[{"type":"read"}],"status":"completed","exit_code":1,"aggregated_output":"File missing"}}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"FileChange","id":"f1","changes":{"/repo/a.txt":{"type":"add"}},"status":"completed"}}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","id":"m1","server":"macro","tool":"search","arguments":{"query":"file"},"status":"failed"}}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"WebSearch","id":"w1","query":"file format"}}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"a1","content":[{"type":"Text","text":"The file is missing."}]}}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"a1","content":[{"type":"Text","text":"The file is missing."}]}}}
+{"type":"event_msg","payload":{"type":"task_complete"}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"u2","content":[{"text":"Stop."}]}}}
+{"type":"event_msg","payload":{"type":"turn_aborted"}}
+{"type":"future_record"}

@@ -1,13 +1,15 @@
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
+import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import FunnelIcon from '@phosphor/funnel-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { cn, Layer } from '@ui';
+import { Badge, badgeTriggerClasses, buttonClasses, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import {
@@ -16,18 +18,13 @@ import {
   type TagEditorDialogMode,
 } from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
+import { TagPill } from './TagPill';
 import {
   buildTaggedItemsSplitContent,
   buildTaggedItemsSplitOptions,
 } from './tagNavigation';
 import type { ResolvedTag } from './useDocTags';
 import { useDocTags } from './useDocTags';
-
-const chipClass = cn(
-  'inline-flex items-center gap-1.5 m-px min-w-0 max-w-[30ch]',
-  'px-2 py-1 leading-tight rounded-full border border-edge-muted bg-surface',
-  'text-ink-muted transition-colors hover:bg-hover hover:text-ink'
-);
 
 function TagChip(props: {
   tag: ResolvedTag;
@@ -46,7 +43,10 @@ function TagChip(props: {
   };
 
   const removeTag = () => {
-    void props.docTags.removeTag(props.tag.scope, props.tag.optionId);
+    fireAndForget(
+      props.docTags.removeTag(props.tag.scope, props.tag.optionId),
+      'property-tags'
+    );
   };
 
   return (
@@ -56,37 +56,42 @@ function TagChip(props: {
           <Show
             when={props.canEdit}
             fallback={
-              <span class={cn(chipClass, 'cursor-default hover:bg-surface')}>
+              <Badge
+                variant="outline"
+                size="sm"
+                class="m-px min-w-0 max-w-[30ch] gap-1.5 cursor-default"
+              >
                 <TagDot color={props.tag.color} />
                 <span class="min-w-0 truncate">{props.tag.label}</span>
-              </span>
+              </Badge>
             }
           >
-            <TagPicker
+            <TagPill
+              tag={props.tag}
               docTags={props.docTags}
               replaceTag={props.tag}
-              triggerClass={chipClass}
-              triggerLabel={`Change or select tag ${props.tag.label}`}
-            >
-              <TagDot color={props.tag.color} />
-              <span class="min-w-0 truncate">{props.tag.label}</span>
-            </TagPicker>
+              class="m-px max-w-[30ch] gap-1.5"
+            />
           </Show>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenuContent class="text-xs text-ink-muted">
             <MenuItem
               icon={FunnelIcon}
-              text="View all items with tag"
+              text={t('entityActions.viewItemsWithTag')}
               onClick={viewTaggedItems}
             />
             <Show when={props.canEdit}>
               <MenuItem
                 icon={PencilIcon}
-                text="Edit tag"
+                text={t('entityActions.editTag')}
                 onClick={() => props.onEdit(props.tag)}
               />
-              <MenuItem icon={XIcon} text="Remove tag" onClick={removeTag} />
+              <MenuItem
+                icon={XIcon}
+                text={t('entityActions.removeTag')}
+                onClick={removeTag}
+              />
             </Show>
           </ContextMenuContent>
         </ContextMenu.Portal>
@@ -155,11 +160,11 @@ export function TagsRow(props: {
           <Match when={triggerVariant() === 'pill' && !hasTags()}>
             <TagPicker
               docTags={docTags}
-              triggerClass={cn(
-                'inline-flex items-center gap-1.5 m-px border border-edge-muted bg-surface',
-                'px-2 py-1 leading-tight rounded-full text-ink-muted',
-                'hover:bg-hover hover:text-ink transition-colors'
-              )}
+              triggerClass={badgeTriggerClasses({
+                variant: 'outline',
+                size: 'xs',
+                class: 'm-px gap-1.5',
+              })}
               triggerLabel="Add tags"
             >
               <PlusIcon class="size-3" />
@@ -169,11 +174,11 @@ export function TagsRow(props: {
           <Match when={true}>
             <TagPicker
               docTags={docTags}
-              triggerClass={cn(
-                'inline-flex items-center justify-center rounded-full px-1 py-1 leading-tight',
-                'm-px border border-edge-muted bg-surface text-ink-muted',
-                'transition-colors hover:bg-hover hover:text-ink'
-              )}
+              triggerClass={buttonClasses({
+                variant: 'secondary',
+                size: 'icon-xs',
+                class: 'm-px',
+              })}
               triggerLabel="Add tags"
             >
               <PlusIcon class="size-3" />

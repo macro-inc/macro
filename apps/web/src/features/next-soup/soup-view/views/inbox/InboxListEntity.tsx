@@ -1,10 +1,13 @@
+import '@entity/composed/ListEntity.css';
 import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { MaybeEntityRow, MultiSelectCheckbox, UnreadIndicator } from '@entity';
+import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
 import {
   type BaseListEntityProps,
   InboxDivider,
 } from '@entity/composed/list-entity/shared';
+import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
@@ -17,16 +20,25 @@ import { scopeThreadNotifications } from './utils';
  * from the focused row (which is what the preview shows).
  *
  */
-export function InboxListEntity(props: BaseListEntityProps) {
+type InboxListEntityProps = BaseListEntityProps & {
+  /** Classes applied to the outer list-row wrapper. */
+  class?: string;
+  /** Classes applied to the rendered Inbox card. */
+  cardClass?: string;
+  focusable?: boolean;
+  occurrenceKey?: string;
+};
+
+export function InboxListEntity(props: InboxListEntityProps) {
   const channels = useChannelsContext();
 
-  // A channel_thread soup entity comes back with a generic name ("Channel
-  // thread"), so resolve the real channel name for the row's location label.
   const entity = createMemo(() => {
     const scoped = scopeThreadNotifications(props.entity);
     if (scoped.type !== 'channel_thread') return scoped;
-    const name = channels.channelsById()[scoped.channelId]?.name;
-    return name ? { ...scoped, name } : scoped;
+    return {
+      ...scoped,
+      name: getChannelThreadName(scoped, channels.channelsById()),
+    };
   });
 
   const item = createMemo(() => toInboxCardDisplayItem(entity()));
@@ -38,22 +50,33 @@ export function InboxListEntity(props: BaseListEntityProps) {
       // reads, and opts the row into the shared touch-press highlight. On
       // mobile the row is full-bleed with a hairline divider, like
       // NarrowInboxLayout.
-      class="group/inbox-item soup-list-entity relative mx-2 mobile:mx-0"
+      class={cn(
+        'group/inbox-item soup-list-entity relative mx-(--soup-row-gutter)',
+        SOUP_ROW_CLASS.card,
+        props.class
+      )}
       ref={props.ref}
       onMouseMove={props.onMouseMove}
     >
-      <MaybeEntityRow entityId={props.entity.id} config={props.entityRowConfig}>
+      <MaybeEntityRow
+        entityId={props.occurrenceKey ?? props.entity.id}
+        config={props.entityRowConfig}
+      >
         <InboxCardLayout
+          class={props.cardClass}
           item={item()}
           selected={props.checked}
           highlighted={props.highlighted}
+          focusable={props.focusable}
+          showUnreadIndicator={props.hideCheckbox}
           onClick={props.onClick}
         />
       </MaybeEntityRow>
-      <Show when={!props.isLastInGroup}>
+      <Show when={isTouchDevice() && !props.isLastInGroup}>
         <InboxDivider />
       </Show>
-      {/* Select checkbox lives in the gutter reserved by the card's `pl-9`;
+      {/* Select checkbox lives in the gutter the card reserves as its
+          `--soup-row-padding-l` left padding;
           mobile has no gutter — the rail shows the unread dot instead. */}
       <Show when={!isTouchDevice() && !props.hideCheckbox}>
         <div class="group/select-control absolute left-1 top-2.5 z-10 grid size-8 place-items-center">

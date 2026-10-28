@@ -1,143 +1,204 @@
-<!DOCTYPE html>
-<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
+<!doctype html>
+<html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office">
   <head>
     <meta charset="utf-8" />
-    <meta name="x-apple-disable-message-reformatting" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
     <meta
       name="format-detection"
       content="telephone=no, date=no, address=no, email=no"
     />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="supported-color-schemes" content="light dark" />
-    <title>Macro Account Merge Request</title>
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <title>Merge your Macro accounts</title>
+    <!--[if mso]>
+      <noscript
+        ><xml
+          ><o:OfficeDocumentSettings
+            ><o:PixelsPerInch>96</o:PixelsPerInch
+            ><o:AllowPNG /></o:OfficeDocumentSettings></xml
+      ></noscript>
+    <![endif]-->
     <style>
-      body {
-        margin: 0;
-        padding: 0;
-        width: 100% !important;
-        background-color: #f9fafb !important;
-      }
-
-      .email-container {
-        width: 100%;
-        max-width: 640px;
-        margin: 0 auto;
-        background-color: #f9fafb;
-      }
-
-      .content-block {
-        background-color: #ffffff;
-        border-radius: 8px;
-        padding: 56px 40px;
-        margin: 0 16px;
-        outline: 1px solid #f3f4f6;
-      }
-
-      .code-display {
-        margin: 56px auto;
-        width: calc(100% - 64px);
-        max-width: 400px;
-        border-radius: 12px;
-        background-color: #f3f4f6;
-        padding: 32px;
-        text-align: center;
-        font-size: 48px;
-        letter-spacing: 0.2em;
-        color: #374151;
-        font-family: monospace;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        box-sizing: border-box;
-      }
-
-      @media (max-width: 425px) {
-        .content-block {
-          padding: 32px 16px;
-          margin: 0 8px;
+      @media screen and (max-width: 600px) {
+        .email-page {
+          padding: 24px 12px !important;
         }
-        
-        .code-display {
-          width: calc(100% - 32px);
-          margin: 32px auto;
-          padding: 24px 16px;
-          font-size: 32px;
+        .email-content {
+          padding: 28px 24px !important;
+        }
+        .email-heading {
+          font-size: 26px !important;
+          line-height: 34px !important;
         }
       }
     </style>
   </head>
-
-  <body>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background-color: #f5f5f4;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    "
+  >
     <div
-      role="article"
-      aria-roledescription="email"
-      aria-label="Macro Account Merge Request"
-      lang="en"
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        mso-hide: all;
+      "
     >
-      <table
-        class="email-container"
-        cellpadding="0"
-        cellspacing="0"
-        role="presentation"
-      >
-        <tr>
-          <td align="center" style="padding: 56px 0 32px">
-            <a href="https://macro.com">
-              <img
-                src="https://coparse-release-artifact-storage-bucket.s3.amazonaws.com/logos/logo.png"
-                width="200"
-                alt="Macro"
-                style="border: 0; max-width: 100%"
-              />
-            </a>
-          </td>
-        </tr>
-        <tr>
-          <td>
-            <div class="content-block">
-              <h1
-                style="
-                  margin: 0 0 16px;
-                  text-align: center;
-                  font-size: 36px;
-                  font-weight: 600;
-                  color: #374151;
-                "
-              >
-                Account Merge Request
-              </h1>
-              <p
-                style="
-                  margin: 0;
-                  text-align: center;
-                  font-size: 16px;
-                  color: #6b7280;
-                "
-              >
-                {{EMAIL}} has requested to merge your macro account into theirs. To do so, enter the code below.
-              </p>
-              <div class="code-display">
-                {{CODE}}
-              </div>
-              <p style="text-align: center; font-size: 16px; color: #6b7280">
-                If you didn't request this, you can safely ignore this email.
-              </p>
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 48px 0; text-align: center">
-            <p style="margin: 0; font-size: 14px; color: #9ca3af">
-              Questions? Email us at
-              <a
-                href="mailto:support@macro.com"
-                style="color: #6b7280; font-weight: 500; text-decoration: none"
-                >support@macro.com</a
-              >
-            </p>
-          </td>
-        </tr>
-      </table>
+      Confirm your account merge request.
     </div>
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      bgcolor="#f5f5f4"
+      style="
+        font-family: Arial, Helvetica, sans-serif;
+        color: #222222;
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      "
+    >
+      <tr>
+        <td class="email-page" align="center" style="padding: 48px 20px">
+          <!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            style="max-width: 560px; table-layout: fixed"
+          >
+            <tr>
+              <td
+                class="email-content"
+                bgcolor="#ffffff"
+                style="
+                  padding: 36px 40px 40px;
+                  border: 1px solid #e7e7e5;
+                  border-radius: 12px;
+                  overflow-wrap: break-word;
+                  word-wrap: break-word;
+                "
+              >
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  style="margin-bottom: 36px"
+                >
+                  <tr>
+                    <td width="36" style="vertical-align: middle">
+                      <a href="https://macro.com" style="text-decoration: none"
+                        ><img
+                          src="https://macro.com/app/macro-email-logo.png"
+                          width="36"
+                          height="36"
+                          alt="Macro"
+                          style="
+                            display: block;
+                            border: 0;
+                            background-color: #ffffff;
+                            -ms-interpolation-mode: bicubic;
+                          "
+                      /></a>
+                    </td>
+                  </tr>
+                </table>
+                <h1
+                  class="email-heading"
+                  style="
+                    margin: 0 0 16px;
+                    font-size: 28px;
+                    line-height: 36px;
+                    font-weight: 600;
+                    letter-spacing: -0.5px;
+                    color: #222222;
+                  "
+                >
+                  Merge your accounts
+                </h1>
+                <p
+                  style="
+                    margin: 0 0 20px;
+                    font-size: 16px;
+                    line-height: 26px;
+                    color: #525252;
+                  "
+                >
+                  {{EMAIL}} has requested to merge your Macro account into
+                  theirs. To confirm, enter the code below.
+                </p>
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  style="margin: 28px 0; table-layout: fixed"
+                >
+                  <tr>
+                    <td
+                      bgcolor="#f5f5f4"
+                      style="
+                        padding: 24px 12px;
+                        border: 1px solid #e7e7e5;
+                        border-radius: 8px;
+                        text-align: center;
+                        font-family: Arial, Helvetica, sans-serif;
+                        font-size: 32px;
+                        line-height: 44px;
+                        font-weight: 600;
+                        letter-spacing: 5px;
+                        color: #222222;
+                      "
+                    >
+                      {{CODE}}
+                    </td>
+                  </tr>
+                </table>
+                <p
+                  style="
+                    margin: 28px 0 0;
+                    font-size: 14px;
+                    line-height: 22px;
+                    color: #737373;
+                  "
+                >
+                  If you didn't request this, you can safely ignore this email.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  padding: 24px 16px 0;
+                  text-align: center;
+                  font-size: 12px;
+                  line-height: 20px;
+                  color: #737373;
+                "
+              >
+                Need a hand?
+                <a
+                  href="mailto:support@macro.com"
+                  style="color: #525252; text-decoration: underline"
+                  >Contact support</a
+                >
+              </td>
+            </tr>
+          </table>
+          <!--[if mso]></td></tr></table><![endif]-->
+        </td>
+      </tr>
+    </table>
   </body>
 </html>

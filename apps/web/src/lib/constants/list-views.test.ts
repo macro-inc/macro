@@ -36,6 +36,6 @@ describe('soupItemMatchesListView', () => {
   });
 
   it('inbox admits rows regardless of touch', () => {
-    expect(soupItemMatchesListView(documentItem(), 'inbox')).toBe(true);
+    expect(soupItemMatchesListView(documentItem(), 'home')).toBe(true);
   });
 });

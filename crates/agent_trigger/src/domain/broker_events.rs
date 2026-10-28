@@ -1,22 +1,132 @@
 //! Signals published to [`MacroAgentSessionsTopic`].
+//!
+//! The topic stays at its first schema version. Channel parents keep the
+//! shapes every consumer already decodes - [`NewAgentSessionEvent::TopLevelMentioned`]
+//! and [`ExistingAgentSessionEvent::Channel`], each embedding the channel-only
+//! post - because some consumers are user-run daemons that cannot be rolled
+//! with a deploy. Other parents travel in the parent-aware variants added
+//! beside them, which those consumers drop as unknown: only the new surface
+//! waits for them to roll, never a channel mention.
 
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
+use channels::domain::broker_events::{ChannelEventAttachment, ChannelMessagePostedMetadata};
+use channels::domain::models::ChannelType;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionsTopic;
+use macro_uuid::Uuid;
+use messages::domain::events::{MessageEventAttachment, MessagePostedMetadata};
+use messages::domain::models::MessageParent;
 use serde::{Deserialize, Serialize};
+
+use trigger_context::TriggerContext;
 
 #[cfg(test)]
 mod test;
 
-/// A session opened by a mention in a channel.
+/// How a message was attributed to the session it feeds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThreadMessageKind {
+    /// The thread the session was created from, where the bot was pinged.
+    MentionThread,
+    /// The session's thread, where the message explicitly targeted another
+    /// message without a mention.
+    ExplicitReply,
+    /// The session's thread, where a model inferred the message was addressed
+    /// to the agent.
+    Inferred,
+}
+
+/// A session opened by a mention in a top-level channel message, in the
+/// channel-only shape consumers built before message parents decode.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentBotMentionedEvent {
     /// The bot that was mentioned.
     pub bot_id: BotId,
     /// The message that triggered this, verbatim.
     pub message: ChannelMessagePostedMetadata,
+    /// Why the agent was called, for whoever composes its prompt. Absent on
+    /// events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
+}
+
+/// A session opened by a mention on a message parent. Today only document
+/// discussions produce it; channel mentions stay on
+/// [`NewAgentSessionEvent::TopLevelMentioned`] until every consumer that
+/// predates parents has rolled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentMentionedEvent {
+    /// The bot that was mentioned.
+    pub bot_id: BotId,
+    /// The message that triggered this, verbatim, with its parent.
+    pub message: MessagePostedMetadata,
+    /// Why the agent was called, for whoever composes its prompt. Absent on
+    /// events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
+}
+
+/// A session opened when a task is assigned to an agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentAssignedToTaskEvent {
+    /// The agent assigned to the task.
+    pub bot_id: BotId,
+    /// Task whose discussion receives the response.
+    pub parent: MessageParent,
+    /// The single bot-authored root to update with the session response.
+    pub discussion_id: Uuid,
+    /// User who assigned the task and owns the resulting session.
+    pub actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// Private startup prompt, never posted as a discussion message.
+    pub prompt: String,
+    /// Why the agent was called, for whoever composes its prompt. Absent on
+    /// events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
+}
+
+/// A session somebody asked for from Macro itself - the composer - rather
+/// than by mentioning the bot. Nothing was posted anywhere, so there is no
+/// thread to announce into and no message to quote.
+///
+/// Served by the bot's own runtime, which creates the session under the id
+/// named here so the requester can find it. No prompt: whoever asked
+/// delivers theirs through the session's control endpoint once it exists,
+/// so nothing a user typed travels on this topic.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentSessionRequestedEvent {
+    /// The bot the session runs for.
+    pub bot_id: BotId,
+    /// The id the runtime must create the session under.
+    pub session_id: AgentSessionId,
+    /// Who asked; owns the session the runtime creates.
+    pub owner: String,
+    /// Repository selected by the requester, absent on older producers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_url: Option<String>,
+    /// Why the agent was called, for whoever composes its prompt. Absent on
+    /// events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
+}
+
+/// A message in a channel where an agent persona converses. The session
+/// identity is reserved durably before publication, so concurrent first
+/// messages agree on it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentConversationMessageEvent {
+    /// Persona the conversation is with.
+    pub bot_id: BotId,
+    /// The conversation's current session, whether its runtime is running yet or not.
+    pub session_id: AgentSessionId,
+    /// Committed user message.
+    pub message: MessagePostedMetadata,
+    /// Why the agent was called, read under the sender's access. Absent when
+    /// the read failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// Events that open a new session.
@@ -24,19 +134,99 @@ pub struct AgentBotMentionedEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum NewAgentSessionEvent {
+    /// Open or continue the reserved session of an agent's channel conversation.
+    ConversationMessage(AgentConversationMessageEvent),
     /// Opened by a bot mention in a top-level channel message.
     TopLevelMentioned(AgentBotMentionedEvent),
+    /// Opened by a bot mention on a message parent other than a channel.
+    Mentioned(AgentMentionedEvent),
+    /// Opened by assigning the agent to a task, with a discussion to answer in.
+    AssignedToTask(AgentAssignedToTaskEvent),
+    /// Asked for from the composer, with no mention behind it. Consumers that
+    /// only know mentions see no [`OpeningMention`] here and skip it.
+    Requested(AgentSessionRequestedEvent),
 }
 
-/// A message for a session that already exists.
+/// The opening discussion message carried by a mention.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpeningMention {
+    /// The bot that should answer.
+    pub bot_id: BotId,
+    /// The opening message, with its parent.
+    pub message: MessagePostedMetadata,
+    /// Why the agent was called.
+    pub context: Option<TriggerContext>,
+}
+
+impl NewAgentSessionEvent {
+    /// The user-authored message behind a mention. Assignments and composer
+    /// requests carry no user discussion message and return `None`.
+    #[must_use]
+    pub fn mention(&self) -> Option<OpeningMention> {
+        match self {
+            Self::TopLevelMentioned(mentioned) => Some(OpeningMention {
+                bot_id: mentioned.bot_id,
+                message: posted_from_channel_event(&mentioned.message),
+                context: mentioned.context.clone(),
+            }),
+            Self::Mentioned(mentioned) => Some(OpeningMention {
+                bot_id: mentioned.bot_id,
+                message: mentioned.message.clone(),
+                context: mentioned.context.clone(),
+            }),
+            Self::AssignedToTask(_) | Self::Requested(_) | Self::ConversationMessage(_) => None,
+        }
+    }
+
+    /// The composer request this event carries, if that is what it is.
+    #[must_use]
+    pub fn requested(&self) -> Option<&AgentSessionRequestedEvent> {
+        match self {
+            Self::Requested(requested) => Some(requested),
+            Self::TopLevelMentioned(_)
+            | Self::Mentioned(_)
+            | Self::AssignedToTask(_)
+            | Self::ConversationMessage(_) => None,
+        }
+    }
+}
+
+/// A channel message for a session that already exists, in the channel-only
+/// shape consumers built before message parents decode.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChannelEventMetadata {
     /// Whose session this is, so foreign traffic is dropped before any read.
     pub bot_id: BotId,
     /// The session to feed.
     pub session_id: AgentSessionId,
+    /// How the message was attributed to the session.
+    pub kind: ThreadMessageKind,
     /// The message, verbatim.
     pub message: ChannelMessagePostedMetadata,
+    /// Why the agent was called, for whoever composes its prompt. Absent on
+    /// events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
+}
+
+/// A message for a session that already exists, with its parent. Today only
+/// document discussions produce it; channel messages stay on
+/// [`ExistingAgentSessionEvent::Channel`] until every consumer that predates
+/// parents has rolled.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadEventMetadata {
+    /// Whose session this is, so foreign traffic is dropped before any read.
+    pub bot_id: BotId,
+    /// The session to feed.
+    pub session_id: AgentSessionId,
+    /// How the message was attributed to the session.
+    pub kind: ThreadMessageKind,
+    /// The message, verbatim, with its parent.
+    pub message: MessagePostedMetadata,
+    /// Why the agent was called, for whoever composes its prompt. Absent on
+    /// events from producers that predate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// Events for a session that already exists.
@@ -44,8 +234,49 @@ pub struct ChannelEventMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum ExistingAgentSessionEvent {
-    /// A mentioned message arrived in the session's originating thread.
+    /// A message arrived in the session's originating channel thread.
     Channel(ChannelEventMetadata),
+    /// A message arrived in the session's originating thread on another parent.
+    Thread(ThreadEventMetadata),
+}
+
+/// The message an existing-session event feeds, whichever parent it was on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionMessage {
+    /// Whose session this is.
+    pub bot_id: BotId,
+    /// The session to feed.
+    pub session_id: AgentSessionId,
+    /// How the message was attributed to the session.
+    pub kind: ThreadMessageKind,
+    /// The message, with its parent.
+    pub message: MessagePostedMetadata,
+    /// Why the agent was called.
+    pub context: Option<TriggerContext>,
+}
+
+impl ExistingAgentSessionEvent {
+    /// The message this event feeds; `None` for a shape this build does not
+    /// recognise, which a consumer skips rather than routes.
+    #[must_use]
+    pub fn session_message(&self) -> Option<SessionMessage> {
+        match self {
+            Self::Channel(metadata) => Some(SessionMessage {
+                bot_id: metadata.bot_id,
+                session_id: metadata.session_id,
+                kind: metadata.kind,
+                message: posted_from_channel_event(&metadata.message),
+                context: metadata.context.clone(),
+            }),
+            Self::Thread(metadata) => Some(SessionMessage {
+                bot_id: metadata.bot_id,
+                session_id: metadata.session_id,
+                kind: metadata.kind,
+                message: metadata.message.clone(),
+                context: metadata.context.clone(),
+            }),
+        }
+    }
 }
 
 /// Events publishable to [`MacroAgentSessionsTopic`].
@@ -71,10 +302,98 @@ pub enum AgentTriggerTopicEvent {
     Existing(ExistingAgentSessionEvent),
 }
 
+impl AgentTriggerTopicEvent {
+    /// The bot the event is for, when its shape is recognised.
+    #[must_use]
+    pub fn bot_id(&self) -> Option<BotId> {
+        match self {
+            Self::New(NewAgentSessionEvent::ConversationMessage(event)) => Some(event.bot_id),
+            Self::New(NewAgentSessionEvent::AssignedToTask(assigned)) => Some(assigned.bot_id),
+            Self::New(event) => event
+                .mention()
+                .map(|mention| mention.bot_id)
+                .or_else(|| event.requested().map(|requested| requested.bot_id)),
+            Self::Existing(event) => event.session_message().map(|message| message.bot_id),
+        }
+    }
+}
+
 impl TopicEvent for AgentTriggerTopicEvent {
     type Topic = MacroAgentSessionsTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
+
+/// What the trigger decided for one bot, before the wire shape is chosen.
+///
+/// The decision is parent-aware; [`AgentSessionMacroEvent::from_decision`]
+/// picks the channel-only shape for channel parents and the parent-aware one
+/// for the rest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "both variants carry a whole message; boxing would only move the size"
+)]
+pub enum TriggerDecision {
+    /// Deliver a message to the reserved current session of an agent's
+    /// channel conversation.
+    ConversationMessage {
+        /// Persona the conversation is with.
+        bot_id: BotId,
+        /// Durable current conversation identity.
+        session_id: AgentSessionId,
+        /// The committed user message.
+        message: MessagePostedMetadata,
+    },
+    /// Open a session for a mentioned bot.
+    Open {
+        /// The bot that was mentioned.
+        bot_id: BotId,
+        /// The mentioning message.
+        message: MessagePostedMetadata,
+    },
+    /// Feed a session that already exists.
+    Existing {
+        /// Whose session this is.
+        bot_id: BotId,
+        /// The session to feed.
+        session_id: AgentSessionId,
+        /// How the message was attributed to the session.
+        kind: ThreadMessageKind,
+        /// The message.
+        message: MessagePostedMetadata,
+    },
+}
+
+impl TriggerDecision {
+    /// The bot the decision is for.
+    #[must_use]
+    pub fn bot_id(&self) -> BotId {
+        match self {
+            Self::Open { bot_id, .. }
+            | Self::Existing { bot_id, .. }
+            | Self::ConversationMessage { bot_id, .. } => *bot_id,
+        }
+    }
+
+    /// The message the decision was made about.
+    #[must_use]
+    pub fn message(&self) -> &MessagePostedMetadata {
+        match self {
+            Self::Open { message, .. }
+            | Self::Existing { message, .. }
+            | Self::ConversationMessage { message, .. } => message,
+        }
+    }
+}
+
+/// A channel-parent decision needs the channel's type to take the channel-only
+/// wire shape, and the caller supplied none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("a channel trigger event needs the channel type of channel {channel_id}")]
+pub struct MissingChannelType {
+    /// The channel whose type was not supplied.
+    pub channel_id: Uuid,
 }
 
 /// Publishable event for [`MacroAgentSessionsTopic`].
@@ -90,20 +409,104 @@ pub struct AgentSessionMacroEvent {
 }
 
 impl AgentSessionMacroEvent {
+    /// The wire event for a decision.
+    ///
+    /// A channel parent takes the channel-only shape, which carries the
+    /// channel's type; any other parent takes the parent-aware shape and
+    /// ignores `channel_type`.
+    pub fn from_decision(
+        decision: TriggerDecision,
+        channel_type: Option<ChannelType>,
+        context: Option<TriggerContext>,
+    ) -> Result<Self, MissingChannelType> {
+        let channel = match &decision.message().parent {
+            MessageParent::Channel(channel_id) => Some(
+                channel_type
+                    .map(|channel_type| (*channel_id, channel_type))
+                    .ok_or(MissingChannelType {
+                        channel_id: *channel_id,
+                    })?,
+            ),
+            MessageParent::Document(_)
+            | MessageParent::Call(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => None,
+        };
+        Ok(match decision {
+            TriggerDecision::ConversationMessage {
+                bot_id,
+                session_id,
+                message,
+            } => Self::new_session(NewAgentSessionEvent::ConversationMessage(
+                AgentConversationMessageEvent {
+                    bot_id,
+                    session_id,
+                    message,
+                    context,
+                },
+            )),
+            TriggerDecision::Open { bot_id, message } => match channel {
+                Some((channel_id, channel_type)) => Self::new_session(
+                    NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
+                        bot_id,
+                        message: channel_event_from_posted(&message, channel_id, channel_type),
+                        context,
+                    }),
+                ),
+                None => Self::new_session(NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
+                    bot_id,
+                    message,
+                    context,
+                })),
+            },
+            TriggerDecision::Existing {
+                bot_id,
+                session_id,
+                kind,
+                message,
+            } => match channel {
+                Some((channel_id, channel_type)) => Self::existing_event(
+                    ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+                        bot_id,
+                        session_id,
+                        kind,
+                        message: channel_event_from_posted(&message, channel_id, channel_type),
+                        context,
+                    }),
+                    bot_id,
+                ),
+                None => Self::existing_event(
+                    ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+                        bot_id,
+                        session_id,
+                        kind,
+                        message,
+                        context,
+                    }),
+                    bot_id,
+                ),
+            },
+        })
+    }
+
     /// Open a session for a bot.
     #[must_use]
     pub fn new_session(event: NewAgentSessionEvent) -> Self {
         let bot_id = match &event {
+            NewAgentSessionEvent::ConversationMessage(message) => message.bot_id,
             NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
+            NewAgentSessionEvent::Mentioned(mentioned) => mentioned.bot_id,
+            NewAgentSessionEvent::AssignedToTask(assigned) => assigned.bot_id,
+            NewAgentSessionEvent::Requested(requested) => requested.bot_id,
         };
         Self::new(bot_id, AgentTriggerTopicEvent::New(event))
     }
 
-    /// Feed one of a bot's existing sessions.
+    /// Ask a bot's own runtime to open a session nobody mentioned it for.
     #[must_use]
-    pub fn channel_event(metadata: ChannelEventMetadata) -> Self {
-        let bot_id = metadata.bot_id;
-        Self::existing_event(ExistingAgentSessionEvent::Channel(metadata), bot_id)
+    pub fn requested_event(event: AgentSessionRequestedEvent) -> Self {
+        Self::new_session(NewAgentSessionEvent::Requested(event))
     }
 
     /// Feed one of a bot's existing sessions, however the message arrived.
@@ -137,5 +540,67 @@ impl MacroEvent for AgentSessionMacroEvent {
 
     fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
         Self::with_event(key, event)
+    }
+}
+
+/// The parent-aware shape of a channel post carried in the channel-only shape.
+///
+/// A channel event names its channel and, for a reply, its thread; the root
+/// is the thread when there is one and the message itself otherwise, exactly
+/// as the message service derives it.
+#[must_use]
+pub fn posted_from_channel_event(posted: &ChannelMessagePostedMetadata) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent: MessageParent::Channel(posted.channel_id),
+        message_id: posted.message_id,
+        thread_id: posted.thread_id,
+        root_id: posted.thread_id.unwrap_or(posted.message_id),
+        sender: posted.sender.clone(),
+        triggered_by: posted.triggered_by.clone(),
+        content: posted.content.clone(),
+        mentions: posted.mentions.clone(),
+        attachments: posted
+            .attachments
+            .iter()
+            .map(|attachment| MessageEventAttachment {
+                attachment_id: attachment.attachment_id,
+                entity_type: attachment.entity_type.clone(),
+                entity_id: attachment.entity_id.clone(),
+                created_at: attachment.created_at,
+            })
+            .collect(),
+        created_at: posted.created_at,
+    }
+}
+
+/// The channel-only shape of a channel-parent post, for consumers built before
+/// message parents. The parent is dropped and the channel's type, which the
+/// parent-aware post does not carry, is supplied by the caller.
+#[must_use]
+pub fn channel_event_from_posted(
+    posted: &MessagePostedMetadata,
+    channel_id: Uuid,
+    channel_type: ChannelType,
+) -> ChannelMessagePostedMetadata {
+    ChannelMessagePostedMetadata {
+        channel_id,
+        message_id: posted.message_id,
+        thread_id: posted.thread_id,
+        sender: posted.sender.clone(),
+        triggered_by: posted.triggered_by.clone(),
+        channel_type,
+        content: posted.content.clone(),
+        mentions: posted.mentions.clone(),
+        attachments: posted
+            .attachments
+            .iter()
+            .map(|attachment| ChannelEventAttachment {
+                attachment_id: attachment.attachment_id,
+                entity_type: attachment.entity_type.clone(),
+                entity_id: attachment.entity_id.clone(),
+                created_at: attachment.created_at,
+            })
+            .collect(),
+        created_at: posted.created_at,
     }
 }

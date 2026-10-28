@@ -57,7 +57,7 @@ fn docker_build_args_match_the_cli() {
 
 #[test]
 fn no_build_still_plans_the_tag() {
-    // `--no-build` is an ensure() argument (Fly VM / CI bake), not an env flag.
+    // `--no-build` is an ensure() argument (CI bake / Cloud install), not an env flag.
     // The plan is unchanged so stack-up still documents which preloaded tag it
     // expects; docker is simply not invoked.
     assert_eq!(

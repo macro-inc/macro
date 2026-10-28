@@ -19,7 +19,6 @@ pub async fn delete_projects_bulk(
     Ok(())
 }
 
-// delete projects in bulk
 #[tracing::instrument(skip(transaction))]
 pub async fn delete_projects_bulk_tsx(
     transaction: &mut Transaction<'_, Postgres>,
@@ -28,7 +27,6 @@ pub async fn delete_projects_bulk_tsx(
     if project_ids.is_empty() {
         return Ok(());
     }
-    // Delete pins
     sqlx::query!(
         r#"
         DELETE FROM "Pin" WHERE "pinnedItemId" = ANY($1) AND "pinnedItemType" = $2
@@ -39,7 +37,6 @@ pub async fn delete_projects_bulk_tsx(
     .execute(transaction.as_mut())
     .await?;
 
-    // Delete user history
     sqlx::query!(
         r#"
         DELETE FROM "UserHistory" WHERE "itemId" = ANY($1) AND "itemType" = $2
@@ -65,15 +62,20 @@ pub async fn delete_projects_bulk_tsx(
     .await
     .context("unable to delete share permissions")?;
 
+    let project_uuids = project_ids
+        .iter()
+        .map(|p| macro_uuid::string_to_uuid(p).unwrap())
+        .collect::<Vec<uuid::Uuid>>();
     crate::item_access::delete::delete_user_entity_access_bulk(
         transaction,
-        &project_ids
-            .iter()
-            .map(|p| macro_uuid::string_to_uuid(p).unwrap())
-            .collect::<Vec<uuid::Uuid>>(),
+        &project_uuids,
         EntityType::Project,
     )
     .await?;
+
+    for project_uuid in project_uuids {
+        entity_registry_db_utils::delete_entity(transaction, project_uuid).await?;
+    }
 
     sqlx::query!(
         r#"

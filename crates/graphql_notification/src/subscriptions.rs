@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use async_graphql::{Context, ID, OutputType, Subscription, Union};
+use async_graphql::{Context, ID, OutputType, SimpleObject, Subscription, Union};
 use graphql_common::{GraphqlCacheDeletion, require_authenticated_user};
 use model_notifications::NotifEvent;
 use notification::domain::{
@@ -12,12 +12,28 @@ use tokio_stream::Stream;
 
 use crate::GraphqlNotification;
 
-/// Realtime notification patch represented as either an update or cache deletion.
+/// A newly delivered notification patch.
+#[derive(SimpleObject)]
+pub struct GraphqlNewNotification {
+    /// The newly delivered notification.
+    pub notification: GraphqlNotification,
+}
+
+/// An update to an existing notification.
+#[derive(SimpleObject)]
+pub struct GraphqlUpdatedNotification {
+    /// The updated notification.
+    pub notification: GraphqlNotification,
+}
+
+/// Realtime notification patch represented as a new, updated, or deleted notification.
 #[allow(clippy::large_enum_variant)] // Notification updates already carry shared rows without allocation.
 #[derive(Union)]
 pub enum GraphqlNotificationPatch {
-    /// A notification that was created or updated.
-    Updated(GraphqlNotification),
+    /// A notification newly delivered to the user.
+    New(GraphqlNewNotification),
+    /// An existing notification that was updated.
+    Updated(GraphqlUpdatedNotification),
     /// A normalized notification record that must be deleted.
     Deleted(GraphqlCacheDeletion),
 }
@@ -25,8 +41,15 @@ pub enum GraphqlNotificationPatch {
 impl From<NotificationSubscriptionUpdate<NotifEvent>> for GraphqlNotificationPatch {
     fn from(value: NotificationSubscriptionUpdate<NotifEvent>) -> Self {
         match value {
+            NotificationSubscriptionUpdate::New(notification) => {
+                Self::New(GraphqlNewNotification {
+                    notification: GraphqlNotification::from(notification),
+                })
+            }
             NotificationSubscriptionUpdate::Updated(notification) => {
-                Self::Updated(GraphqlNotification::from(notification))
+                Self::Updated(GraphqlUpdatedNotification {
+                    notification: GraphqlNotification::from(notification),
+                })
             }
             NotificationSubscriptionUpdate::Deleted(notification_id) => {
                 Self::Deleted(GraphqlCacheDeletion::new(

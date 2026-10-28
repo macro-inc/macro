@@ -1,6 +1,10 @@
 {
-  "git+https://github.com/seanaye/turso?rev=be9acfe9e5e6efb17911af84047e4855cace53a3#be9acfe9e5e6efb17911af84047e4855cace53a3" =
-    "sha256-BTS0ypmcVWne+m0BQp/VT2O6mOFB/cc9F1TgQMo48aM=";
+  "git+https://github.com/signalapp/libsignal?tag=v0.105.2#b369755533ef5a3fae9b31b989114f22e074dfab" =
+    "sha256-TPdxsLDH9ecoR1Cw2TROSLSd8XJdgauv3lmkf13YsKU=";
+  "git+https://github.com/signalapp/tungstenite-rs?rev=a1837ccfe96b6895a57352d7f0112e4557516c27#a1837ccfe96b6895a57352d7f0112e4557516c27" =
+    "sha256-yGGTDdIpvW+skch46bHAa201WolofJC5KKwCcPfDTVs=";
+  "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
+    "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
   "git+https://github.com/whutchinson98/jsonwebtoken#c8c0d19511a0e7ba9d456e21437a79d321e99f16" =
     "sha256-jllT52SAIiNpTPg7Vm3wmT79w/CIz9NnVKM81oQq8dM=";
   "git+https://github.com/macro-inc/rig?branch=feat/responses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7" =

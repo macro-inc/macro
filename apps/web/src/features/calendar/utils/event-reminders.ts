@@ -1,5 +1,6 @@
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventType } from '@service-storage/generated/schemas/eventType';
 import { type Duration, formatDuration } from 'date-fns';
 import { daysInWeek, minutesInDay, minutesInHour } from 'date-fns/constants';
 
@@ -51,16 +52,33 @@ export function popupMinutes(
 }
 
 /**
+ * Status-style events never resolve the calendar's default reminders:
+ * Google's clients offer no notification setting on them and never notify.
+ * Explicit overrides still apply on every type.
+ */
+const EVENT_TYPES_WITHOUT_DEFAULT_REMINDERS: ReadonlySet<EventType> = new Set([
+  'working_location',
+  'out_of_office',
+  'focus_time',
+  'birthday',
+]);
+
+/**
  * The reminders an event resolves to: its own overrides when it departed
  * from the calendar defaults, the calendar defaults otherwise. `undefined`
  * defaults means the calendar is unknown, which resolves to nothing rather
- * than guessing.
+ * than guessing. Status-style events (working location, out of office,
+ * focus time, birthdays) resolve the defaults to nothing, matching Google.
  */
 export function resolveReminderOverrides(
   reminders: EventReminders | undefined,
-  calendarDefaults: EventReminderOverride[] | undefined
+  calendarDefaults: EventReminderOverride[] | undefined,
+  eventType?: EventType
 ): EventReminderOverride[] {
   if (reminders && !reminders.useDefault) return reminders.overrides ?? [];
+  if (eventType && EVENT_TYPES_WITHOUT_DEFAULT_REMINDERS.has(eventType)) {
+    return [];
+  }
   return calendarDefaults ?? [];
 }
 

@@ -1,9 +1,10 @@
 import type { Entity } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
 import { onMount } from 'solid-js';
-import { markNotificationsForEntityAsRead } from '../notification-helpers';
+import { markNotificationsForEntityAsReadInBackground } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
@@ -55,9 +56,12 @@ export function DebouncedNotificationReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        void markNotificationsForEntityAsRead(
-          props.notificationSource,
-          props.entity
+        fireAndForget(
+          markNotificationsForEntityAsReadInBackground(
+            props.notificationSource,
+            props.entity
+          ),
+          'notification-read'
         );
       }}
     />
@@ -93,10 +97,13 @@ export const makeDebouncedChannelNotificationReadMarker = (
   return makeDebouncedMarker({
     debounceTime: props.debounceTime,
     debouncedFn() {
-      markNotificationsForEntityAsRead(props.notificationSource, {
-        type: 'channel',
-        id: props.channelId,
-      });
+      fireAndForget(
+        markNotificationsForEntityAsReadInBackground(props.notificationSource, {
+          type: 'channel',
+          id: props.channelId,
+        }),
+        'notification-read'
+      );
     },
   });
 };
@@ -130,10 +137,16 @@ export function EmailDebouncedReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        markNotificationsForEntityAsRead(props.notificationSource, {
-          type: 'email_thread',
-          id: props.threadId,
-        });
+        fireAndForget(
+          markNotificationsForEntityAsReadInBackground(
+            props.notificationSource,
+            {
+              type: 'email_thread',
+              id: props.threadId,
+            }
+          ),
+          'notification-read'
+        );
         markSeenMutation.mutate({
           threadId: props.threadId,
           linkId: toHeaderLinkId(props.linkId),

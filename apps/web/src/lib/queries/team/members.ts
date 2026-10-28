@@ -1,12 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useMutation } from '@tanstack/solid-query';
-
+import {
+  invalidateAiBillingSummary,
+  invalidateSubscriptionStatus,
+} from '../auth';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
 import { teamKeys } from './keys';
 import { invalidateTeam } from './teams';
 
@@ -56,7 +60,7 @@ export function useRemoveUserFromTeamMutation(
         },
 
         onSuccess: (_data, { teamId }) => {
-          invalidateTeam(teamId);
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
           toast.success('Member removed');
         },
 
@@ -70,6 +74,48 @@ export function useRemoveUserFromTeamMutation(
               context.previousTeam
             );
           }
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type SetTeamMemberPlanArgs = { teamId: string; userId: string; plan: PaidPlan };
+type SetTeamMemberPlanCallbacks = MutationCallbacks<
+  void,
+  Error,
+  SetTeamMemberPlanArgs
+>;
+
+/**
+ * Move one member's seat between Pro and Max. Team admins only; the
+ * Max upgrades apply immediately with proration; Pro downgrades start at renewal.
+ */
+export function useSetTeamMemberPlanMutation(
+  callbacks?: SetTeamMemberPlanCallbacks
+) {
+  return useMutation(() => ({
+    mutationFn: async ({ userId, plan }: SetTeamMemberPlanArgs) => {
+      await throwOnErr(() => authServiceClient.setTeamMemberPlan(userId, plan));
+    },
+
+    ...withCallbacks<void, Error, SetTeamMemberPlanArgs>(
+      {
+        onSuccess: (_data, { teamId, plan }) => {
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
+          fireAndForget(invalidateAiBillingSummary(), 'team-settings');
+          fireAndForget(invalidateSubscriptionStatus(), 'team-settings');
+          toast.success(
+            plan === 'max'
+              ? 'Max applies immediately. Any pending downgrade is canceled.'
+              : 'Pro is scheduled for the next renewal. This seat keeps Max until then.'
+          );
+        },
+
+        onError: (error) => {
+          console.error('Failed to change team member plan', error);
+          toast.failure("Couldn't change the seat's plan. Please try again.");
         },
       },
       callbacks

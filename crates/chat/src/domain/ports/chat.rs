@@ -1,6 +1,6 @@
 use crate::domain::models::{
     ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
-    PatchChatMessageArgs, Result,
+    PatchChatMessageArgs, PatchChatRepoArgs, Result,
 };
 use agent::types::ChatMessageContent;
 use ai_toolset::tool_object::UserToolResponse;
@@ -10,7 +10,9 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::Chat;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 /// Repository trait for low-level chat data access.
@@ -21,16 +23,17 @@ pub trait ChatRepo: Send + Sync + 'static {
     /// repository persists it verbatim and carries no share-policy of its own.
     fn create(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        owner: Owner,
         args: CreateChatArgs,
         share_permission: SharePermissionV2,
     ) -> impl std::future::Future<Output = Result<String>> + Send;
 
-    /// Get the link-share preference of the user's team, or `None` when the
-    /// user is not on a team.
+    /// Get the link-share preference of the owner's team, or `None` when the
+    /// owner has no team. The team is the one [`model_owner::team::owner_team`]
+    /// resolves, so a bot owner gets its team's default.
     fn get_team_default_link_share(
         &self,
-        user_id: &str,
+        owner: &Owner,
     ) -> impl std::future::Future<Output = Result<Option<TeamLinkShareDefault>>> + Send;
 
     /// Get the full chat response (metadata, messages, web citations).
@@ -56,7 +59,7 @@ pub trait ChatRepo: Send + Sync + 'static {
     /// copy — the repository persists it verbatim.
     fn copy_chat(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        owner: Owner,
         source_chat_id: &str,
         args: CopyChatArgs,
         share_permission: SharePermissionV2,
@@ -75,6 +78,13 @@ pub trait ChatRepo: Send + Sync + 'static {
         chat_id: &str,
     ) -> impl std::future::Future<Output = Result<SharePermissionV2>> + Send;
 
+    /// Load the canonical team-share facts (persisted owner, owner's team,
+    /// current explicit grant, revision) the owner policy authorizes against.
+    fn get_team_share_facts(
+        &self,
+        chat_id: &str,
+    ) -> impl std::future::Future<Output = Result<TeamShareFacts>> + Send;
+
     /// Soft-delete a chat (sets `deleted_at`, removes pins and history).
     fn delete(&self, chat_id: &str) -> impl std::future::Future<Output = Result<()>> + Send;
 
@@ -85,11 +95,15 @@ pub trait ChatRepo: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Patch a chat's metadata (name, project, share permissions).
+    ///
+    /// `args.team_share` is the owner-authorized command for an explicit
+    /// `teamShareAccessLevel`; the repository applies it atomically with the
+    /// rest of the patch and rejects a team level that arrives without one.
     fn patch(
         &self,
         user_id: MacroUserIdStr<'static>,
         chat_id: &str,
-        args: PatchChatArgs,
+        args: PatchChatRepoArgs,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Update a project's `updatedAt` timestamp.
@@ -150,7 +164,7 @@ pub trait ChatService: Send + Sync + 'static {
     /// Create a new chat, returning the chat ID.
     fn create(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        owner: Owner,
         args: CreateChatArgs,
     ) -> impl std::future::Future<Output = Result<String>> + Send;
 

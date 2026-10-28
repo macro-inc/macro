@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET pull_request_url = $3, modified_at = clock_timestamp() WHERE id = $1 AND owner_id = $2 AND pull_request_url IS DISTINCT FROM $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d900787eaa40b93c96008d264a0352fe356eaec5d78a65f16fb8522e0808187"
+}

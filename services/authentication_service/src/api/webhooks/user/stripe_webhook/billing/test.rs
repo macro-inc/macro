@@ -1,0 +1,254 @@
+use super::*;
+use ai_billing::PlanTier;
+use serde_json::json;
+
+#[tokio::test]
+async fn policy_failure_preserves_base_work_and_requests_webhook_retry() {
+    let events = std::cell::RefCell::new(Vec::new());
+    let result = complete_subscription_webhook(
+        async {
+            events
+                .borrow_mut()
+                .push("policy checked against original binding");
+            anyhow::bail!("policy storage unavailable")
+        },
+        async {
+            events
+                .borrow_mut()
+                .extend(["subscription", "permissions", "payment"]);
+            Ok(())
+        },
+    )
+    .await;
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("policy storage unavailable")
+    );
+    assert_eq!(
+        *events.borrow(),
+        vec![
+            "policy checked against original binding",
+            "subscription",
+            "permissions",
+            "payment"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn disabled_policy_preserves_legacy_success_and_base_failure() {
+    for fail_base in [false, true] {
+        let called = std::cell::Cell::new(false);
+        let result = complete_subscription_webhook(async { Ok(()) }, async {
+            called.set(true);
+            if fail_base {
+                anyhow::bail!("base failed");
+            }
+            Ok(())
+        })
+        .await;
+        assert!(called.get());
+        assert_eq!(result.is_err(), fail_base);
+    }
+}
+
+fn subscription() -> Value {
+    json!({
+        "id": "sub_verified", "created": 1_700_000_000, "customer": "cus_verified",
+        "status": "active", "metadata": {}, "current_period_start": 1_800_000_000,
+        "current_period_end": 1_802_678_400,
+        "items": {"has_more": false, "data": [{"id": "si_verified", "quantity": 1,
+            "price": {"id": "price_40", "product": "prod_40", "unit_amount": 4000,
+            "currency": "usd", "type": "recurring", "recurring": {"interval": "month", "interval_count": 1}}}]}
+    })
+}
+
+fn invoice() -> Value {
+    json!({
+        "subscription": "sub_verified", "customer": "cus_verified", "status": "paid",
+        "billing_reason": "subscription_cycle", "amount_paid": 0,
+        "lines": {"has_more": false, "data": [{"subscription_item": "si_verified",
+            "price": {"id": "price_40"}, "proration": false,
+            "period": {"start": 1_800_000_000, "end": 1_802_678_400}}]}
+    })
+}
+
+fn event(object: Value) -> BillingEvent {
+    BillingEvent {
+        id: "evt_paid".into(),
+        at: DateTime::from_timestamp(1_800_000_010, 0).unwrap(),
+        object,
+        previous: Value::Null,
+    }
+}
+
+#[test]
+fn supports_both_period_versions_without_fallback() {
+    let old = subscription();
+    let mut new = old.clone();
+    new["items"]["data"][0]["current_period_start"] = new["current_period_start"].take();
+    new["items"]["data"][0]["current_period_end"] = new["current_period_end"].take();
+    let event = event(invoice());
+    assert_eq!(
+        subscription_periods(&event, &old, None),
+        subscription_periods(&event, &new, None)
+    );
+    new["items"]["data"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("current_period_end");
+    assert!(subscription_periods(&event, &new, None).is_empty());
+}
+
+#[test]
+fn discounted_paid_renewal_uses_price_not_invoice_total() {
+    let invoice = invoice();
+    let event = event(invoice.clone());
+    let facts = subscription_periods(&event, &subscription(), Some(&invoice));
+    assert_eq!(facts.len(), 1);
+    assert_eq!(facts[0].evidence, PeriodEvidence::Renewal);
+    assert_eq!(facts[0].unit_amount, Some(4000));
+    assert_eq!(facts[0].product_id.as_str(), "prod_40");
+}
+
+#[test]
+fn ordinary_updates_and_wrong_or_delayed_invoice_lines_never_prove_renewal() {
+    let sub = subscription();
+    let event = event(invoice());
+    assert_eq!(
+        subscription_periods(&event, &sub, None)[0].evidence,
+        PeriodEvidence::Snapshot
+    );
+    let mut invoices = vec![invoice(); 7];
+    invoices[0]["billing_reason"] = json!("subscription_update");
+    invoices[1]["lines"]["data"][0]["proration"] = json!(true);
+    invoices[2]["lines"]["data"][0]["period"]["start"] = json!(1_700_000_000);
+    invoices[3]["lines"]["data"][0]["subscription_item"] = json!("si_other");
+    invoices[4]["status"] = json!("open");
+    invoices[5]["customer"] = json!("cus_other");
+    invoices[6]["lines"]["has_more"] = json!(true);
+    for invoice in invoices {
+        assert_eq!(
+            subscription_periods(&event, &sub, Some(&invoice))[0].evidence,
+            PeriodEvidence::Snapshot
+        );
+    }
+}
+
+#[test]
+fn unknown_recurrence_is_not_assumed_monthly() {
+    let mut sub = subscription();
+    sub["items"]["data"][0]["price"]["recurring"] = Value::Null;
+    let facts = subscription_periods(&event(invoice()), &sub, None);
+    assert!(!facts[0].monthly);
+}
+
+#[test]
+fn newer_invoice_parent_fields_are_matched_by_item_and_price() {
+    let mut invoice = invoice();
+    invoice["parent"]["subscription_details"]["subscription"] = invoice["subscription"].take();
+    let line = &mut invoice["lines"]["data"][0];
+    line["parent"]["subscription_item_details"] =
+        json!({"subscription_item": "si_verified", "proration": false});
+    line["pricing"]["price_details"]["price"] = json!("price_40");
+    for key in ["subscription_item", "price", "proration"] {
+        line.as_object_mut().unwrap().remove(key);
+    }
+    assert_eq!(
+        subscription_periods(&event(invoice.clone()), &subscription(), Some(&invoice))[0].evidence,
+        PeriodEvidence::Renewal
+    );
+}
+
+#[test]
+fn personal_plan_change_retains_original_time_period_and_matching_item() {
+    let prices = crate::api::user::stripe::StripePrices {
+        premium: "price_40".into(),
+        max: Some("price_max".into()),
+    };
+    let mut event = event(subscription());
+    event.previous =
+        json!({"items": {"data": [{"id": "si_verified", "price": {"id": "price_40"}}]}});
+    event.object["items"]["data"][0]["price"]["id"] = json!("price_max");
+    let change = personal_plan_change(&event, &prices, false).unwrap();
+    assert!(change.resets_usage());
+    assert_eq!(change.at, event.at);
+    assert_eq!(change.period.start.timestamp(), 1_800_000_000);
+    assert_eq!(change.period.end.timestamp(), 1_802_678_400);
+    event.previous["items"]["data"][0]["id"] = json!("si_unrelated");
+    assert!(personal_plan_change(&event, &prices, false).is_none());
+    event.previous["items"]["data"][0]["id"] = json!("si_verified");
+    event.object["metadata"]["team_id"] = json!("team");
+    assert!(personal_plan_change(&event, &prices, false).is_none());
+    event.object["metadata"] = json!({});
+    event.object["status"] = json!("canceled");
+    assert!(personal_plan_change(&event, &prices, false).is_none());
+}
+
+#[test]
+fn personal_updates_without_previous_seat_price_do_not_reset_usage() {
+    let prices = crate::api::user::stripe::StripePrices {
+        premium: "price_40".into(),
+        max: Some("price_max".into()),
+    };
+    assert!(personal_plan_change(&event(subscription()), &prices, false).is_none());
+}
+
+#[test]
+fn personal_subscription_activation_resets_free_usage_for_both_paid_plans() {
+    let prices = crate::api::user::stripe::StripePrices {
+        premium: "price_40".into(),
+        max: Some("price_max".into()),
+    };
+    for (price, tier) in [
+        ("price_40", PlanTier::Premium),
+        ("price_max", PlanTier::Max),
+    ] {
+        let mut event = event(subscription());
+        event.object["items"]["data"][0]["price"]["id"] = json!(price);
+        let change = personal_plan_change(&event, &prices, true).unwrap();
+        assert_eq!(change.from, PlanTier::Free);
+        assert_eq!(change.to, tier);
+        assert!(change.resets_usage());
+        assert_eq!(change.at, event.at);
+        // Renewal snapshots don't prove a Free-to-paid activation.
+        assert!(personal_plan_change(&event, &prices, false).is_none());
+    }
+}
+
+#[test]
+fn renewal_downgrade_belongs_to_the_new_period_start() {
+    let prices = crate::api::user::stripe::StripePrices {
+        premium: "price_40".into(),
+        max: Some("price_max".into()),
+    };
+    let mut event = event(subscription());
+    event.previous = json!({"current_period_start": 1_797_321_600, "items": {"data": [{"id": "si_verified", "price": {"id": "price_max"}}]}});
+    let change = personal_plan_change(&event, &prices, false).unwrap();
+    assert_eq!(change.from, PlanTier::Max);
+    assert_eq!(change.to, PlanTier::Premium);
+    assert_eq!(change.at, change.period.start);
+}
+#[test]
+fn application_timestamp_distinguishes_immediate_changes_and_is_not_reused_by_portal_edits() {
+    let prices = crate::api::user::stripe::StripePrices {
+        premium: "price_40".into(),
+        max: Some("price_max".into()),
+    };
+    let mut event = event(subscription());
+    event.object["items"]["data"][0]["price"]["id"] = "price_max".into();
+    let precise = event.at + chrono::Duration::microseconds(123_456);
+    event.object["metadata"]["macro_plan_change_at"] = precise.to_rfc3339().into();
+    event.previous = json!({"items": {"data": [{"id": "si_verified", "price": {"id": "price_40"}}]}, "metadata": {"macro_plan_change_at": null}});
+    assert_eq!(
+        personal_plan_change(&event, &prices, false).unwrap().at,
+        precise
+    );
+    event.previous.as_object_mut().unwrap().remove("metadata");
+    assert_eq!(
+        personal_plan_change(&event, &prices, false).unwrap().at,
+        event.at
+    );
+}

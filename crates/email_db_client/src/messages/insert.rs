@@ -1,12 +1,25 @@
+#[cfg(test)]
+pub(crate) mod test;
+
 use crate::attachments::provider;
 use crate::messages::replying_to_id;
 use crate::parse::service_to_db::addresses_from_message;
-use crate::{contacts, labels, parse, threads};
+use crate::{contacts, labels, messages, parse, threads};
 
 use models_email::email::db::address::UpsertedRecipients;
+use models_email::email::service::label::system_labels;
 use models_email::email::service::message;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+
+/// What a re-sync of a stored message read before fetching it from Gmail.
+#[derive(Debug, Clone, Default)]
+pub struct ResyncSnapshot {
+    /// The message's provider labels before the fetch.
+    pub stored_labels: Vec<String>,
+    /// Labels with a pending Macro write just before or just after the fetch.
+    pub pending_labels: Vec<String>,
+}
 
 /// inserts a message (and all its related parts) into the database using the passed transaction.
 pub async fn insert_message_with_tx(
@@ -21,7 +34,18 @@ pub async fn insert_message_with_tx(
     // 1. inserting thread simultaneously (thread already has latest values)
     // 2. backfilling messages (metadata gets updated once after all messages complete)
     update_thread_metadata: bool,
+    // Set when re-syncing a stored message: Gmail's answer may predate a local
+    // write made while it was fetched, so labels change only where Gmail
+    // disagrees with what was stored before the fetch.
+    resync: Option<&ResyncSnapshot>,
 ) -> anyhow::Result<()> {
+    if let Some(provider_thread_id) = message.provider_thread_id.as_deref() {
+        threads::provider_identity::lock_provider_thread(tx, link_id, provider_thread_id).await?;
+    }
+    if resync.is_some() {
+        // Before the row upsert, in the same order as label writes take it.
+        labels::pending_writes::lock_thread_label_writes(tx, &[thread_db_id]).await?;
+    }
     let message_db_id = insert_db_message(
         tx,
         message,
@@ -33,25 +57,60 @@ pub async fn insert_message_with_tx(
 
     contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipents).await?;
 
-    if !message.labels.is_empty() {
-        let provider_label_ids: Vec<String> = message
-            .labels
-            .iter()
-            .map(|label| label.provider_label_id.clone())
-            .collect();
-        labels::insert::insert_message_labels(
-            tx,
-            link_id,
+    // Also when Gmail reports no labels, so a re-sync removes the stored ones.
+    let provider_label_ids: Vec<String> = message
+        .labels
+        .iter()
+        .map(|label| label.provider_label_id.clone())
+        .collect();
+
+    // A re-sync must not undo a Macro label write Gmail has not confirmed yet,
+    // including the read and starred flags those labels drive.
+    let mut kept_label_ids =
+        labels::pending_writes::pending_provider_label_ids(&mut *tx, message_db_id).await?;
+    if let Some(snapshot) = resync {
+        kept_label_ids.extend(snapshot.pending_labels.iter().cloned());
+        let stored_now = sqlx::query_scalar!(
+            r#"
+            SELECT l.provider_label_id
+            FROM email_message_labels ml
+            JOIN email_labels l ON l.id = ml.label_id
+            WHERE ml.message_id = $1
+            "#,
             message_db_id,
-            &provider_label_ids,
-            true,
         )
+        .fetch_all(&mut *tx)
         .await?;
+        kept_label_ids.extend(
+            stored_now
+                .into_iter()
+                .chain(provider_label_ids.iter().cloned())
+                .chain(snapshot.stored_labels.iter().cloned())
+                .filter(|label| {
+                    provider_label_ids.contains(label) == snapshot.stored_labels.contains(label)
+                }),
+        );
+    }
+    kept_label_ids.sort_unstable();
+    kept_label_ids.dedup();
+
+    labels::insert::insert_message_labels(
+        tx,
+        link_id,
+        message_db_id,
+        &provider_label_ids,
+        true,
+        &kept_label_ids,
+    )
+    .await?;
+
+    let kept_read = kept_label_ids.iter().any(|id| id == system_labels::UNREAD);
+    let kept_starred = kept_label_ids.iter().any(|id| id == system_labels::STARRED);
+    if kept_read || kept_starred {
+        messages::update::set_flags_from_labels(tx, message_db_id, kept_read, kept_starred).await?;
     }
 
-    if !message.attachments.is_empty() {
-        provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
-    }
+    provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
 
     if update_thread_metadata {
         threads::update::update_thread_metadata(tx, thread_db_id, link_id).await?;
@@ -69,6 +128,13 @@ pub async fn insert_message_with_tx(
 }
 
 /// inserts message object into the database
+///
+/// On conflict the update is skipped entirely when the stored row already
+/// holds the incoming values, so a re-sync writes no new row version. When
+/// only small columns change, the large body/header columns keep their
+/// existing values, which lets Postgres reuse their TOAST chunks instead of
+/// rewriting them. Provider messages arrive without `replying_to_id` (it is
+/// resolved from headers afterwards), so a NULL keeps the stored value.
 #[tracing::instrument(skip(tx, message), err)]
 async fn insert_db_message(
     tx: &mut sqlx::PgConnection,
@@ -80,7 +146,7 @@ async fn insert_db_message(
     let db_message =
         parse::service_to_db::map_service_message_to_db(message, thread_id, from_contact_id);
 
-    let result = sqlx::query!(
+    let result = sqlx::query_scalar!(
         r#"
         INSERT INTO email_messages (
         id, provider_id, link_id, global_id, thread_id, provider_thread_id, replying_to_id, provider_history_id, internal_date_ts,
@@ -92,7 +158,7 @@ async fn insert_db_message(
             global_id = EXCLUDED.global_id,
             provider_history_id = EXCLUDED.provider_history_id,
             provider_thread_id = EXCLUDED.provider_thread_id,
-            replying_to_id = EXCLUDED.replying_to_id,
+            replying_to_id = COALESCE(EXCLUDED.replying_to_id, email_messages.replying_to_id),
             from_name = EXCLUDED.from_name,
             from_contact_id = EXCLUDED.from_contact_id,
             internal_date_ts = EXCLUDED.internal_date_ts,
@@ -105,10 +171,36 @@ async fn insert_db_message(
             is_starred = EXCLUDED.is_starred,
             is_sent = EXCLUDED.is_sent,
             is_draft = EXCLUDED.is_draft,
-            headers_jsonb = EXCLUDED.headers_jsonb,
-            body_text = EXCLUDED.body_text,
-            body_html_sanitized = EXCLUDED.body_html_sanitized,
+            headers_jsonb = CASE
+                WHEN email_messages.headers_jsonb IS DISTINCT FROM EXCLUDED.headers_jsonb
+                THEN EXCLUDED.headers_jsonb ELSE email_messages.headers_jsonb END,
+            body_text = CASE
+                WHEN email_messages.body_text IS DISTINCT FROM EXCLUDED.body_text
+                THEN EXCLUDED.body_text ELSE email_messages.body_text END,
+            body_html_sanitized = CASE
+                WHEN email_messages.body_html_sanitized IS DISTINCT FROM EXCLUDED.body_html_sanitized
+                THEN EXCLUDED.body_html_sanitized ELSE email_messages.body_html_sanitized END,
             updated_at = NOW()
+        -- Large columns last: the row comparison stops at the first difference.
+        WHERE (
+            email_messages.global_id, email_messages.provider_history_id,
+            email_messages.provider_thread_id, email_messages.replying_to_id,
+            email_messages.from_name, email_messages.from_contact_id,
+            email_messages.internal_date_ts, email_messages.snippet,
+            email_messages.size_estimate, email_messages.subject, email_messages.sent_at,
+            email_messages.has_attachments, email_messages.is_read, email_messages.is_starred,
+            email_messages.is_sent, email_messages.is_draft, email_messages.headers_jsonb,
+            email_messages.body_text, email_messages.body_html_sanitized
+        ) IS DISTINCT FROM (
+            EXCLUDED.global_id, EXCLUDED.provider_history_id,
+            EXCLUDED.provider_thread_id, COALESCE(EXCLUDED.replying_to_id, email_messages.replying_to_id),
+            EXCLUDED.from_name, EXCLUDED.from_contact_id,
+            EXCLUDED.internal_date_ts, EXCLUDED.snippet,
+            EXCLUDED.size_estimate, EXCLUDED.subject, EXCLUDED.sent_at,
+            EXCLUDED.has_attachments, EXCLUDED.is_read, EXCLUDED.is_starred,
+            EXCLUDED.is_sent, EXCLUDED.is_draft, EXCLUDED.headers_jsonb,
+            EXCLUDED.body_text, EXCLUDED.body_html_sanitized
+        )
         RETURNING id
         "#,
         db_message.id,
@@ -135,10 +227,139 @@ async fn insert_db_message(
         db_message.body_html_sanitized,
         db_message.headers_jsonb
     )
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
 
-    Ok(result.id)
+    if let Some(id) = result {
+        return Ok(id);
+    }
+
+    // The conflicting row already holds this data; fetch its id.
+    let existing_id = sqlx::query_scalar!(
+        r#"
+        SELECT id FROM email_messages
+        WHERE link_id = $1 AND provider_id = $2
+        "#,
+        db_message.link_id,
+        db_message.provider_id,
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    Ok(existing_id)
+}
+
+/// A message a backfill write left out because its own data can never be
+/// stored; the rest of its thread was still written.
+#[derive(Debug)]
+pub struct SkippedMessage {
+    /// The message's position in the slice passed to the write.
+    pub index: usize,
+    /// Why it could not be stored.
+    pub error: anyhow::Error,
+}
+
+/// Writes backfilled messages one savepoint at a time.
+///
+/// A message whose contacts or rows fail with an error `is_unstorable`
+/// accepts is skipped and reported, and the others still commit: one bad
+/// message must not cost its whole thread. Any other error fails the write.
+pub(crate) struct BackfillMessageWriter<'a, U> {
+    pub(crate) pool: &'a PgPool,
+    pub(crate) link_id: Uuid,
+    pub(crate) is_unstorable: U,
+}
+
+impl<U: Fn(&anyhow::Error) -> bool> BackfillMessageWriter<'_, U> {
+    /// Upserts each message's contacts, in order. Contacts are shared across
+    /// messages, so this runs before the messages' transaction to avoid
+    /// deadlocks. A skipped message gets `None`.
+    pub(crate) async fn upsert_contacts(
+        &self,
+        messages: &[message::Message],
+        skipped: &mut Vec<SkippedMessage>,
+    ) -> anyhow::Result<Vec<Option<UpsertedRecipients>>> {
+        let mut recipients = Vec::with_capacity(messages.len());
+        for (index, message) in messages.iter().enumerate() {
+            match contacts::upsert_message::parse_and_upsert_message_contacts(
+                self.pool,
+                self.link_id,
+                addresses_from_message(message),
+            )
+            .await
+            {
+                Ok(upserted) => recipients.push(Some(upserted)),
+                Err(error) if (self.is_unstorable)(&error) => {
+                    skipped.push(SkippedMessage { index, error });
+                    recipients.push(None);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(recipients)
+    }
+
+    /// Inserts each message whose contacts were stored, under its own savepoint.
+    pub(crate) async fn insert_messages(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        thread_db_id: Uuid,
+        messages: &mut [message::Message],
+        recipients: Vec<Option<UpsertedRecipients>>,
+        skipped: &mut Vec<SkippedMessage>,
+    ) -> anyhow::Result<()> {
+        for (index, (message, recipients)) in messages.iter_mut().zip(recipients).enumerate() {
+            let Some(recipients) = recipients else {
+                continue;
+            };
+            let mut savepoint = sqlx::Acquire::begin(&mut *tx).await?;
+            match insert_message_with_tx(
+                &mut savepoint,
+                thread_db_id,
+                message,
+                self.link_id,
+                recipients,
+                false,
+                None,
+            )
+            .await
+            {
+                Ok(()) => savepoint.commit().await?,
+                Err(error) if (self.is_unstorable)(&error) => {
+                    savepoint.rollback().await?;
+                    skipped.push(SkippedMessage { index, error });
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Inserts messages into an existing thread in one transaction, leaving its
+/// metadata and `replying_to` links to the caller's later metadata update.
+/// Returns the messages it skipped because `is_unstorable` accepted their error.
+#[tracing::instrument(skip(pool, messages, is_unstorable), fields(message_count = messages.len()), err)]
+pub async fn insert_thread_messages(
+    pool: &PgPool,
+    thread_db_id: Uuid,
+    link_id: Uuid,
+    messages: &mut [message::Message],
+    is_unstorable: impl Fn(&anyhow::Error) -> bool,
+) -> anyhow::Result<Vec<SkippedMessage>> {
+    let writer = BackfillMessageWriter {
+        pool,
+        link_id,
+        is_unstorable,
+    };
+    let mut skipped = Vec::new();
+    let recipients = writer.upsert_contacts(messages, &mut skipped).await?;
+    let mut tx = pool.begin().await?;
+    writer
+        .insert_messages(&mut tx, thread_db_id, messages, recipients, &mut skipped)
+        .await?;
+    tx.commit().await?;
+    Ok(skipped)
 }
 
 /// Inserts a single message into the database with transaction handling
@@ -149,6 +370,7 @@ pub async fn insert_message(
     message: &mut message::Message,
     link_id: Uuid,
     update_thread_metadata: bool,
+    resync: Option<&ResyncSnapshot>,
 ) -> anyhow::Result<()> {
     // we have to insert addresses before inserting the message. these values are shared
     // across messages, so inserting them in the txn can cause deadlocks.
@@ -167,6 +389,7 @@ pub async fn insert_message(
         link_id,
         recipients,
         update_thread_metadata,
+        resync,
     )
     .await
     {

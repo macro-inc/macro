@@ -1,7 +1,6 @@
 import type { ListView } from '@app/constants/list-views';
 import { GroupDropdown } from '@app/features/next-soup/soup-view/filters-bar/group-dropdown';
 import {
-  COMPANY_GROUP_OPTIONS,
   type GroupOptionId,
   TAG_VIEW_GROUP_OPTIONS,
   TASK_GROUP_OPTIONS,
@@ -9,15 +8,18 @@ import {
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ENABLE_SOUP_GROUP_BY_OVERRIDE } from '@core/constant/featureFlags';
+import { enableSoupGroupBy } from '@core/constant/featureFlags';
+import type { ButtonVariant } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 
-export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
+export const SoupViewContextGroup = (props: {
+  grouped?: boolean;
+  hideLabel?: boolean;
+  variant?: ButtonVariant;
+}) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, viewMode } = useSoupView();
-  const groupByEnabled = useFeatureFlag('enable-soup-group-by', {
-    enabledOverride: ENABLE_SOUP_GROUP_BY_OVERRIDE,
-  });
+  const { soup, extensions } = useSoupView();
+  const groupByEnabled = useFeatureFlag(enableSoupGroupBy);
 
   const [groupOpen, setGroupOpen] = createSignal(false);
 
@@ -49,34 +51,40 @@ export const SoupViewContextGroup = (props: { hideLabel?: boolean }) => {
     <Show when={groupByEnabled().enabled}>
       <Show when={isComponentListView('tasks')}>
         <GroupDropdown
+          grouped={props.grouped}
           value={value}
           onChange={onChange}
           options={TASK_GROUP_OPTIONS}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
           hideLabel={props.hideLabel}
+          variant={props.variant}
         />
       </Show>
       {/* The board is inherently grouped by stage columns, so grouping only
           applies to the list mode. */}
-      <Show when={isComponentListView('companies') && viewMode() === 'list'}>
+      <Show when={extensions?.groupOptions?.visible()}>
         <GroupDropdown
+          grouped={props.grouped}
           value={value}
           onChange={onChange}
-          options={COMPANY_GROUP_OPTIONS}
+          options={extensions?.groupOptions?.options ?? []}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
           hideLabel={props.hideLabel}
+          variant={props.variant}
         />
       </Show>
       <Show when={component() === 'tag'}>
         <GroupDropdown
+          grouped={props.grouped}
           value={value}
           onChange={onChange}
           options={TAG_VIEW_GROUP_OPTIONS}
           open={groupOpen()}
           onOpenChange={setGroupOpen}
           hideLabel={props.hideLabel}
+          variant={props.variant}
         />
       </Show>
     </Show>

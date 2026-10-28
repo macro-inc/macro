@@ -12,6 +12,7 @@ pub struct PropertyDefinition {
     pub id: Uuid,
     pub team_id: Option<Uuid>,
     pub user_id: Option<String>,
+    pub database_id: Option<Uuid>,
     pub display_name: String,
     pub data_type: DataType,
     pub is_multi_select: bool,
@@ -27,7 +28,8 @@ impl From<PropertyDefinition> for crate::service::property_definition::PropertyD
     fn from(db: PropertyDefinition) -> Self {
         use crate::shared::PropertyOwner;
 
-        let owner = PropertyOwner::from_optional_ids(db.team_id, db.user_id, db.is_system);
+        let owner =
+            PropertyOwner::from_optional_ids(db.team_id, db.user_id, db.database_id, db.is_system);
 
         Self {
             id: db.id,

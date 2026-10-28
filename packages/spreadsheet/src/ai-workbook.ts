@@ -1,0 +1,707 @@
+import type { LoroDoc } from 'loro-crdt';
+import type {
+  SpreadsheetCalculateRequest,
+  SpreadsheetCalculateResponse,
+  SpreadsheetEditRequest,
+  SpreadsheetEditResponse,
+  SpreadsheetOperation,
+  SpreadsheetReadCell,
+  SpreadsheetReadRequest,
+  SpreadsheetReadResponse,
+  SpreadsheetReadValidation,
+  SpreadsheetSheetSummary,
+  SpreadsheetTableSummary,
+  SpreadsheetValue,
+} from './ai-types';
+import type {
+  CalculatedCell,
+  SpreadsheetCalculator,
+  WorkbookCalculation,
+} from './calculation';
+import { fillCopies } from './cell-copy';
+import { insertCheckboxEdits } from './checkboxes';
+import {
+  dropdownRule,
+  literalListItems,
+  overlappingValidations,
+  replaceValidations,
+  validationReference,
+} from './data-validation';
+import { validateSpreadsheetDocument } from './document-validation';
+import {
+  type CellSelection,
+  selectionAddresses,
+  selectionBounds,
+} from './grid-selection';
+import { qualifyScratchFormula } from './scratch-formula';
+import { tableColumnNames } from './sheet-tables';
+import {
+  appendSpreadsheetRows,
+  formatCellAddress,
+  isSpreadsheetCellStyle,
+  MAX_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+  parseCellAddress,
+  parseColumnName,
+  resizeSpreadsheetColumn,
+  SPREADSHEET_DEFAULT_STYLE,
+  SPREADSHEET_MAX_CELL_LENGTH,
+  SPREADSHEET_MAX_ROWS,
+  type SpreadsheetCell,
+  type SpreadsheetCellEdits,
+  type SpreadsheetCellStyle,
+  writeSpreadsheetCells,
+} from './spreadsheet-document';
+import {
+  addSpreadsheetSheet,
+  createSpreadsheetTable,
+  deleteSpreadsheetSheet,
+  duplicateSpreadsheetSheet,
+  readSpreadsheetWorkbook,
+  renameSpreadsheetSheet,
+  type SpreadsheetWorkbookSheet,
+  setSpreadsheetValidations,
+} from './workbook-document';
+
+const MAX_READ_VALIDATIONS = 50;
+
+export const SPREADSHEET_AI_LIMITS = {
+  readCells: 500,
+  formulas: 20,
+  operations: 25,
+  editCells: 2_000,
+  responseBytes: 100_000,
+} as const;
+
+/** Strict native shape check: never reinterpret markdown as a blank sheet. */
+export function assertSpreadsheetDocument(doc: LoroDoc): void {
+  if (doc.getMap('spreadsheetMeta').get('formatVersion') !== 1)
+    throw new Error('This is not a supported native Macro spreadsheet.');
+}
+
+function resolveSheet(
+  workbook: SpreadsheetWorkbookSheet[],
+  reference?: string
+) {
+  if (reference === undefined) return workbook[0];
+  const sheet =
+    workbook.find((item) => item.id === reference) ??
+    workbook.find(
+      (item) => item.name.toLowerCase() === reference.toLowerCase()
+    );
+  if (!sheet)
+    throw new Error(
+      `Sheet “${reference}” does not exist. Read the workbook to get its current sheet IDs.`
+    );
+  return sheet;
+}
+
+function address(value: string) {
+  const normalized = value.trim().toUpperCase();
+  const position = parseCellAddress(normalized);
+  if (!position)
+    throw new Error(
+      `Invalid cell address “${value}”. Use A1-style addresses (columns A–XFD, rows 1–${SPREADSHEET_MAX_ROWS}) without a sheet prefix.`
+    );
+  return { normalized, position };
+}
+
+export function parseSpreadsheetRange(value: string): CellSelection {
+  const parts = value.split(':');
+  if (parts.length > 2 || !parts[0])
+    throw new Error(`Invalid range “${value}”. Use A1 or A1:B10.`);
+  const anchor = address(parts[0]).position;
+  const focus = address(parts[1] ?? parts[0]).position;
+  return { anchor, focus };
+}
+
+function rangeName(selection: CellSelection) {
+  const bounds = selectionBounds(selection);
+  const first = formatCellAddress(bounds.top, bounds.left);
+  const last = formatCellAddress(bounds.bottom, bounds.right);
+  return first === last ? first : `${first}:${last}`;
+}
+
+function checkedRange(value: string, sheet: SpreadsheetWorkbookSheet) {
+  const selection = parseSpreadsheetRange(value);
+  if (selectionBounds(selection).bottom >= sheet.layout.rowCount)
+    throw new Error(
+      `Range ${value} exceeds ${sheet.name}'s ${sheet.layout.rowCount} rows. Append rows first.`
+    );
+  return selection;
+}
+
+function calculate(
+  workbook: SpreadsheetWorkbookSheet[],
+  calculator: SpreadsheetCalculator
+) {
+  return calculator.calculateWorkbook(
+    workbook.map((sheet) => ({ ...sheet, rowCount: sheet.layout.rowCount })),
+    { includeTypes: true }
+  );
+}
+
+function typedValue(result?: CalculatedCell): SpreadsheetValue {
+  if (!result) return { type: 'blank', value: null, display: '' };
+  return {
+    type:
+      result.type ??
+      (result.error
+        ? 'error'
+        : result.number === undefined
+          ? 'text'
+          : 'number'),
+    value:
+      result.value ?? result.number ?? (result.error ? null : result.display),
+    display: result.display,
+    ...(result.error && { error: result.error }),
+  };
+}
+
+function usedRange(
+  sheet: SpreadsheetWorkbookSheet,
+  result: Record<string, CalculatedCell>
+) {
+  // Large sheets exceed the argument limit of Math.min(...positions).
+  let bounds: CellSelection | undefined;
+  const include = (key: string) => {
+    const position = parseCellAddress(key);
+    if (!position) return;
+    if (!bounds) {
+      bounds = { anchor: { ...position }, focus: { ...position } };
+      return;
+    }
+    bounds.anchor.row = Math.min(bounds.anchor.row, position.row);
+    bounds.anchor.column = Math.min(bounds.anchor.column, position.column);
+    bounds.focus.row = Math.max(bounds.focus.row, position.row);
+    bounds.focus.column = Math.max(bounds.focus.column, position.column);
+  };
+  for (const [key, cell] of Object.entries(sheet.cells))
+    if (cell.value !== '') include(key);
+  for (const key of Object.keys(result)) include(key);
+  return bounds ? rangeName(bounds) : null;
+}
+
+function tableSummaries(
+  sheet: SpreadsheetWorkbookSheet
+): SpreadsheetTableSummary[] {
+  return (sheet.metadata?.tables ?? []).map((table) => {
+    const columns = tableColumnNames(table, sheet.cells);
+    const filteredColumns = Object.keys(table.filters ?? {}).flatMap(
+      (offset) => columns[Number(offset)] ?? []
+    );
+    const columnTypes = Object.entries(table.columnTypes ?? {})
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .flatMap(([offset, type]) => {
+        const column = columns[Number(offset)];
+        return column === undefined ? [] : [{ column, type }];
+      });
+    return {
+      name: table.name,
+      range: table.range,
+      columns,
+      totalsRow: table.totalsRow,
+      ...(filteredColumns.length && { filteredColumns }),
+      ...(columnTypes.length && { columnTypes }),
+    };
+  });
+}
+
+function summaries(
+  workbook: SpreadsheetWorkbookSheet[],
+  results: WorkbookCalculation
+): SpreadsheetSheetSummary[] {
+  return workbook.map((sheet) => {
+    const tables = tableSummaries(sheet);
+    return {
+      id: sheet.id,
+      name: sheet.name,
+      rowCount: sheet.layout.rowCount,
+      columnCount: sheet.layout.columnCount,
+      usedRange: usedRange(sheet, results[sheet.id] ?? {}),
+      populatedCells: Object.values(sheet.cells).filter(
+        (cell) => cell.value !== ''
+      ).length,
+      formulaCells: Object.values(sheet.cells).filter(
+        (cell) => cell.format !== 'text' && cell.value.startsWith('=')
+      ).length,
+      errorCells: Object.values(results[sheet.id] ?? {}).filter(
+        (cell) => cell.error
+      ).length,
+      ...(tables.length && { tables }),
+    };
+  });
+}
+
+function readCell(
+  key: string,
+  cell: SpreadsheetCell | undefined,
+  result: CalculatedCell | undefined,
+  includeStyles: boolean
+): SpreadsheetReadCell {
+  const source = cell?.value ?? '';
+  const { value: _value, ...style } = cell ?? { value: '' };
+  return {
+    address: key,
+    source,
+    ...typedValue(result),
+    ...(source.startsWith('=') &&
+      cell?.format !== 'text' && { formula: source }),
+    ...(includeStyles && { style }),
+  };
+}
+
+function readValidations(
+  sheet: SpreadsheetWorkbookSheet,
+  selection: CellSelection
+): SpreadsheetReadValidation[] {
+  return overlappingValidations(
+    sheet.metadata?.validations,
+    rangeName(selection)
+  )
+    .slice(0, MAX_READ_VALIDATIONS)
+    .map((rule) => {
+      const [first] = rule.formulas ?? [];
+      const items =
+        rule.type === 'list' && first !== undefined
+          ? literalListItems(first)
+          : undefined;
+      return {
+        range: rule.range,
+        type: rule.type,
+        ...(items
+          ? { items }
+          : rule.type === 'list' && first !== undefined
+            ? { source: first }
+            : rule.formulas && { formulas: rule.formulas }),
+        ...(rule.operator && { operator: rule.operator }),
+        ...(rule.type === 'list' && { dropdown: rule.dropdown !== false }),
+        rejectInvalid:
+          !!rule.showError && (rule.errorStyle ?? 'stop') === 'stop',
+        ...(rule.colors && { colors: rule.colors }),
+      };
+    });
+}
+
+export function readSpreadsheetForAi(
+  doc: LoroDoc,
+  revision: string,
+  request: SpreadsheetReadRequest,
+  calculator: SpreadsheetCalculator
+): SpreadsheetReadResponse {
+  assertSpreadsheetDocument(doc);
+  const workbook = readSpreadsheetWorkbook(doc);
+  const results = calculate(workbook, calculator);
+  const sheets = summaries(workbook, results);
+  const sheet = resolveSheet(workbook, request.sheetId);
+  const requested = request.ranges?.length
+    ? request.ranges
+    : [sheets.find((item) => item.id === sheet.id)?.usedRange ?? 'A1'];
+  if (requested.length > 20)
+    throw new Error('Read at most 20 ranges at a time.');
+  let remaining = SPREADSHEET_AI_LIMITS.readCells;
+  let bytes = SPREADSHEET_AI_LIMITS.responseBytes;
+  const ranges = requested.map((range) => {
+    const selection = checkedRange(range, sheet);
+    const cells: SpreadsheetReadCell[] = [];
+    let truncated = false;
+    for (const key of selectionAddresses(selection)) {
+      const cell = sheet.cells[key];
+      const result = results[sheet.id]?.[key];
+      // Sparse output; style-only cells are relevant only when requested.
+      if (!cell?.value && !result && !(request.includeStyles && cell)) continue;
+      const item = readCell(key, cell, result, request.includeStyles ?? false);
+      const size = new TextEncoder().encode(JSON.stringify(item)).length;
+      if (!remaining || size > bytes) {
+        truncated = true;
+        continue;
+      }
+      cells.push(item);
+      remaining--;
+      bytes -= size;
+    }
+    const validations = readValidations(sheet, selection);
+    return {
+      sheetId: sheet.id,
+      sheetName: sheet.name,
+      range: rangeName(selection),
+      cells,
+      ...(validations.length && { validations }),
+      truncated,
+    };
+  });
+  return {
+    action: 'read',
+    revision,
+    sheets,
+    ranges,
+    warnings: ranges.some((range) => range.truncated)
+      ? [
+          'Results were limited to 500 cells or 100,000 bytes. Read smaller ranges for the remaining cells.',
+        ]
+      : [],
+  };
+}
+
+function validateInputs(
+  cells: { address: string; value: string }[],
+  sheet: SpreadsheetWorkbookSheet
+) {
+  const edits: SpreadsheetCellEdits = {};
+  for (const cell of cells) {
+    const key = address(cell.address);
+    if (key.position.row >= sheet.layout.rowCount)
+      throw new Error(
+        `Cell ${key.normalized} exceeds ${sheet.name}'s ${sheet.layout.rowCount} rows. Append rows first.`
+      );
+    if (cell.value.length > SPREADSHEET_MAX_CELL_LENGTH)
+      throw new Error(`Cell ${key.normalized} exceeds 10,000 characters.`);
+    if (key.normalized in edits)
+      throw new Error(
+        `Cell ${key.normalized} is specified twice in one operation.`
+      );
+    edits[key.normalized] = { value: cell.value };
+  }
+  return edits;
+}
+
+export function calculateSpreadsheetForAi(
+  doc: LoroDoc,
+  revision: string,
+  request: SpreadsheetCalculateRequest,
+  calculator: SpreadsheetCalculator
+): SpreadsheetCalculateResponse {
+  assertSpreadsheetDocument(doc);
+  if (
+    !request.formulas.length ||
+    request.formulas.length > SPREADSHEET_AI_LIMITS.formulas
+  )
+    throw new Error('Calculate between 1 and 20 formulas at a time.');
+  const workbook = readSpreadsheetWorkbook(doc);
+  const sheet = resolveSheet(workbook, request.sheetId);
+  let edited = 0;
+  for (const override of request.overrides ?? []) {
+    const target = resolveSheet(workbook, override.sheetId);
+    edited += override.cells.length;
+    if (edited > SPREADSHEET_AI_LIMITS.editCells)
+      throw new Error('Override at most 2,000 cells at a time.');
+    const edits = validateInputs(override.cells, target);
+    for (const [key, edit] of Object.entries(edits))
+      target.cells[key] = { ...target.cells[key], value: edit?.value ?? '' };
+  }
+  // Each formula gets an independent private sheet. There is no source-cell
+  // collision, no result-to-result reference, and no accidental circular SUM.
+  const scratchSheets = request.formulas.map(({ formula }, index) => {
+    if (
+      !formula.startsWith('=') ||
+      formula.length > SPREADSHEET_MAX_CELL_LENGTH
+    )
+      throw new Error(
+        'Scratch formulas must start with = and contain at most 10,000 characters.'
+      );
+    let name = `__MacroScratch_${index}`;
+    while (
+      workbook.some((item) => item.name.toLowerCase() === name.toLowerCase())
+    )
+      name += '_';
+    const scratchId = `__macro_scratch_${crypto.randomUUID()}`;
+    const scratch: SpreadsheetWorkbookSheet = {
+      id: scratchId,
+      name,
+      cells: { A1: { value: qualifyScratchFormula(formula, sheet.name) } },
+      layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
+      metadata: {
+        definedNames: sheet.metadata?.definedNames?.filter(
+          (entry) => entry.local
+        ),
+      },
+    };
+    return scratch;
+  });
+  const calculated = calculate([...workbook, ...scratchSheets], calculator);
+  const results = request.formulas.map(({ label, formula }, index) => ({
+    ...(label !== undefined && { label }),
+    formula,
+    ...typedValue(calculated[scratchSheets[index].id]?.A1),
+  }));
+  if (
+    new TextEncoder().encode(JSON.stringify(results)).length >
+    SPREADSHEET_AI_LIMITS.responseBytes
+  )
+    throw new Error(
+      'Scratch results exceed 100,000 bytes. Calculate fewer formulas or return shorter results.'
+    );
+  return {
+    action: 'calculate',
+    revision,
+    results,
+    warnings: [
+      'Scratch formulas return their top-left value and never change the workbook. Unqualified references use the selected sheet; INDIRECT is not supported in scratch calculations.',
+    ],
+  };
+}
+
+function knownStyle(style: SpreadsheetCellStyle) {
+  if (
+    !isSpreadsheetCellStyle(style) ||
+    Object.keys(style).some(
+      (key) => !Object.hasOwn(SPREADSHEET_DEFAULT_STYLE, key)
+    )
+  )
+    throw new Error(
+      'Invalid cell formatting. Use the supported spreadsheet style fields.'
+    );
+}
+
+function operationRange(operation: SpreadsheetOperation): string | undefined {
+  if ('range' in operation) return operation.range;
+  if ('targetRange' in operation) return operation.targetRange;
+  return undefined;
+}
+
+/** All mutations happen on a disposable fork; a failed batch changes nothing. */
+export function prepareSpreadsheetEdit(
+  doc: LoroDoc,
+  request: SpreadsheetEditRequest,
+  calculator: SpreadsheetCalculator,
+  peerId?: bigint
+) {
+  assertSpreadsheetDocument(doc);
+  if (
+    !request.operations.length ||
+    request.operations.length > SPREADSHEET_AI_LIMITS.operations
+  )
+    throw new Error('Edit between 1 and 25 operations at a time.');
+  const fork = doc.fork();
+  if (peerId !== undefined) fork.setPeerId(peerId);
+  const before = doc.version();
+  const changes: SpreadsheetEditResponse['changes'] = [];
+  let edited = 0;
+  const count = (amount: number) => {
+    edited += amount;
+    if (edited > SPREADSHEET_AI_LIMITS.editCells)
+      throw new Error(
+        'A batch may edit at most 2,000 cells. Split the change into smaller batches.'
+      );
+  };
+  try {
+    for (const operation of request.operations) {
+      const workbook = readSpreadsheetWorkbook(fork);
+      let sheet =
+        'sheetId' in operation
+          ? resolveSheet(workbook, operation.sheetId)
+          : undefined;
+      let summary: string;
+      if (operation.type === 'add_sheet') {
+        const id = addSpreadsheetSheet(fork, operation.name);
+        sheet = resolveSheet(readSpreadsheetWorkbook(fork), id);
+        summary = `Added sheet “${sheet.name}”.`;
+      } else {
+        if (!sheet) throw new Error('This operation requires a sheet.');
+        switch (operation.type) {
+          case 'set_cells': {
+            count(operation.cells.length);
+            writeSpreadsheetCells(
+              fork,
+              validateInputs(operation.cells, sheet),
+              sheet.id
+            );
+            summary = `Set ${operation.cells.length} cell(s) in “${sheet.name}”.`;
+            break;
+          }
+          case 'format_cells': {
+            knownStyle(operation.style);
+            const addresses = selectionAddresses(
+              checkedRange(operation.range, sheet)
+            );
+            count(addresses.length);
+            writeSpreadsheetCells(
+              fork,
+              Object.fromEntries(
+                addresses.map((key) => [key, operation.style])
+              ),
+              sheet.id
+            );
+            summary = `Formatted ${addresses.length} cell(s) in “${sheet.name}”.`;
+            break;
+          }
+          case 'clear_cells': {
+            const addresses = selectionAddresses(
+              checkedRange(operation.range, sheet)
+            );
+            count(addresses.length);
+            writeSpreadsheetCells(
+              fork,
+              Object.fromEntries(
+                addresses.map((key) => [
+                  key,
+                  operation.clearFormatting ? null : { value: '' },
+                ])
+              ),
+              sheet.id
+            );
+            summary = `Cleared ${addresses.length} cell(s) in “${sheet.name}”.`;
+            break;
+          }
+          case 'fill_cells': {
+            const source = checkedRange(operation.sourceRange, sheet);
+            const target = checkedRange(operation.targetRange, sheet);
+            const copies = fillCopies(sheet.cells, source, target);
+            count(copies.length);
+            const edits = calculator.copy(copies, {
+              sheetNames: workbook.map((item) => item.name),
+              activeSheet: workbook.findIndex((item) => item.id === sheet?.id),
+            });
+            writeSpreadsheetCells(fork, edits, sheet.id);
+            summary = `Filled ${copies.length} cell(s) from ${operation.sourceRange} in “${sheet.name}”.`;
+            break;
+          }
+          case 'rename_sheet':
+            renameSpreadsheetSheet(fork, sheet.id, operation.name);
+            summary = `Renamed “${sheet.name}” to “${operation.name}”.`;
+            break;
+          case 'duplicate_sheet': {
+            count(Object.keys(sheet.cells).length);
+            const id = duplicateSpreadsheetSheet(fork, sheet.id);
+            if (operation.name !== undefined)
+              renameSpreadsheetSheet(fork, id, operation.name);
+            sheet = resolveSheet(readSpreadsheetWorkbook(fork), id);
+            summary = `Duplicated sheet as “${sheet.name}”.`;
+            break;
+          }
+          case 'delete_sheet':
+            count(Object.keys(sheet.cells).length);
+            deleteSpreadsheetSheet(fork, sheet.id);
+            summary = `Deleted sheet “${sheet.name}”.`;
+            break;
+          case 'append_rows':
+            if (
+              !Number.isInteger(operation.count) ||
+              operation.count < 1 ||
+              sheet.layout.rowCount + operation.count > SPREADSHEET_MAX_ROWS
+            )
+              throw new Error(
+                `Append a positive row count without exceeding ${SPREADSHEET_MAX_ROWS} rows.`
+              );
+            appendSpreadsheetRows(fork, operation.count, sheet.id);
+            summary = `Added ${operation.count} rows to “${sheet.name}”.`;
+            break;
+          case 'resize_columns':
+            if (!operation.columns.length || operation.columns.length > 100)
+              throw new Error('Resize between 1 and 100 columns.');
+            for (const column of operation.columns) {
+              const index = parseColumnName(column.column.toUpperCase());
+              if (
+                index === undefined ||
+                !Number.isInteger(column.width) ||
+                column.width < MIN_COLUMN_WIDTH ||
+                column.width > MAX_COLUMN_WIDTH
+              )
+                throw new Error(
+                  `Columns must be A–XFD and widths must be ${MIN_COLUMN_WIDTH}–${MAX_COLUMN_WIDTH} pixels.`
+                );
+              resizeSpreadsheetColumn(fork, index, column.width, sheet.id);
+            }
+            summary = `Resized ${operation.columns.length} column(s) in “${sheet.name}”.`;
+            break;
+          case 'set_dropdown': {
+            const range = rangeName(checkedRange(operation.range, sheet));
+            if (
+              (operation.items === undefined) ===
+              (operation.source === undefined)
+            )
+              throw new Error(
+                'A dropdown needs exactly one of items (typed choices) or source (a range of cells holding the choices).'
+              );
+            const sourceSheet =
+              operation.source === undefined
+                ? undefined
+                : validationReference(operation.source)?.sheet;
+            if (sourceSheet !== undefined) resolveSheet(workbook, sourceSheet);
+            const rule = dropdownRule({
+              ...(operation.items === undefined
+                ? { range: operation.source ?? '' }
+                : { items: operation.items }),
+              rejectInvalid: operation.rejectInvalid,
+              colors: operation.colors,
+            });
+            setSpreadsheetValidations(
+              fork,
+              sheet.id,
+              replaceValidations(sheet.metadata?.validations, range, rule)
+            );
+            summary = `Added a dropdown to ${range} in “${sheet.name}”.`;
+            break;
+          }
+          case 'clear_validation': {
+            const range = rangeName(checkedRange(operation.range, sheet));
+            setSpreadsheetValidations(
+              fork,
+              sheet.id,
+              replaceValidations(sheet.metadata?.validations, range)
+            );
+            summary = `Removed data validation from ${range} in “${sheet.name}”.`;
+            break;
+          }
+          case 'insert_checkboxes': {
+            const selection = checkedRange(operation.range, sheet);
+            const edits = insertCheckboxEdits(sheet.cells, selection);
+            count(Object.keys(edits).length);
+            writeSpreadsheetCells(fork, edits, sheet.id);
+            summary = `Added checkboxes to ${rangeName(selection)} in “${sheet.name}”.`;
+            break;
+          }
+          case 'create_table': {
+            const selection = checkedRange(operation.range, sheet);
+            const range = rangeName(selection);
+            const { top, bottom, left, right } = selectionBounds(selection);
+            // A conversion writes the header and total rows, and the data
+            // cells of the columns it types.
+            count(
+              (right - left + 1) * (operation.totalsRow ? 2 : 1) +
+                (operation.columnTypes?.length ?? 0) * (bottom - top)
+            );
+            const name = createSpreadsheetTable(fork, sheet.id, {
+              range,
+              name: operation.name,
+              totalsRow: operation.totalsRow,
+              columnTypes: Object.fromEntries(
+                (operation.columnTypes ?? []).map(({ column, type }) => [
+                  column,
+                  type,
+                ])
+              ),
+            });
+            summary = `Converted ${range} in “${sheet.name}” to the table “${name}”.`;
+            break;
+          }
+        }
+      }
+      const range = operationRange(operation);
+      changes.push({
+        type: operation.type,
+        sheetId: sheet.id,
+        summary,
+        ...(range && { range }),
+      });
+    }
+    fork.commit({ origin: 'spreadsheet-ai-edit' });
+    validateSpreadsheetDocument(fork);
+    const workbook = readSpreadsheetWorkbook(fork);
+    const results = calculate(workbook, calculator);
+    const sheets = summaries(workbook, results);
+    const errors = sheets.reduce((sum, item) => sum + item.errorCells, 0);
+    return {
+      update: fork.export({ mode: 'update', from: before }),
+      changes,
+      sheets,
+      warnings: errors
+        ? [
+            `The resulting workbook contains ${errors} formula error(s). Read the affected ranges to inspect them.`,
+          ]
+        : [],
+    };
+  } finally {
+    fork.free();
+  }
+}

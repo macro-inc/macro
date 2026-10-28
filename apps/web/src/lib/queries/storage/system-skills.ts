@@ -5,6 +5,23 @@ import { createMemo } from 'solid-js';
 
 const SYSTEM_SKILLS_QUERY_KEY = ['storage', 'system-skills'] as const;
 
+async function fetchSystemSkills() {
+  const result = await storageServiceClient.getSystemSkills();
+  if (result.isErr()) {
+    throw new Error('Failed to fetch system skills');
+  }
+  return result.value.skills;
+}
+
+export function systemSkillsQueryOptions() {
+  return {
+    queryKey: SYSTEM_SKILLS_QUERY_KEY,
+    queryFn: fetchSystemSkills,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  };
+}
+
 /**
  * Built-in system skills served by the storage service. System skills are
  * static, code-defined AI instructions (crates/system_skills) with well-known
@@ -14,20 +31,11 @@ const SYSTEM_SKILLS_QUERY_KEY = ['storage', 'system-skills'] as const;
  * The list is fixed per deploy, so it is fetched once and cached forever.
  */
 export function useSystemSkillsQuery() {
-  const query = useQuery(() => ({
-    queryKey: SYSTEM_SKILLS_QUERY_KEY,
-    queryFn: async () => {
-      const result = await storageServiceClient.getSystemSkills();
-      if (result.isErr()) {
-        throw new Error('Failed to fetch system skills');
-      }
-      return result.value.skills;
-    },
-    staleTime: Number.POSITIVE_INFINITY,
-    refetchOnWindowFocus: false,
-  }));
+  const query = useQuery(() => systemSkillsQueryOptions());
 
-  const skills = createMemo<SystemSkillSummary[]>(() => query.data ?? []);
+  const skills = createMemo<SystemSkillSummary[]>(() =>
+    query.isSuccess ? (query.data ?? []) : []
+  );
   const byId = createMemo(
     () => new Map(skills().map((skill) => [skill.id, skill]))
   );

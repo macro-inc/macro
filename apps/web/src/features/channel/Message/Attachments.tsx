@@ -1,3 +1,5 @@
+import { PullRequestAttachment } from '@app/features/block-pr/component/PullRequestAttachment';
+import { ProjectAttachment } from '@app/features/projects/project-attachment';
 import {
   type MediaItem,
   mapMediaItems,
@@ -6,7 +8,7 @@ import {
 import { ItemPreview } from '@core/component/ItemPreview';
 import { stringToItemType } from '@service-storage/client';
 import { cn } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { useMessage } from './context';
 import { MediaPreview } from './MediaPreview';
 
@@ -42,10 +44,25 @@ export function Attachments(props: AttachmentsProps) {
           <div class="flex flex-row mt-2 gap-2 flex-wrap max-w-full">
             <For each={buckets().documentAttachments}>
               {(attachment) => (
-                <ItemPreview
-                  id={attachment.entity_id}
-                  type={stringToItemType(attachment.entity_type)}
-                />
+                <Switch
+                  fallback={
+                    <ItemPreview
+                      id={attachment.entity_id}
+                      type={stringToItemType(attachment.entity_type)}
+                    />
+                  }
+                >
+                  <Match when={attachment.entity_type === 'initiative'}>
+                    <ProjectAttachment id={attachment.entity_id} />
+                  </Match>
+                  <Match
+                    when={
+                      stringToItemType(attachment.entity_type) === 'foreign'
+                    }
+                  >
+                    <PullRequestAttachment id={attachment.entity_id} />
+                  </Match>
+                </Switch>
               )}
             </For>
           </div>

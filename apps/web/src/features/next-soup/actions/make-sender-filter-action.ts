@@ -1,6 +1,6 @@
 import type { EntityData } from '@entity';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeSenderFilterAction = (
   action: (email: string, linkId?: string) => Promise<void>
@@ -26,7 +26,10 @@ export const makeSenderFilterAction = (
     }
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

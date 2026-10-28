@@ -1,0 +1,31 @@
+id: rust-no-sqlx-in-inbound
+language: rust
+severity: warning
+message: Inbound adapters must not run database queries — call a domain service backed by an outbound repository instead.
+note: |-
+  Hexagonal architecture (cloud-storage-hexagonal-architecture skill): a
+  handler, tool, or listener that knows SQL is doing the domain's job.
+  Route the operation through a domain service whose repository port is
+  implemented in outbound. Tests are exempt. 8 legacy uses exist (all of
+  search_processing_service's kafka consumers plus one spot in documents'
+  axum router) — don't add new ones; the search_processing extraction is
+  a tracked follow-up.
+files:
+  - crates/**/src/inbound/**
+  - services/**/src/inbound/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - kind: scoped_identifier
+      regex: ^sqlx\b
+      not:
+        inside:
+          kind: scoped_identifier
+    - kind: scoped_type_identifier
+      regex: ^sqlx\b
+    - kind: use_declaration
+      regex: ^use sqlx\b

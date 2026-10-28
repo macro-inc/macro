@@ -1,0 +1,80 @@
+import { createFreshSearch } from '@core/util/freshSort';
+import type { CommandMenuItem } from './useCommandItems';
+
+function compareRecency(left: CommandMenuItem, right: CommandMenuItem) {
+  return (
+    right.sortTimestamp - left.sortTimestamp || left.id.localeCompare(right.id)
+  );
+}
+
+function isPeopleItem(item: CommandMenuItem) {
+  return (
+    item.bucket === 'dm' ||
+    item.bucket === 'person' ||
+    item.bucket === 'crm_contact'
+  );
+}
+
+/** Keep the existing order within each group and the positions of other results. */
+function prioritizeInternalPeople<T extends CommandMenuItem>(items: T[]): T[] {
+  const people = items
+    .filter(isPeopleItem)
+    .sort(
+      (left, right) =>
+        Number(left.bucket === 'crm_contact') -
+        Number(right.bucket === 'crm_contact')
+    );
+  let nextPerson = 0;
+  return items.map((item) =>
+    isPeopleItem(item) ? people[nextPerson++] : item
+  );
+}
+
+/** Rank cached and local candidates together using the command menu's rules. */
+export function rankCommandSearchItems<T extends CommandMenuItem>(
+  items: T[],
+  query: string,
+  options: {
+    preserveAdditionalEntityMatches: boolean;
+    /** Rows a server search already matched, kept even when the menu's
+     * fuzzy matcher would not match them. */
+    preservedIds?: ReadonlySet<string>;
+  }
+): T[] {
+  const search = createFreshSearch<T>({
+    config: {
+      useViewedAt: true,
+      channelBoost: 3,
+      dmBoost: 1.8,
+      fuzzyWeight: 0.7,
+      timeWeight: 0.7,
+      minFuzzyThreshold: 0.1,
+    },
+    getName: (item) => item.searchText,
+    isChannelItem: (item) => item.bucket === 'channel' || item.bucket === 'dm',
+    isDmItem: (item) => item.bucket === 'dm',
+    getTimestamp: (item) => item.timestamps,
+  });
+
+  const ranked = search(items, query)
+    .sort(
+      (left, right) =>
+        right.combinedScore - left.combinedScore ||
+        compareRecency(left.item, right.item)
+    )
+    .map(({ item }) => item);
+  const preserved = (item: CommandMenuItem) =>
+    options.preservedIds?.has(item.id) ||
+    (options.preserveAdditionalEntityMatches &&
+      (item.kind === 'entity' || item.kind === 'initiative'));
+  if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
+    return prioritizeInternalPeople(ranked);
+
+  // Cache search accepts broader subsequences than the menu's fuzzy matcher.
+  // Keep these additional matches reachable after the regular ranked results.
+  const matchedIds = new Set(ranked.map((item) => item.id));
+  const additional = items
+    .filter((item) => preserved(item) && !matchedIds.has(item.id))
+    .sort(compareRecency);
+  return prioritizeInternalPeople([...ranked, ...additional]);
+}

@@ -4,10 +4,13 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { UserUnsubscribeSnoozedUntil } from './userUnsubscribeSnoozedUntil';
 
 export interface UserUnsubscribe {
   /** The item id */
   item_id: string;
   /** The item type */
   item_type: string;
+  /** None for permanent mutes; notifications resume automatically at this deadline. */
+  snoozed_until?: UserUnsubscribeSnoozedUntil;
 }

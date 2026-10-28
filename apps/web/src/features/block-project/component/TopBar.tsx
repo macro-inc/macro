@@ -5,16 +5,15 @@ import {
 } from '@app/features/chat/ChatWithAgentButton';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import {
+  BlockSplitFileMenu,
   type FileOperation,
-  SplitFileMenu,
 } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -29,19 +28,22 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
-import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  useCanEdit,
+  useGetPermissions,
+  useIsDocumentOwner,
+} from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconShared from '@icon/wide-share.svg';
-import Info from '@phosphor/info.svg';
+import { useCopyLink } from '@core/util/useCopyLink';
+import IconShared from '@icon/share.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 
@@ -57,32 +59,24 @@ export function TopBar() {
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
   );
 
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
-  const shareCtx = useShareDialogContext();
-
-  function handleCopyLink() {
-    navigator.clipboard.writeText(
-      buildSimpleEntityUrl({
-        type: 'project',
-        id,
-      })
-    );
-    toast.success('Link copied to clipboard');
-  }
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id,
+    blockAlias: 'project',
+    itemType: 'project',
+    name: name(),
+    userPermissions: permissions(),
+    owner: projectBlockDataSignal()?.projectMetadata.userId,
+  }));
+  const copyLink = useCopyLink();
+  const handleCopyLink = () =>
+    copyLink(buildSimpleEntityUrl({ type: 'project', id }));
 
   const ops = createMemo<FileOperation[]>(() => [
-    ...(!isSpecialProject
-      ? [
-          {
-            label: 'Details',
-            icon: Info,
-            action: detailsControl.toggle,
-          },
-        ]
-      : []),
     ...(isOwner() && !isSpecialProject
       ? [
           { op: 'rename' as const },
+          { op: 'copy' as const },
           { op: 'moveToProject' as const },
           { op: 'delete' as const },
         ]
@@ -101,17 +95,22 @@ export function TopBar() {
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent({ type: 'project', id, name: name() }),
       condition: () => !isSpecialProject,
-      buttonComponent: () => (
-        <ChatWithAgentButton entity={{ type: 'project', id, name: name() }} />
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={{ type: 'project', id, name: name() }}
+        />
       ),
     },
     {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
+      action: openShare,
       condition: () => ENABLE_PROJECT_SHARING && !isSpecialProject,
-      buttonComponent: () => <ShareTrigger copyLink={handleCopyLink} />,
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
+      ),
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
@@ -124,15 +123,33 @@ export function TopBar() {
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <div class="order-[1000] flex items-center gap-1">
+        <div class="order-[1000] flex items-center gap-2">
+          <Show when={!isTouchDevice()}>
+            <HeaderActionGroup label="Folder actions">
+              <For each={toolbarTools()}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent grouped />
+                    ) : (
+                      <ToolButton tool={tool} grouped />
+                    )}
+                  </Show>
+                )}
+              </For>
+            </HeaderActionGroup>
+            <Show when={ops().length > 0 && canEdit()}>
+              <ProjectCreateMenu id={id} name={name()} />
+            </Show>
+          </Show>
           <Show when={showShare()}>
-            <ShareTrigger copyLink={handleCopyLink} />
+            <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
           </Show>
         </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <SplitTitleFileMenu>
-        <SplitFileMenu
+        <BlockSplitFileMenu
           id={id}
           itemType="project"
           name={name()}
@@ -140,12 +157,12 @@ export function TopBar() {
           tools={isMobile() ? [...toolbarTools(), ...createTools] : undefined}
         />
       </SplitTitleFileMenu>
-      <Show when={!isMobile()}>
+      <Show when={!isMobile() && isTouchDevice()}>
         <SplitToolbarLeft class="flex-0">
           <div class="flex gap-2 p-1">
             <Show when={ops().length > 0}>
               <Show when={canEdit()}>
-                <ProjectCreateMenu id={id} />
+                <ProjectCreateMenu id={id} name={name()} />
               </Show>
             </Show>
           </div>
@@ -162,7 +179,6 @@ export function TopBar() {
               </Show>
             )}
           </For>
-          <PreviewButton />
         </SplitToolbarRight>
       </Show>
       <CreateDialog />

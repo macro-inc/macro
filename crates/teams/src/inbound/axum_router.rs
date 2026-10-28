@@ -1,0 +1,427 @@
+//! Axum router for team endpoints.
+
+/// Create a new team.
+pub mod create_team;
+/// Delete a team.
+pub mod delete_team;
+/// Delete a team invite.
+pub mod delete_team_invite;
+/// Get a team by ID.
+pub mod get_team;
+/// Get all invites for a team.
+pub mod get_team_invites;
+/// Get all invites for a user.
+pub mod get_user_invites;
+/// Get all teams for a user.
+pub mod get_user_teams;
+/// Read, create, and turn off a team's shareable invite link, and join
+/// through it.
+pub mod invite_link;
+/// Invite users to a team.
+pub mod invite_to_team;
+/// Join a team via invite.
+pub mod join_team;
+/// Update a team.
+pub mod patch_team;
+/// Enable / disable CRM for a team.
+pub mod patch_team_crm_settings;
+/// Move a team member's seat between paid plans.
+pub mod patch_team_member_plan;
+/// Extractor ensuring the authenticated user is premium.
+pub mod premium_user;
+/// Reject a team invitation.
+pub mod reject_invitation;
+/// Remove a user from a team.
+pub mod remove_user_from_team;
+/// Toggle automatic domain joining for a team.
+pub mod toggle_auto_join_domain;
+/// Toggle whether non-admin members may invite users to a team.
+pub mod toggle_non_admin_invites;
+
+#[cfg(test)]
+mod test;
+
+use std::sync::Arc;
+
+use axum::{
+    Json, Router,
+    extract::FromRef,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{delete, get, patch, post},
+};
+use entity_access::domain::ports::EntityAccessService;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use model_error_response::ErrorResponse;
+
+use crate::domain::{
+    model::{
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
+        RemoveTeamInviteError, RemoveUserFromTeamError, SetTeamMemberPlanError, TeamError,
+        ToggleAutoJoinDomainError,
+    },
+    team_repo::{TeamInviteLinkService, TeamService},
+};
+
+/// Router state containing the team service.
+pub struct TeamRouterState<T, Eas, Auth> {
+    /// The team service implementation.
+    pub service: Arc<T>,
+    /// The entity access service.
+    pub entity_access_service: Arc<Eas>,
+    /// State for request authorization.
+    pub authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<T, Eas, Auth> FromRef<TeamRouterState<T, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &TeamRouterState<T, Eas, Auth>) -> Self {
+        state.entity_access_service.clone()
+    }
+}
+
+impl<T, Eas, Auth> FromRef<TeamRouterState<T, Eas, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &TeamRouterState<T, Eas, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+// Manual Clone impl so T, Eas, and Auth don't need to be Clone.
+impl<T, Eas, Auth> Clone for TeamRouterState<T, Eas, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            entity_access_service: self.entity_access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+/// Build the teams router with all endpoints.
+pub fn teams_router<T, Eas, Auth, S>(state: TeamRouterState<T, Eas, Auth>) -> Router<S>
+where
+    T: TeamService + TeamInviteLinkService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    Router::new()
+        .route("/", post(create_team::handler::<T, Eas, Auth>))
+        .route(
+            "/join/{team_invite_id}",
+            get(join_team::handler::<T, Eas, Auth>),
+        )
+        .route("/user", get(get_user_teams::handler::<T, Eas, Auth>))
+        .route(
+            "/user/invites",
+            get(get_user_invites::handler::<T, Eas, Auth>),
+        )
+        .route("/", get(get_team::handler::<T, Eas, Auth>))
+        .route("/", patch(patch_team::handler::<T, Eas, Auth>))
+        .route("/", delete(delete_team::handler::<T, Eas, Auth>))
+        .route(
+            "/crm",
+            patch(patch_team_crm_settings::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/auto-join-domain/toggle",
+            post(toggle_auto_join_domain::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/non-admin-invites/toggle",
+            post(toggle_non_admin_invites::handler::<T, Eas, Auth>),
+        )
+        .route("/invites", get(get_team_invites::handler::<T, Eas, Auth>))
+        .route("/invite", post(invite_to_team::handler::<T, Eas, Auth>))
+        .route(
+            "/invite-link",
+            get(invite_link::get_handler::<T, Eas, Auth>)
+                .post(invite_link::create_handler::<T, Eas, Auth>)
+                .delete(invite_link::delete_handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/invite-link/team",
+            post(invite_link::get_team_handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/invite-link/join",
+            post(invite_link::join_handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/join/{team_invite_id}",
+            delete(reject_invitation::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/remove/{remove_user_id}",
+            delete(remove_user_from_team::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/members/{member_user_id}/plan",
+            patch(patch_team_member_plan::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/invite/{team_invite_id}",
+            delete(delete_team_invite::handler::<T, Eas, Auth>),
+        )
+        .with_state(state)
+}
+
+// --- Error IntoResponse implementations ---
+
+impl IntoResponse for TeamError {
+    fn into_response(self) -> Response {
+        match self {
+            TeamError::TeamDoesNotExist => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "team does not exist".into(),
+                }),
+            ),
+            TeamError::TeamMemberNotFound(_) => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            ),
+
+            TeamError::TeamInviteDoesNotExist => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "team invite does not exist".into(),
+                }),
+            ),
+            TeamError::BadRequest(_) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}
+
+impl IntoResponse for ToggleAutoJoinDomainError {
+    fn into_response(self) -> Response {
+        match self {
+            ToggleAutoJoinDomainError::GenericDomainNotAllowed(_) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: self.to_string().into(),
+                }),
+            )
+                .into_response(),
+            ToggleAutoJoinDomainError::TeamError(e) => e.into_response(),
+        }
+    }
+}
+
+impl IntoResponse for CreateTeamError {
+    fn into_response(self) -> Response {
+        match self {
+            CreateTeamError::InvalidTeamName(_) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "invalid team name".into(),
+                }),
+            ),
+            CreateTeamError::StorageLayerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to create team".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}
+
+impl IntoResponse for DeleteTeamError {
+    fn into_response(self) -> Response {
+        match self {
+            DeleteTeamError::TeamError(_) | DeleteTeamError::StorageLayerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to delete team".into(),
+                }),
+            ),
+            DeleteTeamError::RemoveRolesFromUserError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "invalid roles provided".into(),
+                }),
+            ),
+            DeleteTeamError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+            DeleteTeamError::OwnedEntityCleanup(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to delete the team's content; the team was not deleted".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}
+
+impl IntoResponse for InviteUsersToTeamError {
+    fn into_response(self) -> Response {
+        match self {
+            InviteUsersToTeamError::TooManyEmails => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "too many invites today; try again tomorrow".into(),
+                }),
+            ),
+            InviteUsersToTeamError::NonAdminInvitesDisabled => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "only team admins may invite users to this team".into(),
+                }),
+            ),
+            InviteUsersToTeamError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to invite users to team".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}
+
+impl IntoResponse for JoinTeamError {
+    fn into_response(self) -> Response {
+        match self {
+            JoinTeamError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to join team".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}
+
+impl IntoResponse for RemoveTeamInviteError {
+    fn into_response(self) -> Response {
+        match self {
+            RemoveTeamInviteError::TeamInviteDoesNotExist => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "team invite does not exist".into(),
+                }),
+            ),
+            RemoveTeamInviteError::UserNotInTeam => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "user not in team".into(),
+                }),
+            ),
+            RemoveTeamInviteError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}
+
+impl IntoResponse for SetTeamMemberPlanError {
+    fn into_response(self) -> Response {
+        match self {
+            SetTeamMemberPlanError::TeamNotPaying => (
+                StatusCode::PAYMENT_REQUIRED,
+                Json(ErrorResponse {
+                    message: "the team has no active subscription".into(),
+                }),
+            )
+                .into_response(),
+            SetTeamMemberPlanError::CustomerError(CustomerError::PlanUnavailable(plan)) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: format!("the {plan} plan is not available").into(),
+                }),
+            )
+                .into_response(),
+            SetTeamMemberPlanError::TeamError(e) => e.into_response(),
+            SetTeamMemberPlanError::CustomerError(_)
+            | SetTeamMemberPlanError::RolesError(_)
+            | SetTeamMemberPlanError::UsageReset(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            )
+                .into_response(),
+        }
+    }
+}
+
+impl IntoResponse for RemoveUserFromTeamError {
+    fn into_response(self) -> Response {
+        match self {
+            RemoveUserFromTeamError::TeamDoesNotExist => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "team does not exist".into(),
+                }),
+            ),
+            RemoveUserFromTeamError::CannotRemoveOwner => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: "cannot remove owner".into(),
+                }),
+            ),
+            RemoveUserFromTeamError::UserNotInTeam => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "user not in team".into(),
+                }),
+            ),
+            RemoveUserFromTeamError::CustomerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to remove user from team".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}

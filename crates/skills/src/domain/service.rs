@@ -5,23 +5,28 @@ mod test;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::model::{SkillError, SkillMatchType, SkillSummary};
-use crate::domain::ports::{SkillLister, SkillSearcher, SkillService};
+use crate::domain::model::{SkillContent, SkillError, SkillMatchType, SkillSummary};
+use crate::domain::ports::{SkillLister, SkillReader, SkillSearcher, SkillService};
 
 /// Maximum number of skills returned from a single listing.
 const LIST_LIMIT: u16 = 100;
 
-/// Skill domain service backed by a [`SkillSearcher`] and a [`SkillLister`].
+/// Skill domain service backed by discovery and authorized document reading ports.
 #[derive(Debug, Clone)]
-pub struct SkillServiceImpl<S, L> {
+pub struct SkillServiceImpl<S, L, R> {
     searcher: S,
     lister: L,
+    reader: R,
 }
 
-impl<S, L> SkillServiceImpl<S, L> {
-    /// Create a new skill service from a searcher and a lister.
-    pub fn new(searcher: S, lister: L) -> Self {
-        Self { searcher, lister }
+impl<S, L, R> SkillServiceImpl<S, L, R> {
+    /// Create a skill service from discovery and document reading capabilities.
+    pub fn new(searcher: S, lister: L, reader: R) -> Self {
+        Self {
+            searcher,
+            lister,
+            reader,
+        }
     }
 }
 
@@ -78,7 +83,36 @@ fn system_skill_name_matches(name: &str, query: &str, match_type: SkillMatchType
     })
 }
 
-impl<S: SkillSearcher, L: SkillLister> SkillService for SkillServiceImpl<S, L> {
+impl<S: SkillSearcher, L: SkillLister, R: SkillReader> SkillService for SkillServiceImpl<S, L, R> {
+    #[tracing::instrument(skip(self), err)]
+    async fn read_skill(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        document_id: uuid::Uuid,
+    ) -> Result<SkillContent, SkillError> {
+        if let Some(skill) = system_skills::system_skill(document_id) {
+            return Ok(SkillContent {
+                document_id,
+                name: skill.name.to_string(),
+                content: skill.render_content(),
+            });
+        }
+        let receipt = self.reader.authorize(user_id, document_id).await?;
+        let document = self.reader.metadata(&receipt).await?;
+        if document.deleted
+            || document.sub_type != Some(document_sub_type::DocumentSubType::Skill)
+            || document.file_type.as_deref() != Some("md")
+        {
+            return Err(SkillError::NotASkill);
+        }
+        let content = self.reader.markdown(receipt).await?;
+        Ok(SkillContent {
+            document_id,
+            name: document.name,
+            content,
+        })
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn search_skills(
         &self,

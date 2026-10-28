@@ -10,5 +10,5 @@ export type SoupItemOneOfOnesevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupItemOneOfOnesevenTag = {
-  crmCompany: 'crmCompany',
+  calendarEvent: 'calendarEvent',
 } as const;

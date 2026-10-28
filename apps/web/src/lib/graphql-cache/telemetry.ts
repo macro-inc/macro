@@ -9,16 +9,20 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.schema_init',
   'graphql_cache.db_ready',
   'graphql_cache.host_ready',
+  'graphql_cache.registration_retry',
   'graphql_cache.host_request',
   'graphql_cache.coordinator_request',
   'graphql_cache.engine_request',
   'graphql_cache.transaction',
   'graphql_cache.read',
+  'graphql_cache.slow_query',
   'graphql_cache.owner',
   'graphql_cache.stale_drop',
   'graphql_cache.lock_wait',
   'graphql_cache.storage_reset_required',
   'graphql_cache.logical_reset',
+  'graphql_cache.revision_advance',
+  'graphql_cache.change_batch',
   'graphql_cache.reset_wipe',
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
@@ -75,6 +79,17 @@ export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
 export type CacheQueueDiagnosticsAvailability =
   (typeof CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY)[number];
 
+export const CACHE_REVISION_CATEGORIES = [
+  'authoritative-write',
+  'optimistic-enqueue',
+  'optimistic-commit',
+  'optimistic-rollback',
+  'external-invalidation',
+  'deletion',
+  'clear',
+] as const;
+export type CacheRevisionCategory = (typeof CACHE_REVISION_CATEGORIES)[number];
+
 /** Payload-free, bounded error classes shared by all cache layers. */
 export const CACHE_ERROR_CODES = [
   'none',
@@ -116,10 +131,24 @@ export const CACHE_OWNER_EVENTS = [
   'activated',
   'graceful-drain-started',
   'graceful-drain-completed',
+  'visibility-handoff-started',
+  'visibility-handoff-blocked',
+  'visibility-handoff-completed',
+  'park-started',
+  'parked',
+  'unpark-started',
+  'unpark-completed',
   'navigation-departure',
+  'coordinator-restarted',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
+  'owner-lock-unavailable',
+  'storage-busy',
+  'takeover-granted',
+  'superseded',
+  'stale-databases-removed',
+  'stale-database-kept',
 ] as const;
 export type CacheOwnerEvent = (typeof CACHE_OWNER_EVENTS)[number];
 
@@ -143,8 +172,11 @@ export type CacheTelemetryObservation = {
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
+  revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
   durationMs?: number;
+  /** FNV-1a of the unexpanded SQL template; never SQL text or bound values. */
+  queryFingerprint?: string;
   bytes?: number;
   highWaterBytes?: number;
   usageBytes?: number;
@@ -245,11 +277,20 @@ function sanitizeObservation(
           queueDiagnosticsAvailability: input.queueDiagnosticsAvailability,
         }
       : {}),
+    ...(input.revisionCategory !== undefined &&
+    CACHE_REVISION_CATEGORIES.includes(input.revisionCategory)
+      ? { revisionCategory: input.revisionCategory }
+      : {}),
     ...(input.resetAttempt === 'wipe-before-open'
       ? { resetAttempt: input.resetAttempt }
       : {}),
     ...(boundedNumber(input.durationMs, 3_600_000) !== undefined
       ? { durationMs: boundedNumber(input.durationMs, 3_600_000) }
+      : {}),
+    ...(input.name === 'graphql_cache.slow_query' &&
+    typeof input.queryFingerprint === 'string' &&
+    /^[0-9a-f]{16}$/.test(input.queryFingerprint)
+      ? { queryFingerprint: input.queryFingerprint }
       : {}),
     ...(boundedNumber(input.bytes) !== undefined
       ? { bytes: boundedNumber(input.bytes) }
@@ -470,12 +511,14 @@ export function operationCategoryForRequest(
     .with('init', () => 'initialization' as const)
     .with(
       'read',
+      'current-revision',
       'read-records-by-keys',
       'search',
       'entity-filter',
+      'calendar-range',
       () => 'read' as const
     )
-    .with('write', 'hydrate', () => 'write' as const)
+    .with('write', 'hydrate', 'calendar-commit', () => 'write' as const)
     .with(
       'enqueue-optimistic-mutation',
       'claim-next-mutation',
@@ -490,8 +533,14 @@ export function operationCategoryForRequest(
       () => 'inspection' as const
     )
     .with('invalidate', 'delete-records', () => 'invalidation' as const)
-    .with('teardown', 'clear', () => 'lifecycle' as const)
-    .exhaustive();
+    .with(
+      'teardown',
+      'clear',
+      'current-storage-generation',
+      'inspect-mutations',
+      () => 'lifecycle' as const
+    )
+    .exhaustive(() => 'lifecycle' as const);
 }
 
 export function isStorageTransactionRequest(
@@ -500,6 +549,7 @@ export function isStorageTransactionRequest(
   return [
     'write',
     'hydrate',
+    'calendar-commit',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',
     'defer-optimistic-write',
@@ -612,8 +662,10 @@ export function isCacheTelemetryObservation(
       'persistence',
       'openOutcome',
       'queueDiagnosticsAvailability',
+      'revisionCategory',
       'resetAttempt',
       'durationMs',
+      'queryFingerprint',
       'bytes',
       'highWaterBytes',
       'usageBytes',

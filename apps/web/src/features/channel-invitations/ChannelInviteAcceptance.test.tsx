@@ -65,10 +65,6 @@ vi.mock('@core/component/LoadingBlock', () => ({
   LoadingBlock: () => <div>Joining channel…</div>,
 }));
 
-vi.mock('@core/component/PcNoiseGrid', () => ({
-  PcNoiseGrid: () => null,
-}));
-
 import { ChannelInviteAcceptance } from './ChannelInviteAcceptance';
 
 let dispose: (() => void) | undefined;

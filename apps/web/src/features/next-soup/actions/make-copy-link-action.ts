@@ -1,16 +1,18 @@
-import { copyCalendarEventMentionTarget } from '@block-calendar/copy-event-mention';
+import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
+import { t } from '@app/lib/i18n';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
-import type { SoupState } from '../create-soup-state';
 import { calendarEventLinkTarget } from '../utils';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Get the URL type/path segment for an entity
  */
 const getEntityUrlType = (entity: EntityData): string => {
+  if (entity.type === 'agent_session') return 'agent';
   if (entity.type === 'document') {
     const { fileType, subType } = entity;
     return fileTypeToBlockName(subType?.type ?? fileType);
@@ -40,8 +42,12 @@ const getEntityUrlParams = (
 };
 
 const getEntityUrl = (entity: EntityData): string => {
-  // TODO(dev-rb/github): Return the Macro /pr/:id URL.
-  if (isGithubPrEntity(entity)) return entity.metadata.url;
+  if (isGithubPrEntity(entity)) {
+    return buildSimpleEntityUrl({
+      type: 'reviews/pr',
+      id: encodeURIComponent(entity.id),
+    });
+  }
 
   return buildSimpleEntityUrl(
     {
@@ -53,10 +59,7 @@ const getEntityUrl = (entity: EntityData): string => {
 };
 
 export const makeCopyLinkAction = () => {
-  const canExecute = (_entity: EntityData): boolean => {
-    // Can copy link for any entity type
-    return true;
-  };
+  const canExecute = (_entity: EntityData): boolean => true;
 
   const execute = async (entities: EntityData[]) => {
     // Only copy link for the first entity (doesn't make sense for bulk)
@@ -77,7 +80,7 @@ export const makeCopyLinkAction = () => {
     const url = getEntityUrl(entity);
 
     await navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard');
+    toast.success(t('entityActions.toastLinkCopied'));
   };
 
   /** Blocks already know their id and URL discriminator even when their full
@@ -86,10 +89,13 @@ export const makeCopyLinkAction = () => {
     await navigator.clipboard.writeText(
       buildSimpleEntityUrl({ id, type: blockType })
     );
-    toast.success('Link copied to clipboard');
+    toast.success(t('entityActions.toastLinkCopied'));
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
     // Don't clear selection or change focus for copy link
   };

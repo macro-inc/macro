@@ -5,15 +5,18 @@ import {
   config,
   getKafkaClusterPolicy,
   getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PushNotificationEventHandler } from './push';
+import { NotificationRetention } from './retention';
 import { NotificationService } from './service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'notifications',
 };
 
@@ -61,6 +64,19 @@ const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
 
 export const coparse_api_vpc = get_coparse_api_vpc();
 
+// Fetch as a secret Pulumi output; never export the database URL.
+const retentionDatabaseUrl = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('macro_db_secret_key') })
+  .apply((secret) => pulumi.secret(secret.secretString));
+
+new NotificationRetention('notification-retention', {
+  databaseUrl: retentionDatabaseUrl,
+  enabled: config.getBoolean('notification_retention_enabled') ?? false,
+  dryRun: config.getBoolean('notification_retention_dry_run') ?? true,
+  vpc: coparse_api_vpc,
+  tags,
+});
+
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
@@ -79,6 +95,7 @@ const notificationQueue = new Queue('notification', {
 
 const notificationIngressQueue = new Queue('notification-ingress', {
   tags,
+  maxReceiveCount: 2,
 });
 
 const pushNotificationEventHandler = new PushNotificationEventHandler(
@@ -147,7 +164,7 @@ export const notificationApnsVoipPlatformArn = notificationApnsVoipPlatform.arn;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
-const notificationService = new NotificationService('notification-service', {
+new NotificationService('notification-service', {
   vpc: coparse_api_vpc,
   tags,
   ecsClusterArn: cloudStorageClusterArn,
@@ -166,7 +183,6 @@ const notificationService = new NotificationService('notification-service', {
   snsPlatformArns: notificationSnsPlatformArns,
   extraManagedPolicyArns: [getKafkaClusterPolicy()],
   serviceContainerPort: 8080,
-  isPrivate: false,
   healthCheckPath: '/health',
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars: [
@@ -182,4 +198,6 @@ const notificationService = new NotificationService('notification-service', {
   ],
 });
 
-export const notificationServiceUrl = pulumi.interpolate`${notificationService.domain}`;
+export const notificationServiceUrl = getServiceUrl(
+  ServiceUrl.NOTIFICATION_SERVICE_URL
+);

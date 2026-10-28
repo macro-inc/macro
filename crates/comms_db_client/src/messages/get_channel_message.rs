@@ -1,5 +1,5 @@
 use crate::model::SimpleMention;
-use channels::domain::models::{ChannelType, GetChannelMessageResponse, RecentChannelMessage};
+use channels::domain::models::ChannelType;
 use uuid::Uuid;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -11,10 +11,18 @@ pub struct ChannelMessageInfo {
     pub message_id: Uuid,
     pub thread_id: Option<Uuid>,
     pub sender_id: String,
+    pub imported_author: Option<String>,
     pub content: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Search-only projection; fallback author text is not a Macro sender identity.
+#[derive(Debug)]
+pub struct ChannelMessageForSearch {
+    pub message: ChannelMessageInfo,
+    pub mentions: Vec<String>,
 }
 
 /// Gets a channel message by channel id and message id
@@ -24,7 +32,7 @@ pub async fn get_channel_message_by_id(
     db: &sqlx::Pool<sqlx::Postgres>,
     channel_id: &Uuid,
     message_id: &Uuid,
-) -> anyhow::Result<GetChannelMessageResponse> {
+) -> anyhow::Result<ChannelMessageForSearch> {
     let mentions: Vec<String> = sqlx::query!(
         r#"
         SELECT
@@ -58,6 +66,7 @@ pub async fn get_channel_message_by_id(
             m.id as "message_id",
             m.thread_id as "thread_id",
             m.sender_id as "sender_id",
+            m.imported_author,
             m.content as "content",
             m.created_at as "created_at",
             m.updated_at as "updated_at",
@@ -65,7 +74,7 @@ pub async fn get_channel_message_by_id(
         FROM
             comms_messages m
         JOIN
-            comms_channels c on c."id" = m."channel_id"
+            comms_channels c on m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
         WHERE
             m.id = $1
             AND c.id = $2
@@ -76,20 +85,11 @@ pub async fn get_channel_message_by_id(
     .fetch_one(db)
     .await?;
 
-    Ok(GetChannelMessageResponse {
-        channel_id: channel_message_info.channel_id,
-        name: channel_message_info.name,
-        channel_type: channel_message_info.channel_type,
-        org_id: channel_message_info.org_id,
-        channel_message: RecentChannelMessage {
-            message_id: channel_message_info.message_id,
-            thread_id: channel_message_info.thread_id,
-            sender_id: channel_message_info.sender_id,
-            content: channel_message_info.content,
-            created_at: channel_message_info.created_at,
-            updated_at: channel_message_info.updated_at,
-            deleted_at: channel_message_info.deleted_at,
-            mentions,
-        },
+    Ok(ChannelMessageForSearch {
+        message: channel_message_info,
+        mentions,
     })
 }
+
+#[cfg(test)]
+mod test;

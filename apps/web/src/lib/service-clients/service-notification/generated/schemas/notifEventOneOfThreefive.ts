@@ -4,14 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubPrCheckRun } from './githubPrCheckRun';
+
 import type { NotifEventOneOfThreefiveTag } from './notifEventOneOfThreefiveTag';
+import type { ReminderMetadata } from './reminderMetadata';
 
 /**
- * A GitHub pull request check run completed.
+ * A reminder the user set for themselves came due.
  */
 export type NotifEventOneOfThreefive = {
-  /** A GitHub pull request check run completed. */
-  content: GithubPrCheckRun;
+  /** A reminder the user set for themselves came due. */
+  content: ReminderMetadata;
   tag: NotifEventOneOfThreefiveTag;
 };

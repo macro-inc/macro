@@ -57,11 +57,15 @@ export function MediaGallery(props: {
   };
 
   return (
-    <AttachmentSection label="Photos and Videos" fillBody>
+    <AttachmentSection
+      label="Photos and Videos"
+      class={hasMedia() ? 'flex-1' : undefined}
+      fillBody
+    >
       <Show
         when={hasMedia()}
         fallback={
-          <div class="px-6 py-3 text-sm text-ink-faint">
+          <div class="px-6 py-3 text-sm text-ink-subtle">
             No photos or videos in this channel yet.
           </div>
         }

@@ -1,22 +1,44 @@
 const root = ['call'] as const;
 const active = [...root, 'active'] as const;
-const activeChannels = [...active, 'channels'] as const;
 const record = [...root, 'record'] as const;
+const meeting = [...root, 'meeting'] as const;
+const link = [...root, 'link'] as const;
 
 export const callKeys = {
   _def: root,
+  meetings: { queryKey: [...root, 'meetings'] as const },
+  activeMeetings: { queryKey: [...active, 'meetings'] as const },
+  meeting: Object.assign(
+    (shareToken: string) => ({
+      queryKey: [...meeting, shareToken] as const,
+    }),
+    { _def: meeting }
+  ),
+  meetingParticipants: (shareToken: string, viewerId: string | undefined) => ({
+    queryKey: [
+      ...meeting,
+      shareToken,
+      'participants',
+      viewerId ?? 'guest',
+    ] as const,
+  }),
+  link: Object.assign(
+    (callId: string) => ({
+      queryKey: [...link, callId] as const,
+    }),
+    { _def: link }
+  ),
   active: Object.assign(
     (channelId: string) => ({
       queryKey: [...active, channelId] as const,
     }),
     { _def: active }
   ),
-  activeChannels: Object.assign(
-    (channelIds: string[]) => ({
-      queryKey: [...activeChannels, channelIds] as const,
-    }),
-    { _def: activeChannels }
-  ),
+  // Under the `active` prefix so one invalidation covers both. No collision
+  // with per-channel keys: channel ids are UUIDs, never the literal 'all'.
+  allActive: {
+    queryKey: [...active, 'all'] as const,
+  },
   record: Object.assign(
     (callId: string) => ({
       queryKey: [...record, callId] as const,

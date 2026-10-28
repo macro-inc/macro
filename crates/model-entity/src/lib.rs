@@ -13,6 +13,9 @@ use utoipa::ToSchema;
 #[cfg(test)]
 mod tests;
 
+mod external_chat;
+pub use external_chat::{ExternalChatKind, ExternalChatProvider};
+
 /// The type of an entity in Macro
 #[derive(
     Debug,
@@ -60,6 +63,8 @@ pub enum EntityType {
     CrmCompany,
     /// The entity is a CRM contact tracked by a team
     CrmContact,
+    /// A customizable company or contact pipeline with its own grants.
+    CrmPipeline,
     /// The entity is a reminder set by a user
     Reminder,
     /// The entity is an AI skill: either a skill document or a built-in
@@ -68,6 +73,21 @@ pub enum EntityType {
     /// The entity is an AI coding agent session (see the `agent_session`
     /// crate)
     AgentSession,
+    /// The entity is a scheduled action (see the `scheduled_action` service)
+    ScheduledAction,
+    /// The entity is an initiative (a named grouping of tasks)
+    Initiative,
+    /// The entity is a Macro Database: a collection of user-defined tables
+    /// (see the `databases` crate)
+    Database,
+    /// The entity is a row of a table in a Macro Database
+    DatabaseRow,
+    /// The entity is a Macro Form: a questionnaire whose answers land as rows
+    /// of one database table (see the `forms` crate)
+    Form,
+    /// A chat from another messaging service (see [`ExternalChatProvider`])
+    /// a person added to Macro as an independently shared entity.
+    ExternalChat,
 }
 
 impl EntityType {
@@ -94,6 +114,7 @@ impl EntityType {
             // — they aren't rows in the `entity_access` table.
             EntityType::CrmCompany => false,
             EntityType::CrmContact => false,
+            EntityType::CrmPipeline => false,
             // A reminder is private to the user who set it. Access resolves
             // from its owner column, not from a row in the `entity_access`
             // table — the same shape as channels and CRM entities.
@@ -105,6 +126,24 @@ impl EntityType {
             // owner, the channel the bot was mentioned in as editor - but
             // are not something you file into a project.
             EntityType::AgentSession => false,
+            // Scheduled actions are owner-scoped and are not something you
+            // file into a project. Access currently resolves from the owner
+            // column, not from a row in the `entity_access` table.
+            EntityType::ScheduledAction => false,
+            // Initiatives hold `entity_access` rows but are not something
+            // you file into a project.
+            EntityType::Initiative => false,
+            // A database's permissions are `entity_access` rows - the creator
+            // as owner, plus whoever it is later shared with - but, like agent
+            // sessions, a database is not something you file into a project.
+            EntityType::Database => false,
+            // Rows carry no `entity_access` rows of their own; access
+            // resolves through the parent database.
+            EntityType::DatabaseRow => false,
+            // A form's grants are `entity_access` rows, but, like a
+            // database, a form is not something you file into a project.
+            EntityType::Form => false,
+            EntityType::ExternalChat => true,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

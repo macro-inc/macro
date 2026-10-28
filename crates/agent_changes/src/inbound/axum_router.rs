@@ -1,0 +1,355 @@
+//! Axum routes serving a session's changes, mounted under `/agent-sessions`.
+//!
+//! Every route authenticates its caller and resolves their grant on the
+//! session with [`AgentSessionAccessLevelExtractor`] before the handler body
+//! runs: reading the summary or the patch needs `View`; asking for a fresh
+//! capture needs `Edit`, the same bar as prompting
+//! the agent. Handlers map DTOs to the domain and call one service method;
+//! the receipt travels into the domain so the service can prove the check
+//! happened.
+
+use std::sync::Arc;
+
+use axum::{
+    Json, Router,
+    extract::{FromRef, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
+};
+use chrono::{DateTime, Utc};
+use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
+use entity_access::domain::ports::EntityAccessService;
+use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+use crate::domain::error::ChangesError;
+use crate::domain::model::{
+    AttemptOutcome, CaptureAttempt, Changeset, ChangesetSource, SessionChanges,
+};
+use crate::domain::service::AgentChanges;
+
+pub use git_patch::wire::{
+    ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
+};
+
+#[cfg(test)]
+mod test;
+
+/// Shared state for the changes router: the service plus what the access
+/// extractors resolve grants and identity through.
+pub struct AgentChangesRouterState<Changes, Access, Auth> {
+    service: Arc<Changes>,
+    entity_access: Arc<Access>,
+    authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<Changes, Access, Auth> AgentChangesRouterState<Changes, Access, Auth> {
+    /// Build the state from the service and the extractors' dependencies.
+    pub fn new(
+        service: Changes,
+        entity_access: Arc<Access>,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
+        Self {
+            service: Arc::new(service),
+            entity_access,
+            authorization_state,
+        }
+    }
+}
+
+// Manual Clone so `Changes` need not be Clone (it is behind an Arc).
+impl<Changes, Access, Auth> Clone for AgentChangesRouterState<Changes, Access, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            service: Arc::clone(&self.service),
+            entity_access: Arc::clone(&self.entity_access),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
+impl<Changes, Access, Auth> FromRef<AgentChangesRouterState<Changes, Access, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &AgentChangesRouterState<Changes, Access, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+impl<Changes, Access, Auth> FromRef<AgentChangesRouterState<Changes, Access, Auth>>
+    for Arc<Access>
+{
+    fn from_ref(state: &AgentChangesRouterState<Changes, Access, Auth>) -> Self {
+        Arc::clone(&state.entity_access)
+    }
+}
+
+/// Build the changes router. Mount it under the session prefix the
+/// composition root chooses, e.g. `/agent-sessions`, beside the session
+/// routers.
+pub fn agent_changes_router<Changes, Access, Auth, S>(
+    state: AgentChangesRouterState<Changes, Access, Auth>,
+) -> Router<S>
+where
+    Changes: AgentChanges,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/{session_id}/changes",
+            get(get_agent_session_changes_handler::<Changes, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/changes/patch",
+            get(get_agent_session_changes_patch_handler::<Changes, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/changes/refresh",
+            post(refresh_agent_session_changes_handler::<Changes, Access, Auth>),
+        )
+        .with_state(state)
+}
+
+impl From<ChangesetSource> for ChangesetSourceDto {
+    fn from(source: ChangesetSource) -> Self {
+        match source {
+            ChangesetSource::GithubPullRequest => Self::GithubPullRequest,
+        }
+    }
+}
+
+/// How the latest capture attempt ended, on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureOutcomeDto {
+    /// A changeset (possibly empty) was stored.
+    Captured,
+    /// The pull request was not available; `error` says why.
+    NotReady,
+    /// The extractor or storage failed; `error` says what a user can do.
+    Failed,
+}
+
+impl From<AttemptOutcome> for CaptureOutcomeDto {
+    fn from(outcome: AttemptOutcome) -> Self {
+        match outcome {
+            AttemptOutcome::Captured => Self::Captured,
+            AttemptOutcome::NotReady => Self::NotReady,
+            AttemptOutcome::Failed => Self::Failed,
+        }
+    }
+}
+
+impl From<Changeset> for ChangesetDto {
+    fn from(changeset: Changeset) -> Self {
+        Self {
+            id: changeset.id.as_uuid(),
+            source: changeset.source.into(),
+            repository: changeset.range.repository,
+            base: changeset.range.base.into(),
+            head: changeset.range.head.into(),
+            files: changeset.files.into_iter().map(Into::into).collect(),
+            additions: changeset.additions,
+            deletions: changeset.deletions,
+            patch_bytes: changeset.patch_bytes,
+            truncated: changeset.truncated,
+            captured_at: changeset.captured_at,
+        }
+    }
+}
+
+/// The latest capture attempt.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureAttemptDto {
+    /// When it started.
+    pub started_at: DateTime<Utc>,
+    /// When it ended; absent while it runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finished_at: Option<DateTime<Utc>>,
+    /// How it ended; absent while it runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<CaptureOutcomeDto>,
+    /// Why it did not capture, in a sentence the user can read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl From<CaptureAttempt> for CaptureAttemptDto {
+    fn from(attempt: CaptureAttempt) -> Self {
+        Self {
+            started_at: attempt.started_at,
+            finished_at: attempt.finished_at,
+            outcome: attempt.outcome.map(Into::into),
+            error: attempt.error,
+        }
+    }
+}
+
+/// Response body for `GET /agent-sessions/{session_id}/changes`.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionChangesResponse {
+    /// The latest capture, if any succeeded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changeset: Option<ChangesetDto>,
+    /// The latest attempt, if any was made.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<CaptureAttemptDto>,
+    /// A capture is running right now.
+    pub capturing: bool,
+}
+
+impl From<SessionChanges> for AgentSessionChangesResponse {
+    fn from(changes: SessionChanges) -> Self {
+        let capturing = changes
+            .attempt
+            .as_ref()
+            .is_some_and(CaptureAttempt::in_flight);
+        Self {
+            changeset: changes.changeset.map(Into::into),
+            attempt: changes.attempt.map(Into::into),
+            capturing,
+        }
+    }
+}
+
+/// Response body for `GET /agent-sessions/{session_id}/changes/patch`.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionChangesPatchResponse {
+    /// The git-style unified diff of the current changeset.
+    pub patch: String,
+}
+
+/// How the domain's refusals and failures answer on the wire.
+#[derive(Debug)]
+pub enum AgentChangesApiError {
+    /// The domain rejected or failed the operation.
+    Domain(ChangesError),
+}
+
+impl From<ChangesError> for AgentChangesApiError {
+    fn from(error: ChangesError) -> Self {
+        Self::Domain(error)
+    }
+}
+
+impl IntoResponse for AgentChangesApiError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Domain(ChangesError::Forbidden) => {
+                (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
+            Self::Domain(error @ (ChangesError::NoChangeset | ChangesError::PatchMissing)) => {
+                (StatusCode::NOT_FOUND, error.to_string()).into_response()
+            }
+            Self::Domain(ChangesError::Session(
+                agent_session::domain::error::AgentSessionError::Forbidden,
+            )) => (StatusCode::FORBIDDEN, "forbidden").into_response(),
+            Self::Domain(error) => {
+                tracing::error!(error = ?error, "agent session changes request failed");
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+            }
+        }
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/changes",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_changes",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionChangesResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// The latest captured changes of an agent session: the changed files with
+/// statuses and line counts, and how the latest capture attempt went.
+#[tracing::instrument(skip_all, fields(agent.session.id = %access.entity_access_receipt.entity().entity_id), err(Debug))]
+pub async fn get_agent_session_changes_handler<
+    Changes: AgentChanges,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentChangesRouterState<Changes, Access, Auth>>,
+) -> Result<Json<AgentSessionChangesResponse>, AgentChangesApiError> {
+    let changes = state.service.changes(&access.entity_access_receipt).await?;
+    Ok(Json(changes.into()))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/changes/patch",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_changes_patch",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionChangesPatchResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// The unified diff behind the session's latest changeset.
+#[tracing::instrument(skip_all, fields(agent.session.id = %access.entity_access_receipt.entity().entity_id), err(Debug))]
+pub async fn get_agent_session_changes_patch_handler<
+    Changes: AgentChanges,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentChangesRouterState<Changes, Access, Auth>>,
+) -> Result<Json<AgentSessionChangesPatchResponse>, AgentChangesApiError> {
+    let patch = state.service.patch(&access.entity_access_receipt).await?;
+    Ok(Json(AgentSessionChangesPatchResponse { patch }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent-sessions/{session_id}/changes/refresh",
+    tag = "agent-sessions",
+    operation_id = "refresh_agent_session_changes",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 202, body = AgentSessionChangesResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Capture the session's changes again now. Answers at once with the state
+/// as it stands; the capture runs on and viewers are told when it lands.
+#[tracing::instrument(skip_all, fields(agent.session.id = %access.entity_access_receipt.entity().entity_id), err(Debug))]
+pub async fn refresh_agent_session_changes_handler<
+    Changes: AgentChanges,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    State(state): State<AgentChangesRouterState<Changes, Access, Auth>>,
+) -> Result<(StatusCode, Json<AgentSessionChangesResponse>), AgentChangesApiError> {
+    let changes = state
+        .service
+        .request_capture(&access.entity_access_receipt)
+        .await?;
+    Ok((StatusCode::ACCEPTED, Json(changes.into())))
+}

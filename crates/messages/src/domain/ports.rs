@@ -1,0 +1,635 @@
+use super::models::*;
+use activity::{ActionTag, domain::timeline::TimelineSelection};
+use channel_sender::ChannelSender;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
+
+/// Message use-case failure.
+#[derive(Debug, thiserror::Error)]
+pub enum MessageError {
+    /// Parent, message, or thread does not exist or is deleted.
+    #[error("message or parent not found")]
+    NotFound,
+    /// Caller lacks the required capability or ownership.
+    #[error("not authorized for this message operation")]
+    Forbidden,
+    /// Invalid thread relation or anchor.
+    #[error("{0}")]
+    Invalid(&'static str),
+    /// A client-supplied message id is already taken.
+    #[error("message id already exists")]
+    Conflict,
+    /// Persistence or delivery failed.
+    #[error("message operation failed: {0}")]
+    Repository(rootcause::Report),
+}
+
+/// Cursor for a chronological parent timeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageCursor {
+    /// Last message creation time or activity occurrence time.
+    pub created_at: DateTime<Utc>,
+    /// Last entry UUID, used to break timestamp ties across both sources.
+    pub id: Uuid,
+}
+
+/// Direction through a parent timeline, retaining channel cursor semantics.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum MessageDirection {
+    /// Most recent first, or older than the cursor.
+    #[default]
+    Older,
+    /// Newer than the cursor.
+    Newer,
+}
+
+/// Root selection shared by channel timelines and document discussions.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageTimelineQuery {
+    /// Stable creation-time and UUID cursor.
+    pub cursor: Option<MessageCursor>,
+    /// Which side of the cursor to fetch.
+    #[serde(default)]
+    pub direction: MessageDirection,
+    /// Center on the root containing this message.
+    pub around: Option<Uuid>,
+    /// Restrict roots to this set, for selected source threads.
+    #[serde(default)]
+    pub ids: Vec<Uuid>,
+    /// Select anchored or unanchored roots; absent includes both.
+    pub anchored: Option<bool>,
+    /// Include whole-thread tombstones when reconciling persisted document marks.
+    #[serde(default)]
+    pub include_deleted_threads: bool,
+    /// Include roots or live replies created at or after this time.
+    pub activity_after: Option<DateTime<Utc>>,
+    /// Include roots or live replies created before this time.
+    pub activity_before: Option<DateTime<Utc>>,
+    /// Page size, clamped by the application to 1..=100.
+    pub limit: Option<u16>,
+}
+
+pub use super::models::{MessageListItem, MessageThreadPreview};
+
+/// Bidirectional, bounded timeline page, ordered newest root first.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessagePage {
+    /// Root messages with bounded previews.
+    pub items: Vec<MessageListItem>,
+    /// Continue to older roots.
+    pub next_cursor: Option<MessageCursor>,
+    /// Continue to newer roots.
+    pub previous_cursor: Option<MessageCursor>,
+}
+
+/// One chronological entry in a parent's timeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum MessageTimelineEntry {
+    /// A root message with its bounded thread preview.
+    Message {
+        /// The message and thread state.
+        message: Box<MessageListItem>,
+    },
+    /// A recorded fact about the parent, such as a rename or a finished call.
+    Activity {
+        /// The recorded activity.
+        activity: activity::domain::timeline::TimelineActivity,
+    },
+}
+
+impl MessageTimelineEntry {
+    /// Position on the `(timestamp, id)` keyset shared by both kinds.
+    pub fn position(&self) -> (DateTime<Utc>, Uuid) {
+        match self {
+            Self::Message { message } => (message.message.created_at, message.message.id),
+            Self::Activity { activity } => (activity.occurred_at, activity.id),
+        }
+    }
+
+    /// Continue reading on either side of this entry.
+    pub fn cursor(&self) -> MessageCursor {
+        let (created_at, id) = self.position();
+        MessageCursor { created_at, id }
+    }
+}
+
+/// A bounded, newest-first window of a parent's messages and activity, ordered
+/// by the server on one `(timestamp, id)` keyset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageTimelinePage {
+    /// Messages and activity, newest first.
+    pub entries: Vec<MessageTimelineEntry>,
+    /// Continue to older entries.
+    pub next_cursor: Option<MessageCursor>,
+    /// Continue to newer entries.
+    pub previous_cursor: Option<MessageCursor>,
+}
+
+impl From<MessagePage> for MessageTimelinePage {
+    fn from(page: MessagePage) -> Self {
+        Self {
+            entries: page
+                .items
+                .into_iter()
+                .map(|message| MessageTimelineEntry::Message {
+                    message: Box::new(message),
+                })
+                .collect(),
+            next_cursor: page.next_cursor,
+            previous_cursor: page.previous_cursor,
+        }
+    }
+}
+
+/// Authenticated create command; attribution fields are never client controlled.
+#[derive(Debug, Clone)]
+pub struct CreateMessage {
+    /// Append to this canonical thread, creating its first message atomically when absent.
+    /// Its root identity is server-owned and overrides the first message's client id.
+    pub canonical_root_id: Option<Uuid>,
+    /// Parent with verified actor access.
+    pub parent: MessageParent,
+    /// Verified actor.
+    pub actor: ChannelSender<'static>,
+    /// Server-verified guest display name; absent for account authors.
+    pub guest_name: Option<String>,
+    /// User who triggered a bot message, if applicable.
+    pub triggered_by: Option<String>,
+    /// Parsed message input.
+    pub input: PostMessage,
+}
+
+/// Normalized content and reference update passed to persistence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct EditMessage {
+    /// A bot may publish its final answer by editing a silent placeholder.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub notification_policy: PatchMessageNotificationPolicy,
+    /// Replacement body.
+    pub content: String,
+    /// Complete replacement mention set.
+    #[serde(default)]
+    pub mentions: Vec<SimpleMention>,
+    /// Replacement attachments; absent leaves attachments unchanged.
+    pub attachments: Option<Vec<NewAttachment>>,
+    /// Client mutation nonce.
+    pub nonce: Option<String>,
+}
+
+/// Attachment changes interpreted by the common command boundary.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum AttachmentChange {
+    /// Keep current attachments.
+    #[default]
+    Preserve,
+    /// Replace all attachments.
+    Replace(Vec<NewAttachment>),
+    /// Remove stored attachment identities and append new references.
+    Delta {
+        /// Existing attachment UUIDs to remove.
+        remove: Vec<Uuid>,
+        /// New attachments to append.
+        add: Vec<NewAttachment>,
+    },
+}
+
+/// Partial updates share the same authorship, reference, and delivery rules as edits.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessagePatch {
+    /// Replacement body; absent preserves current content.
+    pub content: Option<String>,
+    /// Replacement authored mentions; absent preserves current mentions.
+    pub mentions: Option<Vec<SimpleMention>>,
+    /// Attachment change, without adapter-side message reads.
+    #[serde(default)]
+    pub attachments: AttachmentChange,
+    /// Client mutation nonce.
+    pub nonce: Option<String>,
+    /// Trusted notification behavior.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub notification_policy: PatchMessageNotificationPolicy,
+}
+/// A committed message or thread change sent to delivery adapters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageEvent {
+    /// Changed parent, used for subscriptions and cache invalidation.
+    pub parent: MessageParent,
+    /// User or bot who initiated the operation.
+    pub actor: String,
+    /// Mutation nonce for optimistic reconciliation.
+    pub nonce: Option<String>,
+    /// Persisted change.
+    pub change: MessageChange,
+}
+
+/// Kind of message change; notification policy only runs for posted messages.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum MessageChange {
+    /// A message was posted.
+    Posted {
+        /// Trusted notification policy carried with the committed change.
+        notification_policy: PostMessageNotificationPolicy,
+        /// Persisted message.
+        message: Message,
+        /// Mentions included in this post.
+        mentions: Vec<SimpleMention>,
+    },
+    /// Message content and references were edited.
+    Edited {
+        /// Trusted notification policy for the edited content.
+        notification_policy: PatchMessageNotificationPolicy,
+        /// Persisted replacement message.
+        message: Message,
+        /// Complete replacement mention set.
+        mentions: Vec<SimpleMention>,
+        /// Attachment identities before the edit, for channel change delivery.
+        previous_attachments: Vec<MessageAttachment>,
+    },
+    /// One message was tombstoned; its thread may remain live.
+    MessageDeleted {
+        /// Persisted tombstone.
+        message: Message,
+    },
+    /// The authenticated actor added or removed a reaction.
+    ReactionChanged {
+        /// Persisted message.
+        message: Message,
+        /// Emoji whose membership changed.
+        emoji: String,
+        /// Whether the reaction was added (`true`) or removed (`false`).
+        added: bool,
+    },
+    /// Thread resolution, placement, or deletion changed.
+    ThreadUpdated {
+        /// Persisted thread state.
+        state: ThreadState,
+    },
+    /// Transient typing indication.
+    Typing {
+        /// Root being replied to, or no root for the parent composer.
+        thread_id: Option<Uuid>,
+        /// Whether the user is currently typing.
+        active: bool,
+        /// Present when an agent session is typing through the bot that
+        /// speaks for it. Names the session, so a viewer who can read it can
+        /// show the turn live in place of the bare indicator.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<AgentTyping>,
+    },
+}
+
+/// An agent session typing through its bot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct AgentTyping {
+    /// The session whose turn the bot is speaking for.
+    pub session_id: Uuid,
+    /// What the agent is doing. Deliberately coarse: a typing event reaches
+    /// everyone in the conversation, and which tool runs on what is for
+    /// viewers who can read the session itself.
+    pub phase: AgentTypingPhase,
+}
+
+/// What a typing agent is doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum AgentTypingPhase {
+    /// Working out what to do, or between steps.
+    Thinking,
+    /// Writing a reply.
+    Writing,
+    /// Using a tool.
+    Working,
+    /// Waiting on someone to answer a question or approve an action.
+    Waiting,
+}
+
+/// Persisted reaction state and whether this operation changed membership.
+pub struct ReactionResult {
+    /// Current message, including its reactions.
+    pub message: Message,
+    /// False for an idempotent add or remove that changed no rows.
+    pub changed: bool,
+}
+
+/// Persistence boundary. Implementations enforce parent/thread integrity atomically.
+pub trait MessageRepository: Send + Sync + 'static {
+    /// Whether the parent still exists and permits messaging lifecycle-wise.
+    fn parent_exists(
+        &self,
+        parent: &MessageParent,
+    ) -> impl Future<Output = Result<bool, MessageError>> + Send;
+    /// File type of a live document, for document-specific anchor validation.
+    fn document_file_type(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, MessageError>> + Send;
+    /// Read a message belonging to the specified parent, including root tombstones.
+    fn get(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
+    /// Recover a call submission within its authorized parent and original sender.
+    /// Includes tombstones so retries never recreate deleted content.
+    fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Message>, MessageError>> + Send;
+    /// Read thread state; returns deleted state so callers can reject writes.
+    fn thread(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ThreadState>, MessageError>> + Send;
+    /// Ordered live replies for a root within its parent.
+    fn replies(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
+    /// Live messages before a prompt, in chronological order. Discussion context
+    /// stays within the prompt's thread; channel context includes the timeline.
+    fn preceding(
+        &self,
+        parent: &MessageParent,
+        message_id: Uuid,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
+    /// Read a bounded root page with reply previews under indexable parent predicates.
+    fn timeline(
+        &self,
+        parent: &MessageParent,
+        query: MessageTimelineQuery,
+    ) -> impl Future<Output = Result<MessagePage, MessageError>> + Send;
+
+    /// Atomically create a message, its initial references, and any new thread state.
+    fn create(
+        &self,
+        command: CreateMessage,
+    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    /// Replace content and references atomically.
+    fn edit(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        command: EditMessage,
+    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    /// Tombstone a single message, preserving its replies and anchor.
+    fn delete(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    /// Add or remove the caller's reaction and report whether membership changed.
+    fn react(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        user_id: &str,
+        emoji: &str,
+        add: bool,
+    ) -> impl Future<Output = Result<ReactionResult, MessageError>> + Send;
+    /// Apply authorized thread resolution or Markdown anchor detachment.
+    fn patch_thread(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        patch: ThreadPatch,
+    ) -> impl Future<Output = Result<ThreadState, MessageError>> + Send;
+    /// Delete a discussion and clean up comment-only anchors, preserving standalone highlights.
+    fn delete_thread(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> impl Future<Output = Result<ThreadState, MessageError>> + Send;
+    /// Resolve an immutable old comment or thread id within its authorized parent.
+    fn resolve_legacy(
+        &self,
+        parent: &MessageParent,
+        id: i64,
+        is_thread: bool,
+    ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// The parent a live message belongs to; `None` once it is deleted. Grants
+    /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
+    fn parent_of(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<Option<MessageParent>, MessageError>> + Send {
+        async { Ok(None) }
+    }
+}
+
+/// Read-only message targets. Returned identities are not authorization grants.
+pub trait HistoricalMessageReader: Send + Sync + 'static {
+    /// At most 500 distinct IDs. Omit deleted messages, deleted roots, and invalid
+    /// parent/channel relationships. Never create threads or update activity.
+    fn lookup_historical_targets(
+        &self,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<super::historical::HistoricalMessageTarget>, MessageError>> + Send;
+}
+
+/// Silent historical persistence for trusted import compositions. Implementations
+/// atomically persist only messages, thread structure, reactions and user mentions:
+/// no activity, sharing, notifications, bots, contacts, broker or realtime effects.
+/// The caller authorizes the channel and owns source deduplication. Importers that
+/// also commit mappings/checkpoints must compose owning-crate transaction helpers
+/// instead of calling this standalone transaction boundary.
+pub trait HistoricalMessageRepository: Send + Sync + 'static {
+    /// Insert a bounded batch. Existing message IDs reject the whole batch; source
+    /// mappings must be resolved before calling. Roots may precede replies in an
+    /// earlier batch or appear anywhere in this one.
+    fn insert_historical(
+        &self,
+        batch: &super::historical::HistoricalBatch,
+    ) -> impl Future<Output = Result<(), MessageError>> + Send;
+}
+
+/// Publish committed changes, deriving delivery policy from the persisted parent.
+pub trait MessageEventPublisher: Send + Sync + 'static {
+    /// Deliver a change through realtime and contextual notification adapters.
+    fn publish(
+        &self,
+        event: MessageEvent,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+}
+
+/// Resolves access to referenced entities before a message transaction begins.
+/// Implementations must never grant access as a side effect of this check.
+pub trait MessageReferenceAccess: Send + Sync + 'static {
+    /// Whether this principal can view the referenced entity now.
+    fn can_view<'a>(
+        &'a self,
+        auth: &'a entity_access::domain::models::EntityAccessAuth,
+        entity_type: entity_access::domain::models::EntityType,
+        entity_id: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool, MessageError>> + Send + 'a>>;
+}
+
+/// Safe default for compositions that do not provide an entity access adapter.
+pub struct DenyMessageReferences;
+impl MessageReferenceAccess for DenyMessageReferences {
+    fn can_view<'a>(
+        &'a self,
+        _: &'a entity_access::domain::models::EntityAccessAuth,
+        _: entity_access::domain::models::EntityType,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool, MessageError>> + Send + 'a>> {
+        Box::pin(async { Ok(false) })
+    }
+}
+
+/// Parses the tracked references in raw bot-authored Markdown.
+pub trait MessageMentionExtractor: Send + Sync + 'static {
+    /// Extract canonical entity and user/bot mentions from a message body.
+    fn extract<'a>(
+        &'a self,
+        content: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<SimpleMention>, MessageError>> + Send + 'a>>;
+}
+/// Message compositions that do not create raw bot Markdown.
+pub struct NoMessageMentionExtractor;
+impl MessageMentionExtractor for NoMessageMentionExtractor {
+    fn extract<'a>(
+        &'a self,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<SimpleMention>, MessageError>> + Send + 'a>>
+    {
+        Box::pin(async { Ok(vec![]) })
+    }
+}
+
+/// Delivery disabled explicitly for tests and isolated callers.
+#[derive(Clone, Copy)]
+pub struct NoMessageEventPublisher;
+impl MessageEventPublisher for NoMessageEventPublisher {
+    async fn publish(&self, _event: MessageEvent) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+}
+
+/// Current human membership used to resolve authored channel group mentions.
+#[async_trait::async_trait]
+pub trait MessageGroupRecipients: Send + Sync + 'static {
+    /// Read active human members; callers have already verified the posting capability.
+    async fn channel_members(
+        &self,
+        channel: Uuid,
+    ) -> Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>, MessageError>;
+}
+/// Reject group mentions in contexts that do not supply channel membership.
+pub struct NoMessageGroups;
+#[async_trait::async_trait]
+impl MessageGroupRecipients for NoMessageGroups {
+    async fn channel_members(
+        &self,
+        _: Uuid,
+    ) -> Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>, MessageError> {
+        Err(MessageError::Invalid(
+            "channel group mentions are unavailable",
+        ))
+    }
+}
+
+/// Channel facts displayed inline; message/view actions would duplicate content.
+pub const CHANNEL_TIMELINE: TimelineSelection = TimelineSelection::new(
+    &[
+        ActionTag::Renamed,
+        ActionTag::PictureChanged,
+        ActionTag::ParticipantAdded,
+        ActionTag::ParticipantRemoved,
+        ActionTag::CallEnded,
+    ],
+    &[],
+);
+
+/// The activity a parent's timeline shows next to its messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimelineActivitySource {
+    /// Activity entity type that records facts about the parent.
+    pub entity_type: activity::EntityType,
+    /// What is shown inline; anything else stays in the activity feed.
+    pub selection: TimelineSelection,
+}
+
+/// Which activity, if any, belongs in a parent's timeline. Parents without a
+/// source read message-only timelines; adding one is a deliberate choice here.
+pub fn timeline_activity(parent: &MessageParent) -> Option<TimelineActivitySource> {
+    match parent {
+        MessageParent::Channel(_) => Some(TimelineActivitySource {
+            entity_type: activity::EntityType::Channel,
+            selection: CHANNEL_TIMELINE,
+        }),
+        MessageParent::Document(_)
+        | MessageParent::Initiative(_)
+        | MessageParent::CrmCompany(_)
+        | MessageParent::CrmContact(_)
+        | MessageParent::Call(_) => None,
+    }
+}
+
+/// The timeline, if any, that shows this activity: the same declaration as
+/// [`timeline_activity`], so live delivery and reads never disagree.
+pub fn timeline_parent(activity: &activity::Activity) -> Option<MessageParent> {
+    let parent = match activity.entity_type {
+        activity::EntityType::Channel => MessageParent::Channel(activity.entity_id.parse().ok()?),
+        _ => return None,
+    };
+    let source = timeline_activity(&parent)?;
+    (source.entity_type == activity.entity_type && source.selection.includes(&activity.action))
+        .then_some(parent)
+}
+
+/// Identity of a CRM company or contact that hosts a discussion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmParentFacts {
+    /// The team that owns the record.
+    pub team_id: Uuid,
+    /// The company itself, or the contact's company.
+    pub company_id: Uuid,
+    /// Display name: a company's custom or directory name (else its primary
+    /// domain), a contact's name (else its email).
+    pub name: String,
+}
+
+/// Read-only CRM parent identity, implemented by the CRM domain. Returned facts
+/// grant nothing: callers verify capabilities before exposing them.
+pub trait CrmParentReader: Send + Sync + 'static {
+    /// The facts for a live CRM company or contact parent, or `None` once it has
+    /// been deleted or when the parent is not a CRM record.
+    fn read_crm_parent(
+        &self,
+        parent: &MessageParent,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Option<CrmParentFacts>, rootcause::Report>>
+                + Send
+                + '_,
+        >,
+    >;
+}

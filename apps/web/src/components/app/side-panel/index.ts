@@ -6,8 +6,12 @@ export {
   GithubPullRequestStatusIcon,
 } from '@app/features/block-pr/side-panel/github-pull-request';
 export type {} from './context';
+export type { DocumentFileSidePanelSectionsProps } from './FileSidePanelSections';
 export {
   DateValueDisplay,
+  DocumentFileDetailsSection,
+  DocumentFilePropertiesSection,
+  DocumentFileSidePanelSections,
   FileDetailsSection,
   FilePropertiesSection,
   FileSidePanelSections,

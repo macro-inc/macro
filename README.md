@@ -11,7 +11,7 @@
     ·
     <a href="https://docs.macro.com">Docs</a>
     ·
-    <a href="https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613">Book demo</a>
+    <a href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/demo">Book demo</a>
     ·
     <a href="https://macro.com">Website</a>
     ·
@@ -25,8 +25,8 @@
 
 <br />
 
-Macro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.
-
+Macro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools. 
+ 
 <br />
 
 # Why Macro
@@ -201,7 +201,7 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 
 # Running it locally
 
-To run the full app on your machine, follow [Running locally](docs/RUNNING_LOCALLY.md).
+To run the frontend against hosted services, or to run the local stack, follow [Running locally](docs/development/running-locally.md).
 
 To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -223,7 +223,7 @@ macro/
 └── tooling/       repo scripts and code generators
 ```
 
-Services follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.
+Services follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/development/style-guide.md`](docs/development/style-guide.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.
 
 <br />
 
@@ -260,6 +260,6 @@ If Macro is interesting/useful to you, please scroll up and give the repo a star
 <a href="https://github.com/macro-inc/macro">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/readme/star-history-dark.svg" />
-    <img alt="Star history for macro-inc/macro, from launch to 3608 stars" src=".github/readme/star-history-light.svg" width="100%" />
+    <img alt="Star history for macro-inc/macro, from launch to 4320 stars" src=".github/readme/star-history-light.svg" width="100%" />
   </picture>
 </a>

@@ -1,5 +1,8 @@
 //! Axum router for favorites endpoints.
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use axum::{
@@ -9,9 +12,9 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post},
 };
+use axum_extra::extract::Query;
 use entity_access::{
-    domain::{models::ViewAccessLevel, ports::EntityAccessService},
-    inbound::axum_extractors::EntityBodyAccessLevelExtractor,
+    domain::ports::EntityAccessService, inbound::axum_extractors::EntityBodyAccessLevelExtractor,
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
@@ -21,8 +24,8 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 
 use crate::domain::{
-    models::{Favorite, FavoritesError, FavoritesList},
-    ports::FavoritesService,
+    models::{Favorite, FavoriteFilter, FavoritesError, FavoritesList},
+    ports::{FavoriteView, FavoritesService},
 };
 
 /// Router state for favorites endpoints.
@@ -156,6 +159,7 @@ pub struct ReorderFavoritesRequest {
     tag = "favorites",
     operation_id = "list_favorites",
     path = "/favorites",
+    params(FavoriteFilter),
     responses(
         (status = 200, body = FavoritesList),
         (status = 401, body = ErrorResponse),
@@ -166,6 +170,7 @@ pub struct ReorderFavoritesRequest {
 pub async fn list_favorites_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(filter): Query<FavoriteFilter>,
 ) -> Result<Json<FavoritesList>, FavoritesError>
 where
     S: FavoritesService,
@@ -174,7 +179,7 @@ where
 {
     let favorites = state
         .service
-        .list_favorites(&user.authorization.user.macro_user_id)
+        .list_favorites(&user.authorization.user.macro_user_id, &filter)
         .await?;
     Ok(Json(FavoritesList { favorites }))
 }
@@ -197,7 +202,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn add_favorite_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
-    access: EntityBodyAccessLevelExtractor<ViewAccessLevel, AccessSvc, AddFavoriteRequest, Auth>,
+    access: EntityBodyAccessLevelExtractor<FavoriteView, AccessSvc, AddFavoriteRequest, Auth>,
 ) -> Result<Json<Favorite>, FavoritesError>
 where
     S: FavoritesService,
@@ -285,7 +290,9 @@ impl IntoResponse for FavoritesError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             FavoritesError::NotFound => StatusCode::NOT_FOUND,
-            FavoritesError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            FavoritesError::UnsupportedEntityType(_) | FavoritesError::BadRequest(_) => {
+                StatusCode::BAD_REQUEST
+            }
             FavoritesError::Unauthorized => StatusCode::FORBIDDEN,
             FavoritesError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

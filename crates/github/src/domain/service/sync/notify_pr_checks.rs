@@ -2,13 +2,13 @@
 
 use chrono::{DateTime, Utc};
 use documents::domain::ports::DocumentService;
-use foreign_entity::domain::ports::ForeignEntityService;
+use github_pull_requests::domain::ports::GithubPullRequestService;
 use model_notifications::{GithubPrCheckRun, GithubPrCheckRunState};
 use notification::domain::service::NotificationIngress;
 
 use crate::domain::{
     models::{EnrichedGithubPullRequest, ValidatedGithubWebhookEvent},
-    ports::{GithubSyncClient, GithubSyncRepo},
+    ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo},
 };
 
 use super::{GithubSyncServiceImpl, PullRequestForeignEntityUpsert};
@@ -27,9 +27,10 @@ impl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
-> GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncServiceImpl<D, R, C, G, N, P>
 {
     /// Notify pull request participants when an associated GitHub check run finishes.
     ///

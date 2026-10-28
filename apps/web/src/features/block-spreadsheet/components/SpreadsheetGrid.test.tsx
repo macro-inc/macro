@@ -1,0 +1,1627 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { type Accessor, type ComponentProps, createSignal } from 'solid-js';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
+import type { SpreadsheetCells } from '../core/spreadsheet-document';
+import {
+  createGridController,
+  type GridController,
+} from '../primitives/create-grid-controller';
+import { SpreadsheetGrid } from './SpreadsheetGrid';
+import { FormulaBar } from './SpreadsheetToolbar';
+
+// The formula bar shares a module with toolbar buttons; their app hotkey
+// infrastructure is not mounted by this editor interaction fixture.
+vi.mock('@ui/components/Button', () => ({ Button: () => null }));
+
+// jsdom has no viewport. Give the row window a deterministic visible height.
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createElementSize: () => ({ width: 1000, height: 960 }),
+}));
+afterEach(cleanup);
+
+function renderGrid(
+  initial: SpreadsheetCells = {},
+  options: Pick<
+    ComponentProps<typeof SpreadsheetGrid>,
+    | 'comments'
+    | 'onCellAction'
+    | 'mentions'
+    | 'zoom'
+    | 'showGridlines'
+    | 'showFormulas'
+    | 'columnWidths'
+    | 'hiddenColumns'
+    | 'rowCount'
+    | 'sheetId'
+    | 'onFill'
+    | 'onResizeColumn'
+    | 'dropdowns'
+    | 'ownsClipboard'
+    | 'tables'
+    | 'tableUi'
+  > & {
+    values?: ComponentProps<typeof SpreadsheetGrid>['values'];
+    readonly?: boolean;
+  } = {}
+) {
+  let controller!: GridController;
+  let cells!: Accessor<SpreadsheetCells>;
+  const onPaste = vi.fn((text: string) => controller.paste(text));
+  const onClear = vi.fn(() => controller.clear());
+  const onCopy = vi.fn(() => controller.copy());
+  const onCopyMetadata = vi.fn((cut?: boolean) => controller.copyMetadata(cut));
+  const onMove = vi.fn((row: number, column: number) =>
+    controller.move(row, column)
+  );
+  const view = render(() => {
+    const [values, setValues] = createSignal(initial);
+    cells = values;
+    controller = createGridController({
+      cells,
+      sheetId: () => options.sheetId ?? 'sheet1',
+      canEdit: () => !options.readonly,
+      setCells: (edits) => {
+        const next = { ...values() };
+        for (const [address, edit] of Object.entries(edits)) {
+          if (edit === null) delete next[address];
+          else next[address] = { ...(next[address] ?? { value: '' }), ...edit };
+        }
+        setValues(next);
+      },
+      undo: () => {},
+      redo: () => {},
+    });
+    return (
+      <>
+        <FormulaBar
+          address={controller.activeAddress()}
+          value={
+            controller.editing()
+              ? controller.draft()
+              : (cells()[controller.activeAddress()]?.value ?? '')
+          }
+          readonly={options.readonly ?? false}
+          complete={async () => undefined}
+          selectionRequest={controller.editorSelection()}
+          pickingReference={controller.pickingReference()}
+          onSelectionChange={controller.setTextSelection}
+          onNavigate={() => {}}
+          onEdit={() => controller.beginEdit('formula')}
+          onInput={controller.setDraft}
+          onCommit={controller.commit}
+          onCancel={controller.cancel}
+          onReturnToGrid={() => {}}
+        />
+        <SpreadsheetGrid
+          onCellAction={options.onCellAction}
+          comments={options.comments}
+          mentions={options.mentions}
+          cells={cells()}
+          sheetId={options.sheetId}
+          rowCount={options.rowCount ?? 30}
+          zoom={options.zoom}
+          showGridlines={options.showGridlines}
+          showFormulas={options.showFormulas}
+          columnWidths={options.columnWidths}
+          hiddenColumns={options.hiddenColumns}
+          onFill={options.onFill}
+          onResizeColumn={options.onResizeColumn}
+          dropdowns={options.dropdowns}
+          tables={options.tables}
+          tableUi={options.tableUi}
+          onToggleCheckbox={(position) => {
+            controller.select(position);
+            controller.toggleCheckboxes();
+          }}
+          values={options.values ?? {}}
+          remoteCursors={[]}
+          selection={controller.selection()}
+          editing={controller.editing() === 'cell'}
+          formulaEditing={controller.editing() === 'formula'}
+          editorSelection={controller.editorSelection()}
+          referenceSelection={controller.referenceSelection()}
+          pickingReference={controller.pickingReference()}
+          onTextSelection={controller.setTextSelection}
+          onReferenceStart={controller.beginReference}
+          onReferenceMove={controller.updateReference}
+          onReferenceEnd={controller.endReference}
+          draft={controller.draft()}
+          readonly={options.readonly ?? false}
+          onSelect={controller.select}
+          onSelectRange={controller.selectRange}
+          onEdit={() => controller.beginEdit('cell')}
+          onDraft={controller.setDraft}
+          onCommit={controller.commit}
+          onCancel={controller.cancel}
+          onMove={onMove}
+          onKeyDown={controller.keyDown}
+          onCopy={onCopy}
+          onCopyMetadata={onCopyMetadata}
+          onPaste={onPaste}
+          ownsClipboard={options.ownsClipboard}
+          onClear={onClear}
+          onGridReady={() => {}}
+        />
+      </>
+    );
+  });
+  const element = view.getByRole('grid');
+  // Coordinates map to cells within the grid's client box, the mocked viewport.
+  Object.defineProperties(element, {
+    clientWidth: { configurable: true, value: 1000 },
+    clientHeight: { configurable: true, value: 960 },
+  });
+  // jsdom has no layout or scrolling; only the selected cells need this DOM API.
+  for (const address of ['A1', 'A2']) {
+    const cell = view.container.querySelector<HTMLElement>(
+      `[data-address="${address}"]`
+    );
+    if (cell) cell.scrollIntoView = vi.fn();
+  }
+  return {
+    ...view,
+    element,
+    controller,
+    cells,
+    onPaste,
+    onClear,
+    onMove,
+    onCopy,
+    onCopyMetadata,
+  };
+}
+
+function clipboardEvent(
+  type: 'paste' | 'cut' | 'copy' | 'beforecopy',
+  data: {
+    types: string[];
+    getData: (format: string) => string;
+    setData?: (format: string, value: string) => void;
+  } | null
+): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', { value: data });
+  return event;
+}
+
+function touchPointer(
+  target: Element | Window,
+  type: string,
+  x = 196,
+  y = 55,
+  pointerId = 1
+) {
+  const event = new MouseEvent(type, {
+    button: 0,
+    buttons: type === 'pointerup' ? 0 : 1,
+    clientX: x,
+    clientY: y,
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.defineProperties(event, {
+    pointerType: { value: 'touch' },
+    pointerId: { value: pointerId },
+    isPrimary: { value: true },
+  });
+  fireEvent(target, event);
+  return event;
+}
+
+describe('spreadsheet dropdown cells', () => {
+  const marker = (view: ReturnType<typeof renderGrid>, address: string) =>
+    view.container.querySelector<HTMLElement>(
+      `[data-address="${address}"] [data-dropdown-marker]`
+    );
+
+  it('shows an arrow in each dropdown cell that selects the cell', () => {
+    const view = renderGrid({}, { dropdowns: [{ range: 'B2:B3 D1' }] });
+    expect(marker(view, 'B2')?.tagName).toBe('BUTTON');
+    expect(marker(view, 'B3')).not.toBeNull();
+    expect(marker(view, 'D1')).not.toBeNull();
+    expect(marker(view, 'B4')).toBeNull();
+    expect(marker(view, 'C2')).toBeNull();
+    // jsdom has no PointerEvent; a MouseEvent carries the pressed button.
+    fireEvent(
+      marker(view, 'B3')!,
+      new MouseEvent('pointerdown', { bubbles: true, button: 0 })
+    );
+    expect(view.controller.activeAddress()).toBe('B3');
+  });
+
+  it('marks dropdown cells without a control in a view-only sheet', () => {
+    const view = renderGrid(
+      {},
+      { dropdowns: [{ range: 'B2' }], readonly: true }
+    );
+    expect(marker(view, 'B2')?.tagName).toBe('SPAN');
+    expect(marker(view, 'B2')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('draws a colored choice as a chip in its cells, matching case-insensitively', () => {
+    const view = renderGrid(
+      {
+        B2: { value: 'done' },
+        B3: { value: 'Open' },
+        B4: { value: 'Elsewhere' },
+        C2: { value: 'Done' },
+      },
+      {
+        dropdowns: [
+          {
+            range: 'B2:B4',
+            colors: new Map([
+              ['done', '#bbf7d0'],
+              ['open', '#1e3a8a'],
+            ]),
+          },
+        ],
+      }
+    );
+    const chip = (address: string) =>
+      view.container.querySelector<HTMLElement>(
+        `[data-address="${address}"] [data-choice-chip]`
+      );
+    expect(chip('B2')?.textContent).toBe('done');
+    expect(chip('B2')?.style.backgroundColor).toBe('rgb(187, 247, 208)');
+    expect(chip('B2')?.style.color).toBe('rgb(0, 0, 0)');
+    // Dark choices keep their text legible.
+    expect(chip('B3')?.style.color).toBe('rgb(255, 255, 255)');
+    expect(chip('B4')).toBeNull();
+    expect(view.getByRole('gridcell', { name: 'B4: Elsewhere' })).toBeTruthy();
+    // Outside the dropdown the same text stays plain.
+    expect(chip('C2')).toBeNull();
+  });
+});
+
+describe('spreadsheet checkbox cells', () => {
+  const cells: SpreadsheetCells = {
+    B2: { value: 'TRUE', checkbox: true, textColor: '#AA0000' },
+    B3: { value: 'FALSE', checkbox: true, horizontalAlign: 'left' },
+    B4: { value: '', checkbox: true },
+    B5: { value: 'Pending', checkbox: true },
+    B6: { value: 'TRUE' },
+  };
+
+  it('shows TRUE, FALSE and blank checkbox cells as boxes in the cell color and alignment', () => {
+    const view = renderGrid(cells);
+    expect(
+      view.getByRole('checkbox', { name: 'B2' }).getAttribute('aria-checked')
+    ).toBe('true');
+    expect(
+      view.getByRole('checkbox', { name: 'B3' }).getAttribute('aria-checked')
+    ).toBe('false');
+    expect(
+      view.getByRole('checkbox', { name: 'B4' }).getAttribute('aria-checked')
+    ).toBe('false');
+    expect(view.queryByRole('checkbox', { name: 'B5' })).toBeNull();
+    expect(view.getByRole('gridcell', { name: 'B5: Pending' })).toBeTruthy();
+    expect(view.queryByRole('checkbox', { name: 'B6' })).toBeNull();
+    const checked = view.getByRole('gridcell', { name: 'B2: checked' });
+    expect(checked.style.textAlign).toBe('center');
+    expect(checked.style.color).toBe('rgb(170, 0, 0)');
+    expect(
+      view.getByRole('gridcell', { name: 'B3: not checked' }).style.textAlign
+    ).toBe('left');
+  });
+
+  it('selects and toggles a box when it is clicked, without starting an edit', () => {
+    const view = renderGrid(cells);
+    const box = view.getByRole('checkbox', { name: 'B3' });
+    fireEvent(box, new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+    fireEvent.click(box);
+    fireEvent.dblClick(box);
+    expect(view.controller.activeAddress()).toBe('B3');
+    expect(view.cells().B3.value).toBe('TRUE');
+    expect(view.controller.editing()).toBeUndefined();
+    fireEvent.click(view.getByRole('checkbox', { name: 'B3' }));
+    expect(view.cells().B3.value).toBe('FALSE');
+  });
+
+  it('extends the selection on a Shift+click over a box without toggling it', () => {
+    const view = renderGrid(cells);
+    view.controller.select({ row: 1, column: 1 });
+    const box = view.getByRole('checkbox', { name: 'B4' });
+    fireEvent(
+      box,
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        shiftKey: true,
+      })
+    );
+    fireEvent.click(box, { shiftKey: true });
+    expect(view.controller.selection()).toEqual({
+      anchor: { row: 1, column: 1 },
+      focus: { row: 3, column: 1 },
+    });
+    expect(view.cells().B4.value).toBe('');
+  });
+
+  it('shows boxes that cannot be toggled in a view-only sheet', () => {
+    const view = renderGrid(cells, { readonly: true });
+    const box = view.getByRole('checkbox', { name: 'B2' });
+    expect(box.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(box);
+    expect(view.cells().B2.value).toBe('TRUE');
+  });
+});
+
+describe('spreadsheet touch gestures', () => {
+  it('waits for a tap and leaves swipes and cancelled gestures to native scrolling', () => {
+    const view = renderGrid();
+    const cell = view.getByRole('gridcell', { name: 'B2' });
+    expect(touchPointer(cell, 'pointerdown').defaultPrevented).toBe(false);
+    expect(view.controller.activeAddress()).toBe('A1');
+    expect(touchPointer(window, 'pointermove', 196, 100).defaultPrevented).toBe(
+      false
+    );
+    touchPointer(window, 'pointerup', 196, 100);
+    expect(view.controller.activeAddress()).toBe('A1');
+
+    touchPointer(cell, 'pointerdown');
+    touchPointer(window, 'pointercancel');
+    touchPointer(window, 'pointerup');
+    expect(view.controller.activeAddress()).toBe('A1');
+
+    touchPointer(cell, 'pointerdown');
+    touchPointer(window, 'pointerup');
+    expect(view.controller.activeAddress()).toBe('B2');
+    expect(view.controller.editing()).toBeUndefined();
+    expect(
+      view.getByRole('button', { name: 'Move selection end' })
+    ).toBeTruthy();
+  });
+
+  it('edits on a second tap and cancels iOS compatibility focus transfer', () => {
+    const view = renderGrid({ B2: { value: 'original' } });
+    const cell = view.getByRole('gridcell', { name: 'B2: original' });
+    for (let tap = 0; tap < 2; tap++) {
+      touchPointer(cell, 'pointerdown');
+      touchPointer(window, 'pointerup');
+    }
+    const editor = view.getByRole('textbox', { name: 'Edit B2' });
+    const compatibility = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(cell, compatibility);
+    expect(compatibility.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(editor);
+    expect(view.cells().B2.value).toBe('original');
+  });
+
+  it('moves selection handles by coordinates even when touch capture keeps targeting the handle', () => {
+    const view = renderGrid();
+    view.element.setPointerCapture = vi.fn();
+    const cell = view.getByRole('gridcell', { name: 'B2' });
+    touchPointer(cell, 'pointerdown');
+    touchPointer(window, 'pointerup');
+    const handle = view.getByRole('button', { name: 'Move selection end' });
+    expect(touchPointer(handle, 'pointerdown', 246, 66).defaultPrevented).toBe(
+      true
+    );
+    touchPointer(handle, 'pointermove', 296, 97);
+    touchPointer(window, 'pointerup', 296, 97);
+    expect(view.controller.selection()).toEqual({
+      anchor: { row: 1, column: 1 },
+      focus: { row: 3, column: 2 },
+    });
+    expect(document.activeElement).toBe(view.element);
+    expect(view.element.setPointerCapture).toHaveBeenCalledWith(1);
+  });
+
+  it('lets a tap in the handle padding select the cell underneath', () => {
+    const view = renderGrid();
+    view.element.setPointerCapture = vi.fn();
+    const cell = view.getByRole('gridcell', { name: 'B2' });
+    touchPointer(cell, 'pointerdown');
+    touchPointer(window, 'pointerup');
+    const handle = view.getByRole('button', { name: 'Move selection end' });
+    // B2's handle is centered at (246, 66); its 44px grip overlaps C3.
+    touchPointer(handle, 'pointerdown', 255, 76);
+    touchPointer(window, 'pointerup', 255, 76);
+    expect(view.controller.activeAddress()).toBe('C3');
+    expect(view.controller.editing()).toBeUndefined();
+  });
+
+  it('does not start edge scrolling until a handle actually moves', () => {
+    const view = renderGrid();
+    view.element.setPointerCapture = vi.fn();
+    touchPointer(view.getByRole('gridcell', { name: 'B2' }), 'pointerdown');
+    touchPointer(window, 'pointerup');
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame');
+    try {
+      touchPointer(
+        view.getByRole('button', { name: 'Move selection start' }),
+        'pointerdown',
+        146,
+        45
+      );
+      touchPointer(window, 'pointermove', 147, 45);
+      expect(requestFrame).not.toHaveBeenCalled();
+      touchPointer(window, 'pointerup', 147, 45);
+      expect(view.controller.selection()).toEqual({
+        anchor: { row: 1, column: 1 },
+        focus: { row: 1, column: 1 },
+      });
+    } finally {
+      requestFrame.mockRestore();
+    }
+  });
+
+  it('cancels a pending tap when zoom or remote column geometry changes', () => {
+    const [zoom, setZoom] = createSignal(100);
+    const [columnWidths, setWidths] = createSignal<Record<number, number>>({});
+    const view = renderGrid(
+      {},
+      {
+        get zoom() {
+          return zoom();
+        },
+        get columnWidths() {
+          return columnWidths();
+        },
+      }
+    );
+    const cell = view.getByRole('gridcell', { name: 'B2' });
+    touchPointer(cell, 'pointerdown');
+    setZoom(150);
+    touchPointer(window, 'pointerup');
+    expect(view.controller.activeAddress()).toBe('A1');
+    touchPointer(cell, 'pointerdown');
+    setWidths({ 0: 300 });
+    touchPointer(window, 'pointerup');
+    expect(view.controller.activeAddress()).toBe('A1');
+  });
+
+  it.each(['cell', 'formula'] as const)(
+    'extends a tapped reference with a handle while keeping the %s editor focused',
+    (location) => {
+      const view = renderGrid();
+      view.element.setPointerCapture = vi.fn();
+      if (location === 'cell') fireEvent.keyDown(view.element, { key: 'F2' });
+      const editor = view.getByRole('textbox', {
+        name: location === 'cell' ? 'Edit A1' : 'Formula bar',
+      }) as HTMLTextAreaElement;
+      editor.focus();
+      fireEvent.input(editor, { target: { value: '=SUM(' } });
+      editor.setSelectionRange(5, 5);
+      fireEvent.select(editor);
+      const cell = view.getByRole('gridcell', { name: 'B2' });
+      touchPointer(cell, 'pointerdown');
+      touchPointer(window, 'pointerup');
+      expect(editor.value).toBe('=SUM(B2');
+      const handle = view.getByRole('button', { name: 'Move reference end' });
+      touchPointer(handle, 'pointerdown', 246, 66);
+      touchPointer(handle, 'pointermove', 296, 97);
+      touchPointer(window, 'pointerup', 296, 97);
+      fireEvent.mouseDown(handle);
+      expect(document.activeElement).toBe(editor);
+      expect(editor.value).toBe('=SUM(B2:C4');
+      expect(view.controller.activeAddress()).toBe('A1');
+      expect(view.cells().A1).toBeUndefined();
+    }
+  );
+
+  it('cancels pending taps and handles when switching sheets, and never edits for viewers', () => {
+    const [sheetId, setSheetId] = createSignal('before');
+    const view = renderGrid(
+      {},
+      {
+        readonly: true,
+        get sheetId() {
+          return sheetId();
+        },
+      }
+    );
+    const cell = view.getByRole('gridcell', { name: 'B2' });
+    touchPointer(cell, 'pointerdown');
+    setSheetId('after');
+    touchPointer(window, 'pointerup');
+    expect(view.controller.activeAddress()).toBe('A1');
+    for (let tap = 0; tap < 2; tap++) {
+      touchPointer(cell, 'pointerdown');
+      touchPointer(window, 'pointerup');
+    }
+    expect(view.controller.activeAddress()).toBe('B2');
+    expect(view.controller.editing()).toBeUndefined();
+    view.element.setPointerCapture = vi.fn();
+    touchPointer(
+      view.getByRole('button', { name: 'Move selection end' }),
+      'pointerdown',
+      246,
+      66
+    );
+    setSheetId('final');
+    touchPointer(window, 'pointermove', 296, 97);
+    touchPointer(window, 'pointerup', 296, 97);
+    expect(view.controller.activeAddress()).toBe('A1');
+  });
+});
+
+describe('spreadsheet pointer gestures across sheet changes', () => {
+  it('cancels a pending fill when its sheet disappears and allows a new fill', () => {
+    const [sheetId, setSheetId] = createSignal('deleted');
+    const onFill = vi.fn();
+    const view = renderGrid(
+      {},
+      {
+        get sheetId() {
+          return sheetId();
+        },
+        onFill,
+      }
+    );
+    const handle = view.getByRole('button', { name: 'Drag to fill selection' });
+    const startFill = () =>
+      fireEvent(
+        handle,
+        new MouseEvent('pointerdown', {
+          button: 0,
+          buttons: 1,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    const enter = (address: string) =>
+      fireEvent(
+        view.getByRole('gridcell', { name: address }),
+        new MouseEvent('pointerenter', { buttons: 1 })
+      );
+    startFill();
+    enter('A3');
+    expect(
+      view.container.querySelectorAll('[role="gridcell"][aria-selected="true"]')
+    ).toHaveLength(3);
+
+    setSheetId('retained');
+    enter('A4');
+    fireEvent(window, new MouseEvent('pointerup', { button: 0 }));
+    expect(onFill).not.toHaveBeenCalled();
+    expect(
+      view.container.querySelectorAll('[role="gridcell"][aria-selected="true"]')
+    ).toHaveLength(1);
+
+    startFill();
+    enter('A2');
+    fireEvent(window, new MouseEvent('pointerup', { button: 0 }));
+    expect(onFill).toHaveBeenCalledExactlyOnceWith(
+      { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 0 } },
+      { anchor: { row: 0, column: 0 }, focus: { row: 1, column: 0 } }
+    );
+  });
+
+  it('cancels an in-progress resize without carrying its width into the next sheet', () => {
+    const [sheetId, setSheetId] = createSignal('deleted');
+    const onResizeColumn = vi.fn();
+    const view = renderGrid(
+      {},
+      {
+        get sheetId() {
+          return sheetId();
+        },
+        get columnWidths() {
+          return { 0: sheetId() === 'deleted' ? 120 : 200 };
+        },
+        onResizeColumn,
+      }
+    );
+    const handle = view.getByRole('separator', { name: 'Resize column A' });
+    handle.setPointerCapture = vi.fn();
+    const pointer = (type: string, clientX: number) =>
+      fireEvent(
+        handle,
+        new MouseEvent(type, {
+          button: 0,
+          buttons: 1,
+          clientX,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    const cell = view.getByRole('gridcell', { name: 'A1' });
+    pointer('pointerdown', 100);
+    pointer('pointermove', 160);
+    expect(cell.style.width).toBe('180px');
+
+    setSheetId('retained');
+    pointer('pointermove', 180);
+    fireEvent(window, new MouseEvent('pointerup', { button: 0 }));
+    expect(onResizeColumn).not.toHaveBeenCalled();
+    expect(cell.style.width).toBe('200px');
+
+    pointer('pointerdown', 100);
+    pointer('pointermove', 116);
+    fireEvent(window, new MouseEvent('pointerup', { button: 0 }));
+    expect(onResizeColumn).toHaveBeenCalledExactlyOnceWith(0, 216);
+  });
+
+  it('ends selection dragging at the sheet boundary', () => {
+    const [sheetId, setSheetId] = createSignal('deleted');
+    const view = renderGrid(
+      {},
+      {
+        get sheetId() {
+          return sheetId();
+        },
+      }
+    );
+    fireEvent(
+      view.getByRole('gridcell', { name: 'B2' }),
+      new MouseEvent('pointerdown', {
+        button: 0,
+        buttons: 1,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    fireEvent(
+      view.getByRole('gridcell', { name: 'C3' }),
+      new MouseEvent('pointerenter', { buttons: 1 })
+    );
+    expect(view.controller.selection().focus).toEqual({ row: 2, column: 2 });
+
+    setSheetId('retained');
+    fireEvent(
+      view.getByRole('gridcell', { name: 'D4' }),
+      new MouseEvent('pointerenter', { buttons: 1 })
+    );
+    fireEvent(window, new MouseEvent('pointerup', { button: 0 }));
+    expect(view.controller.selection()).toEqual({
+      anchor: { row: 0, column: 0 },
+      focus: { row: 0, column: 0 },
+    });
+  });
+});
+
+describe('spreadsheet drag auto-scroll', () => {
+  function mouse(
+    target: Element | Window,
+    type: string,
+    x: number,
+    y: number,
+    buttons = type === 'pointerup' ? 0 : 1
+  ) {
+    fireEvent(
+      target,
+      new MouseEvent(type, {
+        button: 0,
+        buttons,
+        clientX: x,
+        clientY: y,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  }
+
+  it('scrolls once a drag moves, faster the farther past the edge, until release', () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const view = renderGrid({}, { rowCount: 200 });
+    // B45 spans y 948-969; the grid's client box ends at 960.
+    mouse(view.getByRole('gridcell', { name: 'B45' }), 'pointerdown', 196, 950);
+    mouse(window, 'pointermove', 196, 953);
+    vi.advanceTimersToNextFrame();
+    expect(view.element.scrollTop).toBe(0);
+
+    // 34px into the bottom edge zone for a 16ms frame is 10.88px, then 134px
+    // is 42.88px plus the carried 0.88px.
+    mouse(window, 'pointermove', 196, 970);
+    vi.advanceTimersToNextFrame();
+    expect(view.element.scrollTop).toBe(10);
+    mouse(window, 'pointermove', 196, 1070);
+    vi.advanceTimersToNextFrame();
+    expect(view.element.scrollTop).toBe(53);
+    expect(view.controller.selection()).toEqual({
+      anchor: { row: 44, column: 1 },
+      focus: { row: 47, column: 1 },
+    });
+
+    mouse(window, 'pointerup', 196, 1070);
+    vi.advanceTimersToNextFrame();
+    expect(view.element.scrollTop).toBe(53);
+  });
+
+  it('keeps the scroll rate at slow speeds by carrying partial pixels between frames', () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const view = renderGrid({}, { rowCount: 200 });
+    mouse(view.getByRole('gridcell', { name: 'B45' }), 'pointerdown', 196, 950);
+    // 1px into the bottom edge zone: 20px a second, 0.32px a 16ms frame.
+    mouse(window, 'pointermove', 196, 937);
+    for (let frame = 0; frame < 60; frame++) vi.advanceTimersToNextFrame();
+    expect(view.element.scrollTop).toBe(19);
+  });
+
+  it('scrolls a column header drag only across, and stops when the release was missed', () => {
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    const view = renderGrid();
+    mouse(
+      view.getByRole('button', { name: 'Select column B' }),
+      'pointerdown',
+      196,
+      12
+    );
+    mouse(window, 'pointermove', 1010, 1000);
+    vi.advanceTimersToNextFrame();
+    expect(view.element.scrollTop).toBe(0);
+    expect(view.element.scrollLeft).toBe(10);
+    expect(view.controller.selection()).toEqual({
+      anchor: { row: 0, column: 1 },
+      focus: { row: 29, column: 9 },
+    });
+
+    mouse(window, 'pointermove', 1010, 1000, 0);
+    vi.advanceTimersToNextFrame();
+    mouse(window, 'pointermove', 400, 500);
+    vi.advanceTimersToNextFrame();
+    expect(view.element.scrollLeft).toBe(10);
+    expect(view.controller.selection().focus).toEqual({ row: 29, column: 9 });
+  });
+
+  it('cancels a fill whose release the window missed instead of applying it to the next drag', () => {
+    const onFill = vi.fn();
+    const view = renderGrid({}, { onFill });
+    mouse(
+      view.getByRole('button', { name: 'Drag to fill selection' }),
+      'pointerdown',
+      146,
+      45
+    );
+    mouse(window, 'pointermove', 146, 80);
+    fireEvent(
+      view.getByRole('gridcell', { name: 'A3' }),
+      new MouseEvent('pointerenter', { buttons: 1 })
+    );
+    // Released outside the window: the next move arrives without the button.
+    mouse(window, 'pointermove', 146, 80, 0);
+
+    mouse(view.getByRole('gridcell', { name: 'B2' }), 'pointerdown', 196, 55);
+    fireEvent(
+      view.getByRole('gridcell', { name: 'B3' }),
+      new MouseEvent('pointerenter', { buttons: 1 })
+    );
+    mouse(window, 'pointerup', 196, 76);
+    expect(onFill).not.toHaveBeenCalled();
+    expect(view.controller.selection()).toEqual({
+      anchor: { row: 1, column: 1 },
+      focus: { row: 2, column: 1 },
+    });
+  });
+});
+
+describe('spreadsheet grid clipboard and editing', () => {
+  it('copies instead of marking formulas as moved when a viewer uses cut', () => {
+    const view = renderGrid({ A1: { value: '=B1' } }, { readonly: true });
+    const setData = vi.fn();
+    fireEvent(
+      view.element,
+      clipboardEvent('cut', { types: [], getData: () => '', setData })
+    );
+    expect(view.onCopy).toHaveBeenCalledWith(false);
+    expect(view.onCopyMetadata).toHaveBeenCalledWith(false);
+    expect(view.onClear).not.toHaveBeenCalled();
+    expect(view.cells().A1.value).toBe('=B1');
+    const metadata = JSON.parse(setData.mock.calls[1][1]);
+    expect(metadata.cut).toBeUndefined();
+    expect(metadata.cells[0][0].value).toBe('=B1');
+  });
+
+  it('does not erase content for image paste or a cut without a clipboard', () => {
+    const view = renderGrid({ A1: { value: 'preserve me' } });
+    fireEvent(
+      view.element,
+      clipboardEvent('paste', { types: ['Files'], getData: () => '' })
+    );
+    fireEvent(view.element, clipboardEvent('cut', null));
+    expect(view.onPaste).not.toHaveBeenCalled();
+    expect(view.onClear).not.toHaveBeenCalled();
+    expect(view.cells().A1.value).toBe('preserve me');
+
+    // A deliberately copied blank cell remains a valid paste operation.
+    fireEvent(
+      view.element,
+      clipboardEvent('paste', { types: ['text/plain'], getData: () => '' })
+    );
+    expect(view.onPaste).toHaveBeenCalledWith('', undefined);
+    expect(view.cells().A1.value).toBe('');
+  });
+
+  it('handles clipboard shortcuts while focus rests outside the grid in its block', () => {
+    const toolbarButton = document.createElement('button');
+    document.body.append(toolbarButton);
+    const view = renderGrid(
+      { A1: { value: 'copied' } },
+      { ownsClipboard: (event) => event.target === toolbarButton }
+    );
+    const setData = vi.fn();
+    const copy = clipboardEvent('copy', {
+      types: [],
+      getData: () => '',
+      setData,
+    });
+    fireEvent(toolbarButton, copy);
+    expect(copy.defaultPrevented).toBe(true);
+    expect(view.onCopy).toHaveBeenCalledTimes(1);
+    expect(setData).toHaveBeenCalledWith('text/plain', 'copied');
+
+    const beforeCopy = clipboardEvent('beforecopy', null);
+    fireEvent(toolbarButton, beforeCopy);
+    expect(beforeCopy.defaultPrevented).toBe(true);
+
+    fireEvent(
+      toolbarButton,
+      clipboardEvent('paste', {
+        types: ['text/plain'],
+        getData: (format: string) => (format === 'text/plain' ? 'pasted' : ''),
+      })
+    );
+    expect(view.onPaste).toHaveBeenCalledWith('pasted', undefined);
+    expect(view.cells().A1.value).toBe('pasted');
+
+    // Another block's focus, or an event the grid already handled, is left alone.
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    const foreign = clipboardEvent('copy', {
+      types: [],
+      getData: () => '',
+      setData,
+    });
+    fireEvent(elsewhere, foreign);
+    expect(foreign.defaultPrevented).toBe(false);
+    fireEvent(
+      view.element,
+      clipboardEvent('copy', { types: [], getData: () => '', setData })
+    );
+    expect(view.onCopy).toHaveBeenCalledTimes(2);
+    toolbarButton.remove();
+    elsewhere.remove();
+  });
+
+  it('leaves outside inputs and text selections to the browser', () => {
+    const host = document.createElement('div');
+    const input = document.createElement('input');
+    const text = document.createElement('p');
+    text.textContent = 'selectable text';
+    host.append(input, text);
+    document.body.append(host);
+    const view = renderGrid(
+      { A1: { value: 'keep' } },
+      { ownsClipboard: () => true }
+    );
+    const paste = clipboardEvent('paste', {
+      types: ['text/plain'],
+      getData: () => 'typed',
+    });
+    fireEvent(input, paste);
+    expect(paste.defaultPrevented).toBe(false);
+    expect(view.onPaste).not.toHaveBeenCalled();
+
+    const selection = document.getSelection()!;
+    selection.selectAllChildren(text);
+    const copy = clipboardEvent('copy', {
+      types: [],
+      getData: () => '',
+      setData: vi.fn(),
+    });
+    fireEvent(text, copy);
+    expect(copy.defaultPrevented).toBe(false);
+    expect(view.onCopy).not.toHaveBeenCalled();
+    selection.removeAllRanges();
+    host.remove();
+  });
+
+  it('preserves multiline input and focus while editing, then commits on Enter', () => {
+    const view = renderGrid({ A1: { value: 'line\nbreak' } });
+    fireEvent.keyDown(view.element, { key: 'F2' });
+    const editor = view.getByRole('textbox', { name: 'Edit A1' });
+    expect(editor).toBeInstanceOf(HTMLTextAreaElement);
+    expect(document.activeElement).toBe(editor);
+    expect((editor as HTMLTextAreaElement).value).toBe('line\nbreak');
+    fireEvent.input(editor, { target: { value: 'line\nbreak!' } });
+    expect(view.getByRole('textbox', { name: 'Edit A1' })).toBe(editor);
+    expect(document.activeElement).toBe(editor);
+    expect(view.controller.draft()).toBe('line\nbreak!');
+
+    const newline = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(editor, newline);
+    expect(newline.defaultPrevented).toBe(false);
+    expect(view.cells().A1.value).toBe('line\nbreak');
+    expect(view.onMove).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    expect(view.cells().A1.value).toBe('line\nbreak!');
+    expect(view.controller.activeAddress()).toBe('A2');
+    expect(document.activeElement).toBe(view.element);
+    expect(view.queryByRole('textbox', { name: 'Edit A1' })).toBeNull();
+  });
+
+  it('leaves textarea clipboard events native and restores grid focus on Escape', () => {
+    const view = renderGrid({ A1: { value: 'original\ntext' } });
+    fireEvent.keyDown(view.element, { key: 'F2' });
+    const editor = view.getByRole('textbox', { name: 'Edit A1' });
+    const paste = clipboardEvent('paste', {
+      types: ['text/plain'],
+      getData: () => 'inside editor',
+    });
+    fireEvent(editor, paste);
+    expect(paste.defaultPrevented).toBe(false);
+    expect(view.onPaste).not.toHaveBeenCalled();
+    fireEvent.input(editor, { target: { value: 'discard this' } });
+    fireEvent.keyDown(editor, { key: 'Escape' });
+    expect(view.cells().A1.value).toBe('original\ntext');
+    expect(document.activeElement).toBe(view.element);
+    expect(view.queryByRole('textbox', { name: 'Edit A1' })).toBeNull();
+  });
+});
+
+it.each(['cell', 'formula'] as const)(
+  'keeps the %s editor focused and inserts a dragged range at its caret',
+  (location) => {
+    const view = renderGrid();
+    let editor: HTMLTextAreaElement;
+    if (location === 'cell') {
+      fireEvent.keyDown(view.element, { key: 'F2' });
+      editor = view.getByRole('textbox', {
+        name: 'Edit A1',
+      }) as HTMLTextAreaElement;
+    } else {
+      editor = view.getByRole('textbox', {
+        name: 'Formula bar',
+      }) as HTMLTextAreaElement;
+      editor.focus();
+    }
+    fireEvent.input(editor, { target: { value: '=SUM(,D1)' } });
+    editor.setSelectionRange(5, 5);
+    fireEvent.select(editor);
+    const start = view.getByRole('gridcell', { name: 'B2' });
+    const end = view.getByRole('gridcell', { name: 'C4' });
+    fireEvent(
+      start,
+      new MouseEvent('pointerdown', {
+        button: 0,
+        buttons: 1,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    fireEvent(end, new MouseEvent('pointerenter', { buttons: 1 }));
+    fireEvent(window, new MouseEvent('pointerup', { button: 0 }));
+    const compatibilityMouseDown = new MouseEvent('mousedown', {
+      button: 0,
+      bubbles: true,
+      cancelable: true,
+    });
+    fireEvent(end, compatibilityMouseDown);
+    expect(compatibilityMouseDown.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(editor);
+    expect(editor.value).toBe('=SUM(B2:C4,D1)');
+    expect(editor.selectionStart).toBe(10);
+    expect(view.controller.activeAddress()).toBe('A1');
+    expect(view.cells().A1).toBeUndefined();
+    expect(
+      view.container.querySelectorAll('[data-formula-reference]')
+    ).toHaveLength(1);
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    expect(view.cells().A1.value).toBe('=SUM(B2:C4,D1)');
+    expect(view.container.querySelector('[data-formula-reference]')).toBeNull();
+  }
+);
+
+it('keeps a constant number of selection overlays as ranges grow, with accurate cell semantics', () => {
+  const view = renderGrid();
+  view.controller.selectRange({ row: 2, column: 1 }, { row: 20, column: 12 });
+  expect(
+    view.container.querySelectorAll('[data-selection-range]')
+  ).toHaveLength(1);
+  expect(
+    view.container.querySelectorAll('[data-selection-active]')
+  ).toHaveLength(1);
+  expect(
+    view.container.querySelectorAll('[role="gridcell"][aria-selected="true"]')
+  ).toHaveLength(19 * 12);
+  const first = view.container.querySelector('[data-selection-range]');
+  view.controller.selectRange({ row: 0, column: 0 }, { row: 29, column: 25 });
+  expect(view.container.querySelector('[data-selection-range]')).toBe(first);
+  // Columns outside the viewport are not rendered, like rows; every rendered
+  // cell inside the range is selected.
+  const rendered = [
+    ...view.container.querySelectorAll<HTMLElement>('[role="gridcell"]'),
+  ].filter((cell) => {
+    const row = Number(/\d+$/.exec(cell.dataset.address ?? '')?.[0]) - 1;
+    return row <= 29;
+  });
+  expect(
+    new Set(rendered.map((cell) => cell.dataset.address?.replace(/\d+$/, '')))
+      .size
+  ).toBeLessThan(26);
+  expect(
+    view.container.querySelectorAll('[role="gridcell"][aria-selected="true"]')
+  ).toHaveLength(rendered.length);
+});
+
+it('selects every cell with Cmd+A without scrolling to the last cell', () => {
+  const scroll = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    writable: true,
+    value: scroll,
+  });
+  onTestFinished(() => {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  });
+  const view = renderGrid({}, { rowCount: 200 });
+  fireEvent.keyDown(view.element, { key: 'a', metaKey: true });
+  expect(view.controller.selection()).toEqual({
+    anchor: { row: 0, column: 0 },
+    focus: { row: 199, column: 25 },
+  });
+  expect(view.container.querySelector('[data-address="Z200"]')).not.toBeNull();
+  expect(scroll).not.toHaveBeenCalled();
+});
+
+describe('spreadsheet presentation', () => {
+  it('renders persistent text, fill, borders and alignment independently of gridlines', () => {
+    const view = renderGrid(
+      {
+        A1: {
+          value: 'Styled cell',
+          borderTopColor: '#123456',
+          borderRightColor: '#123456',
+          borderLeftColor: '#123456',
+          borderBottomColor: '#123456',
+          borderBottomStyle: 'double',
+          bold: true,
+          italic: true,
+          underline: true,
+          strikethrough: true,
+          fontFamily: 'serif',
+          fontSize: 18,
+          textColor: '#123456',
+          fillColor: '#abcdef',
+          horizontalAlign: 'center',
+          verticalAlign: 'top',
+          borderTop: true,
+          borderRight: true,
+          borderBottom: true,
+          borderLeft: true,
+          wrap: true,
+        },
+      },
+      { showGridlines: false }
+    );
+    const cell = view.container.querySelector<HTMLElement>(
+      '[data-address="A1"]'
+    )!;
+    expect(cell.style.fontSize).toBe('24px');
+    expect(cell.style.fontFamily).toBe('serif');
+    expect(cell.style.fontStyle).toBe('italic');
+    expect(cell.style.textDecorationLine).toBe('underline line-through');
+    expect(cell.style.color).toBe('rgb(18, 52, 86)');
+    expect(cell.style.backgroundColor).toBe('rgb(171, 205, 239)');
+    expect(cell.style.textAlign).toBe('center');
+    expect(cell.style.justifyContent).toBe('flex-start');
+    expect(cell.style.borderBottomColor).not.toBe('transparent');
+    expect(cell.style.borderTopStyle).toBe('solid');
+    expect(cell.style.borderBottomStyle).toBe('double');
+    expect(cell.style.borderRightStyle).toBe('solid');
+    expect(cell.style.borderLeftStyle).toBe('solid');
+    expect(cell.classList.contains('font-semibold')).toBe(true);
+    expect((cell.firstElementChild as HTMLElement).style.whiteSpace).toBe(
+      'pre-wrap'
+    );
+    expect(Number.parseFloat(cell.parentElement!.style.height)).toBeGreaterThan(
+      32
+    );
+  });
+
+  it('indents from the aligned edge by three spaces of the default font per level', () => {
+    const view = renderGrid(
+      {
+        A1: { value: 'Product', indent: 2 },
+        A2: { value: '1200', indent: 1 },
+        A3: { value: '1200', indent: 1, horizontalAlign: 'right' },
+        A4: { value: 'Title', indent: 2, horizontalAlign: 'center' },
+        A5: { value: 'Revenue' },
+      },
+      { zoom: 150 }
+    );
+    const cell = (address: string) =>
+      view.container.querySelector<HTMLElement>(`[data-address="${address}"]`)!;
+    // 10 pt is 13⅓ px; three spaces are 10 px per level, zoomed by 150%.
+    expect(cell('A1').style.paddingLeft).toBe('30px');
+    expect(cell('A1').style.paddingRight).toBe('');
+    // An indented automatic number aligns left, as Excel's Increase Indent does.
+    expect(cell('A2').style.textAlign).toBe('left');
+    expect(cell('A2').style.paddingLeft).toBe('15px');
+    expect(cell('A3').style.textAlign).toBe('right');
+    expect(cell('A3').style.paddingRight).toBe('15px');
+    expect(cell('A3').style.paddingLeft).toBe('');
+    expect(cell('A4').style.paddingLeft).toBe('');
+    expect(cell('A4').style.paddingRight).toBe('');
+    expect(cell('A5').style.paddingLeft).toBe('');
+  });
+
+  it('hides the gridlines a fill covers and those a neighboring border replaces', () => {
+    const view = renderGrid({
+      B2: { value: '', fillColor: '#fff2cc' },
+      B5: { value: 'Total', borderTop: true, borderTopColor: '#123456' },
+      E2: { value: '', borderLeft: true, borderLeftColor: '#123456' },
+    });
+    const style = (address: string) =>
+      view.container.querySelector<HTMLElement>(`[data-address="${address}"]`)!
+        .style;
+    expect(style('B2').borderRightColor).toBe('transparent');
+    expect(style('B2').borderBottomColor).toBe('transparent');
+    expect(style('A2').borderRightColor).toBe('transparent');
+    expect(style('B1').borderBottomColor).toBe('transparent');
+    expect(style('B4').borderBottomColor).toBe('transparent');
+    expect(style('D2').borderRightColor).toBe('transparent');
+    expect(style('B5').borderTopStyle).toBe('solid');
+    expect(style('E2').borderLeftStyle).toBe('solid');
+    expect(style('C3').borderRight).toBe('');
+    expect(style('C3').borderBottom).toBe('');
+  });
+
+  it('uses wrapped row geometry for active and range outlines at different zoom levels', () => {
+    const view = renderGrid(
+      { A1: { value: 'one\ntwo\nthree', wrap: true } },
+      { zoom: 150 }
+    );
+    const active = view.container.querySelector<HTMLElement>(
+      '[data-selection-active]'
+    )!;
+    expect(active.style.top).toBe('36px');
+    expect(active.style.left).toBe('69px');
+    expect(active.style.width).toBe('150px');
+    expect(active.style.height).toBe('79.5px');
+    view.controller.selectRange({ row: 1, column: 1 }, { row: 3, column: 2 });
+    const range = view.container.querySelector<HTMLElement>(
+      '[data-selection-range]'
+    )!;
+    expect(range.style.top).toBe('115.5px');
+    expect(range.style.left).toBe('219px');
+    expect(range.style.width).toBe('300px');
+    expect(range.style.height).toBe('94.5px');
+  });
+
+  it('accounts for offscreen wrapped rows while keeping only the viewport and selection mounted', () => {
+    const view = renderGrid(
+      { A100: { value: 'one\ntwo\nthree', wrap: true } },
+      { rowCount: 1000 }
+    );
+    expect(view.container.querySelector('[data-address="A100"]')).toBeNull();
+    view.controller.select({ row: 199, column: 0 });
+    const active = view.container.querySelector<HTMLElement>(
+      '[data-selection-active]'
+    )!;
+    const cell = view.container.querySelector<HTMLElement>(
+      '[data-address="A200"]'
+    )!;
+    expect(active.style.top).toBe('4235px');
+    expect(cell.parentElement!.style.top).toBe(active.style.top);
+    expect(view.container.querySelectorAll('[role="row"]').length).toBeLessThan(
+      56
+    );
+    fireEvent.scroll(view.element, { target: { scrollTop: 4100 } });
+    expect(view.container.querySelector('[data-address="A200"]')).toBe(cell);
+    expect(view.container.querySelectorAll('[role="row"]').length).toBeLessThan(
+      64
+    );
+  });
+
+  it('waits for new formula results without flashing expressions or hiding literal text', () => {
+    const [values, setValues] = createSignal<
+      ComponentProps<typeof SpreadsheetGrid>['values']
+    >({});
+    const view = renderGrid(
+      {
+        A1: { value: '=SUM(B1:B3)' },
+        A2: { value: '=literal', format: 'text' },
+      },
+      {
+        get values() {
+          return values();
+        },
+      }
+    );
+    const cell = view.container.querySelector('[data-address="A1"]')!;
+    expect(cell.textContent).toBe('');
+    expect(
+      view.container.querySelector('[data-address="A2"]')?.textContent
+    ).toBe('=literal');
+    setValues({ A1: { display: '6', number: 6 } });
+    expect(cell.textContent).toBe('6');
+    expect(view.cells().A1.value).toBe('=SUM(B1:B3)');
+  });
+
+  it('shows formulas without changing their values or numeric alignment in the normal view', () => {
+    const [showFormulas, setShowFormulas] = createSignal(false);
+    const view = renderGrid(
+      { A1: { value: '=SUM(B1:B3)' } },
+      {
+        get showFormulas() {
+          return showFormulas();
+        },
+        values: { A1: { display: '6', number: 6 } },
+      }
+    );
+    const cell = view.container.querySelector<HTMLElement>(
+      '[data-address="A1"]'
+    )!;
+    expect(cell.textContent).toBe('6');
+    expect(cell.style.textAlign).toBe('right');
+    setShowFormulas(true);
+    expect(cell.textContent).toBe('=SUM(B1:B3)');
+    expect(cell.style.textAlign).toBe('left');
+    expect(view.cells().A1.value).toBe('=SUM(B1:B3)');
+  });
+
+  it('pins the accounting symbol to the left edge and pads amounts to line up with negatives', () => {
+    const [showFormulas, setShowFormulas] = createSignal(false);
+    const view = renderGrid(
+      {
+        A1: { value: '1234.5', format: 'accounting' },
+        A2: { value: '=-A1', format: 'accounting' },
+        A3: { value: '=A1-A1', format: 'accounting' },
+        A4: { value: 'Total', format: 'accounting' },
+      },
+      {
+        get showFormulas() {
+          return showFormulas();
+        },
+        values: {
+          A2: { display: '$(1,234.50)', number: -1234.5 },
+          A3: { display: '$-', number: 0 },
+          A4: { display: 'Total' },
+        },
+      }
+    );
+    const cell = (address: string) =>
+      view.container.querySelector<HTMLElement>(`[data-address="${address}"]`)!;
+    const layout = (address: string) => {
+      const parts = cell(address).querySelector('[data-accounting]');
+      return (
+        parts && {
+          symbol: parts.children[0].textContent,
+          amount: parts.children[1].firstChild?.textContent,
+          padding: parts.querySelector('.invisible')?.textContent,
+        }
+      );
+    };
+    // A literal shows as calculation will before its first result arrives.
+    expect(layout('A1')).toEqual({
+      symbol: '$',
+      amount: '1,234.50',
+      padding: ')',
+    });
+    expect(layout('A2')).toEqual({
+      symbol: '$',
+      amount: '(1,234.50)',
+      padding: '',
+    });
+    expect(layout('A3')).toEqual({ symbol: '$', amount: '-', padding: '00)' });
+    expect(cell('A2').getAttribute('aria-label')).toBe('A2: $(1,234.50)');
+    expect(layout('A4')).toBeNull();
+    expect(cell('A4').textContent).toBe('Total');
+    setShowFormulas(true);
+    expect(layout('A2')).toBeNull();
+    expect(cell('A2').textContent).toBe('=-A1');
+  });
+});
+
+it('renders imported URL and email cells without raw native tooltips, but leaves formulas intact', () => {
+  const renderText = vi.fn((value: string) => (
+    <a href="https://example.com">{value}</a>
+  ));
+  const view = renderGrid(
+    {
+      A1: { value: "'https://example.com" },
+      A2: { value: 'person@example.one' },
+      A3: { value: '=HYPERLINK("https://example.com","Site")' },
+    },
+    {
+      mentions: { renderText, renderEditor: () => null },
+      values: { A3: { display: 'Site' } },
+    }
+  );
+  expect(view.getByRole('link', { name: 'https://example.com' })).toBeTruthy();
+  expect(view.getByRole('link', { name: 'person@example.one' })).toBeTruthy();
+  expect(
+    view.container.querySelector('[data-address="A1"]')?.hasAttribute('title')
+  ).toBe(false);
+  expect(view.container.querySelector('[data-address="A3"]')?.textContent).toBe(
+    'Site'
+  );
+  expect(renderText).not.toHaveBeenCalledWith(
+    expect.stringContaining('HYPERLINK')
+  );
+  fireEvent.keyDown(view.getByRole('link', { name: 'https://example.com' }), {
+    key: 'Enter',
+  });
+  expect(view.queryByRole('textbox', { name: 'Edit A1' })).toBeNull();
+});
+
+it('marks commented cells and opens hover/click comments without selecting or editing the cell', () => {
+  const comments = {
+    canComment: () => true,
+    add: vi.fn(),
+    hasComment: (address: string) => address === 'B2',
+    enter: vi.fn(),
+    leave: vi.fn(),
+    show: vi.fn(),
+  };
+  const view = renderGrid({}, { comments });
+  const cell = view.getByRole('gridcell', { name: 'B2' });
+  expect(cell.getAttribute('aria-description')).toBe('Has comments');
+  fireEvent.mouseEnter(cell);
+  expect(comments.enter).toHaveBeenCalledWith('B2', cell);
+  const marker = view.getByRole('button', { name: 'Comments on B2' });
+  fireEvent.keyDown(marker, { key: 'Enter' });
+  expect(view.controller.editing()).toBeUndefined();
+  fireEvent.pointerDown(marker, { pointerId: 1, button: 0 });
+  fireEvent.click(marker);
+  expect(comments.show).toHaveBeenCalledWith('B2', cell);
+  expect(view.controller.activeAddress()).toBe('A1');
+  expect(view.controller.editing()).toBeUndefined();
+  fireEvent.mouseLeave(cell);
+  expect(comments.leave).toHaveBeenCalled();
+});
+
+describe('cell context menu', () => {
+  beforeEach(() => {
+    // jsdom has no CSS animations or layout. Explicitly use the browser's
+    // default animation name so Kobalte can finish its unmount/focus lifecycle.
+    const style = document.createElement('style');
+    style.textContent = '[role="menu"] { animation-name: none; }';
+    document.head.append(style);
+    const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    return () => {
+      style.remove();
+      scroll.mockRestore();
+    };
+  });
+  it('preserves a range on right-click and dispatches its command after restoring focus', async () => {
+    const onCellAction = vi.fn();
+    const view = renderGrid({}, { onCellAction });
+    view.controller.selectRange({ row: 1, column: 1 }, { row: 3, column: 2 });
+    const selection = structuredClone(view.controller.selection());
+    const cell = view.getByRole('gridcell', { name: 'C3' });
+    fireEvent.pointerDown(cell, { button: 2 });
+    expect(fireEvent.contextMenu(cell, { clientX: 250, clientY: 120 })).toBe(
+      false
+    );
+    expect(view.controller.selection()).toEqual(selection);
+    const copy = await screen.findByRole('menuitem', {
+      name: 'Copy',
+    });
+    fireEvent.keyDown(copy, { key: 'ArrowDown' });
+    expect(view.controller.selection()).toEqual(selection);
+    fireEvent.keyDown(copy, { key: 'Enter' });
+    await waitFor(() => expect(onCellAction).toHaveBeenCalledWith('copy'));
+    expect(view.controller.selection()).toEqual(selection);
+    expect(document.activeElement).toBe(view.element);
+  });
+
+  it('targets an unselected cell and enables fill only for the matching range dimension', async () => {
+    const view = renderGrid();
+    view.controller.selectRange({ row: 0, column: 0 }, { row: 2, column: 2 });
+    fireEvent.contextMenu(view.getByRole('gridcell', { name: 'E5' }));
+    expect(view.controller.activeAddress()).toBe('E5');
+    expect(view.controller.selection().anchor).toEqual(
+      view.controller.selection().focus
+    );
+    expect(
+      (await screen.findByRole('menuitem', { name: 'Fill down' })).hasAttribute(
+        'data-disabled'
+      )
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'Fill right' })
+        .hasAttribute('data-disabled')
+    ).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    view.controller.selectRange({ row: 0, column: 1 }, { row: 2, column: 1 });
+    fireEvent.keyDown(view.element, { key: 'F10', shiftKey: true });
+    expect(
+      (await screen.findByRole('menuitem', { name: 'Fill down' })).hasAttribute(
+        'data-disabled'
+      )
+    ).toBe(false);
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'Fill right' })
+        .hasAttribute('data-disabled')
+    ).toBe(true);
+  });
+
+  it('allows comments and copy for commenters while disabling cell mutations', async () => {
+    const comments = {
+      canComment: () => true,
+      add: vi.fn(),
+      hasComment: () => false,
+      enter: vi.fn(),
+      leave: vi.fn(),
+      show: vi.fn(),
+    };
+    const onCellAction = vi.fn();
+    const view = renderGrid({}, { readonly: true, comments, onCellAction });
+    const cell = view.getByRole('gridcell', { name: 'B2' });
+    fireEvent.contextMenu(cell);
+    for (const name of [
+      'Cut',
+      'Paste',
+      'Paste values only',
+      'Clear values',
+      'Clear formatting',
+      'Fill down',
+      'Fill right',
+    ]) {
+      expect(
+        (await screen.findByRole('menuitem', { name })).hasAttribute(
+          'data-disabled'
+        )
+      ).toBe(true);
+    }
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'Copy' })
+        .hasAttribute('data-disabled')
+    ).toBe(false);
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Comment' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(comments.add).toHaveBeenCalledWith(cell));
+    expect(onCellAction).not.toHaveBeenCalled();
+  });
+
+  it('anchors a range comment to a rendered cell when its selection anchor is hidden', async () => {
+    const comments = {
+      canComment: () => true,
+      add: vi.fn(),
+      hasComment: () => false,
+      enter: vi.fn(),
+      leave: vi.fn(),
+      show: vi.fn(),
+    };
+    const view = renderGrid({}, { comments, hiddenColumns: [0] });
+    // Keep full-grid role queries outside the polling callback so they cannot
+    // starve the menu's deferred close/focus handlers on slower CI runners.
+    const anchor = view.getByRole('gridcell', { name: 'B2' });
+    view.controller.selectRange({ row: 1, column: 0 }, { row: 1, column: 25 });
+    fireEvent.keyDown(view.element, { key: 'ContextMenu' });
+    const comment = await screen.findByRole('menuitem', { name: 'Comment' });
+    fireEvent.keyDown(comment, { key: 'Enter' });
+    await waitFor(() => expect(comments.add).toHaveBeenCalledWith(anchor));
+  });
+
+  it('keeps the native text editing menu and does not open the cell menu over headers', async () => {
+    const view = renderGrid({ A1: { value: 'draft' } });
+    view.controller.beginEdit('cell');
+    const input = view.getByRole('textbox', { name: 'Edit A1' });
+    expect(fireEvent.contextMenu(input)).toBe(true);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(view.controller.editing()).toBe('cell');
+    view.controller.cancel();
+    fireEvent.contextMenu(
+      view.getByRole('button', { name: 'Select column B' })
+    );
+    await screen.findByRole('menuitem', { name: 'Resize 1 column…' });
+    expect(
+      screen.queryByRole('menuitem', { name: 'Clear formatting' })
+    ).toBeNull();
+  });
+
+  it('ignores a stale cell action after switching sheets', async () => {
+    const [sheetId, setSheetId] = createSignal('one');
+    const onCellAction = vi.fn();
+    const view = renderGrid(
+      {},
+      {
+        get sheetId() {
+          return sheetId();
+        },
+        onCellAction,
+      }
+    );
+    fireEvent.keyDown(view.element, { key: 'ContextMenu' });
+    const clear = await screen.findByRole('menuitem', { name: 'Clear values' });
+    setSheetId('two');
+    fireEvent.keyDown(clear, { key: 'Enter' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(onCellAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('tables in the grid', () => {
+  const tables = [
+    {
+      name: 'Sales',
+      range: 'A1:B41',
+      totalsRow: true,
+      bandedRows: true,
+      style: 'TableStyleMedium2',
+    },
+  ];
+  const tableUi = {
+    columnMenu: (table: () => { name: string }, column: number) => (
+      <span data-testid="column-menu">{`${table().name} ${column}`}</span>
+    ),
+    tableMenu: (table: () => { name: string }) => (
+      <span data-testid="table-menu">{table().name}</span>
+    ),
+    mismatch: (row: number, column: number) =>
+      row === 2 && column === 1 ? 'Expected a number' : undefined,
+    totalLabel: (row: number, column: number) =>
+      row === 40 && column === 1 ? 'Sum' : undefined,
+    columnNames: () => ['Item', 'Amount'],
+    menuTable: () => undefined,
+  };
+  const cells = {
+    A1: { value: 'Item' },
+    B1: { value: 'Amount' },
+    B3: { value: 'n/a' },
+    B41: { value: '=SUBTOTAL(109,[Amount])' },
+  };
+
+  it('names the active table, marks mismatches and labels totals', () => {
+    const view = renderGrid(cells, { rowCount: 100, tables, tableUi });
+    view.controller.select({ row: 9, column: 4 });
+    expect(view.queryByTestId('table-menu')).toBeNull();
+    view.controller.select({ row: 2, column: 1 });
+    expect(view.getByTestId('table-menu').textContent).toBe('Sales');
+    expect(view.getAllByTestId('column-menu')).toHaveLength(2);
+    const mismatch = view.getByRole('gridcell', { name: 'B3: n/a' });
+    expect(mismatch.getAttribute('title')).toBe('Expected a number');
+    expect(mismatch.querySelector('[data-type-mismatch]')).not.toBeNull();
+    expect(
+      view.container.querySelector('[data-address="B41"] [data-total-label]')
+        ?.textContent
+    ).toBe('Sum');
+    view.controller.select({ row: 0, column: 0 });
+    expect(view.queryByTestId('table-menu')).not.toBeNull();
+  });
+
+  it('shows the column names in the column headers once the header row scrolls away', () => {
+    const view = renderGrid(cells, { rowCount: 100, tables, tableUi });
+    view.controller.select({ row: 20, column: 0 });
+    const header = () =>
+      view.getByRole('button', { name: 'Select column A' }).textContent;
+    expect(header()).toBe('A');
+    view.element.scrollTop = 200;
+    fireEvent.scroll(view.element);
+    expect(header()).toBe('Item');
+    view.controller.select({ row: 60, column: 0 });
+    expect(header()).toBe('A');
+  });
+});

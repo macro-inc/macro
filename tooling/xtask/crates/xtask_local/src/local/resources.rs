@@ -33,6 +33,20 @@ pub const CONNECTION_GATEWAY_TABLE: &str = "connection-gateway-table";
 /// The static-file metadata table.
 pub const STATIC_FILE_TABLE: &str = "static-file-metadata";
 
+/// Alias for the KMS key that encrypts users' Cursor API keys.
+///
+/// An alias rather than a key id: `CreateKey` mints a random id on every run,
+/// so a key id could not be baked into the compose env, while an alias is
+/// stable and KMS accepts one anywhere a key id goes.
+pub const CURSOR_API_KEY_KMS_ALIAS: &str = "alias/macro-local-cursor-api-key";
+
+/// Dedicated envelope-encryption key for local ChatGPT account connections.
+pub const CODEX_OAUTH_KMS_ALIAS: &str = "alias/macro-local-codex-oauth";
+
+/// The WhatsApp session service's key for per-account data keys. The service
+/// computes this name from `ENVIRONMENT` (`SessionKmsKey` in its `config.rs`).
+pub const WHATSAPP_SESSION_KMS_ALIAS: &str = "alias/whatsapp-session-service-local";
+
 /// The full LocalStack URL for `queue` (docker-network host — services run in
 /// containers and reach LocalStack by its compose alias).
 pub fn queue_url(queue: &str) -> String {
@@ -73,6 +87,36 @@ pub struct Queue {
     pub bindings: &'static [(&'static str, QueueForm)],
 }
 
+impl Queue {
+    /// Non-default attributes, applied after all queues exist so redrive targets resolve.
+    pub fn attributes(
+        &self,
+    ) -> std::collections::HashMap<aws_sdk_sqs::types::QueueAttributeName, String> {
+        use aws_sdk_sqs::types::QueueAttributeName;
+
+        match self.name {
+            macro_queues::SlackImportQueue::LOCAL => [
+                (QueueAttributeName::VisibilityTimeout, "900".to_string()),
+                (
+                    QueueAttributeName::RedrivePolicy,
+                    serde_json::json!({
+                        "deadLetterTargetArn": queue_arn(macro_queues::SlackImportDlq::LOCAL),
+                        "maxReceiveCount": 5,
+                    })
+                    .to_string(),
+                ),
+            ]
+            .into(),
+            macro_queues::SlackImportDlq::LOCAL => [(
+                QueueAttributeName::MessageRetentionPeriod,
+                (14 * 24 * 60 * 60).to_string(),
+            )]
+            .into(),
+            _ => Default::default(),
+        }
+    }
+}
+
 /// An S3 bucket: the name created in LocalStack and the env var pointing at it.
 pub struct Bucket {
     /// The bucket name created in LocalStack.
@@ -94,6 +138,14 @@ use QueueForm::{Name, Url};
 
 /// Every local SQS queue and the env var(s) that reference it.
 pub const QUEUES: &[Queue] = &[
+    Queue {
+        name: macro_queues::SlackImportQueue::LOCAL,
+        bindings: &[(macro_queues::SlackImportQueue::OVERRIDE_ENV_VAR_NAME, Url)],
+    },
+    Queue {
+        name: macro_queues::SlackImportDlq::LOCAL,
+        bindings: &[(macro_queues::SlackImportDlq::OVERRIDE_ENV_VAR_NAME, Url)],
+    },
     Queue {
         name: macro_queues::NotificationQueue::LOCAL,
         bindings: &[("NOTIFICATION_QUEUE", Url)],
@@ -215,6 +267,17 @@ pub const QUEUES: &[Queue] = &[
             Url,
         )],
     },
+    Queue {
+        // calendar_service's backfill queue, consumed by its always-on backfill
+        // workers (which tight-loop on receive errors if the queue is absent).
+        // Bound through the queue's own override var in URL form so the service
+        // dials the full LocalStack URL rather than the bare name.
+        name: macro_queues::CalendarServiceBackfillQueue::LOCAL,
+        bindings: &[(
+            macro_queues::CalendarServiceBackfillQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
 ];
 
 /// Every local S3 bucket and the env var that references it.
@@ -242,6 +305,17 @@ pub const BUCKETS: &[Bucket] = &[
     Bucket {
         name: "macro-call-recording-local",
         env_key: "CALL_RECORDING_BUCKET_NAME",
+    },
+    Bucket {
+        // The patch behind each agent session's Changes pane.
+        name: "agent-session-changes",
+        env_key: "AGENT_SESSION_CHANGES_BUCKET",
+    },
+    Bucket {
+        // The patch behind each pull request's Changes pane, shared with the
+        // agent sessions that work on that pull request.
+        name: "github-pull-request-patches",
+        env_key: "GITHUB_PULL_REQUEST_PATCH_BUCKET",
     },
 ];
 

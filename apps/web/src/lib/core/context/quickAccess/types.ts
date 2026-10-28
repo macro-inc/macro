@@ -1,12 +1,17 @@
 import type { IUser } from '@core/user/types';
 import type { DateValue } from '@core/util/date';
 import type {
+  AgentSessionEntity,
   ChannelEntity,
   ChatEntity,
   CrmCompanyEntity,
+  CrmContactEntity,
+  DatabaseEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
+  FormEntity,
+  InitiativeEntity,
   ProjectEntity,
   SkillEntity,
   SnippetEntity,
@@ -30,7 +35,13 @@ export type Bucket =
   | 'chat'
   | 'project'
   | 'email'
-  | 'crm_company';
+  | 'crm_company'
+  // CRM contacts, kept apart from 'person' (Macro users and email contacts).
+  | 'crm_contact'
+  | 'agent_session'
+  | 'initiative'
+  | 'database'
+  | 'form';
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
@@ -47,6 +58,11 @@ const ALL_BUCKETS: Bucket[] = [
   'project',
   'email',
   'crm_company',
+  'crm_contact',
+  'agent_session',
+  'database',
+  'form',
+  'initiative',
 ];
 
 export type BucketCombination = 'all' | 'channels' | 'documents';
@@ -62,6 +78,9 @@ export const BUCKET_COMBINATIONS: Record<BucketCombination, Bucket[]> = {
     'skill',
     'chat',
     'project',
+    'database',
+    'form',
+    'initiative',
   ],
 };
 
@@ -131,6 +150,11 @@ export type BucketItemMap = {
   project: EntityItem<ProjectEntity>;
   email: EntityItem<EmailEntity>;
   crm_company: EntityItem<CrmCompanyEntity>;
+  crm_contact: EntityItem<CrmContactEntity>;
+  agent_session: EntityItem<AgentSessionEntity>;
+  database: EntityItem<DatabaseEntity>;
+  form: EntityItem<FormEntity>;
+  initiative: EntityItem<InitiativeEntity>;
   person: UserItem;
 };
 
@@ -145,11 +169,12 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
 
 export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   items: Accessor<T[]>;
-  /** Total matching items, including pages not loaded yet. */
+  /** Number of loaded matching items. Check hasMore for additional cached pages. */
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
+  error: Accessor<unknown>;
   loadMore: () => Promise<void>;
 };
 

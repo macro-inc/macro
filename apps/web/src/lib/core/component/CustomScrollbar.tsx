@@ -12,14 +12,16 @@ interface CustomScrollbarProps {
   enabled?: boolean;
   reverse?: boolean;
   horizontal?: boolean;
+  /** Called before a pointer-driven scroll, with the signed offset change. */
+  onScrollIntent?: (delta: number) => void;
   /**
    * Reveal the bar when the pointer moves within this many px of the
    * scrollbar edge, instead of only when hovering the gutter itself.
    */
   revealZone?: number;
   /**
-   * Re-measure when content mounts/unmounts inside the container. Needed
-   * when content loads in after mount without resizing the container.
+   * Re-measure when content mounts/unmounts or direct content wrappers resize.
+   * Includes virtual sizer growth without a viewport resize or scroll event.
    */
   watchContent?: boolean;
   /**
@@ -80,6 +82,22 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     }
   };
 
+  // Read the metrics once per frame, from its animation-frame callbacks. A
+  // scroll or resize can arrive just after content changed, and reading there
+  // forces a layout of everything that changed; the frame's own layout runs
+  // once all of those callbacks have had their turn.
+  let metricsFrame: number | undefined;
+  const scheduleScrollMetrics = () => {
+    if (metricsFrame !== undefined) return;
+    metricsFrame = requestAnimationFrame(() => {
+      metricsFrame = undefined;
+      updateScrollMetrics();
+    });
+  };
+  onCleanup(() => {
+    if (metricsFrame !== undefined) cancelAnimationFrame(metricsFrame);
+  });
+
   const maxScroll = () => Math.max(0, scrollSize() - clientSize());
 
   const trackSize = () => Math.max(0, clientSize() - THUMB_INSET * 2);
@@ -114,10 +132,8 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     const container = props.scrollContainer();
     if (!container) return;
 
-    updateScrollMetrics();
-
     const handleScroll = () => {
-      if (!isDragging()) updateScrollMetrics();
+      if (!isDragging()) scheduleScrollMetrics();
       setIsScrolling(true);
       debouncedHideScrollbar();
       if (props.labelVisibilityDebounceMs !== Infinity) {
@@ -145,13 +161,24 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     });
     container.addEventListener('pointerleave', handleProximityLeave);
 
-    const resizeObserver = new ResizeObserver(updateScrollMetrics);
+    // Observing reports every target once after the next layout. Earlier
+    // observers in that delivery can still change content, so the read waits
+    // for the next frame rather than forcing a layout here.
+    const resizeObserver = new ResizeObserver(scheduleScrollMetrics);
     resizeObserver.observe(container);
 
     let mutationObserver: MutationObserver | undefined;
     if (props.watchContent) {
-      mutationObserver = new MutationObserver(updateScrollMetrics);
-      mutationObserver.observe(container, { childList: true, subtree: true });
+      const observeContent = () => {
+        resizeObserver.disconnect();
+        resizeObserver.observe(container);
+        for (const child of container.children) resizeObserver.observe(child);
+      };
+      observeContent();
+      // Only direct children change the scroll extent; their own resizes are
+      // observed above. Descendant mutations (every rendered message) are not.
+      mutationObserver = new MutationObserver(observeContent);
+      mutationObserver.observe(container, { childList: true });
     }
 
     onCleanup(() => {
@@ -180,6 +207,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     const clamped = Math.max(0, Math.min(mt, localPos - THUMB_INSET));
     let newPos = (clamped / mt) * max;
     if (props.reverse && !horiz()) newPos = newPos - max;
+    const delta =
+      newPos - (horiz() ? container.scrollLeft : container.scrollTop);
+    if (delta !== 0) props.onScrollIntent?.(delta);
     if (horiz()) {
       container.scrollLeft = newPos;
     } else {
@@ -278,7 +308,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
                   height: `${THUMB_THICKNESS}px`,
                   bottom: `${EDGE_INSET}px`,
                   left: '0',
-                  'background-color': 'var(--c4)',
+                  'background-color': 'var(--color-content-4)',
                   'border-radius': '2px',
                   'pointer-events': 'none',
                   opacity: isDragging() || isScrolling() || isHovered() ? 1 : 0,
@@ -290,7 +320,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
                   width: `${THUMB_THICKNESS}px`,
                   right: `${EDGE_INSET}px`,
                   top: '0',
-                  'background-color': 'var(--c4)',
+                  'background-color': 'var(--color-content-4)',
                   'border-radius': '2px',
                   'pointer-events': 'none',
                   opacity: isDragging() || isScrolling() || isHovered() ? 1 : 0,

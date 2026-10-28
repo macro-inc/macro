@@ -17,7 +17,7 @@ export type SoupProjectSoupPropertiesFieldAllOfTwo = {
   id: string;
   /** The name of the project */
   name: string;
-  /** The user id of who created the project */
+  /** The owner of the project */
   ownerId: string;
   /** The parent project id */
   parentId?: SoupProjectSoupPropertiesFieldAllOfTwoParentId;

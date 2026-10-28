@@ -12,8 +12,8 @@ pub enum MemoryError {
     NoGeneration,
     #[error("memory rejected by judge: {0}")]
     Rejected(String),
-    #[error(transparent)]
-    Db(#[from] sqlx::Error),
+    #[error("database error: {0}")]
+    Db(rootcause::Report),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

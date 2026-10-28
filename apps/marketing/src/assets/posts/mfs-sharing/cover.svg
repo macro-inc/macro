@@ -1,0 +1,38 @@
+<svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="270" fill="none"/>
+  <defs>
+    <linearGradient id="mfs-cover-sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="oklch(from var(--a0) calc(l + 0.06) calc(c * 0.9) h)"/>
+      <stop offset="52%" stop-color="oklch(from var(--a0) calc(l + 0.01) calc(c * 0.9) h)"/>
+      <stop offset="100%" stop-color="oklch(from var(--a0) calc(l - 0.04) calc(c * 0.9) h)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Channel (share something in a channel...) -->
+  <rect x="96" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#mfs-cover-sheen)" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M161,98 L155,142 M177,98 L171,142"/>
+    <path d="M148,113 H186 M146,128 H184"/>
+  </g>
+  <text x="166" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Channel</text>
+
+  <path d="M254,120 H298 M290,113 l8,7 -8,7" stroke="#4a4a4a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Access cascades... -->
+  <rect x="310" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#mfs-cover-sheen)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <circle cx="368" cy="107" r="11"/>
+    <path d="M376,115 L399,138 M388,127 l-6,6 M395,134 l-6,6"/>
+  </g>
+  <text x="380" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Access</text>
+
+  <path d="M468,120 H512 M504,113 l8,7 -8,7" stroke="#4a4a4a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- ...to the entity -->
+  <rect x="524" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g stroke="url(#mfs-cover-sheen)" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M582,96 h24 a6,6 0 0 1 6,6 v36 a6,6 0 0 1 -6,6 h-24 a6,6 0 0 1 -6,-6 v-36 a6,6 0 0 1 6,-6 Z"/>
+    <path d="M584,110 h20 M584,120 h20 M584,130 h13"/>
+  </g>
+  <text x="594" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Entities</text>
+</svg>

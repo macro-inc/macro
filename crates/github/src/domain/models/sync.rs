@@ -33,29 +33,6 @@ impl TryFrom<&str> for GithubInstallationSetupAction {
     }
 }
 
-/// Github key used for tracking tasks
-#[derive(Debug, Clone)]
-pub struct GithubKey(String);
-
-impl GithubKey {
-    /// Create a new github key
-    pub fn new(org: &str, repo: &str, pr: u64) -> Self {
-        Self(format!("{org}/{repo}/pull/{pr}"))
-    }
-}
-
-impl fmt::Display for GithubKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl AsRef<str> for GithubKey {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
 /// OAuth access token returned after exchanging a GitHub App setup code.
 #[derive(Clone, Deserialize)]
 pub struct GithubSetupAccessToken {
@@ -98,12 +75,40 @@ pub struct GithubUserInstallationsPage {
 }
 
 /// GitHub App installation access token response
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct GithubInstallationAccessToken {
     /// The installation access token
     pub token: String,
-    /// When the token expires
+    /// When the token expires, as GitHub sent it (RFC 3339).
     pub expires_at: String,
+}
+
+impl std::fmt::Debug for GithubInstallationAccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GithubInstallationAccessToken")
+            .field("token", &"[REDACTED]")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
+impl GithubInstallationAccessToken {
+    /// When this token expires.
+    ///
+    /// Parsed here rather than by callers: the field is a string because that
+    /// is how GitHub sends it, and a caller that has to know the format in
+    /// order to cache the token would be the second place that knowledge
+    /// lives.
+    pub fn expires_at(&self) -> Result<chrono::DateTime<chrono::Utc>, GithubError> {
+        chrono::DateTime::parse_from_rfc3339(&self.expires_at)
+            .map(|expiry| expiry.with_timezone(&chrono::Utc))
+            .map_err(|error| {
+                GithubError::Internal(anyhow::anyhow!(
+                    "github sent an unparseable token expiry {:?}: {error}",
+                    self.expires_at
+                ))
+            })
+    }
 }
 
 /// Source that grants a GitHub App installation access to Macro sync data.
@@ -626,6 +631,21 @@ impl TeamTaskReference {
     }
 }
 
+/// The text to put in a pull request so the webhook links it to `task`: the team reference
+/// when the webhook's parser reads it back, else `MACRO-{short_uuid}`.
+pub fn pull_request_task_reference(task: &MacroTaskId, team: Option<&TeamTaskReference>) -> String {
+    team.and_then(|team| {
+        let reference = format!(
+            "{}-{}",
+            team.team_slug.to_ascii_uppercase(),
+            team.team_task_id
+        );
+        (TeamTaskReference::extract_from_text(&reference).as_slice() == std::slice::from_ref(team))
+            .then_some(reference)
+    })
+    .unwrap_or_else(|| task.to_task_id_string())
+}
+
 /// A [`TeamTaskReference`] resolved against a concrete team.
 ///
 /// Because team slugs are not unique, one reference can resolve in more than
@@ -684,6 +704,10 @@ impl MacroTaskId {
     /// Extract all unique `MACRO-{short_uuid}` references from text.
     /// Matching is case-insensitive on the `MACRO-` prefix; the short UUID
     /// portion is preserved as captured.
+    ///
+    /// Only short UUIDs that decode to an RFC 4122 UUID are kept. Free text is
+    /// full of `macro-` words that are valid base58 but are not task ids, such
+    /// as the `macro-inc` org in GitHub URLs or `MACRO-3692` team task numbers.
     pub fn extract_from_text(text: &str) -> Vec<MacroTaskId> {
         let mut seen = HashSet::new();
         let mut results = Vec::new();
@@ -692,6 +716,7 @@ impl MacroTaskId {
             let short = &caps[1];
             if seen.insert(short.to_string())
                 && let Some(task_id) = Self::from_short_uuid(short)
+                && task_id.to_uuid().is_ok_and(|uuid| is_rfc4122_uuid(&uuid))
             {
                 results.push(task_id);
             }
@@ -699,6 +724,10 @@ impl MacroTaskId {
 
         results
     }
+}
+
+fn is_rfc4122_uuid(uuid: &uuid::Uuid) -> bool {
+    uuid.get_variant() == uuid::Variant::RFC4122 && uuid.get_version().is_some()
 }
 
 impl fmt::Display for MacroTaskId {

@@ -1,0 +1,277 @@
+use agent_client_protocol::schema::v1::{ContentBlock, ResourceLink, TextContent};
+use attachment::AttachmentPart;
+use attachment::image::ImageData;
+
+use super::*;
+
+fn link(name: &str, uri: &str, mime: Option<&str>) -> ContentBlock {
+    ContentBlock::ResourceLink(ResourceLink::new(name, uri).mime_type(mime.map(str::to_owned)))
+}
+
+/// A prompt of `text`, under that text as the id of the request that
+/// carried it.
+fn user(text: &str) -> HistoryEntry {
+    HistoryEntry::User {
+        prompt: UserPrompt::text(text),
+        request_id: RequestId::Str(text.to_owned()),
+    }
+}
+
+fn reply(text: &str) -> HistoryEntry {
+    HistoryEntry::Assistant(vec![AssistantMessagePart::Text {
+        text: text.to_owned(),
+    }])
+}
+
+#[test]
+fn a_prompt_reads_its_text_and_its_file_links_off_the_blocks() {
+    let prompt = UserPrompt::from_blocks(&[
+        ContentBlock::Text(TextContent::new("what is ")),
+        link("a.png", "https://x/file/1", Some("image/png")),
+        ContentBlock::Text(TextContent::new("this?")),
+        link("b.txt", "https://x/file/2", None),
+    ]);
+    assert_eq!(prompt.text, "what is this?");
+    assert_eq!(prompt.attachments.len(), 2);
+    assert_eq!(prompt.attachments[0].name, "a.png");
+    assert_eq!(prompt.attachments[1].uri, "https://x/file/2");
+}
+
+#[test]
+fn images_become_image_urls_and_other_files_are_named_to_the_model() {
+    let prompt = UserPrompt::from_blocks(&[
+        ContentBlock::Text(TextContent::new("look")),
+        link("a.png", "https://x/file/1", Some("image/png")),
+        link("spec.pdf", "https://x/file/2", Some("application/pdf")),
+    ]);
+    let message = prompt.to_chat_message();
+    assert_eq!(message.content.message_text(), "look");
+    let attachments = message.attachments.expect("files attach to the message");
+    let contents: Vec<_> = attachments
+        .parts()
+        .iter()
+        .map(|resolved| resolved.as_ref().expect("links always resolve"))
+        .collect();
+    assert_eq!(contents.len(), 2);
+
+    // The static file id is what the reference names.
+    assert_eq!(contents[0].reference.entity_id, "1");
+    assert_eq!(contents[0].name.as_deref(), Some("a.png"));
+    assert!(matches!(
+        &contents[0].content[0],
+        AttachmentPart::Image(ImageData::StaticUrl(url)) if url == "https://x/file/1"
+    ));
+
+    let AttachmentPart::Content(text) = &contents[1].content[0] else {
+        panic!(
+            "a non-image file is described in text: {:?}",
+            contents[1].content[0]
+        );
+    };
+    assert!(text.contains("spec.pdf") && text.contains("application/pdf"));
+    assert!(text.contains("https://x/file/2"));
+}
+
+#[test]
+fn an_image_the_browser_left_untyped_is_still_handed_over_as_an_image() {
+    // A browser can report no media type for a `.png`, and the composer shows
+    // it as a thumbnail either way - so the model must see the image, not a
+    // line of text describing it.
+    let prompt = UserPrompt::from_blocks(&[
+        link("shot.PNG", "https://x/file/1", None),
+        link("clip.mp4", "https://x/file/2", None),
+        link("notes", "https://x/file/3", None),
+    ]);
+    let attachments = prompt
+        .to_chat_message()
+        .attachments
+        .expect("files attach to the message");
+    let contents: Vec<_> = attachments
+        .parts()
+        .iter()
+        .map(|resolved| resolved.as_ref().expect("links always resolve"))
+        .collect();
+
+    // The name decides, and its case does not matter.
+    assert!(matches!(
+        &contents[0].content[0],
+        AttachmentPart::Image(ImageData::StaticUrl(url)) if url == "https://x/file/1"
+    ));
+    // A video and an extensionless file are still named in text.
+    assert!(matches!(
+        &contents[1].content[0],
+        AttachmentPart::Content(_)
+    ));
+    assert!(matches!(
+        &contents[2].content[0],
+        AttachmentPart::Content(_)
+    ));
+}
+
+#[test]
+fn photoshop_documents_are_named_to_the_model_not_shown_as_images() {
+    // Browsers type `.psd` files as `image/vnd.adobe.photoshop`, but no image
+    // pipeline decodes a layered Photoshop document.
+    let prompt = UserPrompt::from_blocks(&[
+        link(
+            "poster.psd",
+            "https://x/file/1",
+            Some("image/vnd.adobe.photoshop"),
+        ),
+        link("big.psb", "https://x/file/2", None),
+    ]);
+    let attachments = prompt
+        .to_chat_message()
+        .attachments
+        .expect("the files attach");
+    for part in attachments.parts().iter() {
+        let content = part.as_ref().expect("links resolve");
+        assert!(matches!(&content.content[0], AttachmentPart::Content(_)));
+    }
+}
+
+#[test]
+fn a_media_type_naming_another_medium_wins_over_the_name() {
+    // The composer classifies by media type first, so a file typed as video
+    // is a video however it is named - the model input must agree.
+    let prompt =
+        UserPrompt::from_blocks(&[link("thumb.png", "https://x/file/1", Some("video/mp4"))]);
+    let attachments = prompt
+        .to_chat_message()
+        .attachments
+        .expect("the file attaches");
+    let content = attachments.parts()[0].as_ref().expect("links resolve");
+    assert!(matches!(&content.content[0], AttachmentPart::Content(_)));
+}
+
+#[test]
+fn a_text_only_prompt_attaches_nothing() {
+    let message = UserPrompt::text("hi").to_chat_message();
+    assert_eq!(message.content.message_text(), "hi");
+    assert!(message.attachments.is_none());
+}
+
+#[test]
+fn a_plain_http_image_is_named_rather_than_handed_over_as_an_image_url() {
+    // Providers refuse http image URLs, and the attachment stays in history
+    // for the rest of the session - so it must never reach them as an image.
+    let prompt = UserPrompt::from_blocks(&[link(
+        "a.png",
+        "http://localhost:8100/file/1",
+        Some("image/png"),
+    )]);
+    let message = prompt.to_chat_message();
+    let attachments = message.attachments.expect("the file still attaches");
+    let content = attachments.parts()[0].as_ref().expect("links resolve");
+    let AttachmentPart::Content(text) = &content.content[0] else {
+        panic!(
+            "an http image is described, not embedded: {:?}",
+            content.content[0]
+        );
+    };
+    assert!(text.contains("a.png") && text.contains("http://localhost:8100/file/1"));
+}
+
+#[test]
+fn image_names_and_source_uris_reach_the_model_after_history_replay() {
+    use agent_client_protocol::RawJsonRpcMessage;
+    use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage};
+    use agent_session::domain::model::Message;
+
+    for uri in [
+        "https://local.example.test/static-file/file/00000000-0000-4000-8000-000000000001",
+        "https://external.example/photo.png",
+    ] {
+        let prompt = PromptRequest::new(
+            SessionId::new("replayed-session"),
+            vec![link("reference-photo.png", uri, Some("image/png"))],
+        );
+        let raw: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "session/prompt",
+            "params": prompt,
+        }))
+        .expect("logged request");
+        let history = crate::domain::replay::replay_history([Message::ToRuntime(
+            ToRuntimeMessage::Acp(AcpMessage(raw)),
+        )]);
+        let messages = messages_for_turn(&history, &UserPrompt::text("use that reference"));
+        let serialized = serde_json::to_string(&agent::to_rig_messages(&messages))
+            .expect("model messages serialize");
+        assert!(serialized.contains("image_file_name: reference-photo.png"));
+        assert!(serialized.contains(&format!("image_source_uri: {uri}")));
+        assert!(!serialized.contains("static_file_id"));
+    }
+}
+
+#[test]
+fn a_summary_reaches_the_model_as_history_it_already_acted_on() {
+    let history = [
+        HistoryEntry::Summary("The user picked blue.".to_owned()),
+        user("now red"),
+    ];
+
+    let messages = messages_for_turn(&history, &UserPrompt::text("why?"));
+
+    let texts: Vec<_> = messages
+        .iter()
+        .map(|message| (message.role, message.content.message_text_with_tools()))
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            (Role::User, SUMMARY_PREAMBLE.to_owned()),
+            (Role::Assistant, "The user picked blue.".to_owned()),
+            (Role::User, "now red".to_owned()),
+            (Role::User, "why?".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn a_summary_replaces_its_entries_and_the_earlier_summary_among_them() {
+    let mut history = vec![
+        HistoryEntry::Summary("Before.".to_owned()),
+        user("one"),
+        user("two"),
+        user("three"),
+    ];
+
+    splice_summary(&mut history, "Up to two.".to_owned(), 3);
+
+    let text = |entries: &[HistoryEntry]| -> Vec<String> {
+        entries
+            .iter()
+            .map(|entry| match entry {
+                HistoryEntry::User { prompt, .. } => prompt.text.clone(),
+                HistoryEntry::Summary(summary) => format!("[{summary}]"),
+                HistoryEntry::Assistant(_) => "assistant".to_owned(),
+            })
+            .collect()
+    };
+    assert_eq!(text(&history), ["[Up to two.]", "three"]);
+
+    // A log shorter than the live history it was written from replaces
+    // what it has.
+    splice_summary(&mut history, "All.".to_owned(), 9);
+    assert_eq!(text(&history), ["[All.]"]);
+}
+
+#[test]
+fn a_turn_ends_where_the_next_prompt_starts() {
+    let history = [
+        HistoryEntry::Summary("Before.".to_owned()),
+        user("one"),
+        reply("1"),
+        user("two"),
+        user("three"),
+        reply("3"),
+    ];
+    let end = |id: &str| end_of_turn(&history, &RequestId::Str(id.to_owned()));
+
+    assert_eq!(end("one"), Some(3), "after its reply");
+    assert_eq!(end("two"), Some(4), "a turn without a reply is its prompt");
+    assert_eq!(end("three"), Some(6), "the last turn ends the history");
+    assert_eq!(end("four"), None, "no such prompt");
+}

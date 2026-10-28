@@ -8,8 +8,9 @@ pub async fn patch_seen(
     sqlx::query!(
         r#"
         UPDATE user_notification
-        SET seen_at = NOW()
-        WHERE notification_id = $1 AND user_id = $2
+        SET state = CASE WHEN state = 'unseen' THEN 'seen'::notification_state ELSE state END,
+            seen_at = COALESCE(seen_at, NOW())
+        WHERE notification_id = $1 AND user_id = $2 AND deleted_at IS NULL
         "#,
         macro_uuid::string_to_uuid(notification_id)?,
         user_id,
@@ -29,9 +30,12 @@ pub async fn bulk_patch_seen(
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        UPDATE user_notification un SET seen_at = NOW()
+        UPDATE user_notification un
+        SET state = CASE WHEN state = 'unseen' THEN 'seen'::notification_state ELSE state END,
+            seen_at = COALESCE(seen_at, NOW())
         WHERE un.user_id = $1
         AND un.notification_id = ANY($2)
+        AND un.deleted_at IS NULL
         "#,
         user_id,
         notification_ids,

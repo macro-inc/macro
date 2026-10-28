@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Call invitation</title></head>
+<body style="font-family:Arial,sans-serif;color:#171717;padding:32px;line-height:1.6">
+  <p>{{ self.sender_display() }} invited you to a Macro call.</p>
+  <h1 style="font-size:24px">{{ title }}</h1>
+  <p><a href="{{ self.join_url() }}" style="display:inline-block;padding:10px 20px;background:#171717;color:white;border-radius:8px;text-decoration:none">Join call</a></p>
+  <p>No Macro account needed. Enter your name to join.</p>
+  <p>Call link: <a href="{{ self.join_url() }}">{{ self.join_url() }}</a></p>
+  <p style="color:#666;font-size:12px">Calls may be recorded and transcribed for the organizer and Macro participants.</p>
+</body></html>

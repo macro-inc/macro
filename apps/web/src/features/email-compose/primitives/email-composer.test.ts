@@ -1,0 +1,420 @@
+import { createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { message } from '../../email-message/tests/messages';
+import { decodeBase64Utf8 } from '../core/decode-base64';
+import { createComposeContext } from '../tests/capabilities';
+import { mountEmailComposer } from '../tests/composer';
+
+// Keep the scheduling fixtures in the future regardless of the wall clock.
+beforeEach(() => vi.useFakeTimers({ now: new Date('2026-09-01T12:00:00Z') }));
+afterEach(() => vi.useRealTimers());
+
+function hoursFromNow(hours: number): Date {
+  return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
+// Real controller and editor, with only feature capabilities replaced.
+describe('standalone compose controller', () => {
+  it.each([
+    {
+      initialInboxId: undefined,
+      expectedId: 'inbox',
+      expectedAddress: 'me@example.com',
+    },
+    {
+      initialInboxId: 'work',
+      expectedId: 'work',
+      expectedAddress: 'work@example.com',
+    },
+  ])(
+    'uses $expectedAddress as the initial sender and saves to that inbox',
+    async ({ initialInboxId, expectedId, expectedAddress }) => {
+      const context = createComposeContext();
+      context.accounts.inboxes = () => [
+        { id: 'work', email_address: 'work@example.com', settings: {} },
+        { id: 'inbox', email_address: 'me@example.com', settings: {} },
+      ];
+      const root = mountEmailComposer(context, undefined, { initialInboxId });
+      try {
+        expect(root.state.context.fromAddress?.()).toBe(expectedAddress);
+        root.edit('Save with the selected sender');
+        await vi.advanceTimersByTimeAsync(600);
+        expect(context.drafts.saveDraft).toHaveBeenCalledWith(
+          expect.objectContaining({ inboxId: expectedId })
+        );
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
+  it('blocks sending when an explicit initial inbox cannot be resolved', async () => {
+    const context = createComposeContext();
+    const root = mountEmailComposer(context, undefined, {
+      initialInboxId: 'removed-inbox',
+    });
+    try {
+      root.edit('Send only from the selected inbox');
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(600);
+
+      expect(root.state.context.fromAddress?.()).toBeUndefined();
+      expect(root.state.context.validationError('no_link')).toMatchObject({
+        type: 'no_link',
+        message: 'Unable to find linked email account. Select a sending inbox.',
+      });
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it.each(['initial', 'draft'])(
+    'handles a missing %s sender without retargeting an inaccessible saved draft',
+    async (source) => {
+      const context = createComposeContext();
+      const root = mountEmailComposer(
+        context,
+        undefined,
+        source === 'draft'
+          ? {
+              draft: message('existing-draft', {
+                is_draft: true,
+                link_id: 'removed-inbox',
+              }),
+            }
+          : { initialInboxId: 'removed-inbox' }
+      );
+      try {
+        root.state.context.setRecipients('to', [
+          {
+            kind: 'custom',
+            id: 'colleague@example.com',
+            data: {
+              id: 'colleague@example.com',
+              email: 'colleague@example.com',
+              invalid: false,
+            },
+          },
+        ]);
+        root.edit('Keep this message');
+        root.state.context.onSend();
+        expect(root.state.context.validationError('no_link')).toBeDefined();
+        expect(root.state.hasInboxError()).toBe(false);
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+
+        root.state.context.onSelectInbox?.('inbox');
+        await vi.advanceTimersByTimeAsync(0);
+
+        if (source === 'draft') {
+          expect(root.state.context.validationError('no_link')).toBeDefined();
+          expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+            'Reconnect the draft’s original inbox before changing its sender.',
+            expect.anything()
+          );
+          expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+          expect(context.drafts.transferDraft).not.toHaveBeenCalled();
+          return;
+        }
+        expect(root.state.context.validationError('no_link')).toBeUndefined();
+        expect(root.state.context.fromAddress?.()).toBe('me@example.com');
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ inboxId: 'inbox' })
+        );
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
+  it.each([undefined, 'missing-primary'])(
+    'falls back to the first inbox without an explicit selection when primary is %s',
+    async (primaryId) => {
+      const context = createComposeContext();
+      context.accounts.primaryId = () => primaryId;
+      const root = mountEmailComposer(context);
+      try {
+        root.edit('Use the default sender');
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(root.state.context.fromAddress?.()).toBe('me@example.com');
+        expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+        expect(context.delivery.sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ inboxId: 'inbox' })
+        );
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
+  it('keeps a draft sender instead of the initial inbox and still allows a sender change', async () => {
+    const context = createComposeContext();
+    context.accounts.inboxes = () => [
+      { id: 'inbox', email_address: 'me@example.com', settings: {} },
+      { id: 'work', email_address: 'work@example.com', settings: {} },
+    ];
+    const root = mountEmailComposer(context, undefined, {
+      draft: message('existing-draft', {
+        is_draft: true,
+        link_id: 'work',
+        from: { email: 'work@example.com' },
+      }),
+      initialInboxId: 'inbox',
+    });
+    try {
+      expect(root.state.context.fromAddress?.()).toBe('work@example.com');
+      root.state.context.onSelectInbox?.('inbox');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.fromAddress?.()).toBe('me@example.com');
+      expect(context.drafts.transferDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          draftId: 'draft',
+          sourceInboxId: 'work',
+          destinationInboxId: 'inbox',
+        })
+      );
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it.each(['inbox', 'work'])(
+    'persists an alias selected in %s after any required inbox transfer',
+    async (inboxId) => {
+      const context = createComposeContext();
+      context.accounts.inboxes = () => [
+        {
+          id: 'inbox',
+          email_address: 'me@example.com',
+          sendAs: [{ email_address: 'alias@example.com' }],
+          settings: {},
+        },
+        {
+          id: 'work',
+          email_address: 'work@example.com',
+          sendAs: [{ email_address: 'alias@example.com' }],
+          settings: {},
+        },
+      ];
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async () => ({
+        draftId: 'saved-draft',
+        threadId: 'saved-thread',
+        inboxId,
+      }));
+      const root = mountEmailComposer(context);
+      try {
+        root.edit('Send from my selected alias');
+        root.state.context.onSelectInbox?.(inboxId, 'alias@example.com');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.drafts.saveDraft).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            inboxId,
+            draft: expect.objectContaining({
+              sender_email: 'alias@example.com',
+            }),
+          })
+        );
+        expect(root.state.context.fromAddress?.()).toBe('alias@example.com');
+        if (inboxId === 'inbox') {
+          expect(context.drafts.transferDraft).not.toHaveBeenCalled();
+        } else {
+          expect(context.drafts.transferDraft).toHaveBeenCalledWith(
+            expect.objectContaining({
+              sourceInboxId: 'inbox',
+              destinationInboxId: 'work',
+            })
+          );
+        }
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
+  it('saves a composed draft after debounce and preserves the recipients and HTML', async () => {
+    const context = createComposeContext();
+    const root = mountEmailComposer(context);
+    try {
+      root.edit('Keep this draft', 'Architecture');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      const { draft } = vi.mocked(context.drafts.saveDraft).mock.calls[0][0];
+      expect(draft.to).toEqual([
+        expect.objectContaining({ email: 'colleague@example.com' }),
+      ]);
+      expect(draft.subject).toBe('Architecture');
+      expect(decodeBase64Utf8(draft.body_html ?? '')).toContain(
+        'Keep this draft'
+      );
+      expect(root.state.context.hasDraft()).toBe(true);
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it('prefills a new message whose generated attachment saves with the first edit', async () => {
+    const context = createComposeContext();
+    const ics = new File(['BEGIN:VCALENDAR'], 'Team sync.ics', {
+      type: 'text/calendar',
+    });
+    const root = mountEmailComposer(context, undefined, {
+      initialSubject: 'Team sync',
+      initialBodyText: 'Team sync\nWhere: Room 4',
+      initialAttachments: [ics],
+    });
+    try {
+      expect(root.state.context.subject()).toBe('Team sync');
+      expect(root.state.context.initialHtml()).toContain('Where: Room 4');
+      expect(root.state.context.attachments()).toEqual([]);
+
+      root.state.context.onEditorInitialized?.(root.editor);
+      root.state.context.onEditorInitialized?.(root.editor);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(root.state.context.attachments()).toEqual([
+        { type: 'local', file: ics },
+      ]);
+      expect(root.state.draftDirty()).toBe(false);
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+
+      root.edit('Passing this on', 'Team sync');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(context.attachmentStorage.uploadAttachments).toHaveBeenCalledWith(
+        expect.objectContaining({ attachments: [ics] })
+      );
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it('attaches a generated file once the outbox stops locking the composer', async () => {
+    const context = createComposeContext();
+    const [locked, setLocked] = createSignal(true);
+    context.delivery.sendLocked = locked;
+    const ics = new File(['BEGIN:VCALENDAR'], 'Team sync.ics');
+    const root = mountEmailComposer(context, undefined, {
+      initialAttachments: [ics],
+    });
+    try {
+      root.state.context.onEditorInitialized?.(root.editor);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.attachments()).toEqual([]);
+
+      setLocked(false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.attachments()).toEqual([
+        { type: 'local', file: ics },
+      ]);
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it('offers a generated attachment over the inbox limit as a link, like a picked file', async () => {
+    const context = createComposeContext();
+    const oversized = new File(['x'], 'Team sync.ics');
+    Object.defineProperty(oversized, 'size', { value: 30_000_000 });
+    const root = mountEmailComposer(context, undefined, {
+      initialAttachments: [oversized],
+    });
+    try {
+      root.state.context.onEditorInitialized?.(root.editor);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.attachments()).toEqual([]);
+      expect(context.notices.confirm).toHaveBeenCalledWith(
+        expect.objectContaining({ confirmLabel: 'Share link' })
+      );
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it('rejects an empty body in an otherwise ready composer and sends once content is added', async () => {
+    const context = createComposeContext();
+    const root = mountEmailComposer(context);
+    try {
+      root.state.context.setSubject('Review');
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.validationError('no_message')).toMatchObject({
+        type: 'no_message',
+        message: 'Please enter a message',
+      });
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      root.edit('Ready to send');
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it('keeps a picked time local and preserves it when explicit scheduling fails', async () => {
+    const context = createComposeContext();
+    const root = mountEmailComposer(context);
+    try {
+      root.edit('Schedule this reply', 'Schedule review');
+      const requested = hoursFromNow(24);
+      vi.mocked(context.delivery.schedule).mockRejectedValueOnce(
+        new Error('offline')
+      );
+      expect(root.state.context.schedule.onSelect(requested)).toBe(true);
+      expect(root.state.context.schedule.selectedTime()).toEqual(requested);
+      expect(context.delivery.schedule).not.toHaveBeenCalled();
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.schedule.selectedTime()).toEqual(requested);
+      expect(root.state.context.schedule.state().type).toBe('editing');
+      expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+        'Failed to schedule email'
+      );
+      vi.mocked(context.delivery.archive).mockRejectedValueOnce(
+        new Error('archive offline')
+      );
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.schedule.confirmedTime()).toEqual(requested);
+      expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+        'Email scheduled, but unable to mark thread done'
+      );
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it('blocks immediate send and overlapping changes while a scheduling request is pending', async () => {
+    const pending = Promise.withResolvers<void>();
+    const context = createComposeContext();
+    vi.mocked(context.delivery.schedule).mockReturnValue(pending.promise);
+    const root = mountEmailComposer(context);
+    try {
+      root.edit('Schedule this reply', 'Schedule review');
+      root.state.context.schedule.onSelect(hoursFromNow(24));
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.delivery.schedule).toHaveBeenCalledOnce();
+      expect(root.state.context.disabled()).toBe(true);
+      root.state.context.onSend();
+      expect(root.state.context.schedule.onSelect(hoursFromNow(48))).toBe(
+        false
+      );
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      expect(context.delivery.schedule).toHaveBeenCalledOnce();
+      pending.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.context.disabled()).toBe(true);
+      expect(root.state.context.sendUnavailableReason?.()).toContain(
+        'Scheduled for'
+      );
+      expect(root.state.draftDirty()).toBe(true);
+    } finally {
+      pending.resolve();
+      root.dispose();
+    }
+  });
+});

@@ -1,5 +1,5 @@
+import type { MessageActions, MessageData } from '@core/messages/types';
 import { type Accessor, createContext, useContext } from 'solid-js';
-import type { MessageActions, MessageData } from './types';
 
 const MessageContext = createContext<Accessor<MessageData>>();
 const MessageActionsContext = createContext<MessageActions>();
@@ -18,12 +18,23 @@ export type SearchHighlightTermsLookup = (
 
 const SearchHighlightTermsContext = createContext<SearchHighlightTermsLookup>();
 
+/**
+ * Hosts with narrow message cards (document margin comments) cap long message
+ * bodies behind "Show more". Channels and other full-width timelines leave it off.
+ */
+const CollapseLongContentContext = createContext(false);
+
 export const MessageProvider = MessageContext.Provider;
 export const MessageActionsProvider = MessageActionsContext.Provider;
 export const MessageActionMenuVisibilityProvider =
   MessageActionMenuVisibilityContext.Provider;
 export const SearchHighlightTermsProvider =
   SearchHighlightTermsContext.Provider;
+export const CollapseLongContentProvider = CollapseLongContentContext.Provider;
+
+export function useCollapseLongContent(): boolean {
+  return useContext(CollapseLongContentContext);
+}
 
 export function useSearchHighlightTermsLookup():
   | SearchHighlightTermsLookup

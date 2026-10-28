@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sequence, units FROM ai_funding_prepaid_release WHERE payer_id = $1 AND through_sequence >= $2 ORDER BY sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "units",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "bd362b7bde0271e53c2e9d10f9597cc8e8e05fd48832d0c4727e8f61c92e50aa"
+}

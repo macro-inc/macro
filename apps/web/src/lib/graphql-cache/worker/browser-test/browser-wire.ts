@@ -1,3 +1,5 @@
+import type { EngineOpenOutcome } from '../coordinator-protocol';
+
 export type BrowserHarnessCommand =
   | { kind: 'write'; commandId: string; value: string }
   | { kind: 'read'; commandId: string }
@@ -26,7 +28,11 @@ export type BrowserHarnessEnvelope =
         | { kind: 'registered' }
         | { kind: 'worker-created'; ownerEpoch: number }
         | { kind: 'worker-terminated'; ownerEpoch: number; reason: string }
-        | { kind: 'engine-replaced'; ownerEpoch: number }
+        | {
+            kind: 'engine-replaced';
+            ownerEpoch: number;
+            openOutcome: EngineOpenOutcome;
+          }
         | { kind: 'cache-push'; pushKind: string }
         | {
             kind: 'command-result';

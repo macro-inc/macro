@@ -4,14 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupForeignEntity } from './soupForeignEntity';
+import type { SoupCrmCompanySoupPropertiesField } from './soupCrmCompanySoupPropertiesField';
 import type { SoupItemOneOfOnenineTag } from './soupItemOneOfOnenineTag';
 
 /**
- * Foreign entity item.
+ * CRM company item.
  */
 export type SoupItemOneOfOnenine = {
-  /** Foreign entity item. */
-  data: SoupForeignEntity;
+  /** CRM company item. */
+  data: SoupCrmCompanySoupPropertiesField;
   tag: SoupItemOneOfOnenineTag;
 };

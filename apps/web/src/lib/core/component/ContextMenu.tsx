@@ -1,8 +1,8 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
-import CheckIcon from '@phosphor/check.svg?component-solid';
 import {
   addCtrlJKMenuNavigation,
   cn,
@@ -12,6 +12,7 @@ import {
 import { Hotkey } from '@ui/components/Hotkey';
 import {
   type Component,
+  type ComponentProps,
   createEffect,
   type JSX,
   Match,
@@ -19,6 +20,7 @@ import {
   type ParentProps,
   Show,
   Switch,
+  splitProps,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -26,7 +28,9 @@ import { Dynamic } from 'solid-js/web';
  * ContextMenu-only abstractions. The DropdownMenu equivalents that used to
  * live alongside these (in the old `Menu.tsx`) have been retired in favor of
  * `@ui` `Dropdown`. Right-click menus still use this file because they need
- * separate behavior + positioning from the click-triggered Dropdown.
+ * separate behavior + positioning from the click-triggered Dropdown. The
+ * content wrapper also accepts a click-menu content component when a surface
+ * (such as sidebar Search) should match the context menus.
  */
 
 type BaseMenuItemWrapperProps = {
@@ -272,19 +276,42 @@ export function MenuGroup(props: { children: JSX.Element; class?: string }) {
   );
 }
 
-export function GroupLabel(props: { children: JSX.Element }) {
+/**
+ * Solid delegates a portal's events to where it sits in the component tree,
+ * so an editor portaled out of a trigger would open the trigger's menu and
+ * lose its native one.
+ */
+const ignorePortaledEvents = (
+  event: Event & { currentTarget: HTMLElement }
+) => {
+  if (
+    !(event.target instanceof Node) ||
+    !event.currentTarget.contains(event.target)
+  )
+    event.stopPropagation();
+};
+
+/** Kobalte's context-menu trigger, ignoring events from portaled content. */
+export function ContextMenuTrigger(
+  props: ComponentProps<typeof ContextMenu.Trigger>
+) {
+  const [local, others] = splitProps(props, ['children']);
   return (
-    <ContextMenu.GroupLabel
-      class={cn(MENU_ITEM_CLASS, 'text-xs! text-ink-extra-muted')}
-    >
-      {props.children}
-    </ContextMenu.GroupLabel>
+    <ContextMenu.Trigger {...others}>
+      <div
+        class="contents"
+        onContextMenu={ignorePortaledEvents}
+        onPointerDown={ignorePortaledEvents}
+      >
+        {local.children}
+      </div>
+    </ContextMenu.Trigger>
   );
 }
 
 export function MenuSeparator() {
   return (
-    <ContextMenu.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge" />
+    <ContextMenu.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge-divider" />
   );
 }
 
@@ -302,10 +329,12 @@ function MobileConditionalOverlay(
 
 const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu ${MENU_SURFACE_SCOPE} shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+export const MENU_CONTENT_CLASS = `menu-surface flex flex-col justify-start items-start p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
+  /** Reuse the surface with click-menu dismissal and focus behavior. */
+  contentComponent?: typeof ContextMenu.Content;
   submenu?: boolean;
   onOpenAutoFocus?: (event: Event) => void;
   onCloseAutoFocus?: (event: Event) => void;
@@ -410,7 +439,8 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         when={props.submenu}
         fallback={
           <Layer depth={2}>
-            <ContextMenu.Content
+            <Dynamic
+              component={props.contentComponent ?? ContextMenu.Content}
               class={cn(
                 MENU_SURFACE_SCOPE,
                 !props.overrideStyling && MENU_CONTENT_CLASS,
@@ -425,7 +455,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
               {props.children}
-            </ContextMenu.Content>
+            </Dynamic>
           </Layer>
         }
       >

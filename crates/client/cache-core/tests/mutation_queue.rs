@@ -1,6 +1,8 @@
+use cache_core::predicate::OptimisticUpsertReconciliation;
 use cache_core::queue::{
-    MutationClaimRequest, MutationClaimToken, MutationRequest, NewQueuedMutation, OptimisticSource,
-    PersistedOptimisticLayer, StoredMutation, decode_optimistic_source, encode_optimistic_source,
+    MutationClaimRequest, MutationClaimToken, MutationRequest, MutationUpsertKind,
+    NewQueuedMutation, OptimisticSource, PersistedOptimisticLayer, StoredMutation,
+    decode_optimistic_source, encode_optimistic_source,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
@@ -14,6 +16,8 @@ use serde_json::json;
 #[test]
 fn optimistic_source_supports_versioned_and_legacy_json() {
     let source = OptimisticSource {
+        client_metadata: Some(json!({"kind": "email-draft", "revision": 10})),
+        identity_bindings: Vec::new(),
         mutation_data: json!({"rename": {"name": "next"}}),
         link_patches: Vec::new(),
         revalidations: Vec::new(),
@@ -47,6 +51,7 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
                 }],
             },
         ],
+        uncertain_calendar_event_keys: vec![EntityKey::entity("GraphqlCalendarEvent", &["e1"])],
     };
     assert_eq!(
         decode_optimistic_source(&encode_optimistic_source(&source)).unwrap(),
@@ -74,6 +79,14 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
         json!({"rename": {"name": "legacy"}})
     );
     assert!(legacy_v2.projection_mutations.is_empty());
+    assert!(legacy_v2.client_metadata.is_none());
+    let without_metadata = encode_optimistic_source(&OptimisticSource {
+        client_metadata: None,
+        uncertain_calendar_event_keys: Vec::new(),
+        ..source
+    });
+    assert!(!without_metadata.contains("clientMetadata"));
+    assert!(!without_metadata.contains("uncertainCalendarEventKeys"));
     assert!(
         decode_optimistic_source(
             r#"@macro-cache/optimistic-source:{"version":2,"mutationData":{},"projectionMutations":[]}"#,
@@ -89,6 +102,7 @@ fn queued(value: &str, created_at_ms: i64) -> NewQueuedMutation {
         .fields
         .insert("name".into(), CacheValue::String(value.into()));
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, value.as_bytes()),
         mutation: StoredMutation::new(
             MutationRequest {
                 query: "mutation Rename { rename { id } }".into(),
@@ -164,6 +178,61 @@ fn queue_diagnostics_are_payload_free_and_track_oldest() {
 }
 
 #[test]
+fn storage_upsert_reports_pending_and_active_uuid_collisions() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let uuid = uuid::Uuid::new_v4();
+        let mut first = queued("a", 1);
+        first.uuid = uuid;
+        let first = storage
+            .upsert_mutation_with_shadow(first, 1, OptimisticUpsertReconciliation::default())
+            .await
+            .unwrap();
+        assert_eq!(first.kind, MutationUpsertKind::Inserted);
+
+        let mut pending = queued("b", 2);
+        pending.uuid = uuid;
+        let pending = storage
+            .upsert_mutation_with_shadow(pending, 2, OptimisticUpsertReconciliation::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            pending.kind,
+            MutationUpsertKind::ReplacedPending {
+                removed_id: first.id
+            }
+        );
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 3,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed.queued.id, pending.id);
+
+        let mut active = queued("c", 4);
+        active.uuid = uuid;
+        let active = storage
+            .upsert_mutation_with_shadow(active, 4, OptimisticUpsertReconciliation::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            active.kind,
+            MutationUpsertKind::AppendedAfterActive {
+                active_id: pending.id
+            }
+        );
+        let queue = storage.load_mutation_queue().await.unwrap();
+        assert_eq!(queue.len(), 2);
+        assert!(queue[0].superseded);
+        assert_eq!(queue[1].id, active.id);
+    });
+}
+
+#[test]
 fn queue_claim_retry_and_settlement_are_ordered() {
     block_on(async {
         let mut storage = InMemoryStorage::new();
@@ -212,6 +281,7 @@ fn queue_claim_retry_and_settlement_are_ordered() {
                     },
                     200,
                     "offline".into(),
+                    false,
                 )
                 .await
                 .unwrap()

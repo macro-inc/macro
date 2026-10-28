@@ -110,13 +110,14 @@ VALUES
   );
 
 INSERT INTO
-  user_notification (user_id, notification_id, created_at, seen_at)
+  user_notification (user_id, notification_id, created_at, seen_at, state)
 VALUES
   (
     'macro|user@user.com',
     '0193b1ea-a542-7589-893b-2b4a509c1e73',
     '2019-10-18 00:00:00',
-    '2019-10-18 00:00:00'
+    '2019-10-18 00:00:00',
+    'seen'
   );
 
 

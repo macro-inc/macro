@@ -1,9 +1,10 @@
 import { IS_MAC } from '@core/constant/isMac';
+import { hotkeyScopeNeutralSelector } from '@core/dom-selectors';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { Telemetry } from '@macro-inc/observability';
 
-import { onCleanup, onMount, untrack } from 'solid-js';
+import { getOwner, onCleanup, onMount } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -14,9 +15,9 @@ import {
 } from './constants';
 import {
   activeScope,
+  findLastLiveActiveDOMScope,
   hotkeyScopeTree,
   hotkeysAwaitingKeyUp,
-  hotkeyTokenMap,
   pressedKeys,
   setActiveScope,
   setHotkeyTokenMap,
@@ -37,6 +38,7 @@ import {
   activateClosestDOMScope,
   findClosestParentScopeElement,
   findClosestParentScopeId,
+  getCommandsForHotkey,
   getKeyString,
   getScopeId,
   normalizeEventKeyPress,
@@ -87,7 +89,11 @@ import {
  * @param args.tags - Optional tags for categorizing in the command palette.
  * @returns An object with a dispose function to clean up the hotkey
  * registration. If `activateCommandScope` is true, it also includes the
- * `commandScopeId`.
+ * `commandScopeId`. When called under a reactive owner, the registration is
+ * also disposed automatically with that owner — commands can attach to scopes
+ * that outlive their registrant (block commands live on the split scope,
+ * which survives split navigation), so they must not depend on scope teardown
+ * for cleanup.
  *
  * @example
  * // Basic usage
@@ -131,9 +137,11 @@ export function registerHotkey(
     onHighlightEnd,
     tags,
     keywords,
+    sheetSection,
     surfaceNestedCommands,
     shouldReturnFocusOnClose,
     proxiedHotkey,
+    disposeWithOwner,
   } = args;
 
   const noopDisposer: RegisterHotkeyReturn = {
@@ -165,9 +173,11 @@ export function registerHotkey(
   // Convert single hotkey to array for consistent handling
   const hotkeys = hotkey && !Array.isArray(hotkey) ? [hotkey] : hotkey;
 
-  // Check for existing duplicate hotkeyToken for non-identical command
+  // Tokens are shared across scopes on purpose (a list and an open entity
+  // both bind entity.step.end), and getActiveCommandByToken resolves them by
+  // the active branch. Only a same-token command in this scope is a conflict.
   const existingCommand = hotkeyToken
-    ? untrack(() => hotkeyTokenMap().get(hotkeyToken)?.at(0))
+    ? scopeNode.commands.find((c) => c.hotkeyToken === hotkeyToken)
     : undefined;
   if (existingCommand && hotkeys && existingCommand.hotkeys) {
     // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
@@ -220,6 +230,7 @@ export function registerHotkey(
   const command: HotkeyCommand = {
     hotkeyToken,
     scopeId,
+    registrationType,
     hotkeys,
     condition,
     description,
@@ -237,24 +248,28 @@ export function registerHotkey(
     onHighlightEnd,
     tags,
     keywords,
+    sheetSection,
     surfaceNestedCommands,
     shouldReturnFocusOnClose,
     proxiedHotkey,
   };
 
-  // Check for existing hotkeys in the scope and warn if overriding
-  if (registrationType === 'override') {
-    hotkeys?.forEach((h) => {
-      const existingHandlers = scopeNode.hotkeyCommands.get(h);
-      if (existingHandlers && existingHandlers.length > 0) {
-        Telemetry.warn(
-          `Hotkey ${h} already registered in scope ${scopeId}. Previous hotkey is being overwritten.`,
-          {
-            error: 'Hotkey already registered in scope',
-          }
-        );
+  // An override re-registration of the same logical command — same token in
+  // this scope — replaces the old registration outright instead of stacking:
+  // persistent commands (disposeWithOwner: false) re-register on every mount
+  // of their view and must not accumulate eclipsed copies.
+  if (registrationType === 'override' && hotkeyToken) {
+    const replaced: HotkeyCommand[] = [];
+    for (let i = scopeNode.commands.length - 1; i >= 0; i--) {
+      const existingCommand = scopeNode.commands[i];
+      if (existingCommand && existingCommand.hotkeyToken === hotkeyToken) {
+        replaced.push(existingCommand);
+        scopeNode.commands.splice(i, 1);
       }
-    });
+    }
+    if (replaced.length > 0) {
+      setHotkeyTokenMap((prev) => removeCommandsFromTokenMap(prev, replaced));
+    }
   }
 
   if (hotkeyToken) {
@@ -266,22 +281,12 @@ export function registerHotkey(
     });
   }
 
-  if (scopeNode) {
-    // Register each hotkey with the same command
-    if (hotkeys) {
-      hotkeys.forEach((h) => {
-        const existingHandlers = scopeNode.hotkeyCommands.get(h) || [];
-        if (registrationType === 'add') {
-          scopeNode.hotkeyCommands.set(h, [...existingHandlers, command]);
-        } else {
-          // Override: replace with single-element array
-          scopeNode.hotkeyCommands.set(h, [command]);
-        }
-      });
-    } else {
-      scopeNode.unkeyedCommands.push(command);
-    }
-  }
+  // Commands append in registration order. An 'override' command eclipses
+  // the commands registered before it on its keys (see getCommandsForHotkey)
+  // rather than destroying them, so disposing it restores whatever it
+  // displaced — a block taking over a split-scope key does not permanently
+  // disable it.
+  scopeNode.commands.push(command);
 
   const primaryHotkey = hotkeys?.[0];
   const prettyHotkey = primaryHotkey
@@ -289,9 +294,15 @@ export function registerHotkey(
     : undefined;
 
   // Create disposer object
+  let disposed = false;
   const disposer: RegisterHotkeyReturn = {
     hotkey: () => prettyHotkey,
     dispose: () => {
+      // Idempotent: manual disposal (groups, effect re-runs) and the
+      // owner-bound auto-dispose below may both fire.
+      if (disposed) return;
+      disposed = true;
+
       // Remove from hotkey token map if it exists
       if (hotkeyToken) {
         setHotkeyTokenMap((prev) =>
@@ -299,31 +310,12 @@ export function registerHotkey(
         );
       }
 
-      // Remove this specific command from scope's hotkey handlers
+      // Remove this specific command from its scope
       const scope = hotkeyScopeTree.get(scopeId);
       if (scope) {
-        if (hotkeys) {
-          hotkeys.forEach((h) => {
-            const existingHandlers = scope.hotkeyCommands.get(h);
-            if (existingHandlers) {
-              const newHandlers = existingHandlers.filter((c) => c !== command);
-              if (newHandlers.length > 0) {
-                scope.hotkeyCommands.set(h, newHandlers);
-              } else {
-                scope.hotkeyCommands.delete(h);
-              }
-            }
-          });
-        } else {
-          // Unkeyed commands are pushed onto `unkeyedCommands` at registration
-          // (see above). Without this branch they leaked until the whole scope
-          // was removed — re-registering unkeyed commands (e.g. per-favorite
-          // command-menu entries) grew the list unboundedly and left ghost
-          // rows for removed/renamed entries.
-          const idx = scope.unkeyedCommands.indexOf(command);
-          if (idx !== -1) {
-            scope.unkeyedCommands.splice(idx, 1);
-          }
+        const idx = scope.commands.indexOf(command);
+        if (idx !== -1) {
+          scope.commands.splice(idx, 1);
         }
       }
 
@@ -338,6 +330,15 @@ export function registerHotkey(
       return disposer;
     },
   };
+
+  // A registration made under a reactive owner must not outlive it: the
+  // target scope can persist past the registrant (the split scope survives
+  // split navigation), and a leaked command would keep running with closures
+  // over unmounted state. `disposeWithOwner: false` opts out for commands
+  // meant to persist past their registrant (see HotkeyRegistrationOptions).
+  if (disposeWithOwner !== false && getOwner()) {
+    onCleanup(() => disposer.dispose());
+  }
 
   return disposer;
 }
@@ -531,7 +532,7 @@ export function useHotkeyDOMScope(
 }
 
 export function attachGlobalDOMScope(el: Element) {
-  const handleFocusIn = () => {
+  const handleFocusIn = (e: Event) => {
     window.clearTimeout(focusoutTimoutId);
 
     // just in case focusin fires before focusout
@@ -539,8 +540,35 @@ export function attachGlobalDOMScope(el: Element) {
       window.clearTimeout(focusoutTimoutId);
     });
 
+    // Focus landing in a neutral region (e.g. the sidebar) must not flip the
+    // scope to 'global': that would mute every split/block command just
+    // because the user clicked chrome that lives outside the splits. Overlays
+    // without a scope of their own (dialogs, menus) are not neutral on
+    // purpose — activating 'global' is what mutes app hotkeys beneath them.
+    const isNeutralTarget =
+      e.target instanceof Element &&
+      e.target.closest(hotkeyScopeNeutralSelector) !== null;
+
     if (!scopeActivatedByFocusIn) {
-      setActiveScope('global');
+      if (isNeutralTarget) {
+        // A neutral region preserves a live scope but must not preserve a
+        // decayed one. Opening an overlay from the sidebar moves focus into
+        // a body portal (activating 'global'), and closing it returns focus
+        // to the trigger; overlays that own a scope (the launcher) also
+        // remove it on close. When the current scope is 'global' or gone,
+        // restore the most recent live DOM scope instead.
+        const currentScopeId = activeScope();
+        const currentIsLive =
+          currentScopeId !== 'global' && hotkeyScopeTree.has(currentScopeId);
+        if (!currentIsLive) {
+          const lastLiveScope = findLastLiveActiveDOMScope();
+          if (lastLiveScope) {
+            setActiveScope(lastLiveScope);
+          }
+        }
+      } else {
+        setActiveScope('global');
+      }
     }
     scopeActivatedByFocusIn = false;
   };
@@ -573,7 +601,21 @@ export function useHotKeyRoot() {
   let onHotkeyInterceptor: ((context: HotkeyInterceptorContext) => boolean)[] =
     [];
 
+  // Synthetic keyboard events must not reach the hotkey system: several
+  // components dispatch keydowns to drive Kobalte (e.g.
+  // highlightFirstMenuItemOnOpen sends ArrowDown, with no paired keyup), and a
+  // keydown without its keyup leaves a phantom key stuck in pressedKeys that
+  // makes every subsequent plain-key hotkey resolve to e.g. 'arrowdown+j'
+  // until a modifier keyup clears the set. Tests simulate keypresses with
+  // dispatched (untrusted) events, so they stay exempt. Chrome autofill
+  // dispatches trusted keydown/keyup events with no `key`; they are not key
+  // presses either.
+  const shouldIgnoreKeyEvent = (e: KeyboardEvent) =>
+    typeof e.key !== 'string' ||
+    (!e.isTrusted && import.meta.env.MODE !== 'test');
+
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (shouldIgnoreKeyEvent(e)) return;
     document.documentElement.dataset.modality = 'keyboard';
     const key = normalizeEventKeyPress(e);
 
@@ -615,6 +657,7 @@ export function useHotKeyRoot() {
   };
 
   const handleKeyUp = (e: KeyboardEvent) => {
+    if (shouldIgnoreKeyEvent(e)) return;
     const key = normalizeEventKeyPress(e);
 
     // if we are releasing a modifier key, release all keys, because the user may have triggered some broswer or os shortcut
@@ -690,8 +733,8 @@ export function useHotKeyRoot() {
     let commandScopeActivated = false;
 
     while (scopeNode) {
-      const commands = scopeNode.hotkeyCommands.get(pressedKeysString);
-      if (commands && commands.length > 0) {
+      const commands = getCommandsForHotkey(scopeNode, pressedKeysString);
+      if (commands.length > 0) {
         // Sort commands by handlerPriority (higher priority first)
         const sortedCommands = [...commands].sort(
           (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
@@ -766,9 +809,6 @@ export function useHotKeyRoot() {
       commandFound: !!commandCaptured,
       commandCaptured: commandCaptured,
       eventType: e.type as 'keydown' | 'keyup',
-      isNonModifierKeypress: ![...currentPressedKeys].every((key) =>
-        ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
-      ),
     };
 
     // Notify all subscribers with the context

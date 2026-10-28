@@ -16,8 +16,10 @@ use entity_mutation::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
 use model_entity::{Entity, EntityType};
+use model_owner::CreationPrincipal;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
+use crate::domain::ports::sync::DocumentSyncPort;
 use connection::domain::ports::ConnectionService;
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use foreign_entity::domain::ports::ForeignEntityService;
@@ -80,7 +82,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> RenameEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> RenameEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -116,7 +119,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> MoveEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> MoveEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -167,7 +171,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> UpdateEntitySharePolicy for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> UpdateEntitySharePolicy for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -203,7 +208,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> TrashEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> TrashEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -238,7 +244,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> DuplicateEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> DuplicateEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -254,8 +261,9 @@ where
         let document = self.internal_get_basic_document(&entity.entity_id).await?;
         let display_name =
             display_name.unwrap_or_else(|| format!("{} copy", document.document_name));
+        let principal = CreationPrincipal::User(user_id);
         let response = self
-            .copy_document(receipt, document, user_id, display_name, None, None)
+            .copy_document(receipt, document, &principal, display_name, None, None)
             .await?;
         Ok(vec![EntityMutationEffect::updated(
             EntityType::Document

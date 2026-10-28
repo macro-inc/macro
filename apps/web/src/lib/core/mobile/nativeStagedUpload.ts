@@ -1,3 +1,4 @@
+import { contentHash } from '@core/util/hash';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 /**
@@ -9,7 +10,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
  * URL.
  */
 
-export type NativeStagedUploadSource = 'pasteboard' | 'photo-library';
+export type NativeStagedUploadSource = 'pasteboard' | 'photo-library' | 'share';
 
 export type NativeStagedUploadData = {
   token: string | null;
@@ -17,6 +18,7 @@ export type NativeStagedUploadData = {
   mimeType: string | null;
   size: number | null;
   previewPath: string | null;
+  sha256?: string;
 };
 
 export type NativeStagedUpload = {
@@ -26,6 +28,7 @@ export type NativeStagedUpload = {
   mimeType: string;
   size: number;
   previewSrc?: string;
+  sha256?: string;
 };
 
 const nativeStagedUploads = new WeakMap<File, NativeStagedUpload>();
@@ -45,6 +48,7 @@ export function createNativeStagedUploadFile(
     name: media.name,
     mimeType: media.mimeType,
     size: media.size,
+    sha256: media.sha256,
     previewSrc: media.previewPath
       ? convertFileSrc(media.previewPath)
       : undefined,
@@ -64,12 +68,72 @@ export function getNativeStagedUpload(
  */
 export async function uploadNativeStagedFileToPresignedUrl(
   file: NativeStagedUpload,
-  uploadUrl: string
+  uploadUrl: string,
+  checksumSha256?: string
 ): Promise<void> {
   await invoke('upload_staged_file_to_presigned_url', {
     source: file.source,
     token: file.token,
     uploadUrl,
     mimeType: file.mimeType,
+    checksumSha256,
   });
+}
+
+/** Native placeholders have no JS bytes; use their staged byte count for limits. */
+export function getUploadFileSize(file: File): number {
+  return getNativeStagedUpload(file)?.size ?? file.size;
+}
+
+/**
+ * Android staging supplies a digest. The iOS plugins stage the original bytes
+ * but no digest, so hash them through the asset protocol; this pulls the file
+ * into JS memory once and caches the result for retries.
+ */
+export async function getNativeStagedUploadChecksum(
+  file: NativeStagedUpload
+): Promise<string> {
+  if (file.sha256) return file.sha256;
+  if (!file.previewSrc) throw new Error('Native attachment bytes unavailable');
+  // Use the WebView's asset protocol, not the native HTTP client, for local files.
+  const response = await fetch(file.previewSrc);
+  if (!response.ok) throw new Error('Unable to read native attachment');
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength !== file.size)
+    throw new Error('Native attachment size mismatch');
+  file.sha256 = await contentHash(bytes);
+  return file.sha256;
+}
+
+/** Either JS bytes or a native staged file, with the fields uploads need. */
+export type UploadSource =
+  | { kind: 'bytes'; buffer: ArrayBuffer; sha: string; size: number }
+  | { kind: 'staged'; staged: NativeStagedUpload; sha: string; size: number };
+
+export async function resolveUploadSource(file: File): Promise<UploadSource> {
+  const staged = getNativeStagedUpload(file);
+  if (staged) {
+    const sha = await getNativeStagedUploadChecksum(staged);
+    return { kind: 'staged', staged, sha, size: staged.size };
+  }
+  const buffer = await file.arrayBuffer();
+  return {
+    kind: 'bytes',
+    buffer,
+    sha: await contentHash(buffer),
+    size: file.size,
+  };
+}
+
+/** S3 expects the native SHA-256 digest as base64 rather than hexadecimal. */
+export function nativeUploadChecksum(sha256: string): string {
+  if (!/^[a-f0-9]{64}$/i.test(sha256))
+    throw new Error('Invalid staged file checksum');
+  let binary = '';
+  for (let index = 0; index < sha256.length; index += 2) {
+    binary += String.fromCharCode(
+      Number.parseInt(sha256.slice(index, index + 2), 16)
+    );
+  }
+  return btoa(binary);
 }

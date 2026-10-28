@@ -16,15 +16,14 @@ pub enum ForeignEntityLiteral {
     /// Filter by the external source name.
     #[serde(rename = "fes")]
     ForeignEntitySource(String),
-    /// Filter to entities whose metadata participant list contains the requesting user.
+    /// The requesting user takes part in the record. For GitHub pull requests this is the pull
+    /// request filter's `inv` literal for the user's linked GitHub id; the generic foreign entity
+    /// listing matches nothing.
     #[serde(rename = "me")]
     IncludesMe,
-    /// Filter by the requesting user's notification done state for this foreign entity.
-    #[serde(rename = "nd")]
-    NotificationDone(bool),
-    /// Filter by the requesting user's notification seen state for this foreign entity.
+    /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
-    NotificationSeen(bool),
+    NotificationState(crate::NotificationState),
 }
 
 impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
@@ -56,20 +55,18 @@ impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
 
         let includes_me = includes_me.then_some(Expr::Literal(ForeignEntityLiteral::IncludesMe));
 
-        let notification_done = notification_filters
-            .done
-            .map(|done| Expr::Literal(ForeignEntityLiteral::NotificationDone(done)));
-        let notification_seen = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(ForeignEntityLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(ForeignEntityLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         Ok([
             ids,
             foreign_entity_ids,
             foreign_entity_sources,
             includes_me,
-            notification_done,
-            notification_seen,
+            notification_state_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

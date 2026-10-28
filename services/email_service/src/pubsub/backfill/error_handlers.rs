@@ -1,18 +1,16 @@
+use crate::pubsub::backfill::deferral;
 use crate::pubsub::backfill::increment_counters::{
     incr_completed_messages, incr_completed_threads,
 };
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
-use calendar_events::domain::{
-    models::{CalendarBackfillFailureDisposition, CalendarBackfillJobKey},
-    service::GoogleCalendarBackfillRunError,
-};
 use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason, LinkManagerMessage};
+use models_email::email::service::pubsub::{DetailedError, FailureReason};
 use sqs_worker::cleanup_message;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Handles non-retryable errors by updating the appropriate status in the database and cleaning up the SQS message
@@ -62,46 +60,6 @@ pub async fn handle_non_retryable_error(
             })
             .ok();
         }
-        BackfillOperation::CalendarGoogleBackfill(scope) => {
-            let coordinator_reauth_transitioned = coordinator_reauth_edge(&e.source);
-            let prelease_reauth_transitioned = if coordinator_reauth_transitioned.is_none() {
-                let disposition = if e.reason == FailureReason::AccessTokenFetchFailed {
-                    CalendarBackfillFailureDisposition::ReauthRequired
-                } else {
-                    CalendarBackfillFailureDisposition::Permanent
-                };
-                ctx.calendar_backfills
-                    .google_failure
-                    .fail_unclaimed(
-                        CalendarBackfillJobKey {
-                            job_id: scope.payload.calendar_job_id,
-                            email_link_id: scope.link_id,
-                        },
-                        disposition,
-                        &format!("{:#}", e.source),
-                    )
-                    .await
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?
-                    .link_reauth_transitioned
-            } else {
-                false
-            };
-            if coordinator_reauth_transitioned == Some(true) || prelease_reauth_transitioned {
-                ctx.sqs_client
-                    .enqueue_link_manager_notification(LinkManagerMessage::NotifyReauthRequired {
-                        link_id: scope.link_id,
-                    })
-                    .await
-                    .inspect_err(|error| {
-                        tracing::error!(
-                            error=?error,
-                            link_id=%scope.link_id,
-                            "Failed to enqueue reauth notification after calendar backfill failure"
-                        );
-                    })
-                    .ok();
-            }
-        }
         // Best-effort side seed — a failure must not fail the backfill job.
         BackfillOperation::SeedSentContact(_) => {}
         BackfillOperation::PopulateCrmContact(_) => {}
@@ -112,22 +70,6 @@ pub async fn handle_non_retryable_error(
 
     cleanup_message(&ctx.sqs_worker, message).await?;
     Ok(())
-}
-
-fn coordinator_reauth_edge(error: &anyhow::Error) -> Option<bool> {
-    error.chain().find_map(|cause| {
-        cause
-            .downcast_ref::<GoogleCalendarBackfillRunError>()
-            .map(|error| {
-                matches!(
-                    error,
-                    GoogleCalendarBackfillRunError::ReauthRequired {
-                        link_reauth_transitioned: true,
-                        ..
-                    }
-                )
-            })
-    })
 }
 
 #[tracing::instrument(skip(ctx), err)]
@@ -167,8 +109,39 @@ async fn notify_job_failed(ctx: &PubSubContext, job_id: Uuid) {
     }
 }
 
-#[cfg(test)]
-mod test;
+/// Sends a rate-limited operation back to the queue after a growing delay
+/// (see [`deferral`]), keeping its delivery budget for real failures. If the
+/// send fails, the message is left for redelivery after its visibility timeout.
+#[tracing::instrument(
+    skip(ctx, message, data, e),
+    fields(link_id = ?data.backfill_operation.link_id()),
+    err
+)]
+pub async fn defer_rate_limited_operation(
+    ctx: &PubSubContext,
+    message: &aws_sdk_sqs::types::Message,
+    data: &BackfillPubsubMessage,
+    e: &DetailedError,
+    retry_after: Option<Duration>,
+) -> anyhow::Result<()> {
+    let deferrals = deferral::deferrals(message);
+    let delay_seconds = deferral::delay_seconds(deferrals, retry_after);
+    if let Err(error) = ctx
+        .sqs_client
+        .defer_email_backfill_message(data, delay_seconds, deferrals + 1)
+        .await
+    {
+        tracing::warn!(error = ?error, "Failed to defer a rate-limited backfill operation; it will be redelivered");
+        return handle_retryable_error(data, e).await;
+    }
+    tracing::debug!(
+        deferrals,
+        delay_seconds,
+        "Rate-limited backfill operation deferred"
+    );
+    cleanup_message(&ctx.sqs_worker, message).await?;
+    Ok(())
+}
 
 /// Handles retryable errors by updating status to InProgress and adding the error message
 #[tracing::instrument(
@@ -182,76 +155,81 @@ pub async fn handle_retryable_error(
     let error_chain = format!("{:#}", _e.source);
     tracing::Span::current().record("error", &error_chain);
 
+    // Rate limits and busy write slots are expected backpressure, redelivered
+    // after the visibility timeout; the email API client logs provider
+    // throttling at ERROR.
+    if matches!(
+        _e.reason,
+        FailureReason::GmailApiRateLimited | FailureReason::BackfillWritesBusy
+    ) {
+        tracing::debug!("Refused backfill operation will be redelivered");
+        return Ok(());
+    }
+
     match &data.backfill_operation {
         BackfillOperation::Init(_) => {
-            tracing::debug!("Retryable error in Init")
+            tracing::warn!("Retryable error in Init")
         }
         BackfillOperation::ListThreads(_) => {
-            tracing::debug!("Retryable error listing threads")
+            tracing::warn!("Retryable error listing threads")
         }
         BackfillOperation::BackfillThread(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 thread_id = %scope.payload.thread_provider_id,
                 "Retryable error backfilling thread"
             );
         }
         BackfillOperation::BackfillMessage(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 thread_id = %scope.payload.thread_provider_id,
                 message_id = %scope.payload.message_provider_id,
                 "Retryable error backfilling message"
             );
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 thread_id = %scope.payload.thread_provider_id,
                 "Retryable error updating thread metadata"
             );
         }
         BackfillOperation::BackfillAttachment(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 attachment_db_id = %scope.payload.metadata.attachment_metadata.attachment_db_id,
                 "Retryable error backfilling attachment"
             )
         }
         BackfillOperation::FinalizeBackfill(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 job_id = %scope.job_id,
                 "Retryable error finalizing completed backfill"
             )
         }
-        BackfillOperation::CalendarGoogleBackfill(scope) => {
-            tracing::debug!(
-                calendar_job_id = %scope.payload.calendar_job_id,
-                "Retryable error backfilling Google Calendar"
-            )
-        }
         BackfillOperation::SeedSentContact(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 message_id = %scope.payload.message_provider_id,
                 "Retryable error seeding contact from sent message"
             )
         }
         BackfillOperation::PopulateCrmContact(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 contact_email = %scope.payload.contact_email,
                 "Retryable error populating CRM contact"
             )
         }
         BackfillOperation::DepopulateCrmContact(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 contact_email = %scope.payload.contact_email,
                 "Retryable error depopulating CRM contact"
             )
         }
         BackfillOperation::PopulateCrmForUser(payload) => {
-            tracing::debug!(
+            tracing::warn!(
                 macro_id = %payload.macro_id,
                 "Retryable error populating CRM for user"
             )
         }
         BackfillOperation::DepopulateCrmForUser(payload) => {
-            tracing::debug!(
+            tracing::warn!(
                 macro_id = %payload.macro_id,
                 "Retryable error depopulating CRM for user"
             )

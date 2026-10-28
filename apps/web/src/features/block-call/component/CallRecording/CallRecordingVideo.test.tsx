@@ -22,7 +22,6 @@ const nextRecordingUrl =
 const posterUrl =
   'https://recordings.example/previews/call-1.jpg?signature=abc';
 const posterBlobUrl = 'blob:call-recording-preview';
-const mediaErrSrcNotSupported = 4;
 
 const originalCreateObjectUrl = Object.getOwnPropertyDescriptor(
   URL,
@@ -64,10 +63,10 @@ function getVideo(container: HTMLElement): HTMLVideoElement {
   return video;
 }
 
-function dispatchUnsupportedMediaError(video: HTMLVideoElement): void {
+function dispatchMediaError(video: HTMLVideoElement, code: number): void {
   Object.defineProperty(video, 'error', {
     configurable: true,
-    value: { code: mediaErrSrcNotSupported },
+    value: { code },
   });
   video.dispatchEvent(new Event('error'));
 }
@@ -95,53 +94,54 @@ afterAll(() => {
 });
 
 describe('CallRecordingVideo', () => {
-  it('shows an unsupported-format fallback while preserving native video attributes', async () => {
-    mockPosterFetch();
+  it.each([2, 3, 4])(
+    'shows a playback fallback for media error %s while preserving native video attributes',
+    async (code) => {
+      mockPosterFetch();
 
-    const { container } = render(() => (
-      <CallRecordingVideo url={recordingUrl} posterUrl={posterUrl} />
-    ));
-    const video = getVideo(container);
+      const { container } = render(() => (
+        <CallRecordingVideo url={recordingUrl} posterUrl={posterUrl} />
+      ));
+      const video = getVideo(container);
 
-    expect(video.load).toHaveBeenCalledOnce();
+      expect(video.load).toHaveBeenCalledOnce();
 
-    await waitFor(() =>
-      expect(video.getAttribute('poster')).toBe(posterBlobUrl)
-    );
+      await waitFor(() =>
+        expect(video.getAttribute('poster')).toBe(posterBlobUrl)
+      );
 
-    dispatchUnsupportedMediaError(video);
+      dispatchMediaError(video, code);
 
-    expect(
-      screen.getByText(
-        "This recording uses a media format your browser can't play."
-      )
-    ).not.toBeNull();
+      expect(
+        screen.getByText("This recording couldn't be played.")
+      ).not.toBeNull();
 
-    const fallbackLink = screen.getByRole('link', {
-      name: 'Open or download recording',
-    });
-    expect(fallbackLink.getAttribute('href')).toBe(recordingUrl);
-    expect(fallbackLink.getAttribute('target')).toBe('_blank');
-    expect(fallbackLink.getAttribute('rel')).toBe('noopener noreferrer');
-    expect(fallbackLink.hasAttribute('download')).toBe(true);
+      const fallbackLink = screen.getByRole('link', {
+        name: 'Open or download recording',
+      });
+      expect(fallbackLink.getAttribute('href')).toBe(recordingUrl);
+      expect(fallbackLink.getAttribute('target')).toBe('_blank');
+      expect(fallbackLink.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(fallbackLink.hasAttribute('download')).toBe(true);
 
-    expect(video.hasAttribute('controls')).toBe(true);
-    expect(video.getAttribute('preload')).toBe('metadata');
-    expect(video.getAttribute('crossorigin')).toBe('anonymous');
-    expect(video.getAttribute('poster')).toBe(posterBlobUrl);
-    expect(video.getAttribute('src')).toBe(recordingUrl);
+      expect(video.hasAttribute('controls')).toBe(true);
+      expect(video.getAttribute('preload')).toBe('metadata');
+      expect(video.getAttribute('crossorigin')).toBe('anonymous');
+      expect(video.getAttribute('poster')).toBe(posterBlobUrl);
+      expect(video.getAttribute('src')).toBe(recordingUrl);
 
-    video.dispatchEvent(new Event('canplay'));
+      video.dispatchEvent(new Event('canplay'));
 
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
+      expect(screen.queryByRole('alert')).toBeNull();
+    }
+  );
 
   it('clears the fallback when the recording URL changes', async () => {
     const [url, setUrl] = createSignal(recordingUrl);
     const { container } = render(() => <CallRecordingVideo url={url()} />);
     const video = getVideo(container);
 
-    dispatchUnsupportedMediaError(video);
+    dispatchMediaError(video, 4);
     expect(screen.getByRole('alert')).not.toBeNull();
 
     setUrl(nextRecordingUrl);

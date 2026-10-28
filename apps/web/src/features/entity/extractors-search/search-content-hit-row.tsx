@@ -29,7 +29,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
   return (
     <div
       class={cn(
-        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-message gap-4 hover:bg-hover'
+        'ph-no-capture flex p-2 pr-0 my-1 border-l-2 border-edge-muted bg-surface-1 gap-4 hover:bg-hover'
       )}
       onClick={handleClick}
       role="button"
@@ -49,7 +49,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
             </span>
           </div>
         </Show>
-        <Show when={props.hit.type === 'pdf'}>
+        <Show when={props.hit.type === 'pdf' || props.hit.type === 'agent'}>
           <SearchLoc hit={props.hit} />
         </Show>
         <SearchContent hit={props.hit} />

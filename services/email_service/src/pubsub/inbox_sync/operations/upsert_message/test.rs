@@ -1,4 +1,8 @@
 use super::*;
+use email_api_client::domain::models::RateLimitOrigin;
+use email_db_client::attachments::provider::upload::new_email_media_atts;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use std::time::Duration;
 
 fn id(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_string()).unwrap()
@@ -9,6 +13,7 @@ fn attachment(mime_type: Option<&str>, filename: Option<&str>) -> Attachment {
         db_id: Uuid::new_v4(),
         provider_id: None,
         data_url: None,
+        reference_url: None,
         filename: filename.map(str::to_string),
         mime_type: mime_type.map(str::to_string),
         size_bytes: None,
@@ -192,4 +197,281 @@ fn selects_received_for_new_received_message() {
 fn suppresses_existing_immutable_non_drafts() {
     assert_eq!(select_message_sync_event(Some(false), false, false), None);
     assert_eq!(select_message_sync_event(Some(false), false, true), None);
+}
+
+#[test]
+fn staff_recipients_are_split_onto_the_apns_path() {
+    let (staff, customers) = partition_email_push_recipients(HashSet::from([
+        id("macro|teo@macro.com"),
+        id("macro|teo+notify@macro.com"),
+        id("macro|user@example.com"),
+    ]));
+
+    assert_eq!(
+        staff,
+        HashSet::from([id("macro|teo@macro.com"), id("macro|teo+notify@macro.com"),])
+    );
+    assert_eq!(customers, HashSet::from([id("macro|user@example.com")]));
+}
+
+#[test]
+fn customer_only_recipients_do_not_take_the_apns_path() {
+    let (staff, customers) =
+        partition_email_push_recipients(HashSet::from([id("macro|user@example.com")]));
+
+    assert!(staff.is_empty());
+    assert_eq!(customers, HashSet::from([id("macro|user@example.com")]));
+}
+
+fn email_notification_builder(
+    recipient: &str,
+) -> SendNotificationRequestBuilder<'static, NewEmailMetadata> {
+    SendNotificationRequestBuilder {
+        notification_entity: EntityType::EmailThread.with_entity_string(Uuid::nil().to_string()),
+        secondary_notification_entity: None,
+        notification: NewEmailMetadata {
+            sender: Some("Sender".to_string()),
+            to_email: "staff@macro.com".to_string(),
+            thread_id: Uuid::nil().to_string(),
+            subject: "Subject".to_string(),
+            snippet: "Snippet".to_string(),
+        },
+        sender_id: Some(id("macro|sender@example.com")),
+        recipient_ids: HashSet::from([id(recipient)]),
+    }
+}
+
+#[test]
+fn noise_requests_preserve_rows_without_realtime_delivery() {
+    // A staff inbox may also notify a non-staff delegate. Neither recipient
+    // partition should receive GraphQL/gateway events for the Noise tier.
+    for recipient in ["macro|staff@macro.com", "macro|delegate@example.com"] {
+        let builder = email_notification_builder(recipient);
+        let original = serde_json::to_value(&builder).unwrap();
+        let request = NewEmailTier::StaffInbox.notification_request(builder);
+        let request = serde_json::to_value(request).unwrap();
+
+        assert_eq!(request["send_conn_gateway"], false);
+        assert!(request["build_apns"].is_null());
+        assert!(request["build_email"].is_null());
+        assert!(request["uuid_to_write"].is_string());
+        for field in [
+            "notification_entity",
+            "secondary_notification_entity",
+            "sender_id",
+            "recipient_ids",
+        ] {
+            assert_eq!(request["req"][field], original[field]);
+        }
+        assert_eq!(request["req"]["notification"]["tag"], "new_email");
+        assert_eq!(
+            request["req"]["notification"]["content"],
+            original["notification"]
+        );
+    }
+}
+
+#[test]
+fn signal_requests_keep_realtime_delivery_for_both_recipient_partitions() {
+    for recipient in ["macro|staff@macro.com", "macro|customer@example.com"] {
+        let request =
+            NewEmailTier::Signal.notification_request(email_notification_builder(recipient));
+        let request = serde_json::to_value(request).unwrap();
+
+        assert_eq!(request["send_conn_gateway"], true);
+        // The staff branch adds APNS separately; customer requests stay realtime-only.
+        assert!(request["build_apns"].is_null());
+    }
+}
+
+#[test]
+fn signal_staff_requests_keep_apns_and_realtime_delivery() {
+    let request = NewEmailTier::Signal
+        .notification_request(email_notification_builder("macro|staff@macro.com"))
+        .with_apns();
+    let request = serde_json::to_value(request).unwrap();
+
+    assert_eq!(request["send_conn_gateway"], true);
+    assert!(request["build_apns"].is_object());
+}
+
+#[test]
+fn signal_filter_requires_importance_and_unshared() {
+    let thread_id = Uuid::nil();
+    match signal_filter(thread_id) {
+        Expr::And(thread, rest) => {
+            assert!(matches!(
+                *thread,
+                Expr::Literal(EmailLiteral::ThreadId(id)) if id == thread_id
+            ));
+            match *rest {
+                Expr::And(importance, shared) => {
+                    assert!(matches!(
+                        *importance,
+                        Expr::Literal(EmailLiteral::Importance(true))
+                    ));
+                    assert!(matches!(
+                        *shared,
+                        Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude))
+                    ));
+                }
+                other => panic!("expected importance AND shared, got {other:?}"),
+            }
+        }
+        other => panic!("expected thread AND signal predicates, got {other:?}"),
+    }
+}
+
+fn received_message(link_id: Uuid, thread_db_id: Uuid) -> Message {
+    let now = chrono::Utc::now();
+    Message {
+        db_id: Uuid::now_v7(),
+        provider_id: Some("provider-message".to_string()),
+        thread_db_id,
+        provider_thread_id: Some("provider-thread".to_string()),
+        replying_to_id: None,
+        global_id: Some("<received@example.com>".to_string()),
+        link_id,
+        subject: Some("hello".to_string()),
+        snippet: None,
+        provider_history_id: None,
+        internal_date_ts: Some(now),
+        sent_at: Some(now),
+        size_estimate: None,
+        is_read: false,
+        is_starred: false,
+        is_sent: false,
+        is_draft: false,
+        scheduled_send_time: None,
+        has_attachments: false,
+        from: None,
+        to: vec![],
+        cc: vec![],
+        bcc: vec![],
+        labels: vec![],
+        body_text: Some("body".to_string()),
+        body_html_sanitized: None,
+        body_macro: None,
+        attachments: vec![],
+        attachments_draft: vec![],
+        attachments_forwarded: vec![],
+        headers_json: None,
+        created_at: now,
+        updated_at: now,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inserting_into_a_concurrently_deleted_thread_is_retryable(pool: PgPool) {
+    let link_id = Uuid::now_v7();
+    let thread_db_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+         VALUES ($1, 'macro|deleted-thread@example.com', 'fa-user', 'deleted-thread@example.com', 'GMAIL')",
+    )
+    .bind(link_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read)
+         VALUES ($1, 'provider-thread', $2, TRUE, FALSE)",
+    )
+    .bind(thread_db_id)
+    .bind(link_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    // The thread lookup found this row; a delete of its last message then
+    // removes it before the insert runs.
+    sqlx::query("DELETE FROM email_threads WHERE id = $1")
+        .bind(thread_db_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let mut message = received_message(link_id, thread_db_id);
+    let result = process_and_insert_message(&pool, link_id, thread_db_id, &mut message, None).await;
+
+    match result {
+        Err(ProcessingError::Retryable(e)) => assert!(
+            format!("{:#}", e.source).contains("email_messages_thread_id_fkey"),
+            "unexpected insert error: {:#}",
+            e.source
+        ),
+        other => panic!("expected a retryable insert failure, got {other:?}"),
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_refused_attachment_fetch_is_claimed_again_by_the_retry(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let image = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0201")?;
+    let video = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0202")?;
+    let animation = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0203")?;
+    sqlx::query!(
+        "INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type)
+         VALUES ($1, '00000000-0000-0000-0000-0000000ec201', 'claim-test-media-att-3', 'animation.gif', 'image/gif')",
+        animation
+    )
+    .execute(&pool)
+    .await?;
+
+    let claimed = new_email_media_atts(&pool, link_id, "claim-test-media-msg").await?;
+    assert_eq!(
+        claimed
+            .iter()
+            .map(|a| a.attachment_db_id)
+            .collect::<Vec<_>>(),
+        vec![image, video, animation]
+    );
+    let uploads = claimed
+        .into_iter()
+        .map(|attachment_metadata| AttachmentUploadArgs {
+            recipient_emails: vec![],
+            attachment_metadata,
+            backfill: false,
+            upload_destination: AttachmentUploadDestination::Sfs,
+        })
+        .collect();
+
+    // The image uploads; the gate then refuses the video's fetch.
+    let refusal = EmailApiError::RateLimited {
+        retry_after: Some(Duration::from_secs(1)),
+        origin: RateLimitOrigin::Local,
+    };
+    let mut attempted = Vec::new();
+    let refused = upload_claimed_attachments(&pool, uploads, |args| {
+        let attachment_id = args.attachment_metadata.attachment_db_id;
+        attempted.push(attachment_id);
+        let result = if attachment_id == image {
+            Ok("sfs-image".to_string())
+        } else {
+            Err(UploadAttachmentError::RateLimited(refusal.clone()))
+        };
+        async move { result }
+    })
+    .await;
+
+    assert!(matches!(refused, Ok(Some(ref error)) if *error == refusal));
+    assert_eq!(attempted, vec![image, video]);
+    // The retried upsert claims the refused and untried attachments, not the uploaded one.
+    let reclaimed = new_email_media_atts(&pool, link_id, "claim-test-media-msg").await?;
+    assert_eq!(
+        reclaimed
+            .iter()
+            .map(|a| a.attachment_db_id)
+            .collect::<Vec<_>>(),
+        vec![video, animation]
+    );
+
+    Ok(())
 }

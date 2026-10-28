@@ -1,0 +1,112 @@
+import { TOKENS } from '@core/hotkey/tokens';
+import StarFillIcon from '@icon/system/fill/star-fill.svg?component-solid';
+import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import { Button, cn } from '@ui';
+import { type ParentProps, Show } from 'solid-js';
+
+function EmailActionGroup(
+  props: ParentProps<{
+    onFocus: () => void;
+    class?: string;
+  }>
+) {
+  return (
+    <div
+      role="group"
+      aria-label="Email actions"
+      class={cn('flex items-center gap-1', props.class)}
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+      }}
+      onFocusIn={props.onFocus}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+export function EmailStarAction(props: {
+  starred: boolean;
+  pending: boolean;
+  onStar: () => void;
+  onFocus: () => void;
+}) {
+  return (
+    <EmailActionGroup
+      onFocus={props.onFocus}
+      class={cn(
+        'group-hover/entity:opacity-100 group-hover/entity:pointer-events-auto group-focus-within/entity:opacity-100 group-focus-within/entity:pointer-events-auto',
+        !props.starred && 'opacity-0 pointer-events-none'
+      )}
+    >
+      <Button
+        aria-label={props.starred ? 'Unstar email' : 'Star email'}
+        variant="ghost"
+        size="icon-sm"
+        class={props.starred ? 'text-ink-muted' : 'text-ink-extra-muted'}
+        tooltip={{
+          content: props.starred ? 'Remove from favorites' : 'Add to favorites',
+          hotkey: TOKENS.email.star,
+        }}
+        aria-pressed={props.starred}
+        disabled={props.pending}
+        onClick={props.onStar}
+      >
+        <Show when={props.starred} fallback={<StarIcon class="size-4" />}>
+          <StarFillIcon class="size-4" />
+        </Show>
+      </Button>
+    </EmailActionGroup>
+  );
+}
+
+export function EmailRowActions(props: {
+  archived: boolean;
+  canArchive: boolean;
+  pending: boolean;
+  onArchive: () => void;
+  onCommands: () => void;
+  onFocus: () => void;
+}) {
+  return (
+    <EmailActionGroup onFocus={props.onFocus}>
+      <Button
+        aria-label={props.archived ? 'Unarchive email' : 'Archive email'}
+        tooltip={{
+          content: props.archived ? 'Unarchive email' : 'Archive email',
+          hotkey: props.archived
+            ? TOKENS.entity.action.markNotDone
+            : TOKENS.entity.action.markDone,
+        }}
+        variant="ghost"
+        size="icon-sm"
+        class="text-ink-extra-muted"
+        disabled={!props.canArchive || props.pending}
+        onClick={props.onArchive}
+      >
+        <Show when={props.archived} fallback={<CheckIcon class="size-4" />}>
+          <ArrowCounterClockwiseIcon class="size-4" />
+        </Show>
+      </Button>
+      <Button
+        aria-label="Open command menu"
+        tooltip={{
+          content: 'Open command menu',
+          hotkey: TOKENS.global.commandMenu,
+        }}
+        variant="ghost"
+        size="icon-sm"
+        class="text-ink-extra-muted"
+        onClick={props.onCommands}
+      >
+        <LightningIcon class="size-4" />
+      </Button>
+    </EmailActionGroup>
+  );
+}

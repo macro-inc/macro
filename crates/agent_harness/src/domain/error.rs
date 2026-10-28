@@ -12,9 +12,26 @@ pub type Result<T, E = HarnessError> = std::result::Result<T, E>;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum HarnessError {
+    /// New Macro-funded work was refused or could not be validated.
+    #[error(transparent)]
+    Admission(#[from] ai_billing::AiAdmissionError),
     /// A container could not be spawned or reattached.
     #[error("container unavailable: {0}")]
     Container(String),
+    /// The session's owner has no Cursor API key registered.
+    ///
+    /// Its own variant because it is the one provisioning failure that is the
+    /// user's to fix, and the most likely first run of `@cursor` there is.
+    ///
+    /// Phrased for a reader rather than an operator, but be aware of where it
+    /// currently lands: the trigger path announces the session *before* it
+    /// spawns, so a spawn failure marks the session disconnected and returns,
+    /// and this sentence reaches a log. What the user sees is a session chip
+    /// whose session never answers. Closing that needs a way to post a failure
+    /// back to the thread, which [`crate::domain::ports::SessionAnnouncer`]
+    /// does not have — it announces sessions and nothing else.
+    #[error("connect your Cursor account in Settings → Agents → Harness to use @cursor")]
+    CursorNotConnected,
     /// The agent would not open an ACP session.
     #[error("acp handshake failed: {0}")]
     Handshake(String),
@@ -36,7 +53,43 @@ pub enum HarnessError {
     /// A session command worker stopped before reporting its result.
     #[error("agent session {0} command worker stopped")]
     CommandWorkerStopped(AgentSessionId),
+    /// The sandbox's egress environment could not be prepared: no signing
+    /// key, no repository, or the owner's connected servers could not be read.
+    #[error("failed to provision sandbox egress: {0}")]
+    Egress(rootcause::Report),
     /// The session link could not be posted back to the mention's thread.
     #[error("failed to announce the agent session: {0}")]
     Announce(rootcause::Report),
+    /// Required context for a channel-originated prompt could not be loaded.
+    #[error("failed to load channel prompt context: {0}")]
+    PromptContext(rootcause::Report),
+    /// The message a prompt answers is gone, was moved, or is no longer one
+    /// its sender may write beside. Unlike [`Self::PromptContext`], asking
+    /// again cannot succeed.
+    #[error("the message an agent prompt answers is no longer valid: {0}")]
+    InvalidOrigin(rootcause::Report),
+    /// A prompt could not be composed for the agent runtime.
+    #[error("failed to compose agent prompt: {0}")]
+    PromptComposition(rootcause::Report),
+    /// Forwarding a command to the session's managing replica failed.
+    #[error("failed to forward an agent session command: {0}")]
+    Forward(rootcause::Report),
+    /// The repositories a user reaches through the GitHub App could not be
+    /// listed. Its own variant because the failure is GitHub's, not ours: the
+    /// App's credentials, an installation record, or a call to github.com.
+    #[error("failed to list reachable repositories: {0}")]
+    Repositories(rootcause::Report),
+    /// The named repository is not one the user reaches through the GitHub App.
+    ///
+    /// The same sentence the create-session path uses, so a picker that listed
+    /// a repository the user can no longer reach and a typed URL they never
+    /// could both explain themselves the same way.
+    #[error("repository is not available to this user")]
+    RepositoryUnavailable,
+    /// A bot's persisted agent runtime configuration could not be loaded.
+    #[error("failed to resolve agent runtime configuration: {0}")]
+    RuntimeDirectory(rootcause::Report),
+    /// Who a prompt mentions could not be resolved.
+    #[error("failed to resolve prompt mentions: {0}")]
+    Mentions(rootcause::Report),
 }

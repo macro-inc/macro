@@ -3,14 +3,15 @@
 //! This service handles the worker-facing side of notifications:
 //! consuming from the queue and delivering via realtime, push, and email.
 
-use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::android::FCMMessage;
+use crate::domain::models::apple::{APNSPushNotification, Alert};
 use crate::domain::models::email_notification_digest::ports::{
     ClaimResult, DigestBatch, DigestBatcher, MessageId, NotificationSendChecker,
 };
 use crate::domain::models::email_notification_digest::{
     BulkDigestEgressStateMachine, ResumeMachineBRequest,
 };
-use crate::domain::models::mobile::MessageAttributes;
+use crate::domain::models::mobile::{MessageAttributes, PushEndpointUnavailable, PushType};
 use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailCreateBundle,
     EmailNotification, NotificationChannel, QueueMessage,
@@ -27,36 +28,103 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
 use std::time::Duration;
-use tracing::Level;
 
 /// Maximum time to wait for a single notification delivery before timing out.
 pub(crate) const DELIVERY_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// Wraps a single iOS push notification send for the bulk-digest state machine.
+/// Wraps a single mobile push notification send for the bulk-digest state machine.
 ///
 /// The state machine calls [`NotificationSendChecker::send_notification`] to perform the actual
 /// push delivery, then records the SNS message ID or queues for batch email on failure.
-struct IosPushSend<'a, M> {
+struct MobilePushSend<'a, M> {
     mobile: &'a M,
     endpoint_arn: &'a str,
-    notif: &'a APNSPushNotification<serde_json::Value>,
+    notif: MobilePayload<'a>,
     attributes: &'a MessageAttributes,
 }
 
-impl<M: NotificationSender> NotificationSendChecker for IosPushSend<'_, M> {
+impl<M: NotificationSender> NotificationSendChecker for MobilePushSend<'_, M> {
     type Ok = String;
     type Err = Report;
 
     async fn send_notification(self) -> Result<String, Report> {
-        self.mobile
-            .send_ios_push_notification(self.endpoint_arn, self.notif, self.attributes)
-            .await
+        match self.notif {
+            MobilePayload::Ios(notif) => {
+                self.mobile
+                    .send_ios_push_notification(self.endpoint_arn, notif, self.attributes)
+                    .await
+            }
+            MobilePayload::Android(notif) => {
+                self.mobile
+                    .send_android_push_notification(self.endpoint_arn, notif, self.attributes)
+                    .await
+            }
+        }
     }
 
     fn extract_message_id(res: &String) -> MessageId {
         MessageId(res.clone())
     }
 }
+
+#[derive(Clone, Copy)]
+enum MobilePayload<'a> {
+    Ios(&'a APNSPushNotification<serde_json::Value>),
+    Android(&'a FCMMessage<serde_json::Value>),
+}
+
+impl MobilePayload<'_> {
+    fn success(self) -> DeliverySuccess {
+        match self {
+            Self::Ios(_) => DeliverySuccess::Ios,
+            Self::Android(_) => DeliverySuccess::Android,
+        }
+    }
+}
+
+fn android_notification(
+    apns: &APNSTargets<serde_json::Value>,
+    recipient_id: MacroUserIdStr<'static>,
+) -> FCMMessage<serde_json::Value> {
+    let data = apns.notif.push_notification_data.clone();
+    let identifier = apns.attributes.collapse_key.clone();
+    if matches!(apns.attributes.push_type, PushType::Background) {
+        return FCMMessage::clear(identifier, data, recipient_id);
+    }
+    let (mut title, body) = match &apns.notif.aps.alert {
+        Some(Alert::Simple(body)) => (String::new(), body.clone()),
+        Some(Alert::Dictionary(alert)) => (
+            [alert.title.as_deref(), alert.subtitle.as_deref()]
+                .into_iter()
+                .flatten()
+                .filter(|text| !text.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join(" — "),
+            alert.body.clone().unwrap_or_default(),
+        ),
+        None => (String::new(), String::new()),
+    };
+    // Android rejects visible pushes without text. Keep silent clears above
+    // separate from alerts whose source payload omitted display content.
+    if title.trim().is_empty() && body.trim().is_empty() {
+        title = "New notification".to_owned();
+    }
+    FCMMessage::notification(title, body, identifier, data, recipient_id)
+}
+
+fn ios_notification(
+    apns: &APNSPushNotification<serde_json::Value>,
+    recipient_id: &MacroUserIdStr<'_>,
+) -> APNSPushNotification<serde_json::Value> {
+    let mut notification = apns.clone();
+    if let Some(data) = notification.push_notification_data.as_object_mut() {
+        data.insert("recipientId".into(), recipient_id.as_ref().into());
+    }
+    notification
+}
+
+#[cfg(test)]
+mod test;
 
 /// Service for delivering notifications (egress side).
 ///
@@ -97,12 +165,41 @@ where
     /// on failure. Returns a list of results for each delivery attempt.
     ///
     /// If a rate limit is configured and exceeded, returns an empty list (no delivery).
-    #[tracing::instrument(ret, level = Level::INFO, skip(self))]
+    #[tracing::instrument(ret, skip_all, fields(message_type = message.message_type()))]
     pub async fn deliver_notification(
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
+        let access_request = message.message_type() == "entity_access_requested";
         let content = message.into_inner();
+        if access_request {
+            let notification_id = match &content {
+                NotificationChannel::ConnGateway(conn) => conn.notif.notification_id,
+                NotificationChannel::Ios(apns) => {
+                    match serde_json::from_value::<crate::domain::models::apple::PushNotificationData>(
+                        apns.notif.push_notification_data.clone(),
+                    ) {
+                        Ok(data) => data.notification_id,
+                        Err(error) => {
+                            return vec![Err(report!(error).context(DeliveryFailure::Other))];
+                        }
+                    }
+                }
+                NotificationChannel::Email(_) => {
+                    return vec![Err(report!("access requests do not use email delivery")
+                        .context(DeliveryFailure::Other))];
+                }
+            };
+            match self
+                .repository
+                .notification_is_withdrawn(notification_id)
+                .await
+            {
+                Ok(true) => return Vec::new(),
+                Ok(false) => {}
+                Err(error) => return vec![Err(error.context(DeliveryFailure::Other))],
+            }
+        }
 
         let results = match content {
             NotificationChannel::ConnGateway(ref conn) => Either::Left([self
@@ -111,10 +208,10 @@ where
                 .context(DeliveryFailure::Other)]),
             NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
             NotificationChannel::Ios(apns) => Either::Right(
-                self.deliver_ios(&apns)
+                self.deliver_mobile(&apns)
                     .await
                     .into_iter()
-                    .map(|r| r.context(DeliveryFailure::Ios)),
+                    .map(|r| r.context(DeliveryFailure::Mobile)),
             ),
         };
 
@@ -132,66 +229,99 @@ where
         Ok(DeliverySuccess::ConnGateway)
     }
 
-    /// Deliver via iOS push (APNS).
+    /// Deliver mobile push (APNS and FCM) within one per-user fallback decision.
     ///
     /// Iterates per-user. If a user has a digest state machine entry, all
     /// endpoints are passed to [`BulkDigestEgressStateMachine::continue_machine`]
     /// in a single call. The state machine records SNS message IDs for successes
     /// and only queues a batch email if ALL endpoints fail.
     /// Users without a state machine entry are sent directly.
-    async fn deliver_ios(
+    async fn deliver_mobile(
         &self,
         apns: &APNSTargets<serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
         let total: usize = apns
             .ios_device_endpoints
             .values()
-            .map(|u| u.endpoints.len())
+            .map(|u| u.endpoints.len() + u.android_endpoints.len())
             .sum();
         let mut out = Vec::with_capacity(total);
 
-        for user_apns in apns.ios_device_endpoints.values() {
-            if let Some(ref entry) = user_apns.digest_state {
-                // Build all send checkers for this user's endpoints
-                let checkers: Vec<_> = user_apns
-                    .endpoints
-                    .iter()
-                    .map(|endpoint| IosPushSend {
-                        mobile: &self.mobile,
-                        endpoint_arn: endpoint,
-                        notif: &apns.notif,
-                        attributes: &apns.attributes,
-                    })
-                    .collect();
-
+        for (user_id, user_apns) in &apns.ios_device_endpoints {
+            let ios = ios_notification(&apns.notif, user_id);
+            let android = (!user_apns.android_endpoints.is_empty())
+                .then(|| android_notification(apns, user_id.clone()));
+            let checkers: Vec<_> = user_apns
+                .endpoints
+                .iter()
+                .map(|endpoint| MobilePushSend {
+                    mobile: &self.mobile,
+                    endpoint_arn: endpoint,
+                    notif: MobilePayload::Ios(&ios),
+                    attributes: &apns.attributes,
+                })
+                .chain(android.iter().flat_map(|android| {
+                    user_apns
+                        .android_endpoints
+                        .iter()
+                        .map(move |endpoint| MobilePushSend {
+                            mobile: &self.mobile,
+                            endpoint_arn: endpoint,
+                            notif: MobilePayload::Android(android),
+                            attributes: &apns.attributes,
+                        })
+                }))
+                .collect();
+            let targets: Vec<_> = checkers
+                .iter()
+                .map(|checker| (checker.endpoint_arn, checker.notif))
+                .collect();
+            let results = if let Some(ref entry) = user_apns.digest_state {
                 let req = ResumeMachineBRequest {
                     notification_enabled: entry.inner().clone(),
                     send_notifs: checkers,
                 };
-
                 let (results, batch_decision) = self.state_machine.continue_machine(req).await;
-
                 if let Either::Right(Err(ref batch_err)) = batch_decision {
                     tracing::error!(error=?batch_err, "failed to queue digest batch after all pushes failed");
                 }
-
-                for result in results {
-                    out.push(result.map(|_| DeliverySuccess::Ios));
-                }
+                results
             } else {
-                // No state machine entry — send directly
-                for endpoint in &user_apns.endpoints {
-                    let res = self
-                        .mobile
-                        .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
-                        .await
-                        .map(|_| DeliverySuccess::Ios);
-                    out.push(res);
+                let mut results = Vec::with_capacity(checkers.len());
+                for checker in checkers {
+                    results.push(checker.send_notification().await);
                 }
+                results
+            };
+            for (result, (endpoint_arn, platform)) in results.into_iter().zip(targets) {
+                if let Err(e) = &result
+                    && e.downcast_current_context::<PushEndpointUnavailable>()
+                        .is_some()
+                {
+                    self.remove_unavailable_endpoint(endpoint_arn).await;
+                }
+                out.push(result.map(|_| platform.success()));
             }
         }
 
         out
+    }
+
+    /// Remove the device registration for an endpoint SNS will no longer deliver to, so
+    /// later notifications stop targeting it. The device gets a fresh registration the next
+    /// time the app registers its push token.
+    async fn remove_unavailable_endpoint(&self, endpoint_arn: &str) {
+        tracing::info!(
+            endpoint_arn,
+            "removing device registration for unavailable push endpoint"
+        );
+        let _ = self
+            .repository
+            .delete_device_by_endpoint(endpoint_arn)
+            .await
+            .inspect_err(|e| {
+                tracing::warn!(error=?e, endpoint_arn, "failed to remove device registration for unavailable push endpoint");
+            });
     }
 
     /// Deliver via email.
@@ -299,8 +429,8 @@ where
 
         for (receipt_handle, delivery_results) in outcomes {
             let any_succeeded = delivery_results.iter().any(Result::is_ok);
-            let all_ios_failed = delivery_results.iter().all(
-                |e| matches!(e, Err(e) if matches!(e.current_context(), DeliveryFailure::Ios )),
+            let all_mobile_failed = delivery_results.iter().all(
+                |e| matches!(e, Err(e) if matches!(e.current_context(), DeliveryFailure::Mobile )),
             );
             let rate_limited = delivery_results.iter().any(|e| {
                 matches!(
@@ -310,10 +440,10 @@ where
             });
 
             // Delete from the queue if any delivery succeeded, all failures were
-            // iOS failures, or delivery was rejected by the rate limit. Rate-limit
+            // mobile push failures, or delivery was rejected by the rate limit. Rate-limit
             // rejection is terminal; retrying the same notification would only
             // deliver stale notifications after the limit window expires.
-            if (any_succeeded || all_ios_failed || rate_limited)
+            if (any_succeeded || all_mobile_failed || rate_limited)
                 && let Err(e) = self.queue.delete_message(&receipt_handle).await
             {
                 results.push(Err(e))

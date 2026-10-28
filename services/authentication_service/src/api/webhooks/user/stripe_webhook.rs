@@ -2,7 +2,12 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::api::context::ApiContext;
+use crate::api::user::stripe::PaidPlan;
 
+use ai_billing::BillingService;
+use ai_billing::outbound::stripe_gateway::{
+    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY,
+};
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use anyhow::Context;
 use axum::{
@@ -11,6 +16,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
+use gtm_invite::domain::ports::GtmInviteService;
 use macro_user_id::email::Email;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
@@ -26,8 +32,13 @@ use stripe_webhook::{EventObject, EventType};
 use teams::domain::team_repo::TeamService;
 use tracing::Instrument;
 
+mod billing;
 #[cfg(test)]
 mod test;
+use billing::{
+    BillingEvent, TeamPlanSync, handle_checkout_session_completed, period_from_timestamps,
+    subscription_periods, sync_personal_billing_period, sync_team_billing_period,
+};
 
 /// Extracts the previous status from the previous_attributes JSON value.
 fn extract_previous_status(previous_attributes: &Option<JsonValue>) -> Option<String> {
@@ -151,6 +162,10 @@ pub async fn handler(
         "processing stripe event"
     );
 
+    let billing_event = BillingEvent::from_verified_payload(payload).map_err(|error| {
+        tracing::error!(?error, "invalid verified billing event");
+        (StatusCode::BAD_REQUEST, "invalid billing event").into_response()
+    })?;
     let event_type = event.type_.clone();
     let previous_attributes = event.data.previous_attributes.clone();
     match event.type_ {
@@ -163,12 +178,21 @@ pub async fn handler(
                 event.data.object,
                 event_type,
                 previous_attributes,
+                &billing_event,
             )
             .await
         }
         EventType::InvoicePaymentFailed
         | EventType::InvoicePaymentSucceeded
-        | EventType::InvoicePaid => handle_payment_event(&ctx, event.data.object, event_type).await,
+        | EventType::InvoicePaid => {
+            handle_payment_event(&ctx, event.data.object, event_type, &billing_event).await
+        }
+        // A credit pack paid with a delayed method (bank debit, etc.) completes
+        // its session unpaid and reports the money later; both events book
+        // through the same idempotent path.
+        EventType::CheckoutSessionCompleted | EventType::CheckoutSessionAsyncPaymentSucceeded => {
+            handle_checkout_session_completed(&ctx, event.data.object).await
+        }
         _ => {
             tracing::error!(event_type=?event_type, "unexpected event type");
             Ok(())
@@ -182,11 +206,12 @@ pub async fn handler(
     Ok(StatusCode::OK.into_response())
 }
 
-#[tracing::instrument(skip(ctx, event_object), err, ret)]
+#[tracing::instrument(skip(ctx, event_object, billing_event), err, ret)]
 async fn handle_payment_event(
     ctx: &ApiContext,
     event_object: EventObject,
     event_type: EventType,
+    billing_event: &BillingEvent,
 ) -> anyhow::Result<()> {
     let invoice = match event_object {
         EventObject::InvoicePaymentFailed(invoice) => invoice,
@@ -205,6 +230,46 @@ async fn handle_payment_event(
         .as_ref()
         .map(|subscription| subscription.id().as_str())
     else {
+        // Our own one-off invoices: AI overage chunks and automatic credit
+        // reloads. Their outcome drives whether the payer keeps overage or
+        // automatic reloads; they never touch plan roles.
+        let macro_purpose = invoice
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get(PURPOSE_METADATA_KEY))
+            .map(String::as_str);
+        let paid = !outcome.is_revoke();
+        if let Some(invoice_id) = invoice.id.as_ref() {
+            match macro_purpose {
+                Some(PURPOSE_AI_OVERAGE) => {
+                    tracing::info!(
+                        event_type = ?event_type,
+                        invoice_id = %invoice_id,
+                        paid,
+                        "processing ai overage invoice event"
+                    );
+                    ctx.ai_billing_service
+                        .mark_overage_invoice(invoice_id.as_str(), paid)
+                        .await
+                        .context("failed to record ai overage invoice outcome")?;
+                    return Ok(());
+                }
+                Some(PURPOSE_AI_CREDIT_RELOAD) => {
+                    tracing::info!(
+                        event_type = ?event_type,
+                        invoice_id = %invoice_id,
+                        paid,
+                        "processing ai credit reload invoice event"
+                    );
+                    ctx.ai_billing_service
+                        .mark_credit_reload_invoice(invoice_id.as_str(), paid)
+                        .await
+                        .context("failed to record ai credit reload invoice outcome")?;
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
         tracing::info!(
             event_type = ?event_type,
             invoice_id = ?invoice.id.as_ref().map(|id| id.as_str()),
@@ -272,14 +337,44 @@ async fn handle_payment_event(
         "processing stripe invoice payment event"
     );
 
+    let plan = subscription
+        .items
+        .data
+        .iter()
+        .filter_map(|item| item.price.as_ref())
+        .find_map(|price| ctx.stripe_prices.plan_for_price(price.id.as_str()));
+    // This subscription was fetched with the `stripe` client, which pins its
+    // own (older) API version where the current period still lives on the
+    // subscription. Webhook payloads arrive on the endpoint's newer version,
+    // where it moved onto the items; `handle_customer_subscription_event`
+    // reads it from there.
+    let period = period_from_timestamps(
+        subscription.current_period_start,
+        subscription.current_period_end,
+    );
+    let verified = subscription_periods(
+        billing_event,
+        &serde_json::to_value(&subscription)?,
+        Some(&billing_event.object),
+    );
+
     if let Some(team_id) = subscription.metadata.get("team_id") {
         let team_id = macro_uuid::string_to_uuid(team_id)?;
+        let owner = subscription
+            .metadata
+            .get("owner_id")
+            .and_then(|id| MacroUserIdStr::try_from(id.clone()).ok());
         return handle_team_subscription_event(
             ctx,
             subscription_id,
             subscription_status,
             &team_id,
             &email,
+            TeamPlanSync {
+                owner,
+                period,
+                verified,
+            },
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -289,6 +384,7 @@ async fn handle_payment_event(
                 currency: subscription_currency,
                 status: subscription_status.to_string(),
                 is_new: false,
+                team_id: Some(team_id),
             },
         )
         .await;
@@ -324,21 +420,24 @@ async fn handle_payment_event(
 
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(
-            email,
+            email.clone(),
             outcome.personal_subscription_status(),
-            ProductTier::Opus,
+            plan.map(PaidPlan::product_tier)
+                .unwrap_or(ProductTier::Opus),
         )
         .await?;
+    sync_personal_billing_period(ctx, &email, period, verified).await?;
 
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, event_object, previous_attributes), err, ret)]
+#[tracing::instrument(skip(ctx, event_object, previous_attributes, billing_event), err, ret)]
 async fn handle_customer_subscription_event(
     ctx: &ApiContext,
     event_object: EventObject,
     event_type: EventType,
     previous_attributes: Option<JsonValue>,
+    billing_event: &BillingEvent,
 ) -> anyhow::Result<()> {
     let subscription = match event_object {
         EventObject::CustomerSubscriptionCreated(subscription) => subscription,
@@ -455,10 +554,35 @@ async fn handle_customer_subscription_event(
     let is_new_subscription = matches!(event_type, EventType::CustomerSubscriptionCreated)
         || is_transition_from_incomplete;
 
+    // An account that signed up through a GTM invite link converted the moment
+    // its subscription — personal or team — is live. Tracking only: never
+    // fails the webhook.
+    if matches!(subscription_status, "active" | "trialing") {
+        mark_gtm_invite_converted(ctx, &email, subscription_id).await;
+    }
+
+    // For a personal subscription the seat price says which plan this is (a
+    // team subscription may carry one item per plan; its members' plans are
+    // recorded on the team). The first item carries the current period on
+    // this API version.
+    let plan = subscription
+        .items
+        .data
+        .iter()
+        .find_map(|item| ctx.stripe_prices.plan_for_price(item.price.id.as_str()));
+    let period = subscription.items.data.first().and_then(|item| {
+        period_from_timestamps(item.current_period_start, item.current_period_end)
+    });
+    let verified = subscription_periods(billing_event, &billing_event.object, None);
+
     // Get subscription metadata, if this is a team subscription then we need to handle it
     // separately.
     if let Some(team_id) = subscription.metadata.get("team_id") {
         let team_id = macro_uuid::string_to_uuid(team_id)?;
+        let owner = subscription
+            .metadata
+            .get("owner_id")
+            .and_then(|id| MacroUserIdStr::try_from(id.clone()).ok());
         // We need to handle team subscriptions differently than regular subscriptions.
         return handle_team_subscription_event(
             ctx,
@@ -466,6 +590,11 @@ async fn handle_customer_subscription_event(
             subscription_status,
             &team_id,
             &email,
+            TeamPlanSync {
+                owner,
+                period,
+                verified,
+            },
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -475,6 +604,7 @@ async fn handle_customer_subscription_event(
                 currency: subscription_currency,
                 status: subscription_status.to_string(),
                 is_new: is_new_subscription,
+                team_id: Some(team_id),
             },
         )
         .await;
@@ -563,15 +693,11 @@ async fn handle_customer_subscription_event(
         tracing::error!(error=?e, "failed to process referral on subscription created");
     }
 
-    // Extract the price ID(s) from the subscription items
-    let _price_id = subscription
-        .items
-        .data
-        .first() // SAFETY: we only need the first item because we know the user is not in a team
-        .map(|item| item.price.id.as_str().to_string())
-        .context("no price id attached to subscription")?;
-
-    let product_tier = ProductTier::Opus;
+    // Unknown prices (legacy or manually created subscriptions) keep the
+    // Premium entitlements.
+    let product_tier = plan
+        .map(PaidPlan::product_tier)
+        .unwrap_or(ProductTier::Opus);
 
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(
@@ -580,6 +706,16 @@ async fn handle_customer_subscription_event(
             product_tier,
         )
         .await?;
+    sync_personal_billing_period(ctx, &email, period, verified).await?;
+    if let Some(change) =
+        billing::personal_plan_change(billing_event, &ctx.stripe_prices, is_new_subscription)
+    {
+        let user = MacroUserIdStr::try_from_email(email.as_ref())?;
+        ctx.ai_billing_service
+            .change_plan(&user, change)
+            .await
+            .context("failed to reset upgraded personal seat usage")?;
+    }
 
     // Track conversion events to GA and Meta (fire-and-forget)
     let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
@@ -595,10 +731,38 @@ async fn handle_customer_subscription_event(
             currency: subscription_currency,
             status: subscription_status.to_string(),
             is_new: is_new_subscription,
+            team_id: None,
         },
     );
 
     Ok(())
+}
+
+/// Records the subscriber's redeemed GTM invite link, if they hold one, as
+/// converted into this subscription.
+#[tracing::instrument(skip(ctx, email), fields(subscription_id))]
+async fn mark_gtm_invite_converted(
+    ctx: &ApiContext,
+    email: &Email<macro_user_id::lowercased::Lowercase<'_>>,
+    subscription_id: &str,
+) {
+    let user_id = match macro_user_id::user_id::MacroUserIdStr::try_from_email(email.as_ref()) {
+        Ok(user_id) => user_id,
+        Err(e) => {
+            tracing::error!(error=?e, "customer email is not a valid macro user id");
+            return;
+        }
+    };
+
+    match ctx
+        .gtm_invite_service
+        .mark_converted(&user_id, subscription_id)
+        .await
+    {
+        Ok(true) => tracing::info!("marked GTM invite link as converted"),
+        Ok(false) => {}
+        Err(e) => tracing::error!(error=?e, "failed to mark GTM invite link as converted"),
+    }
 }
 
 /// Checks if the subscribing user was referred and, if so, processes the referral
@@ -643,6 +807,7 @@ async fn handle_team_subscription_event<'a>(
     subscription_status: &str,
     team_id: &uuid::Uuid,
     email: &Email<Lowercase<'a>>,
+    plan_sync: TeamPlanSync,
     tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
     tracing::trace!("handling team subscription");
@@ -652,50 +817,75 @@ async fn handle_team_subscription_event<'a>(
         macro_db_client::user::patch::update_macro_user_has_trialed(&ctx.db, email, true).await?;
     }
 
-    let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
-    ctx.teams_service
-        .patch_team_subscription_id(team_id, &subscription_id)
-        .await?;
-
-    match subscription_status {
-        "active" | "trialing" => {
+    billing::complete_subscription_webhook(
+        billing::sync_team_usage_policy(ctx, &plan_sync),
+        async {
+            let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
             ctx.teams_service
-                .restore_permissions_for_team_members(team_id)
+                .patch_team_subscription_id(team_id, &subscription_id)
                 .await?;
 
-            ctx.teams_service
-                .patch_team_payment_status(team_id, true)
-                .await?;
+            match subscription_status {
+                "active" | "trialing" => {
+                    // Restore stamps every member (owner included) with the team
+                    // subscriber role and the tier role of their own seat's plan.
+                    ctx.teams_service
+                        .restore_permissions_for_team_members(
+                            team_id,
+                            tracking_data
+                                .is_new
+                                .then(|| {
+                                    plan_sync.verified.first().map(|facts| {
+                                        teams::domain::open_seat_release::SubscriptionStart {
+                                            at: facts.event_at,
+                                            period_start: facts.period.start,
+                                            period_end: facts.period.end,
+                                        }
+                                    })
+                                })
+                                .flatten(),
+                        )
+                        .await?;
+                    sync_team_billing_period(ctx, &plan_sync).await?;
 
-            track_stripe_subscription(
-                ctx.analytics_client.clone(),
-                &subscription_id,
-                tracking_data,
-            );
-            Ok(())
-        }
-        "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused" | "unpaid" => {
-            ctx.teams_service
-                .revoke_permissions_for_team_members(team_id)
-                .await?;
-            ctx.teams_service
-                .patch_team_payment_status(team_id, false)
-                .await?;
+                    ctx.teams_service
+                        .patch_team_payment_status(team_id, true)
+                        .await?;
 
-            track_stripe_subscription(
-                ctx.analytics_client.clone(),
-                &subscription_id,
-                SubscriptionTrackingData {
-                    is_new: false,
-                    ..tracking_data
-                },
-            );
-            Ok(())
-        }
-        _ => {
-            anyhow::bail!("unexpected subscription status for team subscription");
-        }
-    }
+                    track_stripe_subscription(
+                        ctx.analytics_client.clone(),
+                        &subscription_id,
+                        tracking_data,
+                    );
+                    Ok(())
+                }
+                "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused"
+                | "unpaid" => {
+                    ctx.teams_service
+                        .revoke_permissions_for_team_members(team_id)
+                        .await?;
+                    sync_team_billing_period(ctx, &plan_sync).await?;
+                    ctx.teams_service
+                        .patch_team_payment_status(team_id, false)
+                        .await?;
+
+                    track_stripe_subscription(
+                        ctx.analytics_client.clone(),
+                        &subscription_id,
+                        SubscriptionTrackingData {
+                            is_new: false,
+                            ..tracking_data
+                        },
+                    );
+                    Ok(())
+                }
+                _ => {
+                    anyhow::bail!("unexpected subscription status for team subscription");
+                }
+            }
+        },
+    )
+    .await
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -703,6 +893,24 @@ struct SubscriptionEvent {
     transaction_id: String,
     value: f64,
     currency: String,
+}
+
+/// PostHog properties for a subscription event. GA and Meta get the bare
+/// [`SubscriptionEvent`]; only PostHog receives the team and its group.
+#[derive(Debug, Serialize)]
+struct PostHogSubscriptionEvent<'a> {
+    #[serde(flatten)]
+    event: &'a SubscriptionEvent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    team_id: Option<uuid::Uuid>,
+    #[serde(rename = "$groups", skip_serializing_if = "Option::is_none")]
+    groups: Option<PostHogTeamGroup>,
+}
+
+/// Attributes the event to the team in PostHog group analytics.
+#[derive(Debug, Serialize)]
+struct PostHogTeamGroup {
+    team: uuid::Uuid,
 }
 
 #[derive(Debug, Clone)]
@@ -715,6 +923,8 @@ struct SubscriptionTrackingData {
     currency: Option<String>,
     status: String,
     is_new: bool,
+    /// Set for team subscriptions (the `team_id` subscription metadata).
+    team_id: Option<uuid::Uuid>,
 }
 
 /// Tracks a Stripe subscription event to GA and Meta (fire-and-forget).
@@ -763,6 +973,11 @@ fn track_stripe_subscription(
                 ..MetaUserData::default()
             };
             let event_id = Some(subscription_id.as_str());
+            let posthog_event = PostHogSubscriptionEvent {
+                event: &event,
+                team_id: data.team_id,
+                groups: data.team_id.map(|team| PostHogTeamGroup { team }),
+            };
             // PostHog distinct id must be the "macro|{email}" id the app
             // identifies with; a bare email lands events on orphaned person
             // profiles disconnected from product usage. This only links to the
@@ -805,7 +1020,7 @@ fn track_stripe_subscription(
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta purchase event"));
 
                     let _ = client
-                        .track_posthog(&posthog_distinct_id, "subscription_created", &event)
+                        .track_posthog(&posthog_distinct_id, "subscription_created", &posthog_event)
                         .await
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_created event"));
                 }
@@ -830,7 +1045,7 @@ fn track_stripe_subscription(
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track Meta cancel event"));
 
                     let _ = client
-                        .track_posthog(&posthog_distinct_id, "subscription_canceled", &event)
+                        .track_posthog(&posthog_distinct_id, "subscription_canceled", &posthog_event)
                         .await
                         .inspect_err(|e| tracing::warn!(error = ?e, "failed to track PostHog subscription_canceled event"));
                 }

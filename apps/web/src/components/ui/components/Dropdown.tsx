@@ -1,14 +1,33 @@
+import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@phosphor/check.svg';
-import { type ComponentProps, onCleanup, splitProps } from 'solid-js';
+import CheckIcon from '@icon/system/regular/check.svg';
+import {
+  DropdownMenu as KobalteDropdownMenu,
+  type DropdownMenuTriggerProps as KobalteDropdownTriggerProps,
+} from '@kobalte/core/dropdown-menu';
+import {
+  type ComponentProps,
+  createSignal,
+  type JSX,
+  onCleanup,
+  Show,
+  splitProps,
+  type ValidComponent,
+} from 'solid-js';
 import { cn } from '../utils/classname';
 import {
   addCtrlJKMenuNavigation,
   highlightFirstMenuItemOnOpen,
 } from '../utils/menuKeyboardNavigation';
+import { createMultiSelectIntent } from '../utils/multiSelectSelection';
+import {
+  createSelectionDismissal,
+  type SelectionDismissal,
+} from '../utils/selectionDismissal';
 import { Button, type ButtonProps } from './Button';
+import { MultiSelectItemContent } from './MultiSelectItemContent';
 import { Surface, type SurfaceProps } from './Surface';
+import { Tooltip } from './Tooltip';
 
 /*
 <Dropdown>
@@ -49,17 +68,22 @@ export type DropdownContentProps = ComponentProps<
   depth?: SurfaceProps['depth'];
   mount?: PortalMount;
   portalScope?: DropdownPortalScope;
+  /** Block pointer interaction behind the menu with a transparent backdrop. */
+  blockingBackdrop?: boolean;
 };
-export type DropdownTriggerProps = ComponentProps<
-  typeof KobalteDropdownMenu.Trigger
-> &
-  ButtonProps;
+export type DropdownTriggerProps<T extends ValidComponent = 'button'> =
+  ButtonProps<T> & KobalteDropdownTriggerProps<T>;
 export type DropdownItemIndicatorProps = ComponentProps<
   typeof KobalteDropdownMenu.ItemIndicator
 >;
-export type DropdownCheckboxItemProps = ComponentProps<
-  typeof KobalteDropdownMenu.CheckboxItem
->;
+export type DropdownCheckboxItemProps = Omit<
+  ComponentProps<typeof KobalteDropdownMenu.CheckboxItem>,
+  'closeOnSelect' | 'onChange'
+> & {
+  indicator?: JSX.Element;
+  closeOnSelect?: SelectionDismissal;
+  onChange?: (checked: boolean) => void;
+};
 export type DropdownSubTriggerProps = ComponentProps<
   typeof KobalteDropdownMenu.SubTrigger
 >;
@@ -72,11 +96,33 @@ export type DropdownGroupLabelProps = ComponentProps<
 export type DropdownGroupProps = ComponentProps<
   typeof KobalteDropdownMenu.Group
 >;
-export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
+export type DropdownItemProps = Omit<
+  ComponentProps<typeof KobalteDropdownMenu.Item>,
+  'closeOnSelect'
+> & {
+  closeOnSelect?: SelectionDismissal;
+  /**
+   * Shows the item as unavailable and explains why: a tooltip beside the row
+   * on hover or keyboard focus, a second line on touch. Unlike `disabled`, the
+   * row stays reachable so the reason can be read; selecting it does nothing.
+   */
+  disabledReason?: string;
+};
+export type DropdownMultiSelectItemProps = Omit<
+  DropdownItemProps,
+  'onSelect' | 'closeOnSelect'
+> & {
+  checked: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+  onOnly: () => void;
+};
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
+// Text size is inherited from `Dropdown.Content` (defaults to `text-sm`) so a
+// menu can be resized by passing a `text-*` class to the content.
 const ROW_CLASS =
-  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal cursor-default outline-none data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -170,6 +216,7 @@ function callRef<T>(ref: ((el: T) => void) | undefined, el: T) {
 function DropdownContent(props: DropdownContentProps) {
   let searchRef: HTMLDivElement | undefined;
   let contentRef: HTMLElement | undefined;
+  const [backdropZIndex, setBackdropZIndex] = createSignal<string>();
   const [local, rest] = splitProps(props, [
     'depth',
     'class',
@@ -178,10 +225,16 @@ function DropdownContent(props: DropdownContentProps) {
     'children',
     'ref',
     'onOpenAutoFocus',
+    'blockingBackdrop',
   ]);
   const handleOpenAutoFocus = (event: Event) => {
+    if (local.blockingBackdrop && contentRef) {
+      // Match custom menu layers; the following menu paints above the backdrop.
+      setBackdropZIndex(getComputedStyle(contentRef).zIndex);
+    }
     local.onOpenAutoFocus?.(event);
-    if (!event.defaultPrevented && contentRef) {
+    // A tap-opened menu shouldn't start with a hover-like highlight
+    if (!event.defaultPrevented && contentRef && !isModality('touch')) {
       highlightFirstMenuItemOnOpen(contentRef);
     }
   };
@@ -198,18 +251,28 @@ function DropdownContent(props: DropdownContentProps) {
       <KobalteDropdownMenu.Portal
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
+        <Show when={local.blockingBackdrop}>
+          <div
+            class="fixed inset-0 z-action-menu pointer-events-auto"
+            style={{ 'z-index': backdropZIndex() }}
+            aria-hidden="true"
+          />
+        </Show>
         <KobalteDropdownMenu.Content
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu bg-menu',
+            // Paint the same surface as context menus, including custom
+            // contents (calendar month lists) without a Dropdown.Group.
+            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
             local.class
           )}
           depth={local.depth ?? 2}
           as={Surface}
+          hideBorder
           {...rest}
           onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div class="flex flex-col divide-y divide-edge-divider size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.Content>
@@ -242,15 +305,16 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu [--color-surface:var(--color-menu)]',
+            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
             local.class
           )}
           depth={local.depth ?? 2}
           as={Surface}
+          hideBorder
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div class="flex flex-col divide-y divide-edge-divider size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.SubContent>
@@ -263,7 +327,7 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1.5 bg-menu', local.class)}
+      class={cn('flex flex-col p-1.5', local.class)}
       {...rest}
     />
   );
@@ -290,19 +354,87 @@ const CHECKBOX_ITEM_BOX_CLASS = cn(
 );
 
 function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
-  const [local, rest] = splitProps(props, ['class', 'children']);
+  const selection = createSelectionDismissal();
+  const [local, rest] = splitProps(props, [
+    'class',
+    'children',
+    'indicator',
+    'ref',
+    'closeOnSelect',
+  ]);
   return (
     <KobalteDropdownMenu.CheckboxItem
       class={cn(ROW_CLASS, local.class)}
       {...rest}
+      ref={(element) => {
+        selection.track(element);
+        callRef(local.ref, element);
+      }}
+      closeOnSelect={
+        local.closeOnSelect === 'unless-shift'
+          ? selection.shouldClose()
+          : local.closeOnSelect
+      }
     >
-      <div class={CHECKBOX_ITEM_BOX_CLASS}>
-        <KobalteDropdownMenu.ItemIndicator>
-          <CheckIcon class="size-2.5" />
-        </KobalteDropdownMenu.ItemIndicator>
-      </div>
+      {local.indicator ?? (
+        <div class={CHECKBOX_ITEM_BOX_CLASS}>
+          <KobalteDropdownMenu.ItemIndicator>
+            <CheckIcon class="size-2.5" />
+          </KobalteDropdownMenu.ItemIndicator>
+        </div>
+      )}
       {local.children}
     </KobalteDropdownMenu.CheckboxItem>
+  );
+}
+
+/**
+ * Checkbox/Space toggles without closing; row/Enter adds and closes.
+ * Shift activation and Only replace the group selection without closing.
+ *
+ * @do Use for options in a multiselect filter, not independent settings.
+ * @do Replace only this item's group in `onOnly`, preserving other filters.
+ */
+function DropdownMultiSelectItem(props: DropdownMultiSelectItemProps) {
+  const selectionIntent = createMultiSelectIntent();
+  const [local, rest] = splitProps(props, [
+    'checked',
+    'label',
+    'onChange',
+    'onOnly',
+    'class',
+    'children',
+    'ref',
+  ]);
+  return (
+    <KobalteDropdownMenu.Item
+      {...rest}
+      role="menuitemcheckbox"
+      aria-label={local.label}
+      aria-checked={local.checked}
+      textValue={local.label}
+      aria-keyshortcuts="Space Enter Shift+Enter"
+      class={cn(ROW_CLASS, 'relative pr-14 touch:min-h-11', local.class)}
+      ref={(element) => {
+        selectionIntent.track(element);
+        callRef(local.ref, element);
+      }}
+      closeOnSelect={selectionIntent.shouldClose()}
+      onSelect={() => {
+        if (selectionIntent.intent() === 'only') local.onOnly();
+        else
+          local.onChange(selectionIntent.intent() === 'add' || !local.checked);
+      }}
+    >
+      <MultiSelectItemContent
+        checked={local.checked}
+        label={local.label}
+        disabled={rest.disabled}
+        onOnly={local.onOnly}
+      >
+        {local.children}
+      </MultiSelectItemContent>
+    </KobalteDropdownMenu.Item>
   );
 }
 
@@ -335,20 +467,98 @@ function DropdownSub(props: DropdownSubProps) {
 }
 
 function DropdownItem(props: DropdownItemProps) {
-  const [local, rest] = splitProps(props, ['class']);
+  const selection = createSelectionDismissal();
+  const [local, rest] = splitProps(props, [
+    'class',
+    'ref',
+    'closeOnSelect',
+    'disabledReason',
+  ]);
   return (
-    <KobalteDropdownMenu.Item
-      class={cn(ROW_CLASS, local.class)}
-      closeOnSelect={props.closeOnSelect}
-      {...rest}
-    />
+    <Show
+      when={local.disabledReason}
+      fallback={
+        <KobalteDropdownMenu.Item
+          class={cn(ROW_CLASS, local.class)}
+          {...rest}
+          ref={(element) => {
+            selection.track(element);
+            callRef(local.ref, element);
+          }}
+          closeOnSelect={
+            local.closeOnSelect === 'unless-shift'
+              ? selection.shouldClose()
+              : local.closeOnSelect
+          }
+        />
+      }
+    >
+      {(reason) => (
+        <UnavailableItem {...rest} class={local.class} reason={reason()} />
+      )}
+    </Show>
   );
 }
 
-function DropdownTrigger(props: DropdownTriggerProps) {
+/**
+ * Kobalte skips `disabled` items, so their reason could never be reached by
+ * keyboard. This row keeps its place in the menu, announced as disabled.
+ */
+function UnavailableItem(
+  props: Omit<DropdownItemProps, 'closeOnSelect' | 'disabledReason'> & {
+    reason: string;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'class',
+    'ref',
+    'reason',
+    'children',
+    'onSelect',
+    'disabled',
+  ]);
+  // Kobalte focuses the row on hover as well as on arrow keys.
+  const [focused, setFocused] = createSignal(false);
   return (
-    <KobalteDropdownMenu.Trigger
-      variant="base"
+    <Tooltip
+      label={local.reason}
+      placement="right"
+      open={focused()}
+      class="w-full"
+    >
+      <KobalteDropdownMenu.Item
+        {...rest}
+        class={cn(ROW_CLASS, 'touch:flex-wrap touch:gap-y-0.5', local.class)}
+        closeOnSelect={false}
+        aria-disabled="true"
+        data-disabled=""
+        ref={(element) => {
+          const show = () => setFocused(true);
+          const hide = () => setFocused(false);
+          element.addEventListener('focus', show);
+          element.addEventListener('blur', hide);
+          onCleanup(() => {
+            element.removeEventListener('focus', show);
+            element.removeEventListener('blur', hide);
+          });
+          callRef(local.ref, element);
+        }}
+      >
+        {local.children}
+        <KobalteDropdownMenu.ItemDescription class="sr-only touch:not-sr-only touch:basis-full touch:text-xs touch:text-ink-muted">
+          {local.reason}
+        </KobalteDropdownMenu.ItemDescription>
+      </KobalteDropdownMenu.Item>
+    </Tooltip>
+  );
+}
+
+function DropdownTrigger<T extends ValidComponent = 'button'>(
+  props: DropdownTriggerProps<T>
+) {
+  return (
+    <KobalteDropdownMenu.Trigger<ValidComponent>
+      variant="secondary"
       as={Button}
       size="sm"
       {...props}
@@ -366,7 +576,12 @@ export const Dropdown = Object.assign(
     Separator:
       KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
     ItemIndicator: DropdownItemIndicator,
+    ItemLabel:
+      KobalteDropdownMenu.ItemLabel /* passthrough — names the item for assistive tech */,
+    ItemDescription:
+      KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
     CheckboxItem: DropdownCheckboxItem,
+    MultiSelectItem: DropdownMultiSelectItem,
     SubContent: DropdownSubContent,
     SubTrigger: DropdownSubTrigger,
     GroupLabel: DropdownGroupLabel,

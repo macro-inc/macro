@@ -1,6 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
-import { useAugmentUserWithDmActivity } from '@core/user';
+import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
@@ -10,12 +11,13 @@ import {
   Entity,
   type EntityData,
 } from '@entity';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
+import * as EmailValidator from 'email-validator';
 import {
   createEffect,
   createMemo,
@@ -46,7 +48,7 @@ type EntityInputProps = {
   selectedOptions: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
-    entityInfo?: { id: string; entity_type: string }[]
+    entityInfo?: { id: string; entity_type: EntityType }[]
   ) => void;
   onClose?: () => void;
   pinnedOptions?: PinnedOption[];
@@ -69,6 +71,8 @@ function getEntityTypePluralLabel(
       return 'chats';
     case 'COMPANY':
       return 'companies';
+    case 'CONTACT':
+      return 'contacts';
     case 'THREAD':
       return 'emails';
     case 'TASK':
@@ -213,29 +217,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       return emails().map(threadMapper);
     }
 
-    // For COMPANY type, return empty (not in quickAccess)
-    if (specificEntityType === 'COMPANY') {
-      return [];
-    }
-
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const converted: CombinedEntity[] = [];
+    const additionalUsers =
+      specificEntityType === 'USER'
+        ? (props.config.additionalUsers?.() ?? [])
+        : [];
+    const converted: CombinedEntity[] = additionalUsers.map(userToEntity);
+    const additionalIds = new Set(additionalUsers.map((user) => user.id));
 
     for (const item of items) {
+      if (additionalIds.has(item.id)) continue;
       // Augment users with DM activity
       if (item.kind === 'user') {
         const augmentedUser = augmentUserWithDmActivity(item.data);
         converted.push(userToEntity(augmentedUser));
       } else {
         const entity = quickAccessItemToEntity(item);
-        // Filter by specific entity type if needed
-        if (specificEntityType) {
-          const entityType = getEntityType(entity);
-          if (entityType === specificEntityType) {
-            converted.push(entity);
-          }
-        } else {
+        const entityType = getEntityType(entity);
+        if (
+          entityType &&
+          (!specificEntityType || entityType === specificEntityType)
+        ) {
           converted.push(entity);
         }
       }
@@ -249,6 +252,25 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return converted;
   });
 
+  const customEmail = createMemo(() => {
+    if (!props.config.allowCustomEmail) return undefined;
+    const raw = inputValue().trim();
+    if (!EmailValidator.validate(raw)) return undefined;
+    const lower = raw.toLowerCase();
+    const alreadyListed = entities().some(
+      (entity) =>
+        entity.kind === 'user' && entity.data.email.toLowerCase() === lower
+    );
+    if (alreadyListed) return undefined;
+    return raw;
+  });
+
+  const customEmailEntity = (): CombinedEntity | undefined => {
+    const email = customEmail();
+    if (!email) return undefined;
+    return userToEntity({ id: emailToId(email), email, name: email });
+  };
+
   const entitySearch = createFreshSearch<CombinedEntity>({
     config: createEntitySearchConfig(currentUserDomain, currentUserId),
     getName: getEntitySearchText,
@@ -258,7 +280,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const filteredEntities = createMemo(() => {
     const term = searchTerm();
-    const allEntities = entities();
+    const excludedIds = props.config.excludedIds?.();
+    const allEntities = entities().filter(
+      (entity) => !excludedIds?.has(entity.id)
+    );
     const userId = currentUserId();
 
     // List is unvirtualized — revisit if these caps grow significantly.
@@ -289,6 +314,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (needsEmailSearch() && term) {
       const localIds = new Set(localResults.map((e) => e.id));
       const serverResults = serverEmails()
+        .filter((entity) => !excludedIds?.has(entity.id))
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
       return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
@@ -320,6 +346,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     index === selectedEntityCountAtOpen();
 
   const toggleEntity = (entity: CombinedEntity) => {
+    const entityType = getEntityType(entity);
+    if (!entityType) return;
     const newSelected = new Set(props.selectedOptions());
     const isCurrentlySelected = newSelected.has(entity.id);
 
@@ -337,7 +365,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     props.setSelectedOptions(newSelected, [
       {
         id: entity.id,
-        entity_type: getEntityType(entity),
+        entity_type: entityType,
       },
     ]);
 
@@ -369,7 +397,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
   };
 
-  const totalCount = () => pinnedCount() + sortedEntities().length;
+  const totalCount = () =>
+    pinnedCount() + sortedEntities().length + (customEmail() ? 1 : 0);
 
   // Reset selected index to top when search term or list changes
   createEffect(() => {
@@ -405,8 +434,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       const pCount = pinnedCount();
       if (idx < pCount) {
         togglePinnedOption(visiblePinnedOptions()[idx]);
-      } else {
+      } else if (idx < pCount + sortedEntities().length) {
         const entity = sortedEntities()[idx - pCount];
+        if (entity) toggleEntity(entity);
+      } else {
+        const entity = customEmailEntity();
         if (entity) toggleEntity(entity);
       }
     }
@@ -538,6 +570,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                   size="sm"
                                   isDeleted={false}
                                   suppressClick={true}
+                                  photoUrl={
+                                    entity.kind === 'user'
+                                      ? entity.data.photoUrl
+                                      : undefined
+                                  }
                                 />
                               }
                             >
@@ -570,6 +607,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                               />
                             </Show>
                           </span>
+                          <Show when={isBotPrincipalId(entity.id)}>
+                            <span class="shrink-0 text-xs text-ink-muted">
+                              Agent
+                            </span>
+                          </Show>
                         </div>
                         <Show
                           when={!props.config.isMultiSelect && isSelected()}
@@ -582,6 +624,44 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 }}
               </For>
             </div>
+          </Show>
+          <Show when={customEmail()}>
+            {(email) => {
+              const rowIndex = () => pinnedCount() + sortedEntities().length;
+              const entity = () => customEmailEntity();
+              return (
+                <div
+                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0"
+                  classList={{
+                    'bg-hover': rowIndex() === selectedIndex(),
+                  }}
+                  onClick={() => {
+                    const next = entity();
+                    if (next) toggleEntity(next);
+                  }}
+                  onMouseEnter={() => {
+                    if (!keyboardMode()) setSelectedIndex(rowIndex());
+                  }}
+                >
+                  <Show when={props.config.isMultiSelect}>
+                    <div class="shrink-0">
+                      <OptionCheckBox checked={false} multiselect />
+                    </div>
+                  </Show>
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <div class="size-4 shrink-0 flex items-center">
+                      <UserIcon
+                        id={emailToId(email())}
+                        size="sm"
+                        isDeleted={false}
+                        suppressClick={true}
+                      />
+                    </div>
+                    <span class="truncate min-w-0">Add {email()}</span>
+                  </div>
+                </div>
+              );
+            }}
           </Show>
         </div>
       </Show>

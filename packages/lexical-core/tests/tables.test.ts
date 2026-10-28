@@ -19,10 +19,17 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $isElementNode,
   createEditor,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
+import {
+  $createDateMentionNode,
+  $isDateMentionNode,
+} from '../nodes/DateMentionNode';
+import { $createImageNode, $isImageNode } from '../nodes/ImageNode';
+import { $createVideoNode, $isVideoNode } from '../nodes/VideoNode';
 import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
 
 function createTestEditor() {
@@ -141,6 +148,32 @@ describe('m-table internal transformer', () => {
       expect(mergedCell.getColSpan()).toBe(2);
       expect(mergedCell.getRowSpan()).toBe(2);
       expect(mergedCell.getTextContent()).toBe('Wolf');
+    });
+  });
+
+  it('serializes height only on rows that have one', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const autoRow = $createTableRowNode();
+      autoRow.append($createCell('a'));
+      const tallRow = $createTableRowNode();
+      tallRow.setHeight(48);
+      tallRow.append($createCell('b'));
+      table.append(autoRow, tallRow);
+      $getRoot().append(table);
+    });
+
+    expect(exportMarkdown(editor)).toBe(
+      '<m-table><m-table-row><m-table-cell>a</m-table-cell></m-table-row><m-table-row height="48"><m-table-cell>b</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, exportMarkdown(editor));
+    editor.getEditorState().read(() => {
+      const rows = $getFirstTable().getChildren().filter($isTableRowNode);
+      expect((rows[0] as TableRowNode).getHeight()).toBeUndefined();
+      expect((rows[1] as TableRowNode).getHeight()).toBe(48);
     });
   });
 
@@ -293,6 +326,305 @@ describe('lists inside table cells', () => {
   });
 });
 
+describe('date mentions inside table cells', () => {
+  const DATE_MENTION_MARKDOWN =
+    '<m-date-mention>{"date":"2026-03-24T00:00:00.000Z","displayFormat":"March 24, 2026"}</m-date-mention>';
+
+  function $getFirstCellDateMention() {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const mention = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isDateMentionNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isDateMentionNode)
+            : []
+      )[0];
+    expect(mention).toBeDefined();
+    return mention!;
+  }
+
+  it('round-trips a date mention in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      `<m-table><m-table-row><m-table-cell>Due ${DATE_MENTION_MARKDOWN}</m-table-cell></m-table-row></m-table>`
+    );
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain(DATE_MENTION_MARKDOWN);
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
+    });
+  });
+
+  it('round-trips a date mention appended to a cell', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      const paragraph = $createParagraphNode();
+      paragraph.append(
+        $createTextNode('Due '),
+        $createDateMentionNode({
+          date: '2026-03-24T00:00:00.000Z',
+          displayFormat: 'March 24, 2026',
+        })
+      );
+      cell.append(paragraph);
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain(DATE_MENTION_MARKDOWN);
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
+    });
+  });
+
+  it('round-trips a date mention in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      `<m-table><m-table-row><m-table-cell>Due ${DATE_MENTION_MARKDOWN}</m-table-cell><m-table-cell>plain</m-table-cell></m-table-row></m-table>`
+    );
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toContain(DATE_MENTION_MARKDOWN);
+    expect(markdown).toContain('|');
+    expect(markdown).toContain('plain');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
+    });
+  });
+
+  it('imports an internal date mention tag from a pipe-table cell', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(
+        `| Due ${DATE_MENTION_MARKDOWN} | plain |`,
+        EXTERNAL_TRANSFORMERS
+      );
+    });
+
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
+    });
+  });
+});
+
+describe('images inside table cells', () => {
+  function $getFirstCellImage() {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const image = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isImageNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isImageNode)
+            : []
+      )[0];
+    expect(image).toBeDefined();
+    return image!;
+  }
+
+  it('round-trips a markdown image in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>![cat](https://example.com/cat.png)</m-table-cell></m-table-row></m-table>'
+    );
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toBe(
+      '<m-table><m-table-row><m-table-cell>![cat](https://example.com/cat.png)</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const image = $getFirstCellImage();
+      expect(image.getUrl()).toBe('https://example.com/cat.png');
+      expect(image.getAlt()).toBe('cat');
+    });
+  });
+
+  it('round-trips a constrained image in a cell', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      cell.append(
+        $createImageNode({
+          srcType: 'url',
+          url: 'https://example.com/cat.png',
+          alt: 'cat',
+          width: 400,
+          height: 300,
+          constrainedWidth: 200,
+          constrainedHeight: 150,
+        })
+      );
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain('<m-image>');
+    expect(markdown).toContain('"constrainedWidth":200');
+    expect(markdown).toContain('"constrainedHeight":150');
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const image = $getFirstCellImage();
+      expect(image.getUrl()).toBe('https://example.com/cat.png');
+      expect(image.getAlt()).toBe('cat');
+      expect(image.getConstrainedWidth()).toBe(200);
+      expect(image.getConstrainedHeight()).toBe(150);
+    });
+  });
+
+  it('round-trips a markdown image in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '<m-table><m-table-row><m-table-cell>![cat](https://example.com/cat.png)</m-table-cell><m-table-cell>plain</m-table-cell></m-table-row></m-table>'
+    );
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toBe('| ![cat](https://example.com/cat.png) | plain |');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const image = $getFirstCellImage();
+      expect(image.getUrl()).toBe('https://example.com/cat.png');
+      expect(image.getAlt()).toBe('cat');
+    });
+  });
+});
+
+describe('videos inside table cells', () => {
+  function $getFirstCellVideo() {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const video = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isVideoNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isVideoNode)
+            : []
+      )[0];
+    expect(video).toBeDefined();
+    return video!;
+  }
+
+  it('round-trips a video in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      cell.append(
+        $createVideoNode({
+          srcType: 'url',
+          url: 'https://example.com/clip.mp4',
+          width: 400,
+          height: 300,
+          constrainedWidth: 200,
+          constrainedHeight: 150,
+        })
+      );
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain('<m-video>');
+    expect(markdown).toContain('https://example.com/clip.mp4');
+    expect(markdown).toContain('"constrainedWidth":200');
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const video = $getFirstCellVideo();
+      expect(video.getUrl()).toBe('https://example.com/clip.mp4');
+      expect(video.getConstrainedWidth()).toBe(200);
+      expect(video.getConstrainedHeight()).toBe(150);
+    });
+  });
+
+  it('round-trips a video in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const videoCell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      videoCell.append(
+        $createVideoNode({
+          srcType: 'url',
+          url: 'https://example.com/clip.mp4',
+        })
+      );
+      row.append(videoCell, $createCell('plain'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toContain('<m-video>');
+    expect(markdown).toContain('|');
+    expect(markdown).toContain('plain');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const video = $getFirstCellVideo();
+      expect(video.getUrl()).toBe('https://example.com/clip.mp4');
+    });
+  });
+});
+
 describe('pipe table external transformer', () => {
   it('pads merged cells so exported rows stay rectangular', async () => {
     const editor = createTestEditor();
@@ -316,5 +648,103 @@ describe('pipe table external transformer', () => {
     const lines = markdown.split('\n');
     expect(lines[0]).toBe('| wide |  | c |');
     expect(lines[1]).toBe('| x | y | z |');
+  });
+});
+
+describe('video link transformer', () => {
+  it('converts markdown links with video URLs to video nodes', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '[Screen Recording 2026-10-06 at 4.03.28 PM.mov](https://static-file-service.macro.com/file/3d7ab8c8-05b7-477f-aa83-7dd514219867)'
+    );
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const video = root.getChildren().find($isVideoNode);
+      expect(video).toBeDefined();
+      expect(video!.getUrl()).toBe(
+        'https://static-file-service.macro.com/file/3d7ab8c8-05b7-477f-aa83-7dd514219867'
+      );
+    });
+  });
+
+  it('converts links with .mp4 extension to video nodes', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(editor, '[Video](https://example.com/video.mp4)');
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const video = root.getChildren().find($isVideoNode);
+      expect(video).toBeDefined();
+      expect(video!.getUrl()).toBe('https://example.com/video.mp4');
+    });
+  });
+
+  it('converts links with .mov extension to video nodes', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(editor, '[Recording](https://example.com/clip.mov)');
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      const video = root.getChildren().find($isVideoNode);
+      expect(video).toBeDefined();
+      expect(video!.getUrl()).toBe('https://example.com/clip.mov');
+    });
+  });
+
+  it('leaves non-video links as links', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(editor, '[Document](https://example.com/doc.pdf)');
+
+    editor.getEditorState().read(() => {
+      const root = $getRoot();
+      expect(root.getChildren().find($isVideoNode)).toBeUndefined();
+      expect(root.getTextContent()).toContain('Document');
+    });
+    expect(exportMarkdown(editor)).toContain('https://example.com/doc.pdf');
+  });
+
+  it('leaves static-file PDF links as links', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '[Report.pdf](https://static-file-service.macro.com/file/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)'
+    );
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getChildren().find($isVideoNode)).toBeUndefined();
+      expect($getRoot().getTextContent()).toContain('Report.pdf');
+    });
+    expect(exportMarkdown(editor)).toContain(
+      'static-file-service.macro.com/file/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    );
+  });
+
+  it('does not turn a trailing inline video link into a block video', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      'Watch this: [clip](https://example.com/clip.mp4)'
+    );
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getChildren().find($isVideoNode)).toBeUndefined();
+      expect($getRoot().getTextContent()).toContain('Watch this:');
+    });
+  });
+
+  it('ignores a video extension that only appears in a query string', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '[Document](https://example.com/document.pdf?next=clip.mp4)'
+    );
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getChildren().find($isVideoNode)).toBeUndefined();
+      expect($getRoot().getTextContent()).toContain('Document');
+    });
+    expect(exportMarkdown(editor)).toContain('document.pdf?next=clip.mp4');
   });
 });

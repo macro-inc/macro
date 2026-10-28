@@ -1,0 +1,691 @@
+//! Shared spreadsheet commands used by the AI tools and execution port.
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+/// Font family.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpreadsheetFont {
+    /// Sans.
+    Sans,
+    /// Serif.
+    Serif,
+    /// Mono.
+    Mono,
+}
+
+/// Horizontal alignment.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpreadsheetHorizontalAlign {
+    /// Auto.
+    Auto,
+    /// Left.
+    Left,
+    /// Center.
+    Center,
+    /// Right.
+    Right,
+}
+
+/// Vertical alignment.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpreadsheetVerticalAlign {
+    /// Top.
+    Top,
+    /// Middle.
+    Middle,
+    /// Bottom.
+    Bottom,
+}
+
+/// Number interpretation and display; currency and accounting are USD and dates use UTC.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpreadsheetNumberFormat {
+    /// General.
+    General,
+    /// Number.
+    Number,
+    /// Currency.
+    Currency,
+    /// Accounting: $ at the cell's left edge, negatives in parentheses, zero as a dash.
+    Accounting,
+    /// Percent.
+    Percent,
+    /// Date, shown as m/d/yyyy unless numberFormat gives another date code.
+    Date,
+    /// Time, shown as h:mm:ss AM/PM unless numberFormat gives another time code.
+    Time,
+    /// Scientific.
+    Scientific,
+    /// Text.
+    Text,
+}
+
+/// Excel border line style.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SpreadsheetBorderStyle {
+    /// Restore the default border style.
+    #[serde(rename = "")]
+    Reset,
+    /// Thin line.
+    Thin,
+    /// Medium line.
+    Medium,
+    /// Thick line.
+    Thick,
+    /// Double line.
+    Double,
+    /// Dotted line.
+    Dotted,
+    /// Dashed line.
+    Dashed,
+    /// DashDot line.
+    DashDot,
+    /// DashDotDot line.
+    DashDotDot,
+    /// SlantDashDot line.
+    SlantDashDot,
+    /// Hair line.
+    Hair,
+    /// MediumDashed line.
+    MediumDashed,
+    /// MediumDashDot line.
+    MediumDashDot,
+    /// MediumDashDotDot line.
+    MediumDashDotDot,
+}
+
+/// Sparse cell styling patch. Omitted fields remain unchanged.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpreadsheetStyle {
+    /// Exact Excel number format, up to 512 characters; it overrides the display of `format`.
+    /// Show dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,
+    /// mm/dd/yyyy, dd/mm/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with
+    /// format=time and a code such as h:mm AM/PM.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub number_format: Option<String>,
+    /// Exact Excel font name, up to 128 characters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_name: Option<String>,
+    /// Top border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_top_style: Option<SpreadsheetBorderStyle>,
+    /// Top border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_top_color: Option<String>,
+    /// Right border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_right_style: Option<SpreadsheetBorderStyle>,
+    /// Right border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_right_color: Option<String>,
+    /// Bottom border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_bottom_style: Option<SpreadsheetBorderStyle>,
+    /// Bottom border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_bottom_color: Option<String>,
+    /// Left border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_left_style: Option<SpreadsheetBorderStyle>,
+    /// Left border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_left_color: Option<String>,
+
+    /// Bold text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bold: Option<bool>,
+    /// Italic text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub italic: Option<bool>,
+    /// Underlined text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub underline: Option<bool>,
+    /// Struck-through text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strikethrough: Option<bool>,
+    /// Font family.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<SpreadsheetFont>,
+    /// Font size in points, 8 through 36.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_size: Option<u8>,
+    /// Text color as #RRGGBB; empty string resets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_color: Option<String>,
+    /// Fill color as #RRGGBB; empty string resets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_color: Option<String>,
+    /// Horizontal alignment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub horizontal_align: Option<SpreadsheetHorizontalAlign>,
+    /// Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the
+    /// left edge, or from the right edge of right-aligned cells. Centered cells ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indent: Option<u8>,
+    /// Vertical alignment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vertical_align: Option<SpreadsheetVerticalAlign>,
+    /// Wrap text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrap: Option<bool>,
+    /// Top border.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_top: Option<bool>,
+    /// Right border.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_right: Option<bool>,
+    /// Bottom border.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_bottom: Option<bool>,
+    /// Left border.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_left: Option<bool>,
+    /// Decimal places, 0 through 10; -1 restores automatic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decimals: Option<i8>,
+    /// How to interpret and display the input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<SpreadsheetNumberFormat>,
+    /// Show the cell's TRUE/FALSE value as a checkbox; false removes it and keeps the value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkbox: Option<bool>,
+}
+
+/// Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpreadsheetCellInput {
+    /// A1 address, from A1 through XFD100000.
+    pub address: String,
+    /// Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
+    /// For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
+    /// or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
+    /// A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
+    /// Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
+    /// Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
+    pub value: String,
+}
+
+/// A scratch formula evaluated without persisting it.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpreadsheetFormula {
+    /// Optional label echoed with the result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Excel-style formula, beginning with =.
+    pub formula: String,
+}
+
+/// Hypothetical inputs applied only to the calculation's disposable workbook.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpreadsheetOverride {
+    /// Stable sheet ID or exact sheet name from ReadSpreadsheet.
+    pub sheet_id: String,
+    /// Cells to change in this hypothetical calculation.
+    pub cells: Vec<SpreadsheetCellInput>,
+}
+
+/// A column width.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpreadsheetColumnWidth {
+    /// Column letter A through XFD.
+    pub column: String,
+    /// Width in pixels, 8 through 640.
+    pub width: u16,
+}
+
+/// A dropdown choice's color. Cells showing the choice draw it as a chip of this color.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpreadsheetDropdownColor {
+    /// The choice, matched to cell text ignoring case.
+    pub item: String,
+    /// Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.
+    pub color: String,
+}
+
+/// One operation in an atomic workbook edit. All operations validate before any write.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum SpreadsheetOperation {
+    /// Set raw values/formulas while preserving existing formatting.
+    SetCells {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// Cells and their new source inputs.
+        cells: Vec<SpreadsheetCellInput>,
+    },
+    /// Apply a sparse formatting patch to a rectangle.
+    FormatCells {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle, for example A1:D20.
+        range: String,
+        /// Properties to change; omitted properties remain unchanged.
+        style: SpreadsheetStyle,
+    },
+    /// Clear a rectangle's inputs, optionally its formatting too.
+    ClearCells {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle.
+        range: String,
+        /// Defaults to false; preserves formatting unless requested.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        clear_formatting: Option<bool>,
+    },
+    /// Repeat a source rectangle into a target using relative formula translation.
+    FillCells {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// Source rectangle.
+        source_range: String,
+        /// Target rectangle.
+        target_range: String,
+    },
+    /// Add an empty sheet; later operations may address it by this name.
+    AddSheet {
+        /// Unique Excel-compatible name, at most 31 characters.
+        name: String,
+    },
+    /// Rename a sheet; rejected when existing formulas directly reference its current name.
+    RenameSheet {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// New unique name.
+        name: String,
+    },
+    /// Duplicate a sheet, including values, formulas, styles, and layout.
+    DuplicateSheet {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// Optional unique name for the copy.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+    },
+    /// Delete a sheet; the final sheet and directly referenced sheets are protected.
+    DeleteSheet {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+    },
+    /// Append rows, up to the 100,000-row sheet limit.
+    AppendRows {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// Number of rows to append.
+        count: u16,
+    },
+    /// Resize one or more columns.
+    ResizeColumns {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// Column widths to set.
+        columns: Vec<SpreadsheetColumnWidth>,
+    },
+    /// Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.
+    /// Give exactly one of items or source. Cell values are unchanged; set them separately.
+    SetDropdown {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle, for example C2:C200.
+        range: String,
+        /// Typed choices, without commas, at most 253 characters in total.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        items: Option<Vec<String>>,
+        /// Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+        /// Defaults to true: reject typed entries that are not a choice. False only suggests the choices.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reject_invalid: Option<bool>,
+        /// Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colors: Option<Vec<SpreadsheetDropdownColor>>,
+    },
+    /// Remove dropdowns and any other data validation from a rectangle.
+    ClearValidation {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle.
+        range: String,
+    },
+    /// Turn a rectangle into checkboxes backed by TRUE/FALSE values: blank cells become FALSE
+    /// (unchecked) and other values are kept. Check or uncheck them with set_cells TRUE or FALSE.
+    InsertCheckboxes {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle, for example D2:D50.
+        range: String,
+    },
+    /// Convert a rectangle to a named table (an Excel table). Its first row becomes the header
+    /// row; blank or repeated headers are named. Formulas can then use structured references
+    /// such as Table1[Amount], [@Amount] or Table1 for its data, and each header gets sort and
+    /// filter controls. Columns take the type their values suggest unless column_types says.
+    CreateTable {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle including the header row, for example A1:D20. Must not overlap a table.
+        range: String,
+        /// Unique table name, such as Sales; spaces become underscores. Defaults to the next free
+        /// TableN.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        /// Add a total row below the data, which must be empty. Defaults to false.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        totals_row: Option<bool>,
+        /// Column types by header name. A type formats the column's data cells; checkbox makes
+        /// them checkboxes and dropdown offers the column's values as colored choices.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        column_types: Option<Vec<SpreadsheetTableColumnType>>,
+    },
+}
+
+/// A table column's type, by its header name.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetTableColumnType {
+    /// Header name of the column, ignoring case.
+    pub column: String,
+    /// What the column holds.
+    #[serde(rename = "type")]
+    pub column_type: SpreadsheetColumnType,
+}
+
+/// What a table column holds, as Google Sheets types table columns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SpreadsheetColumnType {
+    /// Any text.
+    Text,
+    /// Numbers, shown with thousands separators.
+    Number,
+    /// Fractions shown as percentages.
+    Percent,
+    /// Amounts of money.
+    Currency,
+    /// Calendar dates.
+    Date,
+    /// Dates with a time of day.
+    Datetime,
+    /// Times of day.
+    Time,
+    /// TRUE or FALSE, shown as checkboxes.
+    Checkbox,
+    /// One of a list of choices, shown as colored chips.
+    Dropdown,
+    /// A mention of a person, which people type with @.
+    Person,
+}
+
+/// The deterministic spreadsheet execution request.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(
+    tag = "action",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SpreadsheetRequest {
+    /// Inspect the live workbook.
+    Read {
+        /// Stable sheet ID or exact name; defaults to the first sheet.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sheet_id: Option<String>,
+        /// A1 rectangles. Omit for a compact overview; at most 500 returned cells.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ranges: Option<Vec<String>>,
+        /// Include supported cell styles.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        include_styles: Option<bool>,
+    },
+    /// Evaluate scratch formulas and optional hypothetical inputs.
+    Calculate {
+        /// Sheet in whose context unqualified references resolve.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sheet_id: Option<String>,
+        /// At most 20 formulas, evaluated without writes.
+        formulas: Vec<SpreadsheetFormula>,
+        /// Optional hypothetical cell inputs; never persisted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        overrides: Option<Vec<SpreadsheetOverride>>,
+    },
+    /// Apply a guarded atomic mutation.
+    Edit {
+        /// Revision returned by ReadSpreadsheet; a mismatch changes nothing.
+        expected_revision: String,
+        /// Between 1 and 25 operations, affecting at most 2,000 cells.
+        operations: Vec<SpreadsheetOperation>,
+    },
+}
+
+/// A calculated scalar with its display text and optional error explanation.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetValue {
+    /// Scalar kind: blank, number, text, boolean, or error.
+    #[serde(rename = "type")]
+    pub kind: SpreadsheetValueKind,
+    /// The typed scalar. Empty cells have a null value.
+    pub value: serde_json::Value,
+    /// Text shown in the spreadsheet.
+    pub display: String,
+    /// Explanation for an error result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// The calculation result kind.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SpreadsheetValueKind {
+    /// Empty cell.
+    Blank,
+    /// Numeric value.
+    Number,
+    /// Literal text.
+    Text,
+    /// Boolean value.
+    Boolean,
+    /// Formula error.
+    Error,
+}
+
+/// Cell source and calculated result.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetReadCell {
+    /// A1 address.
+    pub address: String,
+    /// Exact persisted source input.
+    pub source: String,
+    /// Formula, when this input is calculated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formula: Option<String>,
+    /// Cell formatting, when requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<SpreadsheetStyle>,
+    /// The current calculation result.
+    #[serde(flatten)]
+    pub result: SpreadsheetValue,
+}
+
+/// Compact metadata for a sheet.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetSheetSummary {
+    /// Stable sheet identity for future calls.
+    pub id: String,
+    /// Current sheet name.
+    pub name: String,
+    /// Available rows.
+    pub row_count: usize,
+    /// Available columns.
+    pub column_count: usize,
+    /// Bounding rectangle of used cells, or null for an empty sheet.
+    pub used_range: Option<String>,
+    /// Number of populated cells.
+    pub populated_cells: usize,
+    /// Number of formulas.
+    pub formula_cells: usize,
+    /// Number of calculated errors.
+    pub error_cells: usize,
+    /// Named tables on the sheet.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tables: Vec<SpreadsheetTableSummary>,
+}
+
+/// A named table (an Excel table) that formulas address with structured references.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetTableSummary {
+    /// Table name, as in Sales[Amount].
+    pub name: String,
+    /// A1 rectangle from the header row through the total row, if any.
+    pub range: String,
+    /// Column names, from the header row.
+    pub columns: Vec<String>,
+    /// Whether the last row is a total row.
+    pub totals_row: bool,
+    /// Columns whose filters currently hide rows.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filtered_columns: Vec<String>,
+    /// Typed columns; untyped columns are left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub column_types: Vec<SpreadsheetTableColumnType>,
+}
+
+/// Addressed range with explicit truncation.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetReadRange {
+    /// Stable sheet identity.
+    pub sheet_id: String,
+    /// Current sheet name.
+    pub sheet_name: String,
+    /// Requested or sampled rectangle.
+    pub range: String,
+    /// Cells with their sources and current results.
+    pub cells: Vec<SpreadsheetReadCell>,
+    /// Dropdowns and other data validation rules overlapping this range.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validations: Vec<SpreadsheetReadValidation>,
+    /// True when a narrower follow-up read is needed to see every cell.
+    pub truncated: bool,
+}
+
+/// A data validation rule; list rules are dropdowns.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetReadValidation {
+    /// Cells the rule covers, as space-separated A1 ranges.
+    pub range: String,
+    /// Rule kind: list, whole, decimal, date, time, textLength, custom, or any.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// A dropdown's typed choices.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<String>>,
+    /// A dropdown's source range.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Comparison for number, date, time and text-length rules.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    /// Rule formulas, without the leading =.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formulas: Option<Vec<String>>,
+    /// Whether a list rule shows its dropdown arrow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropdown: Option<bool>,
+    /// Whether entries that break the rule are rejected.
+    pub reject_invalid: bool,
+    /// A dropdown's choice colors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colors: Option<Vec<SpreadsheetDropdownColor>>,
+}
+
+/// One hypothetical formula result.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetFormulaResult {
+    /// Caller-supplied label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Evaluated scratch formula.
+    pub formula: String,
+    /// Calculated scalar.
+    #[serde(flatten)]
+    pub result: SpreadsheetValue,
+}
+
+/// Applied edit summary.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetChange {
+    /// Operation type.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// Affected stable sheet identity.
+    pub sheet_id: String,
+    /// Human-readable change summary.
+    pub summary: String,
+    /// Affected range, when applicable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<String>,
+}
+
+/// Structured output from a deterministic workbook operation.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(
+    tag = "action",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SpreadsheetResponse {
+    /// Workbook inspection result.
+    Read {
+        /// Opaque revision required for EditSpreadsheet.
+        revision: String,
+        /// All visible sheets and their used bounds.
+        sheets: Vec<SpreadsheetSheetSummary>,
+        /// Addressed cells with raw inputs and calculated results.
+        ranges: Vec<SpreadsheetReadRange>,
+        /// Limits or issues the caller should account for.
+        warnings: Vec<String>,
+    },
+    /// Scratch calculation result. No persistent changes were made.
+    Calculate {
+        /// Revision used for these calculations.
+        revision: String,
+        /// Results in input order.
+        results: Vec<SpreadsheetFormulaResult>,
+        /// Calculation limits or issues.
+        warnings: Vec<String>,
+    },
+    /// Result of a persisted atomic edit.
+    Edit {
+        /// Revision after the edit; use a fresh read before further editing.
+        revision: String,
+        /// Whether a new change was persisted.
+        applied: bool,
+        /// Applied operation summaries.
+        changes: Vec<SpreadsheetChange>,
+        /// Sheet metadata after editing.
+        sheets: Vec<SpreadsheetSheetSummary>,
+        /// Issues requiring inspection, including formula errors.
+        warnings: Vec<String>,
+    },
+}

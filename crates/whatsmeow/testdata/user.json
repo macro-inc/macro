@@ -1,0 +1,71 @@
+{
+  "blocklist": {
+    "addressing_mode": "lid",
+    "d_hash": "1700000000",
+    "items": [
+      {
+        "active": true,
+        "lid": "6666@lid",
+        "pn": "5555@s.whatsapp.net"
+      },
+      {
+        "active": false,
+        "lid": "7777@lid",
+        "pn": ""
+      }
+    ]
+  },
+  "blocklist_lid_pairs": [
+    [
+      "6666@lid",
+      "5555@s.whatsapp.net"
+    ]
+  ],
+  "blocklist_node": "00f80671ecd6ff051700000000fc0f61646472657373696e675f6d6f646576f803f8073f0cfaff02666676fc06706e5f6a6964faff02555503ec019bf8033f0cfaff02777776f8033fedd3fc05626c6f636b",
+  "device_lists": [
+    {
+      "devices": [
+        "5555@s.whatsapp.net",
+        "5555:3@s.whatsapp.net",
+        "5555:99@hosted",
+        "5555:4464@s.whatsapp.net"
+      ],
+      "hash": "2:JqlljRY5",
+      "node": "00f8020ff801f80236f806f8033b082df8053b08a25045f8053b08ff0199fc0969735f686f737465649bf8032408e3f8033b5055f8033b08ff8370000f",
+      "user": "5555@s.whatsapp.net"
+    },
+    {
+      "devices": [
+        "6666@lid",
+        "6666:12@hosted.lid"
+      ],
+      "hash": "2:t38vXlMn",
+      "node": "00f8020ff801f80236f802f8033b082df8053b08cffc0969735f686f737465649b",
+      "user": "6666@lid"
+    },
+    {
+      "devices": [],
+      "hash": "2:47DEQpj8",
+      "node": "00f8010f",
+      "user": "5555@s.whatsapp.net"
+    },
+    {
+      "devices": [],
+      "hash": "2:47DEQpj8",
+      "node": "00f802fc0b6e6f742d64657669636573f801f80236f801f8033b0855",
+      "user": "5555@s.whatsapp.net"
+    }
+  ],
+  "requests": {
+    "block_lid": "00f80a1908fc02494416ecd9045a11fa0003f801f8073f0cfaff02666676edd3fc05626c6f636becd6fc056861736831",
+    "get_blocklist": "00f80a19042911fa000308fc02494416ecd900",
+    "get_blocklist_with_hash": "00f80a1908fc02494416ecd9042911fa0003f801f8033fecd6fc056861736831",
+    "get_user_devices": "00f80a191679042911fa000308fc024944f801f80c79619b8f2d7d13fc03736964fc035349446a6df802f8026df801f8030f5445f80271f802f8030e0cfaff02555503f8030e0cfaff02666676",
+    "get_user_info": "00f80a1908fc0249441679042911fa0003f801f80c798f2d7da0fc03736964fc035349446aed0a619bf802f8026df805f80244f801f80122f8010bf80121f8030f5445f80176f80271f802f8030e0cfaff02555503f8030e0cfaff02666676",
+    "is_on_whatsapp": "00f80a19042911fa000308fc0249441679f801f80c79fc03736964fc035349446a6d619b8f2d7de5f802f8026df804f80325fc0f61646472657373696e675f6d6f646576f80244f801f80122f8010af801fc08757365726e616d65f80271f801f8020ef801f80225fc112b313535353132333435363740632e7573",
+    "profile_picture_community": "00f80a1908fc02494416ed33042911faff091203630099999999991cf801f802fc087069637475726573f801f807210443fc10706172656e745f67726f75705f6a6964faff091203630099999999991c6dd2",
+    "profile_picture_full": "00f80c1987faff0255550308fc0249441642042911fa0003f801f80c210443ec61fc03696e76fc0a636f6d6d6f6e5f676964faff091203630012345678901cfc0a706572736f6e615f6964fc07706572736f6e616dd200",
+    "profile_picture_preview": "00f80c1908fc0249441642042911fa000387faff02555503f801f808216dd2047708fc036f6c6400",
+    "unblock_lid": "00f80a1908fc02494416ecd9045a11fa0003f801f8053f0cfaff02666676edd3fc07756e626c6f636b"
+  }
+}

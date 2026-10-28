@@ -3,8 +3,13 @@
 use crate::domain::models::{AggregateFrecency, AggregateId, FrecencyData, TimestampWeight};
 use filter_ast::Expr;
 use item_filters::ast::{
-    EntityFilterAst, chat::ChatLiteral, date::DateLiteral, document::DocumentLiteral,
+    EntityFilterAst,
+    chat::ChatLiteral,
+    date::DateLiteral,
+    document::DocumentLiteral,
+    email::Email,
     project::ProjectLiteral,
+    properties::{PropertiesLiteral, PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -83,26 +88,19 @@ fn build_notification_exists_clause(
     )
 }
 
-fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: bool) -> String {
+fn build_notification_state_clause(
+    entity_id_sql: &str,
+    entity_type: &str,
+    state: item_filters::NotificationState,
+) -> String {
+    use item_filters::NotificationState::*;
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
-        if done {
-            "un.done = true"
-        } else {
-            "un.done = false"
-        },
-    )
-}
-
-fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: bool) -> String {
-    build_notification_exists_clause(
-        entity_id_sql,
-        entity_type,
-        if seen {
-            "un.seen_at IS NOT NULL"
-        } else {
-            "un.seen_at IS NULL"
+        match state {
+            Unseen => "un.state = 'unseen'",
+            Seen => "un.state = 'seen'",
+            Done => "un.state = 'done'",
         },
     )
 }
@@ -171,11 +169,8 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             )"#
                 .to_string()
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("fa.entity_id", "document", done)
-        }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("fa.entity_id", "document", seen)
+        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationState(state)) => {
+            build_notification_state_clause("fa.entity_id", "document", state)
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(true)) => {
             build_task_include_cbm_atm_nc_clause("fa.entity_id")
@@ -216,12 +211,96 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(DocumentLiteral::UpdatedAt(DateLiteral::LessThanOrEqual(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Document" WHERE "updatedAt" <= '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Property(literal)) => {
+            property_literal_predicate(&literal)
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::EmailAttachmentParticipant(email)) => {
+            email_attachment_participant_predicate(&email)
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::NameContains(name)) => format!(
+            r#"entity_id IN (SELECT id FROM "Document" WHERE STRPOS(LOWER(name), {}) > 0 AND "deletedAt" IS NULL)"#,
+            sql_string_literal(&name.to_lowercase())
+        ),
+        // Soup resolves CRM associations before querying and rejects them on
+        // frecency sorts, so an unresolved one matches nothing.
+        filter_ast::ExprFrame::Literal(DocumentLiteral::CrmAssociated(_)) => "FALSE".to_string(),
     });
     if formatting.is_empty() {
         String::new()
     } else {
         format!(" AND {}", formatting)
     }
+}
+
+/// A single-quoted SQL string literal with embedded quotes doubled.
+fn sql_string_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+/// An EXISTS check that the aggregated document has a property value
+/// matching `literal`.
+fn property_literal_predicate(literal: &PropertiesLiteral) -> String {
+    let PropertiesLiteral {
+        property_definition_id,
+        entity_type,
+        value,
+    } = literal;
+    let value_predicate = match value {
+        PropertyMatchValue::SelectOption(option_id) => {
+            format!("ep_prop.values->'value' ? '{option_id}'")
+        }
+        PropertyMatchValue::EntityRef(entity_id) => format!(
+            "ep_prop.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', '{entity_id}'))"
+        ),
+    };
+    let entity_type_clause = match entity_type {
+        Some(et) => format!("AND ep_prop.entity_type = '{et}'"),
+        None => String::new(),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1 FROM entity_properties ep_prop
+            WHERE ep_prop.entity_id = fa.entity_id
+            {entity_type_clause}
+            AND ep_prop.property_definition_id = '{property_definition_id}'
+            AND {value_predicate}
+        )"#
+    )
+}
+
+/// Matches documents uploaded from an email attachment whose message was sent
+/// by, or addressed to, an address matching `email`.
+fn email_attachment_participant_predicate(email: &Email) -> String {
+    let address_predicate = match email {
+        Email::Complete(address) => format!(
+            "LOWER(c.email_address) = {}",
+            sql_string_literal(&address.0.as_ref().to_lowercase())
+        ),
+        Email::Domain(domain) => format!(
+            "LOWER(SPLIT_PART(c.email_address, '@', 2)) = {}",
+            sql_string_literal(&domain.to_lowercase())
+        ),
+        Email::Partial(fragment) => format!(
+            "STRPOS(LOWER(c.email_address), {}) > 0",
+            sql_string_literal(&fragment.to_lowercase())
+        ),
+    };
+    format!(
+        r#"EXISTS (
+            SELECT 1
+            FROM document_email de
+            JOIN email_attachments ea ON ea.id = de.email_attachment_id
+            JOIN email_messages m ON m.id = ea.message_id
+            JOIN LATERAL (
+                SELECT m.from_contact_id AS contact_id
+                UNION ALL
+                SELECT r.contact_id FROM email_message_recipients r WHERE r.message_id = m.id
+            ) participant ON TRUE
+            JOIN email_contacts c ON c.id = participant.contact_id
+            WHERE de.document_id = fa.entity_id
+            AND {address_predicate}
+        )"#
+    )
 }
 
 fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
@@ -263,11 +342,8 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
             // all chats are important, so if importance is false, exclude them
             filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
             filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
-            filter_ast::ExprFrame::Literal(ChatLiteral::NotificationDone(done)) => {
-                build_notification_done_clause("entity_id", "chat", done)
-            }
-            filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
-                build_notification_seen_clause("entity_id", "chat", seen)
+            filter_ast::ExprFrame::Literal(ChatLiteral::NotificationState(state)) => {
+                build_notification_state_clause("entity_id", "chat", state)
             }
             filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(DateLiteral::GreaterThan(dt))) => {
                 format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "createdAt" > '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())
@@ -321,11 +397,8 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
         // all projects are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("entity_id", "project", done)
-        }
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("entity_id", "project", seen)
+        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationState(state)) => {
+            build_notification_state_clause("entity_id", "project", state)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(DateLiteral::GreaterThan(dt))) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "createdAt" > '{}'::timestamptz AND "deletedAt" IS NULL)"#, dt.to_rfc3339())

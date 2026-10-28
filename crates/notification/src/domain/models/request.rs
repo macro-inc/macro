@@ -1,8 +1,8 @@
 //! Request and response models for the notification service.
 
 use crate::domain::models::{
-    ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
-    RecipientExclusion, TaggedContent,
+    ExclusionReason, FilteredRecipient, MobilePushRecipients, Notification, NotificationExtEmail,
+    NotificationExtIos, RecipientExclusion, TaggedContent,
     apple::APNSPushNotification,
     mobile::{self, MessageAttributes},
     queue_message::EmailCreateBundle,
@@ -32,6 +32,7 @@ pub enum NotificationCategory {
     Github,
     Reminder,
     Calendar,
+    Agent,
 }
 
 /// Request to send a notification.
@@ -58,6 +59,14 @@ where
 {
     /// Convert this builder into a full request with optional delivery customizers.
     pub fn into_request(self) -> SendNotificationRequest<'a, T, ()> {
+        self.into_request_with_id(Uuid::now_v7())
+    }
+
+    /// As [`Self::into_request`], with the notification id chosen by the
+    /// caller. Creating a notification is idempotent on its id, so a producer
+    /// that derives the id from its own event can be redelivered that event
+    /// without notifying twice.
+    pub fn into_request_with_id(self, notification_id: Uuid) -> SendNotificationRequest<'a, T, ()> {
         let SendNotificationRequestBuilder {
             notification_entity,
             secondary_notification_entity,
@@ -66,7 +75,7 @@ where
             recipient_ids,
         } = self;
         SendNotificationRequest {
-            uuid_to_write: Uuid::now_v7(),
+            uuid_to_write: notification_id,
             req: SendNotificationRequestBuilder {
                 notification_entity,
                 secondary_notification_entity,
@@ -77,6 +86,7 @@ where
             build_apns: None,
             build_email: None,
             send_conn_gateway: false,
+            mobile_push_exclusions: MobilePushRecipients::default(),
         }
     }
 }
@@ -102,6 +112,9 @@ pub struct SendNotificationRequest<'a, T, U> {
     pub(crate) build_email: Option<EmailCreateBundle>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
     pub(crate) send_conn_gateway: bool,
+    /// Platforms already handled by another delivery path for these recipients.
+    #[serde(default)]
+    pub(crate) mobile_push_exclusions: MobilePushRecipients,
 }
 
 impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
@@ -113,6 +126,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_email,
             uuid_to_write,
             send_conn_gateway,
+            mobile_push_exclusions,
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
@@ -143,11 +157,31 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             build_apns,
             build_email,
             send_conn_gateway,
+            mobile_push_exclusions,
         }
     }
 }
 
 impl<'a, T: NotificationExtEmail, U> SendNotificationRequest<'a, T, U> {
+    /// Deliver one user's notification to a connected address verified by the
+    /// producing domain. Recipient preference/access filtering still uses the
+    /// actual Macro user. Multi-recipient redirection is deliberately rejected.
+    pub fn with_email_destination(
+        mut self,
+        owner: &MacroUserIdStr<'_>,
+        destination: MacroUserIdStr<'static>,
+    ) -> Result<Self, rootcause::Report> {
+        if self.req.recipient_ids.len() != 1 || !self.req.recipient_ids.contains(owner) {
+            return Err(rootcause::report!(
+                "An email destination requires one matching notification recipient"
+            ));
+        }
+        self.build_email = Some(
+            EmailCreateBundle::new(&self.req.notification.content).with_destination(destination),
+        );
+        Ok(self)
+    }
+
     /// Add a custom email content builder.
     pub fn with_email(mut self) -> Self {
         self.build_email = Some(EmailCreateBundle::new(&self.req.notification.content));
@@ -164,6 +198,14 @@ impl<'a, T: Notification, U> SendNotificationRequest<'a, T, U> {
 }
 
 impl<'a, T, U> SendNotificationRequest<'a, T, U> {
+    /// Skip ordinary mobile alerts for recipients already handled on that platform.
+    /// Android exclusions apply only to devices registered with native call support;
+    /// older APKs always retain ordinary alerts. Other channels and persistence are unchanged.
+    pub fn with_mobile_push_exclusions(mut self, recipients: MobilePushRecipients) -> Self {
+        self.mobile_push_exclusions = recipients;
+        self
+    }
+
     pub(crate) fn update_recipients(
         mut self,
         muted_users: HashSet<MacroUserIdStr<'a>>,
@@ -264,12 +306,30 @@ pub enum NotificationStatus {
 }
 
 impl NotificationStatus {
+    /// States needing an entity-scoped update, plus whether to include rows missing a view time.
+    /// ID-scoped writes still return every requested owned row to reconcile retries.
+    pub(crate) fn entity_update_filter(&self) -> (&'static [super::NotificationState], bool) {
+        use super::NotificationState;
+        match self {
+            Self::Seen => (&[NotificationState::Unseen], true),
+            Self::Done(true) => (&NotificationState::ACTIVE, false),
+            Self::Done(false) => (&[NotificationState::Done], false),
+        }
+    }
+
     /// returns true if we should be clearing the relevant push notifications
     /// for this notification
     pub(crate) fn should_clear_push_notifs(&self) -> bool {
-        match self {
-            NotificationStatus::Seen => true,
-            NotificationStatus::Done(x) => *x,
+        if cfg!(feature = "clear_ios_push") {
+            use super::NotificationAction;
+            let action = match self {
+                NotificationStatus::Seen => NotificationAction::MarkSeen,
+                NotificationStatus::Done(true) => NotificationAction::MarkDone,
+                NotificationStatus::Done(false) => NotificationAction::Reopen,
+            };
+            action.should_clear_push_notifications()
+        } else {
+            false
         }
     }
 }
@@ -299,10 +359,8 @@ pub struct UpdateNotificationsForEntitiesRequest<'a> {
 /// Optional filters for listing user notifications.
 #[derive(Debug, Clone)]
 pub struct NotificationListFilters {
-    /// Filter by done status. `None` means include both done and not-done notifications.
-    pub done: Option<bool>,
-    /// Filter by seen status. `None` means include both seen and unseen notifications.
-    pub seen: Option<bool>,
+    /// Exact states to include. Empty means no state restriction.
+    pub states: Vec<super::NotificationState>,
     /// Optional user-facing notification categories to include. Empty means include all types.
     pub include_types: Vec<NotificationCategory>,
     /// Optional specific entities to include. Empty means include all entities.
@@ -313,8 +371,7 @@ impl NotificationListFilters {
     /// Default product behavior: list active notifications, which excludes done notifications.
     pub fn active() -> Self {
         Self {
-            done: Some(false),
-            seen: None,
+            states: super::NotificationState::ACTIVE.to_vec(),
             include_types: Vec::new(),
             entities: Vec::new(),
         }

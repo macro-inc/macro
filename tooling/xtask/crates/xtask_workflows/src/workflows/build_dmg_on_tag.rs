@@ -1,55 +1,92 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
-//! Nix. Called from [`super::build_desktop_on_tag`].
+//! Nix. The release orchestrator also uses its build job directly.
 
-use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
+use gh_workflow::{Event, Expression, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
-use crate::workflows::{build_appimage_on_tag, steps, vars};
+use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
+
+#[cfg(test)]
+mod test;
+
+const NIX_CACHE_SIZE_GB: u16 = 100;
 
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
     Workflow::new("Build macOS DMG")
-        .on(
-            Event::default().workflow_call(WorkflowCall::default().add_input(
-                "ref",
-                WorkflowCallInput {
-                    description: "Git ref to check out and build".into(),
-                    required: true,
-                    input_type: "string".into(),
-                    default: None,
-                },
-            )),
-        )
+        .on(Event::default().workflow_call(
+            WorkflowCall::default()
+                .add_input(
+                    "ref",
+                    WorkflowCallInput {
+                        description: "Git ref to check out and build".into(),
+                        required: true,
+                        input_type: "string".into(),
+                        default: None,
+                    },
+                )
+                .secrets(build_appimage_on_tag::desktop_build_secrets()),
+        ))
         .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
-        .add_job(
-            "publish-dmg",
-            publish_dmg_job("${{ inputs.ref }}").add_needs("build-dmg"),
-        )
+}
+
+/// Declare every secret referenced by the reusable job in stable YAML order.
+pub fn patch(root: &mut serde_yaml::Value) -> anyhow::Result<()> {
+    let call = root
+        .get_mut("on")
+        .and_then(|on| on.get_mut("workflow_call"))
+        .and_then(serde_yaml::Value::as_mapping_mut)
+        .ok_or_else(|| anyhow::anyhow!("rendered DMG workflow has no workflow_call"))?;
+    call.insert(
+        "secrets".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            POSTHOG_API_KEY:
+              description: PostHog project API key inlined into the desktop bundle
+              required: true
+            MACOS_DEVELOPER_ID_CERTIFICATE_BASE64:
+              description: Developer ID certificate for signing the macOS app
+              required: true
+            MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD:
+              description: Password for the Developer ID certificate
+              required: true
+            MACOS_RELEASE_DOPPLER_TOKEN:
+              description: Doppler token for notarizing the macOS DMG
+              required: true
+        "#})?,
+    );
+    Ok(())
 }
 
 /// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
 pub fn build_dmg_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build macOS DMG")
-        .runs_on("macos-15")
+        .runs_on(vec![
+            format!("{}-with-cache", runners::Runner::MacOsArmLarge),
+            "nscloud-cache-tag-macro-desktop-macos".to_owned(),
+            format!("nscloud-cache-size-{NIX_CACHE_SIZE_GB}gb"),
+        ])
+        .add_env(("DESKTOP_NIX_CACHE_SIZE_GB", NIX_CACHE_SIZE_GB.to_string()))
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
-        .add_step(install_nix_macos())
+        .add_step(steps::mount_macos_nix_cache_volume())
+        .add_step(steps::install_nix_macos())
+        .add_step(configure_nix_cache())
         .add_step(configure_signing_identity())
         .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(build_appimage_on_tag::prepare_desktop_release(ref_expr))
         .add_step(nix_build_dmg())
+        .add_step(save_nix_cache())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
+        .add_step(prepare_cloudkit_tcp())
+        .add_step(notarize_dmg())
         .add_step(steps::upload_artifact(
             "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
             xtask_paths::runtime_path!("artifacts/*"),
         ))
 }
 
-fn publish_dmg_job(ref_expr: &str) -> Job {
-    build_appimage_on_tag::publish_job(ref_expr, xtask_paths::runtime_path!("release-artifacts/*"))
-}
-
-fn assert_arm64() -> Step<Run> {
+pub(super) fn assert_arm64() -> Step<Run> {
     Step::new("Assert arm64 runner")
         .run(indoc::indoc! {r#"
             set -euo pipefail
@@ -58,12 +95,6 @@ fn assert_arm64() -> Step<Run> {
               exit 1
             fi
         "#})
-        .shell("bash")
-}
-
-fn install_nix_macos() -> Step<Run> {
-    Step::new("Install Nix")
-        .run(include_str!("scripts/install_nix_macos.sh"))
         .shell("bash")
 }
 
@@ -79,12 +110,35 @@ fn configure_signing_identity() -> Step<Run> {
             "MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD",
             vars::MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD,
         ))
+        .add_env((
+            "MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64",
+            vars::MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64,
+        ))
 }
 
 fn nix_build_dmg() -> Step<Run> {
     Step::new("Build DMG with Nix")
         .run(include_str!("scripts/build_dmg.sh"))
         .shell("bash")
+        .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
+}
+
+pub(super) fn configure_nix_cache() -> Step<Run> {
+    Step::new("Configure macOS Nix binary cache")
+        .run(include_str!("scripts/configure_macos_nix_cache.sh"))
+        .id("nix-cache")
+        .shell("bash")
+        .continue_on_error(true)
+}
+
+pub(super) fn save_nix_cache() -> Step<Run> {
+    Step::new("Prune and save macOS Nix build dependencies")
+        .run(include_str!("scripts/save_macos_nix_cache.sh"))
+        .shell("bash")
+        .if_condition(Expression::new(
+            "!cancelled() && steps.nix-cache.outcome == 'success'",
+        ))
+        .continue_on_error(true)
 }
 
 fn collect_dmg() -> Step<Run> {
@@ -96,5 +150,21 @@ fn collect_dmg() -> Step<Run> {
 fn validate_signed_dmg() -> Step<Run> {
     Step::new("Validate signed DMG")
         .run(include_str!("scripts/validate_signed_dmg.sh"))
+        .shell("bash")
+}
+
+fn notarize_dmg() -> Step<Run> {
+    Step::new("Notarize and staple DMG")
+        .run(include_str!("scripts/notarize_dmg.sh"))
+        .shell("bash")
+        .add_env(("DOPPLER_TOKEN", vars::MACOS_RELEASE_DOPPLER_TOKEN))
+}
+
+fn prepare_cloudkit_tcp() -> Step<Run> {
+    Step::new("Prepare CloudKit TCP fallback")
+        .run(format!(
+            "set -euo pipefail\ncat > \"$RUNNER_TEMP/macro-cloudkit-tcp.sh\" <<'MACRO_CLOUDKIT_TCP'\n{}\nMACRO_CLOUDKIT_TCP\n",
+            include_str!("scripts/cloudkit_tcp.sh")
+        ))
         .shell("bash")
 }

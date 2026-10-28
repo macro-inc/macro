@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH recovered AS (\n                   UPDATE slack_import_conversation SET\n                     status = CASE WHEN $2 THEN 'skipped' WHEN $3 OR attempts >= $4 THEN 'failed' ELSE 'queued' END,\n                     last_error = CASE WHEN $3 OR attempts >= $4 THEN 'internal' ELSE last_error END,\n                     settled_at = CASE WHEN $2 OR $3 OR attempts >= $4 THEN clock_timestamp() ELSE NULL END,\n                     event_generation = event_generation + 1,\n                     lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, heartbeat_at = NULL,\n                     updated_at = clock_timestamp()\n                   WHERE job_id = $1 AND ((status = 'importing' AND lease_expires_at <= clock_timestamp())\n                     OR (status = 'queued' AND ($2 OR $3)))\n                   RETURNING job_id, slack_channel_id, event_generation, status\n                ) INSERT INTO slack_import_outbox (job_id, slack_channel_id, kind, generation)\n                  SELECT job_id, slack_channel_id, 'import', event_generation FROM recovered WHERE status = 'queued'\n                  ON CONFLICT (job_id, slack_channel_id, kind, generation) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e8b84f8bea9c2d7daea0147a21ba48645ad93cba0b8ebb6da3458faa6b226118"
+}

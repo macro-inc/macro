@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,
@@ -12,16 +13,22 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
+import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import CheckIcon from '@phosphor/check.svg?component-solid';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import { blockNameToItemType } from '@service-storage/client';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import {
+  blockNameToItemType,
+  itemTypeToReferenceEntityType,
+} from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { Button, cn, Hotkey } from '@ui';
 import {
@@ -32,6 +39,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
 import { ScrollIndicators } from './VerticalScrollIndicators';
@@ -41,7 +49,10 @@ type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 interface MobileForwardToChannelLayoutProps
   extends Pick<
     ForwardToChannelProps,
-    'submitPermissionInfo' | 'hideAccessLevelSelector'
+    | 'submitPermissionInfo'
+    | 'hideAccessLevelSelector'
+    | 'editPermissionEnabled'
+    | 'allowedAccessLevels'
   > {
   isAuthenticated: Accessor<boolean | undefined>;
   selectedOptions: Accessor<Recipient[]>;
@@ -130,6 +141,8 @@ function MobileForwardToChannelLayout(
         <div class="px-3 py-2 flex items-center">
           <span class="text-sm text-ink-muted pr-2">Access:</span>
           <ShareOptions
+            editPermissionEnabled={props.editPermissionEnabled}
+            allowedAccessLevels={props.allowedAccessLevels}
             setPermissions={(accessLevel) =>
               props.setSubmitAccessLevel(accessLevel)
             }
@@ -161,11 +174,12 @@ function MobileForwardToChannelLayout(
 }
 
 interface ForwardToChannelProps {
+  editPermissionEnabled?: boolean;
   submitPermissionInfo?: {
     setChannelPermissions: (
       channelId: string,
       accessLevel: AccessLevel
-    ) => void;
+    ) => void | boolean | Promise<void | boolean>;
     channelSharePermissions?: SharePermissionV2ChannelSharePermissions;
     userPermissions: Permissions;
   };
@@ -184,6 +198,18 @@ interface ForwardToChannelProps {
   }) => void;
   hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
+  /** Levels the picker offers; all when absent. */
+  allowedAccessLevels?: readonly AccessLevel[];
+  /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
+  entity?: NewAttachment;
+  /**
+   * Grant the destination before the message is sent, for entities that
+   * sending does not grant. Rejecting cancels that delivery.
+   */
+  prepareChannel?: (
+    channelId: string,
+    accessLevel: AccessLevel | null
+  ) => Promise<void>;
   blockId?: string;
   blockName?: BlockName | BlockAlias;
 }
@@ -205,10 +231,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   // cmd+enter through the hotkey system below.
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: 'forward-to-channel-markdown',
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     onChange: setMarkdown,
   });
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
+  const [isSubmitting, setIsSubmitting] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
 
   const destination = createMemo(() => {
@@ -234,10 +262,20 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   });
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
-  const blockBaseName = useMaybeBlockName() ?? props.blockName;
+  const contextBlockBaseName = useMaybeBlockName();
+  const blockBaseName = props.entity
+    ? undefined
+    : props.blockName
+      ? resolveBlockAlias(props.blockName)
+      : contextBlockBaseName;
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(
-      props.initialAccessLevel ?? (blockBaseName === 'md' ? 'edit' : 'view')
+      props.initialAccessLevel ??
+        match(blockBaseName)
+          .returnType<AccessLevel>()
+          .with('md', () => 'edit')
+          .with('pdf', () => 'comment')
+          .otherwise(() => 'view')
     );
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
@@ -246,18 +284,34 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     }
   });
 
-  const submitChannelPermissions = (channelId: string) => {
+  const submitChannelPermissions = async (
+    channelId: string,
+    accessLevel: AccessLevel | null
+  ) => {
     if (!props.submitPermissionInfo) {
-      return;
+      return true;
     }
 
-    const accessLevel = submitAccessLevel();
     if (!accessLevel) {
       toast.failure('Failed to set channel permissions');
-      return;
+      return false;
     }
 
-    props.submitPermissionInfo.setChannelPermissions(channelId, accessLevel);
+    try {
+      if (props.prepareChannel) {
+        await props.prepareChannel(channelId, accessLevel);
+        return true;
+      }
+      const result = await props.submitPermissionInfo.setChannelPermissions(
+        channelId,
+        accessLevel
+      );
+      return result !== false;
+    } catch (error) {
+      console.error('Failed to set channel permissions', error);
+      toast.failure('Failed to set channel permissions');
+      return false;
+    }
   };
 
   const [sendAsGroupMessage, setSendAsGroupMessage] =
@@ -276,21 +330,31 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     return true;
   });
 
-  const blockName = useMaybeBlockAliasedName() ?? props.blockName;
-  const blockId = useMaybeBlockId() ?? props.blockId;
-  const asAttachment = () => {
-    const itemType =
-      blockName != null ? blockNameToItemType(blockName) : undefined;
+  const contextBlockName = useMaybeBlockAliasedName();
+  const contextBlockId = useMaybeBlockId();
+  // Explicit identity can differ from the enclosing block (e.g. a newly
+  // persisted agent session still mounted in its launcher placeholder).
+  const blockName = () => props.blockName ?? contextBlockName;
+  const blockId = () => props.blockId ?? contextBlockId;
+  const itemType = () => {
+    if (props.entity) return;
+    const name = blockName();
+    return name != null ? blockNameToItemType(name) : undefined;
+  };
+
+  const asAttachment = (): NewAttachment => {
+    if (props.entity) return props.entity;
+    const type = itemType();
     return {
-      entity_type: itemType ?? 'unknown',
-      entity_id: blockId ?? '',
+      entity_type: type ? itemTypeToReferenceEntityType(type) : 'unknown',
+      entity_id: blockId() ?? '',
     };
   };
 
   const trackForwardShare = (targetType: 'channel' | 'user') => {
     const attachment = asAttachment();
     analytics.track('share_entity', {
-      entityType: attachment.entity_type,
+      entityType: itemType() ?? attachment.entity_type,
       entityId: attachment.entity_id || undefined,
       shareMethod: 'forward',
       targetType,
@@ -298,118 +362,125 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     });
   };
 
-  function handleSubmit() {
-    let options = selectedOptions();
-    if (!options || options.length === 0) {
+  // Keep confirmed deliveries until the whole share succeeds. Retrying a
+  // failed grant must not send the same message to that recipient again.
+  const deliveries = new Map<
+    string,
+    {
+      result: NonNullable<Awaited<ReturnType<typeof sendToChannel>>>;
+      accessLevel?: AccessLevel | null;
+    }
+  >();
+
+  async function sendForward(
+    target: NonNullable<ReturnType<typeof destination>>,
+    accessLevel: AccessLevel | null
+  ) {
+    const prepare = props.prepareChannel;
+    const message = {
+      attachments: [asAttachment()],
+      content: markdown(),
+      mentions: [],
+      beforeSend: prepare && ((id: string) => prepare(id, accessLevel)),
+    };
+    const deliveryKey = JSON.stringify([
+      message,
+      target.type === 'channel'
+        ? target
+        : { type: target.type, users: [...target.users].sort() },
+    ]);
+    let delivery = deliveries.get(deliveryKey);
+    if (!delivery) {
+      let result;
+      try {
+        result =
+          target.type === 'channel'
+            ? await sendToChannel({ ...message, channelId: target.id })
+            : await sendToUsers({ ...message, users: target.users });
+      } catch (error) {
+        console.error('Failed to forward message', error);
+      }
+      if (!result) {
+        toast.failure('Message failed to send');
+        return;
+      }
+      // A prepared destination was granted this level before sending.
+      delivery = prepare ? { result, accessLevel } : { result };
+      deliveries.set(deliveryKey, delivery);
+      if (prepare) {
+        trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
+      }
+    }
+
+    // Sending an attachment can automatically grant access. Apply the selected
+    // level afterward so that auto-grant cannot overwrite the user's choice.
+    if (delivery.accessLevel !== accessLevel) {
+      if (
+        !(await submitChannelPermissions(
+          delivery.result.channelId,
+          accessLevel
+        ))
+      ) {
+        return;
+      }
+      if (delivery.accessLevel === undefined) {
+        trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
+      }
+      delivery.accessLevel = accessLevel;
+    }
+    return delivery.result;
+  }
+
+  async function handleSubmit() {
+    if (isSubmitting()) return;
+    const options = selectedOptions();
+    const destination_ = destination();
+    if (options.length === 0 || !destination_) {
       return setTriedToSubmit(true);
     }
 
-    if (canSendAsGroup() && sendAsGroupMessage()) {
-      const destination_ = destination();
-      if (destination_ && destination_.type === 'users') {
-        sendToUsers({
-          attachments: [asAttachment()],
-          users: destination_.users,
-          content: markdown(),
-          mentions: [],
-        }).then((res) => {
-          if (!res) {
-            return;
-          }
-          const { channelId, navigateToChannel } = res;
-          submitChannelPermissions(channelId);
+    const targets: NonNullable<ReturnType<typeof destination>>[] =
+      canSendAsGroup() && sendAsGroupMessage()
+        ? [destination_]
+        : options.map((option) =>
+            option.kind === 'channel'
+              ? { type: 'channel', id: option.id }
+              : { type: 'users', users: [option.id] }
+          );
+    const accessLevel = submitAccessLevel();
+    setIsSubmitting(true);
+    try {
+      const results = await Promise.all(
+        targets.map((target) => sendForward(target, accessLevel))
+      );
+      props.refetch?.();
+      if (results.some((result) => !result)) {
+        if (targets.length > 1) {
+          toast.failure('Some messages failed to send');
+        }
+        return;
+      }
 
-          props.refetch?.();
+      if (targets.length > 1) {
+        toast.success('Messages sent successfully');
+      } else {
+        const result = results[0];
+        if (result) {
           toast.success('Message sent successfully', {
             actions: [
               {
                 label: 'View in channel',
-                onClick: navigateToChannel,
+                onClick: result.navigateToChannel,
               },
             ],
           });
-          trackForwardShare('user');
-        });
-      } else {
-        toast.failure('Message failed to send');
-      }
-    } else {
-      const multipleMessages = options.length > 1;
-      let successfullySentAllMessages = true;
-      for (const option of options) {
-        if (option.kind === 'channel') {
-          Promise.all([
-            submitChannelPermissions(option.id),
-            sendToChannel({
-              attachments: [asAttachment()],
-              content: markdown(),
-              channelId: option.id,
-              mentions: [],
-            }).then((res) => {
-              if (!res) {
-                successfullySentAllMessages = false;
-                return;
-              }
-              props.refetch?.();
-              if (!multipleMessages) {
-                const { navigateToChannel } = res;
-                toast.success('Message sent successfully', {
-                  actions: [
-                    {
-                      label: 'View in channel',
-                      onClick: () => navigateToChannel(),
-                    },
-                  ],
-                });
-              }
-              trackForwardShare('channel');
-            }),
-          ]);
-        } else {
-          // handles option.kind of user, custom, and contact (gmail)
-          sendToUsers({
-            attachments: [asAttachment()],
-            content: markdown(),
-            users: [option.id],
-            mentions: [],
-          }).then((res) => {
-            if (!res) {
-              successfullySentAllMessages = false;
-              return;
-            }
-            const { channelId, navigateToChannel } = res;
-            submitChannelPermissions(channelId);
-
-            props.refetch?.();
-            if (!multipleMessages) {
-              toast.success('Message sent successfully', {
-                actions: [
-                  {
-                    label: 'View in channel',
-                    onClick: () => navigateToChannel(),
-                  },
-                ],
-              });
-            }
-            trackForwardShare('user');
-          });
         }
       }
-      if (multipleMessages) {
-        if (successfullySentAllMessages) {
-          toast.success('Messages sent successfully');
-        } else {
-          toast.failure('Some messages failed to send');
-        }
-      }
+      deliveries.clear();
+      props.onSubmit?.();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const destination_ = destination();
-    if (!destination_) {
-      return;
-    }
-
-    props.onSubmit?.();
   }
 
   // Not detached: the handler below captures cmd+enter before the scope walk
@@ -428,7 +499,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       // Holding the shortcut repeats keydown; swallow the repeats so one press
       // sends one share, but keep capturing them so none reaches the composer.
       if (event?.repeat) return true;
-      handleSubmit();
+      fireAndForget(handleSubmit(), 'forward-to-channel');
       return true;
     },
   });
@@ -455,6 +526,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         when={!isMobile()}
         fallback={
           <MobileForwardToChannelLayout
+            editPermissionEnabled={props.editPermissionEnabled}
             isAuthenticated={isAuthenticated}
             selectedOptions={selectedOptions}
             setSelectedOptions={(v) => setSelectedOptions(v)}
@@ -462,6 +534,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             destinationOptions={destinationOptions}
             submitPermissionInfo={props.submitPermissionInfo}
             hideAccessLevelSelector={props.hideAccessLevelSelector}
+            allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
             mdScrollRef={mdScrollRef}
@@ -497,10 +570,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               }
             >
               <div class="shrink-0 pr-2 flex items-center gap-2">
-                <Show when={selectedOptions().length > 0}>
-                  <span class="text-sm text-ink-extra-muted">can</span>
-                </Show>
                 <ShareOptions
+                  editPermissionEnabled={props.editPermissionEnabled}
+                  allowedAccessLevels={props.allowedAccessLevels}
                   setPermissions={(accessLevel) =>
                     setSubmitAccessLevel(accessLevel)
                   }
@@ -597,14 +669,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   Cancel
                 </Button>
                 <Button
-                  variant={selectedOptions().length > 0 ? 'active' : 'ghost'}
-                  depth={3}
-                  class="rounded-lg border-0"
-                  disabled={selectedOptions().length === 0}
+                  variant="primary"
+                  disabled={selectedOptions().length === 0 || isSubmitting()}
                   onClick={() => {
                     const options = selectedOptions();
                     if (options && options.length > 0) {
-                      handleSubmit();
+                      fireAndForget(handleSubmit(), 'forward-to-channel');
                     }
                   }}
                 >

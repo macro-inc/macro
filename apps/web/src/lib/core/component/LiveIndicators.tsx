@@ -1,7 +1,8 @@
+import { useBlockId } from '@core/block';
 import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { AvatarGroup } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { type Accessor, createMemo, For, Show } from 'solid-js';
 import { useUserIndicators } from '../state/liveIndicators';
 import { UserIcon } from './UserIcon';
 
@@ -39,8 +40,14 @@ export function LiveIndicators(props: {
   );
 }
 
-export function BlockLiveIndicators() {
-  const indicators = useUserIndicators();
+export function BlockLiveIndicators(
+  props: { entityId?: Accessor<string> } = {}
+) {
+  // Session hosts can supply their resolved identity without a legacy block.
+  const blockId = props.entityId ? undefined : useBlockId();
+  const indicators = useUserIndicators(
+    () => props.entityId?.() ?? blockId ?? ''
+  );
   const userId = useUserId();
 
   return (

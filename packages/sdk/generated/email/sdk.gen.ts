@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddDraftAttachmentData, AddDraftAttachmentErrors, AddDraftAttachmentResponses, AddForwardedAttachmentData, AddForwardedAttachmentErrors, AddForwardedAttachmentResponses, AddRemoveLabelData, AddRemoveLabelErrors, AddRemoveLabelResponses, AddRemoveThreadLabelData, AddRemoveThreadLabelErrors, AddRemoveThreadLabelResponses, ArchiveThreadData, ArchiveThreadErrors, ArchiveThreadResponses, BlockSenderData, BlockSenderErrors, BlockSenderResponses, CancelBackfillGmailData, CancelBackfillGmailErrors, CancelBackfillGmailResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateLabelData, CreateLabelErrors, CreateLabelResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeleteEmailFilterData, DeleteEmailFilterErrors, DeleteEmailFilterResponses, DeleteLabelData, DeleteLabelErrors, DeleteLabelResponses, DeleteLinkData, DeleteLinkErrors, DeleteLinkResponses, DeleteScheduledDraftData, DeleteScheduledDraftErrors, DeleteScheduledDraftResponses, DisableLinkCalendarData, DisableLinkCalendarErrors, DisableLinkCalendarResponses, DisableSyncData, DisableSyncErrors, DisableSyncResponses, GetAttachmentData, GetAttachmentDocumentIdData, GetAttachmentDocumentIdErrors, GetAttachmentDocumentIdResponses, GetAttachmentErrors, GetAttachmentResponses, GetBackfillGmailActiveData, GetBackfillGmailActiveErrors, GetBackfillGmailActiveResponses, GetBackfillGmailData, GetBackfillGmailErrors, GetBackfillGmailResponses, GetMessageData, GetMessageErrors, GetMessageResponses, GetMessagesBatchData, GetMessagesBatchErrors, GetMessagesBatchResponses, GetScheduledMessagesData, GetScheduledMessagesErrors, GetScheduledMessagesResponses, GetThreadData, GetThreadErrors, GetThreadMessagesHandlerData, GetThreadMessagesHandlerErrors, GetThreadMessagesHandlerResponses, GetThreadResponses, HealthCheckLinksData, HealthCheckLinksErrors, HealthCheckLinksResponses, HealthHandlerData, HealthHandlerResponses, InitUserData, InitUserErrors, InitUserResponses, ListBackfillGmailData, ListBackfillGmailErrors, ListBackfillGmailResponses, ListBlockedSendersData, ListBlockedSendersErrors, ListBlockedSendersResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, ListContactsData, ListContactsErrors, ListContactsResponses, ListEmailFiltersData, ListEmailFiltersErrors, ListEmailFiltersResponses, ListLabelsData, ListLabelsErrors, ListLabelsResponses, ListLinksData, ListLinksErrors, ListLinksResponses, PatchSettingsData, PatchSettingsErrors, PatchSettingsResponses, PreviewsInboxCursorData, PreviewsInboxCursorErrors, PreviewsInboxCursorResponses, RemoveDraftAttachmentData, RemoveDraftAttachmentErrors, RemoveDraftAttachmentResponses, RemoveForwardedAttachmentData, RemoveForwardedAttachmentErrors, RemoveForwardedAttachmentResponses, ResyncLinkData, ResyncLinkErrors, ResyncLinkResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SendMessageData, SendMessageErrors, SendMessageResponses, ThreadSeenData, ThreadSeenErrors, ThreadSeenResponses, UnblockSenderData, UnblockSenderErrors, UnblockSenderResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses, UpdateThreadProjectData, UpdateThreadProjectErrors, UpdateThreadProjectResponses, UpsertEmailFilterData, UpsertEmailFilterErrors, UpsertEmailFilterResponses, UpsertScheduledMessageData, UpsertScheduledMessageErrors, UpsertScheduledMessageResponses } from './types.gen';
+import type { AddDraftAttachmentData, AddDraftAttachmentErrors, AddDraftAttachmentResponses, AddForwardedAttachmentData, AddForwardedAttachmentErrors, AddForwardedAttachmentResponses, AddRemoveLabelData, AddRemoveLabelErrors, AddRemoveLabelResponses, AddRemoveThreadLabelData, AddRemoveThreadLabelErrors, AddRemoveThreadLabelResponses, ArchiveThreadData, ArchiveThreadErrors, ArchiveThreadResponses, ArchiveThreadsData, ArchiveThreadsErrors, ArchiveThreadsResponses, BlockSenderData, BlockSenderErrors, BlockSenderResponses, CancelBackfillGmailData, CancelBackfillGmailErrors, CancelBackfillGmailResponses, CompleteDraftAttachmentData, CompleteDraftAttachmentErrors, CompleteDraftAttachmentResponses, CopyThreadCalendarInvitationData, CopyThreadCalendarInvitationErrors, CopyThreadCalendarInvitationResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateLabelData, CreateLabelErrors, CreateLabelResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeleteEmailFilterData, DeleteEmailFilterErrors, DeleteEmailFilterResponses, DeleteLabelData, DeleteLabelErrors, DeleteLabelResponses, DeleteLinkData, DeleteLinkErrors, DeleteLinkResponses, DeleteScheduledDraftData, DeleteScheduledDraftErrors, DeleteScheduledDraftResponses, DisableLinkCalendarData, DisableLinkCalendarErrors, DisableLinkCalendarResponses, DisableSyncData, DisableSyncErrors, DisableSyncResponses, ForwardCalendarEventData, ForwardCalendarEventErrors, ForwardCalendarEventResponses, GetAttachmentData, GetAttachmentDocumentIdData, GetAttachmentDocumentIdErrors, GetAttachmentDocumentIdResponses, GetAttachmentErrors, GetAttachmentResponses, GetBackfillGmailActiveData, GetBackfillGmailActiveErrors, GetBackfillGmailActiveResponses, GetBackfillGmailData, GetBackfillGmailErrors, GetBackfillGmailResponses, GetMessageData, GetMessageErrors, GetMessageResponses, GetMessagesBatchData, GetMessagesBatchErrors, GetMessagesBatchResponses, GetScheduledMessagesData, GetScheduledMessagesErrors, GetScheduledMessagesResponses, GetThreadCalendarInvitationsData, GetThreadCalendarInvitationsErrors, GetThreadCalendarInvitationsResponses, GetThreadData, GetThreadErrors, GetThreadMessagesHandlerData, GetThreadMessagesHandlerErrors, GetThreadMessagesHandlerResponses, GetThreadResponses, HealthCheckLinksData, HealthCheckLinksErrors, HealthCheckLinksResponses, HealthHandlerData, HealthHandlerResponses, InitUserData, InitUserErrors, InitUserResponses, ListBackfillGmailData, ListBackfillGmailErrors, ListBackfillGmailResponses, ListBlockedSendersData, ListBlockedSendersErrors, ListBlockedSendersResponses, ListContactsData, ListContactsErrors, ListContactsResponses, ListEmailFiltersData, ListEmailFiltersErrors, ListEmailFiltersResponses, ListLabelsData, ListLabelsErrors, ListLabelsResponses, ListLinksData, ListLinksErrors, ListLinksResponses, MailboxSettingsOperationsData, MailboxSettingsOperationsResponses, MessageOperationStatusData, MessageOperationStatusErrors, MessageOperationStatusResponses, PatchSettingsData, PatchSettingsErrors, PatchSettingsResponses, PreviewsInboxCursorData, PreviewsInboxCursorErrors, PreviewsInboxCursorResponses, RecoverDraftTransferData, RecoverDraftTransferErrors, RecoverDraftTransferResponses, RemoveDraftAttachmentData, RemoveDraftAttachmentErrors, RemoveDraftAttachmentResponses, RemoveForwardedAttachmentData, RemoveForwardedAttachmentErrors, RemoveForwardedAttachmentResponses, ResolveMessageOperationData, ResolveMessageOperationErrors, ResolveMessageOperationResponses, ResyncLinkData, ResyncLinkErrors, ResyncLinkResponses, SendMessageData, SendMessageErrors, SendMessageResponses, ThreadOperationsData, ThreadOperationsErrors, ThreadOperationsResponses, ThreadSeenData, ThreadSeenErrors, ThreadSeenResponses, TransferDraftData, TransferDraftErrors, TransferDraftResponses, UnblockSenderData, UnblockSenderErrors, UnblockSenderResponses, UpdateThreadProjectData, UpdateThreadProjectErrors, UpdateThreadProjectResponses, UpdateThreadStateData, UpdateThreadStateErrors, UpdateThreadStateResponses, UpsertEmailFilterData, UpsertEmailFilterErrors, UpsertEmailFilterResponses, UpsertScheduledMessageData, UpsertScheduledMessageErrors, UpsertScheduledMessageResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -58,62 +58,6 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * List the requester's visible calendars for pickers and filters.
-     */
-    public listCalendars<ThrowOnError extends boolean = false>(options?: Options<ListCalendarsData, ThrowOnError>): RequestResult<ListCalendarsResponses, ListCalendarsErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<ListCalendarsResponses, ListCalendarsErrors, ThrowOnError>({ url: '/calendar/calendars', ...options });
-    }
-    
-    /**
-     * Create a calendar event and return its synced entity.
-     */
-    public createCalendarEvent<ThrowOnError extends boolean = false>(options: Options<CreateCalendarEventData, ThrowOnError>): RequestResult<CreateCalendarEventResponses, CreateCalendarEventErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<CreateCalendarEventResponses, CreateCalendarEventErrors, ThrowOnError>({
-            url: '/calendar/events',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Delete a calendar event at its provider.
-     */
-    public deleteCalendarEvent<ThrowOnError extends boolean = false>(options: Options<DeleteCalendarEventData, ThrowOnError>): RequestResult<DeleteCalendarEventResponses, DeleteCalendarEventErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteCalendarEventResponses, DeleteCalendarEventErrors, ThrowOnError>({ url: '/calendar/events/{event_id}', ...options });
-    }
-    
-    /**
-     * Update fields of a calendar event and return its synced entity.
-     */
-    public updateCalendarEvent<ThrowOnError extends boolean = false>(options: Options<UpdateCalendarEventData, ThrowOnError>): RequestResult<UpdateCalendarEventResponses, UpdateCalendarEventErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<UpdateCalendarEventResponses, UpdateCalendarEventErrors, ThrowOnError>({
-            url: '/calendar/events/{event_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Set the requester's RSVP on a calendar event and return its synced entity.
-     */
-    public rsvpCalendarEvent<ThrowOnError extends boolean = false>(options: Options<RsvpCalendarEventData, ThrowOnError>): RequestResult<RsvpCalendarEventResponses, RsvpCalendarEventErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<RsvpCalendarEventResponses, RsvpCalendarEventErrors, ThrowOnError>({
-            url: '/calendar/events/{event_id}/rsvp',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
      * Get an attachment by ID.
      */
     public getAttachment<ThrowOnError extends boolean = false>(options: Options<GetAttachmentData, ThrowOnError>): RequestResult<GetAttachmentResponses, GetAttachmentErrors, ThrowOnError> {
@@ -165,6 +109,25 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Email one of the viewer's events to people the organizer's guest list
+     * does not name: the event's iCalendar file (`METHOD:PUBLISH`, no
+     * attendees, no join link), sent from the inbox that holds the viewer's
+     * copy, with the usual undo delay. Recipients can add the event to their
+     * own calendar; they are not added to the guest list and the organizer is
+     * not told.
+     */
+    public forwardCalendarEvent<ThrowOnError extends boolean = false>(options: Options<ForwardCalendarEventData, ThrowOnError>): RequestResult<ForwardCalendarEventResponses, ForwardCalendarEventErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ForwardCalendarEventResponses, ForwardCalendarEventErrors, ThrowOnError>({
+            url: '/email/calendar-events/{event_id}/forward',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * List all contacts belonging to the user, grouped by link.
      */
     public listContacts<ThrowOnError extends boolean = false>(options?: Options<ListContactsData, ThrowOnError>): RequestResult<ListContactsResponses, ListContactsErrors, ThrowOnError> {
@@ -172,8 +135,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Block a sender by creating a Gmail filter that sends their emails to trash.
-     * The actual Gmail API call is performed asynchronously by the gmail_ops worker.
+     * Durably block a sender in the selected inbox.
      */
     public blockSender<ThrowOnError extends boolean = false>(options: Options<BlockSenderData, ThrowOnError>): RequestResult<BlockSenderResponses, BlockSenderErrors, ThrowOnError> {
         return (options.client ?? this.client).post<BlockSenderResponses, BlockSenderErrors, ThrowOnError>({
@@ -194,8 +156,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Unblock a sender by removing their block filter from Gmail.
-     * The actual Gmail API call is performed asynchronously by the gmail_ops worker.
+     * Durably remove Macro-managed sender blocking in the selected inbox.
      */
     public unblockSender<ThrowOnError extends boolean = false>(options: Options<UnblockSenderData, ThrowOnError>): RequestResult<UnblockSenderResponses, UnblockSenderErrors, ThrowOnError> {
         return (options.client ?? this.client).post<UnblockSenderResponses, UnblockSenderErrors, ThrowOnError>({
@@ -206,6 +167,10 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+    
+    public recoverDraftTransfer<ThrowOnError extends boolean = false>(options: Options<RecoverDraftTransferData, ThrowOnError>): RequestResult<RecoverDraftTransferResponses, RecoverDraftTransferErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RecoverDraftTransferResponses, RecoverDraftTransferErrors, ThrowOnError>({ url: '/email/draft-transfers/{id}/recover', ...options });
     }
     
     /**
@@ -244,7 +209,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Remove the scheduled send from a draft.
+     * Remove the scheduled send from a draft, including immediate-send undo.
      */
     public deleteScheduledDraft<ThrowOnError extends boolean = false>(options: Options<DeleteScheduledDraftData, ThrowOnError>): RequestResult<DeleteScheduledDraftResponses, DeleteScheduledDraftErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteScheduledDraftResponses, DeleteScheduledDraftErrors, ThrowOnError>({ url: '/email/drafts/scheduled/{message_id}', ...options });
@@ -279,6 +244,13 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Confirm an uploaded attachment before it becomes part of a sendable draft.
+     */
+    public completeDraftAttachment<ThrowOnError extends boolean = false>(options: Options<CompleteDraftAttachmentData, ThrowOnError>): RequestResult<CompleteDraftAttachmentResponses, CompleteDraftAttachmentErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CompleteDraftAttachmentResponses, CompleteDraftAttachmentErrors, ThrowOnError>({ url: '/email/drafts/{id}/attachments/{attachment_id}/complete', ...options });
+    }
+    
+    /**
      * Add a forwarded attachment to a draft.
      */
     public addForwardedAttachment<ThrowOnError extends boolean = false>(options: Options<AddForwardedAttachmentData, ThrowOnError>): RequestResult<AddForwardedAttachmentResponses, AddForwardedAttachmentErrors, ThrowOnError> {
@@ -297,6 +269,38 @@ export class Sdk extends HeyApiClient {
      */
     public removeForwardedAttachment<ThrowOnError extends boolean = false>(options: Options<RemoveForwardedAttachmentData, ThrowOnError>): RequestResult<RemoveForwardedAttachmentResponses, RemoveForwardedAttachmentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveForwardedAttachmentResponses, RemoveForwardedAttachmentErrors, ThrowOnError>({ url: '/email/drafts/{id}/forwarded-attachments/{attachment_id}', ...options });
+    }
+    
+    /**
+     * The same provider-neutral state returned on fully hydrated email messages.
+     */
+    public messageOperationStatus<ThrowOnError extends boolean = false>(options: Options<MessageOperationStatusData, ThrowOnError>): RequestResult<MessageOperationStatusResponses, MessageOperationStatusErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<MessageOperationStatusResponses, MessageOperationStatusErrors, ThrowOnError>({ url: '/email/drafts/{id}/operation', ...options });
+    }
+    
+    /**
+     * Resolve an observed draft conflict or uncertain provider operation.
+     */
+    public resolveMessageOperation<ThrowOnError extends boolean = false>(options: Options<ResolveMessageOperationData, ThrowOnError>): RequestResult<ResolveMessageOperationResponses, ResolveMessageOperationErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ResolveMessageOperationResponses, ResolveMessageOperationErrors, ThrowOnError>({
+            url: '/email/drafts/{id}/resolve',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    public transferDraft<ThrowOnError extends boolean = false>(options: Options<TransferDraftData, ThrowOnError>): RequestResult<TransferDraftResponses, TransferDraftErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<TransferDraftResponses, TransferDraftErrors, ThrowOnError>({
+            url: '/email/drafts/{id}/transfer',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -376,7 +380,7 @@ export class Sdk extends HeyApiClient {
      * the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
      * the one-time reauth fan-out) are handled by the email service token source.
      *
-     * Probes run in the background and the response returns immediately to stay off the
+     * Probes are durably queued and the response returns immediately to stay off the
      * load path; each persisted flag is picked up by the next links read. Probes are
      * throttled per link in Redis so frequent calls — and many sharers of a shared inbox —
      * collapse to one refresh per window.
@@ -479,10 +483,38 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Disables inbox syncing for user.
+     * Accepted label and sender-policy changes awaiting provider confirmation.
+     */
+    public mailboxSettingsOperations<ThrowOnError extends boolean = false>(options?: Options<MailboxSettingsOperationsData, ThrowOnError>): RequestResult<MailboxSettingsOperationsResponses, unknown, ThrowOnError> {
+        return (options?.client ?? this.client).get<MailboxSettingsOperationsResponses, unknown, ThrowOnError>({ url: '/email/settings/operations', ...options });
+    }
+    
+    /**
+     * Disables inbox syncing for the selected inbox.
+     *
+     * The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,
+     * which may be an inbox the caller only reaches through delegation. Removal
+     * therefore follows the same policy as `DELETE /email/links/{link_id}`: an
+     * owner's inbox is torn down, while a delegate only loses their
+     * `macro_user_links` edge and the owner's data stays intact.
      */
     public disableSync<ThrowOnError extends boolean = false>(options?: Options<DisableSyncData, ThrowOnError>): RequestResult<DisableSyncResponses, DisableSyncErrors, ThrowOnError> {
         return (options?.client ?? this.client).delete<DisableSyncResponses, DisableSyncErrors, ThrowOnError>({ url: '/email/sync', ...options });
+    }
+    
+    /**
+     * Change the archived status of up to 100 threads, sending one provider
+     * write per inbox. A thread that can't change is reported, not fatal.
+     */
+    public archiveThreads<ThrowOnError extends boolean = false>(options: Options<ArchiveThreadsData, ThrowOnError>): RequestResult<ArchiveThreadsResponses, ArchiveThreadsErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<ArchiveThreadsResponses, ArchiveThreadsErrors, ThrowOnError>({
+            url: '/email/threads/archived',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -525,6 +557,13 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Fetch the latest organization action outcomes without provider-specific status strings.
+     */
+    public threadOperations<ThrowOnError extends boolean = false>(options: Options<ThreadOperationsData, ThrowOnError>): RequestResult<ThreadOperationsResponses, ThreadOperationsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ThreadOperationsResponses, ThreadOperationsErrors, ThrowOnError>({ url: '/email/threads/{id}/operations', ...options });
+    }
+    
+    /**
      * Called by FE when the user has seen a thread.
      */
     public threadSeen<ThrowOnError extends boolean = false>(options: Options<ThreadSeenData, ThrowOnError>): RequestResult<ThreadSeenResponses, ThreadSeenErrors, ThrowOnError> {
@@ -532,10 +571,47 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Set mailbox state without client-side provider label lookup.
+     */
+    public updateThreadState<ThrowOnError extends boolean = false>(options: Options<UpdateThreadStateData, ThrowOnError>): RequestResult<UpdateThreadStateResponses, UpdateThreadStateErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateThreadStateResponses, UpdateThreadStateErrors, ThrowOnError>({
+            url: '/email/threads/{id}/state',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Get a thread with paginated messages.
      */
     public getThread<ThrowOnError extends boolean = false>(options: Options<GetThreadData, ThrowOnError>): RequestResult<GetThreadResponses, GetThreadErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetThreadResponses, GetThreadErrors, ThrowOnError>({ url: '/email/threads/{thread_id}', ...options });
+    }
+    
+    public getThreadCalendarInvitations<ThrowOnError extends boolean = false>(options: Options<GetThreadCalendarInvitationsData, ThrowOnError>): RequestResult<GetThreadCalendarInvitationsResponses, GetThreadCalendarInvitationsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetThreadCalendarInvitationsResponses, GetThreadCalendarInvitationsErrors, ThrowOnError>({ url: '/email/threads/{thread_id}/calendar-invitations', ...options });
+    }
+    
+    /**
+     * Add a shared event saved from one of the thread's messages to one of the
+     * viewer's Google calendars, the way Add to calendar adds a channel-shared
+     * event: a snapshot under the meeting's iCalendar UID and organizer, with the
+     * viewer as its only guest and no join link. Nobody is notified. Only a
+     * published event file (`METHOD:PUBLISH`) can be added; an invitation is
+     * answered from the calendar it reached.
+     */
+    public copyThreadCalendarInvitation<ThrowOnError extends boolean = false>(options: Options<CopyThreadCalendarInvitationData, ThrowOnError>): RequestResult<CopyThreadCalendarInvitationResponses, CopyThreadCalendarInvitationErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CopyThreadCalendarInvitationResponses, CopyThreadCalendarInvitationErrors, ThrowOnError>({
+            url: '/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**

@@ -4,23 +4,17 @@
       "source_paths": [
         "services/agent_harness_service/**",
         "crates/agent_harness/**",
-        "crates/agent_fold/**",
+        "crates/folds/agent_fold/**",
         "crates/agent_session/**",
         "crates/agent_trigger/**",
-        "crates/agent_runtime_protocol/**"
+        "crates/agent_runtime_protocol/**",
+        "crates/agent_preview/**",
+        "crates/agent_egress/**",
+        "crates/scheduled_action/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [
         "agent_harness_service"
-      ]
-    },
-    "agent-schedule-service": {
-      "source_paths": [
-        "services/scheduled_action/**"
-      ],
-      "stack_path": "infra/stacks/agent-schedule-service/**",
-      "deploy_binaries": [
-        "service"
       ]
     },
     "authentication-service": {
@@ -56,6 +50,15 @@
       "stack_path": "infra/stacks/call-recording/**",
       "deploy_lambdas": [
         "call_recording_preview_handler"
+      ]
+    },
+    "calendar-service": {
+      "source_paths": [
+        "services/calendar_service/**"
+      ],
+      "stack_path": "infra/stacks/calendar-service/**",
+      "deploy_binaries": [
+        "calendar_service"
       ]
     },
     "connection-gateway": {
@@ -96,23 +99,26 @@
       ]
     },
     "document-cognition-service": {
-      "source_paths": [
-        "services/document_cognition_service/**",
-        "services/ai_projections_refresh_handler/**"
-      ],
-      "stack_path": "infra/stacks/document-cognition-service/**",
-      "deploy_binaries": [
-        "document_cognition_service"
-      ],
-      "deploy_lambdas": [
-        "ai_projections_refresh_handler"
-      ]
+      "source_paths": [],
+      "stack_path": "infra/stacks/document-cognition-service/**"
     },
     "document-storage-service": {
       "source_paths": [
         "services/document_storage_service/**",
+        "services/slack_import_worker/**",
+        "crates/slack_integration/**",
+        "crates/channels/**",
+        "crates/messages/**",
+        "crates/import/**",
+        "crates/macro_queues/**",
+        "crates/macro_service_urls/**",
+        "crates/teams/**",
+        "crates/invite_email/**",
+        "crates/notification/**",
+        "crates/model_notifications/**",
         "crates/call/**",
         "crates/github/**",
+        "crates/initiative/**",
         "crates/reminders/**",
         "services/delete_chat_handler/**",
         "services/docx_unzip_handler/**",
@@ -120,7 +126,8 @@
       ],
       "stack_path": "infra/stacks/cloud-storage-service/**",
       "deploy_binaries": [
-        "document_storage_service"
+        "document_storage_service",
+        "slack_import_worker"
       ],
       "deploy_lambdas": [
         "delete_chat_handler",
@@ -161,11 +168,15 @@
     },
     "notification-service": {
       "source_paths": [
-        "services/notification_service/**"
+        "services/notification_service/**",
+        "services/notification_retention_handler/**"
       ],
       "stack_path": "infra/stacks/notification-service/**",
       "deploy_binaries": [
         "notification_service"
+      ],
+      "deploy_lambdas": [
+        "notification_retention_handler"
       ]
     },
     "organization-retention": {
@@ -181,7 +192,11 @@
     },
     "search-processing-service": {
       "source_paths": [
-        "services/search_processing_service/**"
+        "services/search_processing_service/**",
+        "crates/models_search/**",
+        "crates/models_opensearch/**",
+        "crates/opensearch_client/**",
+        "crates/comms_db_client/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**",
       "deploy_binaries": [
@@ -218,6 +233,14 @@
       "deploy_lambdas": [
         "image_optimizer"
       ]
+    },
+    "lexical-service": {
+      "source_paths": [
+        "services/lexical-service/**",
+        "packages/lexical-core/**",
+        "docker/lexical-service.Dockerfile"
+      ],
+      "stack_path": "infra/stacks/lexical-service/**"
     },
     "unfurl-service": {
       "source_paths": [
@@ -270,21 +293,29 @@
         "image_proxy_service"
       ]
     },
-    "mcp-server": {
-      "source_paths": [
-        "services/mcp_service/**",
-        "crates/ai_tools/**"
-      ],
-      "stack_path": "infra/stacks/mcp-server/**",
-      "deploy_binaries": [
-        "mcp_service"
-      ]
-    },
     "kafka-cluster": {
       "source_paths": [
         "crates/macro_event_topics/**"
       ],
       "stack_path": "infra/stacks/kafka-cluster/**"
+    },
+    "preview-gateway": {
+      "source_paths": [],
+      "stack_path": "infra/stacks/preview-gateway/**"
+    },
+    "whatsapp-session-service": {
+      "source_paths": [
+        "services/whatsapp_session_service/**",
+        "crates/whatsapp_linked/**",
+        "crates/whatsapp_store_pg/**",
+        "crates/whatsmeow/**",
+        "crates/whatsmeow_proto/**",
+        "crates/whatsmeow_signal/**"
+      ],
+      "stack_path": "infra/stacks/whatsapp-session-service/**",
+      "deploy_binaries": [
+        "whatsapp_session_service"
+      ]
     }
   }
 }

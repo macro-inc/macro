@@ -1,0 +1,142 @@
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import type { MentionBucketId } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenuController';
+import {
+  DefaultShortcuts,
+  type ItemMention,
+  keyboardShortcutsPlugin,
+} from '@core/component/LexicalMarkdown/plugins';
+import {
+  type Action,
+  ActionCategory,
+} from '@core/component/LexicalMarkdown/plugins/actions/types';
+import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
+import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
+import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import type { IUser } from '@core/user/types';
+import ImageIcon from '@icon/system/regular/image.svg';
+import { isIOS } from '@solid-primitives/platform';
+import type { Accessor } from 'solid-js';
+
+export type MessageEditorOptions = {
+  type?: import('@macro-inc/lexical-core').EditorType;
+  groupMentions?: boolean;
+  inlineMedia?: boolean;
+  floatingFormatMenu?: boolean;
+  disableMentionTracking?: boolean;
+  namespace: string;
+  resolveAppLink?: MentionLinkResolver;
+  enableMentions?: boolean;
+  /** Restrict the `@` menu, e.g. to `['users']` for a fixed people list. */
+  mentionSources?: MentionBucketId[];
+  onMentionCreate?: (mention: ItemMention) => void;
+  onMentionRemove?: (mention: ItemMention) => void;
+  users?: () => IUser[];
+  onChange?: (markdown: string) => void;
+  onEnter?: (event: KeyboardEvent, markdown: string) => boolean;
+  onPasteFilesAndDirs?: (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => void;
+  /** Shared slash actions a surface can't carry, e.g. tables in a WhatsApp group. */
+  ignoreActionIds?: string[];
+  /** Slash actions a surface adds beyond the shared set, e.g. a channel's `/poll`. */
+  additionalActions?: Action[];
+  /** Invoked when the user picks the "Image" slash action. Opens a file picker and hands files back. */
+  onAttachFromDisk?: (files: File[]) => void;
+  scrollContainer?: Accessor<HTMLElement | undefined>;
+};
+
+export function createConfiguredMessageEditor(options: MessageEditorOptions) {
+  const editor = buildConfig(options.type ?? 'chat').namespace(
+    options.namespace
+  );
+  if (options.resolveAppLink)
+    editor.withAppLinkResolver(options.resolveAppLink);
+
+  if (options.enableMentions !== false) {
+    editor.withMentions({
+      onCreate: options.onMentionCreate,
+      onRemove: options.onMentionRemove,
+      users: options.users,
+      sources: options.mentionSources,
+      block: options.groupMentions ? 'channel' : undefined,
+      disableMentionTracking: options.disableMentionTracking,
+    });
+  }
+
+  if (options.onPasteFilesAndDirs) {
+    editor.withFilePaste({
+      onPasteFilesAndDirs: options.onPasteFilesAndDirs,
+    });
+  }
+
+  editor
+    .withEmojis()
+    .withActions({
+      ignoreActionIds: [
+        ...(options.inlineMedia ? ['hr', 'table', 'latex'] : ['hr', 'latex']),
+        ...(options.ignoreActionIds ?? []),
+      ],
+    })
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
+    .withHistory({ timeGap: 400 })
+    .withCode()
+    .withRestoreFocus()
+    .withSelectionData();
+  if (options.inlineMedia) editor.withMedia({ fileDrop: true });
+  if (options.floatingFormatMenu) editor.withFloatingFormatMenu();
+
+  if (options.onAttachFromDisk) {
+    const onAttachFromDisk = options.onAttachFromDisk;
+    const attachFromDiskAction: Action = {
+      id: 'image',
+      name: 'Image',
+      keywords: ['picture', 'photo', 'img', 'upload', 'attach'],
+      category: ActionCategory.MEDIA,
+      icon: ImageIcon,
+      action: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = 'image/*';
+        input.addEventListener('change', () => {
+          const files = Array.from(input.files ?? []);
+          if (files.length > 0) onAttachFromDisk(files);
+        });
+        input.click();
+      },
+    };
+    editor.withActions({ additionalActions: [attachFromDiskAction] });
+  }
+
+  if (options.additionalActions?.length)
+    editor.withActions({ additionalActions: options.additionalActions });
+
+  editor
+    .use(
+      tablePlugin({
+        hasCellMerge: true,
+        hasCellBackgroundColor: false,
+        hasTabHandler: true,
+        hasHorizontalScroll: true,
+      })
+    )
+    .use(tableCellResizerPlugin())
+    .use(
+      keyboardShortcutsPlugin({
+        shortcuts: DefaultShortcuts,
+      })
+    )
+    .onChange(options.onChange)
+    .onEnter(options.onEnter);
+
+  if ((isIOS || isNativeMobilePlatform()) && options.scrollContainer) {
+    editor.use(
+      iosCursorScrollPlugin({ scrollContainer: options.scrollContainer })
+    );
+  }
+
+  return editor;
+}

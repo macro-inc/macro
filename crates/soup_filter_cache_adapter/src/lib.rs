@@ -1,24 +1,38 @@
 #![deny(missing_docs)]
-//! Soup-specific browser adapter for the generic predicate-index cache.
+//! Soup-specific host adapter for the generic predicate-index cache.
 //!
-//! This crate owns the application GraphQL schema and `soup-flat-v1` policy.
+//! This crate owns the application GraphQL schema and Soup projection policy.
 //! Cache crates receive only the generic query and projection IR produced here.
 
+use cache_core::document::{Document, FieldNode, OperationKind, Selection};
+use cache_core::meta::FieldKind;
 use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
 use indexmap::IndexMap;
 use item_filter_index::{
-    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v1, vocabulary,
+    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v4, vocabulary,
 };
 use predicate_index::{
-    IndexDocument, OptimisticProjectionMutation, RecordKey, SortDirection, Token,
-    ValidatedIndexQuery,
+    ExactAttributePatch, ExactValue, IndexDocument, OptimisticProjectionMutation, RecordKey,
+    SortDirection, Token, ValidatedIndexQuery,
 };
 use soup_filter_projection::{
-    DirectProjectionInput, DirectProjectionPatchInput, SoupFlatEntityKind, patch_direct_fields,
-    project_direct_fields,
+    DirectProjectionInput, DirectProjectionPatchInput, DocumentSubType,
+    SoupCacheProjectionSupplement, SoupFlatEntityKind, compose_soup_flat_v3,
+    decode_cache_projection_supplement, patch_direct_fields,
 };
-use std::collections::HashMap;
+use std::collections::HashSet;
+
+mod channels;
+mod database_rows;
+mod direct_patch;
+pub mod live_query;
+pub mod mail;
+mod notifications;
+pub mod properties;
+pub use notifications::{
+    notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
+};
 
 /// Failure to materialize or compile a Soup filter request.
 #[derive(Debug, thiserror::Error)]
@@ -41,6 +55,26 @@ pub fn compile_filter_request(
     sort_direction: &str,
     limit: u16,
 ) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
+    compile_request(filters, sort_method, sort_direction, limit, false)
+}
+
+/// Compile the property-aware profile used by current browser and native hosts.
+pub fn compile_current_filter_request(
+    filters: serde_json::Value,
+    sort_method: &str,
+    sort_direction: &str,
+    limit: u16,
+) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
+    compile_request(filters, sort_method, sort_direction, limit, true)
+}
+
+fn compile_request(
+    filters: serde_json::Value,
+    sort_method: &str,
+    sort_direction: &str,
+    limit: u16,
+    current: bool,
+) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
     let ast = materialize_graphql_filter(filters)
         .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
     let sort = match sort_method {
@@ -57,7 +91,12 @@ pub fn compile_filter_request(
             ));
         }
     };
-    compile_soup_flat_v1(
+    let compile = if current {
+        item_filter_index::properties::compile_soup
+    } else {
+        compile_soup_flat_v4
+    };
+    compile(
         &ast,
         SoupFlatRequest {
             sort,
@@ -73,58 +112,359 @@ pub fn compile_filter_request(
     })
 }
 
-/// Derive authoritative generic projection mutations from a GraphQL response.
-pub fn authoritative_projection_mutations(data: &serde_json::Value) -> Vec<ProjectionMutation> {
-    fn walk(value: &serde_json::Value, mutations: &mut HashMap<String, ProjectionMutation>) {
-        match value {
-            serde_json::Value::Array(values) => {
-                for value in values {
-                    walk(value, mutations);
-                }
+/// Convert server-page sort evidence without losing sub-millisecond precision.
+/// The caller scopes the baseline to the same filter and sort as the request.
+pub fn reconciliation_baseline_entry(
+    record_key: String,
+    sort_timestamp: &str,
+) -> Result<
+    cache_core::predicate::reconciliation::PredicateBaselineEntry,
+    SoupFilterCacheAdapterError,
+> {
+    let record_key = RecordKey::new(record_key)
+        .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    let timestamp = chrono::DateTime::parse_from_rfc3339(sort_timestamp)
+        .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    Ok(
+        cache_core::predicate::reconciliation::PredicateBaselineEntry {
+            record_key,
+            sort_value: predicate_index::utc_timestamp_micros(timestamp.to_utc()),
+        },
+    )
+}
+
+/// Derive authoritative generic projection mutations from a selected GraphQL response.
+///
+/// Document supplements are decoded only where `cacheProjection` is selected
+/// for the surrounding entity and are merged with direct fields from that same
+/// object. The immutable v3 Document supplement is composed with the complete
+/// active-notification edge into the browser's v4 profile. Selected null values
+/// on Projects and Chats are expected; missing notification snapshots cannot
+/// establish v4 completeness. Payloads omitting `cacheProjection` become bounded
+/// v4 patches, preserving server-owned facts and any unselected notification
+/// membership from an existing complete projection. A missing base remains
+/// explicitly incomplete.
+pub fn authoritative_projection_mutations(
+    schema: &cache_core::meta::Schema,
+    query: &str,
+    operation_name: Option<&str>,
+    data: &serde_json::Value,
+) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+    let document =
+        Document::parse(query).map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    let operation = document
+        .operation(operation_name)
+        .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    let root_type = match operation.kind {
+        OperationKind::Query => schema.query_root(),
+        OperationKind::Mutation => schema.mutation_root().ok_or_else(|| {
+            SoupFilterCacheAdapterError("GraphQL schema has no mutation root".to_owned())
+        })?,
+        OperationKind::Subscription => schema.subscription_root().ok_or_else(|| {
+            SoupFilterCacheAdapterError("GraphQL schema has no subscription root".to_owned())
+        })?,
+    };
+    let serde_json::Value::Object(root) = data else {
+        return Err(SoupFilterCacheAdapterError(
+            "GraphQL response data is not an object".to_owned(),
+        ));
+    };
+
+    let mut mutations = IndexMap::new();
+    let mut has_unbound_incomplete_entity = false;
+    walk_authoritative_object(
+        schema,
+        &operation.selection_set,
+        root_type,
+        root,
+        &mut mutations,
+        &mut has_unbound_incomplete_entity,
+    );
+    let has_incomplete_projection = has_unbound_incomplete_entity
+        || mutations
+            .values()
+            .any(|mutation| matches!(mutation, ProjectionMutation::MarkIncomplete { profile, .. } if profile == &vocabulary::profile_v4()));
+    if operation_name.is_some_and(|name| name.starts_with("SoupBackfill"))
+        && has_incomplete_projection
+    {
+        return Err(SoupFilterCacheAdapterError(
+            "SoupBackfill page contains an incomplete required cache projection".to_owned(),
+        ));
+    }
+    Ok(mutations.into_values().collect())
+}
+
+fn walk_authoritative_object(
+    schema: &cache_core::meta::Schema,
+    selections: &[Selection],
+    declared_type: &str,
+    object: &serde_json::Map<String, serde_json::Value>,
+    mutations: &mut IndexMap<String, ProjectionMutation>,
+    has_unbound_incomplete_entity: &mut bool,
+) {
+    let concrete_type = object
+        .get("__typename")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(declared_type);
+    let mut fields = Vec::new();
+    collect_applicable_fields(schema, selections, concrete_type, &mut fields);
+
+    if let Some(partition) = projection_partition(concrete_type) {
+        let (mut projection_object, valid_selection) = if partition
+            == vocabulary::channel_partition()
+            || partition == vocabulary::database_row_partition()
+        {
+            match direct_patch::selected_object(object, &fields) {
+                Ok(selected) => (selected, true),
+                // Use the original ID only to invalidate a conflicting snapshot;
+                // never interpret conflicting nullable aliases as absent facts.
+                Err(()) => (object.clone(), false),
             }
-            serde_json::Value::Object(object) => {
-                let typename = object.get("__typename").and_then(|value| value.as_str());
-                let id = object.get("id").and_then(|value| value.as_str());
-                if let (Some(typename), Some(id)) = (typename, id)
-                    && let Some(partition) = projection_partition(typename)
-                {
-                    let key_text = format!("{typename}:{id}");
-                    if let Ok(record_key) = RecordKey::new(key_text.clone()) {
-                        let mutation = direct_projection_for_object(
-                            record_key.clone(),
-                            partition.clone(),
-                            object,
-                            None,
-                        )
-                        .map(ProjectionMutation::Replace)
-                        .unwrap_or(ProjectionMutation::MarkIncomplete {
-                            record_key,
-                            profile: vocabulary::profile(),
-                            partition,
-                            kind: ProjectionIncompleteKind::Dirty,
-                        });
-                        let replace = matches!(mutation, ProjectionMutation::Replace(_));
-                        if replace
-                            || !matches!(
-                                mutations.get(&key_text),
-                                Some(ProjectionMutation::Replace(_))
-                            )
-                        {
-                            mutations.insert(key_text, mutation);
-                        }
-                    }
+        } else {
+            (object.clone(), true)
+        };
+        projection_object.remove("notifications");
+        if let Some(snapshot) = notifications::selected_snapshot(schema, object, &fields) {
+            projection_object.insert("notifications".into(), snapshot);
+        }
+        let mut projection_fields = fields
+            .iter()
+            .copied()
+            .filter(|field| field.name == "cacheProjection")
+            .collect::<Vec<_>>();
+        projection_fields.sort_by(|left, right| left.response_key.cmp(&right.response_key));
+        projection_fields.dedup_by(|left, right| left.response_key == right.response_key);
+
+        let normalized_key = projection_object
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .map(|id| format!("{concrete_type}:{id}"))
+            .and_then(|key_text| {
+                RecordKey::new(key_text.clone())
+                    .ok()
+                    .map(|key| (key_text, key))
+            });
+        if let Some((key_text, record_key)) = normalized_key {
+            let mutation = if !valid_selection {
+                Some(ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile: vocabulary::profile_v4(),
+                    partition,
+                    kind: ProjectionIncompleteKind::Dirty,
+                })
+            } else if projection_fields.is_empty() {
+                match authoritative_v4_patch_for_object(
+                    record_key.clone(),
+                    partition.clone(),
+                    &projection_object,
+                ) {
+                    Ok(mutation) => Some(mutation),
+                    Err(()) => Some(ProjectionMutation::MarkIncomplete {
+                        record_key,
+                        profile: vocabulary::profile_v4(),
+                        partition,
+                        kind: ProjectionIncompleteKind::Dirty,
+                    }),
                 }
-                for value in object.values() {
-                    walk(value, mutations);
+            } else if partition == vocabulary::document_partition() {
+                Some(selected_document_projection_for_object(
+                    record_key,
+                    partition,
+                    &projection_object,
+                    &projection_fields,
+                ))
+            } else {
+                Some(
+                    complete_v4_projection_for_object(
+                        record_key.clone(),
+                        partition.clone(),
+                        &projection_object,
+                        None,
+                    )
+                    .map(ProjectionMutation::Replace)
+                    .unwrap_or(ProjectionMutation::MarkIncomplete {
+                        record_key,
+                        profile: vocabulary::profile_v4(),
+                        partition,
+                        kind: ProjectionIncompleteKind::IncompatibleVersion,
+                    }),
+                )
+            };
+
+            if let Some(mutation) = mutation {
+                insert_authoritative_mutation(mutations, key_text, mutation);
+            }
+        } else if !projection_fields.is_empty() {
+            *has_unbound_incomplete_entity = true;
+        }
+    }
+
+    let mut visited = HashSet::new();
+    for field in fields {
+        if !visited.insert((field.name.as_str(), field.response_key.as_str())) {
+            continue;
+        }
+        let Some(value) = object.get(&field.response_key) else {
+            continue;
+        };
+        let Some(field_meta) = schema.field_meta(concrete_type, &field.name) else {
+            continue;
+        };
+        if field_meta.ty.kind != FieldKind::Composite {
+            continue;
+        }
+        match value {
+            serde_json::Value::Object(child) => walk_authoritative_object(
+                schema,
+                &field.selection_set,
+                field_meta.ty.name,
+                child,
+                mutations,
+                has_unbound_incomplete_entity,
+            ),
+            serde_json::Value::Array(children) => {
+                for child in children {
+                    if let serde_json::Value::Object(child) = child {
+                        walk_authoritative_object(
+                            schema,
+                            &field.selection_set,
+                            field_meta.ty.name,
+                            child,
+                            mutations,
+                            has_unbound_incomplete_entity,
+                        );
+                    }
                 }
             }
             _ => {}
         }
     }
+}
 
-    let mut mutations = HashMap::new();
-    walk(data, &mut mutations);
-    mutations.into_values().collect()
+fn collect_applicable_fields<'a>(
+    schema: &cache_core::meta::Schema,
+    selections: &'a [Selection],
+    concrete_type: &str,
+    fields: &mut Vec<&'a FieldNode>,
+) {
+    for selection in selections {
+        match selection {
+            Selection::Field(field) => fields.push(field),
+            Selection::Fragment {
+                type_condition,
+                selection_set,
+                ..
+            } if type_condition
+                .as_deref()
+                .is_none_or(|condition| schema.type_matches(concrete_type, condition)) =>
+            {
+                collect_applicable_fields(schema, selection_set, concrete_type, fields);
+            }
+            Selection::Fragment { .. } => {}
+        }
+    }
+}
+
+fn selected_document_projection_for_object(
+    record_key: RecordKey,
+    partition: Token,
+    object: &serde_json::Map<String, serde_json::Value>,
+    fields: &[&FieldNode],
+) -> ProjectionMutation {
+    let incomplete = |kind| ProjectionMutation::MarkIncomplete {
+        record_key: record_key.clone(),
+        profile: vocabulary::profile_v4(),
+        partition: partition.clone(),
+        kind,
+    };
+    let mut selected = None;
+    for field in fields {
+        let Some(value) = object.get(&field.response_key) else {
+            return incomplete(ProjectionIncompleteKind::Missing);
+        };
+        if selected.is_some_and(|existing| existing != value) {
+            return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
+        }
+        selected = Some(value);
+    }
+    let Some(value) = selected else {
+        return incomplete(ProjectionIncompleteKind::Missing);
+    };
+    let serde_json::Value::String(encoded) = value else {
+        return incomplete(if value.is_null() {
+            ProjectionIncompleteKind::Missing
+        } else {
+            ProjectionIncompleteKind::IncompatibleVersion
+        });
+    };
+    let Ok(supplement) = decode_cache_projection_supplement(encoded) else {
+        return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
+    };
+    if supplement.target_profile() != &vocabulary::profile_v3()
+        || supplement.record_key() != &record_key
+        || supplement.partition() != &partition
+    {
+        return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
+    }
+    complete_v4_projection_for_object(
+        record_key.clone(),
+        partition.clone(),
+        object,
+        Some(&supplement),
+    )
+    .map(ProjectionMutation::Replace)
+    .unwrap_or_else(|()| incomplete(ProjectionIncompleteKind::IncompatibleVersion))
+}
+
+fn insert_authoritative_mutation(
+    mutations: &mut IndexMap<String, ProjectionMutation>,
+    key: String,
+    mutation: ProjectionMutation,
+) {
+    let mutation_is_empty_patch = matches!(
+        &mutation,
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        } if exact.is_empty() && integers.is_empty() && sorts.is_empty()
+    );
+    if mutation_is_empty_patch && mutations.contains_key(&key) {
+        return;
+    }
+
+    if let (
+        Some(ProjectionMutation::Patch {
+            exact: prior_exact,
+            integers: prior_integers,
+            sorts: prior_sorts,
+            ..
+        }),
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ) = (mutations.get_mut(&key), &mutation)
+    {
+        prior_exact.retain(|prior| !exact.iter().any(|next| next.attribute == prior.attribute));
+        prior_exact.extend(exact.iter().cloned());
+        prior_integers.retain(|prior| {
+            !integers
+                .iter()
+                .any(|next| next.attribute == prior.attribute)
+        });
+        prior_integers.extend(integers.iter().cloned());
+        prior_sorts.retain(|prior| !sorts.iter().any(|next| next.attribute == prior.attribute));
+        prior_sorts.extend(sorts.iter().cloned());
+        return;
+    }
+    let existing_is_replace = matches!(mutations.get(&key), Some(ProjectionMutation::Replace(_)));
+    if matches!(mutation, ProjectionMutation::Replace(_)) || !existing_is_replace {
+        mutations.insert(key, mutation);
+    }
 }
 
 /// Derive ordered generic optimistic projection mutations from a GraphQL response.
@@ -160,7 +500,7 @@ pub fn optimistic_projection_mutations(
                             key_text,
                             OptimisticProjectionMutation::Delete {
                                 record_key,
-                                profile: vocabulary::profile(),
+                                profile: vocabulary::profile_v4(),
                                 partition,
                             },
                         );
@@ -182,7 +522,7 @@ pub fn optimistic_projection_mutations(
                         )
                         .unwrap_or(OptimisticProjectionMutation::Unknown {
                             record_key,
-                            profile: vocabulary::profile(),
+                            profile: vocabulary::profile_v4(),
                             partition,
                             affected_attributes: Vec::new(),
                         });
@@ -215,7 +555,7 @@ pub fn dirty_projection_mutations(keys: &[String]) -> Vec<ProjectionMutation> {
             let partition = projection_partition(typename)?;
             Some(ProjectionMutation::MarkIncomplete {
                 record_key: RecordKey::new(key.clone()).ok()?,
-                profile: vocabulary::profile(),
+                profile: vocabulary::profile_v4(),
                 partition,
                 kind: ProjectionIncompleteKind::Dirty,
             })
@@ -223,13 +563,13 @@ pub fn dirty_projection_mutations(keys: &[String]) -> Vec<ProjectionMutation> {
         .collect()
 }
 
-fn direct_projection_for_object(
+fn direct_projection_input_for_object(
     record_key: RecordKey,
-    partition: Token,
+    partition: &Token,
     object: &serde_json::Map<String, serde_json::Value>,
     updated_at_fallback_ms: Option<i64>,
-) -> Option<IndexDocument> {
-    let kind = projection_kind(&partition)?;
+) -> Option<DirectProjectionInput> {
+    let kind = projection_kind(partition)?;
     let project_field = if kind == SoupFlatEntityKind::Project {
         "parentId"
     } else {
@@ -239,7 +579,7 @@ fn direct_projection_for_object(
         Some(value) => graphql_timestamp(value)?,
         None => chrono::DateTime::from_timestamp_millis(updated_at_fallback_ms?)?,
     };
-    project_direct_fields(DirectProjectionInput {
+    Some(DirectProjectionInput {
         record_key,
         kind,
         id: uuid::Uuid::parse_str(object.get("id")?.as_str()?).ok()?,
@@ -253,7 +593,170 @@ fn direct_projection_for_object(
         created_at: graphql_timestamp(object.get("createdAt")?)?,
         updated_at,
     })
-    .ok()
+}
+
+fn complete_v4_projection_for_object(
+    record_key: RecordKey,
+    partition: Token,
+    object: &serde_json::Map<String, serde_json::Value>,
+    supplement: Option<&SoupCacheProjectionSupplement>,
+) -> Result<IndexDocument, ()> {
+    if partition == vocabulary::channel_partition() {
+        return channels::complete(record_key, object);
+    }
+    if partition == vocabulary::database_row_partition() {
+        return database_rows::complete(record_key, object);
+    }
+    let input =
+        direct_projection_input_for_object(record_key, &partition, object, None).ok_or(())?;
+    let sub_type = if input.kind == SoupFlatEntityKind::Document {
+        document_sub_type(object.get("subType").ok_or(())?)?
+    } else {
+        None
+    };
+    let document = compose_soup_flat_v3(input, sub_type, supplement).map_err(|_| ())?;
+    notifications::compose_active_notifications(document, object)
+}
+
+fn authoritative_v4_patch_for_object(
+    record_key: RecordKey,
+    partition: Token,
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Result<ProjectionMutation, ()> {
+    let authoritative_patch = if partition == vocabulary::channel_partition() {
+        Some(channels::patch(record_key.clone(), object, None)?)
+    } else if partition == vocabulary::database_row_partition() {
+        Some(database_rows::patch(record_key.clone(), object, None)?)
+    } else {
+        None
+    };
+    if let Some(patch) = authoritative_patch {
+        let OptimisticProjectionMutation::Patch {
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        } = patch
+        else {
+            return Err(());
+        };
+        return Ok(ProjectionMutation::Patch {
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        });
+    }
+    let kind = projection_kind(&partition).ok_or(())?;
+    let project_field = if kind == SoupFlatEntityKind::Project {
+        "parentId"
+    } else {
+        "projectId"
+    };
+    let has_direct_patch = ["ownerId", project_field, "createdAt", "updatedAt"]
+        .iter()
+        .any(|field| object.contains_key(*field))
+        || (kind == SoupFlatEntityKind::Document
+            && (object.contains_key("fileType") || object.contains_key("subType")));
+    if !has_direct_patch && !object.contains_key("notifications") {
+        return Ok(ProjectionMutation::Patch {
+            record_key,
+            profile: vocabulary::profile_v4(),
+            partition,
+            exact: Vec::new(),
+            integers: Vec::new(),
+            sorts: Vec::new(),
+        });
+    }
+
+    let patch = patch_direct_fields(DirectProjectionPatchInput {
+        record_key: record_key.clone(),
+        kind,
+        owner: match object.get("ownerId") {
+            Some(value) => Some(value.as_str().ok_or(())?.to_owned()),
+            None => None,
+        },
+        project_id: match object.get(project_field) {
+            Some(value) => Some(optional_uuid(value).ok_or(())?),
+            None => None,
+        },
+        file_type: if kind == SoupFlatEntityKind::Document {
+            match object.get("fileType") {
+                Some(value) => Some(optional_string(value).ok_or(())?),
+                None => None,
+            }
+        } else {
+            None
+        },
+        created_at: match object.get("createdAt") {
+            Some(value) => Some(graphql_timestamp(value).ok_or(())?),
+            None => None,
+        },
+        updated_at: match object.get("updatedAt") {
+            Some(value) => Some(graphql_timestamp(value).ok_or(())?),
+            None => None,
+        },
+    })
+    .map_err(|_| ())?;
+    let OptimisticProjectionMutation::Patch {
+        mut exact,
+        integers,
+        sorts,
+        ..
+    } = patch
+    else {
+        return Err(());
+    };
+
+    if kind == SoupFlatEntityKind::Document
+        && let Some(value) = object.get("subType")
+    {
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::document_sub_type(),
+            values: document_sub_type_values(value)?,
+        });
+    }
+    if object.contains_key("notifications") {
+        exact.extend(notifications::snapshot_patches(&record_key, object)?);
+    }
+    Ok(ProjectionMutation::Patch {
+        record_key,
+        profile: vocabulary::profile_v4(),
+        partition,
+        exact,
+        integers,
+        sorts,
+    })
+}
+
+fn document_sub_type(value: &serde_json::Value) -> Result<Option<DocumentSubType>, ()> {
+    match value {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::Object(object) => {
+            match object.get("__typename").and_then(serde_json::Value::as_str) {
+                Some("GraphqlTaskSubType") => Ok(Some(DocumentSubType::Task)),
+                Some("GraphqlSnippetSubType") => Ok(Some(DocumentSubType::Snippet)),
+                Some("GraphqlSkillSubType") => Ok(Some(DocumentSubType::Skill)),
+                Some("GraphqlInitiativeDescriptionSubType") => {
+                    Ok(Some(DocumentSubType::InitiativeDescription))
+                }
+                _ => Err(()),
+            }
+        }
+        _ => Err(()),
+    }
+}
+
+fn document_sub_type_values(value: &serde_json::Value) -> Result<Vec<ExactValue>, ()> {
+    Ok(document_sub_type(value)?
+        .map(|sub_type| ExactValue::utf8(sub_type.to_string()).map_err(|_| ()))
+        .transpose()?
+        .into_iter()
+        .collect())
 }
 
 fn optimistic_projection_for_object(
@@ -262,16 +765,30 @@ fn optimistic_projection_for_object(
     object: &serde_json::Map<String, serde_json::Value>,
     created_at_ms: i64,
 ) -> Option<OptimisticProjectionMutation> {
-    if let Some(document) = direct_projection_for_object(
-        record_key.clone(),
-        partition.clone(),
-        object,
-        Some(created_at_ms),
-    ) {
+    if partition == vocabulary::channel_partition() {
+        // Cached channel access is authoritative. Optimism may patch a known
+        // base but cannot fabricate a complete, newly accessible channel.
+        return channels::patch(record_key, object, Some(created_at_ms)).ok();
+    }
+    if partition == vocabulary::database_row_partition() {
+        // Rows are authoritative like channels: optimism patches a known
+        // base but cannot fabricate a newly visible row.
+        return database_rows::patch(record_key, object, Some(created_at_ms)).ok();
+    }
+    let kind = projection_kind(&partition)?;
+    if kind != SoupFlatEntityKind::Document
+        && let Some(input) = direct_projection_input_for_object(
+            record_key.clone(),
+            &partition,
+            object,
+            Some(created_at_ms),
+        )
+        && let Ok(document) = compose_soup_flat_v3(input, None, None)
+        && let Ok(document) = notifications::compose_active_notifications(document, object)
+    {
         return Some(OptimisticProjectionMutation::Replace(document));
     }
 
-    let kind = projection_kind(&partition)?;
     let project_field = if kind == SoupFlatEntityKind::Project {
         "parentId"
     } else {
@@ -281,8 +798,8 @@ fn optimistic_projection_for_object(
         Some(value) => graphql_timestamp(value)?,
         None => chrono::DateTime::from_timestamp_millis(created_at_ms)?,
     };
-    patch_direct_fields(DirectProjectionPatchInput {
-        record_key,
+    let patch = patch_direct_fields(DirectProjectionPatchInput {
+        record_key: record_key.clone(),
         kind,
         owner: match object.get("ownerId") {
             Some(value) => Some(value.as_str()?.to_owned()),
@@ -304,9 +821,37 @@ fn optimistic_projection_for_object(
             Some(value) => Some(graphql_timestamp(value)?),
             None => None,
         },
-        updated_at,
+        updated_at: Some(updated_at),
     })
-    .ok()
+    .ok()?;
+    let OptimisticProjectionMutation::Patch {
+        mut exact,
+        integers,
+        sorts,
+        ..
+    } = patch
+    else {
+        return None;
+    };
+    if kind == SoupFlatEntityKind::Document
+        && let Some(value) = object.get("subType")
+    {
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::document_sub_type(),
+            values: document_sub_type_values(value).ok()?,
+        });
+    }
+    if object.contains_key("notifications") {
+        exact.extend(notifications::snapshot_patches(&record_key, object).ok()?);
+    }
+    Some(OptimisticProjectionMutation::Patch {
+        record_key,
+        profile: vocabulary::profile_v4(),
+        partition,
+        exact,
+        integers,
+        sorts,
+    })
 }
 
 fn projection_kind(partition: &Token) -> Option<SoupFlatEntityKind> {
@@ -350,6 +895,8 @@ fn projection_partition(typename: &str) -> Option<Token> {
         "GraphqlSoupDocument" => Some(vocabulary::document_partition()),
         "GraphqlSoupProject" => Some(vocabulary::project_partition()),
         "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
+        "GraphqlSoupChannel" => Some(vocabulary::channel_partition()),
+        "GraphqlSoupDatabaseRow" => Some(vocabulary::database_row_partition()),
         _ => None,
     }
 }

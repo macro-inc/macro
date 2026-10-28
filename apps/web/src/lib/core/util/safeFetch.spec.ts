@@ -109,6 +109,24 @@ describe('safeFetch', () => {
     }
   });
 
+  test('decode an iCalendar response as bytes', async () => {
+    const document = 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n';
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve(
+        new Response(document, {
+          headers: { 'Content-Type': 'text/calendar; charset=utf-8' },
+        })
+      )
+    );
+
+    const result = await safeFetch<Uint8Array>('https://localhost/event.ics');
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(new TextDecoder().decode(result.value)).toBe(document);
+    }
+  });
+
   describe('HTTP error handling', () => {
     test('handle 404 Not Found', async () => {
       mockFetch.mockImplementationOnce(() =>

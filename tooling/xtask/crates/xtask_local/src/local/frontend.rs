@@ -1,10 +1,9 @@
 //! Frontend dev-server orchestration: generate the instance env, wait for the
-//! backend to be reachable through the proxy, then launch `bun run dev` pointed
+//! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
 use std::io::Read;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -14,14 +13,34 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
 
-/// The app dir where `bun run dev` runs.
+/// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
+}
+
+fn prepare_dependencies(stage: &Stage) -> Result<()> {
+    let mut prepare = Command::new("bun");
+    prepare.current_dir(app_dir()).args(["run", "dev:prepare"]);
+    stage.run("Preparing frontend dependencies", &mut prepare)
 }
 
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))
+}
+
+/// Browser-facing origin for development redirects and integration callbacks.
+pub fn https_origin(instance: &Instance) -> Result<String> {
+    Ok(format!(
+        "https://{}:{}",
+        super::tls::hostname()?,
+        instance.port(Port::Proxy)
+    ))
+}
+
+/// Browser-facing development URL, using the machine certificate and proxy.
+pub fn https_url(instance: &Instance) -> Result<String> {
+    Ok(format!("{}/app/", https_origin(instance)?))
 }
 
 /// Frontend URL when the proxy serves the static bundle (headless stacks): the
@@ -40,40 +59,31 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 }
 
 /// Build the app bundle for headless serving and stage it into the instance
-/// dir. `prebuilt` skips the build and stages an existing dist (CI hands the
-/// binaries-style artifact straight in). The build mirrors `just build-dev`
+/// dir. The build mirrors `just build-dev`
 /// (dev-mode bundle, production optimizations), except the backend origin is
 /// the `same-origin` sentinel — resolved from `location.origin` at runtime — so
-/// the one bundle works on localhost and through any tunnel/preview hostname.
+/// the one bundle works on localhost and through any tunneled hostname.
 ///
 /// Setting `VITE_LOCAL_BACKEND_ORIGIN` also keeps `import.meta.env.DEV` true
 /// in the static bundle (see `keepImportMetaDev` in apps/web/scripts). `vite build`
 /// otherwise compiles DEV from `NODE_ENV=production`, which drops local-only
 /// paths such as passwordless auto-login (`just run_local` uses `vite serve`,
-/// where DEV is already true). Fly preview sets the same origin env, so it
-/// gets the override without a second flag.
-pub fn build_static(
-    stage: &Stage,
-    instance: &Instance,
-    mode: Mode,
-    prebuilt: Option<&Path>,
-) -> Result<()> {
-    let dist = match prebuilt {
-        Some(dir) => dir.to_owned(),
-        None => {
-            let mut cmd = Command::new("bun");
-            cmd.current_dir(app_dir())
-                .args(["run", "--bun", "build"])
-                .env("MODE", "development")
-                .env("NODE_ENV", "production")
-                .env("VITE_LOCAL_SERVERS", "ALL")
-                .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
-            if mode.spec().runs_local_infra {
-                cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
-            }
-            stage.run("Building frontend bundle", &mut cmd)?;
-            app_dir().join("dist")
+/// where DEV is already true). Headless `stack up` sets the same origin env.
+pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    prepare_dependencies(stage)?;
+    let dist = {
+        let mut cmd = Command::new("bun");
+        cmd.current_dir(app_dir())
+            .args(["run", "--bun", "build"])
+            .env("MODE", "development")
+            .env("NODE_ENV", "production")
+            .env("VITE_LOCAL_SERVERS", "ALL")
+            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin");
+        if mode.spec().runs_local_infra {
+            cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
         }
+        stage.run("Building frontend bundle", &mut cmd)?;
+        app_dir().join("dist")
     };
     if stage.is_dry_run() {
         return Ok(());
@@ -103,8 +113,8 @@ pub fn build_static(
 }
 
 /// The env the dev server runs with. Both local and dev point the whole app at
-/// the local proxy origin (single backend origin); the modes differ only in
-/// what the *services* behind the proxy talk to (local infra vs dev resources).
+/// the Vite origin, which forwards backend routes to the instance proxy. The
+/// modes differ in what the services talk to (local infra vs dev resources).
 ///
 /// When a trace collector is up (`--traces`), point the OTel exporter at the
 /// analytics-proxy through the same proxy origin (`/i/otlp`), so tracing works
@@ -112,28 +122,41 @@ pub fn build_static(
 /// and exercises the real browser -> proxy -> collector path. Left unset
 /// otherwise. This overrides the bare-dev defaults in apps/web/.env.local
 /// (Vite lets process env win).
-fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String, String)> {
+fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Result<Vec<(String, String)>> {
     let mut env = vec![
         (
             "PORT".to_string(),
             instance.port(Port::Frontend).to_string(),
         ),
         ("VITE_LOCAL_SERVERS".to_string(), "ALL".to_string()),
+        ("MACRO_LOCAL_HOSTNAME".to_string(), super::tls::hostname()?),
+        (
+            "NODE_EXTRA_CA_CERTS".to_string(),
+            proxy::ca_pem().display().to_string(),
+        ),
         (
             "VITE_LOCAL_BACKEND_ORIGIN".to_string(),
+            "same-origin".to_string(),
+        ),
+        (
+            "MACRO_LOCAL_BACKEND_PROXY".to_string(),
             proxy::url(instance),
+        ),
+        (
+            "MACRO_LOCAL_BACKEND_ROUTES".to_string(),
+            proxy::frontend_path_prefixes().join(","),
         ),
     ];
     if mode.spec().runs_local_infra {
         env.push((
             "VITE_AI_EDITING_WORKER_URL".to_string(),
-            format!("{}/ai-editing", proxy::url(instance)),
+            "/ai-editing".to_string(),
         ));
     }
     if traces_enabled {
         env.push((
             "VITE_OTEL_EXPORTER_URL".to_string(),
-            format!("{}/i/otlp/v1/traces", proxy::url(instance)),
+            "/i/otlp/v1/traces".to_string(),
         ));
         // Tag frontend telemetry with the same env the Datadog agent uses
         // (DD_ENV, default `local`), so the summary's traces/logs links —
@@ -147,40 +170,107 @@ fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String
         "VITE_ENABLE_BROWSER_OTEL".to_string(),
         traces_enabled.to_string(),
     ));
-    env
+    Ok(env)
 }
 
 /// Poll the backend (auth health, through the proxy) until ready.
 pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!("{}/auth/health", proxy::url(instance));
+    let cacert = proxy::ca_pem();
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'backend not ready'; exit 1"
+        "for i in $(seq 1 600); do curl -fsS --cacert '{cacert}' --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'backend not ready'; exit 1",
+        cacert = cacert.display()
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
     stage.run("Waiting for backend (proxy /auth/health)", &mut cmd)
 }
 
+/// A listening Vite port does not prove the containerized proxy can reach it.
+/// Verify the browser's route before announcing that the stack is ready.
+fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--retry",
+        "8",
+        "--retry-connrefused",
+        "--retry-delay",
+        "1",
+        "--retry-max-time",
+        "45",
+        "--max-time",
+        "5",
+        "--output",
+        "/dev/null",
+        "--cacert",
+    ])
+    .arg(proxy::ca_pem())
+    .arg(format!("{}/app/", proxy::url(instance)));
+    stage
+        .run("Checking frontend through HTTPS proxy", &mut cmd)
+        .with_context(|| {
+            format!(
+                "HTTPS proxy could not serve the frontend. Check proxy logs and Docker-to-host \
+                 firewall access to host.docker.internal:{} (Vite's port). \
+                 Direct Vite URL: {}",
+                instance.port(Port::Frontend),
+                url(instance)
+            )
+        })
+}
+
 /// A running frontend dev server plus its captured output, so an unexpected
 /// exit can be explained (the output is otherwise suppressed).
 pub struct Frontend {
+    pub process: FrontendProcess,
+    command: Command,
+    port: u16,
+}
+
+/// One dev-server process and its captured output, replaced on restart.
+pub struct FrontendProcess {
     pub child: Child,
     captured: Arc<Mutex<Vec<u8>>>,
     drains: Vec<JoinHandle<()>>,
 }
 
 impl Frontend {
-    /// Stop the dev server and all its children. `bun run dev` spawns Vite (and
-    /// friends), which we put in their own process group at spawn — so signal the
+    /// Restart only Vite, preserving the command, environment, and instance port.
+    /// Killing the old process group also recovers a stuck in-process reload.
+    pub fn restart(&mut self, stage: &Stage) -> Result<()> {
+        self.shutdown();
+        self.process = spawn(stage, &mut self.command, self.port)?;
+        Ok(())
+    }
+
+    /// Stop the current dev-server process group.
+    pub fn shutdown(&mut self) {
+        self.process.shutdown();
+    }
+
+    /// Return the last output from an exited dev server.
+    pub fn tail_output(&mut self, lines: usize) -> String {
+        self.process.tail_output(lines)
+    }
+}
+
+impl FrontendProcess {
+    /// Stop the dev server and all its children. We put Vite and its children
+    /// in their own process group at spawn — so signal the
     /// GROUP (negative pid). SIGKILL is enough: the kernel releases the port the
-    /// moment the processes die. Then reap `bun` and join the drain threads (their
+    /// moment the processes die. Then reap Vite and join the drain threads (their
     /// pipes close, so they exit).
     pub fn shutdown(&mut self) {
-        let pgid = self.child.id() as i32;
-        // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
-        // ESRCH. The negative pid targets the whole process group.
-        unsafe {
-            libc::kill(-pgid, libc::SIGKILL);
+        if matches!(self.child.try_wait(), Ok(None)) {
+            let pgid = self.child.id() as i32;
+            // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
+            // ESRCH. The negative pid targets the whole process group.
+            unsafe {
+                libc::kill(-pgid, libc::SIGKILL);
+            }
         }
         let _ = self.child.wait();
         for h in self.drains.drain(..) {
@@ -196,6 +286,12 @@ impl Frontend {
         }
         let buf = self.captured.lock().unwrap_or_else(|e| e.into_inner());
         tail_str(&String::from_utf8_lossy(&buf), lines)
+    }
+}
+
+impl Drop for FrontendProcess {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
@@ -242,12 +338,17 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
-    let mut cmd = Command::new("bun");
+    prepare_dependencies(stage)?;
+
+    // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
+    // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies
+    // and builds: https://github.com/oven-sh/bun/issues/10441.
+    let mut cmd = Command::new("node");
     cmd.current_dir(app_dir())
-        .args(["run", "--bun", "dev"])
-        // Run bun (and the Vite child it spawns) in its OWN process group, so
-        // `shutdown` can signal the whole group — killing just `bun` would orphan
-        // Vite and leave the port held. (0 = "new group led by the child".)
+        .arg(repo_root().join("node_modules/vite/bin/vite.js"))
+        .args(["-c", "vite.config.ts"])
+        // Run Vite directly in its OWN process group. Avoiding the `bun run`
+        // package-script wrapper keeps the listener in the process we own.
         .process_group(0)
         // Open-but-empty stdin (piped, held open, never written): vite sees a
         // non-TTY stdin so it won't bind its own keypress shortcuts (no fight
@@ -256,14 +357,24 @@ pub fn start(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance, mode, traces_enabled) {
+    for (k, v) in dev_env(instance, mode, traces_enabled)? {
         cmd.env(k, v);
     }
-    let mut child = cmd.spawn().context("launching `bun run dev`")?;
+    let process = spawn(stage, &mut cmd, port)?;
+    wait_frontend_proxy_ready(stage, instance)?;
+    Ok(Some(Frontend {
+        process,
+        command: cmd,
+        port,
+    }))
+}
+
+fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess> {
+    let mut child = cmd.spawn().context("launching the Vite dev server")?;
 
     // Drain stdout+stderr into a buffer on their own threads (a full pipe would
-    // otherwise block bun); the output stays hidden unless the server exits.
-    // stdin is intentionally NOT taken — its write end stays open so bun never
+    // otherwise block Vite); the output stays hidden unless the server exits.
+    // stdin is intentionally NOT taken — its write end stays open so Vite never
     // sees stdin EOF.
     let captured = Arc::new(Mutex::new(Vec::new()));
     let mut drains = Vec::new();
@@ -276,7 +387,7 @@ pub fn start(
         drains.push(std::thread::spawn(move || drain_into(&mut err, &buf)));
     }
 
-    // Wait until OUR child is serving: poll the port, but fail fast (with bun's
+    // Wait until OUR child is serving: poll the port, but fail fast (with Vite's
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
@@ -306,7 +417,7 @@ pub fn start(
     if let Err(error) = startup {
         let pgid = child.id() as i32;
         // SAFETY: the child leads the process group created above. ESRCH is
-        // harmless when Bun already exited.
+        // harmless when Vite already exited.
         unsafe {
             libc::kill(-pgid, libc::SIGKILL);
         }
@@ -318,11 +429,11 @@ pub fn start(
         anyhow::bail!("{error}\nfrontend output (last lines):\n{out}");
     }
 
-    Ok(Some(Frontend {
+    Ok(FrontendProcess {
         child,
         captured,
         drains,
-    }))
+    })
 }
 
 /// Copy a child pipe into the shared capture buffer until EOF.
@@ -337,3 +448,6 @@ fn drain_into(reader: &mut impl Read, buf: &Mutex<Vec<u8>>) {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

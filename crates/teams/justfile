@@ -26,3 +26,42 @@ check:
 
 test:
   cargo test
+
+# Ensure teammate DMs against the local MacroDB.
+backfill_teammate_dms_local:
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="local" DATABASE_URL="{{ DATABASE_URL }}" \
+        cargo run -p teams --features backfill_binary --bin backfill_teammate_dms
+
+# Ensure teammate DMs against the dev MacroDB.
+backfill_teammate_dms_dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo -e "\033[33mWARNING: this will create missing teammate DMs in DEV MacroDB.\033[0m"
+    echo -n "Continue? [y/N] "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        echo "Backfill cancelled."
+        exit 0
+    fi
+    "{{ just_executable() }}" _backfill_teammate_dms_run dev macro-db-dev macrodb-password-dev
+
+# Ensure teammate DMs against the prod MacroDB.
+backfill_teammate_dms_prod:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo -e "\033[31mWARNING: this will create missing teammate DMs in PRODUCTION MacroDB.\033[0m"
+    echo -n "Type 'prod backfill' to continue: "
+    read -r response
+    if [[ "$response" != "prod backfill" ]]; then
+        echo "Production backfill cancelled."
+        exit 0
+    fi
+    "{{ just_executable() }}" _backfill_teammate_dms_run prod macro-db-prod macrodb-password-prod
+
+_backfill_teammate_dms_run env rds_id secret:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    DATABASE_URL="$(../../tooling/scripts/rds_database_url.sh {{ rds_id }} {{ secret }} macrodb)"
+    eval "$(aws configure export-credentials --format env)"
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="{{ env }}" DATABASE_URL="$DATABASE_URL" \
+        cargo run -p teams --features backfill_binary --bin backfill_teammate_dms

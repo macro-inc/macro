@@ -1,5 +1,6 @@
 use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
+use serde_json::json;
 
 #[test]
 fn test_build_keyword_query_string_single_term() {
@@ -331,7 +332,7 @@ fn test_importance_true_excludes_depriority_unless_priority() -> anyhow::Result<
     let json = bool_query.build().to_json();
 
     let must_not = json["bool"]["must_not"].as_array().unwrap();
-    assert_eq!(must_not.len(), 1);
+    assert_eq!(must_not.len(), 2);
 
     let nested_bool = &must_not[0]["bool"];
     let filter = nested_bool["filter"].as_array().unwrap();
@@ -343,6 +344,16 @@ fn test_importance_true_excludes_depriority_unless_priority() -> anyhow::Result<
     assert_eq!(inner_must_not.len(), 1);
     let priority = inner_must_not[0]["terms"]["labels"].as_array().unwrap();
     assert_eq!(priority.len(), 3);
+
+    // Macro's own notification sender is excluded from signal outright.
+    assert_eq!(
+        must_not[1],
+        json!({
+            "wildcard": {
+                "sender": { "value": "*@notification.macro.com", "case_insensitive": true }
+            }
+        })
+    );
 
     Ok(())
 }
@@ -361,20 +372,35 @@ fn test_importance_false_filters_to_depriority_only() -> anyhow::Result<()> {
     let json = bool_query.build().to_json();
 
     let filters = json["bool"]["filter"].as_array().unwrap();
-    let nested_bool = filters
+    let noise_bool = filters
         .iter()
-        .find(|f| f["bool"]["filter"].is_array() && f["bool"]["must_not"].is_array())
+        .find(|f| f["bool"]["should"].is_array())
         .expect("should have nested importance filter");
+    assert_eq!(noise_bool["bool"]["minimum_should_match"], 1);
 
-    let depriority = nested_bool["bool"]["filter"][0]["terms"]["labels"]
+    let should = noise_bool["bool"]["should"].as_array().unwrap();
+    assert_eq!(should.len(), 2);
+
+    // Depriority-labeled without a priority label...
+    let depriority_bool = &should[0]["bool"];
+    let depriority = depriority_bool["filter"][0]["terms"]["labels"]
         .as_array()
         .unwrap();
     assert_eq!(depriority.len(), 4);
-
-    let priority = nested_bool["bool"]["must_not"][0]["terms"]["labels"]
+    let priority = depriority_bool["must_not"][0]["terms"]["labels"]
         .as_array()
         .unwrap();
     assert_eq!(priority.len(), 3);
+
+    // ...or from Macro's own notification sender.
+    assert_eq!(
+        should[1],
+        json!({
+            "wildcard": {
+                "sender": { "value": "*@notification.macro.com", "case_insensitive": true }
+            }
+        })
+    );
 
     Ok(())
 }
@@ -412,8 +438,9 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
     let json = bool_query.build().to_json();
 
     let must_not = json["bool"]["must_not"].as_array().unwrap();
-    // Should have both: the explicit exclude_label AND the importance nested bool
-    assert_eq!(must_not.len(), 2);
+    // Should have all three: the explicit exclude_label, the importance
+    // nested bool, and the Macro notification sender exclusion.
+    assert_eq!(must_not.len(), 3);
 
     // One should be the INBOX term exclusion
     let has_inbox_exclusion = must_not.iter().any(|q| q["term"]["labels"] == "INBOX");
@@ -449,9 +476,7 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
 
     // Should have the importance filter in filter array
     let filters = json["bool"]["filter"].as_array().unwrap();
-    let has_importance_filter = filters
-        .iter()
-        .any(|f| f["bool"]["filter"].is_array() && f["bool"]["must_not"].is_array());
+    let has_importance_filter = filters.iter().any(|f| f["bool"]["should"].is_array());
     assert!(has_importance_filter);
 
     Ok(())

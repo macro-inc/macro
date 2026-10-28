@@ -1,4 +1,3 @@
-import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
@@ -27,7 +26,6 @@ import { InboxDivider, type LayoutProps } from './shared';
 import { TaskNarrowBody } from './task';
 
 export function NarrowInboxLayout(props: LayoutProps) {
-  const soupView = useMaybeSoupView();
   const isDirectMessage = () =>
     isChannelEntity(props.entity) &&
     props.entity.channelType === 'direct_message';
@@ -43,7 +41,13 @@ export function NarrowInboxLayout(props: LayoutProps) {
     <Entity.Layout
       class="w-full text-sm grid"
       style={{
-        'grid-template-columns': 'auto 1fr 8ch',
+        // A scheduled send's badge is wider than a date, so it sizes its column.
+        'grid-template-columns':
+          props.referenceProperties ||
+          props.scheduleStatus ||
+          (isEmailEntity(props.entity) && props.entity.scheduledSendTime)
+            ? 'auto 1fr auto'
+            : 'auto 1fr 8ch',
         'grid-template-rows': 'auto auto auto',
         'grid-template-areas':
           '"icon title timestamp" "icon body body" "icon body body"',
@@ -58,8 +62,13 @@ export function NarrowInboxLayout(props: LayoutProps) {
           active={props.unread}
         />
         <div class="relative size-(--soup-inbox-icon-diameter) shrink-0 group">
-          <Show when={!props.checked}>
-            <div class="absolute inset-0 grid place-items-center group-hover:opacity-0 transition-opacity">
+          <Show when={props.hideCheckbox || !props.checked}>
+            <div
+              class={cn(
+                'absolute inset-0 grid place-items-center transition-opacity',
+                { 'group-hover:opacity-0': !props.hideCheckbox }
+              )}
+            >
               <Show
                 when={isDirectMessage()}
                 fallback={
@@ -83,18 +92,20 @@ export function NarrowInboxLayout(props: LayoutProps) {
               </Show>
             </div>
           </Show>
-          {/* TODO: make multiselect work on mobile */}
-          <div
-            class={cn(
-              'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
-              { 'opacity-100': props.checked }
-            )}
-          >
-            <MultiSelectCheckbox
-              checked={props.checked}
-              onChecked={props.onChecked}
-            />
-          </div>
+          <Show when={!props.hideCheckbox}>
+            {/* TODO: make multiselect work on mobile */}
+            <div
+              class={cn(
+                'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
+                { 'opacity-100': props.checked }
+              )}
+            >
+              <MultiSelectCheckbox
+                checked={props.checked}
+                onChecked={props.onChecked}
+              />
+            </div>
+          </Show>
         </div>
       </Entity.Slot>
 
@@ -117,8 +128,10 @@ export function NarrowInboxLayout(props: LayoutProps) {
 
       <Entity.Slot
         placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
+        class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
       >
+        {props.referenceProperties}
+        {props.scheduleStatus}
         <Show
           when={
             !props.hasNotifications &&
@@ -158,7 +171,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
           {(entity) => (
             <CallNarrowBody
               entity={entity()}
-              showAttendanceBadge={(soupView?.activeTab() ?? 'all') === 'all'}
+              showAttendanceBadge={props.showCalendarAttendance !== false}
               setContainerRef={props.setSnippetContainerRef}
               chars={props.chars}
             />

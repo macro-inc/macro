@@ -1,8 +1,11 @@
-//! EditDocument tool — thin wrapper over [`EditingWorkerPort`].
+//! EditDocument tool — permission/token boundary for the domain AI-editing use case.
 
+use crate::domain::ai_editing::{AiEditError, AiEditRequest};
 use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
-    DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
+    DocumentService,
+    create::DocumentCreationService,
+    editing::{EditMode, EditingWorkerService},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -19,12 +22,12 @@ use serde::{Deserialize, Serialize};
 use super::DocumentToolContext;
 
 #[cfg(test)]
-mod test;
+pub(super) mod test;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "EditDocument",
-    description = "Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName."
+    description = "Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName."
 )]
 pub struct EditDocument {
     #[schemars(
@@ -32,9 +35,14 @@ pub struct EditDocument {
     )]
     pub document_id: String,
     #[schemars(
-        description = "Natural language instructions. For mention(s), include userId and email per person. For document-card(s), include documentId and documentName per document. You may need to look these up."
+        description = "Natural language instructions. For @-mention chips, include each item's ids and details: userId/email for people; documentId/documentName/blockName for documents and similar items; session id for agent sessions; ISO datetime and displayFormat for time chips; profileId/slug/url for booking links. For document-card(s), include documentId and documentName per document. You may need to look these up."
     )]
     pub instructions: String,
+    #[serde(default)]
+    #[schemars(
+        description = "Set true for one quick, contained edit -- rewrite this paragraph, translate the selected list, fix a heading, bold a phrase. A single model applies it directly in a few seconds. Leave false (the default) for anything with several parts or that restructures the document; the default pipeline plans, dispatches, and reviews its own work, which takes longer but is what multi-step edits need."
+    )]
+    pub fast: bool,
 }
 
 /// The editing worker opens a sync-service session and blocks on the initial
@@ -55,6 +63,12 @@ fn ensure_markdown(document: &DocumentBasic) -> Result<(), ToolCallError> {
     }
 
     let file_type = document.file_type.as_deref().unwrap_or("unknown");
+    if document.try_file_type() == Some(FileType::Docx) {
+        return Err(ToolCallError {
+            description: "this is an uploaded Word (.docx) document, which EditDocument cannot change. Use ReadWordDocument to read it with paragraph ids, then EditWordDocument to edit it.".to_owned(),
+            internal_error: anyhow::anyhow!("document file type docx is not markdown"),
+        });
+    }
     Err(ToolCallError {
         description: format!(
             "this document cannot be edited: it is a `{file_type}` file, not a Macro markdown document. AI editing only works on markdown documents authored in Macro's collaborative editor -- uploaded files (PDFs, DOCX, images, source files, and so on) are readable but not editable. Report this back to the user rather than retrying."
@@ -76,6 +90,16 @@ impl ToolAnnotated for EditDocument {
     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Edit document");
 }
 
+impl EditDocument {
+    fn mode(&self) -> EditMode {
+        if self.fast {
+            EditMode::Fast
+        } else {
+            EditMode::Supervised
+        }
+    }
+}
+
 #[async_trait]
 impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for EditDocument
 where
@@ -91,7 +115,8 @@ where
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        ctx.entity_access_service
+        let receipt = ctx
+            .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
                 &request_context.user_id,
                 None,
@@ -120,45 +145,49 @@ where
             self.document_id.clone(),
             AccessLevel::Edit,
             &ctx.document_permission_jwt_secret,
+            Some(ctx.actor.into_storage_id().to_string()),
         )
         .map_err(|e| ToolCallError {
             description: "failed to mint document token".to_string(),
             internal_error: e.into(),
         })?;
 
+        // The edit is presented as the bot this tool acts as: readers watching
+        // the document see its name on the cursor, the same name the activity
+        // feed attributes the edit to.
+        let editor = ctx.actor_editor_name();
+
         // Honor user cancellation: if the request is cancelled mid-edit, drop the
         // in-flight worker call (closing the HTTP connection so the worker aborts
         // its own LLM work) and surface a `cancelled` tool error -- matching how
         // the chat stream renders cancellation for tool calls that never returned.
+        let editing = ctx.ai_editing();
+        let edit = AiEditRequest {
+            document_token: &document_token,
+            instructions: &self.instructions,
+            mode: self.mode(),
+            editor,
+        };
         let result = tokio::select! {
+            biased;
             _ = request_context.cancel.cancelled() => {
                 return Err(ToolCallError {
                     description: "cancelled".to_string(),
                     internal_error: anyhow::anyhow!("edit cancelled by user. document might be left in a partially edited state."),
                 });
             }
-            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions) => r,
+            r = editing.edit(receipt, &request_context.user_id, edit) => r,
         }
-        .map_err(|e| ToolCallError {
-            description: e.to_string(),
-            internal_error: e,
+        .map_err(|error| {
+            let description = match &error {
+                AiEditError::Admission(error) => format!("{}: {error}", error.code()),
+                AiEditError::Worker(error) => error.to_string(),
+            };
+            ToolCallError {
+                description,
+                internal_error: error.into(),
+            }
         })?;
-
-        // The worker runs several models on the caller's behalf; record each so
-        // their tokens land on the usage ledger (attributed to this user).
-        let entity = macro_uuid::string_to_uuid(&self.document_id).ok();
-        for u in &result.usage {
-            let cx = ai_usage::UsageContext::new(
-                ai_usage::AiFeature::AiEditing,
-                request_context.user_id.clone(),
-            )
-            .with_entity(entity);
-            ctx.recorder.record(cx.into_event(
-                u.model.clone(),
-                u.input_tokens as u64,
-                u.output_tokens as u64,
-            ));
-        }
 
         let summary = if result.clarification.is_some() {
             "Paused for clarification; no edits applied.".to_string()

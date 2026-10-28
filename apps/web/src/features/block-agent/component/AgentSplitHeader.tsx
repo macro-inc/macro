@@ -1,117 +1,230 @@
+import { ChangesToggle } from '@app/features/changes/changes';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { useBlockId } from '@core/block';
-import { toast } from '@core/component/Toast/Toast';
-import { isMobile } from '@core/mobile/isMobile';
-import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
-import GitBranch from '@phosphor/git-branch.svg';
-import LinkIcon from '@phosphor/link.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { BlockLiveIndicators } from '@core/component/LiveIndicators';
+import { Permissions } from '@core/component/SharePermissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { openExternalUrl } from '@core/util/url';
+import type { AgentSessionEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import TrayIcon from '@icon/system/regular/tray.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
+import { useAgentSession } from '../context/AgentSessionContext';
+import { changeSessionArchiveState } from '../queries/change-session-archive-state';
+import { AgentPullRequestChip } from './AgentPullRequestChip';
+import { AgentTaskChip } from './AgentTaskChip';
 import {
-  ORIGIN_THREAD_DRAWER_ID,
-  sessionOriginThread,
-} from '../context/origin-thread';
+  harnessTitle,
+  sessionHarnessTitle,
+  sessionRepositoryUrl,
+} from './compose-agent-session-options';
 
-/** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
-export function harnessTitle(harness: string | undefined): string {
-  if (!harness) return 'Agent session';
-  return harness
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+export { harnessTitle, sessionRepositoryUrl };
+
+export function agentSessionFileOperations(
+  session: AgentSessionResponse | undefined,
+  permissions: Permissions,
+  setArchived: () => void
+): FileOperation[] {
+  const repositoryUrl = sessionRepositoryUrl(session);
+  return [
+    ...(!session?.isArchived ? [{ op: 'rename' } as const] : []),
+    ...(permissions === Permissions.OWNER
+      ? [
+          {
+            label: session?.isArchived ? 'Unarchive' : 'Archive',
+            icon: TrayIcon,
+            action: setArchived,
+          },
+        ]
+      : []),
+    { op: 'delete' },
+    ...(repositoryUrl
+      ? [
+          {
+            label: 'Open repository',
+            icon: GitBranch,
+            action: () => openExternalUrl(repositoryUrl),
+          },
+        ]
+      : []),
+  ];
+}
+
+/** Shared title precedence for standalone and workspace agent sessions. */
+export function agentSessionTitle(
+  session: AgentSessionResponse | undefined,
+  transcriptTitle?: string | null
+): string {
+  const name = session?.name;
+  if (name && name !== 'Agent Session') return name;
+  return transcriptTitle ?? name ?? sessionHarnessTitle(session ?? {});
 }
 
 /**
  * Agent-session identity in the split header chrome plus the standard split
- * toolbar, matching the PR block's shape for non-document blocks: static
- * label (names the split tab), copy-link tool, and a file menu with the
- * session's repository.
+ * toolbar: static label, shared entity actions, the session's pull request
+ * once one exists, and external-provider links.
+ *
+ * Rename lives on the title menu (channel / routine), not on a tap of
+ * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
+ * the dropdown instead of an inline editor.
  */
 export function AgentSplitHeader(props: {
   session: AgentSessionResponse | undefined;
   /** The fold's session title, preferred over the harness fallback. */
   title?: string;
 }) {
-  const blockId = useBlockId();
-  const title = () => props.title ?? harnessTitle(props.session?.harness);
-  const originThreadDrawer = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
+  // The session, not `useBlockId()`: a block created from the launcher mounts
+  // against a placeholder and keeps reporting it (see `Block.tsx`), so the
+  // block id is the one thing here that is not a shareable session id.
+  const { sessionId, metadata, userId } = useAgentSession();
+  const title = () => agentSessionTitle(props.session, props.title);
+  const permissions = () =>
+    userId() && props.session?.ownerId === userId()
+      ? Permissions.OWNER
+      : props.session?.canEdit
+        ? Permissions.CAN_EDIT
+        : Permissions.CAN_VIEW;
 
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(
-      buildSimpleEntityUrl({ type: 'agent', id: blockId })
-    );
-    toast.success('Link copied to clipboard');
+  const entity = (): AgentSessionEntity | undefined => {
+    const session = props.session;
+    const id = sessionId();
+    if (!session || !id) return undefined;
+    return {
+      type: 'agent_session',
+      id,
+      name: title(),
+      isArchived: session.isArchived,
+      ownerId: session.ownerId,
+      botId: session.botId,
+      status:
+        session.status.kind === 'event'
+          ? session.status.event
+          : session.status.kind,
+    };
   };
+  useBlockEntityCommands({ resolveEntity: entity });
+  const openShare = useShareModal(() => {
+    const session = entity();
+    if (!session) return;
+    return {
+      id: session.id,
+      name: title(),
+      owner: session.ownerId,
+      itemType: 'agent_session',
+      blockAlias: 'agent',
+      userPermissions: permissions(),
+    };
+  });
+
+  const shareTools: BlockTool[] = [
+    {
+      label: 'Share',
+      icon: ShareIcon,
+      action: openShare,
+      condition: () => Boolean(entity()),
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} id={sessionId()} />
+      ),
+    },
+  ];
 
   const tools: BlockTool[] = [
     {
-      label: 'Discussion Thread',
-      icon: TreeStructure,
-      action: originThreadDrawer.toggle,
-      isActive: originThreadDrawer.isOpen,
-      condition: () => sessionOriginThread(props.session) !== undefined,
-    },
-    {
-      label: 'Copy link',
-      icon: LinkIcon,
-      action: copyLink,
+      label: () => {
+        const provider = props.session?.external?.provider;
+        if (!provider) return 'Open externally';
+        return `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
+      },
+      icon: ArrowSquareOut,
+      action: () => {
+        const url = props.session?.external?.url;
+        if (url) openExternalUrl(url);
+      },
+      condition: () => Boolean(props.session?.external?.url),
     },
   ];
 
-  const ops: FileOperation[] = [
-    {
-      label: 'Open repository',
-      icon: GitBranch,
-      action: () => {
-        const url = props.session?.repoUrl;
-        if (url) openExternalUrl(url);
-      },
-    },
-  ];
+  const setArchived = async () => {
+    const id = sessionId();
+    if (!id || !props.session) return;
+    await changeSessionArchiveState(id, !props.session.isArchived);
+  };
+  const ops = () =>
+    agentSessionFileOperations(props.session, permissions(), setArchived);
 
   return (
     <>
       <SplitHeaderLeft>
-        <StaticSplitLabel iconType="agent" label={title()} />
+        <StaticSplitLabel
+          icon={
+            <ProviderIcon
+              model={metadata()?.model ?? props.session?.model}
+              class="size-4 shrink-0"
+            />
+          }
+          label={title()}
+        />
       </SplitHeaderLeft>
 
-      {/* Tools live on the header row itself — `ResponsiveBlockToolbar`
-          would push non-Share tools onto a second toolbar row. Markup
-          mirrors its own header-tools branch; on mobile the tools collapse
-          into the title menu via `menuTools` below instead. */}
-      <Show when={!isMobile()}>
-        <SplitHeaderRight>
-          <div class="order-[1000] flex items-center gap-1">
-            <For each={tools}>
-              {(tool) => (
-                <Show when={!tool.condition || tool.condition()}>
-                  <ToolButton tool={tool} />
-                </Show>
-              )}
-            </For>
-          </div>
-        </SplitHeaderRight>
-      </Show>
+      {/* Session context stays next to the grouped header actions. */}
+      <SplitHeaderRight>
+        <Show when={props.session && sessionId()}>
+          {(id) => (
+            <HeaderIsland class="-order-1">
+              <BlockLiveIndicators entityId={id} />
+            </HeaderIsland>
+          )}
+        </Show>
+        <div class="order-[900] flex items-center gap-2 touch:gap-1.5">
+          <Show when={props.session?.taskId}>
+            {(taskId) => <AgentTaskChip taskId={taskId()} />}
+          </Show>
+          <Show when={props.session?.pullRequestUrl}>
+            {(url) => <AgentPullRequestChip url={url()} />}
+          </Show>
+          <Show when={!isTouchDevice()}>
+            <ChangesToggle />
+            <HeaderActionGroup label="Session actions">
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    <ToolButton tool={tool} grouped />
+                  </Show>
+                )}
+              </For>
+            </HeaderActionGroup>
+          </Show>
+        </div>
+      </SplitHeaderRight>
 
       <ResponsiveBlockToolbar
-        tools={[]}
+        tools={shareTools}
         menuTools={tools}
-        ops={ops}
-        id={blockId}
-        itemType="foreign"
+        ops={entity() ? ops() : []}
+        id={sessionId() ?? ''}
+        itemType="agent_session"
+        entity={entity()}
+        permissions={permissions()}
         name={title()}
       />
     </>

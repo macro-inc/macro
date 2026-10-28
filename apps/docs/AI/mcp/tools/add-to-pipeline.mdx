@@ -1,0 +1,18 @@
+---
+title: AddToPipeline
+description: >-
+  Add companies or contacts to a CRM pipeline as new deals (entries), optionally
+  setting their stage, owner, revenue or other fields.
+---
+
+# AddToPipeline
+
+Add companies or contacts to a CRM pipeline as new deals (entries), optionally setting their stage, owner, revenue or other fields. A company pipeline takes companies and a contact pipeline takes contacts (see ListPipelines' `tracks`). A record already in the pipeline is not added again unless allowDuplicates is true (for a second, separate deal); its existing entry is returned in alreadyPresent instead. Returns the new entries with their entryIds and fields as saved.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pipelineId` | string | Yes | The pipeline's id from ListPipelines. |
+| `entries` | ToolNewEntry[] | Yes | The companies or contacts to add, each with its starting fields. |
+| `allowDuplicates` | boolean | No | Add a record again even if it already has an entry in this pipeline. Only for a genuinely separate second deal. Defaults to false. |

@@ -2,14 +2,14 @@
 # sidecar the harness dials.
 
 # Sidecar install
-FROM rust:1.94.0-slim-bullseye AS sidecar-build
+FROM docker.io/library/rust:1.94.0-slim-bullseye AS sidecar-build
 WORKDIR /build
 COPY sidecar/Cargo.toml sidecar/Cargo.lock ./
 COPY sidecar/src ./src
 RUN cargo build --locked --release
 
 # Macro nix devshell hard install
-FROM ubuntu:22.04 AS nix-build
+FROM docker.io/library/ubuntu:22.04 AS nix-build
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl xz-utils && \
@@ -40,8 +40,14 @@ RUN nix develop --profile /env/.base-root path:/env --command true && \
 
 # Bake the macro repo's dev shell, so sandboxes skip realization entirely
 # (git comes from the base shell).
+#
+# Drop stripe-cli from the cloned flake: nixpkgs 1.43.2's checkPhase fails in
+# this sandbox (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn)
+# and a cache miss then fails the whole image. Revert once nixpkgs skips that
+# test or ships a cached build.
 RUN bash -c 'source /env/dev-env.sh && \
       git clone --depth 1 https://github.com/macro-inc/macro.git /tmp/bake && \
+      sed -i "/stripe-cli/d" /tmp/bake/nix/cloud-storage.nix && \
       nix develop --accept-flake-config --profile /env/.repo-root path:/tmp/bake --command true && \
       nix print-dev-env --accept-flake-config path:/tmp/bake > /env/repo-dev-env.sh && \
       rm -rf /tmp/bake' && \
@@ -49,7 +55,7 @@ RUN bash -c 'source /env/dev-env.sh && \
     rm -rf /root/.cache/nix
 
 # Runtime
-FROM ubuntu:22.04
+FROM docker.io/library/ubuntu:22.04
 
 # curl: the ensure script's readiness probe. nixbld users: nix.conf names the
 # group, and source builds inside the sandbox need it.

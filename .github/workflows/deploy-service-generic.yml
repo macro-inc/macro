@@ -7,9 +7,11 @@ on:
         required: true
         description: Select the service to deploy
         options:
+          - agent-harness-service
           - agent-schedule-service
           - authentication-service
           - bulk-upload
+          - calendar-service
           - connection-gateway
           - contacts-service
           - convert-service
@@ -24,6 +26,7 @@ on:
           - email-suppression
           - image-proxy-service
           - lambda-aggregate-frecency
+          - lexical-service
           - link-sharing
           - mcp-server
           - notification-service
@@ -32,6 +35,7 @@ on:
           - search-upload
           - static-file-service
           - unfurl-service
+          - whatsapp-session-service
           - opensearch
           - search-event-queue
           - search-text-extractor-queue

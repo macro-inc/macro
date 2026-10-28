@@ -33,7 +33,7 @@ fn message(role: ChatMessageRole, actor: Option<MacroUserIdStr<'static>>) -> Cha
 fn created_and_user_message_map_to_activities() {
     let created = envelope(ChatTopicEvent::Created(ChatCreatedMetadata {
         chat_id: "chat-1".to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: Owner::User(user("macro|owner@example.com")),
         name: "planning".to_string(),
         project_id: None,
     }));
@@ -51,6 +51,34 @@ fn created_and_user_message_map_to_activities() {
         panic!("expected activities");
     };
     assert_eq!(activities[0].action, Action::Messaged);
+}
+
+#[test]
+fn created_derives_an_actor_for_every_owner_kind() {
+    let user = user("macro|owner@example.com");
+    let bot = bot_id::MACRO_AI_BOT_ID;
+    for (owner, expected_actor) in [
+        (Owner::User(user.clone()), Actor::new_from_user(user)),
+        (Owner::Bot(bot), Actor::new_from_bot(bot)),
+        (
+            Owner::Team(Uuid::from_u128(1)),
+            Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+        ),
+    ] {
+        let event = envelope(ChatTopicEvent::Created(ChatCreatedMetadata {
+            chat_id: "chat-1".to_string(),
+            owner,
+            name: "planning".to_string(),
+            project_id: None,
+        }));
+        let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+            panic!("expected a creation activity");
+        };
+        assert_eq!(activities.len(), 1);
+        assert_eq!(activities[0].actor, expected_actor);
+        assert_eq!(activities[0].subject_id, expected_actor.as_ref());
+        assert_eq!(activities[0].action, Action::Created);
+    }
 }
 
 #[test]

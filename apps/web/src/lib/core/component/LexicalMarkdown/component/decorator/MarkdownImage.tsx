@@ -4,8 +4,10 @@ false && internalDrag;
 
 import { Lightbox } from '@core/component/Lightbox';
 import { toast } from '@core/component/Toast/Toast';
-import { debouncedDependent } from '@core/util/debounce';
-
+import { fireAndForget } from '@core/util/fireAndForget';
+import { displayImageUrl } from '@core/util/imageProxy';
+import ImageIcon from '@icon/system/regular/image-broken.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -13,8 +15,6 @@ import {
   type ImageDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { calculateEffectiveDimensions } from '@macro-inc/lexical-core/utils/media';
-import ImageIcon from '@phosphor/image-broken.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Layer } from '@ui';
 import {
@@ -45,6 +45,7 @@ import {
 } from '../../plugins/media';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
+import { MediaLoadingPlaceholder } from './MediaLoadingPlaceholder';
 import { ResizeHandle } from './ResizeHandle';
 
 type ImageState = 'loading' | 'ok' | 'error';
@@ -104,42 +105,48 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       return;
     }
     if (props.srcType === 'url') {
-      setImageUrl(props.url);
+      // External hosts (GitHub blob screenshots, GIFs) need the image proxy
+      // under COEP; GitHub blob/`raw` links are rewritten to the raw file host
+      // first so the proxy fetches bytes, not an HTML redirect page.
+      setImageUrl(displayImageUrl(props.url));
       return;
     }
-    getMediaUrl({
-      type: props.srcType,
-      id: props.id,
-      url: props.url,
-    }).then((maybeUrl) => {
-      if (maybeUrl.isErr()) {
-        setState('error');
-        if (
-          maybeUrl.isErr() &&
-          maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
-        )
-          setImageError('UNAUTHORIZED');
-        else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
-          setImageError('MISSING');
-        else if (
-          maybeUrl.isErr() &&
-          maybeUrl.error.some((error) => error.code === 'GONE')
-        )
-          setImageError('GONE');
-        else setImageError('FALLBACK');
-        return;
-      }
-      const url = maybeUrl.value;
-      setImageUrl(url);
-      if (props.srcType === 'dss') {
-        editor()?.update(
-          () => {
-            $upgradeDSSMediaUrl(props.key, url, 'image');
-          },
-          { discrete: true, tag: 'historic' }
-        );
-      }
-    });
+    fireAndForget(
+      getMediaUrl({
+        type: props.srcType,
+        id: props.id,
+        url: props.url,
+      }).then((maybeUrl) => {
+        if (maybeUrl.isErr()) {
+          setState('error');
+          if (
+            maybeUrl.isErr() &&
+            maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
+          )
+            setImageError('UNAUTHORIZED');
+          else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
+            setImageError('MISSING');
+          else if (
+            maybeUrl.isErr() &&
+            maybeUrl.error.some((error) => error.code === 'GONE')
+          )
+            setImageError('GONE');
+          else setImageError('FALLBACK');
+          return;
+        }
+        const url = maybeUrl.value;
+        setImageUrl(url);
+        if (props.srcType === 'dss') {
+          editor()?.update(
+            () => {
+              $upgradeDSSMediaUrl(props.key, url, 'image');
+            },
+            { discrete: true, tag: 'historic' }
+          );
+        }
+      }),
+      'markdown-media'
+    );
   });
 
   const isSelectedAsNode = () => {
@@ -245,17 +252,26 @@ export function MarkdownImage(props: ImageDecoratorProps) {
     cleanupListners();
   });
 
-  const debouncedScale = debouncedDependent(scale, 60);
-  createEffect(
-    on(debouncedScale, (value) => {
-      editor()?.update(() => {
+  const persistScale = debounce((value: number) => {
+    const currentEditor = editor();
+    if (!interactable() || !currentEditor?.isEditable()) return;
+    currentEditor.update(() => {
+      if (!currentEditor.isEditable()) return;
+      const node = $getNodeByKey(props.key);
+      if (node && $isImageNode(node)) node.setScale(value, false);
+    });
+  }, 60);
+  createEffect(on(scale, persistScale));
+  createEffect(() => {
+    if (!interactable()) {
+      persistScale.clear();
+      const committedScale = editor()?.read(() => {
         const node = $getNodeByKey(props.key);
-        if (node && $isImageNode(node)) {
-          node.setScale(value, false);
-        }
+        return node && $isImageNode(node) ? node.getScale() : props.scale;
       });
-    })
-  );
+      setScale(committedScale ?? props.scale);
+    }
+  });
 
   const debouncedSetHover = debounce((state: boolean) => {
     setImageHover(state);
@@ -268,12 +284,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         class={cn(
           'relative max-w-full my-4 grid place-items-center',
           isSelectedAsNode() && 'ring-3 ring-edge-muted',
-          state() === 'error' &&
-            'pattern-edge-muted pattern-diagonal-8 min-h-44',
+          state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
+          state() === 'error' && !effectiveDims()[0] && 'min-h-44',
           // If there are no constrained dimensions, center the image
           !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
         )}
         style={{
+          width: effectiveDims()[0] ? '100%' : undefined,
           'max-width': `${effectiveDims()[0] ? effectiveDims()[0] * scale() : 640}px`,
           'aspect-ratio':
             effectiveDims()[0] && effectiveDims()[1]
@@ -296,17 +313,21 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           setImageHover(false);
         }}
       >
-        <Show when={state() === 'ok' && editor()?.isEditable()}>
+        <Show when={state() === 'ok' && interactable()}>
           <ResizeHandle
             scale={scale}
-            setScale={setScale}
+            setScale={(value) => {
+              if (interactable() && editor()?.isEditable()) setScale(value);
+            }}
             side="left"
             imageDims={effectiveDims}
             containerRef={containerRef}
           />
           <ResizeHandle
             scale={scale}
-            setScale={setScale}
+            setScale={(value) => {
+              if (interactable() && editor()?.isEditable()) setScale(value);
+            }}
             side="right"
             imageDims={effectiveDims}
             containerRef={containerRef}
@@ -316,30 +337,39 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           crossorigin="anonymous"
           class={cn(
             'h-full object-contain',
-            (state() === 'loading' || state() === 'error') && 'invisible'
+            effectiveDims()[0] > 0 && 'absolute inset-0 size-full',
+            (state() === 'loading' || state() === 'error') && 'invisible',
+            state() === 'loading' &&
+              !effectiveDims()[0] &&
+              'absolute inset-0 size-0'
           )}
           draggable={true}
           use:internalDrag={true}
           ref={imageRef}
           src={imageUrl()}
           style={{
-            width: effectiveDims()[0]
-              ? `${effectiveDims()[0] * scale()}px`
-              : 'auto',
+            width: effectiveDims()[0] ? '100%' : 'auto',
           }}
         />
 
         <Show when={state() === 'error'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted">
             <ImageIcon class="size-5" />
             <div>{ImageErrors[imageError() ?? 'FALLBACK']}</div>
           </div>
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
-            <Spinner />
-          </div>
+          <Show
+            when={effectiveDims()[0] > 0}
+            fallback={
+              <MediaLoadingPlaceholder kind="image" label={props.alt} />
+            }
+          >
+            <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+              <Spinner />
+            </div>
+          </Show>
         </Show>
 
         <Show when={uploading() && state() !== 'error'}>
@@ -374,7 +404,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       </div>
 
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+        <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Lightbox src={imageUrl} imageId={() => props.id} navigationHidden />
       </Dialog.Portal>
     </Dialog>

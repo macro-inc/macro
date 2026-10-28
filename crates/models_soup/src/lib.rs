@@ -2,6 +2,8 @@
 
 #![deny(missing_docs)]
 
+/// Agent session models for Soup responses.
+pub mod agent_session;
 /// Calendar event models for Soup responses.
 pub mod calendar_event;
 /// Call record models for Soup responses.
@@ -12,19 +14,23 @@ pub mod chat;
 pub mod comms;
 /// CRM company models for Soup responses.
 pub mod crm_company;
+/// CRM contact rows.
+pub mod crm_contact;
+/// Database row models for Soup responses.
+pub mod database_row;
 /// Document models for Soup responses.
 pub mod document;
 /// Email thread models for Soup responses.
 pub mod email_thread;
 /// Foreign entity models for Soup responses.
 pub mod foreign_entity;
+/// Initiative models for Soup responses.
+pub mod initiative;
 /// Unified Soup feed item model.
 pub mod item;
 /// Project models for Soup responses.
 pub mod project;
 /// Property models attached to Soup items.
 pub mod properties;
-/// Reminder models for Soup responses.
-pub mod reminder;
 
 pub use properties::SoupProperty;

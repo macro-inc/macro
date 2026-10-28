@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET egress_token_hash = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07e6d8a68e9b9cbed6a9ddfd6c1eed7c023b019ba25320d3485215811c92085c"
+}

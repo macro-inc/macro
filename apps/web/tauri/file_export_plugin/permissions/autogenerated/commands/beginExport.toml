@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-beginExport"
+description = "Enables the beginExport command without any pre-configured scope."
+commands.allow = ["beginExport"]
+
+[[permission]]
+identifier = "deny-beginExport"
+description = "Denies the beginExport command without any pre-configured scope."
+commands.deny = ["beginExport"]

@@ -32,9 +32,13 @@ use last_online_tracker::{
     outbound::{redis::RedisLastOnlineRepo, time::DefaultTime as LastOnlineDefaultTime},
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
@@ -110,8 +114,10 @@ async fn main() -> Result<()> {
     let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());
     let stream_manager = RedisPostgresStreamManager::new(stream_service.obj());
 
+    let fanout_gateway_id: Arc<str> = Arc::from(uuid::Uuid::new_v4().to_string());
     let context = context::ApiContext {
         connection_manager,
+        fanout_gateway_id: Arc::clone(&fanout_gateway_id),
         redis_client: Arc::clone(&redis_client),
         redis_connection,
         frecency_ingestor_service: EventIngestorImpl::new(FrecencyPgStorage::new(pgpool.clone())),
@@ -120,6 +126,11 @@ async fn main() -> Result<()> {
     };
 
     tokio::spawn(poll_messages(context.clone()));
+    tokio::spawn(service::fanout::poll_outbound(context.clone()));
+    tokio::spawn(service::fanout::heartbeat_loop(
+        context.redis_connection.clone(),
+        fanout_gateway_id,
+    ));
 
     let config = Arc::new(config);
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
@@ -129,6 +140,7 @@ async fn main() -> Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(pgpool.clone())),
     )));
 
     let app = router(AppState {
@@ -140,6 +152,7 @@ async fn main() -> Result<()> {
             Duration::from_secs(60),
         )),
     })
+    .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
     .layer(cors);
 
     tracing::info!(

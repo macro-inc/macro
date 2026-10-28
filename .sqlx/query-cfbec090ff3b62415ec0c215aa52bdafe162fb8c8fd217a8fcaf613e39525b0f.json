@@ -38,7 +38,8 @@
               "Enum": [
                 "task",
                 "snippet",
-                "skill"
+                "skill",
+                "initiative_description"
               ]
             }
           }

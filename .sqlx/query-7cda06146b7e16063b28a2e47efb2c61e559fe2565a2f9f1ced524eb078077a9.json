@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_notification un\n        SET state = CASE WHEN state = 'unseen' THEN 'seen'::notification_state ELSE state END,\n            seen_at = COALESCE(seen_at, NOW())\n        WHERE un.user_id = $1\n        AND un.notification_id = ANY($2)\n        AND un.deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7cda06146b7e16063b28a2e47efb2c61e559fe2565a2f9f1ced524eb078077a9"
+}

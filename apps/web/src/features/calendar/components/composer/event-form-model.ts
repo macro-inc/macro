@@ -3,21 +3,32 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
-import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
-import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import { parseLocalDate } from '@core/util/local-date';
+import { TZDateMini } from '@date-fns/tz';
+import type { CalendarCapabilities } from '@service-calendar/generated/schemas/calendarCapabilities';
+import type { CalendarProvider } from '@service-calendar/generated/schemas/calendarProvider';
+import type { ConferenceChange } from '@service-calendar/generated/schemas/conferenceChange';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
+import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventType } from '@service-storage/generated/schemas/eventType';
+import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
 import {
   addDays,
   addHours,
-  differenceInCalendarDays,
+  endOfDay,
   format,
   parseISO,
   startOfHour,
 } from 'date-fns';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { CalendarEvent } from '../../types';
-import { parseLocalDate } from '../../utils/calendar-date';
+import { isTimedPointEvent } from '../../utils/calendar-date';
+import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '../../utils/macro-call-link';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
@@ -26,7 +37,10 @@ import {
   type RecurrenceConfig,
   recurrenceConfigsEqual,
   recurrencePresetsFor,
+  WEEKDAY_CODES,
+  type WeekdayCode,
 } from '../../utils/recurrence';
+import type { EventEditorOutOfOffice } from './out-of-office';
 
 /** `<input type="date">` value. */
 const DATE_VALUE = 'yyyy-MM-dd';
@@ -45,6 +59,11 @@ function shiftDateValue(value: string, days: number) {
   return format(addDays(parseISO(value), days), DATE_VALUE);
 }
 
+/** Local midnight of a `yyyy-MM-dd` date, as a UTC ISO instant. */
+function localMidnightIso(date: string): string {
+  return new Date(`${date}T00:00`).toISOString();
+}
+
 /** Default editor slot: the next full hour, one hour long. */
 function defaultEditorTimes(reference: Date) {
   const start = addHours(startOfHour(reference), 1);
@@ -52,7 +71,12 @@ function defaultEditorTimes(reference: Date) {
 }
 
 /** Conferencing displayed by the editor before it is submitted. */
-export type EventEditorConferenceChoice = 'none' | 'google_meet' | 'existing';
+export type EventEditorConferenceChoice =
+  | 'none'
+  | 'macro'
+  | 'google_meet'
+  | 'microsoft_teams'
+  | 'existing';
 
 /** Values used to initialize the shared event editor form. */
 export interface EventEditorInitialValues {
@@ -62,6 +86,8 @@ export interface EventEditorInitialValues {
   start: string;
   /** Inclusive end shown to the user; all-day submissions add the exclusive day. */
   end: string;
+  /** Exact provider instant, preserved only for an unchanged imported point. */
+  importedPointTime?: Extract<EventTime, { kind: 'timed' }>;
   recurrenceLines: string[];
   calendarId?: string;
   guests: string;
@@ -71,15 +97,32 @@ export interface EventEditorInitialValues {
   conference: EventEditorConferenceChoice;
   /** Per-user reminder configuration; absent means the calendar default. */
   reminders?: EventReminders;
+  /** Provider event type of the edited event; absent for new events. */
+  eventType?: EventType;
+  /**
+   * Out-of-office decline behavior. Absent while the event is not out of
+   * office, and on an edited out-of-office event until the user picks decline
+   * settings — the provider readback does not expose the stored ones.
+   */
+  outOfOffice?: EventEditorOutOfOffice;
+  /** Event type of the copy `reminders` belong to. Absent for new events. */
+  reminderEventType?: EventType;
+  /** What guests may do; absent means Google's defaults. */
+  guestPolicy?: GuestPolicy;
 }
 
 /** Calendar option displayed by the event editor. */
 export interface EventEditorCalendarOption {
+  provider?: CalendarProvider;
+  capabilities?: CalendarCapabilities;
   id: string;
   label: string;
   color: string;
   /** Provider defaults shown until the event's reminders are customized. */
   defaultReminders?: EventReminderOverride[];
+  /** Whether this is its account's primary calendar, the only kind Google
+   * accepts out-of-office events on. */
+  isPrimary?: boolean;
 }
 
 /** Editable fields that a create/edit owner may disable. */
@@ -94,7 +137,8 @@ type EventEditorField =
   | 'location'
   | 'description'
   | 'conference'
-  | 'reminders';
+  | 'reminders'
+  | 'outOfOffice';
 
 /** Field-level disabled state supplied by a create/edit owner. */
 export type EventEditorDisabledFields = Partial<
@@ -110,14 +154,25 @@ export interface EventEditorSubmitValues {
   guestEmails: string[];
   location: string;
   description: string;
-  /** Present only when conferencing should be attached, replaced, or removed. */
+  /** Selected conferencing, including client-managed Macro call links. */
+  conferenceChoice: EventEditorConferenceChoice;
+  /** Present only when provider conferencing should change. */
   conference?: ConferenceChange;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
+  /**
+   * Present when the save is out of office: on create its presence marks the
+   * event as out of office, on edit it patches the decline behavior of an
+   * event that already is.
+   */
+  outOfOffice?: OutOfOfficeProperties;
+  /** Present only when the user changed what guests may do. */
+  guestPolicy?: GuestPolicy;
 }
 
 export function defaultEditorInitialValues(
-  reference = new Date()
+  reference = new Date(),
+  macroCallsEnabled = false
 ): EventEditorInitialValues {
   const { start, end } = defaultEditorTimes(reference);
   return {
@@ -130,18 +185,26 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
-    conference: 'none',
+    conference: macroCallsEnabled ? 'macro' : 'none',
     reminders: undefined,
+    eventType: undefined,
+    outOfOffice: undefined,
   };
 }
 
 /** Converts a FullCalendar-style selected range into create-event values. */
-export function calendarSelectionToEditorInitialValues(selection: {
-  start: Date;
-  end: Date;
-  allDay: boolean;
-}): EventEditorInitialValues {
-  const initialValues = defaultEditorInitialValues(selection.start);
+export function calendarSelectionToEditorInitialValues(
+  selection: {
+    start: Date;
+    end: Date;
+    allDay: boolean;
+  },
+  macroCallsEnabled = false
+): EventEditorInitialValues {
+  const initialValues = defaultEditorInitialValues(
+    selection.start,
+    macroCallsEnabled
+  );
   if (selection.allDay) {
     return {
       ...initialValues,
@@ -161,20 +224,37 @@ export function calendarSelectionToEditorInitialValues(selection: {
 function initialConferenceChoice(
   event: CalendarEvent
 ): EventEditorConferenceChoice {
+  if (calendarMacroCallUrl(event)) return 'macro';
   if (!event.conferenceUrl) return 'none';
-  return event.conferenceProvider === 'google_meet'
-    ? 'google_meet'
+  return event.conferenceProvider === 'google_meet' ||
+    event.conferenceProvider === 'microsoft_teams'
+    ? event.conferenceProvider
     : 'existing';
+}
+
+/**
+ * Guest emails an existing event seeds into the editor: every attendee except
+ * the viewer when they are a mere guest. The organizer is kept even when it is
+ * the viewer, so a replacement attendee list submitted by the organizer never
+ * drops them. So is the viewer's own row on an event they organize through a
+ * calendar Google names as the organizer, such as their secondary calendar,
+ * which lists them only as a guest.
+ */
+export function eventGuestEmails(event: CalendarEvent): string[] {
+  return event.attendees
+    .filter(
+      (attendee) =>
+        attendee.isOrganizer || !attendee.isSelf || event.viewerCan.organize
+    )
+    .map((attendee) => attendee.email);
 }
 
 /** Converts an existing event into values for the shared editor. */
 export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
-  const guests = event.attendees
-    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
-    .map((attendee) => attendee.email)
-    .join(', ');
+  const guests = eventGuestEmails(event).join(', ');
+  const content = removeCalendarMacroCall(event, calendarMacroCallUrl(event));
 
   if (event.allDay) {
     const start = isDateOnly(event.start)
@@ -191,10 +271,13 @@ export function calendarEventToEditorInitialValues(
       recurrenceLines: [...event.recurrenceLines],
       calendarId: event.calendarId ?? event.calendar.id,
       guests,
-      location: event.location ?? '',
-      description: event.description ?? '',
+      location: content.location,
+      description: content.description,
       conference: initialConferenceChoice(event),
       reminders: event.reminders,
+      eventType: event.eventType,
+      reminderEventType: event.reminderEventType,
+      guestPolicy: event.guestPolicy,
     };
   }
 
@@ -203,13 +286,24 @@ export function calendarEventToEditorInitialValues(
     allDay: false,
     start: format(new Date(event.start), DATETIME_VALUE),
     end: format(new Date(event.end), DATETIME_VALUE),
+    importedPointTime: isTimedPointEvent(event)
+      ? {
+          kind: 'timed',
+          startsAt: event.start,
+          endsAt: event.end,
+          timeZone: event.timeZone ?? null,
+        }
+      : undefined,
     recurrenceLines: [...event.recurrenceLines],
     calendarId: event.calendarId ?? event.calendar.id,
     guests,
-    location: event.location ?? '',
-    description: event.description ?? '',
+    location: content.location,
+    description: content.description,
     conference: initialConferenceChoice(event),
     reminders: event.reminders,
+    eventType: event.eventType,
+    reminderEventType: event.reminderEventType,
+    guestPolicy: event.guestPolicy,
   };
 }
 
@@ -219,6 +313,18 @@ export function buildEventTime(
   if (state.allDay) {
     if (!state.start || !state.end || state.end < state.start) {
       return undefined;
+    }
+    // Google has no date-based out-of-office event, so encode an all-day one as
+    // a timed span covering whole days in the editor's time zone. It then reads
+    // and renders as a full-day timed block, the same as Google Calendar shows
+    // its own all-day out-of-office events.
+    if (state.eventType === 'out_of_office') {
+      return {
+        kind: 'timed',
+        startsAt: localMidnightIso(state.start),
+        endsAt: localMidnightIso(shiftDateValue(state.end, 1)),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
     }
     return {
       kind: 'allDay',
@@ -242,6 +348,29 @@ export function buildEventTime(
     endsAt: end.toISOString(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
+}
+
+/** Copy shown when guests would be invited to an event that already ended. */
+export const PAST_EVENT_GUESTS_WARNING =
+  'This event has already ended — guests will still be invited.';
+
+/** When the edited range ends, or `undefined` while the range does not parse. */
+export function eventEndsAt(state: EventEditorInitialValues): Date | undefined {
+  if (state.allDay) {
+    const end = parseLocalDate(state.end);
+    return end ? endOfDay(end) : undefined;
+  }
+  const end = new Date(state.end);
+  return Number.isNaN(end.getTime()) ? undefined : end;
+}
+
+/** Whether the edited range finished before `now`. In-progress events do not. */
+export function eventHasEnded(
+  state: EventEditorInitialValues,
+  now = new Date()
+) {
+  const endsAt = eventEndsAt(state);
+  return endsAt !== undefined && endsAt.getTime() < now.getTime();
 }
 
 function parseGuestEmails(value: string) {
@@ -300,39 +429,55 @@ export function convertTimesForAllDay(
   };
 }
 
-export function moveAllDayRange(
-  state: EventEditorInitialValues,
-  nextStart: string
-): EventEditorInitialValues {
-  if (nextStart === '') return { ...state, start: '', end: '' };
-  const duration = differenceInCalendarDays(
-    parseISO(state.end),
-    parseISO(state.start)
-  );
-  const durationDays = Number.isFinite(duration) ? Math.max(0, duration) : 0;
-  return {
-    ...state,
-    start: nextStart,
-    end: shiftDateValue(nextStart, durationDays),
-  };
-}
-
 export interface CreateEventEditorStateOptions {
   initialValues: EventEditorInitialValues;
   state: Accessor<EventEditorInitialValues>;
+  recurrenceTimeZone?: string;
+  isEdit?: boolean;
 }
 
-function recurrenceConfigFor(values: EventEditorInitialValues) {
-  return values.recurrenceLines.length > 0
-    ? parseRecurrenceConfig(values.recurrenceLines)
-    : undefined;
+/** When the event starts, in the zone its recurrence is expressed in. */
+function recurrenceStartOf(
+  values: Pick<EventEditorInitialValues, 'allDay' | 'start'>,
+  timeZone?: string
+) {
+  const parsed = values.allDay
+    ? parseISO(values.start)
+    : new Date(values.start);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return !values.allDay && timeZone ? TZDateMini.tz(timeZone, parsed) : parsed;
 }
 
-function recurrenceChoiceFor(values: EventEditorInitialValues) {
+/**
+ * The editable form of the event's rule, read at `start`. A weekly rule
+ * without BYDAY repeats on the start's weekday (RFC 5545), so that weekday
+ * is spelled out, as the weekly preset and the custom editor's day chips
+ * show it.
+ */
+function recurrenceConfigFor(
+  values: EventEditorInitialValues,
+  timeZone?: string,
+  start: Pick<EventEditorInitialValues, 'allDay' | 'start'> = values
+) {
+  if (values.recurrenceLines.length === 0) return undefined;
+  const config = parseRecurrenceConfig(values.recurrenceLines, timeZone);
+  if (config?.frequency !== 'WEEKLY' || config.byDay.length > 0) return config;
+  const startsAt = recurrenceStartOf(start, timeZone);
+  if (!startsAt) return config;
+  return {
+    ...config,
+    byDay: [WEEKDAY_CODES[startsAt.getDay()] as WeekdayCode],
+  };
+}
+
+function recurrenceChoiceFor(
+  values: EventEditorInitialValues,
+  timeZone?: string
+) {
   if (values.recurrenceLines.length === 0) return 'none';
-  const config = recurrenceConfigFor(values);
+  const config = recurrenceConfigFor(values, timeZone);
   if (!config) return 'existing';
-  const start = values.allDay ? parseISO(values.start) : new Date(values.start);
+  const start = recurrenceStartOf(values, timeZone) ?? new Date();
   const preset = recurrencePresetsFor(start).find((candidate) =>
     recurrenceConfigsEqual(candidate.config, config)
   );
@@ -342,18 +487,23 @@ function recurrenceChoiceFor(values: EventEditorInitialValues) {
 /** Shared recurrence and validation state used by event editor layouts. */
 export function createEventEditorState(options: CreateEventEditorStateOptions) {
   const [initialValues, setInitialValues] = createSignal(options.initialValues);
-  const initialConfig = createMemo(() => recurrenceConfigFor(initialValues()));
+  const initialConfig = createMemo(() =>
+    recurrenceConfigFor(initialValues(), options.recurrenceTimeZone)
+  );
   const hasUnrepresentableRule = () =>
     initialValues().recurrenceLines.length > 0 && !initialConfig();
 
   const startForRecurrence = createMemo(() => {
-    const start = options.state().start;
-    const parsed = options.state().allDay ? parseISO(start) : new Date(start);
-    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    const state = options.state();
+    const parsed = state.allDay ? parseISO(state.start) : new Date(state.start);
+    if (Number.isNaN(parsed.getTime())) return new Date();
+    return !state.allDay && options.recurrenceTimeZone
+      ? TZDateMini.tz(options.recurrenceTimeZone, parsed)
+      : parsed;
   });
   const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
   const [recurrenceChoice, setRecurrenceChoice] = createSignal(
-    recurrenceChoiceFor(options.initialValues)
+    recurrenceChoiceFor(options.initialValues, options.recurrenceTimeZone)
   );
   const recurrenceOptions = createMemo<EventEditorRecurrenceOption[]>(() => {
     const values = [
@@ -404,16 +554,52 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     }
     return true;
   });
+  const recurrenceConfig = (): RecurrenceConfig | undefined => {
+    const choice = recurrenceChoice();
+    if (choice === 'none') return undefined;
+    if (choice === 'existing') return initialConfig();
+    return choice === 'custom'
+      ? customConfig()
+      : presets().find((candidate) => candidate.id === choice)?.config;
+  };
   const recurrenceLines = (): string[] | undefined => {
     const choice = recurrenceChoice();
     if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
-    if (choice === 'custom') {
-      return buildRecurrenceLines(customConfig(), options.state().allDay);
+    const config = recurrenceConfig();
+    if (!config) return undefined;
+    // What the stored rule means at the current start: a weekly rule without
+    // BYDAY follows the start to another weekday.
+    const originalConfig = recurrenceConfigFor(
+      initialValues(),
+      options.recurrenceTimeZone,
+      options.state()
+    );
+    if (
+      originalConfig &&
+      options.state().allDay === initialValues().allDay &&
+      recurrenceConfigsEqual(config, originalConfig)
+    ) {
+      // Rebuilding an untouched rule can reorder fields, drop provider details
+      // like WKST, or change UNTIL precision. Preserve it so a private reminder
+      // edit does not accidentally request an organizer-only series update.
+      return initialValues().recurrenceLines;
     }
-    const preset = presets().find((candidate) => candidate.id === choice);
-    return preset
-      ? buildRecurrenceLines(preset.config, options.state().allDay)
+    return buildRecurrenceLines(
+      config,
+      options.state().allDay,
+      options.recurrenceTimeZone
+    );
+  };
+  const unchangedImportedPoint = () => {
+    const initial = initialValues();
+    const current = options.state();
+    return options.isEdit === true &&
+      initial.importedPointTime !== undefined &&
+      !current.allDay &&
+      current.start === initial.start &&
+      current.end === initial.end
+      ? initial.importedPointTime
       : undefined;
   };
   const dateRangeError = createMemo(() => {
@@ -429,9 +615,13 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return undefined;
     }
-    return end <= start ? 'End time must be after the start time.' : undefined;
+    return end <= start && !unchangedImportedPoint()
+      ? 'End time must be after the start time.'
+      : undefined;
   });
-  const eventTime = createMemo(() => buildEventTime(options.state()));
+  const eventTime = createMemo(
+    () => buildEventTime(options.state()) ?? unchangedImportedPoint()
+  );
   const canSave = () =>
     options.state().title.trim() !== '' &&
     eventTime() !== undefined &&
@@ -439,9 +629,12 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
   const replaceInitialValues = (next: EventEditorInitialValues) => {
     batch(() => {
       setInitialValues(() => next);
-      setRecurrenceChoice(recurrenceChoiceFor(next));
+      setRecurrenceChoice(
+        recurrenceChoiceFor(next, options.recurrenceTimeZone)
+      );
       setCustomConfig(
-        recurrenceConfigFor(next) ?? defaultCustomConfig(startForRecurrence())
+        recurrenceConfigFor(next, options.recurrenceTimeZone) ??
+          defaultCustomConfig(startForRecurrence())
       );
     });
   };
@@ -455,6 +648,7 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     setCustomConfig,
     changeRecurrenceChoice,
     recurrenceLines,
+    recurrenceConfig,
     dateRangeError,
     eventTime,
     canSave,

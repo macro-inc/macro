@@ -7,13 +7,18 @@ use macro_user_id::cowlike::CowLike;
 use model_notifications::NotifEvent;
 use notification::domain::models::{
     Notification, NotificationExtEmail, NotificationTitle, RateLimitConfig, RateLimitKey,
-    UserNotificationRow, email_notification_digest::ports::DigestBatch,
-    queue_message::EmailContent, signing::SignedUrl,
+    UserNotificationRow,
+    email_notification_digest::ports::DigestBatch,
+    queue_message::EmailContent,
+    signing::{self, SignedUrl},
 };
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::time::Duration;
+
+#[cfg(test)]
+mod test;
 
 #[derive(Template)]
 #[template(path = "digest.html")]
@@ -106,11 +111,13 @@ impl EmailDigestNotification {
         }
         let num_truncated = input_len - preview_len;
 
-        let mut unsubscribe_url = NotificationServiceUrl::new_for_environment(env)?.parse_url()?;
-        unsubscribe_url.set_path(&format!(
-            "/user_notifications/preferences/{}/disable",
-            Self::TYPE_NAME
-        ));
+        let mut unsubscribe_url = signing::append_path(
+            NotificationServiceUrl::new_for_environment(env)?.parse_url()?,
+            &format!(
+                "/user_notifications/preferences/{}/disable",
+                Self::TYPE_NAME
+            ),
+        );
         unsubscribe_url
             .query_pairs_mut()
             .append_pair("id", digest.user_id.as_ref())

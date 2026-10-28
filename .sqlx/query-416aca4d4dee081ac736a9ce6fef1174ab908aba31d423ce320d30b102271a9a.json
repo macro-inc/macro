@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_declines SET confirmed_at=CASE WHEN $3 THEN now() ELSE confirmed_at END,next_check_at=now()+interval '120 seconds' WHERE id=$1 AND mailbox_key=calendar_outlook_mailbox_key($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "416aca4d4dee081ac736a9ce6fef1174ab908aba31d423ce320d30b102271a9a"
+}

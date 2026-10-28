@@ -1,99 +1,164 @@
-import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { GettingStarted } from '@app/features/getting-started';
-import { Home } from '@app/features/home';
-import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
-import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
-import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
-import type { Query } from '@app/features/next-soup/filters/filter-store/types';
-import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
-import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
-import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
-import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { usePosthog } from '@app/lib/analytics/posthog';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
-import { ChannelCompose } from '@block-channel/component/Compose';
-import { EmailCompose } from '@block-email/component/compose/Compose';
-import { ComposeSkill } from '@block-md/component/ComposeSkill';
-import { ComposeTask } from '@block-md/component/ComposeTask';
-import {
-  CRM_VIEW_URL_PARAM,
-  type CrmViewConfig,
-  decodeCrmViewParam,
-} from '@companies/crm/saved-views';
-import { useIsAuthenticated } from '@core/auth';
+import { HomeRouteView } from '@app/features/home/route-views';
+import { parseProjectRoute } from '@app/features/projects/core/route';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  ENABLE_CRM,
-  ENABLE_REMINDERS,
+  enableChatV3Agents,
+  enableProjects,
+  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
-import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
-import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
-import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import { EmptyStatePanel } from '@ui';
-import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
-import type { SplitContent } from './layoutManager';
+import { lazyNamed } from '@core/util/lazyNamed';
+import {
+  type ComponentProps,
+  type JSXElement,
+  lazy,
+  onMount,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { useSplitPanelOrThrow } from './layoutUtils';
-import { previewEmptyStateForContent } from './previewController';
+import {
+  RedirectSplit,
+  usePageViewTracking,
+  withAuth,
+} from './split-router/app-route-shell';
 
-function usePageViewTracking(pageTitle: string) {
-  const analytics = useAnalytics();
-  onMount(() => {
-    analytics.pageView(pageTitle);
-    analytics.track('open_view', { viewId: pageTitle });
-  });
-}
-
-/**
- * Guard that delays rendering until user is authenticated.
- * Use for components that require user context (userId, email).
- */
-const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
-  return (props: P) => {
-    const isAuthenticated = useIsAuthenticated();
-    return (
-      <Show when={isAuthenticated()} fallback={<LoadingBlock />}>
-        <Comp {...props} />
-      </Show>
-    );
-  };
-};
+// Views load as their own chunks the first time a split opens them.
+const ActivityRouteView = lazyNamed(
+  () => import('@app/features/activity/route-views'),
+  'ActivityRouteView'
+);
+const AgentsRouteView = lazyNamed(
+  () => import('@app/features/agents-view/route-views'),
+  'AgentsRouteView'
+);
+const CalendarRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/route-views'),
+  'CalendarRouteView'
+);
+const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
+);
+const ChannelsRouteView = lazyNamed(
+  () => import('@app/features/channels-view/route-views'),
+  'ChannelsRouteView'
+);
+const CompaniesRouteView = lazyNamed(
+  () => import('@app/features/crm/route-views'),
+  'CompaniesRouteView'
+);
+const DriveRouteView = lazyNamed(
+  () => import('@app/features/drive-view/route-views'),
+  'DriveRouteView'
+);
+const EmailCompose = lazyNamed(
+  () => import('@app/features/email-compose/email-compose'),
+  'EmailCompose'
+);
+const MailRouteView = lazyNamed(
+  () => import('@app/features/email-view/route-views'),
+  'MailRouteView'
+);
+const CallsRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'CallsRouteView'
+);
+const FoldersRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'FoldersRouteView'
+);
+const RecentRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'RecentRouteView'
+);
+const SearchRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'SearchRouteView'
+);
+const FolderComposeView = lazyNamed(
+  () => import('@app/features/drive-view/folder-compose-view'),
+  'FolderComposeView'
+);
+const CreateProjectView = lazyNamed(
+  () => import('@app/features/projects/project-view'),
+  'CreateProjectView'
+);
+const ProjectsListView = lazyNamed(
+  () => import('@app/features/projects/project-view'),
+  'ProjectsListView'
+);
+const ProjectView = lazyNamed(
+  () => import('@app/features/projects/project-view'),
+  'ProjectView'
+);
+const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
+const ReviewsRouteView = lazyNamed(
+  () => import('@app/features/reviews-view/route-views'),
+  'ReviewsRouteView'
+);
+const RoutineCreator = lazyNamed(
+  () => import('@app/features/routines/routine-creator'),
+  'RoutineCreator'
+);
+const SettingsRouteView = lazyNamed(
+  () => import('@app/features/settings/route-views'),
+  'SettingsRouteView'
+);
+const TasksRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'TasksRouteView'
+);
+const EventComposerSplit = lazyNamed(
+  () => import('@block-calendar/components/EventComposerSplit'),
+  'EventComposerSplit'
+);
+const ChannelCompose = lazyNamed(
+  () => import('@block-channel/component/Compose'),
+  'ChannelCompose'
+);
+const ComposeSkill = lazyNamed(
+  () => import('@block-md/component/ComposeSkill'),
+  'ComposeSkill'
+);
+const ComposeTask = lazyNamed(
+  () => import('@block-md/component/ComposeTask'),
+  'ComposeTask'
+);
+const ComposeDocument = lazyNamed(
+  () => import('@block-md/views/compose-document'),
+  'ComposeDocument'
+);
+const NotFound = lazy(
+  () => import('@core/component/AccessErrorViews/NotFound')
+);
 
 type ComponentParams = Record<string, unknown>;
 
 type ComponentFactory = (params: ComponentParams) => JSXElement;
 
-type DocumentsComponentParams = {
-  initialFilters?: Query;
-  initialClientFilters?: SetPredicatesInput<string>;
+export type ComponentMeta = {
+  kind?: string;
+  splitPanelLayout?: 'legacy' | 'composable';
+  ownsCollectionState?: boolean;
 };
 
-function mergeClientFilters(
-  base?: SetPredicatesInput<string>,
-  refinement?: SetPredicatesInput<string>
-): SetPredicatesInput<string> | undefined {
-  if (!base) return refinement;
-  if (!refinement) return base;
-
-  return {
-    and: [...new Set([...(base.and ?? []), ...(refinement.and ?? [])])],
-    or: [...new Set([...(base.or ?? []), ...(refinement.or ?? [])])],
-  };
-}
-
-export type UnifiedListMeta = {
+export type UnifiedListMeta = ComponentMeta & {
   kind: 'unified-list';
   viewId: ViewId;
 };
-
-export type ComponentMeta = UnifiedListMeta | { kind?: undefined };
 
 export type ComponentMetaMap = {
   'unified-list': UnifiedListMeta;
@@ -101,18 +166,31 @@ export type ComponentMetaMap = {
 
 type ComponentRegistration = {
   factory: ComponentFactory;
-  initialMeta?: ComponentMeta;
+  initialMeta?: ComponentMeta | (() => ComponentMeta | undefined);
 };
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-function registerComponent<T extends Omit<ComponentMeta, 'kind'>>(
+/** Shell for views that draw their own top bar. */
+function composableLayout(onTouch = false): ComponentMeta | undefined {
+  if (isTouchDevice() && !onTouch) return;
+  return { splitPanelLayout: 'composable' };
+}
+
+function registerComponent(
   name: string,
   factory: ComponentFactory,
-  initialMeta?: T
+  initialMeta?: ComponentMeta | (() => ComponentMeta | undefined)
 ) {
-  const metaWithKind = initialMeta ? { kind: name, ...initialMeta } : undefined;
-  REGISTRY.set(name, { factory, initialMeta: metaWithKind as ComponentMeta });
+  REGISTRY.set(name, { factory, initialMeta });
+}
+
+function resolveInitialMeta(
+  name: string,
+  initialMeta: ComponentRegistration['initialMeta']
+): ComponentMeta | undefined {
+  const meta = typeof initialMeta === 'function' ? initialMeta() : initialMeta;
+  return meta ? { kind: name, ...meta } : undefined;
 }
 
 type ResolvedComponent = {
@@ -120,168 +198,183 @@ type ResolvedComponent = {
   initialMeta?: ComponentMeta;
 };
 
-// Similar to SolidRouter's `<Navigate />` but for splits
-function RedirectSplit(props: { to: SplitContent }) {
-  const panel = useSplitPanelOrThrow();
-
-  onMount(() => {
-    panel.handle.replace({ next: props.to });
-  });
-
-  return null;
-}
-
 export function resolveComponent(
   name: string,
   params?: ComponentParams
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
-  if (!registration) throw new Error(`Component '${name}' not registered`);
+  if (!registration) {
+    if (parseProjectRoute(name)) {
+      const base = REGISTRY.get('initiative-view');
+      if (base)
+        return {
+          element: () =>
+            base.factory({ ...(params ?? {}), projectRoute: name }),
+          initialMeta: resolveInitialMeta('initiative-view', base.initialMeta),
+        };
+    }
+    if (parseAgentsRoute(name)) {
+      const base = REGISTRY.get('agents');
+      if (base) {
+        return {
+          element: () => base.factory({ ...(params ?? {}), agentsRoute: name }),
+          initialMeta: resolveInitialMeta('agents', base.initialMeta),
+        };
+      }
+    }
+    throw new Error(`Component '${name}' not registered`);
+  }
   return {
     element: () => registration.factory(params ?? {}),
-    initialMeta: registration.initialMeta,
+    initialMeta: resolveInitialMeta(name, registration.initialMeta),
   };
 }
 
 registerComponent('unified-list', () => (
-  <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+  <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
-/** BEGIN - APP ROUTES */
+// Retired Getting Started checklist: restored layouts and old
+// `/component/getting-started` links land on Home.
+registerComponent('getting-started', () => (
+  <RedirectSplit to={{ type: 'component', id: 'home' }} />
+));
+
+function DisabledProjectsRoute() {
+  const panel = useSplitPanelOrThrow();
+  onMount(() => {
+    if (panel.handle.isPopover()) panel.handle.close();
+    else panel.handle.replace({ next: { type: 'component', id: 'tasks' } });
+  });
+  return null;
+}
+
+function ProjectsRouteGate(props: ParentProps) {
+  const flag = useFeatureFlag(enableProjects);
+  return (
+    <Show
+      when={flag().enabled}
+      fallback={
+        <Show when={!flag().loading} fallback={<LoadingBlock />}>
+          <DisabledProjectsRoute />
+        </Show>
+      }
+    >
+      {props.children}
+    </Show>
+  );
+}
+
+const GatedCreateProjectView = (
+  props: ComponentProps<typeof CreateProjectView>
+) => (
+  <ProjectsRouteGate>
+    <CreateProjectView {...props} />
+  </ProjectsRouteGate>
+);
+
+registerComponent('new-project', withAuth(GatedCreateProjectView), {
+  splitPanelLayout: 'composable',
+});
+registerComponent('folder-compose', withAuth(FolderComposeView), {
+  splitPanelLayout: 'composable',
+});
+registerComponent('project-compose', withAuth(GatedCreateProjectView), {
+  splitPanelLayout: 'composable',
+});
+registerComponent(
+  'initiative-view',
+  withAuth((params) => {
+    const route =
+      typeof params.projectRoute === 'string'
+        ? parseProjectRoute(params.projectRoute)
+        : undefined;
+    return route ? (
+      <ProjectsRouteGate>
+        <ProjectView route={route} />
+      </ProjectsRouteGate>
+    ) : (
+      <RedirectSplit to={{ type: 'component', id: 'tasks' }} />
+    );
+  }),
+  { splitPanelLayout: 'composable' }
+);
+registerComponent(
+  'tasks-projects',
+  withAuth(() => (
+    <ProjectsRouteGate>
+      <ProjectsListView />
+    </ProjectsRouteGate>
+  )),
+  { splitPanelLayout: 'composable' }
+);
+
+// Compatibility factories for restored content and hosts outside a route outlet.
+// App views themselves are composed by the application route layer.
 registerComponent(
   'home',
-  withAuth(() => {
-    usePageViewTracking('home');
-    return <Home />;
-  })
+  () => <HomeRouteView />,
+  () => composableLayout(true)
 );
-
+registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
+registerComponent('recent', () => <RecentRouteView />);
+registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
-  'getting-started',
-  withAuth(() => {
-    usePageViewTracking('getting-started');
-    return <GettingStarted />;
-  })
+  'routines',
+  () => <AgentsRouteView />,
+  () => composableLayout()
 );
-
 registerComponent(
-  'inbox',
-  withAuth(() => {
-    usePageViewTracking('inbox');
-    const preset = getViewPreset('inbox');
-    return (
-      <SoupView
-        viewName="Inbox"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        disableLocalSearch
-      />
-    );
-  })
+  'agents',
+  () => <AgentsRouteView />,
+  () =>
+    isFeatureEnabled(enableChatV3Agents)
+      ? { splitPanelLayout: 'composable' }
+      : undefined
 );
-
-registerComponent('recent', withAuth(RecentViewWrapper));
-
-function TrackedRecentView() {
-  usePageViewTracking('recent');
-  const preset = getViewPreset('recent');
-  return (
-    <SoupView
-      viewName="Recent"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      // Rows carry the server's touched_at, so sorting on it preserves
-      // the touched-by-me order and lets optimistic bumps reorder locally.
-      initialClientSort={['touched_at']}
-      disableLocalSearch
-    />
-  );
-}
-
-function RecentViewWrapper() {
-  const recentViewEnabled = useRecentViewFlag();
-  const posthog = usePosthog();
-
-  // Registered even when the flag is off so a bookmarked /recent or a
-  // restored split recovers to the inbox instead of an empty split, and the
-  // touched query is never issued. The redirect replaces the split
-  // irreversibly, so it must wait for PostHog to actually answer — on a
-  // fresh reload the flag reads false until flags load.
-  return (
-    <Show
-      when={recentViewEnabled()}
-      fallback={
-        <Show when={posthog.flagsLoaded()}>
-          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
-        </Show>
-      }
-    >
-      <TrackedRecentView />
-    </Show>
-  );
-}
-
-const MyActivityView = lazy(() =>
-  import('@app/features/activity/my-activity-view').then((module) => ({
-    default: module.MyActivityView,
-  }))
-);
-
-function TrackedMyActivityView() {
-  usePageViewTracking('activity');
-  return <MyActivityView />;
-}
-
-function MyActivityViewWrapper() {
-  const activityFeedEnabled = useActivityFeedFlag();
-  const posthog = usePosthog();
-
-  // Registered even when the flag is off so a bookmarked /activity or a
-  // restored split recovers to the inbox instead of an empty split, and the
-  // data-owning feed view is never mounted. The redirect replaces the split
-  // irreversibly, so it must wait for PostHog to actually answer — on a
-  // fresh reload the flag reads false until flags load.
-  return (
-    <Show
-      when={activityFeedEnabled()}
-      fallback={
-        <Show when={posthog.flagsLoaded()}>
-          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
-        </Show>
-      }
-    >
-      <TrackedMyActivityView />
-    </Show>
-  );
-}
-
-registerComponent('activity', withAuth(MyActivityViewWrapper));
-
 registerComponent(
-  'reminders',
-  withAuth(() => {
-    // Registered even when the flag is closed so a bookmarked /reminders or a
-    // restored split recovers to the inbox instead of an empty split.
-    if (!ENABLE_REMINDERS()) {
-      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
-    }
-    usePageViewTracking('reminders');
-    const preset = getViewPreset('reminders');
-    return (
-      <SoupView
-        viewName="Reminders"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        disableLocalSearch
-      />
-    );
-  })
+  'mail',
+  () => <MailRouteView />,
+  () => composableLayout()
 );
-
-// The Activity tab briefly shipped as two separate views; restored splits
-// may still reference their ids.
+registerComponent(
+  'documents',
+  () => <DriveRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'reviews',
+  () => <ReviewsRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'tasks',
+  () => <TasksRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'calendar',
+  () => <CalendarRouteView />,
+  // Desktop Calendar draws its own top bar. Touch still needs the split header
+  // for the floating month and action controls.
+  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+);
+registerComponent(
+  'channels',
+  () => <ChannelsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'calls',
+  () => <CallsRouteView />,
+  () => composableLayout()
+);
+registerComponent('companies', () => <CompaniesRouteView />, {
+  ownsCollectionState: true,
+  splitPanelLayout: 'composable',
+});
+registerComponent('folders', () => <FoldersRouteView />);
+registerComponent('search', () => <SearchRouteView />);
 registerComponent('firehose', () => (
   <RedirectSplit to={{ type: 'component', id: 'activity' }} />
 ));
@@ -289,260 +382,7 @@ registerComponent('my-activity', () => (
   <RedirectSplit to={{ type: 'component', id: 'activity' }} />
 ));
 
-registerComponent(
-  'agents',
-  withAuth(() => {
-    usePageViewTracking('agents');
-    const user = useUserContext();
-    const preset = getViewPreset('agents', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    const automationEntities = useAutomationEntities();
-    return (
-      <SoupView
-        viewName="Agents"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        additionalEntities={automationEntities}
-      />
-    );
-  })
-);
-
-registerComponent(
-  'mail',
-  withAuth(() => {
-    usePageViewTracking('mail');
-    const preset = getViewPreset('mail');
-    return (
-      <SoupView
-        viewName="Email"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
-
-registerComponent(
-  'documents',
-  withAuth((params: DocumentsComponentParams = {}) => {
-    usePageViewTracking('documents');
-    const user = useUserContext();
-    const preset = getViewPreset('documents', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    const initialFilters =
-      preset?.filters && params.initialFilters
-        ? mergeQuery(queryStateFrom(preset.filters), params.initialFilters)
-        : (params.initialFilters ?? preset?.filters);
-    const initialClientFilters = mergeClientFilters(
-      preset?.clientFilters,
-      params.initialClientFilters
-    );
-    return (
-      <SoupView
-        viewName="Files"
-        initialFilters={initialFilters}
-        initialClientFilters={initialClientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
-
-registerComponent(
-  'tasks',
-  withAuth(() => {
-    usePageViewTracking('tasks');
-    const user = useUserContext();
-    const preset = getViewPreset('tasks', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    return (
-      <SoupView
-        viewName="Tasks"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
-
-registerComponent(
-  'channels',
-  withAuth(() => {
-    usePageViewTracking('channels');
-    const preset = getViewPreset('channels');
-    return (
-      <SoupView
-        viewName="Channels"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
-
-registerComponent(
-  'calls',
-  withAuth(() => {
-    usePageViewTracking('calls');
-    const preset = getViewPreset('calls');
-    return (
-      <SoupView
-        viewName="Calls"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
-
-registerComponent(
-  'companies',
-  withAuth(() => {
-    // Registered even when the CRM feature is off so direct navigation /
-    // restored splits redirect instead of throwing in resolveComponent.
-    if (!ENABLE_CRM()) {
-      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
-    }
-    usePageViewTracking('companies');
-    const preset = getViewPreset('companies');
-    // Share links land here as `/companies?crmView=<encoded config>` — the
-    // param carries the full view state (never data), decoded client-side.
-    const crmViewParam = new URLSearchParams(window.location.search).get(
-      CRM_VIEW_URL_PARAM
-    );
-    const initialCrmView: CrmViewConfig | undefined = crmViewParam
-      ? decodeCrmViewParam(crmViewParam)
-      : undefined;
-    return (
-      <SoupView
-        viewName="Customers"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        initialCrmView={initialCrmView}
-      />
-    );
-  })
-);
-
-registerComponent(
-  'folders',
-  withAuth(() => {
-    usePageViewTracking('folders');
-    const user = useUserContext();
-    const preset = getViewPreset('folders', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    return (
-      <SoupView
-        viewName="Folders"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
-
-type SearchComponentParams = {
-  initialQuery?: string;
-  initialFilters?: Query;
-  initialClientFilters?: SetPredicatesInput<string>;
-};
-
-registerComponent(
-  'search',
-  withAuth((params: SearchComponentParams = {}) => {
-    usePageViewTracking('search');
-    const preset = getViewPreset('search');
-    return (
-      <SoupView
-        viewName="Search"
-        initialFilters={params.initialFilters ?? preset?.filters}
-        initialClientFilters={
-          params.initialClientFilters ?? preset?.clientFilters
-        }
-        initialSearchText={params.initialQuery}
-      />
-    );
-  })
-);
-
-/** END - APP ROUTES */
-
 registerComponent('loading', () => <LoadingBlock />);
-// Placeholder a Preview Pair's Viewer opens before its Controller has
-// navigated anywhere (see layoutManager engagePreviewMode). Controllers can
-// override the copy via `emptyState` in previewController.ts; resolving it
-// from the live pair (rather than params) keeps the override across URL
-// restore.
-registerComponent('preview-empty', () => {
-  const panel = useSplitPanelOrThrow();
-  onMount(() => panel.handle.setDisplayName('Preview'));
-  const emptyState = () => {
-    const manager = globalSplitManager();
-    const controllerId = manager?.controllerOf(panel.handle.id);
-    const controllerContent = controllerId
-      ? manager?.getSplit(controllerId)?.content()
-      : undefined;
-    return controllerContent
-      ? previewEmptyStateForContent(controllerContent)
-      : undefined;
-  };
-  return (
-    <EmptyStatePanel
-      graphic={EmptyStatePreviewIcon}
-      title={emptyState()?.title ?? 'No content selected'}
-      description={
-        emptyState()?.description ??
-        'Select an item from the connected list to preview it here'
-      }
-      centered
-    />
-  );
-});
-// Join prompt for a channel the viewer can see but hasn't joined, shown in a
-// Preview Pair's Viewer when the controlling list focuses such a row (see
-// openEntityInSplitFromUnifiedList). Params don't round-trip through the URL,
-// so a restored split has none — fall back to the placeholder and let the
-// controller's focus→preview effect re-open the real prompt.
-registerComponent('non-member-channel', (params) => {
-  const panel = useSplitPanelOrThrow();
-  const channelId =
-    typeof params?.channelId === 'string' ? params.channelId : undefined;
-  if (!channelId) {
-    return <RedirectSplit to={{ type: 'component', id: 'preview-empty' }} />;
-  }
-  const channelName =
-    typeof params?.channelName === 'string' ? params.channelName : 'Channel';
-  const memberCount =
-    typeof params?.memberCount === 'number' ? params.memberCount : 0;
-  onMount(() => panel.handle.setDisplayName(channelName));
-  return (
-    <NonMemberChannelPreview
-      channelId={channelId}
-      channelName={channelName}
-      memberCount={memberCount}
-      // Join landed — hand the Viewer off to the real channel block in place.
-      onJoined={() =>
-        panel.handle.replace({ next: { type: 'channel', id: channelId } })
-      }
-    />
-  );
-});
 registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;
@@ -564,12 +404,56 @@ registerComponent('email-compose', (params) => {
       .filter(Boolean);
   const draftID =
     typeof params.draftID === 'string' ? params.draftID : undefined;
-  return <EmailCompose draftID={draftID} initialTo={initialTo} />;
+  const initialInboxId =
+    typeof params.initialInboxId === 'string'
+      ? params.initialInboxId
+      : undefined;
+  const initialSubject =
+    typeof params.initialSubject === 'string'
+      ? params.initialSubject
+      : undefined;
+  const initialBodyText =
+    typeof params.initialBodyText === 'string'
+      ? params.initialBodyText
+      : undefined;
+  const initialAttachments = Array.isArray(params.initialAttachments)
+    ? params.initialAttachments.filter(
+        (value): value is File => value instanceof File
+      )
+    : undefined;
+  return (
+    <EmailCompose
+      draftId={draftID}
+      initialTo={initialTo}
+      initialInboxId={initialInboxId}
+      initialSubject={initialSubject}
+      initialBodyText={initialBodyText}
+      initialAttachments={initialAttachments}
+    />
+  );
 });
+registerComponent('routine-compose', (params) => (
+  <RoutineCreator
+    onCreated={
+      typeof params.onCreated === 'function'
+        ? (params.onCreated as (id: string) => void)
+        : undefined
+    }
+  />
+));
+registerComponent('document-compose', (params) => {
+  usePageViewTracking('document-compose');
+  return <ComposeDocument {...params} />;
+});
+
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
 });
+// Restore old composer URLs into the shared Agents page.
+registerComponent('agent-session-compose', () => (
+  <RedirectSplit to={{ type: 'component', id: 'agents' }} />
+));
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
   return (
@@ -594,11 +478,26 @@ registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
 });
+
 registerComponent(
   'import-linear',
   lazy(() => import('@app/features/integrations/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <SettingsPanelComponentWrapper />);
+registerComponent(
+  'settings',
+  () => <SettingsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'booking-links',
+  () => <BookingLinksRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'external',
+  () => <ExternalRouteView />,
+  () => composableLayout()
+);
 
 if (LOCAL_ONLY) {
   registerComponent(
@@ -623,14 +522,6 @@ if (LOCAL_ONLY) {
   registerComponent(
     'data',
     lazy(() => import('@core/internal/DataDebug'))
-  );
-  registerComponent(
-    'noise',
-    lazy(() => import('@core/internal/PcNoiseGridDemo'))
-  );
-  registerComponent(
-    'svg-noise',
-    lazy(() => import('@core/internal/SvgNoiseGridDemo'))
   );
   registerComponent(
     'chat',
@@ -710,8 +601,33 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'linked-conversation',
-    withAuth(lazy(() => import('@core/linked-conversation/debug/Demo')))
+    'agent-changes-ui',
+    lazy(() => import('@app/features/changes/debug/Gallery'))
+  );
+
+  registerComponent(
+    'diff-view-ui',
+    lazy(() => import('@app/components/diff-view/debug/DiffViewGallery'))
+  );
+}
+
+if (import.meta.env.DEV) {
+  registerComponent(
+    'spreadsheet-demo',
+    withAuth(() => {
+      const enabled = useSpreadsheetAccess();
+      const Demo = lazy(
+        () => import('@app/features/block-spreadsheet/SpreadsheetDemo')
+      );
+      return (
+        <Show
+          when={enabled()}
+          fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
+        >
+          <Demo />
+        </Show>
+      );
+    })
   );
 }
 
@@ -732,11 +648,6 @@ if (DEV_MODE_ENV) {
     )
   );
 
-  // NOTE (seamus) : putting pixel icons on dev/staging for aidan
-  registerComponent(
-    'pixel-icon',
-    lazy(() => import('@core/internal/PixelArtIconDemo'))
-  );
   registerComponent(
     'md-parse',
     lazy(
@@ -752,10 +663,29 @@ if (DEV_MODE_ENV) {
       () => import('@core/component/LexicalMarkdown/builder/BuilderTestPage')
     )
   );
+  registerComponent(
+    'collab-surface-demo',
+    withAuth(
+      lazy(() => import('@core/collab-surface/debug/CollabSurfaceDemoPage'))
+    )
+  );
 }
 
 // Icon gallery
 registerComponent(
   'icon-gallery',
   lazy(() => import('@core/internal/IconGallery'))
+);
+
+// Component library. Registered outside LOCAL_ONLY so design can browse it on
+// preview deploys; the whole gallery is one lazy chunk the app never loads
+// unless the route is opened.
+registerComponent(
+  'ui',
+  lazy(() => import('@app/features/ui-gallery/UiGallery'))
+);
+
+registerComponent(
+  'create-menu-demo',
+  lazy(() => import('@app/features/command/debug/CreateMenuDemo'))
 );

@@ -1,24 +1,13 @@
-import {
-  activePlaceableIdSignal,
-  newPlaceableSignal,
-} from '@block-pdf/signal/placeables';
-import { blockElementSignal } from '@core/signal/blockElement';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import Dialog from '@corvu/dialog';
-import Check from '@phosphor/check.svg';
-import Trash from '@phosphor/trash-simple.svg';
-import { createCallback } from '@solid-primitives/rootless';
+import Check from '@icon/system/regular/check.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
 import { Button, cn } from '@ui';
 import SignaturePad from 'signature_pad';
-import {
-  createMemo,
-  createSignal,
-  type JSX,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { themeReactive } from '../../../theme/signals/themeReactive';
+import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import { resolvedThemeColors } from '../../../theme/signals/themeSignals';
+import { usePdfDocument } from '../../context/pdf-document-context';
+import { usePdfViewer } from '../../context/pdf-viewer-context';
 import { useDeletePlaceable, useModifyPayload } from '../../store/placeables';
 import { type AllowableEdits, PayloadMode } from '../../type/placeables';
 
@@ -35,49 +24,90 @@ interface SignatureEditorProps {
 }
 
 function SignatureEditor(props: SignatureEditorProps) {
+  const pdf = usePdfDocument();
+  const rootElement = usePdfViewer().rootElement;
   let canvasRef!: HTMLCanvasElement;
   let signaturePad: SignaturePad | undefined;
+  let finished = false;
+  const [hasStrokes, setHasStrokes] = createSignal(false);
 
   onMount(() => {
-    signaturePad = new SignaturePad(canvasRef);
+    const pad = new SignaturePad(canvasRef);
+    signaturePad = pad;
+    let previousWidth = 0;
+    const resizeCanvas = () => {
+      const width = canvasRef.offsetWidth;
+      const height = canvasRef.offsetHeight;
+      if (!width || !height) return;
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const data = pad.toData();
+      const scale = previousWidth ? width / previousWidth : 1;
+      // SignaturePad uses CSS coordinates; its backing bitmap must match them.
+      canvasRef.width = Math.round(width * ratio);
+      canvasRef.height = Math.round(height * ratio);
+      canvasRef.getContext('2d')?.scale(ratio, ratio);
+      pad.clear();
+      pad.fromData(
+        data.map((group) => ({
+          ...group,
+          points: group.points.map((point) => ({
+            ...point,
+            x: point.x * scale,
+            y: point.y * scale,
+          })),
+        }))
+      );
+      previousWidth = width;
+    };
+    resizeCanvas();
+    const observer = new ResizeObserver(resizeCanvas);
+    observer.observe(canvasRef);
+    const onEndStroke = () => setHasStrokes(!pad.isEmpty());
+    pad.addEventListener('endStroke', onEndStroke);
+    onCleanup(() => {
+      observer.disconnect();
+      pad.removeEventListener('endStroke', onEndStroke);
+      pad.off();
+    });
   });
 
-  const setActivePlaceable = activePlaceableIdSignal.set;
   const modifyPayload = useModifyPayload();
   const deletePlaceable = useDeletePlaceable();
 
-  const setNewPlaceable = newPlaceableSignal.set;
-  const updatePlaceable = createCallback((e: MouseEvent) => {
+  const cancel = () => {
+    if (finished) return;
+    finished = true;
+    deletePlaceable(props.id);
+    pdf.markup.commands.clearDraftIf(props.id);
+  };
+
+  const updatePlaceable = (e: MouseEvent | KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!signaturePad || signaturePad.isEmpty()) return;
 
-    setNewPlaceable((prev) =>
-      prev?.internalId === props.id ? undefined : prev
-    );
-    setActivePlaceable(undefined);
-
-    if (!signaturePad?.isEmpty()) {
-      modifyPayload(props.id, PayloadMode.Signature, {
-        base64: signaturePad?.toDataURL(),
-      });
+    finished = true;
+    const updated = modifyPayload(props.id, PayloadMode.Signature, {
+      base64: signaturePad.toDataURL(),
+    });
+    if (!updated) {
+      finished = false;
+      return;
     }
-  });
+    pdf.markup.commands.clearDraftIf(props.id);
+    pdf.markup.commands.clearActiveIf(props.id);
+  };
 
-  // ensure no empty signature boxes after signature modal is closed
-  onCleanup(() => {
-    if (signaturePad && !signaturePad.isEmpty()) return;
-    deletePlaceable(props.id);
-  });
+  // Discard unfinished drafts when the editor or its PDF is dismissed.
+  onCleanup(cancel);
 
   // Anchor the editor to the center of the active block rather than the
   // viewport, so the signature canvas appears over the PDF block it belongs to
   // (which may not be the only thing on screen).
-  const [blockRect, setBlockRect] = createSignal<DOMRect | undefined>(
-    undefined
-  );
+  const [blockRect, setBlockRect] = createSignal<DOMRect>();
 
   onMount(() => {
-    const el = blockElementSignal.get();
+    const el = rootElement();
     if (!el) {
       setBlockRect(undefined);
       return;
@@ -91,29 +121,33 @@ function SignatureEditor(props: SignatureEditorProps) {
     onCleanup(() => observer.disconnect());
   });
 
-  const positionStyle = createMemo<JSX.CSSProperties>(() => {
+  const positionStyle = (): JSX.CSSProperties => {
     const rect = blockRect();
     if (rect) {
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
       return {
-        position: 'absolute',
+        position: 'fixed',
         top: `${centerY}px`,
         left: `${centerX}px`,
-        transform: 'translate(-50%, -50%)',
+        translate: '-50% -50%',
+        'max-width': `min(calc(100vw - 2rem), calc(${rect.width}px - 2rem))`,
       };
     }
     return {
-      position: 'absolute',
+      position: 'fixed',
       top: '50%',
       left: '50%',
-      transform: 'translate(-50%, -50%)',
+      translate: '-50% -50%',
     };
-  });
+  };
 
   return (
     <Dialog
       open={true}
+      onOpenChange={(open) => {
+        if (!open) cancel();
+      }}
       restoreFocus={false}
       // prevents the dialog from immediately being dismissed
       closeOnOutsidePointerStrategy="pointerdown"
@@ -122,59 +156,61 @@ function SignatureEditor(props: SignatureEditorProps) {
       // this is because we often prevent default onMouseDown
       noOutsidePointerEvents={false}
     >
-      <Portal mount={document.getElementById('modal') ?? undefined}>
+      <ScopedPortal scope={pdf.portalScope()}>
         <Dialog.Overlay
-          class="flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay"
+          class="dialog-overlay-open-animation flex sm:max-h-full items-center justify-center z-modal-overlay fixed inset-0 bg-modal-overlay"
           style={{
             'max-height': `calc(100dvh - env(safe-area-inset-top, 0px))`,
           }}
         />
         <Dialog.Content
           class={cn(
-            'absolute z-modal min-w-[calc(100vw-2rem)]',
-            '@sm:min-w-96 p-3',
-            'bg-surface shadow',
-            'rounded-lg border border-edge',
+            'fixed z-modal w-[426px] max-w-[calc(100vw-2rem)] p-3',
+            'elevated-surface',
             'flex-col justify-start inline-flex gap-3',
-            'duration-100',
-            'data-open:animate-in',
-            'data-open:fade-in-0 data-open:zoom-in-95',
-            'data-closed:animate-out',
-            'data-closed:fade-out-0 data-closed:zoom-out-95'
+            'dialog-content-open-animation'
           )}
           style={positionStyle()}
         >
+          <Dialog.Label class="sr-only">Draw signature</Dialog.Label>
           <canvas
+            aria-label="Signature drawing area"
+            class="block w-full aspect-[4/1]"
             width={400}
             height={100}
             ref={canvasRef}
             // SCUFFED THEMING TODO: this filter is janky af, checks if it's a "darkish" or "lightish" theme, we should handle this better
             style={{
-              filter: themeReactive.b0.l[0]() < 0.5 ? 'invert(1)' : 'none',
+              height: 'auto',
+              filter:
+                resolvedThemeColors()['surface-0'].l < 0.5
+                  ? 'invert(1)'
+                  : 'none',
             }}
           />
           <div class="flex flex-row w-full justify-center items-center border-t border-edge">
             <Button
+              aria-label="Use signature"
+              tooltip="Use signature"
               variant="ghost"
               size="icon-md"
-              onClick={(e: MouseEvent | KeyboardEvent) =>
-                updatePlaceable(e as MouseEvent)
-              }
+              disabled={!hasStrokes()}
+              onClick={updatePlaceable}
             >
-              <Check />
+              <Check class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <Button
+              aria-label="Cancel signature"
+              tooltip="Cancel signature"
               variant="ghost"
               size="icon-md"
-              onClick={() => {
-                deletePlaceable(props.id);
-              }}
+              onClick={cancel}
             >
-              <Trash />
+              <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
         </Dialog.Content>
-      </Portal>
+      </ScopedPortal>
     </Dialog>
   );
 }

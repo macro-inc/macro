@@ -47,8 +47,40 @@ fn system_bot_id_is_stable_and_distinct_from_ai_personas() {
 }
 
 #[test]
+fn macro_new_id_is_stable_and_distinct_from_macro() {
+    assert_eq!(
+        MACRO_NEW_BOT_ID.into_storage_id().as_ref(),
+        "bot|00000000-0000-0000-0000-00000000a2a2"
+    );
+    assert_ne!(MACRO_NEW_BOT_ID, MACRO_AI_BOT_ID);
+    // The classic bot answers in channel; only its replacement opens sessions.
+    assert!(!system_bot(MACRO_AI_BOT_ID).unwrap().has_agent);
+    assert!(system_bot(MACRO_NEW_BOT_ID).unwrap().has_agent);
+    // Two ids, one persona: both present as "Macro" wherever a person reads a
+    // sender, a mention, or an agent list.
+    assert_eq!(
+        system_bot(MACRO_NEW_BOT_ID).unwrap().name,
+        system_bot(MACRO_AI_BOT_ID).unwrap().name
+    );
+}
+
+#[test]
 fn rejects_non_bot_storage_string() {
     assert!(BotIdStr::parse_from_str("macro|teo@macro.com").is_err());
+}
+
+#[test]
+fn non_system_bot_id_rejects_every_system_bot() {
+    for bot in SYSTEM_BOTS {
+        assert_eq!(NonSystemBotId::new(bot.id), None, "{}", bot.handle);
+    }
+}
+
+#[test]
+fn non_system_bot_id_accepts_a_row_bot() {
+    let bot = NonSystemBotId::new(BotId::TEST_A).unwrap();
+
+    assert_eq!(bot.get(), BotId::TEST_A);
 }
 
 #[test]
@@ -80,4 +112,10 @@ fn equality_and_hash_ignore_uuid_case() {
     let set: std::collections::HashSet<BotIdStr<'_>> =
         [lower.clone(), upper.clone()].into_iter().collect();
     assert_eq!(set.len(), 1);
+}
+
+#[test]
+fn macro_agent_session_bot_is_mentioned_as_macro() {
+    assert_eq!(mention_handle(MACRO_NEW_BOT_ID, MACRO_NEW_HANDLE), "macro");
+    assert_eq!(mention_handle(CURSOR_BOT_ID, CURSOR_HANDLE), "cursor");
 }

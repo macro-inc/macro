@@ -19,6 +19,7 @@ fn uuid(n: u8) -> Uuid {
 
 fn firing(n: u8) -> CalendarReminderFiring {
     CalendarReminderFiring {
+        method: crate::domain::models::ReminderDeliveryMethod::Popup,
         event_id: uuid(n),
         occurrence_key: "2026-08-10T12:10:00+00:00".to_string(),
         minutes_before: 10,
@@ -28,6 +29,7 @@ fn firing(n: u8) -> CalendarReminderFiring {
 
 fn due(n: u8, declined: bool) -> DueCalendarReminder {
     DueCalendarReminder {
+        email_address: "calendar-mailbox@example.com".into(),
         firing: firing(n),
         owner_id: "macro|owner@macro.com".to_string(),
         title: "Team sync".to_string(),
@@ -49,6 +51,7 @@ struct FakeRepoState {
     claimed: Vec<Uuid>,
     released: Vec<Uuid>,
     completed: Vec<Uuid>,
+    fired: Vec<(Uuid, DateTime<Utc>)>,
 }
 
 #[derive(Clone, Default)]
@@ -67,6 +70,7 @@ impl CalendarReminderDispatchRepo for FakeRepo {
                 firing.event_id,
                 firing.minutes_before,
                 firing.occurrence_key.clone(),
+                firing.method,
             )
         };
         let mut scheduled = self.0.lock().unwrap().scheduled.clone();
@@ -118,6 +122,15 @@ impl CalendarReminderDispatchRepo for FakeRepo {
         firing: &CalendarReminderFiring,
     ) -> Result<(), Report> {
         self.0.lock().unwrap().completed.push(firing.event_id);
+        Ok(())
+    }
+
+    async fn record_reminder_fired(
+        &self,
+        event_id: Uuid,
+        fired_at: DateTime<Utc>,
+    ) -> Result<(), Report> {
+        self.0.lock().unwrap().fired.push((event_id, fired_at));
         Ok(())
     }
 }
@@ -195,6 +208,7 @@ async fn sweep_drains_a_backlog_larger_than_one_page() {
     let repo = FakeRepo::default();
     repo.0.lock().unwrap().scheduled = (0..count)
         .map(|n| CalendarReminderFiring {
+            method: crate::domain::models::ReminderDeliveryMethod::Popup,
             event_id: uuid(u8::try_from(n % 251).unwrap()),
             occurrence_key: format!("2026-08-10T12:{:02}:00+00:00[{n}]", n % 60),
             minutes_before: i32::try_from(n).unwrap(),
@@ -261,6 +275,8 @@ async fn deliver_claims_notifies_and_completes() {
     assert_eq!(state.claimed, vec![uuid(1)]);
     assert_eq!(state.completed, vec![uuid(1)]);
     assert!(state.released.is_empty());
+    assert_eq!(state.fired.len(), 1);
+    assert_eq!(state.fired[0].0, uuid(1));
     assert_eq!(*notifier.notified.lock().unwrap(), vec![uuid(1)]);
 }
 
@@ -298,4 +314,5 @@ async fn failed_notification_releases_the_claim_and_errors() {
     assert_eq!(state.claimed, vec![uuid(1)]);
     assert_eq!(state.released, vec![uuid(1)]);
     assert!(state.completed.is_empty());
+    assert!(state.fired.is_empty());
 }

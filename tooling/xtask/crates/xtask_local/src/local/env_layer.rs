@@ -23,6 +23,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 
 use super::instance::Instance;
+use super::local_env::Tunnels;
 use super::{Mode, local_env};
 
 #[cfg(test)]
@@ -46,6 +47,8 @@ pub fn resolve(
     no_doppler: bool,
     env_file: Option<&Path>,
     static_frontend: bool,
+    tunnels: Tunnels<'_>,
+    wire_otel: bool,
 ) -> Result<ResolvedEnv> {
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
     // integration/secret config services require. For local we then overlay the
@@ -56,7 +59,8 @@ pub fn resolve(
     let spec = mode.spec();
     let local = spec
         .overlay_local_env
-        .then(|| local_env::LocalEnv::for_instance(mode, instance, static_frontend));
+        .then(|| local_env::LocalEnv::for_instance(mode, instance, static_frontend, tunnels))
+        .transpose()?;
     let mut env = BTreeMap::new();
     // Boot stubs go in FIRST so Doppler overrides them: they only exist to keep
     // a `--no-doppler` stack's config loaders satisfied, never to replace a
@@ -73,13 +77,39 @@ pub fn resolve(
         for (k, v) in local.to_env() {
             env.insert(k, v);
         }
-        // Opt-in local trace export: point services at the local OTLP collector
-        // (docker-network alias `otel-collector`) only when one answers on the
-        // OTLP HTTP port, so services don't spam export errors when none is
-        // running. Both viewers bind 4318 — Jaeger (compose profile `jaeger`)
-        // and the Datadog agent (profile `datadog`) — so (re)start the stack
-        // after starting one to pick up tracing.
-        if super::summary::port_open(4318) {
+        // Persistent per-instance SSH host identity; never reuse a production key in local stacks.
+        let key_path = instance.ensure_artifact_dir()?.join("preview_ssh_host_key");
+        if !key_path.exists() {
+            let status = Command::new("ssh-keygen")
+                .args([
+                    "-q",
+                    "-t",
+                    "ed25519",
+                    "-N",
+                    "",
+                    "-C",
+                    "macro-local-preview",
+                    "-f",
+                ])
+                .arg(&key_path)
+                .status()
+                .context("generating preview SSH host key (run inside nix develop)")?;
+            if !status.success() {
+                bail!("ssh-keygen failed generating preview host identity");
+            }
+        }
+        env.insert(
+            "PREVIEW_SSH_HOST_KEY".into(),
+            std::fs::read_to_string(key_path).context("reading preview host key")?,
+        );
+        // Local telemetry export: point services at the local OTLP collector
+        // (docker-network alias `otel-collector`) only when the run asked for
+        // tracing AND one answers on the OTLP HTTP port (so services don't
+        // spam export errors when none is running). The `wire_otel` gate is
+        // what makes `--traces off` real: collectors are global and left
+        // running across invocations, so the port alone can't distinguish
+        // "wants tracing" from "a collector happens to be up".
+        if wire_otel && super::summary::port_open(4318) {
             env.insert(
                 "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
                 "http://otel-collector:4317".into(),
@@ -199,7 +229,7 @@ fn pull_aws_credentials(env: &mut BTreeMap<String, String>) {
 /// Pull Doppler secrets as a flat env overlay (mirrors the old
 /// `just get_environment`). Two modes:
 ///
-/// - `DOPPLER_TOKEN` in the process env (CI, Fly preview machines) is a
+/// - `DOPPLER_TOKEN` in the process env (CI, Cloud agents) is a
 ///   config-scoped service token: download WITHOUT `--project`/`--config` (the
 ///   token pins them), and treat failure as fatal — whoever provisioned the
 ///   token explicitly asked for these secrets, so proceeding without them

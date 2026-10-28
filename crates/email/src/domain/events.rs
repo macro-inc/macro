@@ -89,6 +89,8 @@ pub enum SendCancelReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThreadsReindexReason {
+    /// Provider content or normalized mailbox state changed.
+    ProviderChanged,
     /// Contact display names changed; sender/recipient names in the index are stale.
     ContactsChanged,
 }
@@ -534,6 +536,11 @@ pub struct EmailMacroEvent {
 }
 
 impl EmailMacroEvent {
+    /// Retain a durable outbox identity across publication retries.
+    pub fn with_event_id(mut self, id: Uuid) -> Self {
+        self.event.event_id = id;
+        self
+    }
     /// Build a link-connected event keyed by the link id.
     pub fn link_connected(metadata: LinkConnectedMetadata) -> Self {
         Self::new(

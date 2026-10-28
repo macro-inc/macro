@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE entity_properties\n        SET\n            values = jsonb_set(\n                values,\n                '{value}',\n                COALESCE(\n                    (\n                        SELECT jsonb_agg(elem)\n                        FROM jsonb_array_elements(values -> 'value') AS elem\n                        WHERE NOT (to_jsonb($2::text[]) @> elem)\n                    ),\n                    '[]'::jsonb\n                )\n            ),\n            updated_at = NOW()\n        WHERE property_definition_id = $1\n          AND values -> 'value' ?| $2::text[]\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "657e0c6418ff6bc4ada878194f855cd596d4b9a03aa07e03d924f815ad5ae95f"
+}

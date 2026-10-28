@@ -1,5 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import type { RemoteFlag } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { Telemetry } from '@macro-inc/observability';
 import type { JsonType } from 'posthog-js';
 import {
   type Accessor,
@@ -8,6 +10,7 @@ import {
   type JSX,
   onCleanup,
   Show,
+  startTransition,
 } from 'solid-js';
 
 export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
@@ -15,76 +18,148 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
   () => {
     const analytics = useAnalytics();
 
-    const [featureFlags, setFeatureFlags] = createSignal<string[]>([]);
+    // PostHog only reports flags once `/flags` answers, but it already serves
+    // the flags it cached on the previous visit. Starting from that cache means
+    // returning users paint flagged UI once, not flags-off first and then again
+    // when the answer lands (e.g. soup lists reloading on a transport swap).
+    const cachedFlags = analytics.posthog.featureFlags?.getFlags() ?? [];
+    const [featureFlags, setFeatureFlags] = createSignal<string[]>(
+      cachedFlags,
+      { equals: false }
+    );
     // Distinguishes "flags not fetched yet" from "no flags enabled": both
     // leave featureFlags empty, but destructive flag-off fallbacks (e.g.
     // RedirectSplit) must not fire before the answer arrives. Set even on
     // errorsLoading so a PostHog outage degrades to flags-off, not a hang.
-    const [flagsLoaded, setFlagsLoaded] = createSignal(false);
+    const [flagsLoaded, setFlagsLoaded] = createSignal(cachedFlags.length > 0);
+    // Whether the last fetch got no answer at all (blocked, offline, PostHog
+    // down), as opposed to an answer that says a flag is off.
+    const [flagsUnreachable, setFlagsUnreachable] = createSignal(false);
 
     const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
-      // Order matters: signals propagate synchronously, so flagsLoaded must
-      // only flip after the flag values are in place — the other way around,
-      // flag-off fallbacks fire against the still-empty flag list.
-      if (!ctx?.errorsLoading) {
-        setFeatureFlags(flags);
-      }
-      setFlagsLoaded(true);
+      // Flags usually arrive after first paint and swap flagged subtrees,
+      // often to lazy views. A transition keeps the painted UI until the new
+      // one is ready instead of flashing Suspense fallbacks in between.
+      startTransition(() => {
+        // Order matters: signals propagate synchronously, so flagsLoaded must
+        // only flip after the flag values are in place — the other way around,
+        // flag-off fallbacks fire against the still-empty flag list.
+        if (!ctx?.errorsLoading) {
+          setFeatureFlags(flags);
+        }
+        setFlagsUnreachable(ctx?.errorsLoading === true);
+        setFlagsLoaded(true);
+      }).catch((error) => Telemetry.error(error, { surface: 'feature-flags' }));
     });
 
     onCleanup(unsub);
 
-    return { instance: analytics.posthog, featureFlags, flagsLoaded };
+    return {
+      instance: analytics.posthog,
+      featureFlags,
+      flagsLoaded,
+      flagsUnreachable,
+    };
   }
 );
 
-type FeatureFlagResult<T> = { enabled: boolean; payload: T };
+type FeatureFlagResult<T> = {
+  enabled: boolean;
+  payload: T;
+  loading: boolean;
+};
 
-export function useFeatureFlag<T extends JsonType>(
-  key: string,
-  opts?: {
-    fallbackPayload?: T;
-    enabledOverride?: boolean;
-  }
+type FeatureFlagOpts<T> = {
+  fallbackPayload?: T;
+  enabledOverride?: boolean;
+  /**
+   * Treat the flag as on when PostHog could not be reached and holds no
+   * earlier answer for it; an answer of "off" still wins. For pages anonymous
+   * visitors depend on, which a blocked flag request must not take down.
+   */
+  enabledWhenUnreachable?: boolean;
+};
+
+function readFeatureFlag<T extends JsonType>(
+  flagOrKey: RemoteFlag | string,
+  opts?: FeatureFlagOpts<T>
 ): Accessor<FeatureFlagResult<T | undefined>> {
   const posthog = usePosthog();
 
   return createMemo(
     () => {
-      const { enabledOverride, fallbackPayload } = opts ?? {};
+      const fallbackPayload = opts?.fallbackPayload;
+      const remote = typeof flagOrKey === 'string' ? undefined : flagOrKey;
+      const key = typeof flagOrKey === 'string' ? flagOrKey : flagOrKey.key;
+      const override = remote?.override ?? opts?.enabledOverride;
 
-      if (!posthog.featureFlags().length && !enabledOverride) {
-        return { enabled: false, payload: fallbackPayload };
+      if (override !== undefined) {
+        return { enabled: override, payload: fallbackPayload, loading: false };
       }
 
-      const flag = posthog.instance.getFeatureFlagResult(key);
+      if (!posthog.flagsLoaded()) {
+        return { enabled: false, payload: fallbackPayload, loading: true };
+      }
 
-      // A defined override wins in both directions: an explicit `false`
-      // disables even when PostHog reports the flag on.
-      const enabled = enabledOverride ?? flag?.enabled ?? false;
-      const payload = (flag?.payload as T) ?? fallbackPayload;
+      // The SDK is not reactive. Re-read on each successful refresh, including
+      // payload changes that leave the enabled flag list unchanged.
+      posthog.featureFlags();
+      const result = posthog.instance.getFeatureFlagResult(key);
+      const unreachableDefault =
+        opts?.enabledWhenUnreachable === true && posthog.flagsUnreachable();
 
-      return { enabled, payload };
+      return {
+        enabled: result?.enabled ?? unreachableDefault,
+        payload: (result?.payload as T) ?? fallbackPayload,
+        loading: false,
+      };
     },
     undefined,
     {
-      // Only notify dependents when enabled or payload actually changes
       equals: (prev, next) =>
-        prev.enabled === next.enabled && prev.payload === next.payload,
+        prev.enabled === next.enabled &&
+        prev.payload === next.payload &&
+        prev.loading === next.loading,
     }
   );
 }
 
-export const ShowFeatureFlag = <T extends JsonType>(props: {
-  key: string;
+export function useFeatureFlag<T extends JsonType>(
+  flag: RemoteFlag,
+  opts?: Pick<FeatureFlagOpts<T>, 'fallbackPayload' | 'enabledWhenUnreachable'>
+): Accessor<FeatureFlagResult<T | undefined>>;
+export function useFeatureFlag<T extends JsonType>(
+  key: string,
+  opts?: FeatureFlagOpts<T>
+): Accessor<FeatureFlagResult<T | undefined>>;
+export function useFeatureFlag<T extends JsonType>(
+  flagOrKey: RemoteFlag | string,
+  opts?: FeatureFlagOpts<T>
+): Accessor<FeatureFlagResult<T | undefined>> {
+  return readFeatureFlag(flagOrKey, opts);
+}
+
+type ShowFeatureFlagProps<T> = {
   fallback?: JSX.Element;
   fallbackPayload?: T;
-  enabledOverride?: boolean;
   children: JSX.Element;
-}) => {
-  const flag = useFeatureFlag(props.key, {
+} & ({ flag: RemoteFlag } | { key: string; enabledOverride?: boolean });
+
+function showFlagTarget<T>(
+  props: ShowFeatureFlagProps<T>
+): RemoteFlag | string {
+  if ('flag' in props) {
+    return props.flag;
+  }
+  return props.key;
+}
+
+export const ShowFeatureFlag = <T extends JsonType>(
+  props: ShowFeatureFlagProps<T>
+) => {
+  const flag = readFeatureFlag(showFlagTarget(props), {
     fallbackPayload: props.fallbackPayload,
-    enabledOverride: props.enabledOverride,
+    enabledOverride: 'flag' in props ? undefined : props.enabledOverride,
   });
 
   return (

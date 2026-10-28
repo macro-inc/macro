@@ -18,7 +18,7 @@ fn make_row(
         notification_event_type: event_type.to_string(),
         entity: EntityType::Document.with_entity_string("entity-1".to_string()),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),
@@ -117,6 +117,23 @@ fn to_typed_row_channel_message_reply() {
 }
 
 #[test]
+fn to_typed_row_channel_message_reaction() {
+    let metadata = serde_json::json!({
+        "messageId": "msg-4",
+        "messageContent": "Great idea",
+        "emoji": "👍",
+        "channelType": "Public",
+        "channelName": "general"
+    });
+    let row = make_row("channel_message_reaction", metadata);
+    let typed = to_typed_row(row).expect("should deserialize channel_message_reaction");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ChannelMessageReaction(_)
+    ));
+}
+
+#[test]
 fn to_typed_row_new_email() {
     let metadata = serde_json::json!({
         "sender": "ext@example.com",
@@ -207,6 +224,21 @@ fn to_typed_row_github_pr_status_changed() {
 }
 
 #[test]
+fn to_typed_row_calendar_event_join_request() {
+    let metadata = serde_json::json!({
+        "requestId": "01a15f1b-801e-70d6-873d-689f42c0b0e9",
+        "eventId": "01a0d015-b785-7602-9dc8-db34ca69c29b",
+        "title": "Offsite"
+    });
+    let row = make_row("calendar_event_join_request", metadata);
+    let typed = to_typed_row(row).expect("should deserialize calendar_event_join_request");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::CalendarEventJoinRequest(_)
+    ));
+}
+
+#[test]
 fn to_typed_row_unknown_event_type_fails() {
     let metadata = serde_json::json!({"foo": "bar"});
     let row = make_row("unknown_event", metadata);
@@ -288,7 +320,10 @@ fn to_typed_row_preserves_row_fields() {
     assert_eq!(typed.notification_id, uuid::Uuid::nil());
     assert_eq!(typed.notification_event_type, "task_assigned");
     assert!(typed.sent);
-    assert!(!typed.done);
+    assert_eq!(
+        typed.state,
+        notification::domain::models::NotificationState::Unseen
+    );
 
     match typed.notification_metadata {
         NotifEvent::TaskAssigned(ref meta) => {
@@ -334,7 +369,7 @@ fn api_user_notification_and_realtime_notif_metadata_serialize_identically() {
         notification_event_type: "channel_mention".to_string(),
         entity: entity.clone(),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at,
         viewed_at: None,
         updated_at: created_at,
@@ -353,7 +388,7 @@ fn api_user_notification_and_realtime_notif_metadata_serialize_identically() {
         notification_event_type: "channel_mention".to_string(),
         entity,
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at,
         viewed_at: None,
         updated_at: created_at,

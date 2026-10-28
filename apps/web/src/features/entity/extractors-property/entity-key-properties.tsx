@@ -30,6 +30,7 @@ import {
 import {
   getSortedKeyProperties,
   soupPropertyToProperty,
+  withTaskProject,
 } from './property-helpers';
 
 function getEntityType(entity: EntityData): EntityType {
@@ -37,6 +38,7 @@ function getEntityType(entity: EntityData): EntityType {
     .when(isTaskEntity, () => EntityType.TASK)
     .with({ type: 'channel' }, () => EntityType.CHANNEL)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'initiative' }, () => EntityType.INITIATIVE)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
@@ -48,17 +50,25 @@ function getEntityType(entity: EntityData): EntityType {
       // No CONTACT in the properties-service EntityType yet.
       throw new Error('crm contacts do not support properties');
     })
-    .with({ type: 'automation' }, () => {
-      throw new Error('automation entities do not support properties');
+    .with({ type: 'agent_session' }, () => {
+      throw new Error(
+        'agent sessions are not property-service mutation targets'
+      );
+    })
+    .with({ type: 'routine' }, () => {
+      throw new Error('routine entities do not support properties');
     })
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })
-    .with({ type: 'reminder' }, () => {
-      throw new Error('reminders do not support properties');
-    })
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events do not support properties');
+    })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases do not support properties');
+    })
+    .with({ type: 'form' }, () => {
+      throw new Error('forms do not support properties');
     })
     .exhaustive();
 }
@@ -72,6 +82,8 @@ interface EntityKeyPropertiesProps {
   maxUserStackUsers?: number;
   /** Whether to show the edit affordance caret. */
   showCaret?: boolean;
+  /** Append a task's Project, set or not (Projects enabled). */
+  includeProject?: boolean;
 }
 
 /**
@@ -85,16 +97,18 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 
   const keyProperties = createMemo((): PropertyT[] => {
     const soupProperties = props.entity.properties ?? [];
-    return getSortedKeyProperties(
-      soupProperties.flatMap((soupProperty) => {
-        try {
-          return [soupPropertyToProperty(soupProperty)];
-        } catch (error) {
-          console.warn('Skipping property with unsupported type', error);
-          return [];
-        }
-      })
-    );
+    const properties = soupProperties.flatMap((soupProperty) => {
+      try {
+        return [soupPropertyToProperty(soupProperty)];
+      } catch (error) {
+        console.warn('Skipping property with unsupported type', error);
+        return [];
+      }
+    });
+    const key = getSortedKeyProperties(properties);
+    return props.includeProject && entityType() === EntityType.TASK
+      ? withTaskProject(key, properties)
+      : key;
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
@@ -175,9 +189,11 @@ function KeyPropertiesRow(props: {
                 <Layer depth={2}>
                   <Property.EditTrigger
                     class={cn(
-                      'flex items-center gap-1 min-w-0 ring ring-edge-muted/50 ring-inset',
+                      /* border, not ring: Tailwind rings are box-shadows and
+                         would fight the glass shadow */
+                      'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass',
                       'px-1.5 py-1 leading-tight text-left rounded-full',
-                      '@max-2xl/u-list:ring-0 @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
+                      '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
                       {
                         'hover:bg-hover': ctx.canEdit,
                         'text-ink-extra-muted/50': isEmpty(),

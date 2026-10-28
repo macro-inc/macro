@@ -132,7 +132,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SimpleUnifiedSearchBaseResponse"
+                  "$ref": "#/components/schemas/SimpleSearchResponse"
                 }
               }
             }
@@ -173,6 +173,112 @@
   },
   "components": {
     "schemas": {
+      "AgentSessionAuthor": {
+        "type": "string",
+        "description": "Side of a folded conversation.",
+        "enum": ["user", "agent"]
+      },
+      "AgentSessionFilters": {
+        "type": "object",
+        "description": "Filters for agent sessions.",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Agent session ids to filter by. Empty to include all accessible sessions."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into agent sessions at all. Agent sessions are off by\ndefault — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].\nAsking for specific `ids` or `owners` also opts in."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+          }
+        }
+      },
+      "AgentSessionSearchResponseItem": {
+        "type": "object",
+        "description": "One accessible agent session, grouped with its matching folded messages.",
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "bot_id",
+          "created_at",
+          "updated_at",
+          "agent_session_search_results"
+        ],
+        "properties": {
+          "agent_session_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentSessionSearchResult"
+            },
+            "description": "Name and folded-message matches."
+          },
+          "bot_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent persona ID."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Session creation time."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Session ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current persisted name."
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "Session owner."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Current persisted modification time."
+          }
+        }
+      },
+      "AgentSessionSearchResult": {
+        "type": "object",
+        "description": "A name match or one matching folded message.",
+        "required": ["highlight"],
+        "properties": {
+          "goto": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SearchGotoAgentSession",
+                "description": "Absent for a name-only match."
+              }
+            ]
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "Matched name/content fragments."
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Search score."
+          }
+        }
+      },
       "CalendarEventFilters": {
         "type": "object",
         "description": "Filters for canonical calendar-event entities.",
@@ -216,6 +322,243 @@
             "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
           }
         }
+      },
+      "CalendarEventMetadata": {
+        "type": "object",
+        "description": "Metadata for a calendar event fetched from the database.\n\nThe index carries the master span for ranking, but the occurrence a row\nshould display depends on when the query ran, so it is resolved here\nrather than indexed.",
+        "required": [
+          "createdAt",
+          "updatedAt",
+          "status",
+          "time",
+          "isRecurring",
+          "isReadOnly"
+        ],
+        "properties": {
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Direct conference join URL when known."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Free-text description, when the event carries one. May contain HTML from\nthe source; clients render a plain-text preview."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the canonical source prohibits mutation."
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "description": "Whether the series carries a recurrence rule. Lets a row render a\nrecurring badge without parsing the rules."
+          },
+          "occurrence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEventSearchOccurrence",
+                "description": "The instance this row points at. `None` when the series has no\nmaterialized occurrence — occurrences exist only inside a rolling\nwindow, so a row can legitimately fall back to `time`."
+              }
+            ]
+          },
+          "organizer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEventOrganizer",
+                "description": "The event's organizer (creator), when the source names one."
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Canonical status (`confirmed`, `tentative`, `cancelled`)."
+          },
+          "time": {
+            "$ref": "#/components/schemas/CalendarEventSearchTime",
+            "description": "The series' own span."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CalendarEventOrganizer": {
+        "type": "object",
+        "description": "The event's organizer — its creator, in Google's model. Either field can be\nabsent when the source does not name it.",
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "Organizer email address, when known."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name, when the source provided one."
+          }
+        }
+      },
+      "CalendarEventSearchOccurrence": {
+        "type": "object",
+        "description": "The instance a search row points at.\n\nA recurring series is indexed once, as its master. Which instance the row\nshould show is decided per request rather than baked into the index: the\nnext occurrence at or after now, else the most recent past one. This is\nthe same resolution a calendar mention performs, so a search row and a\nmention of the same event agree on where they land.",
+        "required": ["occurrenceKey", "time"],
+        "properties": {
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Stable key of the resolved instance within its series."
+          },
+          "time": {
+            "$ref": "#/components/schemas/CalendarEventSearchTime",
+            "description": "Span of the resolved instance."
+          }
+        }
+      },
+      "CalendarEventSearchResponseItem": {
+        "type": "object",
+        "description": "A single response item, part of the CalendarEventSearchResponse object",
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "updated_at",
+          "created_at",
+          "calendar_event_search_results"
+        ],
+        "properties": {
+          "calendar_event_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarEventSearchResult"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized fields that all item types will share."
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CalendarEventSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CalendarEventSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CalendarEventMetadata",
+                    "description": "Metadata from the database. None if the event no longer exists."
+                  }
+                ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the event."
+              }
+            }
+          }
+        ],
+        "description": "CalendarEventSearchResponseItem with metadata fetched from macrodb."
+      },
+      "CalendarEventSearchResult": {
+        "type": "object",
+        "required": ["highlight"],
+        "properties": {
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          }
+        }
+      },
+      "CalendarEventSearchScope": {
+        "type": "string",
+        "description": "Which calendar events a unified search covers.\n\nSharing an event with a channel lets its members see the sharer's copy,\nwhich is on none of their own calendars, so the default scope never finds\nit. Shared events are a separate scope rather than part of the default, so\na caller can list them after the caller's own events without reordering\nthose.",
+        "enum": ["own", "shared_with_you"]
+      },
+      "CalendarEventSearchTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Absolute timed event.",
+            "required": ["startsAt", "endsAt", "kind"],
+            "properties": {
+              "endsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Exclusive end."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timed"]
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Inclusive start."
+              },
+              "timeZone": {
+                "type": ["string", "null"],
+                "description": "Original IANA time zone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "All-day event with an exclusive end date.",
+            "required": ["startDate", "endDate", "kind"],
+            "properties": {
+              "endDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Exclusive end date."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["allDay"]
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Inclusive start date."
+              }
+            }
+          }
+        ],
+        "description": "Timed or all-day span of a calendar event.\n\nDeliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`\nrather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and\n`JsonSchema` (AI tool schemas), and `models_soup` carries no schemars\ndependency. The wire shape is identical and must stay that way, so a\nclient can decode a search row and a soup row with one mapping.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores."
       },
       "CallFilters": {
         "type": "object",
@@ -307,7 +650,6 @@
           "id",
           "owner_id",
           "call_id",
-          "channel_id",
           "participant_ids",
           "call_search_results"
         ],
@@ -323,7 +665,7 @@
             }
           },
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "id": {
@@ -853,7 +1195,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -1158,6 +1500,7 @@
         "enum": [
           "BOOLEAN",
           "DATE",
+          "DATE_RANGE",
           "NUMBER",
           "STRING",
           "SELECT_NUMBER",
@@ -1166,6 +1509,21 @@
           "ENTITY",
           "LINK"
         ]
+      },
+      "DateRange": {
+        "type": "object",
+        "description": "A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "DocumentFilters": {
         "type": "object",
@@ -1202,7 +1560,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -1421,8 +1779,8 @@
       },
       "DocumentSubType": {
         "type": "string",
-        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet", "skill"]
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.",
+        "enum": ["task", "snippet", "skill", "initiative_description"]
       },
       "EmailFilters": {
         "type": "object",
@@ -1484,6 +1842,10 @@
               "type": "string"
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
+          },
+          "is_read": {
+            "type": ["boolean", "null"],
+            "description": "Filter by the email thread's read flag, independently of notification state."
           },
           "link_ids": {
             "type": "array",
@@ -1786,6 +2148,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "agent_session_filters": {
+            "$ref": "#/components/schemas/AgentSessionFilters",
+            "description": "the bundled [AgentSessionFilters]"
+          },
           "calendar_event_filters": {
             "$ref": "#/components/schemas/CalendarEventFilters",
             "description": "the bundled [CalendarEventFilters]"
@@ -1818,9 +2184,17 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
+          },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",
             "description": "the bundled [ForeignEntityFilters]"
+          },
+          "initiative_filters": {
+            "$ref": "#/components/schemas/InitiativeFilters",
+            "description": "Initiative filters. Initiatives are opt-in."
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -1832,10 +2206,6 @@
               "$ref": "#/components/schemas/PropertyFilter"
             },
             "description": "property-based filters applied across entity types"
-          },
-          "reminder_filters": {
-            "$ref": "#/components/schemas/ReminderFilters",
-            "description": "the bundled [ReminderFilters]"
           },
           "tag_filter_mode": {
             "$ref": "#/components/schemas/TagFilterMode",
@@ -1877,7 +2247,10 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "DATABASE_ROW",
+          "CONTACT",
           "DOCUMENT",
+          "INITIATIVE",
           "PROJECT",
           "TASK",
           "THREAD",
@@ -1902,6 +2275,7 @@
           "docx",
           "pdf",
           "md",
+          "spreadsheet",
           "canvas",
           "coffee",
           "cson",
@@ -2283,7 +2657,9 @@
           "azw3",
           "djvu",
           "xls",
+          "xlsm",
           "ppt",
+          "doc",
           "pptx",
           "xlsx",
           "db",
@@ -2305,6 +2681,9 @@
           "ps",
           "dxf",
           "dwg",
+          "fig",
+          "psd",
+          "psb",
           "stl",
           "obj",
           "fbx",
@@ -2358,6 +2737,61 @@
           }
         }
       },
+      "Highlight": {
+        "type": "object",
+        "description": "The search service version of a highlight",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "If the match was on the entity content, this will provide a list of highlights\nfor each content match"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "If the match was on the entity name, this will be present with that highlight"
+          }
+        }
+      },
+      "InitiativeFilters": {
+        "type": "object",
+        "description": "Filters for initiatives.",
+        "properties": {
+          "due_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive lower due-date bound."
+          },
+          "due_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive upper due-date bound."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+          },
+          "initiative_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Initiative ids to filter by. Empty to include all accessible initiatives."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Case-insensitive name substring."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+          }
+        }
+      },
       "MatchType": {
         "type": "string",
         "enum": ["exact", "partial", "regexp", "query"]
@@ -2366,15 +2800,20 @@
         "type": "object",
         "description": "Notification-level filters that apply to an entity type.",
         "properties": {
-          "done": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
-          },
-          "seen": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationState"
+            },
+            "description": "Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`."
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "NotificationState": {
+        "type": "string",
+        "description": "The mutually exclusive lifecycle states of a user's notification.",
+        "enum": ["unseen", "seen", "done"]
       },
       "ProjectFilters": {
         "type": "object",
@@ -2397,7 +2836,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -2602,6 +3041,7 @@
           "display_name",
           "data_type",
           "is_multi_select",
+          "specific_entity_type",
           "created_at",
           "updated_at",
           "is_system",
@@ -2714,7 +3154,22 @@
           },
           {
             "type": "object",
-            "description": "System-owned property (no user or team owner).",
+            "description": "Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user/team property namespace.",
+            "required": ["database_id", "scope"],
+            "properties": {
+              "database_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["database"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user, team, or database owner).",
             "required": ["scope"],
             "properties": {
               "scope": {
@@ -2724,7 +3179,7 @@
             }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, team-scoped, or system."
+        "description": "Defines who owns a property - user-scoped, team-scoped, database-scoped, or system."
       },
       "PropertyValue": {
         "oneOf": [
@@ -2792,6 +3247,21 @@
           },
           {
             "type": "object",
+            "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["DateRange"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
             "required": ["value", "type"],
             "properties": {
@@ -2848,35 +3318,173 @@
         ],
         "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
       },
-      "ReminderFilters": {
+      "SearchGotoAgentSession": {
         "type": "object",
-        "description": "Filters for reminders.",
+        "description": "Stable navigation target from the fold, independent of raw ACP log IDs.",
+        "required": ["message_turn", "author"],
         "properties": {
-          "completed": {
-            "type": ["boolean", "null"],
-            "description": "Filter on whether the owner has marked the reminder done. `None` returns\nboth."
+          "author": {
+            "$ref": "#/components/schemas/AgentSessionAuthor",
+            "description": "Author within the turn."
           },
-          "entities": {
+          "message_turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Fold-assigned turn.",
+            "minimum": 0
+          }
+        }
+      },
+      "SearchGotoCallRecord": {
+        "type": "object",
+        "required": [
+          "transcript_id",
+          "speaker_id",
+          "sequence_num",
+          "started_at",
+          "participant_ids"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "ended_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "participant_ids": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Restrict to reminders attached to these entities, each `\"{type}:{id}\"`."
+            }
           },
-          "fired": {
-            "type": ["boolean", "null"],
-            "description": "Filter on whether the reminder's next run has come due, i.e. it has\nfired and is awaiting its owner. `None` returns both.\n\nEvaluated server-side against the database clock rather than a\ntimestamp supplied by the caller: a timestamp would land in the query\ncache key and change on every render."
+          "sequence_num": {
+            "type": "integer",
+            "format": "int32"
           },
-          "ids": {
+          "speaker_id": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "transcript_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SearchGotoChannel": {
+        "type": "object",
+        "required": ["channel_message_id"],
+        "properties": {
+          "channel_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel message id"
+          }
+        }
+      },
+      "SearchGotoChat": {
+        "type": "object",
+        "required": ["chat_message_id", "role"],
+        "properties": {
+          "chat_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The chat message id"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role of the chat message"
+          }
+        }
+      },
+      "SearchGotoContent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SearchGotoAgentSession"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoDocument"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoChat"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoEmail"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoChannel"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoCallRecord"
+          }
+        ],
+        "description": "The search service version of a goto"
+      },
+      "SearchGotoDocument": {
+        "type": "object",
+        "required": ["node_id"],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "description": "The node id of the document\nThis can be a stringified page number 0-indexed for pdf/docx files,\nor it can be a unique id that is used in lexical for markdown files."
+          },
+          "raw_content": {
+            "type": ["string", "null"],
+            "description": "The raw content of the document"
+          }
+        }
+      },
+      "SearchGotoEmail": {
+        "type": "object",
+        "required": [
+          "email_message_id",
+          "bcc",
+          "cc",
+          "labels",
+          "sender",
+          "recipients"
+        ],
+        "properties": {
+          "bcc": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Reminder ids to filter by. Empty to include all of the caller's reminders."
+            }
           },
-          "include": {
-            "type": "boolean",
-            "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "email_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The email message id"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sender": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -2947,11 +3555,68 @@
         "description": "Controls whether shared email threads are included in results.",
         "enum": ["exclude", "include", "only"]
       },
+      "SimpleCalendarEventSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "calendar_event_id",
+          "updated_at",
+          "created_at",
+          "title",
+          "user_id",
+          "is_recurring",
+          "highlight"
+        ],
+        "properties": {
+          "calendar_event_id": {
+            "type": "string",
+            "description": "The calendar event id"
+          },
+          "created_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the event was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the event"
+          },
+          "is_recurring": {
+            "type": "boolean",
+            "description": "Whether the series carries a recurrence rule"
+          },
+          "occurrence_key": {
+            "type": ["string", "null"],
+            "description": "Stable key of the instance this row points at, when one resolved"
+          },
+          "title": {
+            "type": "string",
+            "description": "The event title"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the event was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The owner of this event projection"
+          }
+        }
+      },
       "SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "call_id",
-          "channel_id",
           "user_id",
           "participant_ids",
           "started_at",
@@ -2964,7 +3629,7 @@
             "type": "string"
           },
           "channel_id": {
-            "type": "string"
+            "type": ["string", "null"]
           },
           "channel_name": {
             "type": ["string", "null"]
@@ -3696,6 +4361,51 @@
           }
         }
       },
+      "SimpleSearchResponse": {
+        "type": "object",
+        "description": "The response for simple search",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleSearchResponseItem"
+            }
+          }
+        }
+      },
+      "SimpleSearchResponseItem": {
+        "type": "object",
+        "description": "Simple response item to mimic what we get back from opensearch",
+        "required": ["entity_id", "entity_type", "highlight"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the chat, channel, email, or document"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "goto": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SearchGotoContent"
+              }
+            ]
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/Highlight"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double"
+          }
+        }
+      },
       "SimpleUnifiedSearchBaseResponse": {
         "type": "object",
         "required": ["results"],
@@ -3811,6 +4521,23 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCalendarEventSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calendarEvent"]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -3917,6 +4644,23 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCalendarEventSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calendarEvent"]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -3966,6 +4710,10 @@
         "type": "object",
         "required": ["query", "match_type"],
         "properties": {
+          "calendar_event_scope": {
+            "$ref": "#/components/schemas/CalendarEventSearchScope",
+            "description": "Which calendar events to search. Defaults to `own`: events on the\ncaller's own and delegated calendars. `shared_with_you` searches only\nevents shared with a channel the caller belongs to that are on none of\ntheir calendars."
+          },
           "collapse": {
             "type": ["boolean", "null"]
           },
@@ -4141,6 +4889,40 @@
                   "type": {
                     "type": "string",
                     "enum": ["company"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CalendarEventSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calendarEvent"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentSessionSearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["agentSession"]
                   }
                 }
               }

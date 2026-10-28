@@ -1,3 +1,4 @@
+import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { Entity } from '../../entity';
 import {
@@ -7,8 +8,14 @@ import {
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
-import { ChannelJoinButton, ChannelMessageSingleLine } from './channel';
+import { CalendarEventWhen } from './calendar';
+import {
+  ChannelActiveCallBadge,
+  ChannelJoinButton,
+  ChannelMessageSingleLine,
+} from './channel';
 import { EmailIdentity, EmailInboxChip } from './email';
+import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 /**
@@ -24,9 +31,13 @@ import { type LayoutProps, RowIndicator } from './shared';
 export function NarrowSingleLineLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-1 items-center text-sm pr-2 pl-1 grid"
+      class={cn(
+        SOUP_ROW_CLASS.narrow,
+        'w-full gap-x-(--soup-row-column-gap) items-center text-sm pr-2 pl-(--soup-row-padding-l) grid'
+      )}
       style={{
-        'grid-template-columns': 'auto 1fr max-content',
+        'grid-template-columns':
+          'var(--soup-row-indicator-width) 1fr max-content',
         'grid-template-rows': '44px',
         'grid-template-areas': '"indicator title timestamp"',
       }}
@@ -45,7 +56,17 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
         class="ph-no-capture flex min-w-0 items-center gap-2 truncate"
       >
         <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
+          <Show
+            when={props.icon}
+            fallback={
+              <Entity.Icon
+                entity={props.entity}
+                streamState={props.streamState}
+              />
+            }
+          >
+            {props.icon}
+          </Show>
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
@@ -68,6 +89,13 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
             <span class="min-w-0 truncate font-semibold">
               <Entity.Title entity={props.entity} />
             </span>
+            <Show when={isChannelEntity(props.entity) && props.entity}>
+              {(entity) => (
+                <span class="ml-auto shrink-0 flex items-center">
+                  <ChannelActiveCallBadge channelId={entity().id} />
+                </span>
+              )}
+            </Show>
             <Show
               when={
                 isChannelEntity(props.entity) &&
@@ -81,29 +109,38 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
             </Show>
           </Match>
         </Switch>
+        {props.titleTrailing}
       </Entity.Slot>
 
       <Show
         when={
-          !props.hasNotifications &&
-          !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+          props.referenceProperties ||
+          props.scheduleStatus ||
+          (!props.hasNotifications &&
+            !(isChannelEntity(props.entity) && isSearchEntity(props.entity)))
         }
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light"
         >
-          <Show
-            when={!isTaskEntity(props.entity)}
-            fallback={
-              <Entity.Properties
-                entity={props.entity}
-                maxUserStackUsers={0}
-                showCaret={false}
-              />
-            }
-          >
-            <Entity.Timestamp entity={props.entity} />
+          {props.referenceProperties}
+          {props.scheduleStatus}
+          <Show when={!props.hasNotifications}>
+            <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
+              <Match when={isTaskEntity(props.entity)}>
+                <Entity.Properties
+                  entity={props.entity}
+                  maxUserStackUsers={0}
+                  showCaret={false}
+                />
+              </Match>
+              <Match
+                when={props.entity.type === 'calendar_event' && props.entity}
+              >
+                {(entity) => <CalendarEventWhen entity={entity()} />}
+              </Match>
+            </Switch>
           </Show>
         </Entity.Slot>
       </Show>

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM agent_session WHERE ($1::uuid IS NULL OR id > $1) ORDER BY id LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cda7bd1c8001e386048e00031ccc28b2517b4ee95134aeac2f66aeeedddcd7f7"
+}

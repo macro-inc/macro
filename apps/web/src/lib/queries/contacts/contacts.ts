@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from '@core/context/user';
 import type { IUser } from '@core/user/types';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { throwOnErr } from '@core/util/result';
@@ -7,7 +8,7 @@ import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactsKeys } from './keys';
 
-function contactsQueryOptions() {
+export function contactsQueryOptions() {
   return {
     queryKey: contactsKeys.all.queryKey,
     queryFn: () => throwOnErr(() => contactsClient.getContacts()),
@@ -15,18 +16,25 @@ function contactsQueryOptions() {
 }
 
 /** The raw contacts query — for callers that need its loading state. */
-export function useContactsQuery() {
-  return useQuery(() => contactsQueryOptions());
+export function useContactsQuery(enabled: Accessor<boolean> = () => true) {
+  const authenticated = useIsAuthenticated();
+  return useQuery(() => ({
+    ...contactsQueryOptions(),
+    enabled: authenticated() === true && enabled(),
+  }));
 }
 
 /**
  * Returns contacts as IUser objects.
  * Compatible with the previous createResource-based implementation.
  */
-export function useContacts(): Accessor<IUser[]> {
-  const query = useContactsQuery();
+export function useContacts(
+  enabled: Accessor<boolean> = () => true
+): Accessor<IUser[]> {
+  const authenticated = useIsAuthenticated();
+  const query = useContactsQuery(enabled);
   return createMemo(() => {
-    if (!query.isSuccess) return [];
+    if (authenticated() !== true || !query.isSuccess) return [];
     const contacts = query.data.contacts;
     return contacts.map((c) => ({
       id: c,

@@ -1,0 +1,822 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useHasPaidAccess } from '@core/auth';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  ENABLE_EMAIL_SCHEDULED_SEND,
+  enableEmailSignatures,
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { useEmail, useUserContext, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { trackMention } from '@core/signal/mention';
+import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { getDisplayName, tryMacroId } from '@core/user';
+import { deviceLooksOffline } from '@core/util/connectivity';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
+import { handleFileFolderDrop } from '@core/util/upload';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
+import { Telemetry } from '@macro-inc/observability';
+import { queryClient } from '@queries/client';
+import {
+  completeDraftAttachment,
+  useAddForwardedAttachmentsMutation,
+  useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
+import { cancelServerEmailSend } from '@queries/email/cancel-server-send';
+import {
+  transferEmailDraft,
+  useDeleteDraftMutation,
+} from '@queries/email/draft';
+import { markThreadDraftSaved } from '@queries/email/draft-cache';
+import { subscribeToDraftLifecycleChanges } from '@queries/email/draft-lifecycle-events';
+import {
+  assertEmailDraftQueueAvailable,
+  deleteEmailDraftQueued,
+  draftQueueActive,
+  graphqlCacheRecoveryState,
+  readEmailDraft,
+  recoverDraftSynchronization,
+  retryEmailDraftSynchronization,
+  saveEmailDraftQueued,
+  watchEmailDrafts,
+} from '@queries/email/draft-queue';
+import { saveEmailComposeDraft } from '@queries/email/graphql/compose';
+import {
+  archiveEmailThread,
+  scheduleEmailMessage,
+} from '@queries/email/integration';
+import { emailKeys } from '@queries/email/keys';
+import {
+  findPrimaryEmailLinkId,
+  nonPrimaryEmailLinkIdHeader,
+} from '@queries/email/link';
+import { confirmLocalDraftSave } from '@queries/email/local-draft-confirmation';
+import {
+  clearLocalAttachmentReceipt,
+  readLocalDraft,
+  recordLocalAttachment,
+  reviveLocalDraft,
+  saveLocalDraft,
+  withLocalAttachmentUpload,
+} from '@queries/email/local-drafts';
+import { useMailAccountsQuery } from '@queries/email/mail-accounts';
+import { useQueuedEmailSends } from '@queries/email/queued-sends';
+import {
+  cancelEmailSendAndConfirm,
+  emailSendLocked,
+  emailSendMatchesDraft,
+  sendEmailQueued,
+  settledSendAttempt,
+} from '@queries/email/send-queue';
+import { serverEmailSends } from '@queries/email/server-sends';
+import {
+  fetchAndCacheThread,
+  fetchFreshEmailThread,
+  type ThreadQueryTransport,
+  useUnscheduleMessageMutation,
+} from '@queries/email/thread';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import type { ApiThread } from '@service-email/generated/schemas';
+import type { InfiniteData } from '@tanstack/solid-query';
+import { confirmDialog } from '@ui';
+import { type Accessor, getOwner } from 'solid-js';
+import { createMessageOperationSource } from '../email-message/queries/message-operation';
+import { toEmailThread } from '../email-thread/queries/thread-source';
+import {
+  type ComposeNoticeOptions,
+  type DraftClientHandles,
+  DraftPersistRejected,
+  type DraftSaveResult,
+  type EmailComposeContext,
+  type SaveEmailDraft,
+} from './context/compose-capabilities';
+import { localDraftReadyForDelivery } from './core/local-draft';
+import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
+import { makeAttachmentPublic } from './make-attachment-public';
+import {
+  emailDraftLifecycleSource,
+  publishDraftLifecycleChange,
+} from './queries/draft-lifecycle';
+import { createEmailInboxSource } from './queries/inbox-source';
+import { queuedDraftSaveArgs } from './queries/queued-draft';
+import {
+  restoreDraftBodyAfterUndo,
+  runQueuedUndoSend,
+  runUndoSend,
+} from './undo-send';
+import { uploadAttachmentDocuments } from './upload-documents';
+
+export type EmailComposeContextOptions = {
+  /** Transport of the thread read this surface sits under; a compose surface has none. */
+  threadTransport?: Accessor<ThreadQueryTransport | undefined>;
+};
+
+async function refreshEmailLists(
+  threadId: string,
+  completingThread: boolean
+): Promise<void> {
+  try {
+    // Keep legacy list observers in step with GraphQL writes without
+    // invalidating the active editor's thread resource.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: emailKeys.previews._def }),
+      completingThread ? undefined : refetchSoupEntity(threadId, 'emailThread'),
+    ]);
+  } catch (error) {
+    Telemetry.error(error);
+  }
+}
+
+/** Construct under the composing surface's Solid owner to scope request progress. */
+export function createEmailComposeContext(
+  options: EmailComposeContextOptions = {}
+): EmailComposeContext {
+  const accounts = useMailAccountsQuery();
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
+  const queueActive = () =>
+    draftQueueActive(
+      options.threadTransport?.() ??
+        (graphqlSoupFlag().enabled ? 'graphql' : 'rest')
+    );
+  const sends = useQueuedEmailSends(() => true);
+  // Attach handlers run as event handlers, which have no Solid owner of
+  // their own; the dialog needs the surface's.
+  const dialogOwner = getOwner();
+  const user = useUserContext();
+  const paywall = usePaywallState();
+  const viewerEmail = useEmail();
+  const viewerId = useUserId();
+  const primaryId = () =>
+    accounts.isSuccess
+      ? findPrimaryEmailLinkId(accounts.data?.links ?? [], viewerId())
+      : undefined;
+  const headerId = (id: string | null | undefined) =>
+    nonPrimaryEmailLinkIdHeader(id, primaryId());
+  const inboxSource = createEmailInboxSource(viewerEmail, accounts, (email) =>
+    getDisplayName(tryMacroId(`macro|${email}`))
+  );
+  const signatures = useFeatureFlag(enableEmailSignatures);
+  const remove = useDeleteDraftMutation();
+  const upload = useUploadDraftAttachmentsMutation();
+  const forward = useAddForwardedAttachmentsMutation();
+  const removeAttachment = useRemoveDraftAttachmentMutation();
+  const removeForwarded = useRemoveForwardedAttachmentMutation();
+  const unschedule = useUnscheduleMessageMutation();
+  const { users } = useCombinedRecipients();
+  const notice = (options?: ComposeNoticeOptions) => ({
+    ...options,
+    actions: options?.actions?.map(({ kind, ...action }) => ({
+      ...action,
+      icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
+    })),
+  });
+  const reportError = (error: unknown) =>
+    Telemetry.error(error instanceof Error ? error : new Error(String(error)));
+  const requireSavedDraftForDelivery = async (
+    draftId: string | null | undefined
+  ) => {
+    if (!queueActive() || !draftId) return;
+    const local = await readLocalDraft(draftId);
+    if (local && !localDraftReadyForDelivery(local))
+      throw new Error(
+        'Save the latest draft and attachments before sending or scheduling'
+      );
+  };
+  // A thread view renders its latest draft as the composer until the thread
+  // is read again, so every delivery change refetches it.
+  const refreshThread = (threadId: string | undefined) => {
+    if (!threadId) return;
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      void (async () => {
+        const result = await fetchAndCacheThread(threadId);
+        if (result.isErr())
+          reportError(
+            new Error(
+              `Failed to refresh email thread ${threadId}: ${result.error
+                .map((error) => `${error.code}: ${error.message}`)
+                .join(', ')}`
+            )
+          );
+      })().catch(reportError);
+      return;
+    }
+    void queryClient
+      .invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      })
+      .catch(reportError);
+  };
+
+  // Queued writes address a draft by handles: the composer's minted ones, or a
+  // confirmed draft's server ids, which resolve as their own handles.
+  const queueHandles = ({
+    draft,
+    clientHandles,
+  }: SaveEmailDraft):
+    | (DraftClientHandles & { threadId: string })
+    | undefined => {
+    if (!queueActive()) return undefined;
+    if (clientHandles?.threadId) {
+      return { ...clientHandles, threadId: clientHandles.threadId };
+    }
+    return draft.db_id && draft.thread_db_id
+      ? { draftId: draft.db_id, threadId: draft.thread_db_id }
+      : undefined;
+  };
+
+  return {
+    draftLifecycle: emailDraftLifecycleSource,
+    operations: createMessageOperationSource,
+    recipientName: (id) => getDisplayName(tryMacroId(id)),
+    recordMention: (sourceId, targetId) => {
+      void trackMention(sourceId, 'document', targetId).catch(reportError);
+    },
+    accounts: {
+      ...inboxSource,
+      primaryId,
+    },
+    connectivity: { looksOffline: deviceLooksOffline },
+    viewerEmail,
+    recipients: users,
+    hasPaidAccess: useHasPaidAccess(),
+    presentation: {
+      viewerLoading: user.isLoading,
+      prepareSignatureLinks: interceptMailtoLinks,
+      onUpgrade: () => paywall.showPaywall(PaywallKey.REMOVE_SIGNATURE),
+      isTouch: isTouchDevice,
+      isMobile,
+      scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
+      signaturesEnabled: () => signatures().enabled,
+    },
+    editorFiles: {
+      readDroppedFiles: readDroppedEmailFiles,
+      makePublic: makeAttachmentPublic,
+      uploadDocuments: uploadAttachmentDocuments,
+      uploadEditorFiles(input) {
+        if (!input.editor) return;
+        handleFileFolderDrop(
+          input.files,
+          input.directories,
+          withVideoAttachments(
+            createFilesReadyHandler(
+              input.editor,
+              input.sourceId,
+              input.sourceId ? 'email' : undefined,
+              input.dropEvent && input.editor
+                ? () =>
+                    getDragDropPosition(input.editor!, input.dropEvent!, true)
+                : undefined,
+              input.onUploaded,
+              { width: 542, height: 542 }
+            ),
+            input.onVideos
+          )
+        ).catch(reportError);
+      },
+    },
+    notices: {
+      feedback: {
+        success: (message, options) => toast.success(message, notice(options)),
+        failure: (message, options) => {
+          if (options?.persistent)
+            return toast.custom(
+              {
+                title: message,
+                content: () => options.subtext,
+                icon: ExclamationIcon,
+                color: 'var(--color-failure)',
+                actions: notice(options).actions,
+              },
+              { persistent: true }
+            );
+          toast.failure(message, notice(options));
+          return undefined;
+        },
+        alert: (message, options) => toast.alert(message, notice(options)),
+        dismiss: toast.dismiss,
+      },
+      async blockingNotice({ title, body }) {
+        await confirmDialog(
+          { title, body, confirmLabel: 'OK' },
+          { owner: dialogOwner }
+        );
+      },
+      confirm: (input) => confirmDialog(input, { owner: dialogOwner }),
+      reportError,
+    },
+    drafts: {
+      syncAvailability: graphqlCacheRecoveryState,
+      recoverSynchronization: recoverDraftSynchronization,
+      watchRestorations: (changed) =>
+        subscribeToDraftLifecycleChanges((event) => {
+          if (event.restoration)
+            changed({
+              ...event.restoration,
+              draftId: event.draftId,
+              inboxId: event.inboxId,
+            });
+        }),
+      async transferDraft(input) {
+        const result = await transferEmailDraft(input);
+        return {
+          draftId: result.message_id,
+          threadId: result.thread_id,
+          attachments: result.attachments,
+        };
+      },
+      async reloadDraft(draftId, threadId) {
+        const thread = await fetchFreshEmailThread(threadId, draftId);
+        return toEmailThread(thread).messages.find(
+          (message) => message.db_id === draftId && message.is_draft
+        );
+      },
+      saveLocalDraft: (input) =>
+        saveLocalDraft({
+          ...input,
+          inboxId: input.inboxId ?? primaryId(),
+          senderEmail:
+            input.draft.sender_email ??
+            inboxSource
+              .inboxes()
+              .find((inbox) => inbox.id === (input.inboxId ?? primaryId()))
+              ?.email_address ??
+            viewerEmail(),
+        }),
+      get retryDraft() {
+        return queueActive() ? retryEmailDraftSynchronization : undefined;
+      },
+      readDraft: readEmailDraft,
+      watchDrafts: watchEmailDrafts,
+      async saveDraft({
+        completingThread,
+        previousThreadId,
+        inboxId,
+        ...input
+      }) {
+        assertEmailDraftQueueAvailable();
+        const handles = queueHandles(input);
+        if (handles) {
+          if (!(await readLocalDraft(handles.draftId)))
+            await saveLocalDraft({
+              ...input,
+              clientHandles: handles,
+              inboxId: inboxId ?? primaryId(),
+              attachments: [],
+            });
+          const local = await readLocalDraft(handles.draftId);
+          const senderLinkId = local?.inboxId ?? inboxId ?? primaryId() ?? '';
+          const outcome = await saveEmailDraftQueued({
+            args: {
+              ...queuedDraftSaveArgs({
+                draft: local?.content ?? input.draft,
+                handles: local
+                  ? {
+                      draftId: local.draftId,
+                      threadId: local.threadId ?? handles.threadId,
+                    }
+                  : handles,
+                senderLinkId,
+                senderAccount: accounts.isSuccess
+                  ? accounts.data?.links.find(
+                      (link) => link.id === senderLinkId
+                    )
+                  : undefined,
+                senderEmail:
+                  inboxSource
+                    .inboxes()
+                    .find((inbox) => inbox.id === senderLinkId)
+                    ?.email_address ??
+                  viewerEmail() ??
+                  '',
+              }),
+              localRevision: local?.revision,
+            },
+            completingThread,
+            previousThreadId,
+          });
+          if (outcome.kind === 'rejected') {
+            throw new DraftPersistRejected(outcome.code);
+          }
+          const saved: DraftSaveResult =
+            outcome.kind === 'queued'
+              ? { ...handles, inboxId: senderLinkId, persistence: 'queued' }
+              : {
+                  draftId: outcome.draftId,
+                  threadId: outcome.threadId,
+                  inboxId: senderLinkId,
+                  persistence: 'committed',
+                };
+          return saved;
+        }
+        const localId = input.clientHandles?.draftId ?? input.draft.db_id;
+        const local = localId ? await readLocalDraft(localId) : undefined;
+        const result = await saveEmailComposeDraft({
+          ...input,
+          inboxId: inboxId ?? primaryId(),
+        });
+        try {
+          await confirmLocalDraftSave(local, result);
+        } catch (error) {
+          reportError(error);
+        }
+        try {
+          const threadId = result.threadId;
+          if (threadId) {
+            markThreadDraftSaved(threadId);
+            fireAndForget(
+              refreshEmailLists(threadId, !!completingThread),
+              'email-compose'
+            );
+          }
+          if (previousThreadId && previousThreadId !== threadId) {
+            markThreadDraftSaved(previousThreadId);
+            invalidateSoupEntity(previousThreadId);
+            void refetchSoupEntity(previousThreadId, 'emailThread').catch(
+              reportError
+            );
+          }
+        } catch (error) {
+          reportError(error);
+        }
+        return result;
+      },
+      async deleteDraft({ completingThread, inboxId, ...input }) {
+        assertEmailDraftQueueAvailable();
+        if (input.threadId && queueActive()) {
+          const outcome = await deleteEmailDraftQueued({
+            draftId: input.draftId,
+            draftGeneration: input.draftGeneration,
+            threadId: input.threadId,
+            completingThread,
+          });
+          if (outcome.kind === 'rejected') {
+            throw new DraftPersistRejected(outcome.code);
+          }
+          return;
+        }
+        await remove.mutateAsync({
+          ...input,
+          linkId: headerId(inboxId),
+          skipSoupRefetch: completingThread,
+        });
+        try {
+          publishDraftLifecycleChange(input.draftId, inboxId);
+          if (input.threadId) markThreadDraftSaved(input.threadId);
+        } catch (error) {
+          reportError(error);
+        }
+      },
+      async restoreDraft({ threadId, draftId, draft, html, inboxId }) {
+        if (threadId && !isFeatureEnabled(enableGraphqlSoup)) {
+          queryClient.setQueryData<InfiniteData<ApiThread>>(
+            emailKeys.threadMessages(threadId).queryKey,
+            (old) =>
+              old
+                ? {
+                    ...old,
+                    pages: old.pages.map((page) => ({
+                      ...page,
+                      messages: page.messages.filter(
+                        (message) => message.db_id !== draftId
+                      ),
+                    })),
+                  }
+                : old
+          );
+          markThreadDraftSaved(threadId);
+        }
+        if (draft && html !== undefined)
+          await restoreDraftBodyAfterUndo(draft, html, inboxId ?? primaryId());
+        if (queueActive()) await reviveLocalDraft(draftId);
+        if (threadId && isFeatureEnabled(enableGraphqlSoup))
+          fireAndForget(fetchAndCacheThread(threadId), 'email-compose');
+      },
+    },
+    delivery: {
+      queueActive: () => true,
+      outgoing: () =>
+        sends.intents().flatMap((intent) => {
+          const attempt = settledSendAttempt(intent);
+          const { draft, input } = intent.metadata.payload;
+          if (
+            !emailSendLocked(intent) ||
+            intent.phase === 'failed' ||
+            attempt?.status === 'FAILED' ||
+            input.message.sendTime
+          )
+            return [];
+          const contacts = (list: typeof draft.to) =>
+            (list ?? []).map((contact) => ({
+              email: contact.email,
+              name: contact.name,
+              photo_url: contact.photoUrl,
+            }));
+          const ids = (values: (string | null | undefined)[]) => [
+            ...new Set(values.filter((value) => !!value).map(String)),
+          ];
+          return [
+            {
+              sendAttemptId: intent.uuid,
+              messageIds: ids([
+                String(input.message.draftId),
+                intent.resolvedDraftId,
+                attempt?.message?.id,
+              ]),
+              threadIds: ids([
+                draft.threadDbId,
+                intent.resolvedThreadId,
+                attempt?.threadId,
+              ]),
+              inboxId: draft.senderLinkId,
+              delivered: attempt?.status === 'SENT',
+              message: {
+                to: contacts(draft.to),
+                cc: contacts(draft.cc),
+                bcc: contacts(draft.bcc),
+                subject: draft.subject,
+                body_text: draft.bodyText,
+                body_macro: draft.bodyMacro,
+                body_html_sanitized: draft.optimisticBodyHtml,
+                replying_to_id:
+                  draft.replyingToId == null
+                    ? null
+                    : String(draft.replyingToId),
+              },
+            },
+          ];
+        }),
+      sendLocked: (draftId) =>
+        !sends.ready() ||
+        (!!draftId &&
+          serverEmailSends().some(
+            (row) => row.attempt.message?.id === draftId
+          )) ||
+        (!!draftId &&
+          sends
+            .intents()
+            .some(
+              (intent) =>
+                emailSendMatchesDraft(intent, draftId) &&
+                emailSendLocked(intent)
+            )),
+      async sendMessage({ inboxId, ...input }) {
+        if (
+          !inboxSource
+            .inboxes()
+            .some((inbox) => inbox.id === (inboxId ?? primaryId()))
+        )
+          throw new Error(
+            'Linked email accounts are still loading. Try sending again after they load.'
+          );
+        const senderLinkId = inboxId ?? primaryId() ?? '';
+        const draftId = input.clientHandles?.draftId ?? input.message.db_id;
+        const threadId =
+          input.clientHandles?.threadId ?? input.message.thread_db_id;
+        if (!draftId || !threadId)
+          throw new Error('Draft identity is required to queue a send');
+        const inbox = inboxSource
+          .inboxes()
+          .find((inbox) => inbox.id === senderLinkId);
+        if (!inbox) throw new Error('The sending account is unavailable');
+        const signatureHtml =
+          input.message.include_signature === false ||
+          (input.message.replying_to_id &&
+            input.message.include_signature !== true &&
+            !inbox.settings.signature_on_replies_forwards)
+            ? ''
+            : (inbox.settings.signature ?? '');
+        return await sendEmailQueued({
+          signatureHtml,
+          expectedLocalVersion: input.expectedLocalVersion,
+          draft: {
+            ...queuedDraftSaveArgs({
+              draft: input.message,
+              handles: { draftId, threadId },
+              senderLinkId,
+              senderAccount: accounts.isSuccess
+                ? accounts.data?.links.find((link) => link.id === senderLinkId)
+                : undefined,
+              senderEmail:
+                inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
+                  ?.email_address ??
+                viewerEmail() ??
+                '',
+            }),
+            sendTime: input.sendTime,
+          },
+          attachmentIds: input.attachmentIds ?? [],
+          forwardedAttachmentIds: input.forwardedAttachmentIds ?? [],
+          includeSignature: input.message.include_signature,
+          restoreBodyHtml: input.restoreBodyHtml,
+          restoreBodyText: input.restoreBodyText,
+          restoreBodyMacro: input.restoreBodyMacro,
+        });
+      },
+      async unschedule({ draftId, threadId, inboxId, draftGeneration }) {
+        const local = sends
+          .intents()
+          .find((row) => emailSendMatchesDraft(row, draftId));
+        if (local) {
+          await cancelEmailSendAndConfirm(local);
+          return;
+        }
+        const remote = serverEmailSends().find(
+          (row) => row.attempt.message?.id === draftId
+        );
+        if (remote) {
+          await cancelServerEmailSend(remote);
+          return;
+        }
+        await unschedule.mutateAsync({
+          draftID: draftId,
+          draftGeneration,
+          linkId: headerId(inboxId),
+        });
+        try {
+          publishDraftLifecycleChange(draftId, inboxId);
+          invalidateSoupEntity(draftId);
+          refreshThread(threadId);
+        } catch (error) {
+          reportError(error);
+        }
+      },
+      schedule: async (
+        { draftId, threadId, sendTime, includeSignature, draftGeneration },
+        inboxId
+      ) => {
+        await requireSavedDraftForDelivery(draftId);
+        await scheduleEmailMessage(
+          {
+            draftID: draftId,
+            send_time: sendTime,
+            draftGeneration,
+            include_signature: includeSignature,
+          },
+          headerId(inboxId)
+        );
+        try {
+          publishDraftLifecycleChange(draftId, inboxId);
+          refreshThread(threadId);
+          void queryClient
+            .invalidateQueries({
+              queryKey: emailKeys.scheduledMessages._def,
+            })
+            .catch(reportError);
+        } catch (error) {
+          // Cache and cross-tab notifications are post-commit UI work. A
+          // failure here must not make a successful schedule retryable.
+          reportError(error);
+        }
+      },
+      archive: async ({ threadId, value }, inboxId) => {
+        await archiveEmailThread({ id: threadId, value }, headerId(inboxId));
+      },
+      undoSend: async (input) => {
+        if (input.sendAttemptId) {
+          await runQueuedUndoSend({
+            draftId: input.draftId,
+            attemptId: input.sendAttemptId,
+            onUndone: () => input.onUndone({ draftRestored: true }),
+          });
+          return;
+        }
+        await runUndoSend({
+          draftId: input.draftId,
+          linkId: headerId(input.inboxId),
+          onUndone: async () => {
+            await input.onUndone();
+            if (input.threadId)
+              fireAndForget(
+                refetchSoupEntity(input.threadId, 'emailThread'),
+                'email-compose'
+              );
+          },
+        });
+      },
+    },
+    attachmentStorage: {
+      completeAttachment: completeDraftAttachment,
+      async uploadAttachments({ draftId, inboxId, draftGeneration, ...input }) {
+        for (const file of input.attachments) {
+          const run = async (
+            receipt?: { attachmentId?: string; uploaded: boolean },
+            generation?: string
+          ) => {
+            if (receipt?.uploaded && receipt.attachmentId) {
+              input.onAttachmentUploaded?.(file, receipt.attachmentId);
+              return;
+            }
+            if (receipt?.attachmentId) {
+              await removeAttachment.mutateAsync({
+                draftID: draftId,
+                draftGeneration,
+                attachmentID: receipt.attachmentId,
+                linkId: headerId(inboxId),
+              });
+              await recordLocalAttachment(
+                draftId,
+                file,
+                undefined,
+                false,
+                generation
+              );
+            }
+            await upload.mutateAsync({
+              draftID: draftId,
+              draftGeneration,
+              attachments: [file],
+              linkId: headerId(inboxId),
+              onAttachmentAdded: async (uploadedFile, id) => {
+                input.onAttachmentAdded?.(uploadedFile, id);
+                await recordLocalAttachment(
+                  draftId,
+                  uploadedFile,
+                  id,
+                  false,
+                  generation
+                );
+              },
+              onAttachmentUploaded: async (uploadedFile, id) => {
+                input.onAttachmentUploaded?.(uploadedFile, id);
+                await recordLocalAttachment(
+                  draftId,
+                  uploadedFile,
+                  id,
+                  true,
+                  generation
+                );
+              },
+              onAttachmentUploadFailed: (uploadedFile) => {
+                void recordLocalAttachment(
+                  draftId,
+                  uploadedFile,
+                  undefined,
+                  false,
+                  generation
+                ).catch(reportError);
+                input.onAttachmentUploadFailed?.(uploadedFile);
+              },
+            });
+          };
+          await withLocalAttachmentUpload(draftId, file, run);
+        }
+      },
+      addForwardedAttachments: ({
+        draftId,
+        attachments,
+        inboxId,
+        draftGeneration,
+      }) =>
+        forward.mutateAsync({
+          draftID: draftId,
+          draftGeneration,
+          attachments: attachments.map(({ attachmentId }) => ({
+            attachmentID: attachmentId,
+          })),
+          linkId: headerId(inboxId),
+        }),
+      removeAttachment: async ({
+        draftId,
+        attachmentId,
+        inboxId,
+        draftGeneration,
+      }) => {
+        await removeAttachment.mutateAsync({
+          draftID: draftId,
+          draftGeneration,
+          attachmentID: attachmentId,
+          linkId: headerId(inboxId),
+        });
+        try {
+          await clearLocalAttachmentReceipt(draftId, attachmentId);
+        } catch (error) {
+          reportError(error);
+        }
+      },
+      removeForwardedAttachment: ({
+        draftId,
+        attachmentId,
+        inboxId,
+        draftGeneration,
+      }) =>
+        removeForwarded.mutateAsync({
+          draftID: draftId,
+          draftGeneration,
+          attachmentID: attachmentId,
+          linkId: headerId(inboxId),
+        }),
+    },
+  };
+}

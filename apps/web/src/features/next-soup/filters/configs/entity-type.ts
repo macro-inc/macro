@@ -1,11 +1,11 @@
 import {
   agentFilter as agentPredicate,
-  automationFilter as automationPredicate,
   documentFilter as documentPredicate,
   emailFilter as emailPredicate,
   fileFilter as filePredicate,
   githubPrFilter as githubPrPredicate,
   peopleFilter as peoplePredicate,
+  routineFilter as routinePredicate,
   taskFilter as taskPredicate,
   teamsFilter as teamsPredicate,
 } from '../predicates';
@@ -16,7 +16,7 @@ const documentFilter = config({
   group: 'entity-type',
   predicate: documentPredicate,
   query: {
-    include: { fileAssoc: ['assoc:md', 'assoc:canvas'] },
+    include: { fileType: ['md', 'canvas', 'spreadsheet'] },
     exclude: { subType: ['task'] },
   },
 });
@@ -28,11 +28,11 @@ const agentFilter = config({
   query: isAgent,
 });
 
-const automationFilter = config({
-  id: 'automation',
+const routineFilter = config({
+  id: 'routine',
   group: 'entity-type',
-  predicate: automationPredicate,
-  query: {}, // No server query - automations are merged client-side via additionalEntities
+  predicate: routinePredicate,
+  query: {}, // No server query - routines are merged client-side via additionalEntities
 });
 
 const peopleFilter = config({
@@ -68,7 +68,7 @@ const fileFilter = config({
   group: 'entity-type',
   predicate: filePredicate,
   query: {
-    exclude: { fileAssoc: ['assoc:md', 'assoc:canvas'], subType: ['task'] },
+    exclude: { fileType: ['md', 'canvas', 'spreadsheet'], subType: ['task'] },
   },
 });
 
@@ -87,7 +87,7 @@ const githubPrFilter = config({
 export const ENTITY_TYPE_FILTERS = [
   documentFilter,
   agentFilter,
-  automationFilter,
+  routineFilter,
   peopleFilter,
   teamsFilter,
   taskFilter,

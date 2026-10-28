@@ -1,18 +1,205 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./wasm-module', () => ({ loadCacheWasm: loadCacheWasmMock }));
 
+import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('uses GraphQL JSON variable semantics for every WASM query and mutation path', async () => {
+    const written = {
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+      revalidations: [],
+    };
+    const engine = {
+      readQuery: vi.fn().mockResolvedValue({ kind: 'miss' }),
+      watchQuery: vi.fn().mockResolvedValue({ kind: 'miss', ...written }),
+      writeQuery: vi.fn().mockResolvedValue(written),
+      hydrateQuery: vi.fn().mockResolvedValue({ ...written, data: null }),
+      enqueueOptimisticMutation: vi.fn().mockResolvedValue({
+        ...written,
+        transactionId: '1',
+        upsertKind: { kind: 'inserted' },
+        initialClaim: { kind: 'not-runnable' },
+      }),
+      commitOptimisticWrite: vi.fn().mockResolvedValue({
+        ...written,
+        kind: 'committed',
+      }),
+      inspectQuery: vi.fn().mockResolvedValue([]),
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue(engine),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const variables = {
+      useDefault: undefined,
+      input: {
+        groupBy: { field: 'PROPERTY', entityType: undefined },
+        cleared: null,
+        values: [undefined, null, { omitted: undefined, value: 'kept' }],
+      },
+    };
+    const expected = {
+      input: {
+        groupBy: { field: 'PROPERTY' },
+        cleared: null,
+        values: [null, null, { value: 'kept' }],
+      },
+    };
+    const query = 'query Test($input: GroupedSoupInput!) { user { id } }';
+    const payload = { query, variables, data: { user: { id: 'user' } } };
+    const requests: CacheRequest[] = [
+      { id: 2, kind: 'read', query, variables },
+      { id: 3, kind: 'read', query, variables, opId: 'watch', watch: {} },
+      { id: 4, kind: 'write', ...payload },
+      { id: 5, kind: 'hydrate', ...payload },
+      {
+        id: 6,
+        kind: 'enqueue-optimistic-mutation',
+        ...payload,
+        uuid: 'mutation',
+        createdAtMs: 0,
+        owner: 'runner',
+        nowMs: 0,
+        leaseExpiresAtMs: 1000,
+      },
+      {
+        id: 7,
+        kind: 'commit-optimistic-write',
+        ...payload,
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+      },
+      {
+        id: 8,
+        kind: 'inspect-query',
+        query,
+        path: [{ field: 'user' }],
+        variableFilters: [variables],
+      },
+    ];
+    for (const request of requests) await core.handleRequest(port, request);
+
+    for (const [method, variableIndex] of [
+      ['readQuery', 3],
+      ['watchQuery', 3],
+      ['writeQuery', 3],
+      ['hydrateQuery', 2],
+      ['enqueueOptimisticMutation', 4],
+      ['commitOptimisticWrite', 5],
+    ] as const) {
+      expect(engine[method]).toHaveBeenCalledOnce();
+      expect(engine[method].mock.calls[0][variableIndex]).toStrictEqual(
+        expected
+      );
+    }
+    expect(engine.inspectQuery.mock.calls[0][3]).toStrictEqual([expected]);
+    expect(messages).not.toContainEqual(expect.objectContaining({ ok: false }));
+    // Normalization must not modify the query caller's objects.
+    expect(Object.hasOwn(variables, 'useDefault')).toBe(true);
+    expect(Object.hasOwn(variables.input.groupBy, 'entityType')).toBe(true);
+  });
+
+  it.each([
+    { errorCode: undefined, superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: false },
+    { errorCode: 'INTERNAL', superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: true },
+  ])(
+    'preserves rollback codes only for permanent settlement: %j',
+    async ({ errorCode, superseded }) => {
+      const rollbackOptimisticWrite = vi.fn().mockResolvedValue({
+        kind: superseded ? 'discarded-superseded' : 'rolled-back',
+        ...(superseded ? { replacementTransactionId: '2' } : {}),
+        mutationUuid: 'draft-handle',
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ rollbackOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        error: 'rejected',
+        errorCode,
+      });
+      expect(rollbackOptimisticWrite).toHaveBeenCalledWith('1', 'runner', '1');
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          mutationUuid: 'draft-handle',
+          ...(superseded
+            ? { status: 'superseded', replacementTransactionId: '2' }
+            : {
+                status: 'permanently-failed',
+                error: 'rejected',
+                ...(errorCode === undefined ? {} : { errorCode }),
+              }),
+        },
+      });
+    }
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('obtains durable generations from the engine on every request', async () => {
+    const before = '00000000-0000-4000-8000-000000000001';
+    const after = '00000000-0000-4000-8000-000000000002';
+    const currentStorageGeneration = vi
+      .fn()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ currentStorageGeneration }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'current-storage-generation',
+    });
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'current-storage-generation',
+    });
+    expect(messages).toContainEqual({ id: 2, ok: true, result: before });
+    expect(messages).toContainEqual({ id: 3, ok: true, result: after });
+    expect(currentStorageGeneration).toHaveBeenCalledTimes(2);
   });
 
   it('dispatches explicit-key projection to the wasm engine', async () => {
@@ -22,7 +209,11 @@ describe('CacheWorkerCore', () => {
         record: { id: 'item-1' },
       },
     ];
-    const readRecordsByKeys = vi.fn().mockResolvedValue(records);
+    const selectionResult = {
+      revision: INITIAL_CACHE_REVISION,
+      records,
+    };
+    const readRecordsByKeys = vi.fn().mockResolvedValue(selectionResult);
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({ readRecordsByKeys }),
     });
@@ -48,7 +239,11 @@ describe('CacheWorkerCore', () => {
       'Item',
       ['GraphqlSoupDocument:item-1']
     );
-    expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: records });
+    expect(messages.at(-1)).toEqual({
+      id: 2,
+      ok: true,
+      result: selectionResult,
+    });
   });
 
   it('dispatches bounded search to the wasm compact projection', async () => {
@@ -91,22 +286,110 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
+  it.each([
+    {
+      outcome: {
+        kind: 'committed',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'committed' },
+    },
+    {
+      outcome: {
+        kind: 'committed-superseded',
+        replacementTransactionId: '2',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+    {
+      outcome: { kind: 'failed', error: 'missing identity response id' },
+      settlement: {
+        status: 'permanently-failed',
+        error: 'missing identity response id',
+      },
+    },
+    {
+      outcome: {
+        kind: 'failed',
+        error: 'missing identity response id',
+        replacementTransactionId: '2',
+      },
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+  ])(
+    'publishes commit settlement $settlement',
+    async ({ outcome, settlement }) => {
+      const commitOptimisticWrite = vi.fn().mockResolvedValue({
+        ...outcome,
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, {
+        id: 1,
+        kind: 'init',
+        scope: 'scope-1',
+      });
+      messages.length = 0;
+
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'commit-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      });
+
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          ...settlement,
+        },
+      });
+    }
+  );
+
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
     let resolveEnqueue!: (result: {
       transactionId: string;
+      revision: typeof INITIAL_CACHE_REVISION;
       changed: string[];
       affectedOps: string[];
       reset: false;
+      upsertKind: {
+        kind: 'replaced-pending';
+        removedTransactionId: string;
+      };
       initialClaim: { kind: 'not-runnable' };
     }) => void;
     const enqueueOptimisticMutation = vi.fn(() => {
       order.push('enqueue:start');
       return new Promise<{
         transactionId: string;
+        revision: typeof INITIAL_CACHE_REVISION;
         changed: string[];
         affectedOps: string[];
         reset: false;
+        upsertKind: {
+          kind: 'replaced-pending';
+          removedTransactionId: string;
+        };
         initialClaim: { kind: 'not-runnable' };
       }>((resolve) => {
         resolveEnqueue = (result) => {
@@ -139,6 +422,7 @@ describe('CacheWorkerCore', () => {
     const enqueue = core.handleRequest(port, {
       id: 2,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000007',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 10,
@@ -165,9 +449,14 @@ describe('CacheWorkerCore', () => {
     );
     resolveEnqueue({
       transactionId: '1',
+      revision: INITIAL_CACHE_REVISION,
       changed: ['Thing:1'],
       affectedOps: ['client:query'],
       reset: false,
+      upsertKind: {
+        kind: 'replaced-pending',
+        removedTransactionId: '0',
+      },
       initialClaim: { kind: 'not-runnable' },
     });
     await Promise.all([enqueue, read]);
@@ -178,7 +467,47 @@ describe('CacheWorkerCore', () => {
       opIds: ['client:query'],
       keys: ['Thing:1'],
     });
+    expect(messages).toContainEqual({
+      kind: 'mutation-settled',
+      settlement: {
+        transactionId: '0',
+        status: 'superseded',
+        mutationUuid: '00000000-0000-4000-8000-000000000007',
+        replacementTransactionId: '1',
+      },
+    });
   });
+
+  it.each([undefined, false, true])(
+    'forwards server-failure accounting to wasm: %s',
+    async (serverFailure) => {
+      const deferOptimisticWrite = vi.fn(async () => ({ kind: 'deferred' }));
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ deferOptimisticWrite }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'defer-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '2',
+        nextAttemptAtMs: 100,
+        error: 'failed',
+        serverFailure,
+      });
+      expect(deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+        '1',
+        'runner',
+        '2',
+        100,
+        'failed',
+        serverFailure ?? false
+      );
+    }
+  );
 
   it('runs standalone claims ahead of queued observational reads', async () => {
     const order: string[] = [];
@@ -247,6 +576,405 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('runs foreground cache reads ahead of queued background hydration', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const readQuery = vi.fn(async (opId: string | undefined) => {
+      order.push(`read:${opId}`);
+      if (opId === 'client:blocker') {
+        markBlockerStarted();
+        await blocker;
+      }
+      return { kind: 'miss' as const };
+    });
+    const entityFilter = vi.fn(async () => {
+      order.push('entity-filter');
+      return { kind: 'incomplete' as const };
+    });
+    const hydrateQuery = vi.fn(async () => {
+      order.push('hydrate');
+      return { kind: 'none' as const };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        entityFilter,
+        hydrateQuery,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'client:blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { backfill }',
+      data: { backfill: true },
+    });
+    const filter = core.handleRequest(port, {
+      id: 4,
+      kind: 'entity-filter',
+      request: {
+        filters: {},
+        sortMethod: 'UPDATED_AT',
+        sortDirection: 'DESC',
+        limit: 20,
+      },
+    });
+    const visibleRead = core.handleRequest(port, {
+      id: 5,
+      kind: 'read',
+      opId: 'client:visible',
+      query: 'query Visible { visible }',
+      priority: 'user-visible',
+    });
+
+    releaseBlocker();
+    await Promise.all([running, hydration, filter, visibleRead]);
+
+    expect(order).toEqual([
+      'read:client:blocker',
+      'read:client:visible',
+      'entity-filter',
+      'hydrate',
+    ]);
+  });
+
+  it('keeps a calendar commit behind the hydration it covers and fans out its deletions', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const range = {
+      kind: 'range' as const,
+      revision: '1',
+      occurrenceKeys: [],
+      gaps: [],
+      freshness: 'fresh' as const,
+      uncertainEventKeys: [],
+      optimistic: false,
+      watermark: null,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: vi.fn(async () => {
+          order.push('read');
+          markBlockerStarted();
+          await blocker;
+          return { kind: 'miss' as const };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrate');
+          return {
+            revision: '1',
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            data: null,
+          };
+        }),
+        calendarRange: vi.fn(async () => {
+          order.push('calendar-range');
+          return range;
+        }),
+        calendarCommit: vi.fn(async () => {
+          order.push('calendar-commit');
+          return {
+            revision: '2',
+            revisionAdvanced: true,
+            changed: ['GraphqlCalendarOccurrence:e1:k'],
+            affectedOps: ['client:7'],
+            reset: false,
+            searchChangedBuckets: [],
+          };
+        }),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: vi.fn((message) => messages.push(message)) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query CalendarOccurrences { occurrences }',
+      data: { occurrences: [] },
+    });
+    const commit = core.handleRequest(port, {
+      id: 4,
+      kind: 'calendar-commit',
+      commit: {
+        coverage: [{ kind: 'timed', start: 0, end: 10 }],
+        deletedEventKeys: ['GraphqlCalendarEvent:e1'],
+      },
+    });
+    const read = core.handleRequest(port, {
+      id: 5,
+      kind: 'calendar-range',
+      request: { startMs: 0, endMs: 10, startDay: 0, endDay: 1 },
+    });
+    releaseBlocker();
+    await Promise.all([running, hydration, commit, read]);
+
+    expect(order).toEqual([
+      'read',
+      'calendar-range',
+      'hydrate',
+      'calendar-commit',
+    ]);
+    expect(messages).toContainEqual({ id: 5, ok: true, result: range });
+    expect(messages).toContainEqual({
+      kind: 'ops-affected',
+      opIds: ['client:7'],
+      keys: ['GraphqlCalendarOccurrence:e1:k'],
+    });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: '2',
+      searchChangedBuckets: [],
+    });
+    expect(messages).toContainEqual({
+      id: 4,
+      ok: true,
+      result: {
+        kind: 'committed',
+        revision: '2',
+        changed: ['GraphqlCalendarOccurrence:e1:k'],
+      },
+    });
+  });
+
+  it('does not let stale hydration overwrite a newer queued write', async () => {
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const record = { id: 'doc-1', title: 'initial' };
+    const mergeDocument = (data: unknown) => {
+      Object.assign(
+        record,
+        (data as { document: { id: string; title: string } }).document
+      );
+    };
+    const readQuery = vi.fn(async () => {
+      markBlockerStarted();
+      await blocker;
+      return { kind: 'miss' as const };
+    });
+    const hydrateQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[3]);
+      return { changed: [], affectedOps: [], reset: false, data: null };
+    });
+    const writeQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[4]);
+      return { changed: [], affectedOps: [], reset: false };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        hydrateQuery,
+        writeQuery,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'stale' } },
+    });
+    const write = core.handleRequest(port, {
+      id: 4,
+      kind: 'write',
+      query: 'query Current { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'newer' } },
+    });
+
+    releaseBlocker();
+    await Promise.all([running, hydration, write]);
+
+    expect(record).toEqual({ id: 'doc-1', title: 'newer' });
+    expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
+  });
+
+  it.each(['commit', 'delete'] as const)(
+    'preserves a %s after older hydration queued behind a busy worker',
+    async (action) => {
+      const blocker = Promise.withResolvers<void>();
+      const started = Promise.withResolvers<void>();
+      let title: string | undefined = 'initial';
+      const written = {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          readQuery: async () => {
+            started.resolve();
+            await blocker.promise;
+            return { kind: 'miss' };
+          },
+          hydrateQuery: async () => {
+            title = 'stale';
+            return { ...written, kind: 'data', data: null };
+          },
+          commitOptimisticWrite: async () => {
+            title = 'committed';
+            return { ...written, kind: 'committed' };
+          },
+          deleteKeys: async () => {
+            title = undefined;
+            return written;
+          },
+        }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const running = core.handleRequest(port, {
+        id: 2,
+        kind: 'read',
+        query: 'query Blocker { blocker }',
+      });
+      await started.promise;
+      const hydration = core.handleRequest(port, {
+        id: 3,
+        kind: 'hydrate',
+        query: 'query Old { document { title } }',
+        data: { document: { title: 'stale' } },
+      });
+      const write = core.handleRequest(
+        port,
+        action === 'commit'
+          ? {
+              id: 4,
+              kind: 'commit-optimistic-write',
+              transactionId: 'txn',
+              leaseOwner: 'runner',
+              leaseGeneration: '1',
+              query: 'mutation Save { document { title } }',
+              data: { document: { title: 'committed' } },
+            }
+          : { id: 4, kind: 'delete-records', keys: ['Document:doc-1'] }
+      );
+      blocker.resolve();
+      await Promise.all([running, hydration, write]);
+      expect(title).toBe(action === 'commit' ? 'committed' : undefined);
+      expect(port.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false })
+      );
+    }
+  );
+
+  it('checks storage generation after earlier hydration before later foreground reads', async () => {
+    const order: string[] = [];
+    const blocker = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const generation = '00000000-0000-4000-8000-000000000001';
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(opId);
+          if (opId === 'blocker') {
+            started.resolve();
+            await blocker.promise;
+          }
+          return { kind: 'miss' };
+        },
+        hydrateQuery: async () => {
+          order.push('hydrate');
+          return { changed: [], affectedOps: [], reset: false, data: null };
+        },
+        currentStorageGeneration: async () => {
+          order.push('generation');
+          return generation;
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await started.promise;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { backfill }',
+      data: { backfill: true },
+    });
+    const proof = core.handleRequest(port, {
+      id: 4,
+      kind: 'current-storage-generation',
+    });
+    const visible = core.handleRequest(port, {
+      id: 5,
+      kind: 'read',
+      opId: 'visible',
+      query: 'query Visible { visible }',
+      priority: 'user-visible',
+    });
+    blocker.resolve();
+    await Promise.all([running, hydration, proof, visible]);
+    expect(order).toEqual(['blocker', 'hydrate', 'generation', 'visible']);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
@@ -266,13 +994,15 @@ describe('CacheWorkerCore', () => {
       return { kind: 'hit' as const, data: { opId } };
     });
     const enqueueOptimisticMutation = vi.fn(
-      async (_originOpId: string | undefined, query: string) => {
+      async (_originOpId: string | undefined, _uuid: string, query: string) => {
         order.push(`enqueue:${query}`);
         return {
           transactionId: query,
+          revision: INITIAL_CACHE_REVISION,
           changed: [],
           affectedOps: [],
           reset: false,
+          upsertKind: { kind: 'inserted' as const },
           initialClaim: { kind: 'not-runnable' as const },
         };
       }
@@ -315,6 +1045,7 @@ describe('CacheWorkerCore', () => {
     const firstEnqueue = core.handleRequest(port, {
       id: 5,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000008',
       query: 'mutation First { first }',
       data: { first: true },
       createdAtMs: 1,
@@ -325,6 +1056,7 @@ describe('CacheWorkerCore', () => {
     const secondEnqueue = core.handleRequest(port, {
       id: 6,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000009',
       query: 'mutation Second { second }',
       data: { second: true },
       createdAtMs: 2,
@@ -491,9 +1223,11 @@ describe('CacheWorkerCore', () => {
       order.push('enqueue');
       return {
         transactionId: '1',
+        revision: INITIAL_CACHE_REVISION,
         changed: [],
         affectedOps: [],
         reset: false,
+        upsertKind: { kind: 'inserted' as const },
         initialClaim: { kind: 'not-runnable' as const },
       };
     });
@@ -533,6 +1267,7 @@ describe('CacheWorkerCore', () => {
     const enqueue = core.handleRequest(port, {
       id: 5,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000010',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 1,
@@ -599,8 +1334,21 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: variants });
   });
 
+  it('fails a request kind from a newer page instead of answering it', async () => {
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    const fromNewerPage = JSON.parse('{"id":1,"kind":"future-request"}');
+
+    await core.handleRequest(port, fromNewerPage);
+
+    expect(messages).toEqual([expect.objectContaining({ id: 1, ok: false })]);
+  });
+
   it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
       changed: ['GraphqlSoupDocument:doc-1'],
       affectedOps: [],
       reset: false,
@@ -642,8 +1390,159 @@ describe('CacheWorkerCore', () => {
       { user: { id: 'user-1' } },
       undefined
     );
-    expect(messages).toContainEqual({ kind: 'cache-changed' });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
   });
+
+  it.each([
+    { searchChangedBuckets: [], reset: false },
+    { searchChangedBuckets: ['note'], reset: false },
+    { searchChangedBuckets: [], reset: true },
+  ])(
+    'scopes ordinary writes but not resets: %j',
+    async ({ searchChangedBuckets, reset }) => {
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          writeQuery: vi.fn().mockResolvedValue({
+            revision: INITIAL_CACHE_REVISION,
+            revisionAdvanced: true,
+            changed: ['GraphqlUser:viewer'],
+            affectedOps: [],
+            reset,
+            searchChangedBuckets,
+          }),
+        }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'write',
+        query: '{ user { id } }',
+        data: { user: { id: 'viewer' } },
+      });
+      expect(messages).toContainEqual({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+        ...(reset ? { reset: true } : { searchChangedBuckets }),
+      });
+    }
+  );
+
+  it('does not push cache changes for no-op writes', async () => {
+    const writeResult = {
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: false,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery: vi.fn().mockResolvedValue(writeResult),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: 'subscription { soupUpdates { __typename } }',
+      data: { soupUpdates: [] },
+    });
+
+    expect(messages).not.toContainEqual({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
+  });
+
+  it.each([true, false])(
+    'notifies only hydration listeners when its revision advances (%s)',
+    async (revisionAdvanced) => {
+      const hydrateQuery = vi.fn().mockResolvedValue({
+        revision: INITIAL_CACHE_REVISION,
+        changed: ['GraphqlSoupDocument:doc-1'],
+        affectedOps: ['client:7'],
+        reset: false,
+        data: { cursor: 'next' },
+        revisionAdvanced,
+        searchChangedBuckets: ['note'],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+
+      await core.handleRequest(port, {
+        id: 1,
+        kind: 'init',
+        scope: 'scope-1',
+      });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'hydrate',
+        query: 'query Backfill { cursor }',
+        data: { cursor: 'next' },
+      });
+
+      expect(messages).not.toContainEqual(
+        expect.objectContaining({ kind: 'ops-affected' })
+      );
+      expect(messages).not.toContainEqual(
+        expect.objectContaining({ kind: 'cache-changed' })
+      );
+      expect(
+        messages.filter(
+          (message) =>
+            typeof message === 'object' &&
+            message !== null &&
+            'kind' in message &&
+            message.kind === 'cache-hydrated'
+        )
+      ).toEqual(
+        revisionAdvanced
+          ? [
+              {
+                kind: 'cache-hydrated',
+                revision: INITIAL_CACHE_REVISION,
+                searchChangedBuckets: ['note'],
+              },
+            ]
+          : []
+      );
+      expect(messages.at(-1)).toEqual({
+        id: 2,
+        ok: true,
+        result: {
+          kind: 'data',
+          data: { cursor: 'next' },
+          revision: INITIAL_CACHE_REVISION,
+          reset: false,
+        },
+      });
+    }
+  );
 
   it('drains earlier request responses before consuming close and rejects later admission', async () => {
     const order: string[] = [];
@@ -704,6 +1603,176 @@ describe('CacheWorkerCore', () => {
     await Promise.all([read, drain]);
     expect(order).toEqual(['read:start', 'read:done', 'response', 'close']);
   });
+
+  it.each([
+    [false, 'openCacheWithOutcome'],
+    [true, 'openCacheForRecoveryWithOutcome'],
+  ] as const)(
+    'asks for the storage grant from inside the WASM open (recovery: %s)',
+    async (recoveryOpen, openName) => {
+      const order: string[] = [];
+      const open = vi.fn(
+        async (
+          _scope: string,
+          _hotCapacity: number | undefined,
+          grant?: () => Promise<void>
+        ) => {
+          order.push('owner-lock');
+          await grant?.();
+          order.push('storage');
+          return { engine: {}, outcome: 'opened-existing' };
+        }
+      );
+      loadCacheWasmMock.mockResolvedValue({ [openName]: open });
+      const messages: unknown[] = [];
+      const core = new CacheWorkerCore({
+        recoveryOpen,
+        onOwnerLockAcquired: async () => {
+          order.push('grant');
+        },
+      });
+
+      await core.handleRequest(
+        { postMessage: (message: unknown) => messages.push(message) },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(order).toEqual(['owner-lock', 'grant', 'storage']);
+      expect(messages).toEqual([{ id: 1, ok: true, result: null }]);
+    }
+  );
+
+  it('refuses a WASM open that never asked for the storage grant', async () => {
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn(async () => ({
+        engine: {},
+        outcome: 'opened-existing',
+      })),
+    });
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({
+      onOwnerLockAcquired: async () => undefined,
+    });
+
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'cache WASM does not support the owner-lock grant',
+      },
+    ]);
+  });
+
+  const busyOwnerLock = () =>
+    Object.assign(new Error('owner lock is held by another context'), {
+      cacheOwnerLockUnavailable: true,
+    });
+
+  const initMessages = async (core: CacheWorkerCore): Promise<unknown[]> => {
+    const messages: unknown[] = [];
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    return messages;
+  };
+
+  it.each([
+    [false, 'openCacheWithOutcome'],
+    [true, 'openCacheForRecoveryWithOutcome'],
+  ] as const)(
+    'opens only a free owner lock, asking before each retry (recovery: %s)',
+    async (recoveryOpen, openName) => {
+      const open = vi
+        .fn()
+        .mockRejectedValueOnce(busyOwnerLock())
+        .mockRejectedValueOnce(busyOwnerLock())
+        .mockImplementation(
+          async (
+            _scope: string,
+            _hotCapacity: number | undefined,
+            grant?: () => Promise<void>
+          ) => {
+            await grant?.();
+            return { engine: {}, outcome: 'opened-existing' };
+          }
+        );
+      loadCacheWasmMock.mockResolvedValue({
+        [openName]: open,
+        cacheDatabaseIdentity,
+      });
+      const onOwnerLockBusy = vi.fn(async (_attempt: number) => undefined);
+      const core = new CacheWorkerCore({
+        recoveryOpen,
+        onOwnerLockAcquired: async () => undefined,
+        onOwnerLockBusy,
+      });
+
+      expect(await initMessages(core)).toEqual([
+        { id: 1, ok: true, result: null },
+      ]);
+      expect(onOwnerLockBusy.mock.calls).toEqual([[1], [2]]);
+      // Every attempt declines to queue behind another holder.
+      expect(open.mock.calls.map((call) => call[3])).toEqual([
+        true,
+        true,
+        true,
+      ]);
+    }
+  );
+
+  it('gives up on a busy owner lock when told to stop retrying', async () => {
+    const open = vi.fn().mockRejectedValue(busyOwnerLock());
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: open,
+      cacheDatabaseIdentity,
+    });
+    const core = new CacheWorkerCore({
+      onOwnerLockAcquired: async () => undefined,
+      onOwnerLockBusy: async () => {
+        throw new Error('owner lock stayed unavailable');
+      },
+    });
+
+    expect(await initMessages(core)).toEqual([
+      { id: 1, ok: false, error: 'owner lock stayed unavailable' },
+    ]);
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      'predates storage versions',
+      {},
+      'cache WASM predates storage-versioned databases; rebuild it',
+    ],
+    [
+      'names another version',
+      { cacheDatabaseIdentity: () => 'graphql-cache:scope-1:s0.v0.t0' },
+      'cache WASM storage version does not match this build',
+    ],
+  ])(
+    'refuses a WASM build that %s before opening anything',
+    async (_label, identity, error) => {
+      const open = vi.fn();
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: open,
+        ...identity,
+      });
+      const core = new CacheWorkerCore({
+        onOwnerLockAcquired: async () => undefined,
+        onOwnerLockBusy: async () => undefined,
+      });
+
+      expect(await initMessages(core)).toEqual([{ id: 1, ok: false, error }]);
+      expect(open).not.toHaveBeenCalled();
+    }
+  );
 
   it('uses atomic recovery-open instead of opening before a reset', async () => {
     const openCache = vi.fn();
@@ -800,6 +1869,7 @@ describe('CacheWorkerCore', () => {
     });
     const close = vi.fn().mockResolvedValue(undefined);
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -933,6 +2003,7 @@ describe('CacheWorkerCore', () => {
       .mockImplementation(() => new Promise(() => {}));
     const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -1002,6 +2073,7 @@ describe('CacheWorkerCore', () => {
       .mockRejectedValueOnce(resetError)
       .mockImplementation(() => new Promise(() => {}));
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -1070,10 +2142,12 @@ describe('CacheWorkerCore', () => {
     expect(onStorageResetRequired).not.toHaveBeenCalled();
   });
 
-  it('records an identity-changing hydration as a logical reset', async () => {
+  it('records and broadcasts identity-changing hydration as a logical reset', async () => {
     const hydrateQuery = vi.fn().mockResolvedValue({
-      changed: [],
-      affectedOps: [],
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: ['GraphqlUser:user-1'],
+      affectedOps: ['client:7'],
       reset: true,
       data: { cursor: 'next' },
     });
@@ -1088,6 +2162,7 @@ describe('CacheWorkerCore', () => {
         flush: vi.fn(),
       },
     });
+    core.addPort(port);
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
 
     await core.handleRequest(port, {
@@ -1104,10 +2179,25 @@ describe('CacheWorkerCore', () => {
         resetReason: 'identity-change',
       })
     );
+    expect(port.postMessage).toHaveBeenCalledWith({
+      kind: 'ops-affected',
+      opIds: ['client:7'],
+      keys: ['GraphqlUser:user-1'],
+    });
+    expect(port.postMessage).toHaveBeenCalledWith({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+      reset: true,
+    });
     expect(port.postMessage).toHaveBeenLastCalledWith({
       id: 2,
       ok: true,
-      result: { kind: 'data', data: { cursor: 'next' }, reset: true },
+      result: {
+        kind: 'data',
+        data: { cursor: 'next' },
+        revision: INITIAL_CACHE_REVISION,
+        reset: true,
+      },
     });
   });
 
@@ -1250,6 +2340,35 @@ describe('CacheWorkerCore', () => {
     expect(messages.slice(-2)).toEqual([
       { id: 2, ok: false, error: 'cache storage reset required' },
       { id: 3, ok: false, error: 'cache storage reset required' },
+    ]);
+  });
+
+  it('reports an open that gave up on busy database files', async () => {
+    const busyError = Object.assign(
+      new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
+      { cacheStorageBusy: true as const }
+    );
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockRejectedValue(busyError),
+    });
+    const onStorageBusy = vi.fn();
+    const onStorageResetRequired = vi.fn();
+    const messages: unknown[] = [];
+    const core = new CacheWorkerCore({ onStorageBusy, onStorageResetRequired });
+
+    await core.handleRequest(
+      { postMessage: (message: unknown) => messages.push(message) },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(onStorageBusy).toHaveBeenCalledOnce();
+    expect(onStorageResetRequired).not.toHaveBeenCalled();
+    expect(messages).toEqual([
+      {
+        id: 1,
+        ok: false,
+        error: 'OPFS sync handle open failed (NoModificationAllowedError)',
+      },
     ]);
   });
 });

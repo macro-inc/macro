@@ -8,6 +8,7 @@ use ::activity::{
     event_time,
 };
 use chrono::{DateTime, Utc};
+use model_owner::Owner;
 use uuid::Uuid;
 
 use super::events::{ChatMessageRole, ChatTopicEvent};
@@ -66,7 +67,12 @@ impl ActivitySource for ChatTopicEvent {
 
         match self {
             ChatTopicEvent::Created(m) => common(
-                Actor::new_from_user(m.owner.clone()),
+                match &m.owner {
+                    Owner::User(user) => Actor::new_from_user(user.clone()),
+                    Owner::Bot(bot_id) => Actor::new_from_bot(*bot_id),
+                    // A team is not an actor; display unattributed creation as system activity.
+                    Owner::Team(_) => Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+                },
                 CommonAction::Created,
                 &m.chat_id,
                 now(),

@@ -6,10 +6,35 @@
  * opencode); see individual file headers.
  */
 
-export { AgentInput, type AgentInputProps } from './AgentInput';
+export {
+  ElicitationForm,
+  type ElicitationFormProps,
+} from '@app/features/agent-interactions/components/ElicitationForm';
+export {
+  type PermissionOptionItem,
+  type PermissionOptionKind,
+  PermissionOptions,
+  type PermissionOptionsProps,
+} from '@app/features/agent-interactions/components/PermissionOptions';
+export { ActionLine, type ActionLineProps } from './ActionLine';
+export {
+  AGENT_INPUT_TEXT_AREA_ID,
+  AgentInput,
+  type AgentInputProps,
+  type QuoteInsert,
+} from './AgentInput';
+export { AgentModelSelector } from './AgentModelSelector';
 export { AnimatedNumber } from './AnimatedNumber';
+export {
+  ComposerNotice,
+  type ComposerNoticeProps,
+} from './ComposerNotice';
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';
+export {
+  FailureNoticeCard,
+  type FailureNoticeCardProps,
+} from './FailureNoticeCard';
 export { FoldedAnsiText } from './FoldedAnsiText';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';
@@ -17,9 +42,10 @@ export { FoldedTerminal } from './FoldedTerminal';
 export { PierreDiff } from './PierreDiff';
 export { QuestionAnswers, type QuestionAnswersProps } from './QuestionAnswers';
 export {
-  QueuedPromptList,
-  type QueuedPromptListProps,
-} from './QueuedPromptList';
+  type QueuedPromptItem,
+  QueuedPrompts,
+  type QueuedPromptsProps,
+} from './QueuedPrompts';
 export {
   type SessionStatusLike,
   SessionStatusPill,
@@ -29,6 +55,7 @@ export { Thought, type ThoughtProps } from './Thought';
 export { TodoList } from './TodoList';
 export { ToolCard, type ToolCardProps } from './ToolCard';
 export { ToolErrorCard, type ToolErrorCardProps } from './ToolErrorCard';
+export { ToolGroup, type ToolGroupProps } from './ToolGroup';
 export {
   ToolStatusTitle,
   type ToolStatusTitleProps,
@@ -37,6 +64,8 @@ export {
   type AnsweredQuestion,
   type FileDiff,
   isToolActive,
+  settledToolStatus,
   type TodoItem,
   type ToolStatus,
 } from './types';
+export { WorkingLine } from './WorkingLine';

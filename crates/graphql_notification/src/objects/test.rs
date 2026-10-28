@@ -26,7 +26,7 @@ fn raw_notification(metadata: serde_json::Value) -> UserNotificationRow<serde_js
         notification_event_type: "task_assigned".to_string(),
         entity: EntityType::Document.with_entity_string("document-1".to_string()),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),
@@ -71,6 +71,33 @@ async fn metadata_is_the_typed_notification_union() {
         data["notification"]["metadata"]["assignedBy"],
         "macro|assigner@example.com"
     );
+}
+
+#[tokio::test]
+async fn group_access_notifications_retain_the_canonical_entity_identity() {
+    let metadata = model_notifications::EntityAccessGrantedMetadata {
+        request_id: uuid::Uuid::from_u128(2),
+        revision: 1,
+        entity_name: "Escalations".into(),
+        file_type: None,
+        access_level: model_notifications::RequestedAccessLevel::View,
+    };
+    let mut row = raw_notification(serde_json::to_value(metadata).unwrap());
+    row.notification_event_type = "entity_access_granted".into();
+    row.entity = EntityType::ExternalChat.with_entity_string("group-1".into());
+    let notification = GraphqlNotification::try_from(row).unwrap();
+    let schema = Schema::new(Query { notification }, EmptyMutation, EmptySubscription);
+    let response = schema
+        .execute("{ notification { targetEntityType entityId eventType } }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap(),
+        json!({
+            "notification": { "targetEntityType": "EXTERNAL_CHAT", "entityId": "group-1", "eventType": "entity_access_granted" }
+        })
+    );
+    assert!(graphql_common::GraphqlSoupEntityType::try_new(EntityType::ExternalChat).is_none());
 }
 
 #[test]

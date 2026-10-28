@@ -15,7 +15,9 @@ beforeAll(async () => {
 
 describe("awareness sync tests", () => {
   test("should include awareness on connection if available", async () => {
-    const userA = await createTestUser(mf, "1234");
+    const documentId = crypto.randomUUID();
+    const userA = await createTestUser(mf, documentId);
+    const observer = await createTestUser(mf, documentId);
     // Initialize with some text
     userA.doc.getText("content").push("hello world");
     const cursor = userA.doc.getText("content").getCursor(5);
@@ -27,15 +29,22 @@ describe("awareness sync tests", () => {
     let awarenessUpdate = userA.awareness.encode(userA.doc.peerIdStr);
     const update = userA.doc.export({ mode: "update" });
 
-    userA.connection.send(FromPeer.fromPeerUpdate({ update}).encode());
+    userA.connection.send(FromPeer.fromPeerUpdate({ updates: [update], id: crypto.randomUUID() }).encode());
     userA.connection.send(FromPeer.fromPeerAwareness({ awareness: awarenessUpdate }).encode());
 
-    const userB = await createTestUser(mf, "1234");
+    // Observe server delivery before checking a new connection's initial state.
+    for (;;) {
+      const message = await observer.readNextMessage();
+      if (message.isRemoteAwareness()) break;
+    }
+    const userB = await createTestUser(mf, documentId);
     expect(userB.awareness.getAllStates()[userA.doc.peerIdStr]).toBeDefined();
   });
 
   test("should broadcast awareness when one client disconnects", async () => {
-    const userA = await createTestUser(mf, "1234");
+    const documentId = crypto.randomUUID();
+    const userA = await createTestUser(mf, documentId);
+    const observer = await createTestUser(mf, documentId);
     // Initialize with some text
     userA.doc.getText("content").push("hello world");
     const cursor = userA.doc.getText("content").getCursor(5);
@@ -47,10 +56,15 @@ describe("awareness sync tests", () => {
     let awarenessUpdate = userA.awareness.encode(userA.doc.peerIdStr);
     const update = userA.doc.export({ mode: "update" });
 
-    userA.connection.send(FromPeer.fromPeerUpdate({ update}).encode());
+    userA.connection.send(FromPeer.fromPeerUpdate({ updates: [update], id: crypto.randomUUID() }).encode());
     userA.connection.send(FromPeer.fromPeerAwareness({ awareness: awarenessUpdate }).encode());
 
-    const userB = await createTestUser(mf, "1234");
+    // Observe server delivery before checking a new connection's initial state.
+    for (;;) {
+      const message = await observer.readNextMessage();
+      if (message.isRemoteAwareness()) break;
+    }
+    const userB = await createTestUser(mf, documentId);
     expect(userB.awareness.getAllStates()[userA.doc.peerIdStr]).toBeDefined();
 
     // When userA disconnects, the service should broadcast an undefined awareness update

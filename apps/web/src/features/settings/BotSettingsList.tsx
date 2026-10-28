@@ -1,8 +1,8 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
-import BotIcon from '@icon/wide-bot.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import BotIcon from '@icon/system/regular/robot.svg';
 import { useBotChannelsQuery } from '@queries/bots/bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button } from '@ui';
@@ -66,17 +66,17 @@ export function BotSettingsList(props: {
   return (
     <SettingsPage
       title="Bots"
-      description="Create webhook-powered teammates and connect them to channels."
+      description="A bot is an account your program uses to read and send channel messages. Create a bot, add it to channels, then use its token with the Macro SDK to control it."
       actions={
-        <Button variant="cta" size="sm" onClick={props.onCreate}>
-          <PlusIcon />
+        <Button variant="neutral" size="sm" onClick={props.onCreate}>
+          <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Create bot
         </Button>
       }
     >
       <SettingsSection
         title="Your bots"
-        description="Each bot can join multiple channels. Webhook URLs are scoped to the channel."
+        description="Manage your bots, their channels, and access tokens."
       >
         <SettingsCard>
           <Show
@@ -98,16 +98,16 @@ export function BotSettingsList(props: {
                     Create your first bot
                   </div>
                   <div class="mt-1 max-w-80 text-xs text-ink-muted">
-                    Bots post to channels through a secure webhook and can be
-                    mentioned like any other participant.
+                    Give your program a name and profile in Macro. We’ll
+                    generate a token when you create the bot.
                   </div>
                   <Button
                     class="mt-4"
-                    variant="cta"
+                    variant="neutral"
                     size="sm"
                     onClick={props.onCreate}
                   >
-                    <PlusIcon />
+                    <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                     Create bot
                   </Button>
                 </div>

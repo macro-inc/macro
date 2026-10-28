@@ -1,43 +1,65 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  captureElementScrollAnchor,
+  holdScrollAnchor,
+} from '@core/util/scrollAnchor';
 import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
+  OpenSplitResult,
   OpenWithSplitOptions,
   PopoverSplitOptions,
   ReferredFrom,
+  ReplaceAllSplitsOptions,
   SplitContent,
 } from './layoutManager';
 
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
 
+  /** Warms a destination on navigation intent (hover, focus) without opening it. */
+  function preloadContent(content: SplitContent) {
+    globalSplitManager()?.preloadContent(content);
+  }
+
   function openWithSplit(
     content: SplitContent,
     options?: OpenWithSplitOptions
-  ) {
+  ): OpenSplitResult {
     const splitManager = globalSplitManager();
     const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
       console.error('No split manager found');
-      return;
+      return { status: 'unavailable' };
     }
 
-    // Navigation issued from inside a split panel (links, mentions, references)
-    // carries that panel as its source; callers outside any panel (sidebar,
-    // command menu) stay handle-less, which is what marks "external navigation"
-    // for Preview Pair routing. A popover's SplitPanelContext handle is a stub
-    // whose replace() is a no-op, so treat popover sources as handle-less too
-    // and let same-split navigation fall back to the active split.
+    // Use the source panel for navigation. Popover handles cannot replace
+    // content, so navigation from a popover falls back to the active split.
     const requestedHandle = options?.handle ?? splitPanelContext?.handle;
     const handle = requestedHandle?.isPopover() ? undefined : requestedHandle;
 
-    return splitManager.openWithSplit(content, {
+    // A new split narrows this one and reflows its content under an unchanged
+    // scrollTop, which can push what was just clicked out of view.
+    const clickedAnchor = preferNewSplit
+      ? captureElementScrollAnchor(splitPanelContext?.pointerTarget?.())
+      : undefined;
+
+    const result = splitManager.openWithSplit(content, {
       ...options,
       preferNewSplit,
       handle,
     });
+
+    if (
+      clickedAnchor &&
+      result.status === 'opened' &&
+      result.split.id !== splitPanelContext?.handle.id
+    ) {
+      holdScrollAnchor(clickedAnchor.scroller, clickedAnchor.anchor);
+    }
+    return result;
   }
 
   function replaceOrInsertSplit(
@@ -48,7 +70,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       activate: true,
-    });
+    }).split;
   }
 
   function replaceSplit(options: {
@@ -63,7 +85,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       preferNewSplit: false,
-    });
+    }).split;
   }
 
   function insertSplit(
@@ -76,7 +98,7 @@ export function useSplitLayout() {
       referredFrom,
       preferNewSplit: true,
       ...options,
-    });
+    }).split;
   }
 
   function popoverSplit(
@@ -93,7 +115,7 @@ export function useSplitLayout() {
 
   function replaceAllSplits(
     content: SplitContent,
-    options?: { referredFrom?: ReferredFrom }
+    options?: ReplaceAllSplitsOptions
   ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
@@ -122,6 +144,7 @@ export function useSplitLayout() {
 
   return {
     openWithSplit,
+    preloadContent,
     getSplitCount,
     replaceOrInsertSplit,
     replaceSplit,

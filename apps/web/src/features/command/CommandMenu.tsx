@@ -1,13 +1,11 @@
 import { isListViewID } from '@app/constants/list-views';
-import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
-import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { getSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
+import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { TabsInset } from '@core/component/TabsInset';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import { enableProjects } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
@@ -15,15 +13,19 @@ import {
   setActiveScope,
   setPressedKeys,
 } from '@core/hotkey/state';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
-import { openExternalUrl } from '@core/util/url';
-import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { lazyNamed } from '@core/util/lazyNamed';
+import type { EntityData } from '@entity';
+import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
-import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import {
-  CommandMenuEmptyState,
+  Badge,
   CommandMenuHotkeyHint,
   CommandMenuSearchInput,
   CommandMenuShell,
@@ -31,23 +33,27 @@ import {
   createCommandListController,
   Dialog,
   Hotkey,
+  Tabs,
 } from '@ui';
 import {
   createEffect,
   createMemo,
-  createSelector,
   createSignal,
   For,
+  type JSX,
   Match,
   on,
   onCleanup,
   onMount,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { CommandItem } from './CommandItem';
-import { getCategorySearchFilters } from './category-search-filters';
+import type { InputLayoutParts } from '../universal-input/context/capabilities';
+import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
+import { defaultCommandResultIndex } from './core/default-result-index';
+import { shouldUseUniversalInput } from './core/universal-input-mode';
+import { createCommandResultOpener } from './open-command-result';
 import { trackCommandUsage } from './recency';
 import { CommandState } from './state';
 import type { CategoryFilter } from './types';
@@ -57,25 +63,66 @@ import {
   isCommandItem,
   isEntityItem,
   isSearchItem,
-  type PaginationControls,
+  isUserItem,
   useCommandItems,
 } from './useCommandItems';
+import { CommandResults } from './views/command-results';
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'commands', label: 'Command' },
-  { id: 'chats', label: 'Agents' },
-  { id: 'documents', label: 'Files' },
-  { id: 'tasks', label: 'Tasks' },
-  { id: 'channels', label: 'Channels' },
-  { id: 'dms', label: 'People' },
+  {
+    id: 'all',
+    get label() {
+      return t('commandMenu.categoryAll');
+    },
+  },
+  {
+    id: 'commands',
+    get label() {
+      return t('commandMenu.categoryCommands');
+    },
+  },
+  {
+    id: 'chats',
+    get label() {
+      return t('commandMenu.categoryAgents');
+    },
+  },
+  {
+    id: 'documents',
+    get label() {
+      return t('commandMenu.categoryFiles');
+    },
+  },
+  {
+    id: 'tasks',
+    get label() {
+      return t('commandMenu.categoryTasks');
+    },
+  },
+  {
+    id: 'projects',
+    get label() {
+      return t('commandMenu.categoryProjects');
+    },
+  },
+  {
+    id: 'channels',
+    get label() {
+      return t('commandMenu.categoryChannels');
+    },
+  },
+  {
+    id: 'dms',
+    get label() {
+      return t('commandMenu.categoryPeople');
+    },
+  },
 ];
 
-const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
-const LIST_PADDING = 16; // p-2 = 8px top + 8px bottom
-const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8 + LIST_PADDING;
-const LOAD_MORE_THRESHOLD = VIRTUAL_ITEM_HEIGHT * 3;
-const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5 + LIST_PADDING;
+const CommandUniversalInput = lazyNamed(
+  () => import('../universal-input/universal-input'),
+  'CommandUniversalInput'
+);
 
 export function CommandMenu() {
   const splitManager = globalSplitManager();
@@ -99,11 +146,19 @@ export function CommandMenu() {
   });
 
   const handleSelect = (item: CommandMenuItem) => {
-    if (isSearchItem(item) || isAskAiItem(item)) suppressCloseAutoFocus = true;
+    if (
+      isSearchItem(item) ||
+      isAskAiItem(item) ||
+      item.kind === 'new-project' ||
+      (isCommandItem(item) &&
+        item.data.hotkeyToken === TOKENS.global.createCommand)
+    )
+      suppressCloseAutoFocus = true;
   };
 
   return (
     <Dialog
+      class="[&>[data-command-menu]>[data-layer]>[data-surface]]:border-0! [&>[data-command-menu]>[data-layer]>[data-surface]]:bg-transparent [&>[data-command-menu]>[data-layer]>[data-surface]]:rounded-[24px]"
       onOpenChange={CommandState.setIsOpen}
       onCloseAutoFocus={(e) => {
         if (suppressCloseAutoFocus) {
@@ -113,16 +168,24 @@ export function CommandMenu() {
       }}
       open={CommandState.isOpen()}
     >
-      <CommandMenuInner depth={2} onSelect={handleSelect} />
+      <CommandMenuInner
+        depth={2}
+        onSelect={handleSelect}
+        onHint={() => {
+          suppressCloseAutoFocus = true;
+        }}
+      />
     </Dialog>
   );
 }
 
-export function CommandMenuInner(props: {
+type CommandMenuInnerProps = {
   /** Override items source with custom data (e.g. sandbox entities for tutorial) */
   items?: () => CommandMenuItem[];
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
+  /** Called when the user takes the menu's hint (it moves focus itself). */
+  onHint?: () => void;
   /**
    * When true, selecting an item only fires `onSelect` — no navigation,
    * command, or search is run. Used by the onboarding sandbox so selecting a
@@ -133,27 +196,251 @@ export function CommandMenuInner(props: {
   class?: string;
   /** Optional depth for the Panel wrapper. */
   depth?: 0 | 1 | 2 | 3 | 4;
-}) {
+};
+
+export function CommandMenuInner(props: CommandMenuInnerProps) {
+  const universalInputEnabled = useUniversalInputEnabled();
+  const [expanded, setExpanded] = createSignal(false);
+  let selection = { start: 0, end: 0 };
+  let typing = false;
+  let composing = false;
+  let input: HTMLTextAreaElement | undefined;
+  let ready = false;
+  let disposed = false;
+  let loading: Promise<unknown> | undefined;
+  const eligible = () =>
+    universalInputEnabled() &&
+    !props.items &&
+    !props.disableDefaultAction &&
+    !CommandState.isInCommandScope() &&
+    !CommandState.isEntityActionMode();
+  const promote = () => {
+    if (
+      !disposed &&
+      ready &&
+      !typing &&
+      !composing &&
+      input?.isConnected &&
+      eligible() &&
+      shouldUseUniversalInput(input.value, expanded())
+    )
+      setExpanded(true);
+  };
+  const prepareComposer = async () => {
+    try {
+      loading ??= CommandUniversalInput.preload();
+      await loading;
+      ready = true;
+      promote();
+    } catch {
+      loading = undefined;
+    }
+  };
+  const updateQuery = (element: HTMLTextAreaElement, isComposing: boolean) => {
+    input = element;
+    composing = isComposing;
+    selection = {
+      start: element.selectionStart ?? element.value.length,
+      end: element.selectionEnd ?? element.value.length,
+    };
+    CommandState.setQuery(element.value);
+    if (
+      !composing &&
+      eligible() &&
+      shouldUseUniversalInput(element.value, expanded())
+    ) {
+      if (ready) promote();
+      else fireAndForget(prepareComposer(), 'command-menu');
+    }
+  };
+  createEffect(
+    on(CommandState.isOpen, (open) => {
+      if (!open) setExpanded(false);
+    })
+  );
+  onMount(() => {
+    if (eligible()) fireAndForget(prepareComposer(), 'command-menu');
+  });
+  onCleanup(() => {
+    disposed = true;
+  });
+  const finish = () => {
+    props.onHint?.();
+    CommandState.close();
+  };
+  const searchMenu = () => (
+    <CommandSearchMenu
+      {...props}
+      onQueryInput={updateQuery}
+      onQueryKeyDown={() => {
+        typing = true;
+      }}
+      onQueryKeyUp={(element, isComposing) => {
+        typing = false;
+        updateQuery(element, isComposing);
+      }}
+    />
+  );
+  return (
+    <div class="contents" data-command-menu>
+      <Show when={expanded() && eligible()} fallback={searchMenu()}>
+        <CommandComposerMenu {...props}>
+          <Suspense
+            fallback={<p class="text-sm text-ink-muted">Opening composer…</p>}
+          >
+            <CommandUniversalInput
+              text={CommandState.query()}
+              selection={selection}
+              layout={CommandComposerLayout}
+              onTextChange={(text) => {
+                CommandState.setQuery(text.trim() ? text : '');
+                if (!text.trim()) setExpanded(false);
+              }}
+              onComplete={finish}
+              onNavigate={finish}
+            />
+          </Suspense>
+        </CommandComposerMenu>
+      </Show>
+    </div>
+  );
+}
+
+function CommandComposerMenu(
+  props: CommandMenuInnerProps & { children: JSX.Element }
+) {
+  const [attachHotkeys, scopeId] = useHotkeyDOMScope('command-composer');
+  registerHotkey({
+    scopeId,
+    hotkey: 'escape',
+    description: 'Close command menu',
+    runWithInputFocused: true,
+    hide: true,
+    keyDownHandler: (event) => {
+      if (event?.isComposing) return false;
+      CommandState.close();
+      return true;
+    },
+  });
+  return (
+    <CommandMenuShell
+      ref={attachHotkeys}
+      depth={props.depth}
+      class={props.class}
+    >
+      {props.children}
+    </CommandMenuShell>
+  );
+}
+
+function CommandMenuLogo() {
+  const [multiline, setMultiline] = createSignal(false);
+  let logo: HTMLSpanElement | undefined;
+  onMount(() => {
+    const icon = logo;
+    const header = icon?.parentElement;
+    const input = header?.querySelector<HTMLElement>(
+      '[data-universal-input], textarea'
+    );
+    if (!input || !icon || !header) return;
+    const measure = () => {
+      // Measure at the width of the single-line layout even while the logo is
+      // hidden, so revealing it cannot wrap the text and toggle it off again.
+      const maxWidth = input.style.maxWidth;
+      if (multiline()) {
+        const gap = Number.parseFloat(getComputedStyle(header).columnGap);
+        const logoWidth = Number.parseFloat(getComputedStyle(icon).width);
+        input.style.maxWidth = `${input.getBoundingClientRect().width - logoWidth - gap}px`;
+      }
+      const style = getComputedStyle(input.firstElementChild ?? input);
+      const lineHeight =
+        Number.parseFloat(style.lineHeight) ||
+        Number.parseFloat(style.fontSize) * 1.5;
+      const padding = getComputedStyle(input);
+      const textHeight =
+        input.scrollHeight -
+        Number.parseFloat(padding.paddingTop) -
+        Number.parseFloat(padding.paddingBottom);
+      const next = input.childElementCount > 1 || textHeight > lineHeight * 1.5;
+      input.style.maxWidth = maxWidth;
+      setMultiline(next);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(input);
+    input.addEventListener('input', measure);
+    measure();
+    onCleanup(() => {
+      observer.disconnect();
+      input.removeEventListener('input', measure);
+    });
+  });
+  return (
+    <span
+      ref={logo}
+      data-testid="command-input-logo"
+      aria-hidden="true"
+      class="flex size-5 shrink-0 items-center justify-center text-accent"
+      classList={{ hidden: multiline() }}
+    >
+      <Macro class="size-3" />
+    </span>
+  );
+}
+
+function CommandComposerLayout(props: InputLayoutParts) {
+  return (
+    <>
+      <CommandMenuShell.Header>
+        <CommandMenuLogo />
+        {props.editor}
+      </CommandMenuShell.Header>
+      <CommandMenuShell.Body class="space-y-3 p-4" scroll>
+        {props.fields}
+        {props.result}
+      </CommandMenuShell.Body>
+    </>
+  );
+}
+
+function CommandSearchMenu(
+  props: CommandMenuInnerProps & {
+    onQueryInput: (input: HTMLTextAreaElement, composing: boolean) => void;
+    onQueryKeyDown: () => void;
+    onQueryKeyUp: (input: HTMLTextAreaElement, composing: boolean) => void;
+  }
+) {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
+  let searchInput: HTMLTextAreaElement | undefined;
 
   const analytics = useAnalytics();
+  const projectsFlag = useFeatureFlag(enableProjects);
+  const categories = () =>
+    CATEGORIES.filter(
+      (item) => item.id !== 'projects' || projectsFlag().enabled
+    );
+  const categoryFilter = () =>
+    CommandState.categoryFilter() === 'projects' && !projectsFlag().enabled
+      ? 'all'
+      : CommandState.categoryFilter();
 
-  const { openWithSplit } = useSplitLayout();
-
-  const canOpenInNewSplit = () =>
-    globalSplitManager()?.canAppendSplit() ?? false;
+  const { popoverSplit } = useSplitLayout();
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
   const query = debouncedDependent(CommandState.query, 60);
 
+  useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
+
   const defaultCommandItems = props.items
     ? undefined
-    : useCommandItems(query, CommandState.categoryFilter, {
+    : useCommandItems(query, categoryFilter, {
         searchActive: CommandState.isOpen,
+        contactDiscovery: useCrmContactDiscovery,
       });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;
+  const isLoadingEntities = () =>
+    defaultCommandItems?.isLoadingEntities() ?? false;
   const listController = createCommandListController({
     items: filteredItems,
     selectedIndex: CommandState.selectedIndex,
@@ -168,16 +455,29 @@ export function CommandMenuInner(props: {
     }
   });
 
+  // Skip past the search row only onto a real result — when the query has
+  // no results the rows below are fallbacks (ask AI), and the search row
+  // should stay the default.
+  const resultFollowsSearchRow = () =>
+    defaultCommandResultIndex(filteredItems()) === 1;
   createEffect(
-    on([query, CommandState.categoryFilter], () => {
-      const items = filteredItems();
-      const firstIsSearch = items[0] && isSearchItem(items[0]);
-      // Skip past the search row only onto a real result — when the query has
-      // no results the rows below are fallbacks (ask AI), and the search row
-      // should stay the default.
-      const secondIsResult = items[1] && !isAskAiItem(items[1]);
-      listController.setSelectedIndex(firstIsSearch && secondIsResult ? 1 : 0);
+    on([query, categoryFilter], () => {
+      listController.setSelectedIndex(resultFollowsSearchRow() ? 1 : 0);
     })
+  );
+  // Results fetched from the server (CRM contacts outside the cache, projects)
+  // can appear after the query changes; the first one takes the default
+  // selection the search row held until then.
+  createEffect(
+    on(
+      resultFollowsSearchRow,
+      (hasResult, hadResult) => {
+        if (hasResult && !hadResult && CommandState.selectedIndex() === 0) {
+          listController.setSelectedIndex(1);
+        }
+      },
+      { defer: true }
+    )
   );
 
   const selectedItem = () => {
@@ -209,7 +509,10 @@ export function CommandMenuInner(props: {
   };
   const selectedIsEntity = () => {
     const item = selectedItem();
-    return item && isEntityItem(item);
+    return (
+      item &&
+      (isEntityItem(item) || isUserItem(item) || item.kind === 'initiative')
+    );
   };
   const selectedIsSearch = () => {
     const item = selectedItem();
@@ -220,8 +523,15 @@ export function CommandMenuInner(props: {
     return item && isAskAiItem(item);
   };
 
+  const openResult = createCommandResultOpener();
+
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
+    if (
+      (item.kind === 'new-project' || item.kind === 'initiative') &&
+      !projectsFlag().enabled
+    )
+      return;
 
     props.onSelect?.(item);
     if (props.disableDefaultAction) {
@@ -236,8 +546,11 @@ export function CommandMenuInner(props: {
       const command = item.data;
       trackCommandUsage(item.id);
 
-      // Check if this is a multi-stage command
-      if (command.activateCommandScopeId) {
+      // Create opens its own launcher; other multi-stage commands stay here.
+      if (
+        command.activateCommandScopeId &&
+        command.hotkeyToken !== TOKENS.global.createCommand
+      ) {
         const commandScope = hotkeyScopeTree.get(
           command.activateCommandScopeId
         );
@@ -276,96 +589,14 @@ export function CommandMenuInner(props: {
       return;
     }
 
-    // Handle entity items (documents, channels, chats, etc.)
-    if (isEntityItem(item)) {
-      if (isGithubPrEntity(item.data)) {
-        if (USE_MACRO_PR_SUMMARY_BLOCK) {
-          openWithSplit(
-            { type: 'pr', id: item.data.id },
-            { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
-          );
-        } else {
-          openExternalUrl(item.data.metadata.url);
-        }
-        CommandState.close();
-        CommandState.setQuery('');
-        return;
-      }
-
-      if (item.data.type !== 'foreign') {
-        const blockName = itemToBlockName(item.data);
-        if (blockName) {
-          openWithSplit(
-            { type: blockName, id: item.id },
-            {
-              referredFrom: 'kommand-menu',
-              preferNewSplit: openInNewSplit,
-              reopen: blockName === 'channel' ? 'latest' : undefined,
-            }
-          );
-        }
-      }
+    if (item.kind === 'new-project') {
       CommandState.close();
       CommandState.setQuery('');
+      popoverSplit({ type: 'component', id: 'project-compose' });
       return;
     }
 
-    if (isAskAiItem(item)) {
-      // Opens a new chat split and sends the query immediately.
-      openChatWithMessage(item.query);
-      CommandState.close();
-      CommandState.setQuery('');
-      return;
-    }
-
-    if (isSearchItem(item)) {
-      // Fall back to the search preset (not `{}`) so uncategorized searches
-      // keep the search view's baseline exclusions (foreign entities, CRM).
-      const preset = getViewPreset('search');
-      const overrides = getCategorySearchFilters(item.category);
-      const filters = overrides?.filters ?? preset?.filters ?? {};
-      const clientFilters =
-        overrides?.clientFilters ?? preset?.clientFilters ?? {};
-      const splitManager = globalSplitManager();
-      const active = splitManager?.activeSplit();
-      const activeContent = active?.content();
-      const activeIsSearch =
-        activeContent?.type === 'component' && activeContent.id === 'search';
-
-      if (!openInNewSplit && activeIsSearch && active) {
-        const controller = getSearchSplit(active.id);
-        if (controller) {
-          controller.applyOverrides({
-            query: item.query,
-            filters,
-            clientFilters,
-          });
-          active.activate();
-          CommandState.close();
-          CommandState.setQuery('');
-          return;
-        }
-      }
-
-      openWithSplit(
-        {
-          type: 'component',
-          id: 'search',
-          // Opening search into an existing split otherwise drops these params
-          // and the field mounts empty. Entry state still wins on back/forward.
-          preserveParams: true,
-          params: {
-            initialQuery: item.query,
-            initialFilters: filters,
-            initialClientFilters: clientFilters,
-          },
-        },
-        {
-          referredFrom: 'kommand-menu',
-          preferNewSplit: openInNewSplit,
-          allowDuplicate: true,
-        }
-      );
+    if (openResult(item, openInNewSplit)) {
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -378,7 +609,7 @@ export function CommandMenuInner(props: {
   const navDownHotkey = registerHotkey({
     hotkey: ['arrowdown', 'ctrl+j'],
     scopeId: hotkeyScope,
-    description: 'Move selection down',
+    description: () => t('commandMenu.moveSelectionDown'),
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
@@ -386,7 +617,8 @@ export function CommandMenuInner(props: {
         CommandState.selectedIndex() >= items.length - 1 &&
         (pagination?.hasMore() || pagination?.isLoadingMore())
       ) {
-        if (!pagination?.isLoadingMore()) void pagination?.loadMore();
+        if (!pagination?.isLoadingMore())
+          fireAndForget(pagination?.loadMore(), 'command-menu');
         return true;
       }
       return listController.selectNext();
@@ -398,7 +630,7 @@ export function CommandMenuInner(props: {
   const navUpHotkey = registerHotkey({
     hotkey: ['arrowup', 'ctrl+k'],
     scopeId: hotkeyScope,
-    description: 'Move selection up',
+    description: () => t('commandMenu.moveSelectionUp'),
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
@@ -411,8 +643,9 @@ export function CommandMenuInner(props: {
   const confirmHotkey = registerHotkey({
     hotkey: 'enter',
     scopeId: hotkeyScope,
-    description: 'Select item',
-    keyDownHandler: () => {
+    description: () => t('commandMenu.selectItem'),
+    keyDownHandler: (event) => {
+      if (event?.isComposing || event?.shiftKey) return false;
       const item = selectedItem();
       if (item) {
         handleItemAction(item, false);
@@ -423,25 +656,10 @@ export function CommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
-  const confirmSplitHotkey = registerHotkey({
-    hotkey: 'shift+enter',
-    scopeId: hotkeyScope,
-    description: 'Open in new split',
-    keyDownHandler: () => {
-      const item = selectedItem();
-      if (item) {
-        handleItemAction(item, true);
-        return true;
-      }
-      return false;
-    },
-    runWithInputFocused: true,
-  });
-
   const escapeHotkey = registerHotkey({
     hotkey: 'escape',
     scopeId: hotkeyScope,
-    description: 'Close command menu',
+    description: () => t('commandMenu.closeCommandMenu'),
     keyDownHandler: () => {
       // If in command scope, go back to main menu
       if (CommandState.commandScopeCommands().length > 0) {
@@ -462,7 +680,7 @@ export function CommandMenuInner(props: {
   const backspaceHotkey = registerHotkey({
     hotkey: 'backspace',
     scopeId: hotkeyScope,
-    description: 'Go back',
+    description: () => t('commandMenu.goBack'),
     keyDownHandler: () => {
       // Only handle if query is empty
       if (CommandState.query() !== '') {
@@ -485,13 +703,13 @@ export function CommandMenuInner(props: {
   const tabHotkey = registerHotkey({
     hotkey: 'tab',
     scopeId: hotkeyScope,
-    description: 'Next category',
+    description: () => t('commandMenu.nextCategory'),
     keyDownHandler: () => {
-      const currentIndex = CATEGORIES.findIndex(
-        (c) => c.id === CommandState.categoryFilter()
+      const currentIndex = categories().findIndex(
+        (c) => c.id === categoryFilter()
       );
-      const nextIndex = (currentIndex + 1) % CATEGORIES.length;
-      CommandState.setCategoryFilter(CATEGORIES[nextIndex].id);
+      const nextIndex = (currentIndex + 1) % categories().length;
+      CommandState.setCategoryFilter(categories()[nextIndex].id);
       return true;
     },
     runWithInputFocused: true,
@@ -501,14 +719,14 @@ export function CommandMenuInner(props: {
   registerHotkey({
     hotkey: 'shift+tab',
     scopeId: hotkeyScope,
-    description: 'Previous category',
+    description: () => t('commandMenu.previousCategory'),
     keyDownHandler: () => {
-      const currentIndex = CATEGORIES.findIndex(
-        (c) => c.id === CommandState.categoryFilter()
+      const currentIndex = categories().findIndex(
+        (c) => c.id === categoryFilter()
       );
       const prevIndex =
-        (currentIndex - 1 + CATEGORIES.length) % CATEGORIES.length;
-      CommandState.setCategoryFilter(CATEGORIES[prevIndex].id);
+        (currentIndex - 1 + categories().length) % categories().length;
+      CommandState.setCategoryFilter(categories()[prevIndex].id);
       return true;
     },
     runWithInputFocused: true,
@@ -520,6 +738,28 @@ export function CommandMenuInner(props: {
     if (element) {
       attachHotkeys(element);
     }
+    // Returning from the composer mounts a new input in an already-open dialog.
+    searchInput?.focus();
+  });
+
+  const runHint = () => {
+    const hint = CommandState.hint();
+    if (!hint) return;
+    props.onHint?.();
+    CommandState.close();
+    // After the dialog has gone, so its focus trap lets the hint move focus.
+    setTimeout(hint.run);
+  };
+  // The hint's own key (e.g. ⌘P) works while the menu is open.
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!CommandState.hint()?.matches(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      runHint();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', onKeyDown));
   });
 
   const isInCommandScope = createMemo(
@@ -542,74 +782,84 @@ export function CommandMenuInner(props: {
     setActiveScope(hotkeyScope);
   };
 
-  const resultsHeight = () => {
-    const count = filteredItems().length;
-    if (count === 0) return EMPTY_STATE_HEIGHT;
-    return Math.min(
-      MAX_LIST_HEIGHT,
-      count * VIRTUAL_ITEM_HEIGHT + LIST_PADDING
-    );
-  };
-
-  const categoryTabs = CATEGORIES.map((c) => ({
-    value: c.id,
-    label: c.label,
-  }));
+  const categoryTabs = () =>
+    categories().map((c) => ({
+      value: c.id,
+      label: c.label,
+    }));
 
   return (
     <CommandMenuShell
-      class={cn('max-h-[75vh] rounded-xl', props.class)}
+      class={cn('max-h-[75vh]', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
     >
       <CommandMenuShell.Header>
-        <Show
-          when={isInCommandScope()}
-          fallback={
-            <span class="flex size-5 shrink-0 items-center justify-center text-accent">
-              <Macro class="size-3" />
-            </span>
-          }
-        >
+        <Show when={isInCommandScope()} fallback={<CommandMenuLogo />}>
           <button
             class="flex size-5 shrink-0 items-center justify-center text-ink-muted hover:text-ink transition-colors"
             onClick={handleBack}
-            title="Back (Esc)"
+            title={t('commandMenu.backWithEsc')}
           >
             <ArrowLeft class="size-3" />
           </button>
         </Show>
         <CommandMenuSearchInput
-          type="text"
+          ref={(element) => {
+            searchInput = element;
+          }}
+          as="textarea"
           placeholder={
             CommandState.commandScopePlaceholder() ??
-            (isEntityActionMode() ? 'Search actions...' : 'Search...')
+            (isEntityActionMode()
+              ? t('commandMenu.searchActionsPlaceholder')
+              : t('commandMenu.searchPlaceholder'))
           }
           value={CommandState.query()}
-          onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
+          onInput={(e) => props.onQueryInput(e.currentTarget, e.isComposing)}
+          onCompositionEnd={(e) => props.onQueryInput(e.currentTarget, false)}
+          onKeyDown={props.onQueryKeyDown}
+          onKeyUp={(e) => props.onQueryKeyUp(e.currentTarget, e.isComposing)}
           autofocus
         />
       </CommandMenuShell.Header>
 
+      <Show
+        when={
+          !isInCommandScope() && !isEntityActionMode() && CommandState.hint()
+        }
+      >
+        {(hint) => (
+          <button
+            type="button"
+            class="mx-2 mt-2 flex items-center justify-between gap-2 rounded-md border border-edge-muted bg-inset px-2.5 py-1.5 text-left text-ink-muted text-xs hover:bg-hover hover:text-ink"
+            data-testid="command-menu-hint"
+            onClick={runHint}
+          >
+            <span class="truncate">{hint().message}</span>
+            <kbd class="shrink-0 rounded border border-edge-muted px-1 font-sans text-ink">
+              {hint().shortcut}
+            </kbd>
+          </button>
+        )}
+      </Show>
+
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <CommandMenuShell.Toolbar
           class={cn(
-            'pl-2.5 pr-1.5 pt-2 border-0',
+            'pl-2.5 pr-1.5 pt-2 border-0 bg-transparent',
             isEntityActionMode() && 'gap-1.5'
           )}
         >
           <Show
             when={isEntityActionMode()}
             fallback={
-              <TabsInset
-                depth={1}
-                list={categoryTabs}
-                value={CommandState.categoryFilter()}
-                onChange={(value) => {
-                  if (value) {
-                    CommandState.setCategoryFilter(value as CategoryFilter);
-                  }
-                }}
+              <Tabs
+                aria-label="Result categories"
+                size="sm"
+                options={categoryTabs()}
+                value={categoryFilter()}
+                onChange={CommandState.setCategoryFilter}
               />
             }
           >
@@ -621,31 +871,18 @@ export function CommandMenuInner(props: {
       </Show>
 
       <CommandMenuShell.Body>
-        <div
-          class="overflow-hidden transition-[height] duration-60 ease-out p-2"
-          style={{ height: `${resultsHeight()}px` }}
-        >
-          <Show
-            when={filteredItems().length > 0}
-            fallback={
-              <CommandMenuEmptyState>No results found</CommandMenuEmptyState>
-            }
-          >
-            <VirtualizedCommandList
-              items={filteredItems()}
-              selectedIndex={CommandState.selectedIndex()}
-              onSelect={(item, openInNewSplit) =>
-                handleItemAction(item, openInNewSplit)
-              }
-              onItemMouseMove={listController.setSelectedIndexFromPointer}
-              scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-              pagination={pagination}
-            />
-          </Show>
-        </div>
+        <CommandResults
+          items={filteredItems()}
+          selectedIndex={CommandState.selectedIndex()}
+          onSelect={handleItemAction}
+          onItemMouseMove={listController.setSelectedIndexFromPointer}
+          scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
+          pagination={pagination}
+          loading={isLoadingEntities()}
+        />
       </CommandMenuShell.Body>
 
-      <CommandMenuShell.Footer>
+      <CommandMenuShell.Footer class="bg-transparent">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
@@ -655,48 +892,65 @@ export function CommandMenuInner(props: {
               <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
             </div>
           </div>
-          Navigate
+          {t('commandMenu.navigate')}
         </span>
 
         <Switch>
           <Match when={isInCommandScope()}>
-            <HotkeyHint command={confirmHotkey} label="Run action" />
-            <HotkeyHint command={backspaceHotkey} label="Back" />
+            <HotkeyHint
+              command={confirmHotkey}
+              label={t('commandMenu.hintRunAction')}
+            />
+            <HotkeyHint
+              command={backspaceHotkey}
+              label={t('commandMenu.hintBack')}
+            />
           </Match>
           <Match when={selectedIsCommand() || isEntityActionMode()}>
-            <HotkeyHint command={confirmHotkey} label="Run action" />
+            <HotkeyHint
+              command={confirmHotkey}
+              label={t('commandMenu.hintRunAction')}
+            />
           </Match>
           <Match when={selectedIsSearch()}>
-            <HotkeyHint command={confirmHotkey} label="Search" />
-            <Show when={canOpenInNewSplit()}>
-              <HotkeyHint
-                command={confirmSplitHotkey}
-                label="Search in new split"
-              />
-            </Show>
+            <HotkeyHint
+              command={confirmHotkey}
+              label={t('commandMenu.hintSearch')}
+            />
           </Match>
           <Match when={selectedIsAskAi()}>
-            <HotkeyHint command={confirmHotkey} label="Ask AI" />
+            <HotkeyHint
+              command={confirmHotkey}
+              label={t('commandMenu.hintAskAi')}
+            />
           </Match>
           <Match when={selectedIsEntity()}>
-            <HotkeyHint command={confirmHotkey} label="Open" />
-            <Show when={canOpenInNewSplit()}>
-              <HotkeyHint
-                command={confirmSplitHotkey}
-                label="Open in new split"
-              />
-            </Show>
+            <HotkeyHint
+              command={confirmHotkey}
+              label={t('commandMenu.hintOpen')}
+            />
           </Match>
         </Switch>
 
         <Show when={!isInCommandScope() && !isEntityActionMode()}>
-          <HotkeyHint command={tabHotkey} label="Category" />
+          <HotkeyHint
+            command={tabHotkey}
+            label={t('commandMenu.hintCategory')}
+          />
         </Show>
         <Show
           when={isInCommandScope()}
-          fallback={<HotkeyHint command={escapeHotkey} label="Close" />}
+          fallback={
+            <HotkeyHint
+              command={escapeHotkey}
+              label={t('commandMenu.hintClose')}
+            />
+          }
         >
-          <HotkeyHint command={escapeHotkey} label="Back" />
+          <HotkeyHint
+            command={escapeHotkey}
+            label={t('commandMenu.hintBack')}
+          />
         </Show>
       </CommandMenuShell.Footer>
     </CommandMenuShell>
@@ -711,101 +965,14 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   return (
     <>
       <For each={displayEntities()}>
-        {(entity) => {
-          return (
-            <div
-              class={cn(
-                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
-                {
-                  'max-w-[50%]': props.entities.length === 2,
-                }
-              )}
-            >
-              <InlineEntity entity={entity} />
-            </div>
-          );
-        }}
+        {(entity) => <EntitySelectionBadge entity={entity} />}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-muted-foreground text-xs px-2 py-1">
-          +{remainingCount()} more
-        </div>
+        <Badge size="sm">
+          {t('commandMenu.moreCount', { count: remainingCount() })}
+        </Badge>
       </Show>
     </>
-  );
-}
-
-/** Virtualized command list component */
-function VirtualizedCommandList(props: {
-  items: CommandMenuItem[];
-  selectedIndex: number;
-  onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
-  onItemMouseMove: (index: number) => void;
-  scrollSelectedIntoView: boolean;
-  pagination?: PaginationControls;
-}) {
-  let virtualizerHandle: VirtualizerHandle | undefined;
-
-  const loadMoreNearEnd = () => {
-    const pagination = props.pagination;
-    if (
-      !virtualizerHandle ||
-      !pagination?.hasMore() ||
-      pagination.isLoadingMore()
-    )
-      return;
-    const remaining =
-      virtualizerHandle.scrollSize -
-      virtualizerHandle.scrollOffset -
-      virtualizerHandle.viewportSize;
-    if (remaining <= LOAD_MORE_THRESHOLD) void pagination.loadMore();
-  };
-
-  createEffect(() => {
-    const index = props.selectedIndex;
-    if (
-      !props.scrollSelectedIntoView ||
-      index < 0 ||
-      index >= props.items.length ||
-      !virtualizerHandle
-    ) {
-      return;
-    }
-    // Skip when all items fit: scrolling would be a no-op at the final
-    // container size, but during the height transition the container is
-    // briefly clipped and scrollToIndex shifts scrollTop, hiding the search
-    // row across category switches.
-    if (props.items.length * VIRTUAL_ITEM_HEIGHT <= MAX_LIST_HEIGHT) {
-      return;
-    }
-    virtualizerHandle.scrollToIndex(index, { align: 'nearest' });
-  });
-
-  const selector = createSelector(
-    () => props.selectedIndex,
-    (ndx, selected) => ndx === selected
-  );
-
-  return (
-    <VList
-      ref={(handle) => {
-        virtualizerHandle = handle;
-      }}
-      data={props.items}
-      style={{ height: '100%' }}
-      class="scrollbar-hidden"
-      onScroll={loadMoreNearEnd}
-    >
-      {(item, index) => (
-        <CommandItem
-          item={item}
-          index={index()}
-          selected={selector(index())}
-          onSelect={props.onSelect}
-          onMouseMove={props.onItemMouseMove}
-        />
-      )}
-    </VList>
   );
 }
 

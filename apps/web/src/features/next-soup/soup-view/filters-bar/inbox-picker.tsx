@@ -1,6 +1,7 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { useEmailLinksQuery } from '@queries/email/link';
+import { useMailAccountsQuery } from '@queries/email/mail-accounts';
+import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
 import type { SearchableOption } from './searchable-multi-select';
 
@@ -17,10 +18,10 @@ export function useInboxPicker(args: {
   selectedIds: Accessor<string[] | undefined>;
   setSelectedIds: (ids: string[] | undefined) => void;
 }) {
-  const linksQuery = useEmailLinksQuery();
+  const linksQuery = useMailAccountsQuery();
 
   const options = createMemo((): SearchableOption[] =>
-    (linksQuery.data?.links ?? [])
+    (queryReadyGate(linksQuery) ? linksQuery.data.links : [])
       .map((link) => ({
         id: link.id,
         label: link.email_address,

@@ -1,5 +1,7 @@
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
-import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+import type {
+  Message as EntityMessage,
+  MessageListItem,
+} from '@service-storage/messages';
 import {
   type Accessor,
   createContext,
@@ -11,9 +13,9 @@ import type { FocusRequest } from '../Thread/focus-request';
 export type StandaloneThreadContextValue = {
   channelId: Accessor<string>;
   messageId: Accessor<string>;
-  parent: Accessor<ApiChannelMessage | undefined>;
-  replies: Accessor<ApiThreadReply[]>;
-  displayReplies: Accessor<ApiThreadReply[]>;
+  parent: Accessor<MessageListItem | undefined>;
+  replies: Accessor<EntityMessage[]>;
+  displayReplies: Accessor<EntityMessage[]>;
   hasReplies: Accessor<boolean>;
   isExpanded: Accessor<boolean>;
   setIsExpanded: Setter<boolean>;

@@ -9,6 +9,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import {
   type CalendarEvent,
   type CalendarSource,
+  isCalendarEventVisible,
   mapCalendarOccurrence,
 } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
@@ -26,6 +27,8 @@ export interface CalendarOccurrenceData {
 export interface CalendarOccurrenceDataOptions {
   range: Accessor<CalendarOccurrenceQueryRange | undefined>;
   sourceById?: Accessor<ReadonlyMap<string, CalendarSource>>;
+  /** Wait for calendar metadata before painting source colors. */
+  sourcesReady?: Accessor<boolean>;
   isSourceVisible?: (sourceId: string) => boolean;
   queryOptions?: Accessor<CalendarOccurrencesQueryOptions>;
 }
@@ -50,20 +53,23 @@ export function useCalendarOccurrenceData(
     }
   );
   const events = createMemo(() => {
-    if (!isRangeSupported()) return [];
+    if (
+      !isRangeSupported() ||
+      !occurrencesQuery.isSuccess ||
+      options.sourcesReady?.() === false
+    )
+      return [];
     const sourceById = options.sourceById?.();
     return (occurrencesQuery.data?.items ?? []).map((item) =>
-      mapCalendarOccurrence(
-        item,
-        item.event.calendarId != null
-          ? sourceById?.get(item.event.calendarId)
-          : undefined
-      )
+      mapCalendarOccurrence(item, {
+        sourceById,
+        isSourceVisible: options.isSourceVisible,
+      })
     );
   });
   const visibleEvents = createMemo(() =>
-    events().filter(
-      (event) => options.isSourceVisible?.(event.calendar.id) !== false
+    events().filter((event) =>
+      isCalendarEventVisible(event, options.isSourceVisible)
     )
   );
   const eventsById = createMemo(
@@ -72,8 +78,9 @@ export function useCalendarOccurrenceData(
   const isLoading = () =>
     options.range() === undefined ||
     (isRangeSupported() &&
-      (occurrencesQuery.isPending || occurrencesQuery.isPlaceholderData));
+      (occurrencesQuery.isPending || options.sourcesReady?.() === false));
   const isSyncing = () =>
+    occurrencesQuery.isSuccess &&
     occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
 
   return {

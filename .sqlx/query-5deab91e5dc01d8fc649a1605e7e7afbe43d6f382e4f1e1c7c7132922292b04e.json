@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO reminder_email_followup (reminder_id, user_id, thread_id, link_id, state, payload)\n               VALUES ($1, $2, $3, $4, $5, $6)\n               ON CONFLICT (reminder_id) DO UPDATE SET state = EXCLUDED.state, payload = EXCLUDED.payload\n               WHERE reminder_email_followup.user_id = EXCLUDED.user_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5deab91e5dc01d8fc649a1605e7e7afbe43d6f382e4f1e1c7c7132922292b04e"
+}

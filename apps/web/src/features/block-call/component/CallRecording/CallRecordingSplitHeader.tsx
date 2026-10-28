@@ -3,13 +3,14 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
-import { useCall } from '@channel/Call/use-call';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -20,15 +21,23 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
+import { createFileDownload } from '@core/util/createFileDownload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
-import PhoneCallIcon from '@icon/wide-call.svg';
-import IconShared from '@icon/wide-share.svg';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import { Button } from '@ui';
-import { type Accessor, Show } from 'solid-js';
+import IconShared from '@icon/share.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import type { CallRecord } from '@service-call/client';
+import { ButtonGroup } from '@ui';
+import { Show } from 'solid-js';
+import { callRecordingDownloadSource } from '../../queries/recording-download';
+import { useCallAgain } from '../use-call-again';
 
 export function CallRecordingSplitHeaderLoading() {
   return (
@@ -47,20 +56,50 @@ export function CallRecordingSplitHeaderLoading() {
   );
 }
 
-export function CallRecordingSplitHeader(props: {
-  record: Accessor<CallRecord>;
-}) {
-  const record = props.record;
+export function CallRecordingSplitHeader(props: { record: CallRecord }) {
+  const record = () => props.record;
   const blockId = useBlockId();
-  const shareCtx = useShareDialogContext();
   const callName = () => record().customName ?? record().channelName ?? 'Call';
-  const call = useCall(() => record().channelId);
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias: 'call',
+    itemType: 'call',
+    name: callName(),
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
+  const { canCallAgain, callAgain } = useCallAgain(
+    () => record().callId,
+    () => record().channelId
+  );
+  const recordingDownload = createFileDownload(() =>
+    callRecordingDownloadSource(record(), callName())
+  );
+  const ops = (): FileOperation[] => [
+    { op: 'rename' },
+    ...(record().recordingUrl
+      ? [
+          {
+            group: 'file' as const,
+            label: 'Download',
+            icon: DownloadSimple,
+            action: () =>
+              fireAndForget(
+                recordingDownload.start(),
+                'call-recording-download'
+              ),
+          },
+        ]
+      : []),
+    { op: 'delete' },
+  ];
 
   const shareTool: BlockTool = {
     label: 'Share',
     icon: IconShared,
-    action: () => shareCtx.open(),
-    buttonComponent: () => <ShareTrigger />,
+    action: openShare,
+    buttonComponent: () => <ShareTrigger onClick={openShare} />,
     focusTarget: getShareDrawerRecipientInput,
   };
 
@@ -87,8 +126,9 @@ export function CallRecordingSplitHeader(props: {
           name: callName(),
           fileType: 'call',
         }),
-      buttonComponent: () => (
+      buttonComponent: (control) => (
         <ChatWithAgentButton
+          grouped={control.grouped}
           entity={{
             type: 'document',
             id: blockId,
@@ -135,20 +175,21 @@ export function CallRecordingSplitHeader(props: {
         <div class="-order-1">
           <BlockLiveIndicators />
         </div>
-        <Show when={!record().isActive}>
+        <Show when={!isMobile() && !record().isActive && canCallAgain()}>
           <div class="order-[900] flex items-center">
-            <HeaderIsland>
-              <Button
-                depth={2}
-                variant="base"
-                size="icon-xs"
-                class="bg-surface"
-                tooltip="Call Again"
-                onClick={() => call.joinCall()}
-              >
-                <PhoneCallIcon class="size-4" />
-              </Button>
-            </HeaderIsland>
+            <HeaderActionGroup label="Call actions">
+              <HeaderIsland>
+                <ButtonGroup.Button
+                  variant="secondary"
+                  size={isTouchDevice() ? 'icon-xs' : 'icon-sm'}
+                  class={isTouchDevice() ? 'bg-surface' : undefined}
+                  tooltip="Call Again"
+                  onClick={callAgain}
+                >
+                  <PhoneCallIcon class="size-4" />
+                </ButtonGroup.Button>
+              </HeaderIsland>
+            </HeaderActionGroup>
           </div>
         </Show>
       </SplitHeaderRight>
@@ -158,12 +199,11 @@ export function CallRecordingSplitHeader(props: {
       <ResponsiveBlockToolbar
         tools={tools}
         menuTools={menuTools}
-        ops={[{ op: 'copy' }]}
+        ops={ops()}
         id={blockId}
         itemType="call"
         name={callName()}
-        // Generic chrome can't reconstruct a CallEntity (it lacks the
-        // channelId), so supply it for the menu's entity-gated items.
+        // Supply the record's current status and optional channel association.
         entity={buildEntityData({
           id: record().callId,
           name: callName(),

@@ -27,9 +27,15 @@ impl DocumentBytesUploadPort for ReqwestDocumentBytesUploader {
         &self,
         upload: DocumentBytesUpload,
     ) -> Result<(), DocumentError> {
+        // The document service mints the presigned URL for a browser on the
+        // host (`localhost:4566`); this uploader runs inside the Docker
+        // network and has to use LocalStack's own hostname to reach the same
+        // object. No-op outside local AWS.
+        let presigned_url =
+            macro_aws_config::transform_aws_url_for_internal_fetch(&upload.presigned_url);
         let upload_response = self
             .http_client
-            .put(&upload.presigned_url)
+            .put(&presigned_url)
             .header("content-type", &upload.content_type)
             .header("x-amz-checksum-sha256", &upload.base64_sha256)
             .body(upload.bytes)

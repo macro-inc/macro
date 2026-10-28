@@ -2,14 +2,22 @@ use crate::domain::models::{
     CatalogEntry, CatalogPage, ConnectToken, McpServer, PipedreamAccount, PipedreamConnection,
     client_info,
 };
-use crate::domain::ports::{ConnectorDirectory, McpConnection, PipedreamConnect};
+use crate::domain::ports::{
+    ConnectedAppProxy, ConnectorDirectory, McpConnection, PipedreamConnect, ProxyResponse,
+};
 use anyhow::Context;
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use reqwest::header::{HeaderMap, HeaderValue};
 use rmcp::service::ServiceExt;
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use serde::Deserialize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use url::Url;
+
+mod capabilities;
 
 /// Default base URL of the Pipedream REST API.
 pub const DEFAULT_API_URL: &str = "https://api.pipedream.com";
@@ -20,6 +28,10 @@ pub const DEFAULT_MCP_URL: &str = "https://remote.mcp.pipedream.net";
 /// Safety margin subtracted from an access token's lifetime, so we never
 /// present a token about to expire mid-request.
 const TOKEN_EXPIRY_MARGIN: Duration = Duration::from_secs(60);
+
+/// The most accounts one listing asks for; a user holds one per app unless a
+/// connect flow went unreported.
+const ACCOUNTS_PAGE_LIMIT: &str = "100";
 
 /// Configuration for [`PipedreamClient`].
 #[derive(Clone, Debug)]
@@ -54,6 +66,9 @@ pub struct PipedreamConfig {
 pub struct PipedreamClient {
     http: reqwest::Client,
     config: PipedreamConfig,
+    /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
+    /// every Connect token. Unset when the host did not configure a webhook.
+    webhook_uri: Option<String>,
     access_token: Mutex<Option<CachedToken>>,
 }
 
@@ -74,8 +89,16 @@ impl PipedreamClient {
         Ok(Self {
             http,
             config,
+            webhook_uri: None,
             access_token: Mutex::new(None),
         })
+    }
+
+    /// Mint connect tokens with this webhook so Pipedream reports in-UI
+    /// connect-flow outcomes. Hosts that never mint tokens can skip this.
+    pub fn with_webhook_uri(mut self, webhook_uri: impl Into<String>) -> Self {
+        self.webhook_uri = Some(webhook_uri.into());
+        self
     }
 
     fn api(&self, path: &str) -> String {
@@ -94,6 +117,7 @@ impl PipedreamClient {
         {
             return Ok(cached.token.clone());
         }
+        tracing::debug!("pipedream api token absent or near expiry; requesting a fresh one");
 
         let response = self
             .http
@@ -143,6 +167,9 @@ impl PipedreamConnect for PipedreamClient {
         if !self.config.allowed_origins.is_empty() {
             body["allowed_origins"] = serde_json::json!(self.config.allowed_origins);
         }
+        if let Some(webhook_uri) = &self.webhook_uri {
+            body["webhook_uri"] = serde_json::json!(webhook_uri);
+        }
 
         let response = self
             .authed(self.http.post(self.connect_api("/tokens")))
@@ -191,13 +218,32 @@ impl PipedreamConnect for PipedreamClient {
         let account: AccountResponse =
             serde_json::from_value(account).context("parsing Pipedream account")?;
 
-        Ok(Some(PipedreamAccount {
-            id: account.id,
-            external_user_id: account.external_id,
-            app_slug: account.app.name_slug,
-            app_name: account.app.name,
-            healthy: account.healthy.unwrap_or(true),
-        }))
+        Ok(Some(account.into()))
+    }
+
+    #[tracing::instrument(skip(self, external_user_id), err)]
+    async fn list_accounts(
+        &self,
+        external_user_id: &str,
+        app_slug: &str,
+    ) -> anyhow::Result<Vec<PipedreamAccount>> {
+        let response = self
+            .authed(self.http.get(self.connect_api("/accounts")).query(&[
+                ("external_user_id", external_user_id),
+                ("app", app_slug),
+                ("limit", ACCOUNTS_PAGE_LIMIT),
+            ]))
+            .await?
+            .send()
+            .await
+            .context("listing Pipedream accounts")?;
+        let response = error_for_status(response).await?;
+
+        let accounts: AccountsResponse = response
+            .json()
+            .await
+            .context("decoding Pipedream accounts response")?;
+        Ok(accounts.data.into_iter().map(Into::into).collect())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -222,6 +268,37 @@ impl PipedreamConnect for PipedreamClient {
 }
 
 impl ConnectorDirectory for PipedreamClient {
+    #[tracing::instrument(skip(self), err, fields(app = %app_slug))]
+    async fn retrieve(&self, app_slug: &str) -> anyhow::Result<Option<CatalogEntry>> {
+        // The slug is interpolated into the path. Anything outside Pipedream's
+        // app-slug charset is not an app, and is not requested.
+        if !is_app_slug(app_slug) {
+            return Ok(None);
+        }
+
+        let response = self
+            .authed(
+                self.http
+                    .get(self.api(&format!("/connect/apps/{app_slug}"))),
+            )
+            .await?
+            .send()
+            .await
+            .context("retrieving Pipedream app")?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let response = error_for_status(response).await?;
+
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .context("decoding Pipedream app response")?;
+        let app = body.get("data").unwrap_or(&body).clone();
+        let app: AppResponse = serde_json::from_value(app).context("parsing Pipedream app")?;
+        Ok(connectable_catalog_entry(app_slug, app))
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn search(
         &self,
@@ -229,7 +306,17 @@ impl ConnectorDirectory for PipedreamClient {
         cursor: Option<&str>,
         limit: u32,
     ) -> anyhow::Result<CatalogPage> {
-        let mut query: Vec<(&str, String)> = vec![("limit", limit.to_string())];
+        let mut query: Vec<(&str, String)> = vec![
+            ("limit", limit.to_string()),
+            // `featured_weight` is Pipedream's popularity ordering (the sort
+            // behind pipedream.com/apps); without it the directory comes back
+            // in an order nobody would browse.
+            ("sort_key", "featured_weight".to_owned()),
+            ("sort_direction", "desc".to_owned()),
+            // Apps without actions expose no MCP tools, so there is nothing
+            // to connect them for.
+            ("has_actions", "true".to_owned()),
+        ];
         if let Some(search) = search {
             query.push(("q", search.to_owned()));
         }
@@ -238,7 +325,7 @@ impl ConnectorDirectory for PipedreamClient {
         }
 
         let response = self
-            .authed(self.http.get(self.api("/apps")))
+            .authed(self.http.get(self.api("/connect/apps")))
             .await?
             .query(&query)
             .send()
@@ -265,11 +352,11 @@ impl ConnectorDirectory for PipedreamClient {
             // Apps without an auth flow have nothing to connect.
             .filter(|app| app.auth_type.as_deref() != Some("none"))
             .map(|app| CatalogEntry {
+                categories: app.categories,
                 app_slug: app.name_slug,
                 display_name: app.name,
-                description: Some(app.description).filter(|d| !d.is_empty()),
+                description: app.description.filter(|d| !d.is_empty()),
                 icon_url: Some(app.img_src).filter(|u| u.starts_with("https://")),
-                priority: false,
             })
             .collect();
 
@@ -280,33 +367,167 @@ impl ConnectorDirectory for PipedreamClient {
     }
 }
 
-impl McpConnection for PipedreamClient {
-    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
-    async fn connect(&self, record: &PipedreamConnection) -> anyhow::Result<McpServer> {
-        let token = self.access_token().await?;
+/// How to address Pipedream's remote MCP server on behalf of one user's
+/// connected app.
+///
+/// The bearer is our project-level API token and the headers are what scope a
+/// request to the user and app - Pipedream injects the account's own
+/// credentials server-side from nothing but these. That is why this exists as
+/// a value handed to a proxy rather than only inside a client: whoever holds
+/// the bearer can claim to be any user, so the caller is expected to keep it
+/// away from anything user-controlled.
+///
+/// An outbound vocabulary, not a domain one, typed accordingly: headers are a
+/// validated `HeaderMap` and the destination a parsed `Url`, so an injectable
+/// value fails here, where it originates, and consumers have nothing left to
+/// re-validate.
+#[derive(Clone, Debug)]
+pub struct McpUpstreamCall {
+    /// URL of Pipedream's remote MCP server.
+    pub url: Url,
+    /// Our project API token, for `Authorization: Bearer`.
+    pub bearer_token: String,
+    /// The `x-pd-*` headers scoping the call to the record's user and app.
+    pub headers: HeaderMap,
+}
 
-        let mut headers = reqwest::header::HeaderMap::new();
-        let mut auth = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-            .map_err(|e| anyhow::anyhow!("invalid bearer token: {e}"))?;
-        auth.set_sensitive(true);
-        headers.insert(reqwest::header::AUTHORIZATION, auth);
-        let header = |v: &str| reqwest::header::HeaderValue::from_str(v);
+/// Port for addressing Pipedream's remote MCP server without opening a
+/// session on it.
+///
+/// What [`McpConnection`] uses under the hood, exposed for callers that
+/// proxy raw MCP-over-HTTP traffic instead of speaking MCP themselves: they
+/// need the URL, bearer, and scoping headers to stamp onto a request that
+/// already exists. The returned call carries our project-level bearer, so it
+/// must never travel anywhere user-controlled.
+pub trait McpUpstream: Send + Sync + 'static {
+    /// The upstream call scoped to `record`'s app for `record.user_id`.
+    fn upstream(
+        &self,
+        record: &PipedreamConnection,
+    ) -> impl Future<Output = anyhow::Result<McpUpstreamCall>> + Send;
+}
+
+impl McpUpstream for PipedreamClient {
+    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
+    async fn upstream(&self, record: &PipedreamConnection) -> anyhow::Result<McpUpstreamCall> {
+        let mut headers = HeaderMap::new();
+        let header = |value: &str| {
+            HeaderValue::from_str(value).with_context(|| format!("{value:?} is not a header value"))
+        };
         headers.insert("x-pd-project-id", header(&self.config.project_id)?);
         headers.insert("x-pd-environment", header(&self.config.environment)?);
         headers.insert("x-pd-external-user-id", header(record.user_id.as_ref())?);
         headers.insert("x-pd-app-slug", header(&record.app_slug)?);
         // Flat per-app tools; no configuration meta-tools.
-        headers.insert("x-pd-tool-mode", header("tools-only")?);
+        headers.insert("x-pd-tool-mode", HeaderValue::from_static("tools-only"));
+
+        Ok(McpUpstreamCall {
+            url: Url::parse(&self.config.mcp_url).context("PIPEDREAM_MCP_URL is not a url")?,
+            bearer_token: self.access_token().await?,
+            headers,
+        })
+    }
+}
+
+impl McpConnection for PipedreamClient {
+    fn is_configured(&self) -> bool {
+        true
+    }
+
+    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
+    async fn connect(&self, record: &PipedreamConnection) -> anyhow::Result<McpServer> {
+        let upstream = self.upstream(record).await?;
+
+        let mut headers = upstream.headers;
+        let mut auth = HeaderValue::from_str(&format!("Bearer {}", upstream.bearer_token))
+            .map_err(|e| anyhow::anyhow!("invalid bearer token: {e}"))?;
+        auth.set_sensitive(true);
+        headers.insert(reqwest::header::AUTHORIZATION, auth);
 
         let client = reqwest::Client::builder()
             .default_headers(headers)
             .build()
             .context("building Pipedream MCP HTTP client")?;
 
-        let config = StreamableHttpClientTransportConfig::with_uri(&*self.config.mcp_url.clone());
+        let config = StreamableHttpClientTransportConfig::with_uri(upstream.url.as_str());
         let transport = StreamableHttpClientTransport::with_client(client, config);
         Ok(client_info().serve(transport).await?)
     }
+}
+
+/// The prefix Pipedream's Connect proxy strips to find upstream headers.
+const PROXY_HEADER_PREFIX: &str = "x-pd-proxy-";
+
+impl ConnectedAppProxy for PipedreamClient {
+    #[tracing::instrument(skip_all, err, fields(app = %connection.app_slug, user_id = %connection.user_id, method = ?method))]
+    async fn proxy(
+        &self,
+        connection: &PipedreamConnection,
+        method: http::Method,
+        url: &str,
+        headers: &http::HeaderMap,
+        body: Option<&serde_json::Value>,
+    ) -> anyhow::Result<ProxyResponse> {
+        if headers.contains_key(http::header::AUTHORIZATION) {
+            anyhow::bail!("the Connect proxy injects Authorization; callers may not set it");
+        }
+        let endpoint = self.connect_api(&format!("/proxy/{}", URL_SAFE_NO_PAD.encode(url)));
+        let mut request = self
+            .authed(self.http.request(method, endpoint))
+            .await?
+            .query(&[
+                ("external_user_id", connection.user_id.as_ref()),
+                ("account_id", connection.account_id.as_str()),
+            ]);
+        for (name, value) in headers {
+            request = request.header(format!("{PROXY_HEADER_PREFIX}{name}"), value);
+        }
+        if let Some(body) = body {
+            request = request.json(body);
+        }
+
+        let response = request
+            .send()
+            .await
+            .context("calling the Pipedream Connect proxy")?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response
+            .text()
+            .await
+            .context("reading the Pipedream Connect proxy response")?;
+        Ok(ProxyResponse {
+            status,
+            headers,
+            body,
+        })
+    }
+}
+
+/// The charset a Pipedream app slug may use. A segment outside it could never
+/// name an app, and must not be placed in a request path.
+fn is_app_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
+}
+
+/// An app the catalog would offer to connect: the slug we asked for, with an
+/// auth flow. Apps with `auth_type: none` have nothing to connect.
+fn connectable_catalog_entry(requested_slug: &str, app: AppResponse) -> Option<CatalogEntry> {
+    if app.auth_type.as_deref() == Some("none") || app.name_slug != requested_slug {
+        return None;
+    }
+    Some(CatalogEntry {
+        categories: app.categories,
+        app_slug: app.name_slug,
+        display_name: app.name,
+        description: app
+            .description
+            .filter(|description| !description.is_empty()),
+        icon_url: Some(app.img_src).filter(|url| url.starts_with("https://")),
+    })
 }
 
 async fn error_for_status(response: reqwest::Response) -> anyhow::Result<reqwest::Response> {
@@ -338,7 +559,26 @@ struct AccountResponse {
     id: String,
     external_id: Option<String>,
     healthy: Option<bool>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
     app: AccountApp,
+}
+
+impl From<AccountResponse> for PipedreamAccount {
+    fn from(account: AccountResponse) -> Self {
+        Self {
+            id: account.id,
+            external_user_id: account.external_id,
+            app_slug: account.app.name_slug,
+            app_name: account.app.name,
+            healthy: account.healthy.unwrap_or(true),
+            created_at: account.created_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct AccountsResponse {
+    data: Vec<AccountResponse>,
 }
 
 #[derive(Deserialize)]
@@ -358,14 +598,20 @@ struct PageInfo {
     end_cursor: Option<String>,
 }
 
+#[cfg(test)]
+mod test;
+
 #[derive(Deserialize)]
 struct AppResponse {
     name_slug: String,
     name: String,
+    // Nullable in the API, not just omissible.
     #[serde(default)]
-    description: String,
+    description: Option<String>,
     #[serde(default)]
     auth_type: Option<String>,
     #[serde(default)]
     img_src: String,
+    #[serde(default)]
+    categories: Vec<String>,
 }

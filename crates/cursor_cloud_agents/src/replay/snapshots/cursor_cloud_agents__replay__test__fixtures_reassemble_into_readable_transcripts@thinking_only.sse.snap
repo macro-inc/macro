@@ -1,0 +1,13 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 239
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/thinking_only.sse
+---
+
+--- thinking ---
+Preparing a pull request with a one-line test appended to the README change.
+
+Checking the repository state and existing README changes.
+--- assistant ---
+I'll inspect the repo and README so I can add a one-line TEST at the bottom and open a PR.

@@ -17,6 +17,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::de::DeserializeOwned;
+use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -54,7 +55,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
@@ -68,6 +69,7 @@ where
         let project_context: Extension<BasicProject> = parts
             .extract()
             .await
+            .inspect_err(|error| tracing::error!(error=?error, "project context missing"))
             .map_err(|_| ExtractorError::Internal)?;
 
         if matches!(
@@ -89,13 +91,14 @@ where
         let macro_user_id = match authorization.authorization.as_ref() {
             Some(MacroAuthorization::User(user))
             | Some(MacroAuthorization::Internal(Some(user))) => Some(user.macro_user_id.clone()),
-            Some(MacroAuthorization::Bot(_)) | Some(MacroAuthorization::Internal(None)) | None => {
-                None
-            }
+            Some(MacroAuthorization::Bot(_))
+            | Some(MacroAuthorization::Harness(_))
+            | Some(MacroAuthorization::Internal(None))
+            | None => None,
         };
 
         if let Some(ref user_id) = macro_user_id
-            && project_context.user_id == *user_id
+            && project_context.user_id.is_user(user_id)
         {
             return Ok(Self {
                 entity_access_receipt: project_access_receipt(
@@ -345,6 +348,7 @@ where
             get_project_access_receipt(service.as_ref(), Some(user.macro_user_id), project.id())
                 .await?
         }
+        Some(MacroAuthorization::Harness(_)) => return Err(ExtractorError::Unauthorized),
         None => get_project_access_receipt(service.as_ref(), None, project.id()).await?,
     };
 

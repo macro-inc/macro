@@ -1,7 +1,16 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { getScrollParentElement } from '@core/util/scrollParent';
+import ColumnsIcon from '@icon/system/regular/columns.svg';
+import ColumnsPlusLeftIcon from '@icon/system/regular/columns-plus-left.svg';
+import ColumnsPlusRightIcon from '@icon/system/regular/columns-plus-right.svg';
+import CornersOutIcon from '@icon/system/regular/corners-out.svg';
+import DotsIcon from '@icon/system/regular/dots-six-vertical.svg';
+import RowsIcon from '@icon/system/regular/rows.svg';
+import RowsPlusBottomIcon from '@icon/system/regular/rows-plus-bottom.svg';
+import RowsPlusTopIcon from '@icon/system/regular/rows-plus-top.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import {
   $computeTableMap,
   $createTableSelection,
@@ -17,15 +26,6 @@ import {
   getDOMCellFromTarget,
   type TableCellNode,
 } from '@lexical/table';
-import ColumnsIcon from '@phosphor/columns.svg';
-import ColumnsPlusLeftIcon from '@phosphor/columns-plus-left.svg';
-import ColumnsPlusRightIcon from '@phosphor/columns-plus-right.svg';
-import CornersOutIcon from '@phosphor/corners-out.svg';
-import DotsIcon from '@phosphor/dots-six-vertical.svg';
-import RowsIcon from '@phosphor/rows.svg';
-import RowsPlusBottomIcon from '@phosphor/rows-plus-bottom.svg';
-import RowsPlusTopIcon from '@phosphor/rows-plus-top.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
@@ -47,7 +47,9 @@ import {
   createSignal,
   For,
   Show,
+  useContext,
 } from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { lazyRegister } from '../../plugins';
 import { $moveCellRange } from '../../plugins/tables/tableMove';
@@ -122,8 +124,8 @@ type DragShape = {
  * pasting a copied range.
  */
 export function TableMoveHandle() {
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();
   const [focusCellKey, setFocusCellKey] = createSignal<string>();
@@ -238,7 +240,9 @@ export function TableMoveHandle() {
       ?.getBoundingClientRect();
     // Vertical scroll viewport of the editor; its top is the highest the
     // handle may sit before it would float over the gray area above.
-    const scrollTop = mdData.scrollContainer?.getBoundingClientRect().top;
+    const scrollTop = getScrollParentElement(
+      currentEditor.getRootElement()
+    )?.getBoundingClientRect().top;
 
     return {
       // Clamp to the scroll wrapper's visible right edge so a cell scrolled
@@ -572,7 +576,7 @@ export function TableMoveHandle() {
             </Show>
             <Show when={menuOpen()}>
               <div
-                class="z-30 grid grid-cols-2 gap-1 overflow-y-auto rounded-lg bg-surface p-1.5 shadow-lg ring-1 ring-edge"
+                class="menu-surface z-30 grid grid-cols-2 gap-1 overflow-y-auto p-1.5"
                 style={{
                   width: `${MENU_WIDTH_PX}px`,
                   'max-height': `${MENU_MAX_HEIGHT_PX}px`,

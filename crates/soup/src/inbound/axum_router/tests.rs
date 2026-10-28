@@ -33,8 +33,9 @@ use crate::{
     domain::{
         models::{
             EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
-            SoupSortDirection, SoupType, TouchedQueryInner, grouping::ItemGroupingInfo,
+            NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
+            SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
+            grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -55,6 +56,8 @@ enum MockCursorKind {
     FrecencyCursor,
     TouchedSort,
     TouchedCursor,
+    NotifiedSort,
+    NotifiedCursor,
 }
 
 #[derive(Debug)]
@@ -165,6 +168,12 @@ impl SoupService for MockSoup {
             SoupQuery::Touched(TouchedQueryInner(Query::Cursor(..))) => {
                 MockCursorKind::TouchedCursor
             }
+            SoupQuery::Notified(NotifiedQueryInner(Query::Sort(..))) => {
+                MockCursorKind::NotifiedSort
+            }
+            SoupQuery::Notified(NotifiedQueryInner(Query::Cursor(..))) => {
+                MockCursorKind::NotifiedCursor
+            }
         };
         let user_id = req.user.to_string();
         let soup_type = req.soup_type;
@@ -216,6 +225,48 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
+    async fn send_message_for_user(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _link: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::SendAsUnavailable)
+    }
+
+    async fn set_thread_archived(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _id: uuid::Uuid,
+        _archived: bool,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -249,10 +300,11 @@ impl EmailService for MockEmail {
         }))
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -298,6 +350,24 @@ impl EmailService for MockEmail {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _link_id: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::SavedUserDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _draft_id: uuid::Uuid,
+        _expected_generation: i32,
+    ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn send_message(
         &self,
         _link: &email::domain::models::Link,
@@ -339,6 +409,16 @@ impl EmailService for MockEmail {
         _link: &email::domain::models::Link,
         _input: email::domain::models::UpsertEmailFilterInput,
     ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn set_sender_policy(
+        &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _link: &email::domain::models::Link,
+        _sender_email: &str,
+        _policy: email::domain::models::SenderPolicy,
+    ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -517,6 +597,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -649,6 +738,48 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
+    async fn send_message_for_user(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _link: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::SendAsUnavailable)
+    }
+
+    async fn set_thread_archived(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _id: uuid::Uuid,
+        _archived: bool,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -672,10 +803,11 @@ impl EmailService for MockEmailLinkResult {
         (self.get_link_result)()
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -721,6 +853,24 @@ impl EmailService for MockEmailLinkResult {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _link_id: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::SavedUserDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _draft_id: uuid::Uuid,
+        _expected_generation: i32,
+    ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn send_message(
         &self,
         _link: &email::domain::models::Link,
@@ -762,6 +912,16 @@ impl EmailService for MockEmailLinkResult {
         _link: &email::domain::models::Link,
         _input: email::domain::models::UpsertEmailFilterInput,
     ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn set_sender_policy(
+        &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        _link: &email::domain::models::Link,
+        _sender_email: &str,
+        _policy: email::domain::models::SenderPolicy,
+    ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -1157,17 +1317,17 @@ async fn it_parses_notification_and_task_filters() {
         .body(axum::body::Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "document_filters": {
-                    "notification_filters": { "done": false, "seen": false },
+                    "notification_filters": { "states": ["unseen"] },
                     "task_filters": { "include_cbm_atm_nc": true }
                 },
                 "chat_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 },
                 "project_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 },
                 "channel_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 }
             }))
             .unwrap(),
@@ -1183,34 +1343,24 @@ async fn it_parses_notification_and_task_filters() {
 
     let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
     assert_eq!(
-        filter.document_filters.notification_filters.done,
-        Some(false)
-    );
-    assert_eq!(
-        filter.document_filters.notification_filters.seen,
-        Some(false)
+        filter.document_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
         filter.document_filters.task_filters.include_cbm_atm_nc,
         Some(true)
     );
-    assert_eq!(filter.chat_filters.notification_filters.done, Some(false));
-    assert_eq!(filter.chat_filters.notification_filters.seen, Some(false));
     assert_eq!(
-        filter.project_filters.notification_filters.done,
-        Some(false)
+        filter.chat_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
-        filter.project_filters.notification_filters.seen,
-        Some(false)
+        filter.project_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
-        filter.channel_filters.notification_filters.done,
-        Some(false)
-    );
-    assert_eq!(
-        filter.channel_filters.notification_filters.seen,
-        Some(false)
+        filter.channel_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
 }
 
@@ -2020,6 +2170,105 @@ async fn ascending_touched_is_rejected() {
         body,
         json!({
             "message": "sort_direction=asc is not supported with sort_method=touched_by_me"
+        })
+    );
+}
+
+/// notified_at selects the notified query mode from the plain sort param.
+#[tokio::test]
+async fn notified_at_sort_selects_notified_query() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({ "sort_method": "notified_at" })).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::NotifiedSort));
+}
+
+/// A notified page cursor round-trips into the notified query mode. Its
+/// value is a timestamp exactly like the touched cursor's, so this also
+/// proves the `"notified_at"` sort marker keeps it out of the touched arm.
+#[tokio::test]
+async fn notified_cursor_round_trips() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let cursor = models_pagination::Base64Str::encode_json(models_pagination::Cursor {
+        id: Uuid::new_v4().to_string(),
+        limit: 20usize,
+        val: CursorVal {
+            sort_type: models_pagination::NotifiedAt,
+            last_val: chrono::DateTime::<chrono::Utc>::default(),
+        },
+        filter: EntityFilters::default(),
+    })
+    .type_erase();
+
+    let cursor = cursor
+        .replace('+', "%2B")
+        .replace('/', "%2F")
+        .replace('=', "%3D");
+    let request = authenticated_request()
+        .uri(format!("/soup?cursor={cursor}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({})).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::NotifiedCursor));
+}
+
+/// Ascending notified order is rejected like frecency and touched: the
+/// branch orders by the caller's latest notification and never applies the
+/// merged sort a direction would flip.
+#[tokio::test]
+async fn ascending_notified_is_rejected() {
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "sort_method": "notified_at",
+                "sort_direction": "asc"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({
+            "message": "sort_direction=asc is not supported with sort_method=notified_at"
         })
     );
 }

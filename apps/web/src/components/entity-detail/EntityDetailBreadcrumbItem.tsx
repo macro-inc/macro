@@ -1,0 +1,149 @@
+import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
+import { useSplitDisplayName } from '@components/app/split-layout/layoutUtils';
+import {
+  EntityIcon,
+  type EntityIconSelector,
+} from '@core/component/EntityIcon';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useItemRawName } from '@queries/preview';
+import type { ItemEntity } from '@queries/preview/types';
+import { Show } from 'solid-js';
+import { DocumentTitleHoverCard } from './DocumentTitleHoverCard';
+import type {
+  EntityDetailNavigationEntry,
+  EntityDetailTarget,
+} from './entity-detail-target';
+
+function breadcrumbIcon(target: EntityDetailTarget): EntityIconSelector {
+  if (target.type === 'document') {
+    return (target.subType?.type ??
+      target.fileType ??
+      'unknown') as EntityIconSelector;
+  }
+  return fileTypeToBlockName(target.type, true);
+}
+
+function breadcrumbChannelId(target: EntityDetailTarget): string | undefined {
+  if (target.type === 'channel') return target.id;
+  if (target.type === 'channel_message' || target.type === 'channel_thread') {
+    return target.channelId;
+  }
+}
+function fallbackBreadcrumbName(target: EntityDetailTarget) {
+  if (target.fallbackName) return target.fallbackName;
+
+  if (target.type === 'document' && target.subType?.type === 'task') {
+    return 'New Task';
+  }
+  if (
+    target.type === 'channel' ||
+    target.type === 'channel_message' ||
+    target.type === 'channel_thread'
+  ) {
+    return 'Channel';
+  }
+  return 'Untitled';
+}
+
+function BreadcrumbItem(props: {
+  entry: EntityDetailNavigationEntry;
+  order: number;
+  name: string;
+  setsSplitDisplayName?: boolean;
+}) {
+  useSplitDisplayName(() =>
+    props.setsSplitDisplayName ? props.name : undefined
+  );
+
+  const button = (item: { isActive: () => boolean; onSelect: () => void }) => (
+    <ViewBreadcrumbs.Button
+      class="gap-1.5"
+      isActive={item.isActive()}
+      onClick={item.onSelect}
+      tooltip={props.entry.data.type === 'document' ? undefined : props.name}
+    >
+      <Show
+        when={breadcrumbChannelId(props.entry.data)}
+        fallback={
+          <EntityIcon
+            targetType={breadcrumbIcon(props.entry.data)}
+            size="xs"
+            class="shrink-0"
+          />
+        }
+      >
+        {(channelId) => (
+          <ChannelTitleIcon channelId={channelId()} suppressClick />
+        )}
+      </Show>
+      <span class="truncate">{props.name}</span>
+    </ViewBreadcrumbs.Button>
+  );
+
+  return (
+    <ViewBreadcrumbs.Item
+      value={props.entry.value}
+      metadata={props.entry.data}
+      order={props.order}
+    >
+      {(item) => (
+        <Show
+          when={props.entry.data.type === 'document'}
+          fallback={button(item)}
+        >
+          <DocumentTitleHoverCard
+            documentId={props.entry.data.id}
+            name={props.name}
+          >
+            {button(item)}
+          </DocumentTitleHoverCard>
+        </Show>
+      )}
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+function LiveBreadcrumbItem(props: {
+  entry: EntityDetailNavigationEntry;
+  order: number;
+  previewItem: ItemEntity;
+  setsSplitDisplayName?: boolean;
+}) {
+  const currentName = useItemRawName(() => props.previewItem);
+  const name = () => {
+    const current = currentName();
+    if (current?.trim()) return current;
+
+    return fallbackBreadcrumbName(props.entry.data);
+  };
+
+  return (
+    <BreadcrumbItem
+      entry={props.entry}
+      order={props.order}
+      name={name()}
+      setsSplitDisplayName={props.setsSplitDisplayName ?? false}
+    />
+  );
+}
+
+export function EntityDetailBreadcrumbItem(props: {
+  entry: EntityDetailNavigationEntry;
+  order: number;
+  setsSplitDisplayName?: boolean;
+}) {
+  return (
+    <LiveBreadcrumbItem
+      entry={props.entry}
+      order={props.order}
+      previewItem={{
+        id: breadcrumbChannelId(props.entry.data) ?? props.entry.data.id,
+        type: breadcrumbChannelId(props.entry.data)
+          ? 'channel'
+          : props.entry.data.type,
+      }}
+      setsSplitDisplayName={props.setsSplitDisplayName ?? false}
+    />
+  );
+}

@@ -1,3 +1,4 @@
+import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed entry point for durable optimistic GraphQL mutations.
  *
@@ -12,11 +13,13 @@ import {
   type Client,
   CombinedError,
   type Operation,
+  type OperationContext,
   type OperationResult,
   type OperationResultSource,
   stringifyDocument,
 } from '@urql/core';
 import type { DocumentNode } from 'graphql';
+import { validate as validateUuid } from 'uuid';
 import type {
   EmbeddedLinkPathSegment,
   OptimisticLinkPatchWire,
@@ -27,9 +30,12 @@ import {
   type Present,
   type StringKey,
 } from './generated-selection';
+import { selectRecords } from './record-selection';
 
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
+// Page-local acknowledgement; deliberately excluded from durable queue data.
+const OPTIMISTIC_ENQUEUED_CONTEXT_KEY = 'normalizedCacheOptimisticEnqueued';
 /** Private result-extension field carrying the queue disposition. */
 const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
   'normalizedCacheMutationDisposition';
@@ -53,6 +59,7 @@ type SelectionState = {
   readonly document: TypedDocumentNode<unknown, AnyVariables>;
   readonly variables: AnyVariables;
   readonly path: readonly EmbeddedLinkPathSegment[];
+  readonly recordRoot?: OptimisticLinkPatchWire['recordRoot'];
 };
 
 /** A type-generated path through one query result. */
@@ -105,18 +112,50 @@ export type OptimisticUpdate = OptimisticLinkPatchWire & {
 export type QueryRevalidation = {
   document: DocumentNode;
   variables: AnyVariables;
+  /** Recover incomplete relations without refetching successful local edits. */
+  onlyOnLinkFailure?: boolean;
 };
 
 export type OptimisticMutationOptions = {
+  /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
+  uuid: string;
+  /** Opaque durable client correlation; never included in GraphQL variables. */
+  clientMetadata?: Record<string, unknown>;
+  identityBindings?: readonly IdentityBindingWire[];
+  /** Runs after durable layer installation, independently of HTTP settlement. */
+  onEnqueued?: () => void;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
+  /** Calendar events whose occurrence set the mutation cannot predict. */
+  uncertainCalendarEventKeys?: readonly string[];
 };
 
+/** Existing records may be patched; newly created records must be complete. */
+export type OptimisticResponse<T> = T extends readonly (infer Item)[]
+  ? OptimisticResponse<Item>[]
+  : T extends object
+    ? { [Key in keyof T]?: OptimisticResponse<T[Key]> }
+    : T;
+
+/** Partial predicted records must retain their cache identity. */
+export type OptimisticPatch<T> = T extends readonly (infer Item)[]
+  ? OptimisticPatch<Item>[]
+  : T extends { id: string }
+    ? { id: string } & { [K in Exclude<keyof T, 'id'>]?: OptimisticPatch<T[K]> }
+    : T extends object
+      ? { [K in keyof T]?: OptimisticPatch<T[K]> }
+      : T;
+
 export type OptimisticMutationContext<TData = unknown> = {
+  uuid: string;
   optimisticResponse: TData;
+  /** Opaque durable client correlation; never included in GraphQL variables. */
+  clientMetadata?: Record<string, unknown>;
+  identityBindings?: IdentityBindingWire[];
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
+  uncertainCalendarEventKeys?: string[];
 };
 
 /** Caller-facing disposition of one durable optimistic mutation submission. */
@@ -129,6 +168,11 @@ export type OptimisticMutationDisposition<TData> =
 export type OptimisticMutationDispositionMetadata =
   | { kind: 'committed'; transactionId?: string }
   | { kind: 'queued'; transactionId: string }
+  | {
+      kind: 'superseded';
+      transactionId: string;
+      replacementTransactionId: string;
+    }
   | { kind: 'permanently-failed'; transactionId?: string };
 
 /** Returns a copy of an operation result carrying its queue disposition. */
@@ -150,7 +194,14 @@ export function withOptimisticMutationDisposition(
           // that would roll back UI state or block the next edit.
           error: undefined,
         }
-      : {}),
+      : disposition.kind === 'superseded'
+        ? {
+            // The replacement's optimistic payload is already visible in the
+            // cache. Never expose this older operation's stale response.
+            data: undefined,
+            error: undefined,
+          }
+        : {}),
     extensions: {
       ...result.extensions,
       [OPTIMISTIC_MUTATION_DISPOSITION_KEY]: disposition,
@@ -175,6 +226,12 @@ export function optimisticMutationDispositionOf<
   if (metadata.kind === 'queued' && metadata.transactionId) {
     return { kind: 'queued', transactionId: metadata.transactionId };
   }
+  if (metadata.kind === 'superseded' && metadata.replacementTransactionId) {
+    return {
+      kind: 'queued',
+      transactionId: metadata.replacementTransactionId,
+    };
+  }
   if (metadata.kind === 'committed' && result.data != null) {
     return { kind: 'committed', data: result.data };
   }
@@ -198,6 +255,7 @@ function serializeRevalidation(
     query: stringifyDocument(revalidation.document),
     operationName: documentOperationName(revalidation.document),
     variablesJson: JSON.stringify(revalidation.variables ?? {}),
+    ...(revalidation.onlyOnLinkFailure ? { onlyOnLinkFailure: true } : {}),
   };
 }
 
@@ -246,6 +304,29 @@ export function select<TData, TVariables extends AnyVariables>(
   });
 }
 
+/**
+ * Starts a fragment-typed relation update at one explicit normalized record.
+ * It requires no cached query path and never enumerates unrelated query variants.
+ */
+export function selectRecord<
+  TData extends NormalizedEntityIdentity,
+  TVariables,
+>(
+  document: TypedDocumentNode<TData, TVariables>,
+  entity: { __typename: TData['__typename']; id: string }
+): Selection<TData> {
+  const fragment = selectRecords(document);
+  return createSelection<TData>({
+    document: document as TypedDocumentNode<unknown, AnyVariables>,
+    variables: {},
+    path: [],
+    recordRoot: {
+      fragmentName: fragment.fragmentName,
+      entityKey: normalizedEntityKey(entity),
+    },
+  });
+}
+
 /** Construct the wire key for one normalized `id: ID!` GraphQL entity. */
 export function normalizedEntityKey(entity: NormalizedEntityIdentity): string {
   return `${entity.__typename}:${entity.id}`;
@@ -271,11 +352,40 @@ export function update<TItem extends object>(
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: operation.kind,
       entityKey: normalizedEntityKey(operation.entity),
     },
   } as OptimisticUpdate;
+}
+
+/**
+ * Upserts a logical list member using its matching mutation-response record.
+ * Settlement resolves the server's ID rather than persisting a temporary ID.
+ */
+export function upsertByField<TItem extends object, K extends ScalarKey<TItem>>(
+  selection: ListSelection<TItem>,
+  args: {
+    entity: NormalizedEntityIdentity;
+    whereField: K;
+    equals: Extract<Present<TItem[K]>, JsonScalar>;
+  }
+): OptimisticUpdate {
+  const patch: OptimisticLinkPatchWire = {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
+    operation: {
+      kind: 'upsertByField',
+      entityKey: normalizedEntityKey(args.entity),
+      whereField: args.whereField,
+      equals: args.equals,
+    },
+  };
+  return patch as OptimisticUpdate;
 }
 
 /**
@@ -304,6 +414,7 @@ export function removeEmbeddedLink<
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: 'removeEmbeddedLink',
       listItem: args.listItem,
@@ -346,6 +457,7 @@ export function upsertEmbeddedLink<
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: 'upsertEmbeddedLink',
       listItem: args.listItem,
@@ -370,17 +482,67 @@ export function executeOptimisticMutation<
   client: Client,
   document: TypedDocumentNode<TData, TVariables>,
   variables: TVariables,
-  optimisticData: TData,
-  options: OptimisticMutationOptions = {}
+  optimisticData: OptimisticResponse<NoInfer<TData>>,
+  options: OptimisticMutationOptions
 ): OperationResultSource<OperationResult<TData, TVariables>> {
+  return client.mutation(
+    document,
+    variables,
+    optimisticMutationContext(optimisticData, options)
+  );
+}
+
+/** Defaults to a fresh transaction; UUID reuse remains an explicit decision. */
+export type OptimisticCallOptions = Omit<OptimisticMutationOptions, 'uuid'> & {
+  uuid?: string;
+};
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Options for automatic optimistic recipes; false explicitly opts out. */
+    optimisticMutation?: OptimisticCallOptions | false;
+  }
+}
+
+/** Shared compiler used by mutation authoring interfaces and the legacy API. */
+export function optimisticMutationContext<TData>(
+  optimisticData: TData,
+  options: OptimisticCallOptions = {}
+): Partial<OperationContext> {
+  const uuid = options.uuid ?? crypto.randomUUID();
+  if (!validateUuid(uuid)) {
+    throw new TypeError(`invalid optimistic mutation UUID: ${uuid}`);
+  }
   const context: OptimisticMutationContext<TData> = {
+    uuid,
+    clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
+    identityBindings: options.identityBindings
+      ? [...options.identityBindings]
+      : undefined,
     linkPatches: [...(options.updates ?? [])],
     revalidations: (options.revalidations ?? []).map(serializeRevalidation),
+    ...(options.uncertainCalendarEventKeys?.length
+      ? { uncertainCalendarEventKeys: [...options.uncertainCalendarEventKeys] }
+      : {}),
   };
-  return client.mutation(document, variables, {
+  return {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: context,
-  });
+    ...(options.onEnqueued
+      ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
+      : {}),
+  };
+}
+
+/** Acknowledge installation without allowing caller code to interrupt queue routing. */
+export function notifyOptimisticMutationEnqueued(op: Operation): void {
+  const notify: unknown = op.context[OPTIMISTIC_ENQUEUED_CONTEXT_KEY];
+  if (typeof notify !== 'function') return;
+  try {
+    notify();
+  } catch (error) {
+    console.warn('Optimistic enqueue acknowledgement failed', error);
+  }
 }
 
 /** Reads and defensively validates the private context at the exchange edge. */
@@ -396,14 +558,27 @@ export function optimisticContextOf(
     const context = value as Partial<OptimisticMutationContext> & {
       optimisticResponse: unknown;
     };
+    if (typeof context.uuid !== 'string' || !validateUuid(context.uuid)) {
+      throw new TypeError(
+        'invalid optimistic mutation UUID in operation context'
+      );
+    }
     return {
+      uuid: context.uuid,
+      clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
+      identityBindings: context.identityBindings,
       linkPatches: Array.isArray(context.linkPatches)
         ? context.linkPatches
         : [],
       revalidations: Array.isArray(context.revalidations)
         ? context.revalidations
         : [],
+      uncertainCalendarEventKeys: Array.isArray(
+        context.uncertainCalendarEventKeys
+      )
+        ? context.uncertainCalendarEventKeys
+        : undefined,
     };
   }
   return undefined;

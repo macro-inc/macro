@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                event.owner_id = $2 AS \"is_owner!\",\n                EXISTS (\n                    SELECT 1\n                    FROM macro_user_links link\n                    WHERE link.link_id = event.source_link_id\n                      AND link.primary_macro_id = $2\n                ) AS \"is_linked!\",\n                (\n                    event.status <> 'cancelled'\n                    AND event.visibility IN ('default', 'public')\n                    AND EXISTS (\n                        SELECT 1\n                        FROM entity_access grant_row\n                        JOIN comms_channel_participants participant\n                          ON participant.channel_id::text = grant_row.source_id\n                         AND participant.user_id = $2\n                         AND participant.left_at IS NULL\n                        WHERE grant_row.entity_id = event.id\n                          AND grant_row.entity_type = 'calendar_event'\n                          AND grant_row.source_type = 'channel'\n                    )\n                ) AS \"is_channel_shared!\"\n            FROM calendar_events event\n            WHERE event.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_owner!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_linked!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_channel_shared!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "df93754df9b24e4fc2dc358799202a5d510086a889c5d80f077049f9868c2632"
+}

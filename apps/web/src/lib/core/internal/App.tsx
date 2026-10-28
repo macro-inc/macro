@@ -3,10 +3,10 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { LiveIndicators } from '@core/component/LiveIndicators';
 import MacroBrandLoader from '@icon/macro-brand-loader.svg';
 import MacroGridLoader from '@icon/macro-grid-noise-loader.svg';
-import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
-import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
-import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
+import Acorn from '@icon/system/regular/acorn.svg?component-solid';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Subtract from '@icon/system/regular/subtract.svg?component-solid';
+import TrashSimple from '@icon/system/regular/trash-simple.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
 import { Button, Dropdown } from '@ui';
 import { type Component, createSignal, For, Index } from 'solid-js';
@@ -27,7 +27,7 @@ const App: Component = () => {
     'red',
   ] as const;
 
-  const testIds = [
+  const testIds: { id: string; type: ItemType }[] = [
     { id: '15085bba-d188-4c80-aac6-657b15b255d8', type: 'document' },
     { id: '6f1ea347-fee1-4717-b118-89e7bda1eacd', type: 'document' },
     { id: 'dd2ec57b-0bce-4051-8522-cf8a5f0802d5', type: 'document' },
@@ -72,7 +72,8 @@ const App: Component = () => {
         center={
           <Center>
             <Button variant="ghost" onClick={togglePublicPermissions}>
-              {documentAccess()} <CaretDown />
+              {documentAccess()}{' '}
+              <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Center>
         }
@@ -80,8 +81,10 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <For each={Themes}>
           {() => (
-            <Button variant="base">
-              <Subtract /> Button Text <CaretDown />
+            <Button variant="secondary">
+              <Subtract class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Button Text{' '}
+              <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </For>
@@ -89,8 +92,10 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="base">
-              <Subtract /> Button Text <CaretDown />
+            <Button variant="secondary">
+              <Subtract class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Button Text{' '}
+              <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -98,8 +103,8 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={Themes}>
           {() => (
-            <Button variant="base" size="icon-md">
-              <Acorn />
+            <Button variant="secondary" size="icon-md">
+              <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -107,9 +112,9 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="base" size="icon-md">
-              <Acorn />
-              <CaretDown />
+            <Button variant="secondary" size="icon-md">
+              <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+              <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -117,9 +122,9 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="base" size="icon-md">
-              <Acorn />
-              <CaretDown />
+            <Button variant="secondary" size="icon-md">
+              <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+              <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -136,7 +141,7 @@ const App: Component = () => {
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Dropdown>
-          <Dropdown.Trigger variant="base" tabIndex={-1}>
+          <Dropdown.Trigger variant="secondary" tabIndex={-1}>
             Open
           </Dropdown.Trigger>
           <Dropdown.Content>
@@ -183,7 +188,7 @@ const App: Component = () => {
       <div class="w-full flex gap-2 justify-center flex-wrap">
         <For each={testIds}>
           {(item) => {
-            return <ItemPreview id={item.id} type={item.type as ItemType} />;
+            return <ItemPreview id={item.id} type={item.type} />;
           }}
         </For>
       </div>

@@ -1,0 +1,43 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 210
+expression: updates(sse)
+input_file: crates/cursor_acp/fixtures/real/no_tools.sse
+---
+[
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "The user wants the capital"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " of France in one word."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nThe capital of France"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " is Paris."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Paris"
+    }
+  }
+]

@@ -1,336 +1,161 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Architecture Overview
-
-This is a Rust-based cloud storage microservices architecture built as a Cargo workspace with 80+ crates. The system
-handles document storage, processing, search, communication, and email functionality.
-When making changes, make sure to test the services individually before committing using `cargo test -p {my_service}`
-from the repository root.
-
-### Key Services
-
-**Core Storage Services:**
-
-- `document-storage-service`: Main document storage API
-- `document-cognition-service`: Document analysis and processing
-- `search_service`: Search functionality across documents
-- `static_file_service`: Static file serving
-
-**Processing Services:**
-
-- `convert_service`: Document format conversion
-- `document-text-extractor`: Text extraction from documents
-- `search_processing_service`: Search indexing and processing
-
-**Communication Services:**
-
-- `email_service`: Email processing and management
-- `notification_service`: User notifications
-
-**Infrastructure Services:**
-
-- `authentication_service`: User authentication
-- `connection_gateway`: WebSocket gateway
-- `contacts_service`: Contact management
-
-### Data Storage
-
-The system uses multiple databases:
-
-- **MacroDB**: Main PostgreSQL database for documents, users, projects, Communication data (messages, channels,
-  participants), Email threads, messages, metadata, and notification preferences/history
-- **ContactsDB**: User connections and contacts
-
-External storage includes S3 for document files, Redis for caching, OpenSearch for search indexing, and DynamoDB for
-connection tracking.
-
-### MacroDB Schema Changes
-
-DB migration files are located in `crates/macro_db_client`. Use the `/dump-schema` skill to dump the current Postgres schema for reference.
-If you are still getting migration errors after running `just setup_macrodb`, you may need to run `just force_drop_db`
-in `crates/macro_db_client` to drop the database and re-create it
-with `just setup_macrodb` at the repository root. Remember that some database table and column names may be
-camelCased rather than snake_cased (use `/dump-schema` or check the migration files for actual column names).
-When a column is camelCased, you need to cast it as the snake_cased version when reading from the database. E.g.
-`SELECT "userId" as "user_id" FROM "UserInsights"`.
-Any time you make changes to the SQL code in rust, you need to run `just prepare_db` to
-update the `.sqlx` directory. Always run it inside `nix develop` and **only** from the
-repository root (for example, `nix develop --command just prepare_db`) — do not run it from
-individual crate directories anymore. The workspace-level recipe handles every crate that
-has sqlx queries.
-
-## Development Commands
-
-### Alias Commands (IMPORTANT)
-
-Use `\cd` instead of `cd` to navigate in the repository.
-
-### Building
-
-```bash
-just build                    # Build all services
-just build_lambdas           # Build all Lambda functions
-just check                   # Type check without building
-```
-
-### Testing
-
-```bash
-just create_networks
-just run_dbs -d
-just setup_test_envs
-just initialize_dbs
-cargo test -p {crate}
-```
-
-`just test` does not exist. Leave `SQLX_OFFLINE` unset when you run `cargo test`. Run `just prepare_db` only if you changed SQL queries.
-
-### Pre Commit
-```bash
-cargo fmt                   # format
-just clippy                 # extra lints / best practices
-```
-
-### Database Management
-
-Use `just setup_macrodb` or `just initialize_dbs` to create and migrate MacroDB. Those recipes are the same.
-
-Schemas live in `crates/macro_db_client/migrations/`.
-
-To reset MacroDB, run `just crates/macro_db_client/drop_db -y -f`, then `just setup_macrodb`.
-
-### Lambda Building
-
-Individual lambda builds available for:
-
-- `build_document_text_extractor`
-- `build_docx_unzip_handler`
-- `build_delete_chat_handler`
-- `build_upload_extractor_lambda_handler`
-- `build_email_suppression`
-- `build_deleted_item_poller`
-
-## Key Architectural Patterns
-
-### Service Communication
-
-Services communicate via:
-
-- HTTP APIs (internal service clients)
-- SQS queues for async processing
-- Lambda triggers for event-driven processing
-- Redis for caching and session management
-
-### Database Architecture
-
-- Each service has its own database client crate (e.g., `macro_db_client`, `comms_db_client`)
-- Uses SQLx for database interactions with offline query validation
-- Migrations managed per service
-
-### AWS Integration
-
-Heavy use of AWS services:
-
-- S3 for file storage
-- Lambda for serverless processing
-- SQS for message queuing
-- DynamoDB for connection tracking
-- OpenSearch for search capabilities
-
-###
-Environment variables are managed in doppler. New env vars should be added to doppler. All environment variables should
-_always_ be loaded with the macros in the macro_env_var crate. They should never be loaded with std::env::var.
-
-## Development Notes
-
-### Prerequisites
-
-- Docker (for local databases)
-- `sqlx-cli` for database migrations
-- `just` for task running
-- Pulumi CLI for infrastructure
-- AWS CLI for deployment
-
-### Offline Development
-
-The project uses `SQLX_OFFLINE=true` for building without database connections. Database queries are pre-validated and
-cached.
-
-### Document Processing Pipeline
-
-Documents go through: Upload → Text Extraction → Search Indexing → Storage → Retrieval
-
-- DOCX files are unzipped via Lambda
-- PDFs processed with pdfium library
-- Text indexed in OpenSearch
-- Metadata stored in PostgreSQL
-
-## Case Study: Implementing Generic Entity Mentions
-
-This case study documents the process of extending message mentions to support generic entity mentions (e.g., documents
-mentioning other documents).
-
-### Task Understanding & Planning
-
-1. **Analyzed Requirements**: Extended existing MessageMention functionality to support any entity mentioning any other
-   entity
-2. **Created Todo List**: Used TodoWrite tool to track implementation steps
-3. **Examined Existing Code**: Reviewed current message_mentions table structure and usage
-
-### Implementation Steps
-
-1. **Data Model Changes**
-    - Created `EntityMention` struct with generic source/target fields
-    - Maintained backward compatibility with existing mentions
-
-2. **Database Migration**
-    - Renamed `message_mentions` → `entity_mentions`
-    - Added `source_entity_type` and `source_entity_id` columns
-    - Migrated existing data (messages) to new structure
-    - Updated all indexes for performance
-
-3. **Updated Database Client**
-    - Created `entity_mentions` module with create/delete functions
-    - Modified `get_attachment_references` to query new table
-    - Updated `create_message_mentions` to insert into new table
-    - Fixed test fixtures to use new table structure
-
-4. **API Endpoints**
-    - Created POST/DELETE `/entity-mentions` endpoints
-    - Used proper Extension extractors for axum handlers
-    - Added OpenAPI documentation
-
-### Testing & Debugging
-
-1. **Compilation Issues**
-    - Fixed import errors (wrong Context type, missing http import)
-    - Added Clone trait to structs used in tests
-    - Updated fixture references from `message_mentions` to `mentions`
-
-2. **Test Failures**
-    - Fixed `create_message_mentions` test by updating query logic
-    - Query now returns all mentioned users, not just newly inserted ones
-    - Updated fixtures to include entity_mentions data
-
-3. **SQLX Offline Mode**
-    - Encountered "no cached data" errors due to schema changes
-    - Required running migrations before `cargo sqlx prepare`
-
-### Database Preparation
-
-1. Run migrations: `just migrate_db`
-2. Update SQLX cache: `just prepare_db`
-3. Verify with tests: `cargo test`
-
-### Key Learnings
-
-1. **Todo Management**: Proactive use of TodoWrite helps track complex multi-step tasks
-2. **Incremental Testing**: Run tests frequently to catch issues early
-3. **Fixture Management**: Update test fixtures when changing table structures
-4. **SQLX Workflow**: Schema changes require migration → prepare → test cycle
-5. **Axum Patterns**: Handlers take shared services via `State`, not `Extension` (see docs/STYLE_GUIDE.md CS-30; this case study predates that convention)
-
-### Index Strategy
-
-The migration included comprehensive indexes:
-
-- Composite index on (entity_type, entity_id) for efficient lookups
-- Index on source columns for reverse lookups
-- Index on created_at for ordering
-- Maintained existing performance optimizations
-
-## Development Best Practices
-
-### Database Query Management
-
-- Prefer SQLx compile-time checked macros (`query!`, `query_as!`, `query_scalar!`) for database queries whenever possible instead of dynamic `sqlx::query` calls.
-- Never manually create or edit `.sqlx/query-*.json` files. To update SQLx query metadata, run `just prepare_db` from the repository root.
-- When creating a new SQLx migration file, run `sqlx migrate add <descriptive_name>` from the relevant database crate (or use SQLx's `--source` option) and then edit the generated file. Never manually create migration files, and never invent, copy, or guess timestamp prefixes to fake a migration filename.
-- Always run tests between changes that involve changes to db queries
-- Never run `cargo test` with `SQLX_OFFLINE=true`. Tests are designed to validate against the live local Postgres; offline mode forces sqlx macros to consult the cached `.sqlx` data and can either surface confusing "type annotations needed" errors when a query was not in the cache or hide regressions where a query no longer matches the schema. If tests fail with sqlx "no cached data" errors, run `just prepare_db` (with `--tests` when the failure is in test code) — do not flip offline mode on. `SQLX_OFFLINE=true` is fine for `cargo check` / `cargo build` / `cargo clippy` only.
-
-### Rust Error Handling
-
-- New code uses `rootcause` for error handling — it's preferred over `anyhow` (see docs/STYLE_GUIDE.md CS-46)
-- In code still on anyhow: prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))` for early returns - it's more concise and idiomatic
-
-### Documentation Requirements
-
-- Add `#![deny(missing_docs)]` to `lib.rs` in new crates to enforce documentation on all public items
-- This ensures all public functions, structs, enums, and modules have documentation comments
-- Do not use `ignore` to except code blocks from doc tests unless explicitely directed
-
-
-### Test File Organization
-
-Place tests in a separate `test.rs` file within the same module directory, rather than inline with `#[cfg(test)]` blocks in the implementation file.
-
-**Pattern:**
-- Implementation: `foo/mod.rs` or `foo.rs`
-- Tests: `foo/test.rs`
-
-Note: You do NOT need to convert a file module (`foo.rs`) into a directory module (`foo/mod.rs`) to add tests.
-Rust supports `foo.rs` alongside a `foo/` directory — just create `foo/test.rs` and it works as a submodule of `foo.rs`.
-
-**Example structure:**
-```
-src/
-  user.rs       # Contains: mod test;  (with #[cfg(test)]) + implementation
-  user/
-    test.rs     # Contains: use super::*; and test functions
-```
-
-**In `user.rs`:**
-```rust
-#[cfg(test)]
-mod test;
-
-// implementation code...
-```
-
-**In `test.rs`:**
-```rust
-use super::*;
-
-#[tokio::test]
-async fn test_something() {
-    // test code
-}
-```
-
-This keeps implementation files focused and makes tests easier to locate and maintain.
-
-### Tracing
-
-- Include `err` when adding the `tracing::instrument` attribute to functions that return `Result`. Do not include `err` on functions that return `Option`, `()`, or other non-`Result` types. Never include `level = "info"`.
-- When including an error with a log, include it like so: `tracing::error!(error=?e, "error msg");`
-don't inject it directly into the error message.
-- Prefer using `.inspect_err` instead of `if let Err(e)` in order to do logging.
-
-## Development Memories
-
-### DB Crate Changes
-
-- When making changes to a db crate you should always update tests, and run prepare
-
-## Cursor Cloud specific instructions
-
-`.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot, then stops dockerd and nix-daemon so the Cloud bake can exit. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product stack. `.cursor/rebuild.sh` rebuilds the stack after backend edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment.
-
-Nix is the only host dependency. The pinned dev shell supplies the Docker CLI and daemon, Compose, `fuse-overlayfs`, and OpenSSH. `ssh-keygen` must come from this shell.
-
-Service binaries come from the private S3 Nix cache. A sibling workflow on push to main (`push_local_stack_binaries.yml`) builds and pushes `.#local-stack-binaries`. It is not part of the deploy pipeline. Cursor Cloud realizes the aggregate with `nix build .#local-stack-binaries`.
-
-Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Cursor environment secrets. The IAM credentials need read-only access to the cache bucket.
-
-Set `DOPPLER_TOKEN` as a Cursor environment **runtime** secret: a Doppler service token scoped to the `local` project's `lcl_preview` config (the same token CI stores as `DOPPLER_PREVIEW_TOKEN` also works). Do not paste the token into chat. When the token is present, `bash .cursor/stack.sh` pulls those secrets instead of passing `--no-doppler`. Install/bake stays on stubs so the snapshot does not embed secrets. Existing running agents do not pick up newly added secrets — start a new agent after adding the token.
-
-Nothing runs after boot. Before DB-backed `cargo test -p <crate>`, run `bash .cursor/infra.sh` once — it brings up Docker, Postgres, and Redis in seconds because install baked the images and volumes. Pure-logic crate tests need nothing. Run `bash .cursor/stack.sh` for a product-ready environment.
-
-After backend edits, run `bash .cursor/rebuild.sh`. Do not use `just stack update` with the read-only Nix binary directory.
-
-No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible at the proxy's `/mailpit/` UI). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected when AI provider keys are missing; with `DOPPLER_TOKEN` those keys come from `local`/`lcl_preview`.
-
-Leave `SQLX_OFFLINE` unset for `cargo test`. If SQLx reports missing cached query data, run `just prepare_db` instead of enabling offline mode. Run crate tests from the repository root with `cargo test -p <crate>`.
+# Repository guide for coding agents
+
+Macro is a document and collaboration app with a Rust backend and a web frontend.
+This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
+`CLAUDE.md` and preserve the symlink; do not maintain two copies.
+
+## Start here
+
+Unless the user says otherwise, before writing any code:
+
+1. Read [CODING.md](CODING.md).
+2. Find the affected app, service, or crate in the map below and read its
+   `AGENTS.md`.
+3. Read the task-relevant guides below, not every linked document.
+4. Explore the code you will change and its callers until you know how it works.
+
+Rules in `.agents/rules/` load when you touch matching files. Prefer them over
+patterns in older code.
+
+## Repository map
+
+| Path | Contents |
+| --- | --- |
+| `apps/web/` | Web frontend; its own agent guide covers Bun, UI patterns, and browser verification. |
+| `apps/`, `packages/` | Other apps and shared frontend packages. |
+| `services/` | Deployable services and workers; Rust package names come from each `Cargo.toml`. |
+| `crates/` | Reusable backend libraries, domain services, and adapters. |
+| `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
+| `infra/` | Deployment definitions and local infrastructure. |
+| `tooling/` | Development tools, scripts, and imported `just` recipes. |
+| `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
+
+## Where agent guidance lives
+
+| Path | Contents |
+| --- | --- |
+| `CODING.md` | Coding rules for every language; read before writing code. |
+| `AGENTS.md` in a directory | Scope, map, checks, and gotchas for that subtree; a sibling `CLAUDE.md` symlinks to it. |
+| `.agents/skills/` | Task workflows. Cursor loads this directory. `.claude/skills` and `.pi/skills` symlink here. |
+| `.agents/rules/` | Path-scoped conventions, loaded when you touch matching files. `.claude/rules` and `.cursor/rules` symlink here. |
+| `.agents/agents/` | Subagents (`auditor`, `browser-verifier`). `.claude/agents` symlinks here. |
+| `.agents/templates/` | Templates for new rules and `AGENTS.md` files. |
+| `rules/ast-grep/` | Mechanically enforced code rules, run by `just check`. |
+
+Real files live in `.agents/`; tool-specific directories only symlink to it.
+
+## Read when relevant
+
+| Task | Guide |
+| --- | --- |
+| Reusing database storage or separating it from an app entity | [Database core skill](.agents/skills/database-core/SKILL.md) |
+| Adding collaborative markdown to a feature | [Collab surface core skill](.agents/skills/collab-surface-core/SKILL.md) |
+| Adding a flow or hot path, or tracing one | `instrumentation` skill |
+| Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
+| SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
+| Web frontend | [Web agent guide](apps/web/AGENTS.md) |
+| iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
+| Android Play releases from pull requests | [Android development](docs/development/android.md) |
+| Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
+| Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
+| Giving the user a local preview link | `local-preview` skill |
+| Working inside Cursor Cloud | [Cursor Cloud](docs/development/cursor-cloud.md) |
+| Driving the app through a browser | [App agent guide](docs/agent-guide/README.md) |
+| Adding or changing SDK methods | [SDK rule](.agents/rules/sdk.md), `add-sdk-endpoint` skill |
+| SDK version bumps and npm publishing | [SDK release guide](packages/sdk/RELEASING.md), [release-sdk skill](.agents/skills/release-sdk/SKILL.md) |
+| Adding a service, worker, or Pulumi stack | [New service guide](docs/guides/new-service.md) |
+| Infrastructure, Pulumi, or deploys | [Infrastructure guide](docs/development/infrastructure.md) |
+
+## Rules
+
+**Working with the user**
+
+- Do only what was asked. Questions get answers, not code changes.
+- Commit as you go, in small logical commits on a feature branch, without
+  asking. Never commit to `main`. Push or open a PR only when asked.
+  Once authorized, finish in-scope review fixes and follow-up pushes without
+  per-fix confirmation.
+- Keep each feature's development, validation, and local preview on one branch/worktree.
+- Flag real risks; once the user decides, act on it.
+- Disagree when they're wrong. No flattery.
+- Answer simple questions directly.
+- For UI work, ask how it should behave on mobile unless that's obvious.
+- Ground UI proposals and prototypes in the existing Macro app screens and
+  design system, preserving its shell, typography, controls, and spacing.
+- Treat an approved UI proposal followed by a PR request as a request to
+  implement it; keep standalone prototypes outside the repository unless asked.
+- Be brief. No justification essays, no time estimates.
+
+**Environment**
+
+- Never touch production (data, services, consoles, secrets) without explicit
+  permission.
+- Never deploy (`pulumi up`, `wrangler deploy`, workflow dispatch) without
+  explicit permission for that deploy.
+- Never reset databases or wipe stack volumes without approval.
+- Never paste or commit secrets, or put customer PII (emails, phones,
+  addresses) in commits, PR titles, or PR descriptions.
+- PR titles and bodies, commits, review replies, comments, and docs describe
+  only the code. Never name people, customers, their companies or products,
+  places, or support channels and tickets; state any reason in general terms.
+  See the `git` skill's Privacy section; CI's `PR Privacy Check` enforces it.
+- Never `git stash`; it's shared across sessions.
+- Memory is context, not authority; verify against code.
+- Treat hosted dev data as real. `.cursor/*.sh` is Cursor Cloud only.
+- Use `\cd` instead of `cd`.
+
+## Before handing off
+
+- Commits, branches, and PRs follow the `git` skill: Conventional Commit titles
+  such as `fix(onboarding): preserve team inputs`, and Why / What bodies with no test plan.
+- Run the `audit` skill (via the `auditor` subagent) before saying work is done.
+- Update every doc your change makes stale, in the same change: the `AGENTS.md`
+  of each directory you touched, `docs/guides/`, `docs/architecture/`, the
+  agent guide, READMEs, rules, and skills. Search for the names you changed.
+- A new crate, service, or package gets an `AGENTS.md` from the
+  [template](.agents/templates/AGENTS.md); one you change keeps its `AGENTS.md`
+  current. Add the sibling symlink (`ln -s AGENTS.md CLAUDE.md`) so Claude Code
+  reads it too.
+- Open pull requests ready for review. If one is created as a draft, mark it
+  ready for review before handing off.
+- Get CI passing before handing off. A pull request whose checks are failing
+  or still running is not done.
+- Test the affected packages/services individually before committing. Use the
+  relevant guide for setup; there is no root `just test` recipe.
+- For code changes, run `just check` (format/lint/code rules scoped to changes).
+  `just check full` adds TypeScript checking and Rust clippy; `just rust-check` is
+  the workspace Rust type check. These checks do not replace tests.
+- Exercise user-visible changes in a browser. If routes, creation flows, editors,
+  AI surfaces, or composer behavior change, update the corresponding
+  [app agent guide](docs/agent-guide/README.md) in the same change.
+- Report what you tested and any checks blocked by the environment.
+
+## Keeping guidance current
+
+Update the docs in the same change whenever:
+
+- the user gives feedback that applies beyond the current task,
+- you and the user settle on a new convention or reverse an old one,
+- you find a doc, rule, or guide that is wrong or stale.
+
+Put it in exactly one place, the narrowest that fits:
+
+| Kind of guidance | Goes in |
+| --- | --- |
+| How to behave with the user, or a cross-cutting guardrail | This file, **Rules** |
+| A coding rule for every language | `CODING.md` |
+| A convention for certain paths (Rust, web, DB, infra) | `.agents/rules/<area>/`, from the [rule template](.agents/templates/rule.md) |
+| Something checkable by a tool | An ast-grep rule in `rules/ast-grep/` or a lint, instead of prose |
+| Navigation, recipes, or gotchas for one directory | That directory's `AGENTS.md`, from the [template](.agents/templates/AGENTS.md) |
+| A repeatable multi-step task | A skill in `.agents/skills/` |
+| An end-to-end walkthrough of a change | `docs/guides/` |
+| How a system works | `docs/architecture/` |
+
+How:
+
+- Edit the existing entry before adding a new one; delete what the change makes
+  wrong. Never leave two versions of the same rule.
+- Write the rule as one imperative line, with the reason only when it isn't
+  obvious. ID-bearing rules take the next free number.
+- Keep this file short: rules and links, no journals, command lists, or runbooks.
+- Tell the user which doc you changed and how, in one line.

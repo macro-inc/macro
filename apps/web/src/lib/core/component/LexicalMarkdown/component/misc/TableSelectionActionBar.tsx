@@ -4,13 +4,18 @@
  * menu for the clipboard and no format popup for table selections. On
  * desktop, merge/split live in the normal selection popup (FormatTools).
  */
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import {
   readClipboardAsDataTransfer,
   writeClipboardData,
 } from '@core/util/dataTransfer';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import CornersInIcon from '@icon/system/regular/corners-in.svg';
+import CornersOutIcon from '@icon/system/regular/corners-out.svg';
+import ScissorsIcon from '@icon/system/regular/scissors.svg';
 import {
   $getClipboardDataFromSelection,
   $insertDataTransferForRichText,
@@ -22,11 +27,6 @@ import {
   $mergeCells,
   $unmergeCell,
 } from '@lexical/table';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import CornersInIcon from '@phosphor/corners-in.svg';
-import CornersOutIcon from '@phosphor/corners-out.svg';
-import ScissorsIcon from '@phosphor/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
@@ -46,15 +46,17 @@ import {
   createSignal,
   onCleanup,
   Show,
+  useContext,
 } from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { createLayoutTick } from './createLayoutTick';
 
 false && floatWithElement;
 
 export function TableSelectionActionBar() {
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();
   const [focusCellKey, setFocusCellKey] = createSignal<string>();
@@ -274,15 +276,21 @@ export function TableSelectionActionBar() {
               }}
             />
             <div
-              class="z-30 flex items-center gap-0.5 rounded-lg bg-surface p-1 shadow-lg ring-1 ring-edge"
+              class="menu-surface z-30 flex items-center gap-0.5 p-1"
               use:floatWithElement={{
                 element: anchorElem,
                 floatingOptions: { placement: 'top' },
               }}
             >
-              {barButton('Cut', ScissorsIcon, () => void runCut())}
-              {barButton('Copy', CopyIcon, () => void runCopy())}
-              {barButton('Paste', ClipboardIcon, () => void runPaste())}
+              {barButton('Cut', ScissorsIcon, () =>
+                fireAndForget(runCut(), 'markdown-table-actions')
+              )}
+              {barButton('Copy', CopyIcon, () =>
+                fireAndForget(runCopy(), 'markdown-table-actions')
+              )}
+              {barButton('Paste', ClipboardIcon, () =>
+                fireAndForget(runPaste(), 'markdown-table-actions')
+              )}
               <Show when={isMultiCell()}>
                 {barButton('Merge', CornersInIcon, runMerge)}
               </Show>

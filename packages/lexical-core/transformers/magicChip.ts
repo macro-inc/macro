@@ -2,13 +2,16 @@ import type { ElementTransformer } from '@lexical/markdown';
 import type { ElementNode, LexicalNode } from 'lexical';
 import {
   $createMagicChipNode,
-  isMagicChipMessage,
   $isMagicChipNode,
+  isMagicChipMessage,
   isMagicChipStatus,
   type MagicChipData,
   MagicChipNode,
 } from '../nodes/MagicChipNode';
-import { replaceElementWithUnknownMention, UnknownMentionNode } from './unknownFallback';
+import {
+  replaceElementWithUnknownMention,
+  UnknownMentionNode,
+} from './unknownFallback';
 
 function isMagicChipData(value: unknown): value is MagicChipData {
   if (!value || typeof value !== 'object') return false;
@@ -16,7 +19,8 @@ function isMagicChipData(value: unknown): value is MagicChipData {
   return (
     typeof data.agentSessionId === 'string' &&
     (data.channelId === undefined || typeof data.channelId === 'string') &&
-    isMagicChipMessage(data.promptedMessage) &&
+    (data.promptedMessage === null ||
+      isMagicChipMessage(data.promptedMessage)) &&
     isMagicChipStatus(data.status)
   );
 }

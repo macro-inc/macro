@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.owner_id, s.share_permission_id,\n                sp.\"linkShare\" AS \"link_share: LinkShare\",\n                sp.\"linkShareAccessLevel\" AS \"link_level: AccessLevel\",\n                sp.team_share_access_level AS \"team_level: AccessLevel\"\n            FROM agent_session s\n            LEFT JOIN \"SharePermission\" sp ON sp.id = s.share_permission_id\n            WHERE s.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_share: LinkShare",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "link_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "team_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "70f39a90ce043a272b3b6a16163da542f73447047593e7ed35b2f9145d012ff7"
+}

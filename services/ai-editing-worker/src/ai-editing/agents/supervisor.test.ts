@@ -4,7 +4,7 @@ import type {
 } from '@ai-sdk/provider';
 import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
-import type { ResolvedModels } from '../../run-edit';
+import type { SupervisedModels } from '../../run-edit';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
 import { mockAwarenessSource } from '../awareness/awareness-source';
 import { Doc } from '../doc/doc';
@@ -137,7 +137,7 @@ describe('supervisor — streamed dispatch', () => {
       supervisor: supervisorModel,
       interpret: codingModel,
       coding: () => codingModel,
-    } as unknown as ResolvedModels;
+    } as unknown as SupervisedModels;
 
     const session = createEditingSession();
     loadMarkdown(session, 'hello world');

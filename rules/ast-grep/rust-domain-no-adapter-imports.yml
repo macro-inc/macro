@@ -1,0 +1,30 @@
+id: rust-domain-no-adapter-imports
+language: rust
+severity: warning
+message: Domain modules must not import from crate::inbound or crate::outbound — dependencies point inward.
+note: |-
+  Hexagonal architecture (cloud-storage-hexagonal-architecture skill):
+  adapters depend on the domain, never the reverse. If the domain needs an
+  outbound capability, define a port trait in domain/ports and implement it
+  in outbound (see notification's VoipPushDelivery). If it needs something
+  from inbound, the type is in the wrong layer — move it into the domain.
+  Tests in domain test.rs files are exempt (they may wire real adapters).
+  1 legacy use exists (import's domain service builds its toolsets from
+  crate::inbound::toolset) — don't add new ones.
+files:
+  - crates/**/src/domain/**
+  - services/**/src/domain/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - kind: scoped_identifier
+      regex: ^crate::(inbound|outbound)\b
+      not:
+        inside:
+          kind: scoped_identifier
+    - kind: use_declaration
+      regex: ^use crate::(inbound|outbound)\b

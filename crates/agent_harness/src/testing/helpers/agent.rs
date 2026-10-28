@@ -1,10 +1,11 @@
 //! A fake agent process, speaking only raw ACP.
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::schema::v1::{
-    ClientNotification, ClientRequest, InitializeResponse, NewSessionResponse, RequestId,
-    ResumeSessionResponse,
+    ClientNotification, ClientRequest, InitializeResponse, NewSessionResponse, PromptResponse,
+    RequestId, ResumeSessionResponse, StopReason,
 };
 use agent_client_protocol::{
     Error as AcpError, JsonRpcMessage, JsonRpcNotification, JsonRpcResponse, RawJsonRpcMessage,
@@ -32,6 +33,7 @@ struct Progress {
     /// Requests received and not yet answered.
     initializing: Option<RequestId>,
     opening: Option<RequestId>,
+    prompts: VecDeque<RequestId>,
 }
 
 /// Parse a frame into whichever ACP message enum the caller asked for.
@@ -119,6 +121,31 @@ impl FakeAgent {
         self.sends_reply(id, response);
     }
 
+    /// Answer the `session/load` this agent received.
+    pub fn loads_session(&self, response: agent_client_protocol::schema::v1::LoadSessionResponse) {
+        let id = self
+            .lock_progress()
+            .opening
+            .clone()
+            .expect("the harness has not sent session/load");
+        self.sends_reply(id, response);
+    }
+
+    /// Wait for and complete the next `session/prompt` request.
+    pub async fn completes_prompt(&self) {
+        let mut received = self.received.subscribe();
+        let id = loop {
+            if let Some(id) = self.lock_progress().prompts.pop_front() {
+                break id;
+            }
+            received
+                .changed()
+                .await
+                .expect("fake agent frame history should remain open");
+        };
+        self.sends_reply(id, PromptResponse::new(StopReason::EndTurn));
+    }
+
     /// Refuse the `session/new` this agent received.
     ///
     /// # Panics
@@ -192,6 +219,33 @@ impl FakeAgent {
             .expect("fake agent frame history should remain open");
     }
 
+    /// Wait until the harness has answered at least `count` of this agent's
+    /// own requests.
+    pub async fn wait_for_responses(&self, count: usize) {
+        let mut received = self.received.subscribe();
+        received
+            .wait_for(|frames| {
+                frames
+                    .iter()
+                    .filter(|frame| matches!(frame, RawJsonRpcMessage::Response(_)))
+                    .count()
+                    >= count
+            })
+            .await
+            .expect("fake agent frame history should remain open");
+    }
+
+    /// The response frames the harness sent to this agent's requests, in order.
+    #[must_use]
+    pub fn received_responses(&self) -> Vec<RawJsonRpcMessage> {
+        self.received
+            .borrow()
+            .iter()
+            .filter(|frame| matches!(frame, RawJsonRpcMessage::Response(_)))
+            .cloned()
+            .collect()
+    }
+
     /// The notifications the harness sent, in order.
     #[must_use]
     pub fn received_notifications(&self) -> Vec<ClientNotification> {
@@ -237,6 +291,13 @@ impl FakeAgent {
                     ClientRequest::InitializeRequest(_) => {
                         progress.initializing = Some(request.id.clone());
                     }
+                    // Resuming the open session again is how a live agent
+                    // is handed new MCP servers.
+                    ClientRequest::ResumeSessionRequest(_)
+                        if progress.stage == Stage::SessionOpen =>
+                    {
+                        progress.opening = Some(request.id.clone());
+                    }
                     ClientRequest::NewSessionRequest(_)
                     | ClientRequest::LoadSessionRequest(_)
                     | ClientRequest::ResumeSessionRequest(_) => {
@@ -247,6 +308,15 @@ impl FakeAgent {
                             request.method
                         );
                         progress.opening = Some(request.id.clone());
+                    }
+                    ClientRequest::PromptRequest(_) => {
+                        assert_eq!(
+                            progress.stage,
+                            Stage::SessionOpen,
+                            "harness sent {} before its ACP session existed",
+                            request.method
+                        );
+                        progress.prompts.push_back(request.id.clone());
                     }
                     other => assert_eq!(
                         progress.stage,

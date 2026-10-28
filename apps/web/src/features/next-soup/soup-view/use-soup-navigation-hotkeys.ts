@@ -1,25 +1,21 @@
+import { listOwnedSlotName } from '@app/components/list';
 import { isListViewID } from '@app/constants/list-views';
-import {
-  isDuplicatePreviewEntityOpen,
-  notifyDuplicateContentOpen,
-  openEntityInSplitFromUnifiedList,
-} from '@app/features/next-soup/utils';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import type {
-  SplitContent,
-  SplitEvent,
-  SplitEventPayload,
-  SplitHandle,
-} from '@components/app/split-layout/layoutManager';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import { withSplitPanelOwner } from '@components/app/split-layout/layoutUtils';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { EntityData } from '@entity';
-import { debounce } from '@solid-primitives/scheduled';
-import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
+import { type EntityData, isTaskEntity } from '@entity/types/entity';
+import { Telemetry } from '@macro-inc/observability';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { previewContentMatchesEntity } from './preview-content-row';
+
+const reportSoupNavigationError = (error: unknown) =>
+  Telemetry.error(error, { surface: 'soup-view' });
 
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
@@ -29,25 +25,30 @@ type UseSoupNavigationHotkeysOptions = {
   hasNextPage?: Accessor<boolean>;
   isFetching?: Accessor<boolean>;
   isFetchingNextPage?: Accessor<boolean>;
-  fetchNextPage?: () => void;
+  fetchNextPage?: () => Promise<void>;
+  error?: Accessor<Error | null>;
 };
 
-export const useSoupNavigationHotkeys = (
-  options: UseSoupNavigationHotkeysOptions
-) => {
-  const { scopeId, soup, splitHandle, virtualizerHandle } = options;
+// These callbacks outlive SoupViewList. Keep their closure separate from the
+// mounted view, and release the only route back to its virtualizer on cleanup.
+function createPersistentNavigation(
+  options: Omit<UseSoupNavigationHotkeysOptions, 'virtualizerHandle'>,
+  viewport: { current?: Accessor<VirtualizerHandle | undefined> }
+) {
+  const { scopeId, soup, splitHandle } = options;
+  const notificationSource = useGlobalNotificationSource();
 
   const scrollTo = (index: number) => {
-    const handle = virtualizerHandle();
+    const handle = viewport.current?.();
 
     if (!handle) return;
 
-    virtualizerHandle()?.scrollToIndex(index, {
+    handle.scrollToIndex(index, {
       align: 'nearest',
     });
   };
 
-  const navigationReferredFrom = createMemo(() => {
+  const navigationReferredFrom = () => {
     const content = splitHandle.content();
 
     if (content.type === 'component' && isListViewID(content.id)) {
@@ -56,100 +57,151 @@ export const useSoupNavigationHotkeys = (
 
     const referredFrom = splitHandle.referredFrom();
     return isListViewID(referredFrom) ? referredFrom : undefined;
-  });
+  };
 
-  // Row focus moves instantly on every keypress; the (expensive) block swap in
-  // the Viewer trails the last press. mergeHistory keeps the Viewer's
-  // history at a single scanning entry while holding j/k.
-  const openInViewerDebounced = debounce((entity: EntityData) => {
-    openEntityInSplitFromUnifiedList(entity, {
-      splitHandle,
-      mergeHistory: true,
-      referredFrom: navigationReferredFrom(),
-    });
-  }, 150);
-  onCleanup(() => openInViewerDebounced.clear());
+  const viewId = navigationReferredFrom();
+  if (viewId) {
+    // Keep navigation available when the list view leaves the split's content.
+    withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>
+      registerListNavigationSource(splitHandle, {
+        viewId,
+        entities: () =>
+          soup
+            .rows()
+            .flatMap((row) =>
+              row.getIsGrouped() || row.getIsLoadMore() ? [] : [row.original]
+            ),
+        hasMore: () => options.hasNextPage?.() ?? false,
+        loadMore: async () => {
+          await options.fetchNextPage?.();
+          const error = options.error?.();
+          if (error) throw error;
+        },
+      })
+    );
+  }
 
-  const openEntity = (entity: EntityData) => {
-    if (splitHandle.isControllerSplit()) {
-      openInViewerDebounced(entity);
-      return;
-    }
-
+  const openEntity = async (entity: EntityData) => {
     const handleContent = splitHandle.content().type;
 
     if (handleContent === 'component' || handleContent === 'project') return;
 
-    openEntityInSplitFromUnifiedList(entity, {
+    await openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
       mergeHistory: true,
       referredFrom: navigationReferredFrom(),
+      notificationSource,
     });
   };
 
-  // Group labels are structural rows — stepping with j/k or the arrow keys
-  // moves through entities only and never focuses a header.
-  const navigateToOpenableEntity = (offset: -1 | 1) => {
-    let skippedDuplicate = false;
-    const next = soup.navigate.by(offset, {
-      skipGroupHeaders: true,
-      skip: (row) => {
-        if (
-          !splitHandle.isControllerSplit() ||
-          row.getIsGrouped() ||
-          row.getIsLoadMore()
-        ) {
-          return false;
-        }
-        const blocked = isDuplicatePreviewEntityOpen(row.original, splitHandle);
-        skippedDuplicate ||= blocked;
-        return blocked;
-      },
-    });
-    if (skippedDuplicate) notifyDuplicateContentOpen();
-    return next;
+  const navigateToOpenableEntity = (offset: -1 | 1) =>
+    soup.navigate.by(offset, { skipGroupHeaders: true });
+
+  const { fetchNextPage, isFetching, isFetchingNextPage, hasNextPage } =
+    options;
+
+  const LOAD_MORE_DISTANCE_FROM_END = 3;
+
+  const fetchNextPageIfNeeded = () => {
+    if (!hasNextPage?.() || isFetching?.() || isFetchingNextPage?.()) return;
+    fetchNextPage?.().catch(reportSoupNavigationError);
   };
 
-  /**
-   * The row this preview-split content corresponds to, if it lives in this
-   * list. Channel messages/threads open as their channel, so those rows are
-   * matched through their channelId.
-   */
-  const rowForPreviewContent = (content: SplitContent) =>
-    soup.rows().find((row) => {
-      if (row.getIsGrouped() || row.getIsLoadMore()) return false;
-      const entity = row.original as EntityData;
-      if (!entity) return false;
-      return previewContentMatchesEntity(content, entity);
-    });
+  const navigateDown = () => {
+    const rowCount = soup.rows().length;
+    const next = navigateToOpenableEntity(1);
 
-  // Preview history → list selection: stepping the Viewer's history
-  // back or forward to content that was opened from this list re-selects the
-  // corresponding row.
-  createEffect(() => {
-    const viewerId = splitHandle.viewerId();
-    if (!viewerId) return;
-    const viewer = globalSplitManager()?.getSplit(viewerId);
-    if (!viewer) return;
+    if (!next) {
+      fetchNextPageIfNeeded();
+      return true;
+    }
 
-    const syncSelection = (
-      payload: SplitEventPayload[SplitEvent.ContentChange]
-    ) => {
-      if (
-        payload.cause !== 'history-back' &&
-        payload.cause !== 'history-forward'
-      ) {
-        return;
-      }
-      const row = rowForPreviewContent(payload.newContent);
-      if (!row) return;
-      const result = soup.navigate.toId(row.id);
-      if (result) scrollTo(result.index);
-    };
+    scrollTo(next.index);
+    openEntity(next.row.original).catch(reportSoupNavigationError);
 
-    viewer.registerContentChangeListener(syncSelection);
-    onCleanup(() => viewer.unregisterContentChangeListener(syncSelection));
+    if (next.index >= rowCount - 1 - LOAD_MORE_DISTANCE_FROM_END) {
+      fetchNextPageIfNeeded();
+    }
+
+    return true;
+  };
+
+  const navigateUp = () => {
+    const next = navigateToOpenableEntity(-1);
+
+    if (!next) return true;
+
+    scrollTo(next.index);
+    openEntity(next.row.original).catch(reportSoupNavigationError);
+
+    return true;
+  };
+
+  const canRunListNavigation = () => {
+    const contentType = splitHandle.content().type;
+    const referredFrom = navigationReferredFrom();
+    return (
+      contentType === 'component' ||
+      contentType === 'project' ||
+      referredFrom === 'home' ||
+      referredFrom === 'mail'
+    );
+  };
+
+  // Keep j/k registered on the split scope after the list unmounts. When an
+  // entity is opened from a list into the same split, this lets j/k continue
+  // navigating the originating soup list and update the split content.
+  registerHotkey({
+    hotkey: ['j'],
+    scopeId,
+    description: 'Down',
+    hotkeyToken: TOKENS.entity.step.end,
+    condition: canRunListNavigation,
+    keyDownHandler: navigateDown,
+    hide: true,
+    disposeWithOwner: false,
   });
+
+  // Keep j/k registered on the split scope after the list unmounts. When an
+  // entity is opened from a list into the same split, this lets j/k continue
+  // navigating the originating soup list and update the split content.
+  registerHotkey({
+    hotkey: ['k'],
+    scopeId,
+    hotkeyToken: TOKENS.entity.step.start,
+    description: 'Up',
+    condition: canRunListNavigation,
+    keyDownHandler: navigateUp,
+    hide: true,
+    disposeWithOwner: false,
+  });
+
+  return { scrollTo, navigateDown, navigateUp };
+}
+
+export const useSoupNavigationHotkeys = (
+  options: UseSoupNavigationHotkeysOptions
+) => {
+  const { scopeId, soup, splitHandle } = options;
+  const viewport: { current?: Accessor<VirtualizerHandle | undefined> } = {
+    current: options.virtualizerHandle,
+  };
+  onCleanup(() => {
+    viewport.current = undefined;
+  });
+  const { scrollTo, navigateDown, navigateUp } = createPersistentNavigation(
+    {
+      scopeId,
+      soup,
+      splitHandle,
+      hasNextPage: options.hasNextPage,
+      isFetching: options.isFetching,
+      isFetchingNextPage: options.isFetchingNextPage,
+      fetchNextPage: options.fetchNextPage,
+      error: options.error,
+    },
+    viewport
+  );
 
   const navigateAndSelectEntity = (offset: number) => {
     const nextRow = soup.navigate.by(offset, { skipGroupHeaders: true });
@@ -205,70 +257,6 @@ export const useSoupNavigationHotkeys = (
 
   const group = createHotkeyGroup();
 
-  const { fetchNextPage, isFetching, isFetchingNextPage, hasNextPage } =
-    options;
-
-  const LOAD_MORE_DISTANCE_FROM_END = 3;
-
-  const fetchNextPageIfNeeded = () => {
-    if (!hasNextPage?.() || isFetching?.() || isFetchingNextPage?.()) return;
-    fetchNextPage?.();
-  };
-
-  const navigateDown = () => {
-    const rowCount = soup.rows().length;
-    const next = navigateToOpenableEntity(1);
-
-    if (!next) {
-      fetchNextPageIfNeeded();
-      return true;
-    }
-
-    scrollTo(next.index);
-    openEntity(next.row.original);
-
-    if (next.index >= rowCount - 1 - LOAD_MORE_DISTANCE_FROM_END) {
-      fetchNextPageIfNeeded();
-    }
-
-    return true;
-  };
-
-  const navigateUp = () => {
-    const next = navigateToOpenableEntity(-1);
-
-    if (!next) return true;
-
-    scrollTo(next.index);
-    openEntity(next.row.original);
-
-    return true;
-  };
-
-  const canRunListNavigation = () => {
-    const contentType = splitHandle.content().type;
-    const referredFrom = navigationReferredFrom();
-    return (
-      contentType === 'component' ||
-      contentType === 'project' ||
-      referredFrom === 'inbox' ||
-      referredFrom === 'mail'
-    );
-  };
-
-  // Keep j/k registered on the split scope after the list unmounts. When an
-  // entity is opened from a list into the same split, this lets j/k continue
-  // navigating the originating soup list and update the split content.
-  registerHotkey({
-    hotkey: ['j'],
-    scopeId,
-    description: 'Down',
-    hotkeyToken: TOKENS.entity.step.end,
-    condition: canRunListNavigation,
-    keyDownHandler: navigateDown,
-    hide: true,
-  });
-
   registerHotkey({
     hotkey: ['arrowdown'],
     scopeId,
@@ -276,19 +264,6 @@ export const useSoupNavigationHotkeys = (
     keyDownHandler: navigateDown,
     hide: true,
   }).withGroup(group);
-
-  // Keep j/k registered on the split scope after the list unmounts. When an
-  // entity is opened from a list into the same split, this lets j/k continue
-  // navigating the originating soup list and update the split content.
-  registerHotkey({
-    hotkey: ['k'],
-    scopeId,
-    hotkeyToken: TOKENS.entity.step.start,
-    description: 'Up',
-    condition: canRunListNavigation,
-    keyDownHandler: navigateUp,
-    hide: true,
-  });
 
   registerHotkey({
     hotkey: ['arrowup'],
@@ -350,11 +325,29 @@ export const useSoupNavigationHotkeys = (
   };
 
   registerHotkey({
-    hotkey: ['h', 'arrowleft'],
+    hotkey: ['h'],
+    scopeId,
+    description: 'Collapse group',
+    hotkeyToken: TOKENS.unifiedList.navigation.collapseGroup,
+    // Consume H on headers even when already collapsed; selected entities
+    // elsewhere must not turn this into a reminder action.
+    keyDownHandler: () => toggleFocusedGroupHeader(false) !== undefined,
+    registrationType: 'add',
+    handlerPriority: 4,
+    hide: true,
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: ['arrowleft', 'h'],
     scopeId,
     description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (
+        event?.key.toLowerCase() === 'h' &&
+        (!soup.focus.row() || !isTaskEntity(soup.focus.row()!.original))
+      )
+        return false;
       const groupHandled = toggleFocusedGroupHeader(false);
       if (groupHandled !== undefined) return groupHandled;
 

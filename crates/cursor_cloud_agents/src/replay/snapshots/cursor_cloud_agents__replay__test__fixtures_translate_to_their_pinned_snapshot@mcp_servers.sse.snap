@@ -1,0 +1,1416 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 208
+expression: updates(sse)
+input_file: crates/cursor_acp/fixtures/real/mcp_servers.sse
+---
+[
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "I will identify every"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " MCP server visible "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "in the current environment"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and list each one's"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " available tools. Then"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " I will stop without"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " modifying any files."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nI'll call GetMcpTools"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " with no arguments to"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " retrieve the full catalog"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " of MCP servers and "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "their tools. The system"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " prompt also indicates"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " three available servers:"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " deepwiki, cursor-cloud,"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and cursor-subscriptions."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " list"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " every"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " MCP"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " server"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " visible"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " in"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " this"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " environment"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " tools"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " each"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " one"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " exposes"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0 fc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0",
+    "title": "get_mcp_tools",
+    "status": "in_progress",
+    "rawInput": {
+      "toolCallId": "unknown-tool-call-id"
+    },
+    "rawOutput": {
+      "result": {
+        "error": {
+          "error": "Invalid arguments"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0 fc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0",
+    "kind": "other",
+    "status": "in_progress",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "toolCallId": "call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0\nfc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0 fc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0",
+    "kind": "other",
+    "status": "completed",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "toolCallId": "call-17ac3651-6436-4ff3-b043-b7199a3d3baf-0\nfc_c201edaf-8ed6-943a-9fee-6d2c66ca3c16_0"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "{\n  \"mode\": \"catalog\",\n  \"servers\": [\n    {\n      \"server\": \"cursor-cloud\",\n      \"serverStatus\": \"ready\",\n      \"serverDescription\": \"Cursor-internal cloud-agent diagnostics (server `cursor-cloud`). - `cursor-cloud-run-info` — return the current cloud-agent run identity, basic run metadata (name, repo, branch, model, ... [truncated]\",\n      \"tools\": [\n        {\n          \"tool\": \"batch-fetch-details\",\n          \"description\": \"Fetch details for a batch of specified accessible cloud agents by bcIds. Users and service accounts can fetch their own runs. Team admins can additionally fetch teammates' runs only whe... [truncated]\"\n        },\n        {\n          \"tool\": \"environment-build-logs\",\n          \"description\": \"Fetch the install/setup logs for one environment build by buildId (bld-<YYYYMMDD>-<uuid>, as surfaced by environment-info's build block). Returns the log text inline (large outputs are ... [truncated]\"\n        },\n        {\n          \"tool\": \"environment-info\",\n          \"description\": \"Return the current cloud-agent run's environment (name, environment & version public ids, source, how/when it was recorded, repos, the full environment.json, a link to the environment i... [truncated]\"\n        },\n        {\n          \"tool\": \"get-automation\",\n          \"description\": \"Look up one Cursor automation by its id (UUID). Calls the AutomationsService GetAutomation API as the current run's principal and returns AutomationInfo metadata, enforcing the same rea... [truncated]\"\n        },\n        {\n          \"tool\": \"get-events\",\n          \"description\": \"Return the list of events recorded for the current cloud-agent run — the same events shown on the run's cursor.com dashboard page — ordered oldest first. Events cover run lifecycle and ... [truncated]\"\n        },\n        {\n          \"tool\": \"get-message-queue\",\n          \"description\": \"Return a point-in-time snapshot of THIS run's user-visible pending follow-up message queue — the same queue shown on the dashboard. No arguments; always scoped to this run. The currentl... [truncated]\"\n        },\n        {\n          \"tool\": \"list-cloud-agents\",\n          \"description\": \"List cloud agents accessible to the current run's principal in this run's environment (or, for a run without a saved environment, agents on the same repository), ordered by creation tim... [truncated]\"\n        },\n        {\n          \"tool\": \"list-environment-builds\",\n          \"description\": \"List this run's environment builds — the prebuilt environment snapshots a cloud agent can boot from instead of running install from scratch — newest first, so build ids can be found for... [truncated]\"\n        },\n        {\n          \"tool\": \"request-environment-setup-actions\",\n          \"description\": \"Record structured actions that the user must complete before environment setup can continue. Call after confirming the requested credentials are unavailable and after completing all ind... [truncated]\"\n        },\n        {\n          \"tool\": \"run-info\",\n          \"description\": \"Return the current cloud-agent run identity, basic run metadata (including lifecycle and setup status), and the URL where the run is available (https://cursor.com/agents/<bcId>).\"\n        },\n        {\n          \"tool\": \"trigger-environment-build\",\n          \"description\": \"Start one DRAFT environment build of this run's own environment (fresh git checkout + install script, snapshotted at the end). OK to call during environment setup to validate the config... [truncated]\"\n        }\n      ]\n    },\n    {\n      \"server\": \"cursor-subscriptions\",\n      \"serverStatus\": \"ready\",\n      \"tools\": [\n        {\n          \"tool\": \"list_subscriptions\",\n          \"description\": \"List active event subscriptions for this Cloud Agent.\"\n        },\n        {\n          \"tool\": \"subscribe_github_ci\",\n          \"description\": \"Subscribe this Cloud Agent to terminal GitHub CI results on one branch. Waits until every check run and commit-status context on a commit is terminal, then delivers one commit-wide resu... [truncated]\"\n        },\n        {\n          \"tool\": \"subscribe_github_pr\",\n          \"description\": \"Subscribe this Cloud Agent to future GitHub pull request events. After subscribing, state what you are waiting for and end your turn; the event arrives as a follow-up notification in th... [truncated]\"\n        },\n        {\n          \"tool\": \"subscribe_timer\",\n          \"description\": \"Subscribe a timer that enqueues the given prompt as a follow-up that runs when this Cloud Agent is otherwise free. Provide exactly one of `cron` (a cron expression) or `delaySeconds` (a... [truncated]\"\n        },\n        {\n          \"tool\": \"unsubscribe\",\n          \"description\": \"Close one active event subscription for this Cloud Agent.\"\n        }\n      ]\n    },\n    {\n      \"server\": \"deepwiki\",\n      \"serverStatus\": \"ready\",\n      \"serverDescription\": \"DeepWiki MCP provides AI-powered documentation for GitHub repositories. Available tools: - read_wiki_structure: Get a list of documentation topics for a repository - read_wiki_contents:... [truncated]\",\n      \"tools\": [\n        {\n          \"tool\": \"ask_question\",\n          \"description\": \"Ask any question about a GitHub repository and get an AI-powered, context-grounded response.\"\n        },\n        {\n          \"tool\": \"read_wiki_contents\",\n          \"description\": \"View documentation about a GitHub repository.\"\n        },\n        {\n          \"tool\": \"read_wiki_structure\",\n          \"description\": \"Get a list of documentation topics for a GitHub repository.\"\n        }\n      ]\n    }\n  ]\n}"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "I will identify every"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " visible MCP server "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "and list its tools. "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Then I will stop."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cursor"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " ("
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "ready"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ")\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "batch"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "fetch"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "details"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "environment"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "build"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "logs"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "environment"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "info"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "get"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "automation"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "get"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "events"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "get"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "message"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "queue"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "list"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "agents"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "list"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "environment"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "builds"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "request"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "environment"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "setup"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "actions"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "run"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "info"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "trigger"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "environment"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "build"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cursor"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "subscriptions"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " ("
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "ready"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ")\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "list"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "subscriptions"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "subscribe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "github"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "ci"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "subscribe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "github"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "pr"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "subscribe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "timer"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "unsubscribe"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "deep"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "wiki"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " ("
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "ready"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ")\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "ask"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "question"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "read"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "wiki"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "contents"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "read"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "wiki"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "structure"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  }
+]

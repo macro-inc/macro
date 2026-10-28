@@ -10,7 +10,7 @@ use entity_mutation::{
 };
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
-use graphql_soup::{SoupEntityEdges, SoupPatch};
+use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
 use model_entity::Entity;
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
@@ -53,7 +53,7 @@ fn validate_batch_with_limit(
 
     let mut seen = HashSet::with_capacity(refs.len());
     if let Some((entity_type, entity_id)) = refs.into_iter().find(|key| !seen.insert(key.clone())) {
-        let entity_type = entity_type.into_model();
+        let entity_type = entity_type.into_model()?;
         return Err(invalid_request(format!(
             "{operation} contains duplicate entity {entity_type}:{entity_id}"
         )));
@@ -99,8 +99,8 @@ pub struct EntityRefInput {
 
 impl EntityRefInput {
     /// Convert this GraphQL reference into the canonical entity model.
-    pub fn into_model(self) -> Entity<'static> {
-        self.entity_type.into_model().with_entity_string(self.id.0)
+    pub fn into_model(self) -> async_graphql::Result<Entity<'static>> {
+        Ok(self.entity_type.into_model()?.with_entity_string(self.id.0))
     }
 }
 
@@ -115,11 +115,11 @@ pub struct RenameEntityInput {
 
 impl RenameEntityInput {
     /// Convert this GraphQL input into a domain rename request.
-    pub fn into_model(self) -> RenameEntityRequest {
-        RenameEntityRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<RenameEntityRequest> {
+        Ok(RenameEntityRequest {
+            entity: self.entity.into_model()?,
             display_name: self.display_name,
-        }
+        })
     }
 }
 
@@ -134,11 +134,11 @@ pub struct MoveEntityInput {
 
 impl MoveEntityInput {
     /// Convert this GraphQL input into a domain move request.
-    pub fn into_model(self) -> MoveEntityRequest {
-        MoveEntityRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<MoveEntityRequest> {
+        Ok(MoveEntityRequest {
+            entity: self.entity.into_model()?,
             project_id: self.project_id.map(|id| id.0),
-        }
+        })
     }
 }
 
@@ -153,11 +153,11 @@ pub struct DuplicateEntityInput {
 
 impl DuplicateEntityInput {
     /// Convert this GraphQL input into a domain duplication request.
-    pub fn into_model(self) -> DuplicateEntityRequest {
-        DuplicateEntityRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<DuplicateEntityRequest> {
+        Ok(DuplicateEntityRequest {
+            entity: self.entity.into_model()?,
             display_name: self.display_name,
-        }
+        })
     }
 }
 
@@ -224,7 +224,7 @@ impl GraphqlLinkShare {
     }
 }
 
-/// Shared link/channel share-policy update.
+/// Shared link, explicit team, and channel share-policy update.
 #[derive(InputObject)]
 pub struct EntitySharePolicyInput {
     /// Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing.
@@ -232,6 +232,10 @@ pub struct EntitySharePolicyInput {
     /// Link access level. Omit to leave unchanged or pass null to reset it to the default level
     /// when a link share exists.
     pub link_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
+    /// Explicit team access level. Omit to leave unchanged or pass null to disable team sharing,
+    /// independently of link sharing. Only the actual owner may change this setting;
+    /// enabling it requires the owner to belong to a team. OWNER is not an allowed level.
+    pub team_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
     /// Channel access entries to add, remove, or replace.
     pub channel_share_permissions: Option<Vec<ChannelSharePolicyInput>>,
 }
@@ -246,6 +250,10 @@ impl EntitySharePolicyInput {
                 .into(),
             link_share_access_level: self
                 .link_share_access_level
+                .map_value(GraphqlEntityAccessLevel::into_model)
+                .into(),
+            team_share_access_level: self
+                .team_share_access_level
                 .map_value(GraphqlEntityAccessLevel::into_model)
                 .into(),
             channel_share_permissions: self.channel_share_permissions.map(|entries| {
@@ -263,17 +271,17 @@ impl EntitySharePolicyInput {
 pub struct UpdateEntitySharePolicyInput {
     /// Entity whose share policy should change.
     pub entity: EntityRefInput,
-    /// New link/channel policy values.
+    /// New link, explicit team, and channel policy values.
     pub policy: EntitySharePolicyInput,
 }
 
 impl UpdateEntitySharePolicyInput {
     /// Convert this GraphQL input into a domain share-policy request.
-    pub fn into_model(self) -> UpdateEntitySharePolicyRequest {
-        UpdateEntitySharePolicyRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<UpdateEntitySharePolicyRequest> {
+        Ok(UpdateEntitySharePolicyRequest {
+            entity: self.entity.into_model()?,
             policy: self.policy.into_model(),
-        }
+        })
     }
 }
 
@@ -305,7 +313,7 @@ fn validate_share_policy_inputs(
 }
 
 /// Stable machine-readable mutation error code.
-#[derive(Clone, Copy, Enum, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum GraphqlEntityMutationErrorCode {
     /// Operation is unavailable for the requested entity kind.
     UnsupportedOperation,
@@ -358,15 +366,23 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     /// Ordered normalized-cache effects produced by the mutation.
     async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
-        self.effects
-            .iter()
-            .map(|effect| match effect {
-                EntityMutationEffect::Updated(entity) => {
-                    Ok(SoupPatch::updated(user_id.clone(), entity.clone()))
+        let loader = ctx.data_opt::<SoupItemDataLoader>();
+        let patches =
+            async_graphql::futures_util::future::try_join_all(self.effects.iter().map(|effect| {
+                let user_id = user_id.clone();
+                async move {
+                    match effect {
+                        EntityMutationEffect::Updated(entity) => {
+                            SoupPatch::hydrate_updated(user_id, entity.clone(), loader).await
+                        }
+                        EntityMutationEffect::Deleted(entity) => {
+                            SoupPatch::deleted(entity.clone()).map(Some)
+                        }
+                    }
                 }
-                EntityMutationEffect::Deleted(entity) => SoupPatch::deleted(entity.clone()),
-            })
-            .collect()
+            }))
+            .await?;
+        Ok(patches.into_iter().flatten().collect())
     }
 }
 
@@ -411,6 +427,19 @@ pub enum GraphqlEntityMutationResult<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
+    /// Construct a successful result that refreshes one entity's Soup record.
+    pub fn from_updated_entity(entity: Entity<'static>) -> Self {
+        Self::Success(GraphqlMutationSuccess {
+            effects: vec![EntityMutationEffect::updated(entity)],
+            edges: PhantomData,
+        })
+    }
+
+    /// Construct a failed result from a domain-classified error.
+    pub fn from_error_code(error: EntityMutationErrorCode) -> Self {
+        Self::Error(GraphqlMutationError(error))
+    }
+
     /// Convert a borrowed domain mutation outcome into its GraphQL union variant.
     fn new(x: Result<&EntityMutationSuccess, &EntityMutationErrorCode>) -> Self {
         match x {
@@ -419,17 +448,6 @@ impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
                 edges: PhantomData,
             }),
             Err(error) => Self::Error(GraphqlMutationError(*error)),
-        }
-    }
-
-    /// Convert an owned domain mutation outcome into its GraphQL union variant.
-    fn new_owned(x: MutateEntitiesResult) -> Self {
-        match x {
-            Ok(result) => Self::Success(GraphqlMutationSuccess {
-                effects: result.effects,
-                edges: PhantomData,
-            }),
-            Err(error) => Self::Error(GraphqlMutationError(error)),
         }
     }
 }
@@ -445,7 +463,21 @@ pub struct EntityMutationPayload<E> {
 
 impl<E> EntityMutationPayload<E> {
     /// Construct a batch payload from ordered domain mutation outcomes.
+    ///
+    /// Per-item failures are successful GraphQL responses, so the resolver
+    /// span records them for the batch.
     fn new(results: Vec<MutateEntitiesResult>) -> Self {
+        let span = tracing::Span::current();
+        let mut failures = results.iter().filter_map(|result| result.as_ref().err());
+        if let Some(first) = failures.next() {
+            span.record("entity_mutation.failed_count", failures.count() + 1);
+            span.record(
+                "entity_mutation.error_code",
+                tracing::field::debug(GraphqlEntityMutationErrorCode::new(*first)),
+            );
+        } else {
+            span.record("entity_mutation.failed_count", 0);
+        }
         EntityMutationPayload {
             results,
             edges: PhantomData,
@@ -481,6 +513,15 @@ fn mutation_actor(ctx: &Context<'_>) -> async_graphql::Result<EntityMutationActo
 #[Object]
 impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     /// Rename heterogeneous entities in one request.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn rename_entities(
         &self,
         ctx: &Context<'_>,
@@ -497,13 +538,22 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(RenameEntityInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
     }
 
     /// Move heterogeneous entities to a project or to the root.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn move_entities(
         &self,
         ctx: &Context<'_>,
@@ -520,13 +570,22 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(MoveEntityInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
     }
 
-    /// Update link and channel share policies across supported entity kinds.
+    /// Update link, explicit team, and channel share policies across supported entity kinds.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn update_entity_share_policies(
         &self,
         ctx: &Context<'_>,
@@ -544,13 +603,22 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(UpdateEntitySharePolicyInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
     }
 
     /// Soft-delete entities with a reversible trash lifecycle.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = entities.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn trash_entities(
         &self,
         ctx: &Context<'_>,
@@ -564,13 +632,22 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     entities
                         .into_iter()
                         .map(EntityRefInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
     }
 
     /// Restore reversibly deleted entities.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = entities.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn restore_entities(
         &self,
         ctx: &Context<'_>,
@@ -584,13 +661,22 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     entities
                         .into_iter()
                         .map(EntityRefInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
     }
 
     /// Irreversibly delete entities.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = entities.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn delete_entities_permanently(
         &self,
         ctx: &Context<'_>,
@@ -607,13 +693,22 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     entities
                         .into_iter()
                         .map(EntityRefInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
     }
 
     /// Duplicate supported entities.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn duplicate_entities(
         &self,
         ctx: &Context<'_>,
@@ -630,23 +725,9 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(DuplicateEntityInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
-    }
-
-    /// Add or remove an entity from the actor's favorites.
-    async fn set_entity_favorite(
-        &self,
-        ctx: &Context<'_>,
-        entity: EntityRefInput,
-        favorite: bool,
-    ) -> async_graphql::Result<GraphqlEntityMutationResult<E>> {
-        let res = mutation_service::<S>(ctx)?
-            .set_favorite(mutation_actor(ctx)?, entity.into_model(), favorite)
-            .await;
-
-        Ok(GraphqlEntityMutationResult::new_owned(res))
     }
 }

@@ -10,7 +10,7 @@ import {
 export const I_IMAGE_CONSTRAINED: ElementTransformer = {
   dependencies: [ImageNode, UnknownMentionNode],
   type: 'element',
-  regExp: /<m-image>(.*?)<\/m-image>/,
+  regExp: /^<m-image>(.*?)<\/m-image>\s*$/,
   export: (node: LexicalNode) => {
     if (!$isImageNode(node)) return null;
     if (node.getSrcType() === 'local') return null;
@@ -52,7 +52,7 @@ export const I_IMAGE_CONSTRAINED: ElementTransformer = {
         constrainedWidth: data.constrainedWidth ?? undefined,
         constrainedHeight: data.constrainedHeight ?? undefined,
       });
-      parent.append(imageNode);
+      parent.replace(imageNode);
     } catch (e) {
       console.error('Failed to parse m-image:', e);
       replaceElementWithUnknownMention(parent, 'Unknown Image');

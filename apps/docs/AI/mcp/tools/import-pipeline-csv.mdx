@@ -1,0 +1,18 @@
+---
+title: ImportPipelineCsv
+description: >-
+  Import a CSV into a CRM pipeline as new deals (entries), such as a pipeline
+  export or a sheet of deals.
+---
+
+# ImportPipelineCsv
+
+Import a CSV into a CRM pipeline as new deals (entries), such as a pipeline export or a sheet of deals. In a company pipeline each row needs a domain (Domain, Domains or Website column) and may name the company (Company); in a contact pipeline each row needs an Email and may name the contact (Contact). Missing companies and contacts are created. Other columns fill the pipeline fields with the same name (Stage, Owner as an email, Revenue, custom fields); stage labels the pipeline lacks are added. Records already in the pipeline are not added again, so retrying an interrupted import adds only what is missing; several rows for one new record become separate deals. Give the CSV as text in csv, or as documentId for a CSV file in Macro. Returns counts and the rows that could not be added.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pipelineId` | string | Yes | The pipeline's id from ListPipelines. |
+| `csv` | string | No | The CSV text with a header row. Give this or documentId, not both. |
+| `documentId` | string | No | The id of a CSV file in Macro the user can open, e.g. one they uploaded or an ExportPipelineCsv result. Give this or csv, not both. |

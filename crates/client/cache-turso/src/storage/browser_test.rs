@@ -10,6 +10,36 @@ fn key(value: &str) -> EntityKey<'static> {
     EntityKey(value.to_owned().into())
 }
 
+#[cfg(feature = "browser-test-hooks")]
+#[wasm_bindgen_test(async)]
+async fn browser_corrupt_queue_hook_preserves_queue_bindings() {
+    let owner = OpfsOwner::acquire("cache-turso-browser-corrupt-queue.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("recovery wipe must produce a complete fresh pair")
+    };
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "browser-corrupt-queue")
+            .unwrap();
+    storage.browser_test_corrupt_queue_payload().unwrap();
+    assert_eq!(
+        storage
+            .load_mutation_queue()
+            .await
+            .unwrap_err()
+            .physical_reset_reason(),
+        Some(PhysicalResetReason::Codec)
+    );
+    let TursoStorageCloseOutcome::ResetRequired(closed) = storage.try_close().unwrap() else {
+        panic!("corrupt queue payload must require reset")
+    };
+    closed.reset().await.unwrap().release().await.unwrap();
+}
+
 #[wasm_bindgen_test(async)]
 async fn runtime_corruption_closes_reset_only_and_replacement_is_empty() {
     let owner = OpfsOwner::acquire("cache-turso-wp06-runtime-reset.db")

@@ -1,17 +1,18 @@
-import { displayResultsInstructions } from '@app/features/dynamic-ui/toolSchema';
 import { analytics } from '@app/lib/analytics';
+import { isAiUsageLimitError } from '@app/lib/service-clients/ai-usage-limit';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
-
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
+import type { ModelSpeed } from '../../constant/speed';
 
 export type ChatSendInput = {
   content: string;
   model: Model;
+  speed?: ModelSpeed;
   attachments: Attachment[];
   toolset: ToolSet;
   metaKey?: boolean;
@@ -19,7 +20,12 @@ export type ChatSendInput = {
 
 type SendChatMessageResult =
   | { stream: ChatMessageStream; chat_id: string }
-  | { error: true; paymentError?: boolean };
+  | {
+      error: true;
+      paymentError?: boolean;
+      /** The billing gate refused the send; carries the backend reason code. */
+      usageLimit?: string;
+    };
 
 export function useSendChatMessage() {
   const additionalInstructions = useAdditionalInstructions();
@@ -27,25 +33,27 @@ export function useSendChatMessage() {
   return async function sendChatMessage({
     content,
     model,
+    speed,
     chatId,
     attachments,
     toolset,
   }: ChatSendInput & { chatId?: string }): Promise<SendChatMessageResult> {
-    // Append the dynamic-UI (displayResults) JSON schema so the model knows the
-    // shape of the tool's `any` `view` argument.
-    const base = additionalInstructions(chatId);
-    const dashboard = displayResultsInstructions();
-    const merged = base ? `${base}\n\n${dashboard}` : dashboard;
-
     const response = await cognitionApiServiceClient.sendStreamChatMessage({
       content,
       model: model ?? DEFAULT_MODEL,
+      speed: speed ?? 'standard',
       chat_id: chatId,
       attachments: attachments.length > 0 ? attachments : undefined,
       toolset,
-      additional_instructions: merged,
+      additional_instructions: additionalInstructions(chatId),
     });
 
+    if (response.isErr()) {
+      const usageLimit = response.error.find(isAiUsageLimitError);
+      if (usageLimit) {
+        return { error: true, usageLimit: usageLimit.reason };
+      }
+    }
     if (isPaymentError(response)) {
       return { error: true, paymentError: true };
     }
@@ -61,6 +69,7 @@ export function useSendChatMessage() {
     }
 
     analytics.track('ai_message_sent', {
+      surface: 'chat',
       model: model ?? DEFAULT_MODEL,
       attachmentCount: attachments.length,
     });

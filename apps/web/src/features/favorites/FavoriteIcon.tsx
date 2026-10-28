@@ -3,7 +3,7 @@ import {
   useFavoriteDmRecipientId,
 } from '@app/util/favorites';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { UserIcon } from '@core/component/UserIcon';
+import { UserIcon, type UserIconSize } from '@core/component/UserIcon';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Show } from 'solid-js';
 
@@ -15,7 +15,11 @@ import { Show } from 'solid-js';
  * The favorite's identity must be stable for the component's lifetime
  * (favorites lists key rows by entity, so it is).
  */
-export function FavoriteIcon(props: { favorite: Favorite; class?: string }) {
+export function FavoriteIcon(props: {
+  favorite: Favorite;
+  avatarSize?: UserIconSize;
+  class?: string;
+}) {
   const dmRecipientId = useFavoriteDmRecipientId(props.favorite);
   return (
     <Show
@@ -31,7 +35,7 @@ export function FavoriteIcon(props: { favorite: Favorite; class?: string }) {
       {(recipientId) => (
         <UserIcon
           id={recipientId()}
-          size="sm"
+          size={props.avatarSize ?? 'sm'}
           suppressClick
           showTooltip={false}
           class={props.class}

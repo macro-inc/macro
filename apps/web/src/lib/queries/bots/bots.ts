@@ -2,9 +2,9 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from '../channel/keys';
-import { botKeys } from './keys';
+import { botKeys, botProfileKeys } from './keys';
 
 type CreateBotParams = {
   avatarUrl?: string;
@@ -31,20 +31,28 @@ type DeleteBotParams = {
   channelIds: string[];
 };
 
-export function useBotsQuery() {
-  return useQuery(() => ({
+export function botsQueryOptions() {
+  return queryOptions({
     queryKey: botKeys.list.queryKey,
     queryFn: async (): Promise<Bot[]> =>
       await throwOnErr(() => storageServiceClient.getBots()),
-  }));
+  });
+}
+
+export function useBotsQuery(enabled: () => boolean = () => true) {
+  return useQuery(() => ({ ...botsQueryOptions(), enabled: enabled() }));
+}
+
+function botQueryOptions(botId: string) {
+  return queryOptions({
+    queryKey: botKeys.detail(botId).queryKey,
+    queryFn: async (): Promise<Bot> =>
+      await throwOnErr(() => storageServiceClient.getBot({ bot_id: botId })),
+  });
 }
 
 export function useBotQuery(botId: () => string) {
-  return useQuery(() => ({
-    queryKey: botKeys.detail(botId()).queryKey,
-    queryFn: async (): Promise<Bot> =>
-      await throwOnErr(() => storageServiceClient.getBot({ bot_id: botId() })),
-  }));
+  return useQuery(() => botQueryOptions(botId()));
 }
 
 export function invalidateBots() {
@@ -86,7 +94,12 @@ export function useUpdateBotMutation() {
       ),
     onSuccess: async (bot) => {
       queryClient.setQueryData(botKeys.detail(bot.id).queryKey, bot);
-      await invalidateBots();
+      await Promise.all([
+        invalidateBots(),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(bot.id).queryKey,
+        }),
+      ]);
     },
     onError: (error) => console.error('failed to update bot', error),
   }));
@@ -112,6 +125,9 @@ export function useDeleteBotMutation() {
 
       await Promise.all([
         invalidateBots(),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(vars.botId).queryKey,
+        }),
         ...vars.channelIds.flatMap((channelId) => [
           queryClient.invalidateQueries({
             queryKey: channelKeys.channelBots(channelId).queryKey,
@@ -145,14 +161,18 @@ export function useCreateBotTokenMutation() {
   }));
 }
 
-export function useBotChannelsQuery(botId: () => string) {
-  return useQuery(() => ({
-    queryKey: botKeys.channels(botId()).queryKey,
+function botChannelsQueryOptions(botId: string) {
+  return queryOptions({
+    queryKey: botKeys.channels(botId).queryKey,
     queryFn: async () =>
       await throwOnErr(() =>
-        storageServiceClient.getBotChannels({ bot_id: botId() })
+        storageServiceClient.getBotChannels({ bot_id: botId })
       ),
-  }));
+  });
+}
+
+export function useBotChannelsQuery(botId: () => string) {
+  return useQuery(() => botChannelsQueryOptions(botId()));
 }
 
 export function invalidateBotChannels(botId: string) {

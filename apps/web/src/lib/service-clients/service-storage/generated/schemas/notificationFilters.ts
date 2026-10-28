@@ -4,17 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationFiltersDone } from './notificationFiltersDone';
-import type { NotificationFiltersSeen } from './notificationFiltersSeen';
+import type { NotificationState } from './notificationState';
 
 /**
- * Notification state filters for channel message queries.
+ * Notification-level filters that apply to an entity type.
  */
 export interface NotificationFilters {
-  /** Filter by notification done state. `Some(true)` selects done
-notifications; `Some(false)` selects not-done notifications. */
-  done?: NotificationFiltersDone;
-  /** Filter by notification seen state. `Some(true)` selects seen
-notifications; `Some(false)` selects not-seen notifications. */
-  seen?: NotificationFiltersSeen;
+  /** Include entities with a non-deleted notification in any of these exact states.
+Empty means no notification restriction. Active means `[unseen, seen]`. */
+  states?: NotificationState[];
 }

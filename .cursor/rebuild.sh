@@ -3,9 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Backend-edit flow, as one verb: rebuild the Nix stack binaries and recycle
-# the stack onto them. This replaces `just stack update`, which cannot write
-# into the read-only Nix binaries directory.
+# Backend-edit flow: rebuild Nix stack binaries and adopt them into the
+# running stack. Volumes stay. If nothing is recorded yet, `stack update`
+# bootstraps through `stack up`.
 
 # shellcheck source=cloud-lib.sh
 source "${SCRIPT_DIR}/cloud-lib.sh"
@@ -18,5 +18,11 @@ fi
 /usr/bin/bash "${SCRIPT_DIR}/infra.sh"
 
 \cd "${WORKSPACE_ROOT}"
-just stack down
-exec /usr/bin/bash "${SCRIPT_DIR}/stack.sh"
+build_local_stack_binaries
+stack_doppler_args
+# The watcher matters on the bootstrap path (update -> up creates networks).
+run_with_bridge_forwarding \
+  just stack update "${doppler_args[@]}" --binaries-dir "${LOCAL_STACK_BINS}/bin"
+ensure_docker_bridge_forwarding
+
+echo "cursor-cloud stack: binaries remounted"

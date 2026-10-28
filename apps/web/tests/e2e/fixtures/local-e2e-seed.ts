@@ -33,6 +33,9 @@ type SeedManifest = {
       };
     };
   };
+  activity: {
+    seededEventCount: number;
+  };
   navigation: {
     genericChannelMention: {
       sourceChannelId: string;
@@ -233,5 +236,8 @@ export const localE2ESeed = {
       `channel ${manifest.navigation.unreadMessageNavigation.sourceChannelId}`
     ),
     unreadChannelNotificationId: manifest.navigation.unreadNotificationId,
+  },
+  activity: {
+    seededEventCount: manifest.activity.seededEventCount,
   },
 } as const;

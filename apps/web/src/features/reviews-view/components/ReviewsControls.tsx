@@ -1,0 +1,308 @@
+import {
+  type ListControlOption,
+  ListFilterDropdown,
+  type ListFilterGroup,
+  ListSortDropdown,
+  MobileFilterDrawer,
+  useViewControlHotkeys,
+} from '@app/components/view-shell';
+import { PrOriginIcon, PrPriorityIcon } from '@block-pr/component/PrLinks';
+import {
+  PR_PRIORITY_IDS,
+  PR_PRIORITY_LABELS,
+  type PrLinkKind,
+} from '@block-pr/data/pr-links';
+import { PR_ORIGIN_LABELS, PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import BoardIcon from '@icon/system/regular/kanban.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import { Accordion } from '@kobalte/core/accordion';
+import { ButtonGroup } from '@ui';
+import { createSignal, For } from 'solid-js';
+import { UNKNOWN_ORIGIN } from '../reviews-filter';
+import type {
+  ReviewsFilterId,
+  ReviewsFilterSelection,
+  ReviewsLayout,
+  ReviewsReviewFilterId,
+  ReviewsSortId,
+  ReviewsStatusFilterId,
+} from '../reviews-types';
+
+export type ReviewsControlProps = {
+  sort: ReviewsSortId;
+  onSortChange: (sort: ReviewsSortId) => void;
+  repositories: ListControlOption<string>[];
+  authors: ListControlOption<string>[];
+  assignees: ListControlOption<string>[];
+  labels: ListControlOption<string>[];
+  /** Offers the review filters that match the viewer's GitHub user id. */
+  hasGithubIdentity: boolean;
+  /** Leaves out Status, for layouts that lay pull requests out by status. */
+  hideStatus?: boolean;
+  selected: ReviewsFilterSelection;
+  onFilterChange: (
+    group: ReviewsFilterId,
+    id: string,
+    selected: boolean
+  ) => void;
+  onClearFilters: () => void;
+};
+
+const SORT_OPTIONS: ListControlOption<ReviewsSortId>[] = [
+  { id: 'priority', label: 'Priority' },
+  { id: 'recently_updated', label: 'Recently updated' },
+  { id: 'least_recently_updated', label: 'Least recently updated' },
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' },
+];
+
+const STATUS_OPTIONS: ListControlOption<ReviewsStatusFilterId>[] = [
+  { id: 'open', label: 'Open' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'merged', label: 'Merged' },
+];
+
+const REVIEW_OPTIONS: ListControlOption<ReviewsReviewFilterId>[] = [
+  { id: 'reviewed_by_me', label: 'Reviewed by you' },
+  { id: 'not_reviewed_by_me', label: 'Not reviewed by you' },
+  { id: 'awaiting_my_review', label: 'Awaiting review from you' },
+];
+
+const PRIORITY_OPTIONS: ListControlOption<string>[] = PR_PRIORITY_IDS.map(
+  (id) => ({
+    id,
+    label: PR_PRIORITY_LABELS[id],
+    icon: () => <PrPriorityIcon priority={id} />,
+  })
+);
+
+const ORIGIN_OPTIONS: ListControlOption<string>[] = [
+  ...PR_ORIGIN_TOOLS.map((tool) => ({
+    id: tool,
+    label: PR_ORIGIN_LABELS[tool],
+    icon: () => <PrOriginIcon tool={tool} class="size-4" />,
+  })),
+  { id: UNKNOWN_ORIGIN, label: 'Unknown' },
+];
+
+const LINKED_OPTIONS: ListControlOption<string>[] = [
+  { id: 'agent', label: 'An agent session' },
+  { id: 'ticket', label: 'A ticket' },
+  { id: 'customer', label: 'A customer' },
+  { id: 'channel', label: 'A channel' },
+] satisfies ListControlOption<PrLinkKind>[];
+
+function filterGroups(
+  props: ReviewsControlProps
+): ListFilterGroup<ReviewsFilterId, string>[] {
+  return [
+    ...(props.hideStatus
+      ? []
+      : [{ id: 'status' as const, label: 'Status', options: STATUS_OPTIONS }]),
+    { id: 'priority', label: 'Priority', options: PRIORITY_OPTIONS },
+    { id: 'linked', label: 'Linked to', options: LINKED_OPTIONS },
+    { id: 'origin', label: 'Started from', options: ORIGIN_OPTIONS },
+    {
+      id: 'repository',
+      label: 'Repository',
+      options: props.repositories,
+      searchPlaceholder: 'Search repositories',
+    },
+    {
+      id: 'author',
+      label: 'Author',
+      options: props.authors,
+      searchPlaceholder: 'Search authors',
+    },
+    {
+      id: 'assignee',
+      label: 'Assignee',
+      options: props.assignees,
+      searchPlaceholder: 'Search assignees',
+    },
+    {
+      id: 'label',
+      label: 'Label',
+      options: props.labels,
+      searchPlaceholder: 'Search labels',
+    },
+    ...(props.hasGithubIdentity
+      ? [{ id: 'review' as const, label: 'Reviews', options: REVIEW_OPTIONS }]
+      : []),
+  ];
+}
+
+function isSelected(
+  props: ReviewsControlProps,
+  group: ReviewsFilterId,
+  id: string
+) {
+  return props.selected[group].includes(id);
+}
+
+export const activeReviewsFilterCount = (selected: ReviewsFilterSelection) =>
+  Object.values(selected).reduce((count, ids) => count + ids.length, 0);
+
+export function ReviewsControls(
+  props: ReviewsControlProps & {
+    layout: ReviewsLayout;
+    onLayoutChange: (layout: ReviewsLayout) => void;
+  }
+) {
+  const panel = useSplitPanelOrThrow();
+  const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  let filterTrigger: HTMLButtonElement | undefined;
+  let sortTrigger: HTMLButtonElement | undefined;
+
+  const handleMenuOpenChange =
+    (menu: 'filters' | 'sort') => (open: boolean) => {
+      setOpenMenu((current) =>
+        open ? menu : current === menu ? undefined : current
+      );
+    };
+
+  useViewControlHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    filter: {
+      description: 'Filter pull requests',
+      run: () => {
+        if (!filterTrigger) return false;
+        setOpenMenu('filters');
+        return true;
+      },
+    },
+    sort: {
+      description: 'Sort pull requests',
+      run: () => {
+        if (!sortTrigger) return false;
+        setOpenMenu('sort');
+        return true;
+      },
+    },
+  });
+
+  const activeCount = () => activeReviewsFilterCount(props.selected);
+
+  return (
+    <>
+      <HeaderActionGroup label="Review filters">
+        <ListFilterDropdown
+          grouped
+          label="Filter pull requests"
+          activeCount={activeCount()}
+          groups={filterGroups(props)}
+          open={openMenu() === 'filters'}
+          onOpenChange={handleMenuOpenChange('filters')}
+          triggerRef={(element) => (filterTrigger = element)}
+          isSelected={(group, id) => isSelected(props, group, id)}
+          selectedIds={(group) => props.selected[group]}
+          onSelectionChange={props.onFilterChange}
+          onClear={props.onClearFilters}
+        />
+      </HeaderActionGroup>
+      <HeaderActionGroup label="Review layout">
+        <ButtonGroup.Button
+          aria-label="List"
+          tooltip="List"
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.layout === 'list'}
+          onClick={() => props.onLayoutChange('list')}
+        >
+          <ListIcon class="size-4" />
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label="Board"
+          tooltip="Board"
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.layout === 'board'}
+          onClick={() => props.onLayoutChange('board')}
+        >
+          <BoardIcon class="size-4" />
+        </ButtonGroup.Button>
+      </HeaderActionGroup>
+      <HeaderActionGroup label="Review view options">
+        <ListSortDropdown
+          grouped
+          label="Sort pull requests"
+          value={props.sort}
+          options={SORT_OPTIONS}
+          open={openMenu() === 'sort'}
+          onChange={props.onSortChange}
+          onOpenChange={handleMenuOpenChange('sort')}
+          triggerRef={(element) => (sortTrigger = element)}
+        />
+      </HeaderActionGroup>
+    </>
+  );
+}
+
+export function ReviewsFilterDrawer(props: ReviewsControlProps) {
+  const groups = () => filterGroups(props);
+  const activeCount = () => activeReviewsFilterCount(props.selected);
+
+  return (
+    <MobileFilterDrawer
+      triggerLabel="Open pull request filters"
+      label="Pull request list controls"
+      activeCount={activeCount()}
+      onClear={props.onClearFilters}
+    >
+      <MobileDrawer.Label id="reviews-sort-label" class="pt-4">
+        Sort
+      </MobileDrawer.Label>
+      <MobileDrawer.Section
+        role="radiogroup"
+        aria-labelledby="reviews-sort-label"
+      >
+        <For each={SORT_OPTIONS}>
+          {(option) => (
+            <MobileFilterDrawer.Option
+              selectionMode="single"
+              checked={props.sort === option.id}
+              onChange={() => props.onSortChange(option.id)}
+            >
+              {option.label}
+            </MobileFilterDrawer.Option>
+          )}
+        </For>
+      </MobileDrawer.Section>
+      <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
+      <Accordion multiple collapsible defaultValue={['priority']}>
+        <div class="flex flex-col gap-3">
+          <For each={groups()}>
+            {(group) => (
+              <MobileFilterDrawer.Section
+                value={group.id}
+                label={group.label}
+                activeCount={
+                  group.options.filter((option) =>
+                    isSelected(props, group.id, option.id)
+                  ).length
+                }
+              >
+                <For each={group.options}>
+                  {(option) => (
+                    <MobileFilterDrawer.Option
+                      checked={isSelected(props, group.id, option.id)}
+                      onChange={(selected) =>
+                        props.onFilterChange(group.id, option.id, selected)
+                      }
+                    >
+                      {option.content?.() ?? option.label}
+                    </MobileFilterDrawer.Option>
+                  )}
+                </For>
+              </MobileFilterDrawer.Section>
+            )}
+          </For>
+        </div>
+      </Accordion>
+    </MobileFilterDrawer>
+  );
+}

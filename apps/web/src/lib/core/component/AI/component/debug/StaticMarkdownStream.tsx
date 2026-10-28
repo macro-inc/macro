@@ -2,14 +2,11 @@ import {
   type BufferedChatMessageStream,
   bufferedStream,
 } from '@core/component/AI/util/stream';
-import {
-  StaticMarkdown,
-  StaticMarkdownContext,
-} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import PlayIcon from '@phosphor-icons/core/regular/play.svg?component-solid';
-import StopIcon from '@phosphor-icons/core/regular/stop.svg?component-solid';
-import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import PlayIcon from '@icon/system/regular/play.svg?component-solid';
+import StopIcon from '@icon/system/regular/stop.svg?component-solid';
+import TrashIcon from '@icon/system/regular/trash.svg?component-solid';
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import {
   type ChatStreamController,
@@ -24,6 +21,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { ChatMessageMarkdown } from '../message/ChatMessageMarkdown';
 
 const SAMPLE_TEXT = `Here is a streamed Macro XML sample:
 
@@ -200,25 +198,25 @@ export default function StaticMarkdownStreamDebug() {
           </div>
           <div class="flex items-center gap-2">
             <Button
-              variant="active"
+              variant="primary"
               size="sm"
               onClick={startStream}
               disabled={isStreaming()}
             >
-              <PlayIcon />
+              <PlayIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Stream
             </Button>
             <Button
-              variant="base"
+              variant="secondary"
               size="sm"
               onClick={stopRun}
               disabled={!isStreaming()}
             >
-              <StopIcon />
+              <StopIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Stop
             </Button>
             <Button variant="ghost" size="sm" onClick={resetOutput}>
-              <TrashIcon />
+              <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Reset
             </Button>
           </div>
@@ -314,7 +312,7 @@ export default function StaticMarkdownStreamDebug() {
                 {progress()}%
               </div>
             </div>
-            <div class="min-h-[420px] flex-1 overflow-auto rounded-sm border border-edge-muted bg-message p-4">
+            <div class="min-h-[420px] flex-1 overflow-auto rounded-sm border border-edge-muted bg-surface-1 p-4">
               <Show
                 when={renderedText().length > 0}
                 fallback={
@@ -324,7 +322,10 @@ export default function StaticMarkdownStreamDebug() {
                 }
               >
                 <StaticMarkdownContext theme={aiChatTheme}>
-                  <StaticMarkdown markdown={renderedText()} target="internal" />
+                  <ChatMessageMarkdown
+                    text={renderedText()}
+                    generating={isStreaming}
+                  />
                 </StaticMarkdownContext>
               </Show>
             </div>

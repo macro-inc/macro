@@ -1,0 +1,63 @@
+import { ContentLoading } from '@components/app/ContentLoading';
+import {
+  EntityLoadGate,
+  type EntityLoadResult,
+} from '@core/component/EntityLoadGate';
+import { EmailDebouncedReadMarker } from '@notifications';
+import type { ComponentProps, ParentProps } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
+
+export type EmailThreadLoadGateProps<Data> = ParentProps<{
+  result: EntityLoadResult<Data>;
+  notificationSource: ComponentProps<
+    typeof EmailDebouncedReadMarker
+  >['notificationSource'];
+  threadId: string;
+  /** An account-owned working copy whose thread has never been confirmed. */
+  isLocalDraft?: boolean;
+  linkId?: string;
+  debounceTime?: number;
+  onRetry: () => void;
+}>;
+
+/** Shared load and read-state policy for every mounted email detail host. */
+export function EmailThreadLoadGate<Data>(
+  props: EmailThreadLoadGateProps<Data>
+) {
+  const error = () => {
+    const error = props.result.error();
+    return error === 'NOT_FOUND' && props.isLocalDraft ? undefined : error;
+  };
+  return (
+    <Suspense fallback={<ContentLoading />}>
+      <EntityLoadGate
+        result={{
+          data: props.result.data,
+          error,
+          // Hosts supply identity-checked data from createEmailThreadSource.
+          // Keep that composer's data during server-ID adoption; navigation to
+          // another thread clears it and restores the loading state.
+          // Identity resolution can precede the query's loading state. With
+          // no data or error yet, the email is still waiting to load.
+          isPending: () =>
+            props.result.data() === undefined &&
+            (props.result.isPending() || error() === undefined),
+        }}
+        loadErrorTitle="Unable to load this email"
+        onRetry={props.onRetry}
+      >
+        <Show when={!props.isLocalDraft && props.threadId} keyed>
+          {(threadId) => (
+            <EmailDebouncedReadMarker
+              notificationSource={props.notificationSource}
+              threadId={threadId}
+              linkId={props.linkId}
+              debounceTime={props.debounceTime}
+            />
+          )}
+        </Show>
+        {props.children}
+      </EntityLoadGate>
+    </Suspense>
+  );
+}

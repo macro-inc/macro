@@ -17,7 +17,7 @@
 //! that is ignored here.
 //!
 //! ```text
-//! {"ts": "...", "direction": "to_server" | "to_runtime", "content": <envelope>}
+//! {"ts": "...", "direction": "to_server" | "to_runtime" | "notification", "content": <envelope>}
 //! ```
 //!
 //! ```sh
@@ -35,7 +35,10 @@ use agent_session::domain::ports::{AgentSessionLogWriter, AgentSessionRepo, NoOp
 use agent_session::domain::service::LiveSessionLogWriter;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use bots::domain::models::BotId;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use clap::Parser;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::Deserialize;
@@ -152,6 +155,7 @@ struct RecordedLine {
 enum Direction {
     ToServer,
     ToRuntime,
+    Notification,
 }
 
 /// Read a recording into log entries for `session`, in file order.
@@ -182,6 +186,9 @@ fn parse_line(
         Direction::ToServer => {
             Message::ToServer(serde_json::from_value(recorded.content).map_err(frame)?)
         }
+        Direction::Notification => {
+            Message::Notification(serde_json::from_value(recorded.content).map_err(frame)?)
+        }
         Direction::ToRuntime => {
             Message::ToRuntime(serde_json::from_value(recorded.content).map_err(frame)?)
         }
@@ -198,6 +205,7 @@ fn parse_line(
         agent_session_id: session,
         user_id,
         content,
+        logged_at: None,
     })
 }
 
@@ -231,7 +239,10 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
         })?;
     // The same repo answers every port, exactly as the composition root in
     // `document_storage_service` wires them.
-    let repo = PgAgentSessionRepo::new(pool);
+    let repo = PgAgentSessionRepo::new(
+        pool.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool))),
+    );
 
     // Straight to the repo rather than `create_session`: that attaches a
     // transport, and a recording has no container to attach to. The row is
@@ -239,8 +250,10 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     let session = AgentSessionRepo::create(
         &repo,
         CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
+            repo_branch: None,
             id: session_id,
-            owner_id: owner,
+            owner_id: model_owner::Owner::User(owner),
             bot_id: BotId::new_from_uuid(args.bot_id),
             thread_id: None,
             originating_message_id: None,
@@ -248,6 +261,11 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             harness: args.harness.clone(),
             repo_url: Some(args.repo_url.clone()),
             workspace: args.workspace.clone(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            // A recording is replayed, not run; nothing reads instructions.
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
         },
     )
     .await

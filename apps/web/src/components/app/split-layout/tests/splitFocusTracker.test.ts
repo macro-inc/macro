@@ -9,9 +9,9 @@ import {
   it,
   vi,
 } from 'vitest';
-import { createSplitLayout, type SplitId } from '../layoutManager';
-import { restorePreviewPairs } from '../layoutUrlSync';
+import type { SplitId } from '../layoutManager';
 import { createSplitFocusTracker } from '../splitFocusTracker';
+import { createRoutedSplitLayout } from './fixtures';
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -44,6 +44,7 @@ beforeAll(() => {
 
 function createMockOrchestrator(): BlockOrchestrator {
   return {
+    isBlockMounted: vi.fn(() => false),
     createBlockInstance: vi.fn((_type, id, _splitId) => ({
       node: { type: 'mock-node', id },
       detach: vi.fn(),
@@ -64,18 +65,15 @@ const FOCUS_DEBOUNCE_MS = 50;
 
 /**
  * Reproduce the fresh-load wiring of SplitLayoutContainer: the manager comes
- * up from URL contents (last split active), Preview Pairs restore, and only
- * then does the focus tracker mount and process the trailing Insert event.
+ * up from URL contents (last split active), then the focus tracker mounts
+ * and processes the trailing Insert event.
  */
-function mountFreshLoad(options: { withPreviewPair: boolean }) {
+function mountFreshLoad() {
   return createRoot((dispose) => {
-    const manager = createSplitLayout(createMockOrchestrator(), [
-      { type: 'component', id: 'inbox' },
-      { type: 'md', id: 'doc-1' },
-    ]);
-    if (options.withPreviewPair) {
-      restorePreviewPairs(manager, [{ controllerIndex: 0 }]);
-    }
+    const manager = createRoutedSplitLayout(
+      createMockOrchestrator(),
+      '/home/~/channels'
+    );
 
     const panelRefs = new Map<SplitId, HTMLDivElement>(
       manager.splits().map((split) => [split.id, createPanel()])
@@ -101,23 +99,8 @@ describe('createSplitFocusTracker', () => {
     document.body.innerHTML = '';
   });
 
-  it('moves fresh-load focus to the Controller when the last URL split is a Preview Pair Viewer', () => {
-    const { dispose, manager, panelRefs } = mountFreshLoad({
-      withPreviewPair: true,
-    });
-    const [controller, viewer] = manager.splits();
-
-    vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
-
-    expect(manager.controllerOf(viewer.id)).toBe(controller.id);
-    expect(document.activeElement).toBe(panelRefs.get(controller.id));
-    expect(manager.activeSplitId()).toBe(controller.id);
-
-    dispose();
-  });
-
   it('cancels pending debounced focus when its owner is disposed', () => {
-    const { dispose } = mountFreshLoad({ withPreviewPair: true });
+    const { dispose } = mountFreshLoad();
 
     dispose();
     vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
@@ -125,10 +108,8 @@ describe('createSplitFocusTracker', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it('keeps fresh-load focus on the last split when it is not a Viewer', () => {
-    const { dispose, manager, panelRefs } = mountFreshLoad({
-      withPreviewPair: false,
-    });
+  it('keeps fresh-load focus on the last split', () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad();
     const [, last] = manager.splits();
 
     vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
@@ -136,6 +117,51 @@ describe('createSplitFocusTracker', () => {
     expect(document.activeElement).toBe(panelRefs.get(last.id));
     expect(manager.activeSplitId()).toBe(last.id);
 
+    dispose();
+  });
+
+  it('preserves a focused chrome input through deferred insertion but honors explicit return focus', () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad();
+    const [, last] = manager.splits();
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+
+    vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
+
+    expect(document.activeElement).toBe(input);
+    expect(manager.activeSplitId()).toBe(last.id);
+    manager.returnFocus();
+    expect(document.activeElement).toBe(panelRefs.get(last.id));
+    dispose();
+  });
+
+  it('still focuses a new pane when the previous pane owns an editor', () => {
+    const { dispose, manager, panelRefs } = mountFreshLoad();
+    const [first, last] = manager.splits();
+    const input = document.createElement('input');
+    panelRefs.get(first.id)?.append(input);
+    input.focus();
+
+    vi.advanceTimersByTime(FOCUS_DEBOUNCE_MS);
+
+    expect(document.activeElement).toBe(panelRefs.get(last.id));
+    dispose();
+  });
+
+  it('keeps a surviving pane active after removal without taking chrome focus', async () => {
+    const { dispose, manager } = mountFreshLoad();
+    const [first, last] = manager.splits();
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+
+    manager.removeSplit(last.id);
+    await vi.runAllTimersAsync();
+
+    expect(manager.splits().map((split) => split.id)).toEqual([first.id]);
+    expect(manager.activeSplitId()).toBe(first.id);
+    expect(document.activeElement).toBe(input);
     dispose();
   });
 });

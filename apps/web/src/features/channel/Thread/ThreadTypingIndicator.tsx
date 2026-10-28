@@ -1,17 +1,21 @@
+import { AgentTyping } from '@app/features/agent-activity/agent-typing';
 import { idToDisplayName } from '@core/user';
-import { getTypingUsersForChannel } from '@queries/channel/typing';
+import { getTypingAgents, getTypingUsers } from '@queries/messages/typing';
+import type { MessageParent } from '@service-storage/messages';
 import { createMemo, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 
 type ThreadTypingIndicatorProps = {
-  channelId: string;
+  parent: MessageParent;
   threadId: string | null;
 };
 
 export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
+  // Agents type as a row of their own, with their turn beneath.
   const typingUsers = createMemo(() => {
-    const users = getTypingUsersForChannel(props.channelId, props.threadId);
-    return Array.from(users);
+    const agents = getTypingAgents(props.parent, props.threadId);
+    const users = getTypingUsers(props.parent, props.threadId);
+    return Array.from(users).filter((user) => !agents.has(user));
   });
 
   const typingText = createMemo(() => {
@@ -21,11 +25,14 @@ export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
   const isActive = () => typingUsers().length > 0;
 
   return (
-    <div class="flex flex-row items-stretch justify-start ml-(--left-of-connector) min-h-7">
-      <Show when={isActive()}>
-        <ThreadTypingIndicatorContent text={typingText()} />
-      </Show>
-    </div>
+    <>
+      <AgentTyping parent={props.parent} threadId={props.threadId} />
+      <div class="flex flex-row items-stretch justify-start ml-[calc(var(--message-padding-x)+var(--user-icon-width)+--spacing(2))] min-h-7">
+        <Show when={isActive()}>
+          <ThreadTypingIndicatorContent text={typingText()} />
+        </Show>
+      </div>
+    </>
   );
 }
 
@@ -38,16 +45,10 @@ function ThreadTypingIndicatorContent(
 ) {
   return (
     <div class="flex items-center text-ink-extra-muted">
-      <ThreadTypingIndicatorConnector />
-      <div class="size-0 bg-rail rounded-sm" />
-      <span class="text-xs ml-2">{props.text}</span>
+      <span class="text-xs">{props.text}</span>
       <ThreadTypingIndicatorDots />
     </div>
   );
-}
-
-function ThreadTypingIndicatorConnector() {
-  return <div class="w-7 border-b-1 border-rail" />;
 }
 
 function ThreadTypingIndicatorDots() {

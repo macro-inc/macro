@@ -4,9 +4,16 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
+use std::pin::Pin;
 use std::sync::LazyLock;
 use thiserror::Error;
 use utoipa::ToSchema;
+
+use super::financial::{
+    AuthorizedInvocation, BeginInvocation, FinalizeInvocation, FinancialResult,
+    FundingAuthorization, InvocationId, InvocationRecord, PendingInvocations, ProviderModel,
+    RateSnapshot, Recorded,
+};
 
 /// The reserved system user recorded for completions with no originating
 /// end-user (background tasks, internal summarization, subagents, …).
@@ -60,49 +67,170 @@ pub enum AiFeature {
     AiEditing,
     /// Import pipeline agent sessions (connector gathers + Notion imports).
     Import,
+    /// In-process ACP agent sessions (the in-memory harness).
+    AgentSession,
+    /// Choosing the repository an agent session's first prompt belongs to.
+    AgentRepositoryChoice,
+    /// Choosing Chat or Code for a prompt sent from the agent composer's Auto mode.
+    AgentModeChoice,
+    /// User-confirmed audio transcription.
+    Dictation,
+    /// Image generation and editing.
+    ImageGeneration,
 }
 
-/// Resolved price for one completion.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]
-pub struct Price {
-    /// Price per million input tokens (USD).
-    pub price_per_million_in: f32,
-    /// Price per million output tokens (USD).
-    pub price_per_million_out: f32,
-    /// Total cost of the completion (USD).
-    pub total: f32,
+/// Strip a provider prefix from a routing id, yielding the bare model api id
+/// that [`ai_pricing`](UsageRepo::get_pricing) is keyed on.
+///
+/// Chat routes models as `provider/model` (`anthropic/claude-opus-5`) while
+/// one-shot callers pass the bare id. Pricing and stored usage always use the
+/// bare form so a price resolves either way.
+pub fn normalize_model_id(model: &str) -> &str {
+    match model.rsplit_once('/') {
+        Some((_, bare)) if !bare.is_empty() => bare,
+        _ => model,
+    }
 }
 
-impl Price {
-    /// Compute the price of a completion from per-million rates and token counts.
-    pub fn compute(price_per_million_in: f32, price_per_million_out: f32, usage: &Usage) -> Self {
-        let total = (usage.input_tokens as f32 / 1_000_000.0) * price_per_million_in
-            + (usage.output_tokens as f32 / 1_000_000.0) * price_per_million_out;
-        Self {
-            price_per_million_in,
-            price_per_million_out,
-            total,
+/// The billable quantity for one AI invocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UsageAmount {
+    /// Token-based inference. The dimensions are disjoint: a token counted in
+    /// one is never counted in another, whatever the provider's own reporting.
+    Tokens {
+        /// Input tokens neither read from nor written to a prompt cache.
+        input: u64,
+        /// Tokens generated in the output, including reasoning.
+        output: u64,
+        /// Input tokens read from a prompt cache.
+        cache_read: u64,
+        /// Input tokens written to a prompt cache.
+        cache_write: u64,
+    },
+    /// Duration-based audio inference.
+    Audio {
+        /// Provider-reported duration of the audio.
+        duration: std::time::Duration,
+    },
+}
+
+/// Rates for a model's billing unit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModelPricing {
+    /// Prices per million tokens (USD), one per [`UsageAmount::Tokens`] dimension.
+    Tokens {
+        /// Uncached input token rate.
+        input: f32,
+        /// Output token rate.
+        output: f32,
+        /// Cache read rate, or `None` when the model has no published one.
+        cache_read: Option<f32>,
+        /// Cache write rate, or `None` when the model has no published one.
+        cache_write: Option<f32>,
+    },
+    /// Price per minute of audio (USD).
+    Audio {
+        /// Audio minute rate.
+        per_minute: f32,
+    },
+}
+
+impl ModelPricing {
+    /// Reject invalid prices before changing stored pricing or usage totals.
+    pub fn validate(self) -> Result<Self> {
+        let valid = |rate: f32| rate.is_finite() && rate >= 0.0;
+        let is_valid = match self {
+            Self::Tokens {
+                input,
+                output,
+                cache_read,
+                cache_write,
+            } => {
+                valid(input)
+                    && valid(output)
+                    && cache_read.is_none_or(valid)
+                    && cache_write.is_none_or(valid)
+            }
+            Self::Audio { per_minute } => valid(per_minute),
+        };
+        if is_valid {
+            Ok(self)
+        } else {
+            Err(UsageError::InvalidPricing)
         }
     }
 }
 
-/// The token usage and resolved cost of a single completion.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+/// Resolved price for one AI call, including the rates applied at record time.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Price {
+    /// Rates matching the usage's billing unit.
+    pub pricing: ModelPricing,
+    /// Total cost (USD).
+    pub total: f32,
+}
+
+impl Price {
+    /// Compute cost only when the rate and usage use the same billing unit and
+    /// every dimension with usage has a rate.
+    pub fn compute(pricing: ModelPricing, amount: UsageAmount) -> Option<Self> {
+        let total = match (pricing, amount) {
+            (
+                ModelPricing::Tokens {
+                    input,
+                    output,
+                    cache_read,
+                    cache_write,
+                },
+                UsageAmount::Tokens {
+                    input: input_tokens,
+                    output: output_tokens,
+                    cache_read: cache_read_tokens,
+                    cache_write: cache_write_tokens,
+                },
+            ) => {
+                per_million(input_tokens, Some(input))?
+                    + per_million(output_tokens, Some(output))?
+                    + per_million(cache_read_tokens, cache_read)?
+                    + per_million(cache_write_tokens, cache_write)?
+            }
+            (ModelPricing::Audio { per_minute }, UsageAmount::Audio { duration }) => {
+                duration.as_secs_f64() / 60.0 * f64::from(per_minute)
+            }
+            _ => return None,
+        };
+        Some(Self {
+            pricing,
+            total: total as f32,
+        })
+    }
+}
+
+/// The cost of `tokens` at a per-million `rate`. A dimension with tokens but no
+/// rate cannot be priced; one with no tokens needs no rate.
+fn per_million(tokens: u64, rate: Option<f32>) -> Option<f64> {
+    match (tokens, rate) {
+        (0, _) => Some(0.0),
+        (tokens, Some(rate)) => Some(tokens as f64 / 1_000_000.0 * f64::from(rate)),
+        (_, None) => None,
+    }
+}
+
+/// The measured usage and resolved cost of a single AI call.
+#[derive(Debug, Clone)]
 pub struct Usage {
-    /// Tokens consumed by the input.
-    pub input_tokens: u32,
-    /// Tokens generated in the output.
-    pub output_tokens: u32,
+    /// The invocation's billable quantity.
+    pub amount: UsageAmount,
     /// The model api id (e.g. `claude-opus-4-8`).
     pub model: String,
-    /// Resolved price, or `None` when the model had no pricing at record time.
+    /// Resolved price, or `None` when compatible pricing was unavailable.
     pub price: Option<Price>,
-    /// When the completion was recorded.
+    /// When the call was recorded.
     pub created_at: DateTime<Utc>,
 }
 
 /// A recorded completion: who, what feature, optional entity, and the cost.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone)]
 pub struct CompletionUsage {
     /// The feature that performed the completion.
     pub feature: AiFeature,
@@ -111,12 +239,15 @@ pub struct CompletionUsage {
     pub user: MacroUserIdStr<'static>,
     /// The entity the completion related to, if any.
     pub entity: Option<Uuid>,
-    /// Token usage and cost.
+    /// The agent's own API key that paid for the completion, if Macro
+    /// did not. Such usage is recorded but never counted toward a quota.
+    pub agent_api_key_id: Option<Uuid>,
+    /// Token/audio usage and cost.
     pub cost: Usage,
 }
 
 /// Usage for a single feature, with its rolled-up dollar total.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone)]
 pub struct FeatureUsage {
     /// The feature.
     pub feature: AiFeature,
@@ -127,7 +258,7 @@ pub struct FeatureUsage {
 }
 
 /// The result of a usage query: per-feature breakdown plus a grand total.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone)]
 pub struct UsageSummary {
     /// Per-feature usage.
     pub entries: Vec<FeatureUsage>,
@@ -148,7 +279,7 @@ pub struct UsageApiParams {
     pub features: Vec<AiFeature>,
 }
 
-/// A usage event handed to a [`UsageRecorder`] by the agent crate. The recorder
+/// A usage event handed to a [`UsageRecorder`] by an AI caller. The recorder
 /// resolves pricing and persists it; callers never see the cost.
 #[derive(Debug, Clone)]
 pub struct UsageEvent {
@@ -160,14 +291,14 @@ pub struct UsageEvent {
     pub entity: Option<Uuid>,
     /// The model api id.
     pub model: String,
-    /// Input tokens for this round-trip.
-    pub input_tokens: u64,
-    /// Output tokens for this round-trip.
-    pub output_tokens: u64,
+    /// The invocation's billable quantity.
+    pub amount: UsageAmount,
+    /// The agent's own API key that paid for the completion, if any.
+    pub agent_api_key_id: Option<Uuid>,
 }
 
 /// The constant attributes of a logical completion (everything except the model
-/// and token counts, which are only known once the completion runs).
+/// and measured usage, which are only known once the invocation runs).
 ///
 /// Threaded into agent functions so each call site declares which feature it is
 /// and who it is for.
@@ -179,6 +310,9 @@ pub struct UsageContext {
     pub user: MacroUserIdStr<'static>,
     /// The entity the completion relates to, if any.
     pub entity: Option<Uuid>,
+    /// The agent's own API key the completion runs on, when Macro is
+    /// not paying for it.
+    pub agent_api_key_id: Option<Uuid>,
 }
 
 impl UsageContext {
@@ -188,6 +322,7 @@ impl UsageContext {
             feature,
             user,
             entity: None,
+            agent_api_key_id: None,
         }
     }
 
@@ -197,6 +332,7 @@ impl UsageContext {
             feature,
             user: SYSTEM_USER_ID.clone(),
             entity: None,
+            agent_api_key_id: None,
         }
     }
 
@@ -206,16 +342,37 @@ impl UsageContext {
         self
     }
 
+    /// Attribute the completion to an agent's own API key. Only for calls
+    /// that actually authenticate with that key: the usage is not counted
+    /// toward the user's Macro allowance.
+    pub fn with_agent_api_key(mut self, agent_api_key_id: Uuid) -> Self {
+        self.agent_api_key_id = Some(agent_api_key_id);
+        self
+    }
+
     /// Build a [`UsageEvent`] from this context plus a completion's model and
-    /// token counts.
-    pub fn into_event(self, model: String, input_tokens: u64, output_tokens: u64) -> UsageEvent {
+    /// measured usage. Token callers normalize their provider's counters into
+    /// disjoint [`UsageAmount::Tokens`] dimensions first.
+    pub fn into_event(self, model: String, amount: UsageAmount) -> UsageEvent {
         UsageEvent {
             feature: self.feature,
             user: self.user,
             entity: self.entity,
             model,
-            input_tokens,
-            output_tokens,
+            amount,
+            agent_api_key_id: self.agent_api_key_id,
+        }
+    }
+
+    /// Build a duration-based event without representing audio as tokens.
+    pub fn into_audio_event(self, model: String, duration: std::time::Duration) -> UsageEvent {
+        UsageEvent {
+            feature: self.feature,
+            user: self.user,
+            entity: self.entity,
+            model,
+            amount: UsageAmount::Audio { duration },
+            agent_api_key_id: self.agent_api_key_id,
         }
     }
 }
@@ -223,9 +380,15 @@ impl UsageContext {
 /// Errors raised by the cost crate.
 #[derive(Debug, Error)]
 pub enum UsageError {
+    /// The actor cannot administer AI usage or pricing.
+    #[error("admin access required")]
+    Forbidden,
+    /// A rate was negative or non-finite.
+    #[error("prices must be finite and non-negative")]
+    InvalidPricing,
     /// A database error.
-    #[error(transparent)]
-    Db(#[from] sqlx::Error),
+    #[error("database error: {0}")]
+    Db(rootcause::Report),
     /// Any other error.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -236,21 +399,23 @@ pub type Result<T> = std::result::Result<T, UsageError>;
 
 /// Outbound storage port.
 pub trait UsageRepo: Send + Sync + 'static {
-    /// Persist a fully-priced completion row.
-    // TODO: Consumers should have an easier call to make than this
-    // A consumer shouldn't have to know the pricing of the model the just need to supply (feature, input tokens, output tokens, model name)
-    fn insert_usage(&self, usage: &CompletionUsage) -> impl Future<Output = Result<()>> + Send;
+    /// Persist a completion row with its domain-computed quota counting decision.
+    fn insert_usage(
+        &self,
+        usage: &CompletionUsage,
+        count_usage: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Fetch the current per-million `(input, output)` rates for a model, if any.
-    fn get_pricing(&self, model: &str) -> impl Future<Output = Result<Option<(f32, f32)>>> + Send;
+    /// Fetch the current rate for a model's billing unit, if any.
+    fn get_pricing(&self, model: &str)
+    -> impl Future<Output = Result<Option<ModelPricing>>> + Send;
 
     /// Upsert the pricing for a model and recompute the `total` of every
-    /// existing `ai_usage` row for that model.
+    /// existing `ai_usage` row for that model, preserving its `count_usage` decision.
     fn set_pricing(
         &self,
         model: &str,
-        price_per_million_in: f32,
-        price_per_million_out: f32,
+        pricing: ModelPricing,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Query recorded completions matching `params`.
@@ -260,10 +425,17 @@ pub trait UsageRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<CompletionUsage>>> + Send;
 }
 
-/// The recording port used by the agent crate. Recording is best-effort: a
-/// failure must never propagate into the originating call, so the method is
-/// infallible and fire-and-forget.
+/// The analytics recording port used by the agent crate. Recording is best-effort:
+/// a failure must never propagate into the originating call, so the method is
+/// infallible and fire-and-forget. This is NOT financial admission or evidence;
+/// activated traffic also requires the separate [`FinancialUsage`] capability.
 pub trait UsageRecorder: Send + Sync {
+    /// Optional observational capability. Producers must explicitly scope each
+    /// operation and await per-attempt evidence; aggregate `record` is not coverage.
+    fn tracking(&self) -> Option<std::sync::Arc<dyn super::tracking::UsageTracking>> {
+        None
+    }
+
     /// Record one completion round-trip.
     fn record(&self, event: UsageEvent);
 }
@@ -277,20 +449,91 @@ impl UsageRecorder for NoOpUsageRecorder {
     fn record(&self, _event: UsageEvent) {}
 }
 
+/// Boxed, awaited financial operation. Explicit boxing keeps financial capabilities
+/// object-safe without changing the existing `Arc<dyn UsageRecorder>` plumbing.
+pub type FinancialFuture<'a, T> = Pin<Box<dyn Future<Output = FinancialResult<T>> + Send + 'a>>;
+
+/// Owning-domain financial rate port. Implementations resolve immutable snapshots
+/// by actual provider AND model at occurrence time, before funding authorization.
+/// Unknown/unsupported rates fail closed; [`UsageRepo::get_pricing`] and mutable
+/// bare-model analytics prices must never implement this contract as a fallback.
+pub trait FinancialRateResolver: Send + Sync {
+    /// Resolve a version once and pin it for the invocation's entire lifetime.
+    /// An existing invocation replay uses its recorded snapshot, not a fresh lookup.
+    fn resolve(
+        &self,
+        model: ProviderModel,
+        occurred_at: DateTime<Utc>,
+    ) -> FinancialFuture<'_, RateSnapshot>;
+}
+
+/// Capability implemented by the funding owner and injected at composition roots.
+/// `ai_usage` neither imports billing adapters nor depends on `ai_billing`.
+pub trait InvocationFunding: Send + Sync {
+    /// Durably authorize bounded execution against the resolved immutable rate.
+    /// Serialize shared funding, capture policy/payer/period/settings and reserve
+    /// capacity before returning. Denial is an error, never a zero-budget approval.
+    /// Replay is keyed by invocation ID: identical requests return the original
+    /// authorization, even after settings change; conflicting requests fail visibly.
+    fn authorize(
+        &self,
+        request: BeginInvocation,
+        rate: RateSnapshot,
+    ) -> FinancialFuture<'_, FundingAuthorization>;
+
+    /// Idempotently reconcile evidence with its captured authorization. Acknowledgement
+    /// means durable handoff, not necessarily completed allocation or collection.
+    /// Missing/unpriced evidence stays unresolved. Unavoidable usage beyond authorized
+    /// funding must not become unauthorized customer debt. Never reauthorize history
+    /// from the current toggle or consume both prepaid and postpaid for the same amount.
+    fn finalize(&self, invocation: InvocationRecord) -> FinancialFuture<'_, ()>;
+}
+
+/// Awaited financial lifecycle, separate from best-effort analytics. Implementations
+/// persist begin before execution, resolve immutable rates before asking the injected
+/// funding capability for authorization, and make the cross-domain handoff replayable.
+/// These are trusted service ports, not unauthenticated customer query endpoints.
+pub trait FinancialUsage: Send + Sync {
+    /// Return only after begin, pinned rates and funding authorization are durable.
+    /// Only an inserted admission permits a new provider attempt. A replay may follow
+    /// lost acknowledgement after execution and must not execute the provider again.
+    /// Errors (including unavailable rates/capabilities) never permit billable execution.
+    fn begin(
+        &self,
+        request: BeginInvocation,
+    ) -> FinancialFuture<'_, Recorded<AuthorizedInvocation>>;
+
+    /// Persist evidence regardless of provider success/failure/cancellation. Identical
+    /// replays acknowledge the original result; changed evidence raises a replay conflict.
+    /// Acknowledgement guarantees durable evidence and discoverable funding handoff;
+    /// implementations must not lose work between the usage and funding domains.
+    fn finalize(
+        &self,
+        evidence: FinalizeInvocation,
+    ) -> FinancialFuture<'_, Recorded<InvocationRecord>>;
+
+    /// Query the original admission and evidence. Unknown identity is `None`, not zero usage.
+    fn get(&self, invocation_id: InvocationId) -> FinancialFuture<'_, Option<InvocationRecord>>;
+
+    /// Discover interrupted, unpriced and unresolved work for restart-safe reconciliation.
+    fn pending(&self, query: PendingInvocations) -> FinancialFuture<'_, Vec<InvocationRecord>>;
+}
+
 /// The admin-facing query / pricing port, implemented by the domain service and
 /// consumed by the inbound axum router.
 pub trait UsageService: Send + Sync + 'static {
     /// Summarize recorded usage matching `params`.
     fn get_usage(
         &self,
+        actor: MacroUserIdStr<'static>,
         params: UsageApiParams,
     ) -> impl Future<Output = Result<UsageSummary>> + Send;
 
     /// Set the pricing for a model and recompute all of its recorded rows.
     fn set_pricing(
         &self,
+        actor: MacroUserIdStr<'static>,
         model: String,
-        price_per_million_in: f32,
-        price_per_million_out: f32,
+        pricing: ModelPricing,
     ) -> impl Future<Output = Result<()>> + Send;
 }

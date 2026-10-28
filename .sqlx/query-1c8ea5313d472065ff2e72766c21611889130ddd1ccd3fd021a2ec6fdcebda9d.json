@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT message_id, emoji, array_agg(user_id ORDER BY user_id) AS \"users!\"\n               FROM comms_reactions WHERE message_id = ANY($1) GROUP BY message_id, emoji ORDER BY emoji",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "emoji",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "users!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "1c8ea5313d472065ff2e72766c21611889130ddd1ccd3fd021a2ec6fdcebda9d"
+}

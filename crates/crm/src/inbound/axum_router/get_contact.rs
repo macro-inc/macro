@@ -34,9 +34,14 @@ use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(contact_id = %contact_id))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn handler<
+    C: CrmService,
+    St,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: CrmContactAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(contact_id): Path<Uuid>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state

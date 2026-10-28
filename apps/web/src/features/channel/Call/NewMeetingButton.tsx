@@ -1,0 +1,106 @@
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { ManageMeetingsDialog } from '@app/features/meetings/manage-meetings-dialog';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import { Button, Dropdown } from '@ui';
+import { createSignal, Show } from 'solid-js';
+import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
+
+type NewMeetingActions = {
+  presentation?: 'sidebar' | 'toolbar';
+  /** Opens the recipient picker for a channel or direct-message call. */
+  onChannelCall: () => void;
+  /** Opens instant call setup; only offered when quick calls are enabled. */
+  onInstantCall: () => void;
+};
+
+export function NewMeetingButton(props: NewMeetingActions) {
+  const flag = useQuickCallsFlag();
+  return (
+    <Show
+      when={!flag().loading && flag().enabled}
+      fallback={
+        <Show
+          when={props.presentation}
+          fallback={
+            <Button variant="primary" size="sm" onClick={props.onChannelCall}>
+              <VideoCameraIcon class="size-3.5" />
+              New call
+            </Button>
+          }
+        >
+          <ViewCreateButton
+            presentation={props.presentation}
+            aria-label="New call"
+            onClick={props.onChannelCall}
+          />
+        </Show>
+      }
+    >
+      <NewMeetingMenu
+        onChannelCall={props.onChannelCall}
+        onInstantCall={props.onInstantCall}
+        presentation={props.presentation}
+      />
+    </Show>
+  );
+}
+
+function NewMeetingMenu(props: NewMeetingActions) {
+  const [managing, setManaging] = createSignal(false);
+  return (
+    <>
+      <Dropdown
+        placement={
+          props.presentation === 'sidebar' ? 'bottom-start' : 'bottom-end'
+        }
+        modal={false}
+      >
+        <Show
+          when={props.presentation}
+          fallback={
+            <Dropdown.Trigger
+              aria-label="New call"
+              tooltip="New call"
+              variant="primary"
+              size="sm"
+              class="gap-1.5 px-2"
+            >
+              <VideoCameraIcon class="size-3.5" />
+              <span>New call</span>
+              <CaretDownIcon class="size-3" />
+            </Dropdown.Trigger>
+          }
+        >
+          <Dropdown.Trigger
+            as={ViewCreateButton}
+            presentation={props.presentation}
+            aria-label="New call"
+            menu
+          />
+        </Show>
+        <Dropdown.Content class="min-w-60" blockingBackdrop>
+          <Dropdown.Group>
+            <Dropdown.Item closeOnSelect onSelect={props.onInstantCall}>
+              <PhoneIcon class="size-4 shrink-0" />
+              <span>Start an instant call</span>
+            </Dropdown.Item>
+            <Dropdown.Item closeOnSelect onSelect={props.onChannelCall}>
+              <UsersIcon class="size-4 shrink-0" />
+              <span>Call a channel or contact</span>
+            </Dropdown.Item>
+            <Dropdown.Item closeOnSelect onSelect={() => setManaging(true)}>
+              <VideoCameraIcon class="size-4 shrink-0" />
+              <span>Manage call links</span>
+            </Dropdown.Item>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+      <Show when={managing()}>
+        <ManageMeetingsDialog onClose={() => setManaging(false)} />
+      </Show>
+    </>
+  );
+}

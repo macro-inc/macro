@@ -1,20 +1,42 @@
+import { DocumentAccessDenied } from '@app/features/access-requests/access-requests';
+import { NonDocumentBlockTypes, useBlockId, useBlockName } from '@core/block';
 import { BlockContainer } from '@core/component/BlockContainer';
 import { blockDataSignal } from '@core/internal/BlockLoader';
-import { blockErrorSignal } from '@core/signal/load';
-import { type FlowProps, Match, Show, Switch, splitProps } from 'solid-js';
+import { nativeNetworkStatus } from '@core/mobile/native-network-status';
+import { blockErrorSignal, blockLoadRetrySignal } from '@core/signal/load';
+import {
+  type FlowProps,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+  splitProps,
+} from 'solid-js';
 import Gone from './AccessErrorViews/Gone';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
+import { LoadErrorPanel } from './EntityLoadGate';
 import { LoadingPanel } from './LoadingSpinner';
 
 export function DocumentBlockContainer(
-  props: FlowProps<{ usesCenterBar?: boolean; title?: string }>
+  props: FlowProps<{
+    usesCenterBar?: boolean;
+    title?: string;
+    loadingFallback?: JSX.Element;
+  }>
 ) {
+  const documentId = useBlockId();
+  const isDocument = !NonDocumentBlockTypes.includes(useBlockName());
   const blockData = blockDataSignal.get;
   const blockError = blockErrorSignal.get;
+  const setLoadRetry = blockLoadRetrySignal.set;
+  const retryLoad = () => setLoadRetry((count) => (count ?? 0) + 1);
 
   const hasBlockData = () => blockData() != null;
-  const [local, others] = splitProps(props, ['usesCenterBar']);
+  const [local, others] = splitProps(props, [
+    'usesCenterBar',
+    'loadingFallback',
+  ]);
 
   const isLoading = () => !hasBlockData() && !blockError();
 
@@ -23,18 +45,33 @@ export function DocumentBlockContainer(
       when={hasBlockData() && !blockError()}
       fallback={
         <ContainerWithTopBar {...local}>
+          {/* The fallback is every non-structural failure (`INVALID`,
+              `UNKNOWN`): retryable, like EntityLoadGate's LOAD_FAILED. */}
           <Switch
             fallback={
-              <div class="flex flex-col items-center justify-center h-full text-lg">
-                Sorry, an unexpected error has occurred.
-              </div>
+              <LoadErrorPanel
+                title="Unable to load this document"
+                onRetry={retryLoad}
+              />
             }
           >
+            {/* An offline load with nothing to show would otherwise spin
+                forever — its pending fetch resumes once connectivity
+                returns, so no Retry (a second concurrent load could leak
+                the first one's sync source). */}
+            <Match when={isLoading() && nativeNetworkStatus() === 'offline'}>
+              <LoadErrorPanel title="Unable to load this document" />
+            </Match>
             <Match when={isLoading()}>
-              <LoadingPanel />
+              {local.loadingFallback ?? <LoadingPanel />}
             </Match>
             <Match when={blockError() === 'UNAUTHORIZED'}>
-              <Unauthorized />
+              <Show when={isDocument} fallback={<Unauthorized />}>
+                <DocumentAccessDenied
+                  documentId={documentId}
+                  onAccessGranted={retryLoad}
+                />
+              </Show>
             </Match>
             <Match when={blockError() === 'MISSING'}>
               <NotFound />

@@ -11,11 +11,12 @@
 
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 
 use crate::domain::error::Result;
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::SandboxResizeEffect;
 use crate::outbound::daytona::{DaytonaContainer, DaytonaContainerManager};
 use crate::outbound::local::LocalContainerManager;
 use crate::outbound::sidecar::{SidecarSender, SidecarTransport};
@@ -51,17 +52,56 @@ impl HarnessContainers {
 impl ContainerManager for HarnessContainers {
     type Transport = HarnessContainer;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match self {
-            Self::Daytona(manager) => manager.spawn(command).await.map(HarnessContainer::Daytona),
-            Self::Local(manager) => manager.spawn(command).await.map(HarnessContainer::Local),
+            Self::Daytona(manager) => manager
+                .spawn(command)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Daytona)),
+            Self::Local(manager) => manager
+                .spawn(command)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Local)),
         }
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
         match self {
-            Self::Daytona(manager) => manager.resume(session).await.map(HarnessContainer::Daytona),
-            Self::Local(manager) => manager.resume(session).await.map(HarnessContainer::Local),
+            Self::Daytona(manager) => manager.resize_effect(from, to),
+            Self::Local(manager) => manager.resize_effect(from, to),
+        }
+    }
+
+    async fn resize(&self, session: AgentSessionId, size: SandboxSize) -> Result<()> {
+        match self {
+            Self::Daytona(manager) => manager.resize(session, size).await,
+            Self::Local(manager) => manager.resize(session, size).await,
+        }
+    }
+
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
+        match self {
+            Self::Daytona(manager) => manager
+                .resume(session)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Daytona)),
+            Self::Local(manager) => manager
+                .resume(session)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Local)),
+        }
+    }
+
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        match self {
+            Self::Daytona(manager) => manager.session_token(session).await,
+            Self::Local(manager) => manager.session_token(session).await,
         }
     }
 

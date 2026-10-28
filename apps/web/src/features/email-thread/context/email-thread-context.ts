@@ -1,0 +1,93 @@
+import type { Accessor } from 'solid-js';
+import type { EmailRecipient } from '../../email-compose/core/email-recipient';
+import type { EmailThread } from '../core/email-thread';
+import type { EmailThreadKeyboardHandlers } from '../core/thread-keyboard';
+
+/** A reversible thread action, independent of the app's undo stack. */
+export interface ThreadUndoHandle {
+  id: string;
+  undo(callbacks?: {
+    onSuccess?: () => void;
+    onError?: (error: Error) => void;
+    onSettled?: () => void;
+  }): Promise<void>;
+  dispose(): void;
+}
+
+export interface ArchiveThreadOptions {
+  silent?: boolean;
+  onUndoHandle?: (handle: ThreadUndoHandle) => void;
+  nextEntityId?: string;
+  /** Disable automatic list navigation when the host handles it. */
+  navigate?: boolean;
+  navigateBack?: () => void;
+  /** Checked just before archiving; a send undone first is not marked done. */
+  cancelled?: () => boolean;
+}
+
+/** Domain snapshots and request progress; query keys and cursors stay in the adapter. */
+export interface EmailThreadSource {
+  id: Accessor<string>;
+  isError: Accessor<boolean>;
+  thread: Accessor<EmailThread | undefined>;
+  isLoading: Accessor<boolean>;
+  isFetching: Accessor<boolean>;
+  isFetchingOlder: Accessor<boolean>;
+  hasMore: Accessor<boolean>;
+  fetchOlder(): Promise<void>;
+  refresh(): Promise<void>;
+}
+
+export interface EmailThreadCommands {
+  archiveThread(options?: ArchiveThreadOptions): boolean;
+  isThreadDone: Accessor<boolean>;
+  canMarkThreadNotDone: Accessor<boolean>;
+  markThreadNotDone(): boolean;
+  isThreadMarkedUnread: Accessor<boolean>;
+  isThreadMarkedRead: Accessor<boolean>;
+  markThreadUnread(): boolean;
+  markThreadRead(): boolean;
+  blockSender(): boolean;
+  markSenderSignal(): boolean;
+  markSenderNoise(): boolean;
+}
+
+export interface EmailThreadContext {
+  source: EmailThreadSource;
+  recipients: Accessor<EmailRecipient[]>;
+  viewerEmail: Accessor<string | undefined>;
+  viewerLoading: Accessor<boolean>;
+  isTouch: Accessor<boolean>;
+  createCommands(
+    thread: Accessor<EmailThread | undefined>
+  ): EmailThreadCommands;
+}
+
+export interface EmailThreadListNavigation {
+  canPrevious: Accessor<boolean>;
+  canNext: Accessor<boolean>;
+  previous(): void;
+  next(): void;
+  afterReminderSaved?(): Promise<void>;
+  /**
+   * Archives through `archiveThread` and opens the next email. With
+   * `threadId`, only while that thread is the open one. Resolves whether it
+   * archived: false when the host was busy, closed, or showing another thread.
+   */
+  markDone(
+    archiveThread: EmailThreadCommands['archiveThread'],
+    threadId?: string
+  ): Promise<boolean>;
+}
+
+/** Host behavior is optional. A thread can render without a block or router. */
+export interface EmailThreadHost {
+  /** Close an embedded thread without navigating the containing split's history. */
+  returnToList?: () => void;
+  listNavigation?: EmailThreadListNavigation;
+  isActive?: Accessor<boolean>;
+  registerKeyboard?: (handlers: EmailThreadKeyboardHandlers) => void;
+  targetMessageId?: Accessor<string | undefined>;
+  targetRequest?: Accessor<string | undefined>;
+  focusContainer?: () => void;
+}

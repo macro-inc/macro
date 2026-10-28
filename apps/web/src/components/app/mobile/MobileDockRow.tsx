@@ -1,260 +1,271 @@
-import { useCreateMenuBlocks } from '@app/features/command/Launcher';
-import {
-  MobileAskAiButton,
-  MobileSearchInput,
-} from '@app/features/command/mobile/MobileSearchInput';
+import { ContentLoading } from '@app/components/app/ContentLoading';
+import { MobileSearchInput } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
+import { t } from '@app/lib/i18n';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
-import { openFilePicker } from '@core/util/upload';
-import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
-import IconGear from '@icon/macro-gear.svg';
-import CreateIcon from '@icon/square-pen-create.svg';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedSearchIcon } from '@icon/wide-search';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { UnreadIndicator } from '@entity/components/UnreadIndicator';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
+import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
+import IconGear from '@icon/system/regular/gear.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import { Telemetry } from '@macro-inc/observability';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { useNavigationUnread } from '../use-navigation-unread';
+
+import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
+import { MobileDrawer } from './MobileDrawer';
 import { MobileBottomEdgeFade } from './MobileEdgeFade';
+import { createMobileDockOrder, dockVisibleCount } from './mobile-dock-order';
 import {
-  type MobileTouchIconComponent,
-  MobileTouchMenu,
-} from './MobileTouchMenu';
-import { useMobileDockViews } from './mobile-dock-views';
-import { pressPulse } from './pressPulse';
+  MOBILE_DOCK_VIEWS,
+  type MobileDockView,
+  useMobileDockViews,
+} from './mobile-dock-views';
 import {
   type MobileDockNavId,
   useForegroundMobileView,
   useMobileNavNavigate,
 } from './use-mobile-nav';
 
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
+const CustomizeDock = lazyNamed(
+  () => import('./CustomizeDock'),
+  'CustomizeDock'
+);
 
-function CreateMenu() {
-  const createBlocks = useCreateMenuBlocks();
-  const handleFileUpload = useHandleFileUpload();
-
-  // The desktop create menus are the source of truth (useCreateMenuBlocks);
-  // rows render top → bottom ending at the thumb, so reverse to keep the
-  // desktop order's first entries nearest it.
-  const blocks = () => [...createBlocks()].reverse();
-
-  return (
-    <MobileDockIsland class="shrink-0 flex justify-center items-center">
-      <MobileTouchMenu>
-        <MobileTouchMenu.Trigger
-          icon={CreateIcon}
-          class="size-(--mobile-chrome-button-size)"
-          iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
-        />
-        <MobileTouchMenu.Content>
-          <MobileTouchMenu.Item
-            id="upload-file"
-            icon={UploadIcon}
-            animateIcon={false}
-            onSelect={() => {
-              openFilePicker({ multiple: true }, async (files) => {
-                await handleFileUpload(files, false);
-              });
-            }}
-          >
-            Upload file
-          </MobileTouchMenu.Item>
-          {/* Labels key the rows: 'Message' and 'Channel' share a
-              blockName. */}
-          <For each={blocks()}>
-            {(block) => {
-              const useAnimatedIcon =
-                ENABLE_ANIMATED_ICONS && block.animatedIcon;
-              return (
-                <MobileTouchMenu.Item
-                  id={block.label}
-                  icon={useAnimatedIcon ? block.animatedIcon : block.icon}
-                  animateIcon={!!useAnimatedIcon}
-                  // The block's own action, exactly as the desktop menus
-                  // invoke it (e.g. Channel opens the new-channel modal).
-                  onSelect={() => block.keyDownHandler?.()}
-                >
-                  {block.label}
-                </MobileTouchMenu.Item>
-              );
-            }}
-          </For>
-          <MobileTouchMenu.Separator />
-          <MobileTouchMenu.Footer>Create</MobileTouchMenu.Footer>
-        </MobileTouchMenu.Content>
-      </MobileTouchMenu>
-    </MobileDockIsland>
-  );
-}
-
-type MobileDockButtonProps = {
-  icon: MobileTouchIconComponent;
-  /** Accessible name for the icon-only button. */
-  ariaLabel: string;
-  onClick: () => void;
-  active?: boolean;
-  class?: string;
-  /** Plain svg icons (e.g. Bell) don't accept `triggerAnimation`. */
-  animateIcon?: boolean;
-};
-
-/**
- * Renders flat: hosts wrap it in a MobileDockIsland (alone or grouped with
- * other controls) to give it the floating chrome.
- */
-function MobileDockButton(props: MobileDockButtonProps) {
-  const [animating, setAnimating] = createSignal(false);
-
-  return (
-    <button
-      type="button"
-      aria-label={props.ariaLabel}
-      use:pressPulse
-      onPointerDown={() => {
-        hapticImpact('light');
-        if (props.animateIcon !== false) {
-          setAnimating(true);
-          setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
-        }
-      }}
-      // Fires on release; the press pulse holds the on-state while touched.
-      onClick={() => {
-        props.onClick();
-      }}
-      class={cn(
-        'relative flex size-(--mobile-chrome-button-size) shrink-0 items-center justify-center rounded-full',
-        props.active && 'text-accent',
-        props.class
-      )}
-    >
-      <div class="size-(--mobile-chrome-icon-size) shrink-0 [&_svg]:size-(--mobile-chrome-icon-size)">
-        {props.animateIcon === false ? (
-          <Dynamic component={props.icon} />
-        ) : (
-          <Dynamic component={props.icon} triggerAnimation={animating()} />
-        )}
-      </div>
-    </button>
-  );
-}
-
-function MoreViewsMenu(props: {
+function MoreViewsDrawer(props: {
+  views: readonly MobileDockView[];
+  visibleCount: number;
+  onMove: (from: number, to: number) => void;
   isActive: (id: MobileDockNavId) => boolean;
+  hasUnread: (id: MobileDockNavId) => boolean;
   onNavigate: (id: MobileDockNavId) => void;
 }) {
   const { settingsOpen, toggleSettings } = useSettingsState();
-  const dockViews = useMobileDockViews();
+  const [customizing, setCustomizing] = createSignal(false);
+  let customizeButton: HTMLButtonElement | undefined;
 
   return (
-    <MobileTouchMenu>
-      <MobileTouchMenu.Trigger
+    <MobileDrawer
+      side="bottom"
+      restoreFocus
+      onOpenChange={(open) => {
+        if (open) setCustomizing(false);
+      }}
+      preventScroll={false}
+      preventScrollbarShift={false}
+      closeOnOutsidePointerStrategy="pointerdown"
+    >
+      <MobileDrawer.Trigger
+        as={MobileDockButton}
+        ariaLabel={t('mobile.moreViews')}
         icon={CaretUpIcon}
-        class="size-(--mobile-chrome-button-size)"
-        iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
+        unread={props.views
+          .slice(props.visibleCount)
+          .some((view) => props.hasUnread(view.id))}
       />
-      <MobileTouchMenu.Content>
-        <MobileTouchMenu.Item
-          id="settings"
-          icon={IconGear}
-          active={settingsOpen()}
-          animateIcon={false}
-          onSelect={toggleSettings}
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content
+          aria-label={
+            customizing() ? t('mobile.customizeDock') : t('mobile.moreViews')
+          }
+          targetHeight={customizing() ? 85 : undefined}
         >
-          Settings
-        </MobileTouchMenu.Item>
-        <MobileTouchMenu.Separator />
-        {/* Rows render top → bottom ending at the thumb: reverse the shared
-            canonical order so Inbox lands nearest it. */}
-        <For each={[...dockViews()].reverse()}>
-          {(view) => (
-            <MobileTouchMenu.Item
-              id={view.id}
-              icon={view.icon}
-              animateIcon={view.animateIcon}
-              active={props.isActive(view.id)}
-              onSelect={() => props.onNavigate(view.id)}
-            >
-              {view.label}
-            </MobileTouchMenu.Item>
-          )}
-        </For>
-        <MobileTouchMenu.Separator />
-        <MobileTouchMenu.Footer>Views</MobileTouchMenu.Footer>
-      </MobileTouchMenu.Content>
-    </MobileTouchMenu>
+          <MobileDrawer.Handle />
+          <Show
+            when={customizing()}
+            fallback={
+              <MobileDrawer.ScrollBody>
+                <div class="mx-3 flex flex-col gap-1 px-1">
+                  <MobileDrawer.Close
+                    as={MobileDrawer.Item}
+                    aria-label={t('nav.settings')}
+                    class={settingsOpen() ? 'text-accent' : undefined}
+                    onClick={() => {
+                      toggleSettings();
+                    }}
+                  >
+                    <IconGear class="size-4 shrink-0" />
+                    <span>{t('nav.settings')}</span>
+                  </MobileDrawer.Close>
+                  <MobileDrawer.Item
+                    ref={customizeButton}
+                    aria-label={t('mobile.customizeDock')}
+                    onClick={() => setCustomizing(true)}
+                  >
+                    <DotsSixVerticalIcon class="size-4 shrink-0" />
+                    <span>{t('mobile.customizeDock')}</span>
+                  </MobileDrawer.Item>
+                  <Show when={props.views.length > props.visibleCount}>
+                    <div class="-mx-1 h-px shrink-0 bg-edge" />
+                  </Show>
+                  <For each={props.views.slice(props.visibleCount)}>
+                    {(view) => (
+                      <MobileDrawer.Close
+                        as={MobileDrawer.Item}
+                        aria-label={view.label}
+                        aria-description={
+                          props.hasUnread(view.id)
+                            ? t('mobile.unreadItems')
+                            : undefined
+                        }
+                        data-unread={props.hasUnread(view.id) ? '' : undefined}
+                        class={
+                          props.isActive(view.id) ? 'text-accent' : undefined
+                        }
+                        aria-current={
+                          props.isActive(view.id) ? 'page' : undefined
+                        }
+                        onClick={() => {
+                          props.onNavigate(view.id);
+                        }}
+                      >
+                        <Dynamic
+                          component={view.icon}
+                          class="size-4 shrink-0"
+                        />
+                        <span>{view.label}</span>
+                        <Show when={props.hasUnread(view.id)}>
+                          <span aria-hidden="true" class="ml-auto">
+                            <UnreadIndicator active class="size-1.5" />
+                          </span>
+                        </Show>
+                      </MobileDrawer.Close>
+                    )}
+                  </For>
+                  <div class="-mx-1 h-px shrink-0 bg-edge" />
+                  <MobileDrawer.Close
+                    aria-label={t('mobile.views')}
+                    class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
+                  >
+                    {t('mobile.views')}
+                  </MobileDrawer.Close>
+                </div>
+              </MobileDrawer.ScrollBody>
+            }
+          >
+            <Suspense fallback={<ContentLoading />}>
+              <CustomizeDock
+                views={props.views}
+                visibleCount={props.visibleCount}
+                onMove={props.onMove}
+                onBack={() => {
+                  setCustomizing(false);
+                  customizeButton?.focus({ preventScroll: true });
+                }}
+              />
+            </Suspense>
+          </Show>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
   );
 }
 
 /**
- * The compact dock — the default bottom row everywhere: one wide island
- * grouping Notifications, Email, Channels, Search, and the Views menu — with
- * Create on its own island. Pressing Search flips the row to the search
+ * The navigation dock groups as many fixed-size view buttons as fit with More,
+ * with Search on its own island.
+ * Pressing Search flips the row to the search
  * layout (see MobileDockRow); the current view's button shows in accent.
  */
-function MobileCompactDockRow() {
+function MobileNavigationDockRow() {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
+  const availableViews = useMobileDockViews();
+  const hasUnread = useNavigationUnread();
+  const userId = useUserId();
+  const preferences = createMemo(() =>
+    createMobileDockOrder(
+      userId(),
+      MOBILE_DOCK_VIEWS.map((view) => view.id)
+    )
+  );
+  const dockViews = createMemo(() => {
+    const order = preferences().order();
+    return [...availableViews()].sort(
+      (a, b) => order.indexOf(a.id) - order.indexOf(b.id)
+    );
+  });
 
-  const navButtons = (): Array<{
-    id: MobileDockNavId;
-    label: string;
-    icon: MobileTouchIconComponent;
-    animateIcon?: boolean;
-  }> => [
-    {
-      id: 'inbox',
-      label: 'Notifications',
-      icon: BellIcon,
-      animateIcon: false,
-    },
-    { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
-    { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
-  ];
+  const [navRef, setNavRef] = createSignal<HTMLDivElement>();
+  const navSize = createElementSize(navRef);
+  // The measured island already excludes Search and gutters; reserve More.
+  const visibleCount = () =>
+    dockVisibleCount(navSize.width, navSize.height, dockViews().length);
+  const move = (from: number, to: number) => {
+    const span = Telemetry.span('mobile.dock.reorder');
+    try {
+      span.setAttr('dock.from', from);
+      span.setAttr('dock.to', to);
+      span.setAttr('dock.visible_count', visibleCount());
+      preferences().move(
+        from,
+        to,
+        dockViews().map((view) => view.id)
+      );
+      hapticImpact('light');
+    } finally {
+      span.end();
+    }
+  };
 
   return (
-    <div class="flex w-full justify-between">
-      <MobileDockIsland class="h-(--mobile-chrome-button-size) min-w-0 justify-between gap-(--mobile-chrome-gap)">
-        <For each={navButtons()}>
+    <div class="flex w-full justify-between gap-(--mobile-chrome-gutter)">
+      <MobileDockIsland
+        ref={setNavRef}
+        class="h-(--mobile-chrome-button-size) min-w-0 flex-1 justify-between"
+        style={{
+          'max-width': `calc(${dockViews().length + 1} * var(--mobile-chrome-button-size))`,
+        }}
+      >
+        <For each={dockViews().slice(0, visibleCount())}>
           {(button) => (
             <MobileDockButton
-              icon={button.icon}
+              icon={
+                foregroundView() === button.id
+                  ? (button.iconActive ?? button.icon)
+                  : button.icon
+              }
               ariaLabel={button.label}
-              animateIcon={button.animateIcon}
               active={foregroundView() === button.id}
+              unread={hasUnread(button.id)}
               onClick={() => navigate(button.id)}
             />
           )}
         </For>
-        <MobileDockButton
-          icon={AnimatedSearchIcon}
-          ariaLabel="Search"
-          onClick={() => {
-            // Focus synchronously inside the tap so iOS lets the keyboard
-            // open; the input mounts once opening the session flips the row
-            // to the search layout.
-            triggerFocusInput(() =>
-              document.getElementById('mobile-search-input')
-            );
-            SearchState.open();
-            navigate('search');
-          }}
-        />
-        <MoreViewsMenu
+        <MoreViewsDrawer
+          views={dockViews()}
+          visibleCount={visibleCount()}
+          onMove={move}
           isActive={(id) => foregroundView() === id}
+          hasUnread={hasUnread}
           onNavigate={navigate}
         />
       </MobileDockIsland>
-      <CreateMenu />
+      <MobileDockIsland class="shrink-0">
+        <MobileDockButton
+          icon={SearchIcon}
+          ariaLabel={t('nav.search')}
+          onClick={() => {
+            // Mount the real input first, then focus it in this same user
+            // gesture. Deferring the focus transfer can lose iOS keyboard
+            // activation when reopening search.
+            SearchState.open();
+            triggerFocusInput(() =>
+              document.getElementById('mobile-search-input')
+            );
+            navigate('search');
+          }}
+        />
+      </MobileDockIsland>
     </div>
   );
 }
@@ -264,12 +275,11 @@ type MobileDockRowProps = {
 };
 
 /**
- * The bottom-most chrome row. By default it is the compact dock (see
- * MobileCompactDockRow); pressing its Search button opens a search session,
- * which swaps in the search row — the search bar ("Search or ask AI...")
- * with the "Ask AI" island — and shows the views pill row in the accessory
- * slot above as the scope switcher (see MobileViewsRow). Pressing the
- * input's X ends the session and restores the compact dock.
+ * The bottom-most chrome row. By default it is the navigation dock (see
+ * MobileNavigationDockRow); pressing its Search button opens a search session,
+ * which swaps in the search bar; category pills sit at the top of the
+ * results (see MobileViewsRow). Pressing the
+ * input's X ends the session and restores the navigation dock.
  */
 export function MobileDockRow(props: MobileDockRowProps) {
   return (
@@ -280,9 +290,8 @@ export function MobileDockRow(props: MobileDockRowProps) {
       )}
     >
       <MobileBottomEdgeFade />
-      <Show when={SearchState.isOpen()} fallback={<MobileCompactDockRow />}>
+      <Show when={SearchState.isOpen()} fallback={<MobileNavigationDockRow />}>
         <MobileSearchInput />
-        <MobileAskAiButton />
       </Show>
     </div>
   );

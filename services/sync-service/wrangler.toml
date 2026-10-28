@@ -31,9 +31,11 @@ bucket_name = "document-snapshot-bucket-dev"
 
 [vars]
 INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
-SPS_URL = "https://search-processing-dev.macro.com"
+SPS_URL = "http://localhost:8092"
 DSS_URL = "http://localhost:8086"
 DSS_INTERNAL_AUTH_KEY = "local"
+LEXICAL_SERVICE_URL = "http://localhost:8096"
+LEXICAL_SERVICE_AUTH_KEY = "local"
 # Tags exported spans with deployment.environment=local, matching the
 # Datadog agent's DD_ENV so the env:local trace/log views include them.
 ENVIRONMENT = "local"
@@ -61,8 +63,9 @@ name = "sync-service-playground"
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PLAYGROUND"
 DOCUMENT_PERMISSIONS_SECRET = "local"
 ENVIRONMENT = "development"
-SPS_URL = "https://search-processing-dev.macro.com"
-DSS_URL = "https://cloud-storage-dev.macro.com"
+SPS_URL = "https://dev-gateway.macro.com/search-processing"
+DSS_URL = "https://dev-gateway.macro.com/dss"
+LEXICAL_SERVICE_URL = "https://dev-gateway.macro.com/lexical"
 
 [env.playground.durable_objects]
 bindings = [
@@ -101,8 +104,9 @@ INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_DEV"
 ENVIRONMENT = "development"
 # The proxy injects the Datadog key; the exporter appends the signal path.
 OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-dev.macroverse.workers.dev/i/otlp"
-SPS_URL = "https://search-processing-dev.macro.com"
-DSS_URL = "https://cloud-storage-dev.macro.com"
+SPS_URL = "https://dev-gateway.macro.com/search-processing"
+DSS_URL = "https://dev-gateway.macro.com/dss"
+LEXICAL_SERVICE_URL = "https://dev-gateway.macro.com/lexical"
 
 [env.dev.durable_objects]
 bindings = [
@@ -141,8 +145,9 @@ INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PROD"
 ENVIRONMENT = "production"
 # The proxy injects the Datadog key; the exporter appends the signal path.
 OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-prod.macroverse.workers.dev/i/otlp"
-SPS_URL = "https://search-processing.macro.com"
-DSS_URL = "https://cloud-storage.macro.com"
+SPS_URL = "https://gateway.macro.com/search-processing"
+DSS_URL = "https://gateway.macro.com/dss"
+LEXICAL_SERVICE_URL = "https://gateway.macro.com/lexical"
 
 [env.prod.durable_objects]
 bindings = [

@@ -1,26 +1,22 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel';
-import { useBlockId } from '@core/block';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_TASK_DUPLICATES_FLAG,
-  ENABLE_TASK_DUPLICATES_OVERRIDE,
-} from '@core/constant/featureFlags';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import { enableTaskDuplicates } from '@core/constant/featureFlags';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
+import { queryReadyGate } from '@queries/gate';
 import {
   useDismissTaskDuplicatesMutation,
   useTaskDuplicatesQuery,
 } from '@queries/storage/task-duplicates';
 import type { TaskDuplicate } from '@service-storage/client';
 import { Button, cn, Dropdown } from '@ui';
-import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import { createSignal, For, Show, Suspense } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function TaskDuplicateMatchPill() {
-  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
-    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableTaskDuplicates);
   const matches = useTaskDuplicateMatches();
   const [open, setOpen] = createSignal(false);
 
@@ -34,9 +30,8 @@ export function TaskDuplicateMatchPill() {
             placement="bottom-start"
           >
             <Dropdown.Trigger
-              depth={2}
               class={cn(
-                'h-auto min-w-0 gap-1.5 rounded-full border-failure/40 px-2 py-1 leading-tight',
+                'h-auto min-w-0 gap-1.5 border-failure/40 px-2 py-1 leading-tight',
                 'bg-failure/10 text-failure-ink shadow-none',
                 'hover:bg-failure/15 focus-visible:bg-failure/15 focus-visible:ring-failure/60',
                 open() && 'bg-failure/15'
@@ -58,9 +53,7 @@ export function TaskDuplicateMatchPill() {
 }
 
 export function TaskDuplicateMatchesSidePanelSection() {
-  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
-    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableTaskDuplicates);
   const matches = useTaskDuplicateMatches();
 
   return (
@@ -84,11 +77,12 @@ export function TaskDuplicateMatchesSidePanelSection() {
 type TaskDuplicateMatchesState = ReturnType<typeof useTaskDuplicateMatches>;
 
 function useTaskDuplicateMatches() {
-  const blockId = useBlockId();
+  const { documentId } = useMarkdownDocument();
+  const blockId = documentId();
   const matchesQuery = useTaskDuplicatesQuery(() => blockId);
   const dismissMutation = useDismissTaskDuplicatesMutation(() => blockId);
 
-  const matches = createMemo(() => matchesQuery.data ?? []);
+  const matches = () => (queryReadyGate(matchesQuery) ? matchesQuery.data : []);
   const count = () => matches().length;
 
   const dismiss = async (matchesToDismiss: TaskDuplicate[]) => {
@@ -180,10 +174,9 @@ function TaskDuplicateMention(props: { match: TaskDuplicate }) {
 function DismissDuplicateButton(props: { onDismiss: () => void }) {
   return (
     <Button
-      depth={2}
-      variant="base"
-      size="sm"
-      class="h-6 shrink-0 px-2 text-xs"
+      variant="secondary"
+      size="xs"
+      class="shrink-0"
       onClick={props.onDismiss}
     >
       Dismiss
@@ -194,10 +187,9 @@ function DismissDuplicateButton(props: { onDismiss: () => void }) {
 function DismissAllButton(props: { onDismissAll: () => void }) {
   return (
     <Button
-      depth={2}
-      variant="base"
-      size="sm"
-      class="mt-1 w-fit text-xs"
+      variant="secondary"
+      size="xs"
+      class="mt-1 w-fit"
       onClick={props.onDismissAll}
     >
       Dismiss all

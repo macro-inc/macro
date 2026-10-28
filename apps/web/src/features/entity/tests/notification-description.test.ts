@@ -192,13 +192,19 @@ describe('notification-description helpers', () => {
       expect(getActionVerb('channel_message_reply')).toBe('replied');
     });
 
+    it('returns correct verb for channel_message_reaction', () => {
+      expect(getActionVerb('channel_message_reaction')).toBe(
+        'reacted to your message'
+      );
+    });
+
     it('returns correct verb for channel_message_send', () => {
       expect(getActionVerb('channel_message_send')).toBe('sent a message');
     });
 
     it('returns correct verb for mentioned_in_document_comment', () => {
       expect(getActionVerb('mentioned_in_document_comment')).toBe(
-        'mentioned you'
+        'mentioned you in a comment'
       );
     });
 
@@ -238,6 +244,13 @@ describe('notification-description helpers', () => {
       it('returns plural for count greater than 1', () => {
         expect(getTypeNoun('channel_message_reply', 2)).toBe('replies');
         expect(getTypeNoun('channel_message_reply', 10)).toBe('replies');
+      });
+    });
+
+    describe('channel_message_reaction', () => {
+      it('pluralizes reactions', () => {
+        expect(getTypeNoun('channel_message_reaction', 1)).toBe('reaction');
+        expect(getTypeNoun('channel_message_reaction', 2)).toBe('reactions');
       });
     });
 

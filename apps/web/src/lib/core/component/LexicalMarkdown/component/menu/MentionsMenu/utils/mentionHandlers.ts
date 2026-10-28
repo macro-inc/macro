@@ -2,13 +2,18 @@ import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
+import { match } from 'ts-pattern';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
+  INSERT_AGENT_SESSION_MENTION_COMMAND,
+  INSERT_BOOKING_LINK_MENTION_COMMAND,
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
 } from '../../../../plugins/mentions';
 import type {
+  BookingLinkMentionItem,
+  CalendarEventMentionItem,
   HandlerDependencies,
   MentionItem,
 } from '../../../../utils/mentionsUtils';
@@ -31,6 +36,65 @@ function entityDisplayName(item: EntityItem): string {
   return '';
 }
 
+/** Whether a mention inserted into this editor is recorded as a document reference. */
+function tracksMentions(dependencies: HandlerDependencies): boolean {
+  const { blockId, blockName, disableMentionTracking } = dependencies;
+  return Boolean(
+    blockId &&
+      blockName !== 'channel' &&
+      blockName !== 'chat' &&
+      !disableMentionTracking
+  );
+}
+
+/**
+ * Insert an agent session chip. It is a reference, not a bot invocation, so
+ * it skips the document/user attachment callbacks — but it is tracked like
+ * any other entity mention so the session's References panel lists the doc.
+ */
+async function handleAgentSessionMention(
+  session: { id: string; name?: string },
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const { editor, blockId } = dependencies;
+  const mentionUuid =
+    blockId && tracksMentions(dependencies)
+      ? await trackMention(blockId, 'agent_session', session.id)
+      : undefined;
+  editor.dispatchCommand(INSERT_AGENT_SESSION_MENTION_COMMAND, {
+    id: session.id,
+    label: session.name,
+    ...(mentionUuid ? { mentionUuid } : {}),
+  });
+}
+
+/**
+ * Insert a CRM company or contact chip and record it as a reference of the
+ * CRM record, so the record's References list includes this document. A CRM
+ * reference does not share a file, invite a user, or notify the contact.
+ */
+async function handleCrmMention(
+  item: EntityItem,
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const { editor, blockId } = dependencies;
+  const entity = item.data;
+  if (entity.type !== 'crm_contact' && entity.type !== 'crm_company') return;
+  const mentionUuid =
+    blockId && tracksMentions(dependencies)
+      ? await trackMention(blockId, entity.type, entity.id)
+      : undefined;
+  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: entity.id,
+    documentName:
+      entity.type === 'crm_contact'
+        ? entity.name || entity.email
+        : entityDisplayName(item),
+    blockName: entity.type === 'crm_contact' ? 'contact' : 'company',
+    ...(mentionUuid ? { mentionUuid } : {}),
+  });
+}
+
 /**
  * Handle entity mention (documents, channels, emails, etc.).
  */
@@ -38,37 +102,35 @@ async function handleEntityMention(
   item: EntityItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const {
-    editor,
-    blockName,
-    blockId,
-    onDocumentMention,
-    disableMentionTracking,
-    onEmailMention,
-  } = dependencies;
+  const { editor, blockId, onDocumentMention, onEmailMention } = dependencies;
 
   const entity = item.data;
+  if (entity.type === 'agent_session') {
+    return await handleAgentSessionMention(entity, dependencies);
+  }
+
+  if (entity.type === 'crm_contact' || entity.type === 'crm_company') {
+    return await handleCrmMention(item, dependencies);
+  }
 
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entityDisplayName(item);
 
   let mentionId: string | undefined;
-  if (
-    blockId &&
-    blockName !== 'channel' &&
-    blockName !== 'chat' &&
-    !disableMentionTracking
-  ) {
-    const trackType =
-      item.bucket === 'channel' || item.bucket === 'dm'
-        ? 'channel'
-        : 'document';
+  if (blockId && tracksMentions(dependencies)) {
+    const trackType = match(item.bucket)
+      .with('channel', 'dm', () => 'channel' as const)
+      .with('initiative', () => 'initiative' as const)
+      .with('database', () => 'database' as const)
+      .with('form', () => 'form' as const)
+      .otherwise(() => 'document' as const);
     mentionId = await trackMention(blockId, trackType, entity.id);
   }
 
   if (item.bucket === 'email') {
     onEmailMention?.(entity as unknown as EmailEntity);
-  } else {
+  } else if (item.bucket !== 'initiative') {
+    // Callers share or attach mentioned files; a project is neither.
     onDocumentMention?.(entity as unknown as any);
   }
 
@@ -111,6 +173,63 @@ async function handleGroupMentionItem(
   });
 }
 
+function buildBookingUrl(profileId: string, slug: string): string {
+  const hostname = window.location.hostname;
+  const cleanHost =
+    hostname === 'localhost' ? 'dev.macro.com' : hostname.replace('www.', '');
+  return `https://${cleanHost}/app/book/${encodeURIComponent(profileId)}/${encodeURIComponent(slug)}`;
+}
+
+/**
+ * Handle booking link mention insertion.
+ */
+async function handleBookingLinkMention(
+  item: BookingLinkMentionItem,
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const { editor } = dependencies;
+  const { profileId, slug, title } = item.data;
+  editor.dispatchCommand(INSERT_BOOKING_LINK_MENTION_COMMAND, {
+    profileId,
+    slug,
+    label: title,
+    url: buildBookingUrl(profileId, slug),
+  });
+}
+
+/**
+ * Insert a calendar event chip, the same node Copy event pastes: a series
+ * mention for a single event, an instance mention for a repeating one.
+ * Posting it in a channel shares the event with the channel's members.
+ */
+async function handleCalendarEventMention(
+  item: CalendarEventMentionItem,
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const { eventId, title, occurrenceKey } = item.data;
+  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: eventId,
+    documentName: title,
+    blockName: 'calendar',
+    blockParams: occurrenceKey ? { occurrenceKey } : undefined,
+  });
+}
+
+/**
+ * Insert a WhatsApp group chip. Posting it in a channel shares the group with
+ * the channel's members; nothing else tracks or attaches it.
+ */
+async function handleExternalChatMention(
+  group: { id: string; name: string },
+  dependencies: HandlerDependencies
+): Promise<void> {
+  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: group.id,
+    documentName: group.name,
+    blockName: 'external_chat',
+  });
+}
+
 /**
  * Creates a handler for MentionItem selection.
  */
@@ -128,8 +247,19 @@ export function createItemHandler(dependencies: HandlerDependencies) {
         return await handleDateMentionFromOption(item.data, dependencies);
       case 'group':
         return await handleGroupMentionItem(item.data, dependencies);
+      case 'agentSession':
+        return await handleAgentSessionMention(
+          { id: item.id, name: item.data.name },
+          dependencies
+        );
+      case 'bookingLink':
+        return await handleBookingLinkMention(item, dependencies);
+      case 'calendarEvent':
+        return await handleCalendarEventMention(item, dependencies);
       case 'entity':
         return await handleEntityMention(item, dependencies);
+      case 'externalChat':
+        return await handleExternalChatMention(item.data, dependencies);
     }
   };
 }

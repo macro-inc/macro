@@ -1,0 +1,14 @@
+use-default-rules = false
+
+[[path-rule]]
+globs = ["static_assets/**"]
+mark-changed = [
+  "cache-core",
+  "collab_surface",
+  "complete_graph",
+  "documents",
+  "graphql_calendar",
+  "seed_cli",
+  "xtask_graphql_schema_compat",
+  "xtask_workflows",
+]

@@ -19,8 +19,45 @@ async fn get_team_settings_missing_row_returns_defaults(pool: PgPool) -> anyhow:
     assert_eq!(settings.move_closed_deals_role, CrmPermissionRole::Admin);
     assert_eq!(settings.delete_records_role, CrmPermissionRole::Admin);
     assert_eq!(settings.closed_stage_ids, None);
+    assert!(settings.legacy_stage_ids.is_empty());
     assert_eq!(settings.team_views, json!([]));
     assert_eq!(settings.default_team_view_id, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn update_team_settings_round_trips_legacy_stage_ids(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+
+    let legacy = std::collections::BTreeMap::from([(Uuid::now_v7(), Uuid::now_v7())]);
+    let patch = CrmTeamSettingsPatch {
+        legacy_stage_ids: Some(legacy.clone()),
+        ..Default::default()
+    };
+    assert_eq!(
+        repo.update_team_settings(&team_id, &patch)
+            .await?
+            .legacy_stage_ids,
+        legacy
+    );
+    assert_eq!(
+        repo.get_team_settings(&team_id).await?.legacy_stage_ids,
+        legacy
+    );
+
+    // Other patches leave it alone.
+    let patch = CrmTeamSettingsPatch {
+        edit_stages_role: Some(CrmPermissionRole::Owner),
+        ..Default::default()
+    };
+    assert_eq!(
+        repo.update_team_settings(&team_id, &patch)
+            .await?
+            .legacy_stage_ids,
+        legacy
+    );
     Ok(())
 }
 
@@ -88,6 +125,10 @@ async fn update_team_settings_partial_changes_only_provided_fields(
         move_closed_deals_role: Some(CrmPermissionRole::Owner),
         delete_records_role: Some(CrmPermissionRole::Owner),
         closed_stage_ids: Some(Some(vec![stage_id])),
+        legacy_stage_ids: Some(std::collections::BTreeMap::from([(
+            Uuid::now_v7(),
+            stage_id,
+        )])),
         team_views: Some(json!([{ "id": "v1", "name": "My view" }])),
         default_team_view_id: Some(Some("v1".to_string())),
     };

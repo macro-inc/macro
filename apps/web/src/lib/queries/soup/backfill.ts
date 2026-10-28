@@ -1,6 +1,16 @@
-import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_GRAPHQL_BACKFILL,
+  enableGraphqlSoup,
+} from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
-import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
+import type { CacheHost } from '@graphql-cache/host/types';
+import { Telemetry } from '@macro-inc/observability';
+import {
+  type GraphqlEmailExpr,
+  SoupBackfillDocument,
+  SoupMailBackfillDocument,
+} from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
   type GraphqlSoupHydrationPage,
@@ -9,25 +19,36 @@ import {
   getGraphqlSoupCacheHost,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
-import { useQueries, useQueryClient } from '@tanstack/solid-query';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+import { createSharedMailBackfillFetcher } from '@service-storage/shared-mail-backfill';
+import * as Effect from 'effect/Effect';
+import * as Fiber from 'effect/Fiber';
+import * as Schedule from 'effect/Schedule';
+import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { useMailAccountsQuery } from '../email/mail-accounts';
 
-// Bump when a default backfill input changes so persisted opaque cursors
-// cannot retain the previous server-side filters.
-const BACKFILL_VERSION = 6;
-const PAGE_LIMIT = 250;
+// Bump when a default backfill input or completion guarantee changes so
+// persisted cursors cannot retain an older hydration contract.
+// Rehydrate raw file-type projections after retiring enum-normalized facts.
+// Old cursors must not skip records when the cache compatibility epoch changes.
+const BACKFILL_VERSION = 17;
+const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
-const INITIAL_RETRY_DELAY_MS = 1_000;
-const MAX_RETRY_DELAY_MS = 30_000;
+const BACKFILL_RETRY_COUNT = 5;
+const BACKFILL_RETRY_SCHEDULE = Schedule.exponential('1 second');
+const CACHE_HOST_RETRY_COUNT = 6;
+const CACHE_HOST_RETRY_SCHEDULE = Schedule.exponential('100 millis');
+const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Email threads of one signal classification whose latest message is at most
+ * `days` old. */
+type EmailRecencyWindow = { signal: boolean; days: number };
+
+const SIGNAL_EMAIL_WINDOW: EmailRecencyWindow = { signal: true, days: 90 };
+const NOISE_EMAIL_WINDOW: EmailRecencyWindow = { signal: false, days: 30 };
 
 type SoupBackfillFetchPage = (
   input: GraphqlSoupInput,
@@ -45,10 +66,22 @@ export type SoupBackfillParams = {
   checkpointId: string;
   /** Optional network fetcher; defaults to the standard Soup operation. */
   fetchPage?: SoupBackfillFetchPage;
+  /** Allocate per-scan membership evidence (never shared across users or retries). */
+  createFetchPage?: (userId: string) => Promise<SoupBackfillFetchPage>;
+  /** Access-scope reconciliation requires a fresh full scan after interruption. */
+  restartOnRun?: boolean;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
   /** Delay between successful pages. Defaults to two seconds. */
   pageDelayMs?: number;
+  /** Immediately follows the initial full scan with its watermark pass. */
+  catchUpAfterInitialPass?: boolean;
+  /** Refresh the whole metadata corpus: message-time watermarks do not capture
+   * read/archive changes to old email threads. Interrupted scans still resume. */
+  refreshAll?: boolean;
+  /** Email threads matching any window. The cutoff is fixed when a pass starts;
+   * resumed cursors keep the cutoff they were issued with. */
+  emailRecency?: readonly EmailRecencyWindow[];
 };
 
 /** Backfills the entities used most often by Quick Access and primary views. */
@@ -71,28 +104,86 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 };
 
 /**
- * Backfills email threads and the first message page used by the thread view
- * while excluding every other entity variant with an impossible id filter.
+ * Email threads and the first message page used by the thread view, excluding
+ * every other entity variant with an impossible id filter.
  */
-export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
-  // Restart completed legacy newest-message checkpoints with the new shape.
-  checkpointId: 'email-thread-pages',
+const EMAIL_THREAD_PAGES_INPUT: GraphqlSoupInitialInput = {
+  limit: EMAIL_CONTENT_PAGE_LIMIT,
+  expand: true,
+  // Orders by the latest-message timestamp that emailRecency bounds, so each
+  // page is an ordered index range ending at the cutoff.
+  sortMethod: 'UPDATED_AT',
+  emailView: 'ALL',
+  filters: {
+    calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
+    chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
+    channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
+    channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
+    callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+    crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+  },
+};
+
+const EMAIL_THREAD_PAGES_LANE = {
   fetchPage: fetchEmailContentPage,
+  // A long full scan can skip threads that receive messages after its cursor
+  // has passed them. Consume the recorded watermark before reporting the lane
+  // complete.
+  catchUpAfterInitialPass: true,
+  input: EMAIL_THREAD_PAGES_INPUT,
+} satisfies Omit<SoupBackfillParams, 'checkpointId'>;
+
+export const SIGNAL_EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_THREAD_PAGES_LANE,
+  checkpointId: 'email-signal-thread-pages',
+  emailRecency: [SIGNAL_EMAIL_WINDOW],
+};
+
+export const NOISE_EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_THREAD_PAGES_LANE,
+  checkpointId: 'email-noise-thread-pages',
+  emailRecency: [NOISE_EMAIL_WINDOW],
+};
+
+/** Filter/row metadata is synchronized before the independently bounded body cache.
+ * ALL covers the first Mail slice across every readable owned/delegated inbox. */
+const EMAIL_FILTER_LANE = {
+  fetchPage: (input, options) =>
+    hydrateGraphqlSoup(SoupMailBackfillDocument, { input }, options),
+  refreshAll: true,
+  input: { ...EMAIL_THREAD_PAGES_INPUT, limit: PAGE_LIMIT },
+} satisfies Omit<SoupBackfillParams, 'checkpointId'>;
+
+export const SIGNAL_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_FILTER_LANE,
+  checkpointId: 'email-signal-filter-metadata',
+  emailRecency: [SIGNAL_EMAIL_WINDOW],
+};
+
+export const NOISE_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_FILTER_LANE,
+  checkpointId: 'email-noise-filter-metadata',
+  emailRecency: [NOISE_EMAIL_WINDOW],
+};
+
+/** Shared grants are separate from owned/delegated inbox scope. A complete scan
+ * invalidates omitted old proof; interrupted scans preserve last-known evidence.
+ * One lane covers both windows because each scan invalidates every cached
+ * Shared thread it did not return, including threads outside the windows. */
+export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'shared-email-filter-metadata',
+  createFetchPage: createSharedMailBackfillFetcher,
+  refreshAll: true,
+  restartOnRun: true,
+  emailRecency: [SIGNAL_EMAIL_WINDOW, NOISE_EMAIL_WINDOW],
   input: {
-    limit: EMAIL_CONTENT_PAGE_LIMIT,
-    expand: true,
-    sortMethod: 'VIEWED_UPDATED',
-    emailView: 'ALL',
+    ...EMAIL_FILTER_LANE.input,
     filters: {
-      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
-      chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
-      channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
-      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
-      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
-      crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      ...EMAIL_FILTER_LANE.input.filters,
+      emailFilter: { tree: { literal: { shared: 'ONLY' } } },
     },
   },
 };
@@ -118,15 +209,21 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   },
 };
 
-/** Independently checkpointed backfills started together by the coordinator. */
+/** Independently checkpointed backfills run serially in priority order. */
 export const DEFAULT_SOUP_BACKFILL_LANES = [
   CORE_SOUP_BACKFILL_LANE,
-  EMAIL_SOUP_BACKFILL_LANE,
+  SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
+  NOISE_EMAIL_FILTER_BACKFILL_LANE,
+  SHARED_EMAIL_FILTER_BACKFILL_LANE,
+  SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+  NOISE_EMAIL_SOUP_BACKFILL_LANE,
   AUXILIARY_SOUP_BACKFILL_LANE,
 ] as const satisfies readonly SoupBackfillParams[];
 
 export type SoupBackfillCheckpoint = {
   userId: string;
+  /** Durable cache data generation that owns this cursor and watermark. */
+  storageGeneration: string | null;
   nextCursor: string | null;
   pagesFetched: number;
   completed: boolean;
@@ -140,12 +237,12 @@ export type SoupBackfillCheckpoint = {
 
 type StoredSoupBackfillCheckpoint = Omit<
   SoupBackfillCheckpoint,
-  'scanStartedAt' | 'updatedSince' | 'completedAt'
+  'storageGeneration' | 'scanStartedAt' | 'updatedSince' | 'completedAt'
 > &
   Partial<
     Pick<
       SoupBackfillCheckpoint,
-      'scanStartedAt' | 'updatedSince' | 'completedAt'
+      'storageGeneration' | 'scanStartedAt' | 'updatedSince' | 'completedAt'
     >
   >;
 
@@ -153,9 +250,13 @@ function checkpointKey(userId: string, checkpointId: string): string {
   return `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}:${checkpointId}`;
 }
 
-function initialCheckpoint(userId: string): SoupBackfillCheckpoint {
+function initialCheckpoint(
+  userId: string,
+  storageGeneration: string | null = null
+): SoupBackfillCheckpoint {
   return {
     userId,
+    storageGeneration,
     nextCursor: null,
     pagesFetched: 0,
     completed: false,
@@ -165,7 +266,7 @@ function initialCheckpoint(userId: string): SoupBackfillCheckpoint {
   };
 }
 
-function isOptionalTimestamp(value: unknown): boolean {
+function isOptionalString(value: unknown): boolean {
   return value === undefined || value === null || typeof value === 'string';
 }
 
@@ -182,9 +283,10 @@ function isCheckpoint(
       checkpoint.nextCursor === null) &&
     typeof checkpoint.pagesFetched === 'number' &&
     typeof checkpoint.completed === 'boolean' &&
-    isOptionalTimestamp(checkpoint.scanStartedAt) &&
-    isOptionalTimestamp(checkpoint.updatedSince) &&
-    isOptionalTimestamp(checkpoint.completedAt)
+    isOptionalString(checkpoint.storageGeneration) &&
+    isOptionalString(checkpoint.scanStartedAt) &&
+    isOptionalString(checkpoint.updatedSince) &&
+    isOptionalString(checkpoint.completedAt)
   );
 }
 
@@ -201,6 +303,7 @@ export function loadSoupBackfillCheckpoint(
 
     return {
       ...parsed,
+      storageGeneration: parsed.storageGeneration ?? null,
       scanStartedAt: parsed.scanStartedAt ?? null,
       updatedSince: parsed.updatedSince ?? null,
       completedAt: parsed.completedAt ?? null,
@@ -227,41 +330,33 @@ function saveSoupBackfillCheckpoint(
   }
 }
 
-export function resetSoupBackfillCheckpoint(
-  userId: string,
-  checkpointId = CORE_SOUP_BACKFILL_LANE.checkpointId
-): void {
+type SoupBackfillTelemetryState =
+  | 'started'
+  | 'progress'
+  | 'completed'
+  | 'failed';
+
+function recordSoupBackfillTelemetry(input: {
+  checkpointId: string;
+  durationMs?: number;
+  pagesFetched: number;
+  state: SoupBackfillTelemetryState;
+  totalPagesFetched: number;
+}): void {
   try {
-    localStorage.removeItem(checkpointKey(userId, checkpointId));
+    const span = Telemetry.anonymousSpan('graphql_cache.backfill');
+    span.setAttr('cache.backfill_lane', input.checkpointId);
+    span.setAttr('cache.backfill_version', BACKFILL_VERSION);
+    span.setAttr('cache.backfill_state', input.state);
+    span.setAttr('cache.backfill_pages_fetched', input.pagesFetched);
+    span.setAttr('cache.backfill_total_pages_fetched', input.totalPagesFetched);
+    if (input.durationMs !== undefined) {
+      span.setAttr('cache.duration_ms', input.durationMs);
+    }
+    span.end();
   } catch {
-    // Storage can be unavailable in restricted browser contexts.
+    // Observability must never affect cache hydration.
   }
-}
-
-function abortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new DOMException('Aborted', 'AbortError');
-}
-
-function delay(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(abortReason(signal));
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timeout);
-        reject(abortReason(signal));
-      },
-      { once: true }
-    );
-  });
-}
-
-/** Retry after 1s, 2s, 4s, 8s, and so on, capped at 30s. */
-function backfillRetryDelay(attempt: number): number {
-  const exponentialDelay = INITIAL_RETRY_DELAY_MS * 2 ** attempt;
-  return Math.min(exponentialDelay, MAX_RETRY_DELAY_MS);
 }
 
 function and<T>(left: T | null | undefined, right: T): T {
@@ -291,8 +386,13 @@ export function withUpdatedSince(
     literal: { updatedAt: { gte: updatedSince } },
   };
 
-  const emailUpdatedAt = {
-    literal: { updatedAt: { gte: updatedSince } },
+  // A cached email row changes through either the thread timestamp or this
+  // viewer's history timestamp, and VIEWED_UPDATED sorts on both. Cover both.
+  const emailSortWatermark = {
+    or: {
+      left: { literal: { updatedAt: { gte: updatedSince } } },
+      right: { literal: { viewedAt: { gte: updatedSince } } },
+    },
   };
 
   return {
@@ -304,24 +404,80 @@ export function withUpdatedSince(
       chatFilter: and(filters.chatFilter, chatUpdatedAt),
       emailFilter: {
         ...(filters.emailFilter ?? {}),
-        tree: and(filters.emailFilter?.tree, emailUpdatedAt),
+        tree: and(filters.emailFilter?.tree, emailSortWatermark),
       },
     },
   };
 }
 
-export async function runSoupBackfill(
-  userId: string,
-  params: SoupBackfillParams,
-  signal: AbortSignal
-): Promise<void> {
-  let checkpoint = loadSoupBackfillCheckpoint(userId, params.checkpointId);
+/**
+ * Restricts email threads to those matching any window. In the ALL view the
+ * email updatedAt literal compares the latest non-spam message timestamp.
+ */
+function withEmailRecency(
+  input: GraphqlSoupInitialInput,
+  windows: readonly EmailRecencyWindow[] | undefined,
+  now: number
+): GraphqlSoupInitialInput {
+  if (!windows?.length) return input;
 
-  // `completed` only marks the end of one pass. A later invocation resets
-  // pagination so it can run another pass narrowed by the stored updatedSince.
-  // An unfinished checkpoint without scanStartedAt keeps its cursor and only
-  // initializes the timestamp needed for the next watermark.
-  if (checkpoint.completed || checkpoint.scanStartedAt === null) {
+  const recency = windows
+    .map(
+      ({ signal, days }): GraphqlEmailExpr => ({
+        and: {
+          left: { literal: { importance: signal } },
+          right: {
+            literal: {
+              updatedAt: { gte: new Date(now - days * DAY_MS).toISOString() },
+            },
+          },
+        },
+      })
+    )
+    .reduce((left, right) => ({ or: { left, right } }));
+  const filters = input.filters ?? {};
+  return {
+    ...input,
+    filters: {
+      ...filters,
+      emailFilter: {
+        ...(filters.emailFilter ?? {}),
+        tree: and(filters.emailFilter?.tree, recency),
+      },
+    },
+  };
+}
+
+type SoupBackfillCacheHost = Pick<CacheHost, 'currentStorageGeneration'>;
+
+export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
+  userId: string,
+  host: SoupBackfillCacheHost,
+  params: SoupBackfillParams,
+  onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void
+) {
+  // Await storage readiness before reading a cursor. Generation notifications
+  // may predate this runner or belong to another tab, so they cannot prove that
+  // a saved continuation still refers to records in the current database.
+  const storageGeneration = yield* Effect.tryPromise(() =>
+    host.currentStorageGeneration()
+  );
+  let checkpoint = yield* Effect.sync(() =>
+    loadSoupBackfillCheckpoint(userId, params.checkpointId)
+  );
+  if (checkpoint.storageGeneration !== storageGeneration) {
+    checkpoint = initialCheckpoint(userId, storageGeneration);
+  }
+  if (params.restartOnRun) {
+    checkpoint = {
+      ...checkpoint,
+      nextCursor: null,
+      completed: false,
+      pagesFetched: 0,
+      scanStartedAt: null,
+    };
+  }
+  const startPass = () => {
     checkpoint = {
       ...checkpoint,
       nextCursor: checkpoint.completed ? null : checkpoint.nextCursor,
@@ -329,11 +485,36 @@ export async function runSoupBackfill(
       scanStartedAt: new Date().toISOString(),
     };
     saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+  };
+  const restartForGeneration = (generation: string) => {
+    checkpoint = initialCheckpoint(userId, generation);
+    startPass();
+  };
+  const createPageFetcher = () =>
+    params.createFetchPage
+      ? Effect.tryPromise(() => params.createFetchPage!(userId))
+      : Effect.succeed(params.fetchPage ?? fetchSoupPage);
+
+  // `completed` marks the end of one pass. Start a fresh pass from its stored
+  // watermark, while an unfinished checkpoint keeps its cursor.
+  if (checkpoint.completed || checkpoint.scanStartedAt === null) {
+    yield* Effect.sync(startPass);
   }
+  let fetchPage = yield* createPageFetcher();
 
-  const passInput = withUpdatedSince(params.input, checkpoint.updatedSince);
-
-  while (!signal.aborted) {
+  while (true) {
+    const beforeFetchGeneration = yield* Effect.tryPromise(() =>
+      host.currentStorageGeneration()
+    );
+    if (checkpoint.storageGeneration !== beforeFetchGeneration) {
+      yield* Effect.sync(() => restartForGeneration(beforeFetchGeneration));
+      fetchPage = yield* createPageFetcher();
+      continue;
+    }
+    const passInput = withUpdatedSince(
+      withEmailRecency(params.input, params.emailRecency, Date.now()),
+      params.refreshAll ? null : checkpoint.updatedSince
+    );
     const input: GraphqlSoupInput = checkpoint.nextCursor
       ? {
           continuation: {
@@ -343,108 +524,225 @@ export async function runSoupBackfill(
           },
         }
       : { initial: passInput };
-    // Hydration returns only the cursor projection. Cache-only entity payloads
-    // are persisted without being materialized back into this page.
-    const fetchPage = params.fetchPage ?? fetchSoupPage;
-    const page = await fetchPage(input, { signal });
+    // Hydration returns only the cursor projection. Cache-only entity
+    // payloads are persisted without being materialized back into this page.
+    const page = yield* Effect.tryPromise((signal) =>
+      fetchPage(input, { signal })
+    );
+    const afterFetchGeneration = yield* Effect.tryPromise(() =>
+      host.currentStorageGeneration()
+    );
+    if (checkpoint.storageGeneration !== afterFetchGeneration) {
+      // A reset during hydration invalidates the page's continuation even when
+      // its request could not be cancelled. Never save it into the new scan.
+      yield* Effect.sync(() => restartForGeneration(afterFetchGeneration));
+      fetchPage = yield* createPageFetcher();
+      continue;
+    }
 
-    const completed = page.nextCursor == null;
+    const passCompleted = page.nextCursor == null;
+    // Only a never-completed full scan needs the additional watermark pass. An
+    // interrupted catch-up already has updatedSince and resumes normally.
+    const transitionToCatchUp =
+      passCompleted &&
+      params.catchUpAfterInitialPass === true &&
+      checkpoint.updatedSince === null;
+    const passCompletedAt = passCompleted ? new Date().toISOString() : null;
     checkpoint = {
       ...checkpoint,
       nextCursor: page.nextCursor ?? null,
       pagesFetched: checkpoint.pagesFetched + 1,
-      completed,
-      ...(completed
-        ? {
-            // Use the pass start rather than its completion time so updates
-            // made while this pass was running are included next time.
-            updatedSince: checkpoint.scanStartedAt ?? checkpoint.updatedSince,
-            completedAt: new Date().toISOString(),
-            scanStartedAt: null,
-          }
+      // Atomically persist the required catch-up as in progress instead of
+      // exposing a completed lane between the two passes.
+      completed: passCompleted && !transitionToCatchUp,
+      ...(passCompleted
+        ? transitionToCatchUp
+          ? {
+              // Filter from the full pass start, while using its completion
+              // as the resumable catch-up pass watermark.
+              updatedSince: checkpoint.scanStartedAt ?? checkpoint.updatedSince,
+              completedAt: null,
+              scanStartedAt: passCompletedAt,
+            }
+          : {
+              // Use the pass start rather than its completion time so updates
+              // made while this pass was running are included next time.
+              updatedSince: checkpoint.scanStartedAt ?? checkpoint.updatedSince,
+              completedAt: passCompletedAt,
+              scanStartedAt: null,
+            }
         : {}),
     };
-    saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+    yield* Effect.sync(() => {
+      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+      onCheckpoint?.(checkpoint);
+    });
 
     if (checkpoint.completed) return;
-
-    await delay(params.pageDelayMs ?? PAGE_DELAY_MS, signal);
+    // The terminal page transitions directly into the narrowed catch-up pass.
+    if (!passCompleted) {
+      yield* Effect.sleep(params.pageDelayMs ?? PAGE_DELAY_MS);
+    }
   }
+});
 
-  throw abortReason(signal);
-}
+/** Runs each backfill lane to completion before starting the next lane. */
+export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
+  userId: string,
+  host: SoupBackfillCacheHost,
+  lanes: readonly SoupBackfillParams[] = DEFAULT_SOUP_BACKFILL_LANES
+) {
+  yield* Effect.forEach(
+    lanes,
+    (lane) =>
+      Effect.gen(function* () {
+        const startedAt = Date.now();
+        const initialCheckpoint = yield* Effect.sync(() =>
+          loadSoupBackfillCheckpoint(userId, lane.checkpointId)
+        );
+        let pagesFetched = 0;
+        yield* Effect.sync(() =>
+          recordSoupBackfillTelemetry({
+            checkpointId: lane.checkpointId,
+            pagesFetched: 0,
+            state: 'started',
+            totalPagesFetched: initialCheckpoint.pagesFetched,
+          })
+        );
+
+        yield* runSoupBackfill(userId, host, lane, (checkpoint) => {
+          pagesFetched += 1;
+          if (
+            !checkpoint.completed &&
+            pagesFetched % BACKFILL_PROGRESS_PAGE_INTERVAL === 0
+          ) {
+            recordSoupBackfillTelemetry({
+              checkpointId: lane.checkpointId,
+              durationMs: Date.now() - startedAt,
+              pagesFetched,
+              state: 'progress',
+              totalPagesFetched: checkpoint.pagesFetched,
+            });
+          }
+        }).pipe(
+          Effect.retry({
+            times: BACKFILL_RETRY_COUNT,
+            schedule: BACKFILL_RETRY_SCHEDULE,
+          }),
+          Effect.matchEffect({
+            onFailure: (error) =>
+              Effect.sync(() => {
+                const checkpoint = loadSoupBackfillCheckpoint(
+                  userId,
+                  lane.checkpointId
+                );
+                recordSoupBackfillTelemetry({
+                  checkpointId: lane.checkpointId,
+                  durationMs: Date.now() - startedAt,
+                  pagesFetched,
+                  state: 'failed',
+                  totalPagesFetched: checkpoint.pagesFetched,
+                });
+                console.warn(
+                  '[graphql-soup-backfill] lane failed after retries',
+                  { checkpointId: lane.checkpointId, error }
+                );
+              }),
+            onSuccess: () =>
+              Effect.sync(() => {
+                const checkpoint = loadSoupBackfillCheckpoint(
+                  userId,
+                  lane.checkpointId
+                );
+                recordSoupBackfillTelemetry({
+                  checkpointId: lane.checkpointId,
+                  durationMs: Date.now() - startedAt,
+                  pagesFetched,
+                  state: 'completed',
+                  totalPagesFetched: checkpoint.pagesFetched,
+                });
+              }),
+          })
+        );
+      }),
+    { concurrency: 1, discard: true }
+  );
+});
+
+const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
+  const host = getGraphqlSoupCacheHost();
+  return !host || host.disabled
+    ? Effect.fail('cache-host-unavailable' as const)
+    : Effect.succeed(host);
+}).pipe(
+  Effect.retry({
+    times: CACHE_HOST_RETRY_COUNT,
+    schedule: CACHE_HOST_RETRY_SCHEDULE,
+  })
+);
 
 /**
- * Slowly fills the browser GraphQL cache through independently checkpointed
- * lanes. Every lane starts together on the elected tab.
+ * Runs the checkpointed backfill Effect while this tab owns leadership.
+ * Interrupting the fiber cancels cache readiness waits, active fetches, and
+ * inter-page sleeps. Engine handoffs resume durable checkpoints; only loss of
+ * stored cache data resets cursors so they cannot point past wiped records.
  */
-export function useSoupBackfills(userId: Accessor<string | undefined>) {
-  const queryClient = useQueryClient();
+/** Runs the signed-in user's soup backfills; waits while `userId` is unknown. */
+export function useSoupBackfills(userId: Accessor<string | undefined>): void {
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );
-  const initialLeadershipController = new AbortController();
-  const initiallyLeader = isLeader();
-  if (!initiallyLeader) initialLeadershipController.abort();
-  const [leadership, setLeadership] = createSignal({
-    isLeader: initiallyLeader,
-    controller: initialLeadershipController,
+  // Sender metadata must be durable before the first composer is opened.
+  // This small catalog runs alongside the paged backfill, never behind it.
+  useMailAccountsQuery(
+    () =>
+      ENABLE_GRAPHQL_BACKFILL &&
+      graphqlSoupFlag().enabled &&
+      isLeader() &&
+      !!userId()
+  );
+  const [cacheHost, setCacheHost] = createSignal<CacheHost>();
+  const [cacheGeneration, setCacheGeneration] = createSignal(0);
+
+  createEffect(() => {
+    if (!ENABLE_GRAPHQL_BACKFILL || !graphqlSoupFlag().enabled || !isLeader()) {
+      setCacheHost(undefined);
+      return;
+    }
+
+    const fiber = Effect.runFork(
+      waitForGraphqlSoupCacheHost.pipe(
+        Effect.tap((host) => Effect.sync(() => setCacheHost(host))),
+        Effect.ignore
+      )
+    );
+    onCleanup(() => {
+      Effect.runFork(Fiber.interrupt(fiber));
+    });
   });
 
-  createEffect(
-    on(
-      isLeader,
-      (leader) => {
-        setLeadership((current) => {
-          current.controller.abort();
-          const controller = new AbortController();
-          if (!leader) {
-            controller.abort();
-            void queryClient.cancelQueries({
-              queryKey: ['graphql-soup-backfill', BACKFILL_VERSION],
-            });
-          }
-          return { isLeader: leader, controller };
-        });
-      },
-      { defer: true }
-    )
-  );
+  createEffect(() => {
+    const host = cacheHost();
+    if (!host) return;
 
-  onCleanup(() => leadership().controller.abort());
+    const unsubscribe = host.onCacheGenerationChanged(() => {
+      setCacheGeneration((generation) => generation + 1);
+    });
+    onCleanup(unsubscribe);
+  });
 
-  return useQueries(() => {
-    const currentUserId = userId();
-    const currentLeadership = leadership();
-    const backfillEnabled =
-      ENABLE_GRAPHQL_BACKFILL &&
-      currentUserId !== undefined &&
-      getGraphqlSoupCacheHost() !== undefined &&
-      currentLeadership.isLeader;
+  createEffect(() => {
+    const host = cacheHost();
+    const id = userId();
+    if (!host || !id) return;
+    cacheGeneration();
 
-    return {
-      queries: DEFAULT_SOUP_BACKFILL_LANES.map((lane) => ({
-        queryKey: [
-          'graphql-soup-backfill',
-          BACKFILL_VERSION,
-          currentUserId,
-          lane.checkpointId,
-        ] as const,
-        enabled: backfillEnabled,
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          runSoupBackfill(
-            currentUserId!,
-            lane,
-            AbortSignal.any([signal, currentLeadership.controller.signal])
-          ),
-        networkMode: 'online' as const,
-        retry: 5,
-        retryDelay: backfillRetryDelay,
-        // A completed lane stays fresh for this QueryClient lifetime. A new
-        // session starts another watermark-based pass from its checkpoint.
-        staleTime: Infinity,
-        refetchOnWindowFocus: false,
-      })),
-    };
+    const fiber = Effect.runFork(
+      runSoupBackfills(id, host).pipe(Effect.ignore)
+    );
+    onCleanup(() => {
+      Effect.runFork(Fiber.interrupt(fiber));
+    });
   });
 }

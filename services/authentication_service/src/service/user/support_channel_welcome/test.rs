@@ -10,7 +10,7 @@ struct RecordingGateway {
 struct PostedWelcomeMessage {
     actor: Sender,
     channel_id: Uuid,
-    request: PostMessageRequest,
+    request: PostMessage,
 }
 
 impl SupportChannelMessageGateway for RecordingGateway {
@@ -18,7 +18,7 @@ impl SupportChannelMessageGateway for RecordingGateway {
         &self,
         actor: Sender,
         channel_id: Uuid,
-        request: PostMessageRequest,
+        request: PostMessage,
     ) -> Result<(), Report> {
         self.posted.lock().unwrap().push(PostedWelcomeMessage {
             actor,
@@ -82,7 +82,8 @@ async fn posts_the_welcome_message() {
         welcome.request.notification_policy,
         PostMessageNotificationPolicy::MentionsOnly
     );
-    assert_eq!(welcome.request.triggered_by, None);
+    assert_eq!(welcome.request.attribution, MessageAttribution::Unprompted);
+    assert!(welcome.request.anchor.is_none());
 }
 
 #[tokio::test]

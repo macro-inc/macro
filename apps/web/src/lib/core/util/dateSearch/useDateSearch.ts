@@ -13,6 +13,7 @@ import {
   parseDateFromDuration,
   parseDurationString,
 } from './dateParser';
+import { type ParsedTime, parseTime } from './parseTime';
 import { searchPresets } from './presets';
 
 // Max number of presets to include
@@ -45,77 +46,6 @@ const possibleDateFormats = [
   'yyyy-MM-dd', // "2024-01-15"
   'dd-MM-yyyy', // "15-01-2024"
 ];
-
-interface ParsedTime {
-  hours: number; // 0-23
-  minutes: number; // 0-59
-}
-
-/**
- * Parse time strings like "9am", "9 AM", "3:30pm", "14:00", "noon", "midnight"
- * Returns the parsed time and the remaining input with the time portion removed.
- */
-function parseTime(input: string): { time: ParsedTime; rest: string } | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  // "noon"
-  if (/^noon$/i.test(trimmed)) {
-    return { time: { hours: 12, minutes: 0 }, rest: '' };
-  }
-  // "midnight"
-  if (/^midnight$/i.test(trimmed)) {
-    return { time: { hours: 0, minutes: 0 }, rest: '' };
-  }
-
-  // Try matching time at end of string: "tomorrow 9am", "feb 17 3:30 PM"
-  // Also matches standalone: "9am", "3:30pm", "14:00"
-  const timeAtEnd = /^(.*?)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*$/i;
-  const time24AtEnd = /^(.*?)\s*(\d{1,2}):(\d{2})\s*$/;
-
-  let match = trimmed.match(timeAtEnd);
-  if (match) {
-    let hours = parseInt(match[2]);
-    const minutes = parseInt(match[3] || '0');
-    const meridiem = match[4].toLowerCase();
-
-    if (hours < 1 || hours > 12 || minutes > 59) return null;
-
-    if (meridiem === 'pm' && hours !== 12) hours += 12;
-    if (meridiem === 'am' && hours === 12) hours = 0;
-
-    return { time: { hours, minutes }, rest: match[1].trim() };
-  }
-
-  // 24-hour format: "14:00", "tomorrow 14:00"
-  match = trimmed.match(time24AtEnd);
-  if (match) {
-    const hours = parseInt(match[2]);
-    const minutes = parseInt(match[3]);
-
-    if (hours > 23 || minutes > 59) return null;
-
-    return { time: { hours, minutes }, rest: match[1].trim() };
-  }
-
-  // Time at start: "9am tomorrow", "3:30 PM feb 17"
-  const timeAtStart = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s+(.+)$/i;
-  match = trimmed.match(timeAtStart);
-  if (match) {
-    let hours = parseInt(match[1]);
-    const minutes = parseInt(match[2] || '0');
-    const meridiem = match[3].toLowerCase();
-
-    if (hours < 1 || hours > 12 || minutes > 59) return null;
-
-    if (meridiem === 'pm' && hours !== 12) hours += 12;
-    if (meridiem === 'am' && hours === 12) hours = 0;
-
-    return { time: { hours, minutes }, rest: match[4].trim() };
-  }
-
-  return null;
-}
 
 /**
  * Format a parsed time for display, e.g. "9 AM", "3:30 PM"
@@ -190,11 +120,42 @@ function parseNaturalDate(
     'saturday',
   ];
 
-  const dayIndex = daysOfWeek.findIndex(
-    (day) => lowerInput === day || lowerInput === day.slice(0, 3)
-  );
+  // Map of common abbreviations and misspellings to day index
+  const dayAbbreviations: Record<string, number> = {
+    sun: 0,
+    sunday: 0,
+    mon: 1,
+    monday: 1,
+    mndy: 1,
+    tue: 2,
+    tues: 2,
+    tuesday: 2,
+    tu: 2,
+    wed: 3,
+    weds: 3,
+    wednes: 3,
+    wednesday: 3,
+    thu: 4,
+    thur: 4,
+    thurs: 4,
+    thursday: 4,
+    fri: 5,
+    friday: 5,
+    sat: 6,
+    saturday: 6,
+  };
 
-  if (dayIndex !== -1) {
+  // Check against the abbreviation map first
+  let dayIndex = dayAbbreviations[lowerInput];
+
+  // Fallback to prefix matching if no exact match
+  if (dayIndex === undefined) {
+    dayIndex = daysOfWeek.findIndex(
+      (day) => day.startsWith(lowerInput) && lowerInput.length >= 2
+    );
+  }
+
+  if (dayIndex !== undefined && dayIndex !== -1) {
     const currentDay = now.getDay();
     let daysToAdd = dayIndex - currentDay;
 
@@ -213,13 +174,33 @@ function parseNaturalDate(
 /**
  * Score how well an option matches the query
  */
-function scoreMatch(option: DateOption, query: string): number {
+function scoreMatch(
+  option: DateOption,
+  query: string,
+  keywords?: string[]
+): number {
   const lowerQuery = query.toLowerCase();
   const lowerDisplay = option.displayText.toLowerCase();
 
   if (lowerDisplay === lowerQuery) return 100;
   if (lowerDisplay.startsWith(lowerQuery)) return 90;
   if (lowerDisplay.includes(lowerQuery)) return 70;
+
+  // Keyword matches: exact, prefix while typing, or leading token ("tmrw 8")
+  if (keywords) {
+    const queryTokens = lowerQuery.split(/\s+/).filter(Boolean);
+    const queryMatchesKeyword = keywords.some((kw) => {
+      const lowerKw = kw.toLowerCase();
+      return (
+        lowerKw === lowerQuery ||
+        lowerKw.startsWith(lowerQuery) ||
+        lowerQuery.startsWith(`${lowerKw} `) ||
+        queryTokens.includes(lowerKw)
+      );
+    });
+    if (queryMatchesKeyword) return 85;
+  }
+
   if (option.secondaryText) {
     const lowerSecondary = option.secondaryText.toLowerCase();
     if (lowerSecondary.includes(lowerQuery)) return 50;
@@ -408,7 +389,7 @@ export function useDateSearch(params: {
         score: 0,
       };
 
-      option.score = scoreMatch(option, presetQuery);
+      option.score = scoreMatch(option, presetQuery, preset.keywords);
 
       if (option.score > 0) {
         options.push(option);

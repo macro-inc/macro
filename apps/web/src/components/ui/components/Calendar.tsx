@@ -1,12 +1,12 @@
 import CorvuCalendar, {
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import {
   createMemo,
   createSignal,
@@ -85,16 +85,20 @@ export function Calendar(props: CalendarProps) {
             </CorvuCalendar.Label>
             <div class="ml-auto flex shrink-0 items-center gap-0.5">
               <CorvuCalendar.Nav
+                as={Button}
+                variant="ghost"
+                size="icon-sm"
                 action="prev-month"
                 aria-label="Go to previous month"
-                class="flex size-7 items-center justify-center rounded-md text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent"
               >
                 <CaretLeftIcon class="size-3" />
               </CorvuCalendar.Nav>
               <CorvuCalendar.Nav
+                as={Button}
+                variant="ghost"
+                size="icon-sm"
                 action="next-month"
                 aria-label="Go to next month"
-                class="flex size-7 items-center justify-center rounded-md text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent"
               >
                 <CaretRightIcon class="size-3" />
               </CorvuCalendar.Nav>
@@ -205,8 +209,10 @@ function CalendarMonthDropdown(props: CalendarMonthSelectorProps) {
   return (
     <Dropdown open={open()} onOpenChange={setOpen} placement="bottom-start">
       <Dropdown.Trigger
+        variant="ghost"
+        size="sm"
         aria-label="Choose month"
-        class="h-7 max-w-full min-w-0 justify-start gap-1 border-none bg-transparent px-1 text-xs font-medium text-ink hover:bg-hover"
+        class="max-w-full min-w-0 justify-start"
       >
         <span class="min-w-0 truncate">{formatCalendarMonth(props.month)}</span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
@@ -388,7 +394,7 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
       <div
         class={cn(
           'h-72 overflow-y-auto overscroll-contain',
-          props.presentation === 'radio-group' && 'rounded-2xl'
+          props.presentation === 'radio-group' && 'rounded-[20px]'
         )}
         style={{ contain: 'strict' }}
       >
@@ -414,11 +420,12 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
                 aria-current={option.value === todayValue ? 'date' : undefined}
                 data-month-index={index()}
                 class={cn(
-                  'flex w-full items-center gap-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover',
-                  selected() ? 'text-accent' : 'text-ink',
+                  'flex w-full items-center gap-1.5 text-left outline-none',
                   props.presentation === 'radio-group'
-                    ? 'relative h-11 bg-surface px-4 text-sm'
-                    : 'h-8 rounded-lg px-2 text-xs'
+                    ? 'relative h-11 rounded-[20px] px-3 text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 focus-visible:outline-2 focus-visible:outline-accent'
+                    : 'h-8 rounded-lg px-2 text-xs hover:bg-hover focus-visible:bg-hover',
+                  props.presentation !== 'radio-group' &&
+                    (selected() ? 'text-accent' : 'text-ink')
                 )}
                 tabIndex={selected() ? 0 : -1}
                 onClick={() => props.onChange(option.date)}
@@ -436,17 +443,6 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
                   class="ml-auto size-3.5 text-accent"
                   classList={{ invisible: !selected() }}
                 />
-                <Show
-                  when={
-                    props.presentation === 'radio-group' &&
-                    index() < options().length - 1
-                  }
-                >
-                  <span
-                    aria-hidden="true"
-                    class="absolute inset-x-2 bottom-0 h-px bg-edge-muted"
-                  />
-                </Show>
               </button>
             );
           }}
@@ -456,12 +452,12 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
       <Show when={props.presentation === 'radio-group'}>
         <div class="flex pt-3">
           <Button
+            aria-label="Go To Today"
+            tooltip="Go To Today"
             fullWidth
-            variant="base"
+            variant="ghost"
             size="sm"
-            depth={3}
-            class="rounded-full bg-surface px-3 text-ink shadow-menu"
-            label="Go To Today"
+            class="min-h-11 bg-ink/6 px-3 text-ink"
             onClick={() => {
               if (props.onToday) {
                 props.onToday();

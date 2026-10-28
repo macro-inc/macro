@@ -20,7 +20,7 @@ pub struct CallStartedMetadata {
     /// Identifier of the started call.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: MacroUserIdStr<'static>,
     /// Time at which the call was created.
@@ -45,7 +45,7 @@ pub struct CallRecordArchivedMetadata {
     /// Identifier shared by the active call and archived call record.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: MacroUserIdStr<'static>,
     /// Time at which the call started.
@@ -56,6 +56,10 @@ pub struct CallRecordArchivedMetadata {
     pub duration_ms: Option<i64>,
     /// Number of distinct participants over the call's lifetime.
     pub participant_count: usize,
+    /// Macro accounts that joined the call over its lifetime. Empty in events
+    /// published before this field existed.
+    #[serde(default)]
+    pub participants: Vec<MacroUserIdStr<'static>>,
     /// Whether the call has an associated recording.
     pub has_recording: bool,
     /// Reason the call was archived.
@@ -68,7 +72,7 @@ pub struct CallRecordUpdatedMetadata {
     /// Identifier of the updated call record.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who updated the record, or `None` for an internal caller.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// New custom display name, or `None` when unchanged.
@@ -83,7 +87,7 @@ pub struct CallRecordDeletedMetadata {
     /// Identifier of the deleted call record.
     pub call_id: Uuid,
     /// Identifier of the channel that contained the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who deleted the record, or `None` for an internal caller.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
 }
@@ -94,7 +98,7 @@ pub struct CallRecordSummarizedMetadata {
     /// Identifier of the summarized call record.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// Whether an AI-generated display name was persisted with the summary.
     pub ai_name_generated: bool,
 }
@@ -105,7 +109,16 @@ pub struct CallRecordingReadyMetadata {
     /// Identifier of the call record whose recording is ready.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
+}
+
+/// Metadata for [`CallTopicEvent::RecordImported`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallRecordImportedMetadata {
+    /// Identifier of the created or refreshed call record.
+    pub call_id: Uuid,
+    /// Connected Macro user who owns the imported record.
+    pub owner: MacroUserIdStr<'static>,
 }
 
 /// Lifecycle and recording events published to [`MacroCallsTopic`].
@@ -130,6 +143,9 @@ pub enum CallTopicEvent {
     /// A call record's recording became available.
     #[serde(rename = "call.recording_ready")]
     RecordingReady(CallRecordingReadyMetadata),
+    /// An integration created or refreshed a call record.
+    #[serde(rename = "call.record_imported")]
+    RecordImported(CallRecordImportedMetadata),
 }
 
 impl TopicEvent for CallTopicEvent {
@@ -179,6 +195,12 @@ impl CallMacroEvent {
     pub fn recording_ready(metadata: CallRecordingReadyMetadata) -> Self {
         let key = metadata.call_id.to_string();
         Self::new(key, CallTopicEvent::RecordingReady(metadata))
+    }
+
+    /// Build a record-imported event keyed by the call id.
+    pub fn record_imported(metadata: CallRecordImportedMetadata) -> Self {
+        let key = metadata.call_id.to_string();
+        Self::new(key, CallTopicEvent::RecordImported(metadata))
     }
 
     fn new(key: String, event: CallTopicEvent) -> Self {

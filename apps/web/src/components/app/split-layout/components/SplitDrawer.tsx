@@ -1,7 +1,8 @@
+import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import CloseIcon from '@phosphor/x.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, Layer } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useSplitPanel } from '../layoutUtils';
@@ -21,7 +22,7 @@ function DrawerInner(props: ParentProps<{ id: string }>) {
       hotkey: 'escape',
       condition: drawerControl.isOpen,
       scopeId: splitPanel.splitHotkeyScope,
-      description: 'Close References Drawer',
+      description: () => t('splitMenu.closeReferencesDrawer'),
       keyDownHandler: (e) => {
         e?.preventDefault();
         drawerControl.close();
@@ -65,7 +66,7 @@ export function SplitDrawer(
   };
 
   const getPositionClasses = () => {
-    const baseClasses = `absolute bg-surface border-edge-muted z-annotation-layer flex flex-col`;
+    const baseClasses = `absolute bg-surface border-edge-frame z-annotation-layer flex flex-col`;
     let positionClasses = '';
     switch (props.side) {
       case 'top':
@@ -132,18 +133,19 @@ export function SplitDrawer(
             <div class={getGradientMaskClasses()} />
             <div class="flex items-center justify-start gap-2 shrink-0 px-2">
               <Show when={props.title}>
-                <h3 class="text-md font-medium text-content-secondary shrink truncate my-3">
+                <h3 class="text-base font-medium text-ink-muted shrink truncate my-3">
                   {props.title}
                 </h3>
               </Show>
               <div class="grow" />
               <Button
+                aria-label={t('splitMenu.close')}
+                tooltip={t('splitMenu.close')}
                 variant="ghost"
                 size="icon-sm"
-                label="Close"
                 onClick={drawerControl.close}
               >
-                <CloseIcon />
+                <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </div>
             <div class="size-full overflow-hidden">

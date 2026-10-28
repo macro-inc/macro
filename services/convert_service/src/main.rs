@@ -2,7 +2,10 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use config::{Config, Environment};
-use macro_authorization::{InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
 use macro_entrypoint::MacroEntrypoint;
 use process::runner::run_worker;
 use sqlx::postgres::PgPoolOptions;
@@ -67,6 +70,13 @@ async fn main() -> anyhow::Result<()> {
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
+    let db = PgPoolOptions::new()
+        .min_connections(1)
+        .max_connections(5)
+        .connect(&config.database_url)
+        .await
+        .context("could not connect to db")?;
+
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
         NoopMacroAuthJwtValidator, // we only have internal calls in this service.
         InternalAuthConfig {
@@ -74,14 +84,8 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
-
-    let db = PgPoolOptions::new()
-        .min_connections(1)
-        .max_connections(5)
-        .connect(&config.database_url)
-        .await
-        .context("could not connect to db")?;
 
     tracing::trace!("initialized config");
 

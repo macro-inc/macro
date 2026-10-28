@@ -10,7 +10,7 @@ use sqlx::{Pool, Postgres};
 #[cfg_attr(
     not(test),
     cached(
-        time = 30,
+        time = 10,
         result = true,
         key = "String",
         convert = r#"{ format!("{}-{}", user_id, items.iter().map(|i| format!("{}-{}", i.item_type, i.item_id)).collect::<Vec<_>>().join("_")) }"#

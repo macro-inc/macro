@@ -14,31 +14,22 @@ import {
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { MobileFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { MobileSearchFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer';
-import {
-  type SoupViewMode,
-  useSoupView,
-} from '@app/features/next-soup/soup-view/soup-view-context';
+import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
   type TabbedListView,
   VIEW_TAB_LISTS,
 } from '@app/features/next-soup/soup-view/tab-lists';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { TabItem } from '@core/component/Tabs';
-import { TabsInset } from '@core/component/TabsInset';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
-import {
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-} from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
+import { Dropdown, type TabOption, Tabs } from '@ui';
 import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
-
   return createMemo<ListView | undefined>(() => {
     const content = panel.handle.content();
 
@@ -55,24 +46,22 @@ const useCurrentListView = () => {
  * pills, and the number/cycle hotkeys — agrees on which tabs exist.
  */
 export const useVisibleViewTabs = () => {
-  const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
-    enabledOverride: ENABLE_REMINDERS_OVERRIDE,
-  });
-
-  return (view: TabbedListView): TabItem[] =>
-    view === 'inbox' && !remindersFlag().enabled
-      ? VIEW_TAB_LISTS.inbox.filter((tab) => tab.value !== 'reminders')
-      : VIEW_TAB_LISTS[view];
+  return (view: TabbedListView): TabOption<string>[] => VIEW_TAB_LISTS[view];
 };
 
-const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = ['documents', 'tasks'];
+const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = [
+  'documents',
+  'tasks',
+  'calls',
+];
+
+const VIEW_SCOPED_REFINEMENTS: ListView[] = ['calls'];
 
 export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
   PRESERVE_FILTERS_ON_TAB_CHANGE.includes(view);
 
 export const useApplyPreset = () => {
   const soup = useSoup();
-  const panel = useSplitPanelOrThrow();
   const {
     queryFilters,
     restorePersistedQueryFilters,
@@ -173,6 +162,15 @@ export const useApplyPreset = () => {
           : undefined;
       }
 
+      // A channel chosen in the Calls sidebar is a direct server refinement,
+      // and no tab scopes by channel, so it carries over unchanged.
+      const channelIds = queryFilters.state.include.callChannelId;
+      if (channelIds?.length) {
+        mergedFilters = mergeQuery(mergedFilters, {
+          include: { callChannelId: [...channelIds] },
+        });
+      }
+
       nextFilters = mergedFilters;
 
       nextClientFilters = {
@@ -181,28 +179,27 @@ export const useApplyPreset = () => {
       };
     }
 
+    // Calls sidebar refinements belong to the view, not to one tab, so a
+    // tab's persisted state must not replace them.
+    const restoreTab = !VIEW_SCOPED_REFINEMENTS.includes(view);
     batch(() => {
       setActiveTab(tabId);
-      if (!restorePersistedQueryFilters(tabId)) {
+      if (!(restoreTab && restorePersistedQueryFilters(tabId))) {
         queryFilters.replace(nextFilters);
       }
-      if (!restorePersistedPredicates(tabId)) {
+      if (!(restoreTab && restorePersistedPredicates(tabId))) {
         soup.predicates.set(nextClientFilters);
       }
       soup.grouping.setActiveGroupId(preset.groupBy);
     });
 
     // The new tab replaces the dataset wholesale, and row focus only follows
-    // a row that survives into it (see soup.setRows). When it doesn't,
-    // nothing is selected anymore, so the Preview Pair's Viewer returns to
-    // its placeholder instead of lingering on the previous tab's entity.
     const focusedRow = soup.focus.row();
     if (
       !focusedRow ||
       focusedRow.getIsGrouped() ||
       focusedRow.getIsLoadMore()
     ) {
-      panel.handle.resetPreview();
     }
     return true;
   };
@@ -215,9 +212,6 @@ export const SoupViewTabs = () => {
 
   return (
     <Switch>
-      <Match when={listView() === 'companies'}>
-        <CompanyModeTabs />
-      </Match>
       <For each={Object.keys(VIEW_TAB_LISTS) as TabbedListView[]}>
         {(v) => (
           <Match when={listView() === v}>
@@ -229,45 +223,27 @@ export const SoupViewTabs = () => {
   );
 };
 
-/** The Customers view swaps filter tabs for a board/list mode switch. */
-const COMPANY_MODE_TABS: TabItem[] = [
-  { value: 'board', label: 'Board' },
-  { value: 'list', label: 'List' },
-];
-
-const CompanyModeTabs = () => {
-  const { viewMode, setViewMode } = useSoupView();
-
-  return (
-    <TabsInset
-      list={COMPANY_MODE_TABS}
-      value={viewMode()}
-      defaultValue="board"
-      onChange={(value) => setViewMode(value as SoupViewMode)}
-    />
-  );
-};
-
 const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
   const visibleViewTabs = useVisibleViewTabs();
 
   return (
-    <TabsInset
-      list={visibleViewTabs(props.view)}
-      value={activeTab()}
-      defaultValue={VIEW_TAB_PRESETS[props.view].default}
+    <Tabs
+      aria-label="View tabs"
+      class="shrink-0"
+      options={visibleViewTabs(props.view)}
+      value={activeTab() ?? VIEW_TAB_PRESETS[props.view].default}
       onChange={(value) => applyTabPreset(props.view, value)}
     />
   );
 };
 
-/** Compact dropdown variant of tabs, used when the header is too narrow for the full segmented control. */
+/** The selected tab as a menu, for a header too narrow for every tab. */
 export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
   const { applyTabPreset } = useApplyPreset();
-  const { activeTab, viewMode, setViewMode } = useSoupView();
+  const { activeTab } = useSoupView();
   const visibleViewTabs = useVisibleViewTabs();
 
   const view = createMemo(() => {
@@ -275,40 +251,43 @@ export const CollapsedSoupViewTabs = () => {
     return v && v in VIEW_TAB_LISTS ? (v as TabbedListView) : undefined;
   });
 
-  const list = createMemo(() => {
+  const options = () => {
     const v = view();
     return v ? visibleViewTabs(v) : [];
-  });
+  };
 
-  const defaultValue = createMemo(() => {
+  const selected = () => {
     const v = view();
-    return v ? VIEW_TAB_PRESETS[v].default : undefined;
-  });
+    const value = activeTab() ?? (v ? VIEW_TAB_PRESETS[v].default : undefined);
+    return options().find((option) => option.value === value) ?? options()[0];
+  };
 
   return (
-    <Show
-      when={listView() !== 'companies'}
-      fallback={
-        <TabsInsetDropdown
-          list={COMPANY_MODE_TABS}
-          value={viewMode()}
-          defaultValue="board"
-          onChange={(value) => setViewMode(value as SoupViewMode)}
-        />
-      }
-    >
-      <TabsInsetDropdown
-        list={list()}
-        value={activeTab()}
-        defaultValue={defaultValue()}
-        onChange={(value) => {
-          const v = view();
-          if (v) {
-            applyTabPreset(v, value);
-          }
-        }}
-      />
-    </Show>
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger variant="secondary" size="md">
+        {selected()?.label}
+        <CaretDownIcon class="size-3 text-ink-extra-muted" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <For each={options()}>
+            {(option) => (
+              <Dropdown.Item
+                onSelect={() => {
+                  const v = view();
+                  if (v) applyTabPreset(v, option.value);
+                }}
+              >
+                <span class="flex-1 truncate">{option.label}</span>
+                <Show when={selected()?.value === option.value}>
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Show>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 };
 
@@ -329,9 +308,6 @@ export const MobileSoupViewTabs = () => {
             facet-filter drawer button (the desktop SearchFiltersRow's
             mobile counterpart). */}
         <MobileSearchFilterDrawer />
-      </Match>
-      <Match when={listView() === 'companies'}>
-        <MobileCompanyModeTabs />
       </Match>
       <For
         each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
@@ -356,22 +332,6 @@ export const MobileSoupViewTabs = () => {
 const MOBILE_TAB_STRIP_CLASS =
   '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
 const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
-
-const MobileCompanyModeTabs = () => {
-  const { viewMode, setViewMode } = useSoupView();
-
-  return (
-    <PillTabs
-      scrollable
-      class={MOBILE_TAB_STRIP_CLASS}
-      contentClass={MOBILE_TAB_CONTENT_CLASS}
-      leading={<MobileFilterDrawer />}
-      items={COMPANY_MODE_TABS}
-      value={viewMode()}
-      onChange={(value) => setViewMode(value as SoupViewMode)}
-    />
-  );
-};
 
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();

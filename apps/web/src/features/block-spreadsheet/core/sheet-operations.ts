@@ -1,0 +1,287 @@
+import {
+  cellPlainText,
+  cellTextParts,
+} from '@macro-inc/spreadsheet/cell-mentions';
+import type { RangeMove } from '@macro-inc/spreadsheet/workbook-structure';
+import type { CellCopy, SpreadsheetCalculation } from './calculation';
+import { csvCellValue } from './csv-value';
+import {
+  type CellSelection,
+  cellAddress,
+  parseClipboard,
+  positionFromAddress,
+  selectionAddresses,
+  selectionBounds,
+} from './grid-selection';
+import {
+  SPREADSHEET_MAX_CELL_LENGTH,
+  SPREADSHEET_MAX_COLUMNS,
+  SPREADSHEET_MAX_INDENT,
+  SPREADSHEET_MAX_ROWS,
+  type SpreadsheetCellEdits,
+  type SpreadsheetCells,
+} from './spreadsheet-document';
+import { CSV_MAX_BYTES } from './workbook-file-types';
+
+/** Largest selection whose empty cells take an indent too: one full column.
+ * Past it, as with a whole sheet, only the cells the sheet holds move, so an
+ * indent never writes millions of style-only cells. */
+const INDENT_EMPTY_CELLS_LIMIT = SPREADSHEET_MAX_ROWS;
+
+/** Excel's Increase and Decrease Indent: each cell moves one level from its
+ * own, so nested line items keep their depth relative to each other. */
+export function indentEdits(
+  cells: SpreadsheetCells,
+  selection: CellSelection,
+  change: 1 | -1
+): SpreadsheetCellEdits {
+  const { top, bottom, left, right } = selectionBounds(selection);
+  const addresses =
+    (bottom - top + 1) * (right - left + 1) <= INDENT_EMPTY_CELLS_LIMIT
+      ? selectionAddresses(selection)
+      : Object.keys(cells).filter((address) => {
+          const position = positionFromAddress(address);
+          return (
+            !!position &&
+            position.row >= top &&
+            position.row <= bottom &&
+            position.column >= left &&
+            position.column <= right
+          );
+        });
+  const edits: SpreadsheetCellEdits = {};
+  for (const address of addresses) {
+    const cell = cells[address];
+    const current = cell?.indent ?? 0;
+    const indent = Math.max(
+      0,
+      Math.min(SPREADSHEET_MAX_INDENT, current + change)
+    );
+    if (indent === current) continue;
+    edits[address] = {
+      indent,
+      // Centered text has no indent, so indenting it aligns it left.
+      ...(change > 0 &&
+        cell?.horizontalAlign === 'center' && { horizontalAlign: 'left' }),
+    };
+  }
+  return edits;
+}
+
+export function borderEdits(
+  selection: CellSelection,
+  border: 'all' | 'outer' | 'none'
+): SpreadsheetCellEdits {
+  const bounds = selectionBounds(selection);
+  return Object.fromEntries(
+    selectionAddresses(selection).map((address) => {
+      const position = positionFromAddress(address)!;
+      return [
+        address,
+        {
+          borderTop:
+            border === 'all' ||
+            (border === 'outer' && position.row === bounds.top),
+          borderBottom:
+            border === 'all' ||
+            (border === 'outer' && position.row === bounds.bottom),
+          borderLeft:
+            border === 'all' ||
+            (border === 'outer' && position.column === bounds.left),
+          borderRight:
+            border === 'all' ||
+            (border === 'outer' && position.column === bounds.right),
+        },
+      ];
+    })
+  );
+}
+
+/** Whether moving cells would replace values that are not among them. */
+export function moveReplacesValues(cells: SpreadsheetCells, move: RangeMove) {
+  const { source, rows, columns } = move;
+  for (const address in cells) {
+    if (!cells[address].value) continue;
+    const position = positionFromAddress(address);
+    if (
+      !position ||
+      position.row < source.top + rows ||
+      position.row > source.bottom + rows ||
+      position.column < source.left + columns ||
+      position.column > source.right + columns
+    )
+      continue;
+    if (
+      position.row < source.top ||
+      position.row > source.bottom ||
+      position.column < source.left ||
+      position.column > source.right
+    )
+      return true;
+  }
+  return false;
+}
+
+/** Sort entire selected rows together using the active column as the key. */
+export function sortedRangeCopies(
+  cells: SpreadsheetCells,
+  values: SpreadsheetCalculation,
+  selection: CellSelection,
+  descending: boolean,
+  keyColumn = selection.anchor.column
+): CellCopy[] {
+  const { top, bottom, left, right } = selectionBounds(selection);
+  const rows = Array.from(
+    { length: bottom - top + 1 },
+    (_, index) => top + index
+  );
+  const key = (row: number) => {
+    const address = cellAddress({ row, column: keyColumn });
+    return (
+      values[address]?.number ??
+      values[address]?.display ??
+      cells[address]?.value ??
+      ''
+    );
+  };
+  rows.sort((a, b) => {
+    const first = key(a);
+    const second = key(b);
+    // Empty rows stay at the bottom for either direction.
+    if (first === '' || second === '')
+      return Number(first === '') - Number(second === '');
+    const order =
+      typeof first === 'number' && typeof second === 'number'
+        ? first - second
+        : String(first).localeCompare(String(second), 'en', {
+            numeric: true,
+            sensitivity: 'base',
+          });
+    return (descending ? -order : order) || a - b;
+  });
+  return rows.flatMap((row, index) =>
+    Array.from({ length: right - left + 1 }, (_, offset) => {
+      const column = left + offset;
+      return {
+        from: { row, column },
+        to: { row: top + index, column },
+        cell: cells[cellAddress({ row, column })] ?? { value: '' },
+      };
+    })
+  );
+}
+
+export function trimWhitespaceEdits(
+  cells: SpreadsheetCells,
+  selection: CellSelection
+): SpreadsheetCellEdits {
+  const edits: SpreadsheetCellEdits = {};
+  for (const address of selectionAddresses(selection)) {
+    const value = cells[address]?.value;
+    if (!value || (value.startsWith('=') && cells[address]?.format !== 'text'))
+      continue;
+    const trimmed = cellTextParts(value)
+      .map((part) =>
+        part.mention ? part.text : part.text.replace(/[\t ]+/g, ' ')
+      )
+      .join('')
+      .trim();
+    if (trimmed !== value) edits[address] = { value: trimmed };
+  }
+  return edits;
+}
+
+/** Import into the selection; a failed validation produces no partial edits. */
+export function csvImportEdits(text: string, selection: CellSelection) {
+  if (text.length > CSV_MAX_BYTES)
+    throw new Error(`Import a CSV up to ${CSV_MAX_BYTES / 1024 / 1024} MB.`);
+  if (!text.replace(/^\uFEFF/, '')) throw new Error('This CSV is empty.');
+  const rows = parseClipboard(text.replace(/^\uFEFF/, ''), ',');
+  const width = rows.reduce((widest, row) => Math.max(widest, row.length), 0);
+  const start = selection.anchor;
+  const lastRow = start.row + rows.length;
+  if (!rows.length || !width) throw new Error('This CSV is empty.');
+  if (
+    lastRow > SPREADSHEET_MAX_ROWS ||
+    start.column + width > SPREADSHEET_MAX_COLUMNS
+  )
+    throw new Error(
+      `The imported table must fit within ${SPREADSHEET_MAX_ROWS.toLocaleString('en-US')} rows and ${SPREADSHEET_MAX_COLUMNS.toLocaleString('en-US')} columns.`
+    );
+  const edits: SpreadsheetCellEdits = {};
+  rows.forEach((row, index) => {
+    for (let column = 0; column < width; column++) {
+      const value = row[column] ?? '';
+      if (value.length > SPREADSHEET_MAX_CELL_LENGTH)
+        throw new Error('A cell can contain up to 10,000 characters.');
+      edits[
+        cellAddress({ row: start.row + index, column: start.column + column })
+      ] = { value: csvCellValue(value) };
+    }
+  });
+  return {
+    edits,
+    rowCount: lastRow,
+    selection: {
+      anchor: start,
+      focus: { row: lastRow - 1, column: start.column + width - 1 },
+    },
+  };
+}
+
+export type FindOptions = {
+  matchCase: boolean;
+  entireCell: boolean;
+  formulas: boolean;
+};
+
+export function findCells(
+  cells: SpreadsheetCells,
+  values: SpreadsheetCalculation,
+  query: string,
+  options: FindOptions
+) {
+  if (!query) return [];
+  const normalize = (value: string) =>
+    options.matchCase ? value : value.toLocaleLowerCase();
+  const needle = normalize(query);
+  return [...new Set([...Object.keys(cells), ...Object.keys(values)])]
+    .filter((address) => {
+      const text = normalize(
+        cellPlainText(
+          options.formulas
+            ? (cells[address]?.value ?? '')
+            : (values[address]?.display ?? cells[address]?.value ?? '')
+        )
+      );
+      return options.entireCell ? text === needle : text.includes(needle);
+    })
+    .sort((a, b) => {
+      const first = positionFromAddress(a)!;
+      const second = positionFromAddress(b)!;
+      return first.row - second.row || first.column - second.column;
+    });
+}
+
+export function replaceCellText(
+  text: string,
+  query: string,
+  replacement: string,
+  options: FindOptions
+) {
+  if (!query) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = options.entireCell ? `^${escaped}$` : escaped;
+  const parts = cellTextParts(text);
+  if (options.entireCell && parts.some((part) => part.mention)) return text;
+  return parts
+    .map((part) =>
+      part.mention
+        ? part.text
+        : part.text.replace(
+            new RegExp(pattern, options.matchCase ? 'g' : 'gi'),
+            () => replacement
+          )
+    )
+    .join('');
+}

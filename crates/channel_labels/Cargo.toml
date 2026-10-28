@@ -1,0 +1,43 @@
+[package]
+edition = "2024"
+name = "channel_labels"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "ports",
+]
+outbound = ["ports"]
+ports = ["dep:tokio", "dep:tracing"]
+postgres = ["dep:sqlx", "outbound"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+cowlike = { path = "../cowlike" }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model-error-response = { path = "../model-error-response", optional = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

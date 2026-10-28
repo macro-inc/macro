@@ -1,0 +1,16 @@
+---
+title: DeleteChannelMessage
+description: >-
+  Delete a channel message or thread reply.
+---
+
+# DeleteChannelMessage
+
+Delete a channel message or thread reply. The channel keeps a 'message deleted' placeholder; this cannot be undone. Users can delete their own messages and messages sent by bots; channel admins and owners can delete any message. Find message ids with ReadChannelMessages or ReadChannelThread. Use only when the user explicitly asks to delete a message.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channelId` | string | Yes | Channel id containing the message. |
+| `messageId` | string | Yes | Id of the message to delete. |

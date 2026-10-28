@@ -6,3 +6,9 @@ pub mod header_names {
 }
 
 pub const USER_PEER_D1_BINDING: &str = "USER_PEER_MAPPING";
+
+/// Author of operations written without a user: snapshots that services
+/// initialize documents from (markdown and Notion imports, uploads, copies of
+/// unattributed history). Keep in sync with the web history UI
+/// (`SYSTEM_AUTHOR_ID`).
+pub const SYSTEM_AUTHOR_ID: &str = "system";

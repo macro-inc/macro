@@ -25,6 +25,7 @@ pub(crate) async fn drafts_preview_cursor(
             t.provider_id,
             t.inbox_visible,
             t.is_read,
+            t.is_signal,
             t.effective_ts AS "sort_ts!",
             t.created_at AS "created_at!",
             t.updated_at AS "updated_at!",
@@ -37,11 +38,8 @@ pub(crate) async fn drafts_preview_cursor(
                 SELECT EXISTS (
                     SELECT 1
                     FROM email_messages m_imp
-                    JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE m_imp.thread_id = t.id
-                      AND l.name = 'IMPORTANT'
-                      AND l.link_id = t.link_id
+                    JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                    WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                 )
             ) AS "is_important!",
             c.email_address AS "sender_email?",
@@ -58,6 +56,7 @@ pub(crate) async fn drafts_preview_cursor(
                 t.link_id,
                 t.inbox_visible,
                 t.is_read,
+                t.is_signal,
                 t.project_id,
                 ldpt.latest_draft_ts AS created_at,
                 ldpt.latest_draft_ts AS updated_at,
@@ -71,13 +70,9 @@ pub(crate) async fn drafts_preview_cursor(
                 -- This sub-subquery efficiently finds the latest draft timestamp for every thread.
                 SELECT m.thread_id, MAX(m.updated_at) as latest_draft_ts
                 FROM email_messages m
-                -- we only display macro drafts, not drafts created in gmail
-                WHERE m.link_id = ANY($1) AND m.is_draft = TRUE AND m.internal_date_ts IS NULL
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_message_labels ml
-                      JOIN email_labels l ON ml.label_id = l.id
-                      WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = m.link_id
-                  )
+                -- Include Macro drafts and imported drafts supported by the provider adapter.
+                WHERE m.link_id = ANY($1) AND m.is_draft = TRUE AND (m.internal_date_ts IS NULL OR m.mailbox_state IS NOT NULL)
+                  AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
                 GROUP BY m.thread_id
             ) ldpt
             JOIN email_threads t ON ldpt.thread_id = t.id
@@ -104,13 +99,9 @@ pub(crate) async fn drafts_preview_cursor(
             FROM email_messages m
             WHERE m.thread_id = t.id
               AND m.is_draft = TRUE
-              -- we only display macro drafts, not drafts created in gmail
-              AND m.internal_date_ts IS NULL
-              AND NOT EXISTS (
-                  SELECT 1 FROM email_message_labels ml
-                  JOIN email_labels l ON ml.label_id = l.id
-                  WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = t.link_id
-              )
+              -- Include Macro drafts and imported drafts supported by the provider adapter.
+              AND (m.internal_date_ts IS NULL OR m.mailbox_state IS NOT NULL)
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
             ORDER BY m.updated_at DESC
             LIMIT 1
         ) AS lmp

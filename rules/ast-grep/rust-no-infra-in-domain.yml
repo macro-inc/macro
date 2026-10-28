@@ -1,0 +1,31 @@
+id: rust-no-infra-in-domain
+language: rust
+severity: warning
+message: Domain modules must not reference infrastructure clients (AWS SDKs, redis, reqwest, opensearch, kafka) — put them in outbound adapters behind a port.
+note: |-
+  Hexagonal architecture (cloud-storage-hexagonal-architecture skill): the
+  domain layer depends only on its own models and port traits. Wrap the
+  client call in an outbound adapter and expose it through a port, the same
+  way sqlx is handled (see rust-no-sqlx-in-domain). Tests in domain test.rs
+  files are exempt. 2 legacy uses exist (the DynamoDB-backed backfill job
+  registry in search_processing_service and mcp_client's reqwest transport
+  construction) — don't add new ones.
+files:
+  - crates/**/src/domain/**
+  - services/**/src/domain/**
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  any:
+    - kind: scoped_identifier
+      regex: ^(aws_sdk_\w+|aws_config|redis|reqwest|opensearch|rdkafka)\b
+      not:
+        inside:
+          kind: scoped_identifier
+    - kind: scoped_type_identifier
+      regex: ^(aws_sdk_\w+|aws_config|redis|reqwest|opensearch|rdkafka)\b
+    - kind: use_declaration
+      regex: ^use (aws_sdk_\w+|aws_config|redis|reqwest|opensearch|rdkafka)\b

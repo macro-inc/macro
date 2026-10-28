@@ -1,0 +1,60 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 237
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/todo_plan.sse
+---
+
+--- thinking ---
+Planning a three-item todo list for adding a CI badge to the README. I'll mark each item complete as I finish it.
+
+I'll use the TodoWrite tool to create the task list. I won't edit files or push changes.
+
+I'll read the README and CI configuration files now while creating the task list.
+--- assistant ---
+I'll create a three-item todo list for adding a CI badge, then work through each item by reading the repo only—no edits, commits, or PRs.
+--- thinking ---
+Found the README and CI workflow files.
+
+Identified `code_check_cloud_storage.yml` as the primary CI workflow. Checking the git remote URL.
+--- assistant ---
+I found the root README and GitHub workflows. Next I’ll identify the primary CI workflow and the badge URL.
+--- thinking ---
+The primary CI workflow is `code_check_cloud_storage.yml` named "cloud storage code check".
+
+The repository is `macro-inc/macro`. The CI badge SVG and link URLs are ready. Item 1 will be marked complete next. Item 2 will follow.
+--- assistant ---
+Primary CI is `code_check_cloud_storage.yml` on `macro-inc/macro`. I’ll mark that done and pick where the badge should sit in the README.
+--- thinking ---
+Items 2 and 3 can now be completed.
+
+The CI badge will be placed right after the header navigation links in the centered layout, following standard GitHub README conventions.
+
+The exact CI badge markdown is ready. Item 2 will be marked complete, and item 3 will be completed by recording the change in the response.
+--- assistant ---
+Placement is clear: a CI badge belongs in the centered header after the nav links. I’ll record the exact markdown next, still without editing the file.
+--- thinking ---
+Item 3 is now marked complete after recording the exact README change.All three todo items are complete. I am preparing a brief summary of the completed tasks.
+
+I located the README file. I identified where to place the CI badge. I determined the exact markdown syntax. No files were modified.
+--- assistant ---
+I created a three-item todo list and worked through each one by reading the repo only. All three are marked **completed**. No files were edited, and nothing was committed, pushed, or opened as a PR.
+
+**1. CI workflow and badge URL**  
+The main backend CI workflow is `.github/workflows/code_check_cloud_storage.yml` (`cloud storage code check`) on `macro-inc/macro`. Badge URL:
+
+`https://github.com/macro-inc/macro/actions/workflows/code_check_cloud_storage.yml/badge.svg`
+
+**2. README placement**  
+The root `README.md` has a centered header (logo + nav links) and no CI badge today. The natural spot is inside that centered block, after the nav links (around line 23).
+
+**3. Exact change to make (not applied)**  
+Insert this after the `</p>` in the header:
+
+```markdown
+  <p>
+    <a href="https://github.com/macro-inc/macro/actions/workflows/code_check_cloud_storage.yml">
+      <img alt="CI" src="https://github.com/macro-inc/macro/actions/workflows/code_check_cloud_storage.yml/badge.svg" />
+    </a>
+  </p>
+```

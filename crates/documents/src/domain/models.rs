@@ -1,15 +1,15 @@
 //! Domain models for the documents crate.
 
-use activity::{Actor, Attribution};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::DocumentResponseMetadata;
 use model::document::{DocumentMetadata, FileType};
+use model_owner::Owner;
+use models_permissions::share_permission::{LinkShareState, TeamLinkShareDefault};
 
 use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
 use models_properties::api::requests::SetPropertyValue;
-use serde_json::Value;
 
 /// SHA256 hash of an empty string — used for empty markdown documents (tasks).
 pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -72,8 +72,8 @@ pub struct CopyDocumentResponse {
 pub struct CopyDocumentRepoArgs {
     /// The original document metadata to copy from.
     pub original_document: DocumentMetadata,
-    /// The new owner/copier user ID.
-    pub user_id: MacroUserIdStr<'static>,
+    /// Who owns the copy.
+    pub owner: Owner,
     /// The name for the new document.
     pub document_name: String,
     /// The file type of the document.
@@ -91,6 +91,28 @@ pub struct TeamTaskMetadata {
     pub team_id: uuid::Uuid,
     /// Monotonic task number within the team.
     pub task_num: i32,
+}
+
+/// A task's number within its team, with the team's slug: `{team_slug}-{task_num}`.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TeamTaskNumber {
+    /// The slug of the team the task is numbered in.
+    pub team_slug: String,
+    /// Monotonic task number within the team.
+    pub task_num: i32,
+}
+
+/// What names a task outside Macro: its title, short id, and team number.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TaskIdentity {
+    /// The task document id.
+    pub document_id: String,
+    /// The task title.
+    pub title: String,
+    /// The short id of the task document.
+    pub short_id: String,
+    /// The task's team number, when it belongs to a team.
+    pub team_task: Option<TeamTaskNumber>,
 }
 
 /// User/team information needed to build a task branch name.
@@ -287,6 +309,39 @@ impl GithubPullRequestsResponse {
     }
 }
 
+/// The most pull requests one task lookup answers, one Reviews page.
+pub const MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP: usize = 100;
+
+/// Request body for looking up the tasks linked to GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksRequest {
+    /// Pull request `owner/repo/pull/number` keys, at most 100.
+    pub github_keys: Vec<String>,
+}
+
+/// The tasks linked to one GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasks {
+    /// The pull request's `owner/repo/pull/number` key, as requested.
+    pub github_key: String,
+    /// Ids of the task documents the pull request references, oldest link first. Empty when
+    /// the caller cannot see the pull request. The caller may still lack access to a task.
+    pub task_ids: Vec<String>,
+}
+
+/// The tasks linked to each requested GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksResponse {
+    /// One entry per requested pull request, in request order.
+    pub pull_requests: Vec<GithubPullRequestTasks>,
+}
+
 /// Request body for copying a document.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -306,47 +361,88 @@ pub struct CopyDocumentQueryParams {
     pub version_id: Option<i64>,
 }
 
-/// Arguments for creating a document in the repository.
-pub struct CreateDocumentRepoArgs {
+/// How a new document's link share is initialized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InitialLinkShare {
+    /// The entity-type default (md is PUBLIC/Edit), overridden only by the owner's team default.
+    #[default]
+    EntityDefault,
+    /// Exactly this state, already resolved by the caller. The document never carries the
+    /// entity-type default, not even between creation and a later update.
+    Exact(LinkShareState),
+}
+
+/// A document to create, before its owner is known.
+///
+/// The service derives the owner from the verified creation principal.
+pub struct NewDocument {
     /// Optional user-provided document ID.
     pub id: Option<uuid::Uuid>,
     /// SHA256 hash of the document content.
     pub sha: String,
     /// Document name without extension.
     pub document_name: String,
-    /// The owner/creator of the document.
-    pub user_id: MacroUserIdStr<'static>,
     /// File type of the document.
     pub file_type: Option<FileType>,
     /// Project to associate the document with.
     pub project_id: Option<uuid::Uuid>,
-    /// Team to use when assigning a per-team task number.
+    /// Team to use when assigning a per-team task number, never sharing authority.
     pub team_id: Option<uuid::Uuid>,
-    /// Email attachment to link (internal only).
-    pub email_attachment_id: Option<uuid::Uuid>,
+    /// Explicit task creation consent. Initializes Edit using the persisted owner's team.
+    /// Ordinary documents, snippets, and imports must leave this false.
+    pub share_with_team: bool,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Sub type of the document — task or snippet (MD files only).
     pub sub_type: Option<document_sub_type::DocumentSubType>,
     /// Whether to skip adding to user history.
     pub skip_history: bool,
-    /// Explicit activity attribution. Unset uses [`Self::resolved_attribution`].
-    pub attribution: Option<Attribution>,
+    /// How the new document's link share is initialized.
+    pub initial_link_share: InitialLinkShare,
 }
 
-impl CreateDocumentRepoArgs {
-    /// Resolves who created this document for activity recording.
-    ///
-    /// Ownership (`user_id`) is unchanged. Email auto-imports default to
-    /// the system principal so they do not appear on the owner's feed.
-    pub fn resolved_attribution(&self) -> Attribution {
-        self.attribution.clone().unwrap_or_else(|| {
-            if self.email_attachment_id.is_some() {
-                Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
-            } else {
-                Attribution::direct(Actor::new_from_user(self.user_id.clone()))
-            }
-        })
+/// Arguments for creating a document in the repository.
+pub struct CreateDocumentRepoArgs {
+    /// Who owns the document.
+    pub owner: Owner,
+    /// The document to create.
+    pub document: NewDocument,
+}
+
+/// Arguments for importing an email attachment as a document.
+pub struct ImportEmailAttachmentRepoArgs {
+    /// The email attachment being imported.
+    pub email_attachment_id: uuid::Uuid,
+    /// The mailbox owner, who owns the imported document.
+    pub owner: MacroUserIdStr<'static>,
+    /// How to create the document when no reusable import exists.
+    pub document: NewDocument,
+}
+
+/// The team an owner resolves to, with the team's link-share preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OwnerTeam {
+    /// The owner's team.
+    pub team_id: uuid::Uuid,
+    /// The team's default link share for new documents.
+    pub default_link_share: TeamLinkShareDefault,
+}
+
+/// Fact returned by the repository for an email-attachment import.
+#[derive(Clone, Debug)]
+pub enum EmailImportRepoOutcome {
+    /// A new `Document` row was inserted and linked to the attachment.
+    Created(DocumentMetadata),
+    /// An existing live email-imported document was linked, or was already linked.
+    Reused(DocumentMetadata),
+}
+
+impl EmailImportRepoOutcome {
+    /// Metadata of the created or reused document.
+    pub fn metadata(&self) -> &DocumentMetadata {
+        match self {
+            Self::Created(metadata) | Self::Reused(metadata) => metadata,
+        }
     }
 }
 
@@ -386,6 +482,9 @@ pub struct EditDocumentRepoArgs {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Owner-authorized conditional team update, applied in the metadata transaction.
+    pub team_share:
+        Option<models_permissions::share_permission::team_share::AuthorizedTeamShareCommand>,
     /// Whether to revoke direct non-owner user access in the edit transaction.
     pub revoke_non_owner_user_access: bool,
     /// New file type (None = no change).
@@ -450,12 +549,36 @@ pub struct CreateMarkdownDocumentRequest {
     pub skip_history: bool,
 }
 
+/// Request for a backend-initialized native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentRequest {
+    /// Canvas name.
+    pub document_name: String,
+    /// Optional parent project.
+    pub project_id: Option<uuid::Uuid>,
+}
+
 /// Response for creating a markdown document.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMarkdownDocumentResponse {
     /// The document ID of the created markdown document
+    pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
+}
+
+/// Response for creating a native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentResponse {
+    /// The document ID of the created native Canvas
     pub document_id: String,
     /// Metadata for the created document
     pub document_metadata: DocumentResponseMetadata,
@@ -581,7 +704,7 @@ pub struct SystemSkillsResponse {
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentTeamShareResponse {
-    /// Whether the document is currently shared with the owner's team.
+    /// Whether explicit team sharing is enabled; inherited team access does not count.
     pub shared_with_team: bool,
     /// The owner's team the document is (or would be) shared with. `None` when
     /// the owner does not belong to a team.
@@ -603,7 +726,7 @@ pub struct SetDocumentTeamShareRequest {
 pub struct DocumentTeamShare {
     /// The owner's team, when the owner belongs to one.
     pub team_id: Option<uuid::Uuid>,
-    /// Whether a team-source access row exists for the document.
+    /// Whether the document has an explicit canonical team-share level.
     pub shared_with_team: bool,
 }
 
@@ -614,68 +737,4 @@ impl From<DocumentTeamShare> for DocumentTeamShareResponse {
             team_id: value.team_id,
         }
     }
-}
-
-/// A comment thread attached to a document.
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
-#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct Thread {
-    /// The unique id of the thread.
-    pub thread_id: i64,
-    /// The user id of the thread owner.
-    pub owner: String,
-    /// Whether the thread has been resolved.
-    pub resolved: bool,
-    /// The document the thread is attached to.
-    pub document_id: String,
-    /// When the thread was created.
-    pub created_at: Option<DateTime<Utc>>,
-    /// When the thread was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
-    /// When the thread was deleted, if ever.
-    pub deleted_at: Option<DateTime<Utc>>,
-    /// Arbitrary thread metadata.
-    pub metadata: Option<Value>,
-}
-
-/// A single comment in a thread.
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
-#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct Comment {
-    /// The unique id of the comment.
-    pub comment_id: i64,
-    /// The thread this comment belongs to.
-    pub thread_id: i64,
-    /// Ordering position within the thread.
-    pub order: Option<i32>,
-    /// The user id of the comment owner.
-    pub owner: String,
-    /// Sender display string.
-    pub sender: Option<String>,
-    /// Comment body.
-    pub text: String,
-    /// Arbitrary comment metadata.
-    pub metadata: Option<Value>,
-    /// When the comment was created.
-    pub created_at: Option<DateTime<Utc>>,
-    /// When the comment was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
-    /// When the comment was deleted, if ever.
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
-/// A thread bundled together with its ordered comments.
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
-#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct CommentThread {
-    /// The thread metadata.
-    pub thread: Thread,
-    /// The comments in the thread, ordered by `createdAt` ASC.
-    pub comments: Vec<Comment>,
 }

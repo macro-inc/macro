@@ -3,9 +3,11 @@ import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { PluginManager, SelectionData } from '../plugins';
 import type { Action } from '../plugins/actions/types';
+import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
   ActionsOptions,
+  AgentCommandsOptions,
   EditorBuilder,
   EditorCallbacks,
   EditorConfig,
@@ -56,6 +58,10 @@ export class EditorConfigBuilder implements EditorBuilder {
     return this;
   }
 
+  withAppLinkResolver(resolveAppLink: MentionLinkResolver | undefined): this {
+    this.state.resolveAppLink = resolveAppLink;
+    return this;
+  }
   withTags(config: TagsOptions = {}): this {
     this.state.tags = {
       ...config,
@@ -125,8 +131,8 @@ export class EditorConfigBuilder implements EditorBuilder {
    * Implies `.withSelectionData()`. The link button is only shown when
    * `.withLinks({ floatingMenu: true })` is also enabled.
    */
-  withFloatingFormatMenu(): this {
-    this.state.floatingFormatMenu = true;
+  withFloatingFormatMenu(options?: { extendedInlineFormats?: boolean }): this {
+    this.state.floatingFormatMenu = options ?? true;
     this.state.selectionData = true;
     return this;
   }
@@ -177,6 +183,18 @@ export class EditorConfigBuilder implements EditorBuilder {
    */
   withSkills(): this {
     this.state.skills = true;
+    return this;
+  }
+
+  /**
+   * Enable the agent commands (`/`) typeahead menu — for agent composers.
+   * Lists skills, pull requests, and commands advertised over ACP;
+   * selecting one inserts `/name` as plain text, which is sent to the agent
+   * as ordinary prompt text. Shares the `/` trigger with the actions and
+   * skills menus, so it only takes effect when both are disabled.
+   */
+  withAgentCommands(config: AgentCommandsOptions): this {
+    this.state.agentCommands = config;
     return this;
   }
 

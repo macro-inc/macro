@@ -6,7 +6,7 @@ const BASE_TITLES: [&str; 6] = [
     "# Tone and Style",
     "# Math Rendering Rules",
     "# Citation Rules",
-    "# Mentioning documents, channels, channel messages, chats, projects, email threads, and calendar events",
+    "# Mentioning documents, people, dates, agent sessions, and other chips",
     "# Do Not Rules",
     "# Terms",
 ];
@@ -32,11 +32,7 @@ fn base_prompt_includes_channel_message_mention_format() {
             r#""blockName":"channel","blockParams":{"channel_message_id":"{message_id}"}"#
         )
     );
-    assert!(
-        rendered.contains(
-            "Do not link only the channel unless you are referring to the whole channel."
-        )
-    );
+    assert!(rendered.contains("mention that message, not just its channel"));
 }
 
 #[test]

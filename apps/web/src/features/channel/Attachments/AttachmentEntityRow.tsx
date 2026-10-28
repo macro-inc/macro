@@ -7,12 +7,12 @@ export function AttachmentEntityRow(props: {
   entity: EntityData;
   timestamp?: DateValue | null;
   senderId?: string;
-  onClick?: () => void;
+  onClick?: (event: MouseEvent) => void;
 }) {
   return (
     <Entity.Root
       entity={props.entity}
-      onClick={() => props.onClick?.()}
+      onClick={(event) => props.onClick?.(event)}
       class="flex items-center gap-2 min-h-10 px-6 text-sm hover:bg-hover w-full"
     >
       <div class="size-4 shrink-0">

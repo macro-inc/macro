@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="com.macro.auth.AuthActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
+        <!-- Only the fallback browser path uses this receiver. Auth Tab returns directly. -->
+        <activity
+            android:name="com.macro.auth.AuthRedirectActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="macro" android:host="android-auth" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

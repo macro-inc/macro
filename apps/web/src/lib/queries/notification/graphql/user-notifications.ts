@@ -16,11 +16,13 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
+  hasGraphqlCacheHost,
   mapGraphqlNotification,
 } from '@service-storage/graphql-soup';
 import { executeGraphqlUpdateNotifications } from '@service-storage/graphql-update-notifications';
 import { CombinedError } from '@urql/core';
-import type { Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
+import { registerNotificationReader } from '../revalidation';
 
 const DEFAULT_NOTIFICATION_LIMIT = 20;
 const MAX_NOTIFICATION_LIMIT = 500;
@@ -31,6 +33,8 @@ function normalizeLimit(limit?: number): number {
     : DEFAULT_NOTIFICATION_LIMIT;
 }
 
+// NOTIFIED_AT pages through the user's notified entities. A timestamp sort
+// would scan every accessible entity just to read a few notification edges.
 function soupInput(cursor: string | null, limit: number): SoupInput {
   return cursor
     ? { continuation: { cursor, expand: true } }
@@ -38,7 +42,7 @@ function soupInput(cursor: string | null, limit: number): SoupInput {
         initial: {
           expand: true,
           limit,
-          sortMethod: 'UPDATED_AT',
+          sortMethod: 'NOTIFIED_AT',
         },
       };
 }
@@ -52,7 +56,10 @@ export function selectGraphqlNotifications(
   for (const page of pages) {
     for (const entity of page.user.soup.items) {
       for (const record of entity.notifications) {
-        if (record.done === done && !notificationsById.has(record.id)) {
+        if (
+          (record.state === 'DONE') === done &&
+          !notificationsById.has(record.id)
+        ) {
           notificationsById.set(record.id, mapGraphqlNotification(record));
         }
       }
@@ -112,6 +119,17 @@ export function createGraphqlNotificationsQuery(
         selectGraphqlNotifications(pages, queryArgs.done ?? false),
     };
   });
+
+  onCleanup(
+    registerNotificationReader({
+      client: getGraphqlSoupClient,
+      isEnabled: () => query.isEnabled,
+      // Rows render each notification's cached state.
+      cacheMaintained: hasGraphqlCacheHost,
+      refresh: () =>
+        query.refetch({ requestPolicy: 'network-only', throwOnError: true }),
+    })
+  );
 
   return query;
 }

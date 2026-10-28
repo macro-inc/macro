@@ -27,6 +27,9 @@ impl SendMessageRequest {
         let msg = self.message;
 
         CreateDraftInput {
+            frozen_signature_html: None,
+            draft_generation: msg.draft_generation,
+            sender_email: None,
             db_id: msg.db_id,
             provider_id: msg.provider_id,
             replying_to_id: msg.replying_to_id,
@@ -60,6 +63,8 @@ impl SendMessageRequest {
             // The actor comes from the transport's auth context, never the
             // request body; the handler fills it in.
             actor: None,
+            draft_client_binding: None,
+            thread_client_binding: None,
         }
     }
 }

@@ -1,10 +1,10 @@
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 import { localE2ESeed } from './fixtures/local-e2e-seed';
 import {
-  fillEditable,
   gotoApp,
   LOCAL_E2E,
+  sendChannelMessage,
   uniqueE2EText,
 } from './helpers/local-app';
 
@@ -63,6 +63,8 @@ async function startInlineEditOfOwnMessage(
 
   await openSeededChannel(page, channelId);
   const message = await sendChannelMessage(page, channelId, messageText);
+  const input = page.locator(`[data-input-id="channel-input-${channelId}"]`);
+  await input.locator('[contenteditable="true"]').first().click();
   const messageId = await message.getAttribute('data-message-id');
   expect(messageId).toBeTruthy();
 
@@ -104,29 +106,4 @@ async function openSeededChannel(page: Page, channelId: string) {
   await expect(page.locator('[data-channel-message-list]')).toBeVisible({
     timeout: 30_000,
   });
-}
-
-async function sendChannelMessage(
-  page: Page,
-  channelId: string,
-  text: string
-): Promise<Locator> {
-  const input = page.locator(`[data-input-id="channel-input-${channelId}"]`);
-  const editable = input.locator('[contenteditable="true"]').first();
-  await fillEditable(editable, text);
-
-  const sendButton = input.locator('[data-input-action="send"]');
-  await expect(sendButton).toBeEnabled({ timeout: 10_000 });
-  await sendButton.click();
-
-  const message = page
-    .locator('[data-message]')
-    .filter({ hasText: text })
-    .last();
-  await expect(message).toBeVisible({ timeout: 30_000 });
-
-  // Keyboard selection starts from the channel input; clicking Send moved
-  // focus to the button, so return it to the input first.
-  await editable.click();
-  return message;
 }

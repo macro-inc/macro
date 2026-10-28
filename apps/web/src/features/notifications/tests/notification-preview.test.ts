@@ -13,7 +13,7 @@ function createEmailNotification(
     updated_at: new Date().toISOString(),
     viewed_at: null,
     deleted_at: null,
-    done: false,
+    state: 'unseen',
     sent: true,
     sender_id: senderId,
     notification_event_type: 'new_email',

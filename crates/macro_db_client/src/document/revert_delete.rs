@@ -10,7 +10,6 @@ pub async fn revert_delete_document(
 ) -> anyhow::Result<()> {
     let mut transaction = db.begin().await.context("unable to begin transaction")?;
 
-    // Remove deletedAt for document
     let document_owner = sqlx::query!(
         r#"
         UPDATE "Document"
@@ -25,7 +24,10 @@ pub async fn revert_delete_document(
     .await
     .context("unable to update document")?;
 
-    // Add document back to history
+    if let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) {
+        entity_registry_db_utils::clear_deleted(&mut transaction, document_uuid).await?;
+    }
+
     sqlx::query!(
         r#"
         INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
@@ -78,6 +80,7 @@ pub async fn revert_delete_document(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_user_id::cowlike::CowLike;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document")))]
@@ -183,6 +186,89 @@ mod tests {
         .await?;
 
         assert!(project_id.is_some());
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document")))]
+    async fn revert_delete_document_clears_entity_deleted_at(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        let document_id = uuid::Uuid::new_v4();
+        sqlx::query(
+            r#"
+            INSERT INTO "Document" (id, name, "fileType", owner, "deletedAt")
+            VALUES ($1, 'uuid-doc', 'md', 'macro|user@user.com', NOW())
+            "#,
+        )
+        .bind(document_id.to_string())
+        .execute(&pool)
+        .await?;
+
+        let mut transaction = pool.begin().await?;
+        entity_registry_db_utils::insert_entity(
+            &mut transaction,
+            entity_registry_db_utils::NewEntityRecord::new(
+                document_id,
+                entity_registry_db_utils::RegisteredEntityType::Document,
+                model_owner::Owner::User(
+                    macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")?
+                        .into_owned(),
+                ),
+            ),
+        )
+        .await?;
+        entity_registry_db_utils::mark_deleted(&mut transaction, document_id, chrono::Utc::now())
+            .await?;
+        transaction.commit().await?;
+
+        revert_delete_document(&pool, &document_id.to_string(), None).await?;
+
+        let deleted_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+            r#"
+            SELECT deleted_at FROM entity WHERE id = $1
+            "#,
+        )
+        .bind(document_id)
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(deleted_at, None);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document")))]
+    async fn revert_delete_document_succeeds_without_entity_row(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        let document_id = uuid::Uuid::new_v4();
+        sqlx::query(
+            r#"
+            INSERT INTO "Document" (id, name, "fileType", owner, "deletedAt")
+            VALUES ($1, 'uuid-doc', 'md', 'macro|user@user.com', NOW())
+            "#,
+        )
+        .bind(document_id.to_string())
+        .execute(&pool)
+        .await?;
+
+        revert_delete_document(&pool, &document_id.to_string(), None).await?;
+
+        let document_deleted_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+            r#"
+            SELECT "deletedAt" FROM "Document" WHERE id = $1
+            "#,
+        )
+        .bind(document_id.to_string())
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(document_deleted_at, None);
+
+        let entity_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM entity WHERE id = $1")
+            .bind(document_id)
+            .fetch_one(&pool)
+            .await?;
+        assert_eq!(entity_count, 0);
 
         Ok(())
     }

@@ -22,7 +22,9 @@ import { User } from '../users/user';
  * The signing secret is only ever returned once, from {@link create}; it's
  * exposed there as {@link Webhook.signingSecret}. Save it — patches, gets,
  * and `byId` handles never carry it again — and pass it to
- * `MacroOpts.webhookSecret` so `MacroEvents` can verify deliveries.
+ * `MacroOpts.webhookSecret` so `macro.events.webhook()` can verify
+ * deliveries. Live SSE via `macro.events.listen()` does not use a
+ * persisted webhook or signing secret.
  */
 export class Webhook extends MacroEntity<WebhookRecord> {
   /**

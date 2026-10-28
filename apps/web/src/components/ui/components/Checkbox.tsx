@@ -1,6 +1,6 @@
+import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
-import CheckIcon from '@phosphor/check.svg';
-import MinusIcon from '@phosphor/minus.svg';
 import type { ComponentProps } from 'solid-js';
 import { splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
@@ -27,7 +27,7 @@ type LabelProps = ComponentProps<typeof KobalteCheckbox.Label>;
 
 const CONTROL_CLASS = cn(
   'inline-flex items-center justify-center size-4 shrink-0 rounded-sm text-surface',
-  'bg-surface border border-edge',
+  'bg-surface border-1 border-edge',
   'data-checked:bg-accent data-checked:border-accent',
   'data-indeterminate:bg-accent data-indeterminate:border-accent',
   'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
@@ -69,12 +69,25 @@ function CheckboxLabel(props: LabelProps) {
   return <KobalteCheckbox.Label class={cn(local.class)} {...rest} />;
 }
 
+/**
+ * A Kobalte checkbox with the app's control styling, composed from slots so
+ * the label, description, and error message are yours to place.
+ *
+ * @do Always render a `Checkbox.Label`, even when the visible text sits
+ *   elsewhere.
+ * @do Use `indeterminate` on a select-all that only covers part of its group.
+ * @do Use `InlineCheckbox` when the whole row is already clickable.
+ * @dont Do not use a checkbox for an immediate action — that is a ToggleSwitch
+ *   or a Button.
+ * @dont Do not add `Checkbox.Input` yourself; `Checkbox.Control` already
+ *   renders one.
+ */
 export const Checkbox = Object.assign(
   (props: CheckboxProps) => {
     const [local, rest] = splitProps(props, ['class']);
     return (
       <KobalteCheckbox
-        class={cn('inline-flex items-center gap-2', local.class)}
+        class={cn('relative inline-flex items-center gap-2', local.class)}
         {...rest}
       />
     );
@@ -110,7 +123,7 @@ export const InlineCheckbox = (props: { checked: boolean }) => (
       'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
       props.checked
         ? 'bg-accent text-surface'
-        : 'bg-transparent border border-edge-muted text-transparent'
+        : 'bg-transparent border-1 border-edge-muted text-transparent'
     )}
   >
     <CheckIcon class="size-2.5" />

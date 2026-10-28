@@ -20,9 +20,15 @@ function optionLabel(option: PropertyOptionResponse): string {
  * Resolves the tags already present in soup properties without initializing
  * any edit mutations. Virtual rows use this read-only model until a picker is
  * actually opened.
+ *
+ * `inFlightOptionIdsForDefinition` overlays pending selections, including edits
+ * waiting for the per-entity mutation scope before writing to the cache.
  */
 export function useSoupResolvedTags(
-  properties: Accessor<SoupProperty[] | undefined>
+  properties: Accessor<SoupProperty[] | undefined>,
+  inFlightOptionIdsForDefinition?: (
+    definitionId: string
+  ) => string[] | undefined
 ): Accessor<ResolvedTag[]> {
   const tagSets = useTagSets();
   const tagOptionById = useTagOptionById();
@@ -39,9 +45,12 @@ export function useSoupResolvedTags(
         (candidate) => candidate.definition.id === definitionId
       );
       const value = property?.value;
-      if (value?.type !== 'SelectOption') continue;
+      const optionIds =
+        inFlightOptionIdsForDefinition?.(definitionId) ??
+        (value?.type === 'SelectOption' ? value.value : undefined);
+      if (!optionIds) continue;
 
-      for (const optionId of value.value) {
+      for (const optionId of optionIds) {
         const tagOption = options.get(optionId);
         if (!tagOption) continue;
         resolved.push({

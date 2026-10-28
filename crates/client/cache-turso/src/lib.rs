@@ -12,17 +12,19 @@
 mod driver;
 mod error;
 mod key;
+pub mod query_telemetry;
 mod storage;
 
 pub use error::{PhysicalResetReason, TursoStorageError};
 pub use storage::{
-    STORAGE_SCHEMA_VERSION, TursoStorage, TursoStorageCloseOutcome, TursoStorageOpenOutcome,
+    QueuedMutationCount, STORAGE_SCHEMA_VERSION, TursoStorage, TursoStorageCloseOutcome,
+    TursoStorageOpenOutcome,
 };
 
 #[cfg(target_arch = "wasm32")]
 pub use storage::{
     HealthyTursoStorageClosed, ResetRequiredTursoStorageClosed, TursoStorageCloseFailure,
-    TursoStorageOpenFailure, TursoStorageResetFailure,
+    TursoStorageOpenFailure, TursoStorageResetFailure, count_queued_mutations,
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use storage::{TursoFileDatabase, TursoMemoryDatabase};

@@ -1,0 +1,128 @@
+//! Port definitions for backend-owned document creation.
+
+use std::future::Future;
+use std::sync::Arc;
+
+use model_owner::CreationPrincipal;
+
+use crate::domain::content::DocumentContent;
+use crate::domain::models::{CreateTaskRequest, DocumentError, NewDocument};
+use crate::domain::response::CreateDocumentResponseData;
+
+/// Uploaded document bytes and metadata for a presigned object-storage URL.
+pub struct DocumentBytesUpload {
+    /// Presigned URL to upload bytes to.
+    pub presigned_url: String,
+    /// Content type to send with the upload.
+    pub content_type: String,
+    /// Base64-encoded SHA-256 checksum to send with the upload.
+    pub base64_sha256: String,
+    /// Bytes to upload.
+    pub bytes: Vec<u8>,
+}
+
+/// Uploads document bytes to object storage using a presigned URL.
+pub trait DocumentBytesUploadPort: Send + Sync {
+    /// Upload document bytes.
+    fn upload_document_bytes(
+        &self,
+        upload: DocumentBytesUpload,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+}
+
+/// Service operations needed by backend-owned document creation.
+pub trait DocumentCreationService: Send + Sync {
+    /// Create a document metadata row and any service-owned creation side effects.
+    fn create_document(
+        &self,
+        principal: &CreationPrincipal,
+        document: NewDocument,
+        job_id: Option<String>,
+    ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
+
+    /// Initialize a newly created Canvas and mark its shared content ready.
+    /// On failure, compensate any possibly-created sync snapshot.
+    fn initialize_canvas(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Assign task properties to a markdown task document.
+    fn handle_task_properties(
+        &self,
+        principal: &CreationPrincipal,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Mark a created document's upload/finalization lifecycle as complete.
+    fn mark_document_uploaded(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Set a created document's persisted content lifecycle metadata.
+    fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Clean up a document that failed after its database row was created.
+    fn cleanup_created_document(&self, document_id: &str) -> impl Future<Output = ()> + Send;
+}
+
+impl<T> DocumentCreationService for Arc<T>
+where
+    T: DocumentCreationService + ?Sized,
+{
+    async fn create_document(
+        &self,
+        principal: &CreationPrincipal,
+        document: NewDocument,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        (**self).create_document(principal, document, job_id).await
+    }
+
+    async fn initialize_canvas(&self, document_id: &str) -> Result<(), DocumentError> {
+        (**self).initialize_canvas(document_id).await
+    }
+
+    async fn handle_task_properties(
+        &self,
+        principal: &CreationPrincipal,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        (**self)
+            .handle_task_properties(principal, document_id, request)
+            .await
+    }
+
+    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
+        (**self).mark_document_uploaded(document_id).await
+    }
+
+    async fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<(), DocumentError> {
+        (**self).set_document_content(document_id, content).await
+    }
+
+    async fn cleanup_created_document(&self, document_id: &str) {
+        (**self).cleanup_created_document(document_id).await
+    }
+}
+
+/// Inbound service for saving file bytes as a document using the existing upload lifecycle.
+pub trait DocumentUploadService: Send + Sync {
+    /// Validate the destination and file, create the document, and upload its bytes.
+    fn upload_file(
+        &self,
+        principal: &CreationPrincipal,
+        upload: crate::domain::create::upload::NewFileUpload,
+    ) -> impl Future<Output = Result<crate::domain::create::CreatedDocument, DocumentError>> + Send;
+}

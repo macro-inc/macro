@@ -1,0 +1,4545 @@
+use super::*;
+use crate::domain::error::{
+    FailureLink, FailureNotice, FailureNoticeKind, PromptRefusal, SessionError,
+};
+use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Truncation};
+use crate::domain::journal::NativeRecord;
+use crate::domain::model::{
+    ConversationLine, ConversationSpeaker, McpHeader, McpServer, McpTransport, RepoUrl, RunListing,
+    RunOutcome, RunStatus,
+};
+use crate::domain::ports::{NoArtifactStore, StreamConnectError};
+use crate::testing::{CursorCall, FakeCursor, FixedChooser, RecordingNotifier};
+use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
+use std::path::Path;
+
+type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser, NoArtifactStore>;
+
+fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifier) {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        notifier.clone(),
+        FixedChooser(repo.clone(), repo.is_some()),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    ));
+    (service, cursor, notifier)
+}
+
+/// Agent text chunks, in delivery order.
+fn agent_texts(updates: &[(SessionId, SessionUpdate)]) -> Vec<String> {
+    updates
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+/// User text chunks, in delivery order.
+fn user_texts(updates: &[(SessionId, SessionUpdate)]) -> Vec<String> {
+    updates
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::UserMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+fn ready_for_sync(service: &Service, id: &SessionId) -> bool {
+    service
+        .session(id)
+        .expect("session exists")
+        .state
+        .lock()
+        .expect("state poisoned")
+        .ready_for_sync
+}
+
+/// The session's run-delivery watermark.
+fn last_run(service: &Service, id: &SessionId) -> Option<CursorRunId> {
+    service
+        .session(id)
+        .expect("session exists")
+        .state
+        .lock()
+        .expect("state poisoned")
+        .last_run
+        .clone()
+}
+
+/// The client's standard load that a reload requirement asks for: the only
+/// path recovered history reaches the client through. Returns what it showed.
+async fn load(
+    service: &Service,
+    id: &SessionId,
+    notifier: &RecordingNotifier,
+) -> Vec<(SessionId, SessionUpdate)> {
+    let before = notifier.updates().len();
+    service.replay_session(id).await.expect("load").complete();
+    assert!(
+        ready_for_sync(service, id),
+        "a successful load re-enables sync"
+    );
+    notifier.updates()[before..].to_vec()
+}
+
+fn line(speaker: ConversationSpeaker, text: &str) -> ConversationLine {
+    ConversationLine {
+        speaker,
+        text: text.to_owned(),
+    }
+}
+
+fn finished(run: &str) -> CursorEvent {
+    CursorEvent::Result {
+        run_id: CursorRunId::new(run),
+        status: RunStatus::Finished,
+        text: None,
+        duration_ms: Some(1),
+        git: None,
+    }
+}
+
+fn cancelled(run: &str) -> CursorEvent {
+    CursorEvent::Result {
+        run_id: CursorRunId::new(run),
+        status: RunStatus::Cancelled,
+        text: None,
+        duration_ms: Some(1),
+        git: None,
+    }
+}
+
+#[tokio::test]
+async fn active_turn_is_reported_while_cursor_is_working() {
+    let (service, _cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let stored = service.session(&session).expect("session exists");
+    let turn = stored.turn_gate.lock().await;
+    assert!(service.has_active_turn());
+
+    drop(turn);
+    assert!(!service.has_active_turn());
+}
+
+#[tokio::test]
+async fn first_prompt_creates_the_agent_with_the_session_repo() {
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
+    let (service, cursor, notifier) = service(Some(repo.clone()));
+    let session = service.new_session(Path::new("/workspace"), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "hello".to_owned(),
+        })
+        .expect("stream open");
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = service
+        .prompt(&session, "do it")
+        .await
+        .expect("prompt runs");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.calls(),
+        vec![CursorCall::CreateAgent(
+            "do it".to_owned(),
+            Some(repo),
+            true,
+            Vec::new(),
+            None
+        )]
+    );
+    let updates = notifier.updates();
+    assert_eq!(updates.len(), 1);
+    assert!(matches!(updates[0].1, SessionUpdate::AgentMessageChunk(_)));
+}
+
+#[tokio::test]
+async fn second_prompt_follows_up_on_the_same_agent() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    for run in 1..=2 {
+        let events = cursor.script_stream();
+        // A real run always ends with a `result`; a stream that just stops is
+        // a truncated one, which is now an error.
+        events
+            .send(finished(&format!("run-fake-{run}")))
+            .expect("stream open");
+        events.send(CursorEvent::Done).expect("stream open");
+        service
+            .prompt(&session, "again")
+            .await
+            .expect("prompt runs");
+    }
+
+    let calls = cursor.calls();
+    assert!(matches!(calls[0], CursorCall::CreateAgent(..)));
+    assert!(matches!(calls[1], CursorCall::CreateRun(..)));
+}
+
+#[tokio::test]
+async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    // Let the turn reach its stream, observed by its first delivered update.
+    events
+        .send(CursorEvent::Assistant {
+            text: "working".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    service.cancel(&session).await.expect("cancel works");
+    drop(events); // the server closes the stream after a cancel
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..)))
+    );
+}
+
+/// A stop must not lose an answer the run had already produced.
+///
+/// The race: the run finishes, its stream is truncated before the `result`
+/// frame, and the stop lands. Get A Run is the only place that answer exists,
+/// so the poll reads it and delivers its text — a stopped turn ends on the
+/// record it can reach, not on the token alone.
+#[tokio::test(start_paused = true)]
+async fn a_stop_still_delivers_a_finished_run_the_stream_never_reported() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::Thinking {
+            text: "hmm".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("here is the answer".to_owned()),
+    });
+    service.cancel(&session).await.expect("cancel works");
+    drop(events);
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    let texts: Vec<String> = notifier
+        .updates()
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
+                    Some(text.text.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, vec!["here is the answer".to_owned()]);
+}
+
+/// Cancel is a notification: POST it, keep reading until Cursor's `result`.
+///
+/// Chunks that land after the POST are still the run — the Cloud Agents stream
+/// is scoped to that run through `result` then `done`. Dropping the stream at
+/// the POST used to resolve the ACP prompt while Cursor was still emitting.
+#[tokio::test]
+async fn cancel_keeps_reading_until_the_result_frame() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::Assistant {
+            text: "working".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    assert!(!events.is_closed());
+    service.cancel(&session).await.expect("cancel works");
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..)))
+    );
+
+    events
+        .send(CursorEvent::Assistant {
+            text: " winding down".to_owned(),
+        })
+        .expect("stream still open after cancel");
+    notifier.wait_for_updates(2).await;
+
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    assert_eq!(notifier.updates().len(), 2);
+}
+
+/// A cancelled `result` does not always complete in-flight tool calls, so the
+/// turn must fail them locally when that frame arrives — otherwise they stay
+/// "running" in the transcript forever.
+#[tokio::test]
+async fn cancel_mid_tool_call_closes_it_as_failed() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::ToolCall(ToolCallEvent {
+            call_id: "call-1".to_owned(),
+            name: "run_terminal_cmd".to_owned(),
+            status: Some("running".to_owned()),
+            args: None,
+            result: None,
+            truncated: Truncation::default(),
+        }))
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    service.cancel(&session).await.expect("cancel works");
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+
+    let closing = notifier
+        .updates()
+        .into_iter()
+        .rev()
+        .find_map(|(_, update)| match update {
+            SessionUpdate::ToolCallUpdate(update) if &*update.tool_call_id.0 == "call-1" => {
+                Some(update)
+            }
+            _ => None,
+        })
+        .expect("the open call was closed out");
+    assert_eq!(closing.fields.status, Some(ToolCallStatus::Failed));
+}
+
+/// A cancel while the prompt is still queued behind someone else's run ends
+/// the wait, rather than sitting out the full busy timeout — and reports it as
+/// the stop it is. The wait itself fails, but a failure the client asked for
+/// is a stop reason: an ACP error would surface in the transcript as a red
+/// "the prompt was cancelled while waiting for the agent to be free" instead
+/// of a stopped turn.
+#[tokio::test]
+async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // First turn mints the agent, so the second takes the follow-up path.
+    let events = cursor.script_stream();
+    events.send(finished("run-1")).expect("stream open");
+    drop(events);
+    service.prompt(&session, "first").await.expect("first turn");
+
+    // Busy for longer than the test will take, so the wait is what ends it.
+    cursor.script_create_run_errors(8, "409 Conflict: {\"error\":{\"code\":\"agent_busy\"}}");
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "second").await }
+    });
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CreateRun(..)))
+        .await;
+
+    service.cancel(&session).await.expect("cancel works");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    // Nothing was ever created, so there is no run to have cancelled.
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..)))
+    );
+}
+
+/// A stop while the fallback poll is running.
+///
+/// The poll only exists because the stream is gone, so a stop ends it at the
+/// first wait rather than re-reading a record nobody is waiting on: one read,
+/// then the turn is over.
+#[tokio::test(start_paused = true)]
+async fn a_stop_ends_the_fallback_poll_at_its_first_wait() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Plenty scripted, so what ends the poll is the stop and not the script.
+    for _ in 0..10 {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+    events
+        .send(CursorEvent::Thinking {
+            text: "hmm".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    service.cancel(&session).await.expect("cancel works");
+    drop(events); // no result frame, so the turn falls back to polling
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    let polls = cursor
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, CursorCall::RunResult(..)))
+        .count();
+    assert_eq!(polls, 1, "one read of the record, then the stop ends it");
+    assert!(
+        service
+            .session(&session)
+            .unwrap()
+            .state
+            .lock()
+            .unwrap()
+            .last_run
+            .is_none(),
+        "local stop does not advance delivered watermark without reconciliation"
+    );
+}
+
+/// A stop that beats the run into existence.
+///
+/// `cancel` has no run id to POST while the first prompt is still creating the
+/// agent — ten seconds, live — so the stop is sent the moment the run has one.
+/// Left unsent, Cursor keeps working and this turn reads the stream to the
+/// agent's own natural end, which is the stop button doing nothing at all.
+#[tokio::test]
+async fn a_stop_before_the_run_exists_is_sent_once_it_does() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let finish_creating = cursor.script_create_gate();
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    // Mid-create: the turn has neither agent nor run for a cancel to name.
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CreateAgent(..)))
+        .await;
+    service.cancel(&session).await.expect("cancel works");
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..))),
+        "there was no run to cancel yet"
+    );
+
+    finish_creating.send(()).expect("the create is waiting");
+
+    // The run exists now, so the stop it missed is sent for it, and the turn
+    // ends on Cursor's cancelled result like any other cancelled run.
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CancelRun(..)))
+        .await;
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+}
+
+#[tokio::test]
+async fn concurrent_prompt_on_an_active_turn_is_rejected() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "first").await }
+    });
+    events
+        .send(CursorEvent::Assistant {
+            text: "…".to_owned(),
+        })
+        .expect("stream open");
+    while notifier.updates().is_empty() {
+        tokio::task::yield_now().await;
+    }
+
+    let second = service.prompt(&session, "second").await;
+    assert!(matches!(second, Err(SessionError::TurnAlreadyActive(_))));
+
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    turn.await
+        .expect("task joins")
+        .expect("first prompt resolves");
+}
+
+#[tokio::test]
+async fn unknown_session_is_an_error() {
+    let (service, _cursor, _notifier) = service(None);
+    let missing = SessionId::new("nope");
+    assert!(matches!(
+        service.prompt(&missing, "hi").await,
+        Err(SessionError::UnknownSession(_))
+    ));
+    assert!(matches!(
+        service.loaded(&missing),
+        Err(SessionError::UnknownSession(_))
+    ));
+}
+
+#[tokio::test]
+async fn a_cancelled_result_reports_cancelled_without_a_client_cancel() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Cancelled,
+            text: None,
+            duration_ms: None,
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = service.prompt(&session, "hi").await.expect("prompt runs");
+    assert_eq!(stop, StopReason::Cancelled);
+}
+
+#[tokio::test]
+async fn a_stream_error_falls_back_to_polling_the_result() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Error {
+            code: Some("stream_unavailable".to_owned()),
+            message: "Run stream is no longer available".to_owned(),
+        })
+        .expect("stream open");
+    // The run itself finished fine server-side - observed for real: the
+    // stream refused while `GET .../runs/{run}` already had the answer.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the turn must survive a dead stream");
+    assert_eq!(stop, StopReason::EndTurn);
+    // The polled answer was delivered even though nothing streamed.
+    assert!(!notifier.updates().is_empty());
+}
+
+/// When both the stream and the poll fail, the turn fails - there is no
+/// third way to learn the outcome.
+#[tokio::test(start_paused = true)]
+async fn a_turn_fails_when_the_stream_and_the_poll_both_fail() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Error {
+            code: Some("boom".to_owned()),
+            message: "stream exploded".to_owned(),
+        })
+        .expect("stream open");
+    // No scripted run results: every poll errors.
+
+    assert!(matches!(
+        service.prompt(&session, "hi").await,
+        Err(SessionError::Cursor(_))
+    ));
+}
+
+/// A run that ended in `Error` is a failed turn, not a clean one.
+///
+/// ACP answers a prompt with either a stop reason or an error; reporting
+/// `EndTurn` for a crashed run tells the client the work succeeded.
+#[tokio::test]
+async fn an_error_run_status_fails_the_turn() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Error,
+            text: None,
+            duration_ms: Some(1),
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let Err(SessionError::Rejected(refusal)) = service.prompt(&session, "hi").await else {
+        panic!("a run that ended in Error must not report a stop reason");
+    };
+    assert_eq!(
+        refusal.notice.map(|notice| *notice),
+        Some(FailureNotice {
+            kind: FailureNoticeKind::ProviderRunFailed,
+            title: "Cursor run failed".to_owned(),
+            body: "Cursor stopped this run with an error. Open the run in Cursor to see why, \
+                   then send another message to continue."
+                .to_owned(),
+            link: Some(FailureLink {
+                label: "Open in Cursor".to_owned(),
+                url: "https://cursor.com/agents/bc-fake".to_owned(),
+            }),
+        })
+    );
+}
+
+/// A terminal status this crate does not know is not a success either.
+///
+/// `RunStatus::Unknown` absorbs any status Cursor adds, so treating it as a
+/// clean finish would silently report success for an outcome nobody has read
+/// yet. The cost is that renaming `FINISHED` upstream fails loudly rather
+/// than quietly - which is the right way round.
+#[tokio::test]
+async fn an_unknown_terminal_status_fails_the_turn() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Unknown("EXPLODED".to_owned()),
+            text: None,
+            duration_ms: None,
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    assert!(matches!(
+        service.prompt(&session, "hi").await,
+        Err(SessionError::Journal(_))
+    ));
+}
+
+/// A stream that ends without a `result` never reported an outcome.
+///
+/// [`crate::domain::ports::RunStream`] says so in as many words: a consumer
+/// that never sees a terminal result "must treat the run's outcome as unknown
+/// rather than successful". A dropped connection ends the stream exactly like
+/// this, and the run may well still be going server-side.
+///
+/// Reconnects come first now — no stream is queued for them, so they are
+/// exhausted — and the turn still fails when nothing can say how the run ended.
+#[tokio::test(start_paused = true)]
+async fn a_stream_that_ends_without_a_result_fails_the_turn_when_polling_cannot_answer() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "half an ans".to_owned(),
+        })
+        .expect("stream open");
+    drop(events); // connection dropped mid-run; polls all error too
+
+    assert!(
+        matches!(
+            service.prompt(&session, "hi").await,
+            Err(SessionError::Cursor(_))
+        ),
+        "a truncated stream must not report EndTurn"
+    );
+    // What did arrive was still delivered - the turn failed, the text was real.
+    assert_eq!(notifier.updates().len(), 1);
+}
+
+/// A stream that dies after delivering text is finished by the poll once the
+/// reconnects are exhausted - and the answer the client already saw is not
+/// delivered twice. No records carried an id here, so the reconnects have no
+/// resume position to offer and none of them reaches a stream.
+#[tokio::test(start_paused = true)]
+async fn a_truncated_stream_is_finished_by_the_poll_without_repeating_text() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the whole answer".to_owned(),
+        })
+        .expect("stream open");
+    drop(events); // connection dropped after the text but before the result
+    // First poll: still running; second: finished, repeating the text the
+    // stream already delivered.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Running,
+        text: None,
+    });
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the poll finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    // Exactly the one live delivery: the polled result must not repeat it.
+    let text_updates = notifier
+        .updates()
+        .iter()
+        .filter(|(_, update)| matches!(update, SessionUpdate::AgentMessageChunk { .. }))
+        .count();
+    assert_eq!(text_updates, 1);
+}
+
+/// A cancelled run reports `Cancelled` even though it has no `turn-ended`.
+///
+/// Recorded from a real cancel: `fixtures/real/cancelled.sse` carries
+/// `result` and `done` but no `turn-ended`, so the terminal signal has to be
+/// the result, not the envelope's end-of-turn marker.
+#[tokio::test]
+async fn a_cancelled_run_reports_cancelled_from_its_result() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Cancelled,
+            text: None,
+            duration_ms: Some(1),
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    assert_eq!(
+        service
+            .prompt(&session, "hi")
+            .await
+            .expect("prompt answers"),
+        StopReason::Cancelled
+    );
+}
+
+/// MCP servers named at `session/new` reach agent creation.
+///
+/// Cursor configures MCP when the agent is created, so this is the only
+/// moment they can be applied — a follow-up run cannot add them.
+#[tokio::test]
+async fn session_mcp_servers_reach_agent_creation() {
+    let (service, cursor, _notifier) = service(None);
+    let servers = vec![McpServer {
+        name: "docs".to_owned(),
+        transport: McpTransport::Http,
+        url: "https://mcp.example.com".to_owned(),
+        headers: vec![McpHeader {
+            name: "Authorization".to_owned(),
+            value: "Bearer t".to_owned(),
+        }],
+    }];
+    let session = service.new_session(Path::new(""), servers.clone());
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "go").await.expect("prompt runs");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![CursorCall::CreateAgent(
+            "go".to_owned(),
+            None,
+            false,
+            servers,
+            None
+        )]
+    );
+}
+
+/// A session with no MCP servers creates an agent with none — not with an
+/// empty-but-present configuration that could override Cursor's own.
+#[tokio::test]
+async fn a_session_without_mcp_servers_forwards_none() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "go").await.expect("prompt runs");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![CursorCall::CreateAgent(
+            "go".to_owned(),
+            None,
+            false,
+            Vec::new(),
+            None
+        )]
+    );
+}
+
+/// A restored session's first prompt is a follow-up run on the restored
+/// agent, not a fresh agent — that is the whole point of restoring.
+#[tokio::test]
+async fn a_restored_session_prompts_its_existing_agent() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-7"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+    );
+    crate::testing::script_legacy_history(&cursor);
+    service
+        .replay_session(&SessionId::new("cursor-acp-7"))
+        .await
+        .expect("full legacy history")
+        .complete();
+    assert!(service.has_session(&SessionId::new("cursor-acp-7")));
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    service
+        .prompt(&SessionId::new("cursor-acp-7"), "continue")
+        .await
+        .expect("prompt runs");
+    assert_eq!(
+        cursor.calls(),
+        vec![CursorCall::CreateRun(
+            CursorAgentId::new("bc-restored"),
+            "continue".to_owned(),
+            None
+        )]
+    );
+}
+
+/// A restored session has no in-memory `active_run` — this process never
+/// drove the run itself — so cancelling it must fall back to asking Cursor
+/// which run is current instead of silently skipping the remote cancel.
+#[tokio::test]
+async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-7"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+    );
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-in-flight"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-7"))
+        .await
+        .expect("cancel works");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![CursorCall::CancelRun(
+            CursorAgentId::new("bc-restored"),
+            CursorRunId::new("run-in-flight"),
+        )]
+    );
+}
+
+/// The fallback lookup cancels every run it finds in progress, not just the
+/// first — Cursor documents one active run per agent, but that invariant is
+/// not enforced client-side, and cancelling one leaked run is cheaper than
+/// missing it.
+#[tokio::test]
+async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-10"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+    );
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-creating"),
+            status: RunStatus::Creating,
+        },
+        RunListing {
+            id: CursorRunId::new("run-running"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-10"))
+        .await
+        .expect("cancel works");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-creating"),
+            ),
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-running"),
+            ),
+        ]
+    );
+}
+
+/// A restored session with no run currently going is a no-op, not an error —
+/// the fallback lookup found nothing to cancel.
+#[tokio::test]
+async fn cancel_on_a_restored_session_with_no_run_going_is_a_no_op() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-8"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+    );
+
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-old"),
+        status: RunStatus::Finished,
+    }]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-8"))
+        .await
+        .expect("cancel works");
+
+    assert!(cursor.calls().is_empty());
+}
+
+/// Fresh ids skip over restored ones instead of replacing a live session.
+#[tokio::test]
+async fn new_sessions_never_collide_with_restored_ids() {
+    let (service, _cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-1"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+    );
+
+    let fresh = service.new_session(Path::new(""), Vec::new());
+    assert_ne!(fresh, SessionId::new("cursor-acp-1"));
+    assert!(service.has_session(&SessionId::new("cursor-acp-1")));
+    assert!(service.has_session(&fresh));
+}
+
+/// A session that died after `session/new` but before its first prompt is
+/// restored with no agent — and the next prompt mints one, exactly like a
+/// fresh session's first prompt. Seen live: a restart in that window left a
+/// session every follow-up crashed against.
+#[tokio::test]
+async fn a_session_restored_without_an_agent_mints_one_on_the_next_prompt() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(SessionId::new("cursor-acp-9"), None, None);
+    service
+        .replay_session(&SessionId::new("cursor-acp-9"))
+        .await
+        .expect("empty session")
+        .complete();
+    assert!(service.has_session(&SessionId::new("cursor-acp-9")));
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    service
+        .prompt(&SessionId::new("cursor-acp-9"), "hello again")
+        .await
+        .expect("prompt runs");
+    assert!(matches!(
+        cursor.calls().first(),
+        Some(CursorCall::CreateAgent(..))
+    ));
+}
+
+/// A prompt that lands while another run is active (cursor.com drives the
+/// same agent) waits it out instead of failing — the session is a queue.
+#[tokio::test(start_paused = true)]
+async fn a_prompt_waits_out_a_busy_agent() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    // First turn establishes the agent.
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    // The follow-up gets agent_busy twice before the agent frees up.
+    cursor.script_create_run_errors(2, "409 Conflict: {\"error\":{\"code\":\"agent_busy\"}}");
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-2")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = service
+        .prompt(&session, "second")
+        .await
+        .expect("the prompt queues behind the busy agent");
+    assert_eq!(stop, StopReason::EndTurn);
+}
+
+/// Runs driven from cursor.com since the session's own last turn are
+/// captured into the journal before the next prompt executes, in full
+/// fidelity, oldest first. They never stream live: the prompt's own turn is
+/// all the client sees until the reload the recovery requires, after which
+/// the standard load shows the cursor.com user's prompt and the agent's
+/// answer ahead of the turn that was about to continue the conversation.
+#[tokio::test]
+async fn foreign_runs_are_captured_before_the_next_prompt_and_shown_by_its_reload() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+    assert!(notifier.reloads().is_empty());
+
+    // One cursor.com run happened since run-fake-1. The page also contains
+    // the run this prompt itself is about to create — which must not be
+    // recovered, its own turn delivers it.
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    // The streams `prompt("second")` consumes, in order: the capture of the
+    // foreign run, then the turn's own.
+    let foreign = cursor.script_stream();
+    foreign
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "but like what is macro".to_owned(),
+        }))
+        .expect("stream open");
+    foreign
+        .send(CursorEvent::Assistant {
+            text: "a team workspace".to_owned(),
+        })
+        .expect("stream open");
+    foreign
+        .send(finished("run-foreign-1"))
+        .expect("stream open");
+    foreign.send(CursorEvent::Done).expect("stream open");
+    let own = cursor.script_stream();
+    own.send(CursorEvent::Assistant {
+        text: "own answer".to_owned(),
+    })
+    .expect("stream open");
+    own.send(finished("run-fake-2")).expect("stream open");
+    own.send(CursorEvent::Done).expect("stream open");
+
+    service
+        .prompt(&session, "second")
+        .await
+        .expect("second turn");
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["own answer"],
+        "recovered history never streams live"
+    );
+    assert!(user_texts(&notifier.updates()).is_empty());
+    // The prompt path reconciles before and after acceptance; the requirement
+    // coalesces into one signal until the client loads.
+    assert_eq!(notifier.reloads(), vec![session.clone()]);
+    assert!(
+        ready_for_sync(&service, &session),
+        "the host owns the dispatch barrier; recovery does not close the session"
+    );
+
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(
+        user_texts(&loaded),
+        vec!["first", "but like what is macro", "second"]
+    );
+    assert_eq!(agent_texts(&loaded), vec!["a team workspace", "own answer"]);
+
+    // The load checkpointed the prompt's own run, which now heads Cursor's
+    // listing: the next tick recovers nothing and requires no reload.
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-fake-2"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let shown = notifier.updates().len();
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), shown);
+    assert_eq!(notifier.reloads().len(), 1);
+    assert!(ready_for_sync(&service, &session));
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("later"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: last_run(&service, &session).unwrap(),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let later = cursor.script_stream();
+    later
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "later question".into(),
+        }))
+        .unwrap();
+    later.send(finished("later")).unwrap();
+    later.send(CursorEvent::Done).unwrap();
+    service.sync_foreign_runs().await;
+    assert_eq!(
+        user_texts(&notifier.updates()[shown..]),
+        vec!["later question"],
+        "a successful load re-arms the mirror, which streams the run live"
+    );
+    assert_eq!(notifier.reloads().len(), 1);
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("later"))
+    );
+    let reloaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&reloaded).last().unwrap(), "later question");
+}
+
+/// The host's poll: cursor.com activity reaches a session as it happens,
+/// without any Macro prompt — exactly once, checkpointed like a turn, and
+/// with no reload to wait for.
+#[tokio::test]
+async fn sync_streams_foreign_runs_live_once_and_checkpoints_them() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+    let before = notifier.updates().len();
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let foreign = cursor.script_stream();
+    foreign
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "asked over there".to_owned(),
+        }))
+        .expect("stream open");
+    foreign
+        .send(CursorEvent::Assistant {
+            text: "from over there".to_owned(),
+        })
+        .expect("stream open");
+    foreign
+        .send(finished("run-foreign-1"))
+        .expect("stream open");
+    foreign.send(CursorEvent::Done).expect("stream open");
+
+    service.sync_foreign_runs().await;
+    let live = &notifier.updates()[before..];
+    assert_eq!(user_texts(live), vec!["asked over there"]);
+    assert_eq!(agent_texts(live), vec!["from over there"]);
+    assert!(
+        notifier.reloads().is_empty(),
+        "nothing is left for a load to show"
+    );
+    assert_eq!(
+        notifier.checkpoints().last(),
+        Some(&CursorRunId::new("run-foreign-1"))
+    );
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-foreign-1"))
+    );
+
+    // The checkpoint moved the watermark: the same listing delivers nothing
+    // more.
+    let shown = notifier.updates().len();
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), shown);
+    assert!(notifier.reloads().is_empty());
+
+    // A later load shows the same conversation the client already has.
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&loaded), vec!["first", "asked over there"]);
+    assert_eq!(agent_texts(&loaded), vec!["from over there"]);
+}
+
+#[tokio::test]
+async fn standalone_recovery_does_not_require_a_host_channel() {
+    crate::inbound::acp::AcpNotifier::new()
+        .require_reload(&SessionId::new("standalone"))
+        .await
+        .unwrap();
+}
+
+/// Restore seeds the durable watermark. The client's initial load hydrates the
+/// legacy run the watermark covers; only a run Cursor finished after it is
+/// recovered by sync — captured once and streamed live, after which the tick
+/// is idempotent and a load shows both runs in provider order.
+#[tokio::test]
+async fn restore_recovers_runs_after_the_durable_watermark_once() {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        notifier.clone(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let session = SessionId::new("cursor-acp-restored");
+    service.restore_session_with_watermark(
+        session.clone(),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        Some(CursorRunId::new("run-delivered")),
+    );
+    // The initial load hydrates the run this session delivered before the
+    // restart, from the provider's complete stream.
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-delivered"),
+        status: RunStatus::Finished,
+    }]);
+    let delivered = cursor.script_stream();
+    delivered
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "earlier question".to_owned(),
+        }))
+        .expect("stream open");
+    delivered
+        .send(CursorEvent::Assistant {
+            text: "earlier answer".to_owned(),
+        })
+        .expect("stream open");
+    delivered
+        .send(finished("run-delivered"))
+        .expect("stream open");
+    delivered.send(CursorEvent::Done).expect("stream open");
+    let initial = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&initial), ["earlier question"]);
+    assert_eq!(agent_texts(&initial), ["earlier answer"]);
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-delivered"))
+    );
+
+    // Then a run happens on cursor.com.
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-missed"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-delivered"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let missed = cursor.script_stream();
+    missed
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "missed question".to_owned(),
+        }))
+        .expect("stream open");
+    missed
+        .send(CursorEvent::Assistant {
+            text: "recovered answer".to_owned(),
+        })
+        .expect("stream open");
+    missed.send(finished("run-missed")).expect("stream open");
+    missed.send(CursorEvent::Done).expect("stream open");
+    service.sync_foreign_runs().await;
+    let live = &notifier.updates()[initial.len()..];
+    assert_eq!(user_texts(live), ["missed question"]);
+    assert_eq!(agent_texts(live), ["recovered answer"]);
+    assert!(notifier.reloads().is_empty());
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-missed")),
+        "the live delivery checkpoints the run"
+    );
+    let captured = |run: &str| {
+        service
+            .session(&session)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .iter()
+            .filter(|e| e.run.as_ref() == Some(&CursorRunId::new(run)))
+            .filter(|e| e.input == JournalInput::Reconciled)
+            .count()
+    };
+    assert_eq!(captured("run-missed"), 1);
+    assert_eq!(
+        captured("run-delivered"),
+        1,
+        "the delivered run was hydrated by the load and is not recovered again"
+    );
+
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&loaded), ["earlier question", "missed question"]);
+    assert_eq!(agent_texts(&loaded), ["earlier answer", "recovered answer"]);
+    let shown = notifier.updates().len();
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), shown);
+    assert!(notifier.reloads().is_empty());
+}
+
+/// Sessions created before run checkpoints existed have no durable watermark.
+/// Their initial load hydrates every run Cursor lists, oldest first, and
+/// checkpoints the newest — so nothing is missed and the first sync tick
+/// afterwards recovers nothing.
+#[tokio::test]
+async fn restore_without_a_watermark_hydrates_every_run_on_load() {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        notifier.clone(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let session = SessionId::new("cursor-acp-restored");
+    service.restore_session_with_watermark(
+        session.clone(),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-latest"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    for (run, question, answer) in [
+        ("run-old", "old question", "old answer"),
+        ("run-latest", "latest question", "latest answer"),
+    ] {
+        let stream = cursor.script_stream();
+        stream
+            .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+                text: question.to_owned(),
+            }))
+            .expect("stream open");
+        stream
+            .send(CursorEvent::Assistant {
+                text: answer.to_owned(),
+            })
+            .expect("stream open");
+        stream.send(finished(run)).expect("stream open");
+        stream.send(CursorEvent::Done).expect("stream open");
+    }
+
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&loaded), ["old question", "latest question"]);
+    assert_eq!(agent_texts(&loaded), ["old answer", "latest answer"]);
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-latest")),
+        "the load's checkpoint makes the next tick idempotent"
+    );
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), loaded.len());
+    assert!(notifier.reloads().is_empty());
+}
+
+/// The host cannot route session updates until `session/load` has rebound the
+/// restored ACP id. A mirror tick before then must leave the durable checkpoint
+/// untouched so the next tick can recover the run after load.
+#[tokio::test]
+async fn restore_waits_for_session_load_before_recovering_runs() {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        notifier.clone(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let session = SessionId::new("cursor-acp-restored");
+    service.restore_session_with_watermark(
+        session.clone(),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        Some(CursorRunId::new("run-delivered")),
+    );
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-missed"),
+        status: RunStatus::Finished,
+    }]);
+
+    service.sync_foreign_runs().await;
+
+    assert!(notifier.updates().is_empty());
+    assert!(notifier.reloads().is_empty());
+    assert!(
+        service
+            .session(&session)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .is_empty()
+    );
+}
+
+/// A foreign run whose stream is gone (retention expired) is captured from
+/// its run record, so the recorded answer is durable and reaches the client
+/// live, without the line that asked for it. The record carries no original
+/// prompt, so recovery must not ask the client to reload a history it cannot
+/// project.
+///
+/// An explicit load still succeeds. It is the only way back to a session
+/// whose runtime has gone: the harness reattaches by loading, so a load that
+/// refuses is every later prompt refused as disconnected, with nothing the
+/// user can do about it. The answer is served without the line that asked
+/// for it, and the gap is reported.
+#[tokio::test(start_paused = true)]
+async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    // No scripted stream: the mirror's stream attempt fails, and the run
+    // record answers instead.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the old answer".to_owned()),
+    });
+
+    let before = notifier.updates().len();
+    service.sync_foreign_runs().await;
+    assert_eq!(
+        agent_texts(&notifier.updates()[before..]),
+        ["the old answer"]
+    );
+    assert!(
+        notifier.reloads().is_empty(),
+        "an unprojectable recovery requires no reload"
+    );
+    let before = notifier.updates().len();
+    assert!(ready_for_sync(&service, &session));
+    let foreign = CursorRunId::new("run-foreign-1");
+    let continuation = cursor.script_stream();
+    continuation.send(finished("run-fake-2")).unwrap();
+    continuation.send(CursorEvent::Done).unwrap();
+    service
+        .prompt(&session, "continue without replacing history")
+        .await
+        .unwrap();
+    assert!(notifier.reloads().is_empty());
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        entries.iter().any(|e| e.run.as_ref() == Some(&foreign)
+            && matches!(&e.input, JournalInput::Poll(raw) if raw.contains("the old answer"))),
+        "the recorded answer is durable"
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.run.as_ref() == Some(&foreign) && e.input == JournalInput::Reconciled)
+    );
+
+    service
+        .replay_session(&session)
+        .await
+        .expect("a run without its original prompt still loads")
+        .complete();
+    assert!(
+        notifier.updates().len() > before,
+        "the load serves the history it does have"
+    );
+    assert!(
+        ready_for_sync(&service, &session),
+        "a loaded session is promptable again"
+    );
+    assert_eq!(
+        service.journal.read(&session).await.expect("journal"),
+        entries,
+        "the load discards nothing captured"
+    );
+    service
+        .prompt(&session, "still reachable after the gap")
+        .await
+        .expect_err("no stream is scripted, but the prompt is not refused as unloaded");
+}
+
+/// The gap the load survives is closed when Cursor's conversation names the
+/// prompt. The mirrored run's answer is matched against the conversation and
+/// the line before it is journaled as that run's prompt, so it projects into
+/// place and the next load needs no lookup.
+#[tokio::test(start_paused = true)]
+async fn a_lost_prompt_is_recovered_from_the_cursor_conversation() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the old answer".to_owned()),
+    });
+    service.sync_foreign_runs().await;
+
+    cursor.script_conversation(vec![
+        line(ConversationSpeaker::User, "what was asked on cursor.com"),
+        line(ConversationSpeaker::Agent, "the old answer"),
+    ]);
+    service
+        .replay_session(&session)
+        .await
+        .expect("load")
+        .complete();
+
+    let entries = service.journal.read(&session).await.expect("journal");
+    let foreign = CursorRunId::new("run-foreign-1");
+    let recovered = entries
+        .iter()
+        .find_map(|e| match &e.input {
+            JournalInput::Prompt(blocks) if e.run.is_none() => blocks.iter().find_map(|b| {
+                matches!(b, ContentBlock::Text(t) if t.text == "what was asked on cursor.com")
+                    .then_some(e.sequence)
+            }),
+            _ => None,
+        })
+        .expect("the recovered prompt is journaled");
+    assert!(
+        entries.iter().any(|e| e.run.as_ref() == Some(&foreign)
+            && e.input == JournalInput::PromptAccepted(recovered)),
+        "and is linked to the run it opened"
+    );
+    assert!(
+        notifier.updates().iter().any(|(_, update)| matches!(
+            update,
+            SessionUpdate::UserMessageChunk(c)
+                if matches!(&c.content, ContentBlock::Text(t) if t.text == "what was asked on cursor.com")
+        )),
+        "the load publishes it as part of the transcript"
+    );
+    assert!(ready_for_sync(&service, &session));
+}
+
+/// An answer the agent gave more than once names no single turn, so nothing
+/// is attached. A wrong question against a real answer is worse than none.
+#[tokio::test(start_paused = true)]
+async fn an_ambiguous_conversation_match_recovers_nothing() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("done".to_owned()),
+    });
+    service.sync_foreign_runs().await;
+
+    cursor.script_conversation(vec![
+        line(ConversationSpeaker::User, "first way of asking"),
+        line(ConversationSpeaker::Agent, "done"),
+        line(ConversationSpeaker::User, "second way of asking"),
+        line(ConversationSpeaker::Agent, "done"),
+    ]);
+    service
+        .replay_session(&session)
+        .await
+        .expect("the load still succeeds without the prompt")
+        .complete();
+
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        !entries.iter().any(|e| matches!(&e.input, JournalInput::Prompt(blocks)
+            if blocks.iter().any(|b| matches!(b, ContentBlock::Text(t) if t.text.contains("way of asking"))))),
+        "neither candidate is guessed at"
+    );
+    assert!(ready_for_sync(&service, &session));
+}
+
+/// A run that is still executing cannot become the watermark when its stream
+/// is unavailable, and requires no reload yet: the next sync must retry it
+/// after Cursor finishes.
+#[tokio::test]
+async fn a_running_foreign_run_is_not_checkpointed_after_stream_fallback() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let initial = cursor.script_stream();
+    initial.send(finished("run-fake-1")).expect("stream open");
+    initial.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    // No stream is queued, so recovery falls back to this still-running record.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Running,
+        text: None,
+    });
+
+    service.sync_foreign_runs().await;
+
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-fake-1"))
+    );
+    assert!(notifier.reloads().is_empty());
+    assert!(
+        ready_for_sync(&service, &session),
+        "an unreconciled run leaves the session open to the next tick"
+    );
+}
+
+/// A stream that delivers the answer and then hangs open must not hold the
+/// turn open with it — seen live: the terminal `result` arrived minutes
+/// after the text, and the client showed "writing" long after the answer.
+/// Once the run's record says terminal, the turn closes from the record.
+#[tokio::test(start_paused = true)]
+async fn a_quiet_stream_closes_the_turn_from_the_run_record() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the whole answer".to_owned(),
+        })
+        .expect("stream open");
+    // The sender stays alive: the stream is open and silent, exactly the
+    // observed hang. The record already knows the run finished.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the turn closes despite the hanging stream");
+    assert_eq!(stop, StopReason::EndTurn);
+    drop(events);
+    // The live text is not repeated by the record-based closure.
+    let text_updates = notifier
+        .updates()
+        .iter()
+        .filter(|(_, update)| matches!(update, SessionUpdate::AgentMessageChunk { .. }))
+        .count();
+    assert_eq!(text_updates, 1);
+}
+
+/// The same durable inputs restore every turn without any provider execution.
+#[tokio::test]
+async fn durable_multiturn_load_replays_full_history_and_supports_continuation() {
+    use crate::outbound::memory_journal::MemoryJournal;
+    let journal = Arc::new(MemoryJournal::default());
+    let cursor = FakeCursor::new();
+    let live = RecordingNotifier::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        live.clone(),
+        FixedChooser(None, false),
+        journal.clone(),
+        NoArtifactStore,
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    for (prompt, fixture) in [
+        ("first prompt", "multi_turn_1.sse"),
+        ("second prompt", "file_operations.sse"),
+    ] {
+        let tx = cursor.script_raw_stream();
+        for event in crate::testing::fixture_records(fixture) {
+            tx.send(event).unwrap();
+        }
+        drop(tx);
+        service.prompt(&id, prompt).await.unwrap();
+    }
+    let entries = journal.read(&id).await.unwrap();
+    assert!(
+        entries.iter().all(
+            |e| !matches!(e.input, JournalInput::Sse(ref r) if r.data.contains("sessionUpdate"))
+        )
+    );
+    let before = cursor.calls();
+    let replayed = RecordingNotifier::new();
+    let restored = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        replayed.clone(),
+        FixedChooser(None, false),
+        journal.clone(),
+        NoArtifactStore,
+    ));
+    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None);
+    restored.replay_session(&id).await.unwrap().complete();
+    let first = replayed.updates();
+    let replay_without_users: Vec<_> = first
+        .iter()
+        .filter(|(_, u)| !matches!(u, SessionUpdate::UserMessageChunk(_)))
+        .cloned()
+        .collect();
+    assert_eq!(replay_without_users, live.updates());
+    assert_eq!(
+        first
+            .iter()
+            .filter(|(_, u)| matches!(u, SessionUpdate::UserMessageChunk(_)))
+            .count(),
+        2
+    );
+    assert_eq!(
+        cursor.calls(),
+        before,
+        "load must not execute provider work"
+    );
+    restored.replay_session(&id).await.unwrap().complete();
+    assert_eq!(&replayed.updates()[first.len()..], first.as_slice());
+    assert_eq!(
+        journal.read(&id).await.unwrap(),
+        entries,
+        "load is a read, not recapture"
+    );
+    let tx = cursor.script_stream();
+    tx.send(CursorEvent::Assistant {
+        text: "next".into(),
+    })
+    .unwrap();
+    tx.send(finished("run-fake-3")).unwrap();
+    tx.send(CursorEvent::Done).unwrap();
+    restored.prompt(&id, "continue").await.unwrap();
+    assert!(
+        matches!(cursor.calls().last(), Some(CursorCall::CreateRun(_, prompt, _)) if prompt == "continue")
+    );
+}
+
+#[derive(Debug, Default)]
+struct FailingJournal {
+    inner: crate::outbound::memory_journal::MemoryJournal,
+    fail_sequence: std::sync::atomic::AtomicI64,
+}
+impl CursorJournal for FailingJournal {
+    fn read<'a>(
+        &'a self,
+        id: &'a SessionId,
+    ) -> futures::future::BoxFuture<'a, Result<Vec<JournalEntry>, rootcause::Report>> {
+        self.inner.read(id)
+    }
+    fn append<'a>(
+        &'a self,
+        id: &'a SessionId,
+        expected: i64,
+        run: Option<&'a CursorRunId>,
+        input: &'a JournalInput,
+    ) -> futures::future::BoxFuture<'a, Result<JournalEntry, rootcause::Report>> {
+        Box::pin(async move {
+            if expected + 1 == self.fail_sequence.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(rootcause::report!("injected durable append failure"));
+            }
+            self.inner.append(id, expected, run, input).await
+        })
+    }
+}
+
+#[tokio::test]
+async fn append_failure_publishes_nothing_and_never_advances_delivery_or_retries_a_prompt() {
+    let journal = Arc::new(FailingJournal::default());
+    journal
+        .fail_sequence
+        .store(4, std::sync::atomic::Ordering::SeqCst);
+    let cursor = FakeCursor::new();
+    let output = RecordingNotifier::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        output.clone(),
+        FixedChooser(None, false),
+        journal.clone(),
+        NoArtifactStore,
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    let tx = cursor.script_stream();
+    tx.send(CursorEvent::Assistant {
+        text: "must never escape".into(),
+    })
+    .unwrap();
+    tx.send(finished("run-fake-1")).unwrap();
+    assert!(matches!(
+        service.prompt(&id, "go").await,
+        Err(SessionError::Journal(_))
+    ));
+    assert!(output.updates().is_empty());
+    assert!(
+        service
+            .session(&id)
+            .unwrap()
+            .state
+            .lock()
+            .unwrap()
+            .last_run
+            .is_none()
+    );
+    assert_eq!(journal.read(&id).await.unwrap().len(), 3);
+    assert!(service.prompt(&id, "retry").await.is_err());
+    assert_eq!(
+        cursor.calls().len(),
+        1,
+        "no second remote execution after capture failure"
+    );
+}
+
+#[tokio::test]
+async fn partial_capture_reconnect_matches_the_prefix_without_duplicate_content() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let session = service.session(&id).unwrap();
+    {
+        let _gate = session.turn_gate.lock().await;
+        service.ensure_journal(&id, &session).await.unwrap();
+        let run = CursorRunId::new("foreign");
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Interaction(
+                    InteractionUpdate::UserMessage {
+                        text: "asked elsewhere".into(),
+                    },
+                ))),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "hel".into(),
+                })),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        let tx = cursor.script_stream();
+        tx.send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "asked elsewhere".into(),
+        }))
+        .unwrap();
+        tx.send(CursorEvent::Assistant { text: "hel".into() })
+            .unwrap();
+        tx.send(CursorEvent::Assistant { text: "lo".into() })
+            .unwrap();
+        tx.send(finished("foreign")).unwrap();
+        tx.send(CursorEvent::Done).unwrap();
+        service
+            .ingest_run(
+                &id,
+                &session,
+                &CursorAgentId::new("agent"),
+                &run,
+                &tokio_util::sync::CancellationToken::new(),
+                IngestMode {
+                    emit: Emit::Live,
+                    ..IngestMode::HYDRATE
+                },
+            )
+            .await
+            .unwrap();
+    }
+    assert!(
+        matches!(&notifier.updates()[..], [(_, SessionUpdate::AgentMessageChunk(c))] if matches!(&c.content, ContentBlock::Text(t) if t.text == "lo"))
+    );
+    let entries = service.journal.read(&id).await.unwrap();
+    assert_eq!(entries.iter().filter(|e| matches!(&e.input, JournalInput::Sse(r) if matches!(r.decode(), CursorEvent::Assistant { text } if text == "hel"))).count(), 1);
+}
+
+#[tokio::test]
+async fn restored_agent_without_provider_history_cannot_commit_empty_replacement() {
+    let (service, cursor, notifier) = service(None);
+    let id = SessionId::new("restored");
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None);
+    cursor.script_run_listings(vec![]);
+
+    assert!(service.replay_session(&id).await.is_err());
+    assert!(notifier.updates().is_empty());
+    assert!(service.journal.read(&id).await.unwrap().is_empty());
+    assert!(service.prompt(&id, "must not execute").await.is_err());
+    assert!(cursor.calls().is_empty());
+}
+
+#[tokio::test]
+async fn incomplete_legacy_hydration_emits_nothing_and_cannot_enable_sync() {
+    let (service, cursor, notifier) = service(None);
+    let id = SessionId::new("old");
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None);
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-old"),
+        status: RunStatus::Finished,
+    }]);
+    let tx = cursor.script_stream();
+    tx.send(CursorEvent::Assistant {
+        text: "answer without original prompt".into(),
+    })
+    .unwrap();
+    tx.send(finished("run-old")).unwrap();
+    tx.send(CursorEvent::Done).unwrap();
+    drop(tx);
+    assert!(service.replay_session(&id).await.is_err());
+    assert!(notifier.updates().is_empty());
+    assert!(!ready_for_sync(&service, &id));
+    assert!(
+        !service
+            .journal
+            .read(&id)
+            .await
+            .unwrap()
+            .iter()
+            .any(|e| e.input == JournalInput::HistoryComplete)
+    );
+    assert!(service.prompt(&id, "must not execute").await.is_err());
+    assert!(cursor.calls().is_empty());
+}
+
+#[tokio::test]
+async fn load_guard_orders_continuation_after_the_queued_response() {
+    let (service, cursor, _notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let guard = service.replay_session(&id).await.unwrap();
+    let tx = cursor.script_stream();
+    tx.send(finished("run-fake-1")).unwrap();
+    tx.send(CursorEvent::Done).unwrap();
+    let next = tokio::spawn({
+        let service = service.clone();
+        let id = id.clone();
+        async move { service.prompt(&id, "next").await }
+    });
+    tokio::task::yield_now().await;
+    assert!(
+        cursor.calls().is_empty(),
+        "the load gate still owns emission"
+    );
+    guard.complete(); // the ACP adapter does this only after responder.respond
+    next.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn stream_unavailable_records_are_captured_before_retry() {
+    let (service, cursor, _notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let first = cursor.script_stream();
+    first
+        .send(CursorEvent::Error {
+            code: Some("stream_unavailable".into()),
+            message: "starting".into(),
+        })
+        .unwrap();
+    let second = cursor.script_stream();
+    second.send(finished("run-fake-1")).unwrap();
+    second.send(CursorEvent::Done).unwrap();
+    service.prompt(&id, "go").await.unwrap();
+    assert!(service.journal.read(&id).await.unwrap().iter().any(|e| matches!(&e.input, JournalInput::Sse(r) if matches!(r.decode(), CursorEvent::Error { .. }))));
+}
+
+#[tokio::test]
+async fn aborted_prompt_is_retained_in_load_history_without_remote_execution() {
+    let (service, cursor, output) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let session = service.session(&id).unwrap();
+    {
+        let _gate = session.turn_gate.lock().await;
+        service.ensure_journal(&id, &session).await.unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                None,
+                JournalInput::Prompt(vec![ContentBlock::Text(TextContent::new(
+                    "stopped before execution",
+                ))]),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                None,
+                JournalInput::PromptAborted(2),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+    }
+    service.replay_session(&id).await.unwrap().complete();
+    assert!(
+        matches!(&output.updates()[..], [(_, SessionUpdate::UserMessageChunk(c))] if matches!(&c.content, ContentBlock::Text(t) if t.text == "stopped before execution"))
+    );
+    assert!(cursor.calls().is_empty());
+}
+
+#[tokio::test]
+async fn terminal_poll_crash_is_reconciled_without_reopening_or_duplicating_tools() {
+    let (service, cursor, output) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let session = service.session(&id).unwrap();
+    let run = CursorRunId::new("R");
+    {
+        let _gate = session.turn_gate.lock().await;
+        service.ensure_journal(&id, &session).await.unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Prompt(vec![ContentBlock::Text(TextContent::new("go"))]),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "hel".into(),
+                })),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::ToolCall(
+                    ToolCallEvent {
+                        call_id: "tool".into(),
+                        name: "shell".into(),
+                        args: None,
+                        result: None,
+                        status: None,
+                        truncated: Truncation::default(),
+                    },
+                ))),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Poll(r#"{"status":"FINISHED","result":"hello"}"#.into()),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+    }
+    // Crash before Reconciled: replay restores hello plus terminal tool cleanup.
+    service.replay_session(&id).await.unwrap().complete();
+    let replay = output.updates();
+    let tx = cursor.script_stream();
+    tx.send(CursorEvent::Assistant { text: "hel".into() })
+        .unwrap();
+    tx.send(CursorEvent::Assistant { text: "lo".into() })
+        .unwrap();
+    tx.send(finished("R")).unwrap();
+    cursor.script_run_listings(vec![RunListing {
+        id: run.clone(),
+        status: RunStatus::Finished,
+    }]);
+    session.state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
+    service.sync_foreign_runs().await;
+    assert_eq!(
+        output.updates(),
+        replay,
+        "no duplicated lo or repeated tool cleanup"
+    );
+    assert!(
+        service
+            .journal
+            .read(&id)
+            .await
+            .unwrap()
+            .iter()
+            .any(|e| e.run.as_ref() == Some(&run) && e.input == JournalInput::Reconciled)
+    );
+    service.replay_session(&id).await.unwrap().complete();
+    assert_eq!(&output.updates()[replay.len()..], replay.as_slice());
+    assert!(
+        cursor.calls().is_empty(),
+        "terminal recovery requires no provider read/execution"
+    );
+}
+
+#[tokio::test]
+async fn capture_backlog_includes_the_run_at_the_delivered_watermark_after_restart() {
+    let (service, cursor, output) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let session = service.session(&id).unwrap();
+    let run = CursorRunId::new("cancelled-run");
+    {
+        let _gate = session.turn_gate.lock().await;
+        service.ensure_journal(&id, &session).await.unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Prompt(vec![ContentBlock::Text(TextContent::new("go"))]),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "hel".into(),
+                })),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Interrupted("disconnected cancellation".into()),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+    }
+    service.restore_session_with_watermark(
+        id.clone(),
+        Some(CursorAgentId::new("agent")),
+        None,
+        Some(run.clone()),
+    );
+    service.replay_session(&id).await.unwrap().complete();
+    let before = output.updates().len();
+    cursor.script_run_listings(vec![RunListing {
+        id: run.clone(),
+        status: RunStatus::Finished,
+    }]);
+    let tx = cursor.script_stream();
+    tx.send(CursorEvent::Assistant { text: "hel".into() })
+        .unwrap();
+    tx.send(CursorEvent::Assistant { text: "lo".into() })
+        .unwrap();
+    tx.send(finished("cancelled-run")).unwrap();
+    tx.send(CursorEvent::Done).unwrap();
+    service.sync_foreign_runs().await;
+    assert_eq!(
+        agent_texts(&output.updates()[before..]),
+        ["lo"],
+        "the load showed the captured prefix; only the rest streams"
+    );
+    assert!(output.reloads().is_empty());
+    assert!(
+        service
+            .journal
+            .read(&id)
+            .await
+            .unwrap()
+            .iter()
+            .any(|e| e.input == JournalInput::Reconciled)
+    );
+    let loaded = load(&service, &id, &output).await;
+    assert_eq!(user_texts(&loaded), ["go"]);
+    assert_eq!(
+        agent_texts(&loaded),
+        ["hel", "lo"],
+        "the captured prefix is not repeated"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_newly_accepted_run_waits_behind_a_failed_older_backfill() {
+    let (service, cursor, output) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let session = service.session(&id).unwrap();
+    session.state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
+    let gate = cursor.script_create_gate();
+    let task = tokio::spawn({
+        let service = service.clone();
+        let id = id.clone();
+        async move { service.prompt(&id, "R2").await }
+    });
+    cursor
+        .wait_for_calls(1, |c| matches!(c, CursorCall::CreateRun(..)))
+        .await;
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("R1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let opened = CursorEvent::ToolCall(ToolCallEvent {
+        call_id: "R1-tool".into(),
+        name: "shell".into(),
+        args: None,
+        result: None,
+        status: None,
+        truncated: Truncation::default(),
+    });
+    let partial = cursor.script_stream();
+    partial
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "R1 prompt".into(),
+        }))
+        .unwrap();
+    partial.send(opened.clone()).unwrap();
+    partial
+        .send(CursorEvent::Error {
+            code: None,
+            message: "transport interrupted".into(),
+        })
+        .unwrap();
+    drop(partial);
+    gate.send(()).unwrap();
+    assert!(
+        task.await.unwrap().is_err(),
+        "failed R1 prevents R2 ingestion"
+    );
+    assert!(
+        !output.updates().iter().any(|(_, u)| matches!(
+            u,
+            SessionUpdate::AgentMessageChunk(_) | SessionUpdate::ToolCallUpdate(_)
+        )),
+        "R2 cannot emit text or close R1's still-open tool"
+    );
+    let entries = service.journal.read(&id).await.unwrap();
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.run.as_ref() == Some(&CursorRunId::new("run-fake-1"))
+                && matches!(e.input, JournalInput::PromptAccepted(_))),
+        "R2 acceptance remains recoverable"
+    );
+    let pending = fold::replay(service.journal.clone(), id.clone()).await;
+    assert_eq!(
+        pending.len(),
+        2,
+        "queued R2 must not steal the incomplete R1 turn during load"
+    );
+    assert_eq!(
+        pending[0].parts.first(),
+        Some(&agent_fold::domain::model::MessagePart::Text {
+            text: "R1 prompt".into()
+        })
+    );
+    assert!(pending[1].stop.is_none());
+    for (run, text, user) in [("R1", "older", true), ("run-fake-1", "newer", false)] {
+        let tx = cursor.script_stream();
+        if user {
+            tx.send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+                text: "R1 prompt".into(),
+            }))
+            .unwrap();
+        }
+        if user {
+            tx.send(opened.clone()).unwrap();
+            let mut completed = match opened.clone() {
+                CursorEvent::ToolCall(call) => call,
+                _ => unreachable!(),
+            };
+            completed.status = Some("completed".into());
+            completed.result = Some(serde_json::json!("older tool finished"));
+            tx.send(CursorEvent::ToolCall(completed)).unwrap();
+        }
+        tx.send(CursorEvent::Assistant { text: text.into() })
+            .unwrap();
+        tx.send(finished(run)).unwrap();
+        tx.send(CursorEvent::Done).unwrap();
+    }
+    service.sync_foreign_runs().await;
+    assert!(
+        agent_texts(&output.updates()).is_empty(),
+        "recovered runs are captured, never streamed"
+    );
+    assert_eq!(output.reloads(), vec![id.clone()]);
+    let messages = fold::replay(service.journal.clone(), id.clone()).await;
+    let text: Vec<_> = messages
+        .iter()
+        .map(|message| {
+            message
+                .parts
+                .iter()
+                .filter_map(|part| match part {
+                    agent_fold::domain::model::MessagePart::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("")
+        })
+        .collect();
+    assert_eq!(text, ["R1 prompt", "older", "R2", "newer"]);
+    assert_eq!(messages[0].id, messages[1].id);
+    assert_eq!(messages[2].id, messages[3].id);
+    assert_ne!(messages[0].id, messages[2].id);
+    assert_eq!(
+        messages[1].stop,
+        Some(agent_fold::domain::model::StopReason::EndTurn)
+    );
+    assert_eq!(
+        messages[3].stop,
+        Some(agent_fold::domain::model::StopReason::EndTurn)
+    );
+}
+
+#[tokio::test]
+async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
+    let cursor = FakeCursor::new();
+    let journal = Arc::new(crate::outbound::memory_journal::MemoryJournal::default());
+    let service = Arc::new(
+        CursorSessionService::new(
+            cursor.clone(),
+            RecordingNotifier::new(),
+            FixedChooser(None, false),
+            journal.clone(),
+            NoArtifactStore,
+        )
+        .with_default_model(Some("model".into())),
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    let gate = cursor.script_model_gate();
+    cursor.script_rejection();
+    let task = tokio::spawn({
+        let service = service.clone();
+        let id = id.clone();
+        async move { service.prompt(&id, "rejected").await }
+    });
+    tokio::task::yield_now().await;
+    assert!(
+        journal.read(&id).await.unwrap().is_empty(),
+        "no intent during model resolution"
+    );
+    gate.send(()).unwrap();
+    assert!(task.await.unwrap().is_err());
+    assert!(
+        journal
+            .read(&id)
+            .await
+            .unwrap()
+            .iter()
+            .any(|e| matches!(e.input, JournalInput::PromptAborted(_)))
+    );
+    service.replay_session(&id).await.unwrap().complete();
+}
+
+mod artifacts;
+mod fold;
+mod working_branches;
+
+#[tokio::test]
+async fn cancellation_during_pre_prompt_recovery_never_executes_the_pending_prompt() {
+    let (service, cursor, output) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    service.session(&id).unwrap().state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("older"),
+        status: RunStatus::Running,
+    }]);
+    let events = cursor.script_stream();
+    let task = tokio::spawn({
+        let service = service.clone();
+        let id = id.clone();
+        async move { service.prompt(&id, "must not execute").await }
+    });
+    events
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "old question".into(),
+        }))
+        .unwrap();
+    loop {
+        if service
+            .journal
+            .read(&id)
+            .await
+            .unwrap()
+            .iter()
+            .any(|entry| matches!(entry.input, JournalInput::Sse(_)))
+        {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    service.cancel(&id).await.unwrap();
+    events
+        .send(CursorEvent::Assistant {
+            text: "old answer".into(),
+        })
+        .unwrap();
+    events.send(finished("older")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    assert_eq!(task.await.unwrap().unwrap(), StopReason::Cancelled);
+    assert!(!cursor.calls().iter().any(|call| matches!(
+        call,
+        CursorCall::CreateAgent(..) | CursorCall::CreateRun(..)
+    )));
+    assert_eq!(output.reloads(), vec![id.clone()]);
+    assert!(output.updates().is_empty());
+    // The load shows the recovered older turn, then the aborted prompt as a
+    // cancelled turn that never reached the provider.
+    let messages = fold::replay(service.journal.clone(), id).await;
+    let texts: Vec<String> = messages
+        .iter()
+        .map(|message| {
+            message
+                .parts
+                .iter()
+                .filter_map(|part| match part {
+                    agent_fold::domain::model::MessagePart::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        texts,
+        ["old question", "old answer", "must not execute", ""]
+    );
+    assert_eq!(messages[0].id, messages[1].id);
+    assert_eq!(messages[2].id, messages[3].id);
+    assert_eq!(
+        messages[1].stop,
+        Some(agent_fold::domain::model::StopReason::EndTurn)
+    );
+    assert_eq!(
+        messages[3].stop,
+        Some(agent_fold::domain::model::StopReason::Cancelled)
+    );
+}
+
+#[tokio::test]
+async fn actual_load_frames_restore_terminal_outcomes_and_leave_partial_tail_open() {
+    use agent_fold::domain::model::StopReason as FoldStop;
+    for (status, expected) in [
+        (Some(RunStatus::Finished), Some(FoldStop::EndTurn)),
+        (Some(RunStatus::Cancelled), Some(FoldStop::Cancelled)),
+        (
+            Some(RunStatus::Error),
+            Some(FoldStop::Failed {
+                message: "Agent run ended in Error".into(),
+                notice: None,
+            }),
+        ),
+        (None, None),
+    ] {
+        let (service, _, _) = service(None);
+        let id = service.new_session(Path::new(""), vec![]);
+        let session = service.session(&id).unwrap();
+        service.ensure_journal(&id, &session).await.unwrap();
+        let run = CursorRunId::new("run");
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Prompt(vec![ContentBlock::Text(TextContent::new("question"))]),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        service
+            .capture(
+                &id,
+                &session,
+                Some(&run),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "answer".into(),
+                })),
+                Emit::Silent,
+            )
+            .await
+            .unwrap();
+        if let Some(status) = status {
+            service
+                .capture(
+                    &id,
+                    &session,
+                    Some(&run),
+                    JournalInput::Poll(
+                        serde_json::json!({"status":status,"result":"answer"}).to_string(),
+                    ),
+                    Emit::Silent,
+                )
+                .await
+                .unwrap();
+        }
+        let messages = fold::replay(service.journal.clone(), id.clone()).await;
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].id, messages[1].id);
+        assert_eq!(messages[1].stop, expected);
+        if expected.is_none() {
+            let continued = fold::replay_with_tail(
+                service.journal.clone(),
+                id,
+                Some(vec![
+                    CursorEvent::Assistant {
+                        text: "answer".into(),
+                    },
+                    CursorEvent::Assistant {
+                        text: " continued".into(),
+                    },
+                    finished("run"),
+                    CursorEvent::Done,
+                ]),
+            )
+            .await;
+            assert_eq!(continued.len(), 2);
+            assert_eq!(continued[1].stop, Some(FoldStop::EndTurn));
+            assert_eq!(
+                continued[1].parts.first(),
+                Some(&agent_fold::domain::model::MessagePart::Text {
+                    text: "answer continued".into()
+                })
+            );
+        }
+    }
+}
+
+/// A repository the Cursor account has not connected is the one rejection a
+/// person can fix, and they can only fix it if the error says which
+/// repository and what to do — not Cursor's raw error body.
+#[tokio::test]
+async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let (service, cursor, _output) = service(Some(repo));
+    let id = service.new_session(Path::new(""), vec![]);
+    cursor.script_repository_rejection();
+
+    let error = service
+        .prompt(&id, "do the thing")
+        .await
+        .expect_err("an unconnected repository fails the prompt");
+
+    // What `inbound::acp` puts in the JSON-RPC error, verbatim.
+    assert_eq!(
+        error.to_string(),
+        "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again."
+    );
+    assert!(
+        !error.to_string().contains("repository_access"),
+        "cursor's own body stays in the logs: {error}"
+    );
+    assert!(
+        service
+            .session(&id)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .iter()
+            .any(|entry| matches!(entry.input, JournalInput::PromptAborted(_))),
+        "a rejected prompt is journalled as aborted"
+    );
+}
+
+/// A Cursor account out of budget is the person's to fix on Cursor's
+/// dashboard, so it reaches the client as a refusal with a notice - title,
+/// plain body, the dashboard link - and never as the report, whose source
+/// locations and span dump are for the logs.
+#[tokio::test]
+async fn an_exhausted_cursor_budget_reaches_the_client_as_a_notice() {
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let (service, cursor, _output) = service(Some(repo));
+    let id = service.new_session(Path::new(""), vec![]);
+    cursor.script_usage_limit_rejection();
+
+    let error = service
+        .prompt(&id, "do the thing")
+        .await
+        .expect_err("an exhausted budget fails the prompt");
+
+    let SessionError::Rejected(refusal) = &error else {
+        panic!("a spent budget is a refusal, not a Cursor failure: {error:?}");
+    };
+    let notice = refusal
+        .notice
+        .as_ref()
+        .expect("a spent budget carries a notice");
+    assert_eq!(notice.title, "Cursor usage limit reached");
+    assert_eq!(
+        notice.link.as_ref().map(|link| link.url.as_str()),
+        Some("https://www.cursor.com/dashboard?tab=settings")
+    );
+    for text in [&refusal.message, &notice.body] {
+        assert!(
+            !text.contains("usage_limit_exceeded") && !text.contains("$2"),
+            "cursor's own body stays in the logs: {text}"
+        );
+        assert!(
+            !text.contains(".rs:") && !text.contains("├"),
+            "no report decoration reaches the person: {text}"
+        );
+    }
+    assert!(
+        service
+            .session(&id)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .iter()
+            .any(|entry| matches!(entry.input, JournalInput::PromptAborted(_))),
+        "a refused prompt is journalled as aborted"
+    );
+}
+
+/// After Cursor refuses the first create, the next prompt is almost always
+/// about the refusal ("what's the error?"), which is no evidence of where
+/// the work belongs. The repository decided from the first prompt has to
+/// stand, and the agent that finally starts has to see the message that
+/// was refused, or it is asked about a conversation it never had.
+#[tokio::test]
+async fn a_refused_create_keeps_its_repository_and_carries_the_prompt_forward() {
+    struct CountingChooser(RepoUrl, Arc<std::sync::atomic::AtomicUsize>);
+    impl RepositoryChooser for CountingChooser {
+        async fn choose(
+            &self,
+            _: &str,
+            _: &std::path::Path,
+        ) -> Result<SessionIntent, rootcause::Report> {
+            self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(SessionIntent {
+                repository: Some(self.0.clone()),
+                open_pull_request: true,
+            })
+        }
+    }
+
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let cursor = FakeCursor::new();
+    let choices = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        CountingChooser(repo.clone(), choices.clone()),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    ));
+    let id = service.new_session(Path::new(""), vec![]);
+
+    cursor.script_repository_rejection();
+    let refusal = service
+        .prompt(&id, "fix the notification grouping bug")
+        .await
+        .expect_err("the first create is refused");
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&id, "what's the error?")
+        .await
+        .expect("the second create succeeds");
+
+    assert_eq!(
+        choices.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "the repository is decided once, on the prompt that carried the evidence"
+    );
+    let creates: Vec<_> = cursor
+        .calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            CursorCall::CreateAgent(prompt, repo, ..) => Some((prompt, repo)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(creates.len(), 2, "one refused create, one accepted");
+    assert_eq!(creates[0].1.as_ref(), Some(&repo));
+    assert_eq!(
+        creates[1].1.as_ref(),
+        Some(&repo),
+        "the follow-up is created against the same repository"
+    );
+    assert_eq!(creates[0].0, "fix the notification grouping bug");
+    let carried = &creates[1].0;
+    assert!(
+        carried.contains("fix the notification grouping bug"),
+        "the refused prompt rides along: {carried}"
+    );
+    assert!(
+        carried.contains(&refusal.to_string()),
+        "and so does what the person was told: {carried}"
+    );
+    assert!(
+        carried.ends_with("what's the error?"),
+        "the current prompt is last, marked as the one to answer: {carried}"
+    );
+
+    // Once an agent exists nothing is carried any more: the conversation is
+    // on cursor.com, and the next prompt is an ordinary follow-up run.
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-2")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&id, "thanks")
+        .await
+        .expect("a follow-up run");
+    let follow_up = cursor
+        .calls()
+        .into_iter()
+        .rev()
+        .find_map(|call| match call {
+            CursorCall::CreateRun(_, prompt, ..) => Some(prompt),
+            _ => None,
+        })
+        .expect("a run was created");
+    assert_eq!(follow_up, "thanks");
+}
+
+#[cfg(feature = "postgres")]
+struct RefusedChooser;
+
+#[cfg(feature = "postgres")]
+impl RepositoryChooser for RefusedChooser {
+    async fn choose(&self, _: &str, _: &Path) -> Result<SessionIntent, rootcause::Report> {
+        Err(
+            rootcause::report!(agent_session::domain::error::AiAdmissionError::Unavailable)
+                .into_dynamic(),
+        )
+    }
+}
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn admission_refusal_is_typed_aborted_and_never_sent_to_cursor() {
+    use agent_session::domain::error::AiAdmissionError;
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RefusedChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    for _ in 0..2 {
+        let error = service.prompt(&id, "do the thing").await.unwrap_err();
+        assert!(matches!(
+            error,
+            SessionError::Admission(AiAdmissionError::Unavailable)
+        ));
+        assert_eq!(error.to_string(), AiAdmissionError::Unavailable.to_string());
+    }
+    assert!(cursor.calls().is_empty());
+    let session = service.session(&id).unwrap();
+    let state = session.state.lock().unwrap();
+    assert!(
+        state.rejected_prompts.is_empty(),
+        "quota-refused work cannot hitch a ride on a later prompt"
+    );
+    assert!(state.intent.is_none());
+    assert_eq!(
+        state
+            .journal_entries
+            .iter()
+            .filter(|entry| matches!(entry.input, JournalInput::PromptAborted(_)))
+            .count(),
+        2
+    );
+}
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn existing_cursor_agent_runs_even_when_macro_helper_admission_would_fail() {
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RefusedChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = SessionId::new("existing");
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent-existing")), None);
+    crate::testing::script_legacy_history(&cursor);
+    service.replay_session(&id).await.unwrap().complete();
+    let events = cursor.script_stream();
+    events.send(finished("run")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    service.prompt(&id, "continue").await.unwrap();
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..)))
+    );
+}
+
+#[tokio::test]
+async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
+    struct UnavailableChooser;
+    impl RepositoryChooser for UnavailableChooser {
+        async fn choose(
+            &self,
+            _: &str,
+            _: &Path,
+        ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
+            Err(rootcause::report!("GitHub repository listing unavailable"))
+        }
+    }
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        UnavailableChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    for _ in 0..2 {
+        let error = service
+            .prompt(&id, "update macro-inc/macro README")
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Couldn't prepare repository access")
+        );
+    }
+    assert!(
+        cursor.calls().is_empty(),
+        "failed setup never creates remote work"
+    );
+}
+
+#[tokio::test]
+async fn native_pr_is_reported_to_the_host_without_cursor_metadata() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: Some("Done".into()),
+            duration_ms: None,
+            git: Some(crate::domain::event::GitState {
+                branches: vec![crate::domain::event::GitBranch {
+                    repo_url: "github.com/org/repo".into(),
+                    branch: Some("fix".into()),
+                    pr_url: Some("https://github.com/org/repo/pull/1".into()),
+                }],
+            }),
+        })
+        .unwrap();
+    drop(events);
+    service.prompt(&session, "fix it").await.unwrap();
+    assert_eq!(
+        notifier.pull_requests(),
+        ["https://github.com/org/repo/pull/1"]
+    );
+    assert!(
+        !notifier
+            .updates()
+            .iter()
+            .any(|(_, update)| matches!(update, SessionUpdate::SessionInfoUpdate(_)))
+    );
+}
+
+#[tokio::test]
+async fn repository_choice_receives_each_sessions_working_directory() {
+    #[derive(Default)]
+    struct RecordingChooser(Mutex<Vec<std::path::PathBuf>>);
+    impl RepositoryChooser for RecordingChooser {
+        async fn choose(
+            &self,
+            _prompt: &str,
+            cwd: &Path,
+        ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
+            self.0.lock().unwrap().push(cwd.to_path_buf());
+            Ok(crate::domain::ports::SessionIntent::default())
+        }
+    }
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RecordingChooser::default(),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    for cwd in ["/workspace/one", "/workspace/two"] {
+        let id = service.new_session(Path::new(cwd), vec![]);
+        let events = cursor.script_stream();
+        events.send(finished("run")).unwrap();
+        events.send(CursorEvent::Done).unwrap();
+        service.prompt(&id, "work here").await.unwrap();
+    }
+    assert_eq!(
+        *service.chooser.0.lock().unwrap(),
+        vec![
+            std::path::PathBuf::from("/workspace/one"),
+            std::path::PathBuf::from("/workspace/two")
+        ]
+    );
+}
+
+/// Drive a turn whose run Cursor never finishes: the stream dies, and every
+/// poll after it answers `RUNNING`, exactly as the provider behaved when it
+/// wedged a run's record at `RUNNING` with a frozen `updatedAt`.
+/// Answers with the wedged run's id, which Cursor keeps listing as `RUNNING`.
+async fn wedge_a_run(
+    service: &Arc<Service>,
+    cursor: &FakeCursor,
+    session: &SessionId,
+) -> CursorRunId {
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "partial work".to_owned(),
+        })
+        .expect("stream open");
+    drop(events);
+    for _ in 0..=POLL_ATTEMPTS {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    service
+        .prompt(session, "do the thing")
+        .await
+        .expect_err("a run that never ends cannot close its turn");
+    let Some(run) = cursor.calls().into_iter().find_map(|call| match call {
+        CursorCall::RunResult(_, run) => Some(run),
+        _ => None,
+    }) else {
+        panic!("the wedged turn should have polled its run");
+    };
+    cursor.script_run_listings(vec![RunListing {
+        id: run.clone(),
+        status: RunStatus::Running,
+    }]);
+    run
+}
+
+/// Giving up on a run still going is not a provider failure, and must not
+/// reach the person who prompted as one: an `AcpError` renders the whole
+/// report, source location and all, which is what shipped to a user.
+#[tokio::test(start_paused = true)]
+async fn a_run_that_never_ends_is_reported_in_words_the_prompter_can_act_on() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "partial work".to_owned(),
+        })
+        .expect("stream open");
+    drop(events);
+    for _ in 0..=POLL_ATTEMPTS {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+
+    let error = service
+        .prompt(&session, "do the thing")
+        .await
+        .expect_err("the turn cannot close on a run that never ends");
+    let SessionError::Rejected(PromptRefusal { message, .. }) = &error else {
+        panic!("a run still going is not a Cursor failure: {error:?}");
+    };
+    // The decorations a report carries would be read as part of the sentence.
+    assert!(
+        !message.contains("├"),
+        "leaked report decoration: {message}"
+    );
+    assert!(
+        !message.contains(".rs:"),
+        "leaked source location: {message}"
+    );
+    assert!(
+        message.contains("stopped waiting"),
+        "must say what actually happened: {message}"
+    );
+    assert!(
+        message.contains("Send another message"),
+        "must say what to do about it: {message}"
+    );
+}
+
+/// The turn gave up, but the journal still has to record that it did - the
+/// projection reads `Interrupted` to tell an abandoned run from a live one,
+/// and the busy-agent release reads it to know which run it may cancel.
+#[tokio::test(start_paused = true)]
+async fn giving_up_on_an_unfinished_run_is_still_journalled_as_interrupted() {
+    use crate::outbound::memory_journal::MemoryJournal;
+    let journal = Arc::new(MemoryJournal::default());
+    let cursor = FakeCursor::new();
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        FixedChooser(None, false),
+        journal.clone(),
+        NoArtifactStore,
+    ));
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    wedge_a_run(&service, &cursor, &session).await;
+
+    let entries = journal.read(&session).await.expect("journal readable");
+    assert!(
+        entries
+            .iter()
+            .any(|e| matches!(e.input, JournalInput::Interrupted(_))),
+        "an abandoned turn must leave its record"
+    );
+    assert!(
+        !entries.iter().any(|e| e.input == JournalInput::Reconciled),
+        "nothing terminal was observed, so nothing may be reconciled"
+    );
+}
+
+/// The regression that killed sessions: one run Cursor never finished made
+/// every later prompt fail, because recovery insisted on reconciling it
+/// first and a run still going has no terminal fact to reconcile against.
+#[tokio::test(start_paused = true)]
+async fn an_unfinished_run_does_not_block_the_next_prompt() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Cursor goes on listing that run as RUNNING, which is the whole problem.
+    let stuck = wedge_a_run(&service, &cursor, &session).await;
+    let before = cursor.calls().len();
+
+    // The next prompt answers normally instead of dying on recovery.
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the next answer".to_owned(),
+        })
+        .expect("stream open");
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-2"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    drop(events);
+
+    let stop = service
+        .prompt(&session, "try again")
+        .await
+        .expect("an unfinished earlier run must not fail a new prompt");
+    assert_eq!(stop, StopReason::EndTurn);
+    // And it was left alone rather than recovered slowly: nothing this prompt
+    // did touched the wedged run.
+    assert!(
+        !cursor.calls()[before..].iter().any(|call| matches!(
+            call,
+            CursorCall::RunResult(_, run) if run == &stuck
+        )),
+        "the wedged run should not have been re-read by the next prompt"
+    );
+}
+
+/// A wedged run holds the agent's single run slot forever, so waiting out
+/// `agent_busy` only fails the prompt slower. The run this session already
+/// abandoned is cancelled to get the slot back.
+#[tokio::test(start_paused = true)]
+async fn a_busy_agent_is_freed_by_cancelling_the_run_this_session_abandoned() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let abandoned = wedge_a_run(&service, &cursor, &session).await;
+
+    // The wedged run still holds the slot; one release frees it.
+    cursor.script_create_run_errors(1, "agent_busy");
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-3"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    drop(events);
+
+    service
+        .prompt(&session, "try again")
+        .await
+        .expect("the prompt proceeds once the abandoned run lets go");
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(_, run) if run == &abandoned)),
+        "the abandoned run should have been cancelled to free the agent"
+    );
+}
+
+/// The root cause of the reported incident. Cursor announced `FINISHED` on
+/// the stream's `status` channel and sent no `result` frame at all, while its
+/// run record stayed `RUNNING` with an `updatedAt` frozen seconds after the
+/// run began. A turn that accepts only `result` waits out its entire poll
+/// budget against a record that is never going to move, and then fails a run
+/// that had in fact finished.
+#[tokio::test(start_paused = true)]
+async fn a_terminal_status_frame_closes_the_turn_without_a_result_frame() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the whole answer".to_owned(),
+        })
+        .expect("stream open");
+    events
+        .send(CursorEvent::Status {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        })
+        .expect("stream open");
+    drop(events); // no `result` frame ever comes, exactly as observed
+    // No poll result is scripted: `raw_result` errors when asked, so a turn
+    // that closes here proves it closed on the status frame alone and never
+    // consulted the run record — which in production was frozen at RUNNING.
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("a terminal status frame is a terminal fact");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(agent_texts(&notifier.updates()), vec!["the whole answer"]);
+}
+
+/// A non-terminal `status` is framing, not an outcome - Cursor re-sends one
+/// at the top of every reconnect - so it must not close anything.
+#[tokio::test(start_paused = true)]
+async fn a_running_status_frame_does_not_close_the_turn() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Status {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Running,
+        })
+        .expect("stream open");
+    drop(events);
+    // With no outcome from the stream, the record is still what decides.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("from the record".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the record closes a turn the stream did not");
+    assert_eq!(stop, StopReason::EndTurn);
+}
+
+/// A stop landing while the poll budget runs out still answers Cancelled:
+/// ACP requires it once the client sent `session/cancel`, and giving up on an
+/// unfinished run takes the `Rejected` variant now.
+#[tokio::test(start_paused = true)]
+async fn a_cancel_near_poll_exhaustion_still_reports_cancelled() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "partial work".to_owned(),
+        })
+        .expect("stream open");
+    drop(events);
+    for _ in 0..=POLL_ATTEMPTS {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+
+    let turn = {
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        tokio::spawn(async move { service.prompt(&session, "hi").await })
+    };
+    // Let the turn reach the poll loop, then stop it.
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    service.cancel(&session).await.expect("cancel lands");
+
+    let stop = turn
+        .await
+        .expect("the turn task completes")
+        .expect("a cancelled turn reports a stop reason, not an error");
+    assert_eq!(stop, StopReason::Cancelled);
+}
+
+/// A stream that dies mid-run is resumed, not abandoned.
+///
+/// Observed twice in production: the SSE body fails during a long tool call
+/// while the run carries on server-side, and everything Cursor says between
+/// the drop and the run's end is lost from the transcript. The last event id
+/// is the only thing Cursor accepts as a resume position, so it is what goes
+/// back.
+#[tokio::test(start_paused = true)]
+async fn a_dropped_stream_is_resumed_from_the_last_event_id() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "before the drop".to_owned(),
+            },
+            "1713033006000-0",
+        )
+        .expect("stream open");
+    drop(dropped);
+    let resumed = cursor.script_stream();
+    resumed
+        .send(CursorEvent::Assistant {
+            text: " and after it".to_owned(),
+        })
+        .expect("stream open");
+    resumed.send(finished("run-fake-1")).expect("stream open");
+    resumed.send(CursorEvent::Done).expect("stream open");
+    drop(resumed);
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the resumed stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![None, Some("1713033006000-0".to_owned())],
+        "the reconnect carries the last id seen, verbatim"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["before the drop", " and after it"],
+        "what Cursor said after the drop still reaches the client"
+    );
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        entries.iter().any(|entry| matches!(
+            &entry.input,
+            JournalInput::StreamInterrupted { last_event_id, attempt, reason }
+                if last_event_id.as_deref() == Some("1713033006000-0")
+                    && *attempt == 1
+                    && reason.contains("error decoding response body")
+        )),
+        "the break is durable, so the transcript's gap stays explicable"
+    );
+}
+
+/// Cursor re-sends the run's `status` frame at the top of every reconnect,
+/// without an id. It is framing, not a new fact, and journaling it twice would
+/// put the same lifecycle event in the durable record twice.
+#[tokio::test(start_paused = true)]
+async fn a_resumed_stream_does_not_repeat_the_sticky_status_frame() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let running = CursorEvent::Status {
+        run_id: CursorRunId::new("run-fake-1"),
+        status: RunStatus::Running,
+    };
+
+    let dropped = cursor.script_stream_failing_with("connection reset");
+    dropped.send(running.clone()).expect("stream open");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "half".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    let resumed = cursor.script_stream();
+    resumed.send(running).expect("stream open");
+    resumed
+        .send(CursorEvent::Assistant {
+            text: " and half".to_owned(),
+        })
+        .expect("stream open");
+    resumed.send(finished("run-fake-1")).expect("stream open");
+    resumed.send(CursorEvent::Done).expect("stream open");
+    drop(resumed);
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("a resumed stream never trips prefix reconciliation");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(agent_texts(&notifier.updates()), vec!["half", " and half"]);
+    let statuses = service
+        .journal
+        .read(&session)
+        .await
+        .expect("journal")
+        .iter()
+        .filter(
+            |entry| matches!(&entry.input, JournalInput::Sse(record) if record.event == "status"),
+        )
+        .count();
+    assert_eq!(statuses, 1, "the sticky frame is recognized, not recorded");
+}
+
+/// A stream that will not come back stops being retried, and the run's record
+/// closes the turn — a turn may lose its liveness, never its answer.
+#[tokio::test(start_paused = true)]
+async fn exhausted_reconnects_fall_back_to_polling_the_run_record() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "the whole answer".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    // No further streams are queued, so every reconnect fails to connect.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the poll still ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        1 + STREAM_RECONNECT_ATTEMPTS,
+        "the first connect plus a bounded number of reconnects"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["the whole answer"],
+        "the poll does not repeat what the stream already delivered"
+    );
+}
+
+/// Past Cursor's retention window there is no stream left to resume, so
+/// retrying one only delays the run record that can still answer.
+#[tokio::test(start_paused = true)]
+async fn an_expired_stream_polls_instead_of_reconnecting_again() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "the whole answer".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    cursor.script_stream_connect_error(StreamConnectError::Expired(
+        "410 Gone: stream_expired".to_owned(),
+    ));
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the poll ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![None, Some("evt-1".to_owned())],
+        "an expired stream is not connected a third time"
+    );
+}
+
+/// A resume position Cursor will not accept is worth one connect without one:
+/// reading the run from the top still beats polling, and the prefix already
+/// captured is matched rather than delivered twice.
+#[tokio::test(start_paused = true)]
+async fn a_rejected_resume_position_reconnects_once_without_one() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "half".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    cursor.script_stream_connect_error(StreamConnectError::InvalidResumePosition(
+        "400 Bad Request: invalid_last_event_id".to_owned(),
+    ));
+    let restarted = cursor.script_stream();
+    restarted
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "half".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    restarted
+        .send(CursorEvent::Assistant {
+            text: " and half".to_owned(),
+        })
+        .expect("stream open");
+    restarted.send(finished("run-fake-1")).expect("stream open");
+    restarted.send(CursorEvent::Done).expect("stream open");
+    drop(restarted);
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the restarted stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![None, Some("evt-1".to_owned()), None],
+        "exactly one blind reconnect follows the rejection"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["half", " and half"],
+        "the replayed prefix is matched, not delivered again"
+    );
+}
+
+/// Prod, 2026-09-26: a resume was held open with no headers for 6m43s and
+/// answered all at once when the run ended. The connect now gives up waiting
+/// for headers, and each stall checks the run's record: a run still going
+/// gets its stream tried again without spending the failure budget, and a
+/// run that has ended gets one more connect to drain what the stream held.
+#[tokio::test(start_paused = true)]
+async fn a_stalled_connect_checks_the_record_and_drains_the_stream_once_the_run_ends() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "before the stall".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    // Two resumes stall. The record says the run is still going after the
+    // first and finished after the second.
+    cursor.script_stream_connect_error(StreamConnectError::Stalled(
+        "no response headers after 30s".to_owned(),
+    ));
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Running,
+        text: None,
+    });
+    cursor.script_stream_connect_error(StreamConnectError::Stalled(
+        "no response headers after 30s".to_owned(),
+    ));
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("before the stall and after it".to_owned()),
+    });
+    // The drain delivers what the stalled stream held back, terminal frame
+    // included.
+    let drained = cursor.script_stream();
+    drained
+        .send(CursorEvent::Assistant {
+            text: " and after it".to_owned(),
+        })
+        .expect("stream open");
+    drained.send(finished("run-fake-1")).expect("stream open");
+    drained.send(CursorEvent::Done).expect("stream open");
+    drop(drained);
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the drained stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![
+            None,
+            Some("evt-1".to_owned()),
+            Some("evt-1".to_owned()),
+            Some("evt-1".to_owned()),
+        ],
+        "every connect after the break resumes from the last id heard"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["before the stall", " and after it"],
+        "the stream's own account is delivered once, never the record's on top of it"
+    );
+    let entries = service.journal.read(&session).await.expect("journal");
+    let stalls: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| match &entry.input {
+            JournalInput::StreamInterrupted {
+                reason, attempt, ..
+            } if reason.contains("stalled connect") => Some((reason.clone(), *attempt)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        stalls,
+        vec![
+            (
+                "no response headers after 30s (stalled connect 1)".to_owned(),
+                2
+            ),
+            (
+                "no response headers after 30s (stalled connect 2)".to_owned(),
+                2
+            ),
+        ],
+        "each stall is durable, and none of them spends the reconnect budget"
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|entry| matches!(entry.input, JournalInput::Poll(_)))
+            .count(),
+        1,
+        "the record is captured while the run is going, not the terminal one that the drain overtook"
+    );
+}
+
+/// When the drain stalls too, the record's account stands - and because the
+/// stream broke and never came back, the restated answer is appended whole
+/// rather than dropped for not continuing the fragment that was streamed.
+#[tokio::test(start_paused = true)]
+async fn a_stream_still_stalled_after_the_run_ends_keeps_the_record() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "Looking into".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    for _ in 0..2 {
+        cursor.script_stream_connect_error(StreamConnectError::Stalled(
+            "no response headers after 30s".to_owned(),
+        ));
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Finished,
+            text: Some("The bell icon was hidden by a stale flag.".to_owned()),
+        });
+    }
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the record ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        3,
+        "the first connect, the stalled resume, and the one drain attempt"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec![
+            "Looking into",
+            "\n\nThe bell icon was hidden by a stale flag."
+        ],
+        "the answer the stream never delivered still reaches the client"
+    );
+}
+
+/// Before the stream has ever opened there is nothing to resume, so stalls
+/// are bounded: a few are tried, then the record is polled instead.
+#[tokio::test(start_paused = true)]
+async fn stalls_before_the_stream_ever_opened_fall_back_to_polling() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    for _ in 0..STALLED_CONNECTS_BEFORE_POLLING {
+        cursor.script_stream_connect_error(StreamConnectError::Stalled(
+            "no response headers after 30s".to_owned(),
+        ));
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the poll ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        STALLED_CONNECTS_BEFORE_POLLING as usize,
+        "a stream that never opens is tried a bounded number of times"
+    );
+    assert_eq!(agent_texts(&notifier.updates()), vec!["the whole answer"]);
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        entries.iter().any(|entry| matches!(
+            &entry.input,
+            JournalInput::TransportError(reason) if reason.contains("stalled connect 3")
+        )),
+        "giving up on the stream is journaled as the transport failure it is"
+    );
+}
+
+/// Every resume in the 2026-09-26 incidents delivered its backlog in one
+/// burst and failed within the second. Delivery alone no longer refills the
+/// reconnect budget: a resume that dies at once is the same failure
+/// continuing, and after the budget the record is polled instead.
+#[tokio::test(start_paused = true)]
+async fn a_resume_that_delivers_and_dies_at_once_spends_the_budget() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "a".to_owned(),
+            },
+            "evt-0",
+        )
+        .expect("stream open");
+    drop(dropped);
+    for index in 1..=STREAM_RECONNECT_ATTEMPTS {
+        let burst = cursor.script_stream_failing_with("error decoding response body");
+        burst
+            .send_with_id(
+                CursorEvent::Assistant {
+                    text: "a".to_owned(),
+                },
+                &format!("evt-{index}"),
+            )
+            .expect("stream open");
+        drop(burst);
+    }
+    // One more burst is queued than the budget allows; it must go unread.
+    let unread = cursor.script_stream();
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("a".repeat(1 + STREAM_RECONNECT_ATTEMPTS)),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the poll ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    drop(unread);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        1 + STREAM_RECONNECT_ATTEMPTS,
+        "the budget is spent by resumes that fail at once, however much they delivered"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()).concat(),
+        "a".repeat(1 + STREAM_RECONNECT_ATTEMPTS),
+        "everything each burst delivered still reached the client, once"
+    );
+    let entries = service.journal.read(&session).await.expect("journal");
+    let attempts: Vec<u32> = entries
+        .iter()
+        .filter_map(|entry| match &entry.input {
+            JournalInput::StreamInterrupted { attempt, .. } => Some(*attempt),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        attempts,
+        (1..=1 + STREAM_RECONNECT_ATTEMPTS as u32).collect::<Vec<_>>(),
+        "the attempt counter climbs instead of reading 1 on every line"
+    );
+}
+
+/// A resume that delivers and then stays up is the transport working again,
+/// and the next break gets a full budget.
+#[tokio::test(start_paused = true)]
+async fn a_resume_that_stays_up_refills_the_budget() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "a".to_owned(),
+            },
+            "evt-0",
+        )
+        .expect("stream open");
+    drop(dropped);
+    // The budget's worth of resumes that die at once, then one that lives.
+    for index in 1..STREAM_RECONNECT_ATTEMPTS {
+        let burst = cursor.script_stream_failing_with("error decoding response body");
+        burst
+            .send_with_id(
+                CursorEvent::Assistant {
+                    text: "a".to_owned(),
+                },
+                &format!("evt-{index}"),
+            )
+            .expect("stream open");
+        drop(burst);
+    }
+    let lively = cursor.script_stream_failing_with("error decoding response body");
+    lively
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "b".to_owned(),
+            },
+            "evt-lively",
+        )
+        .expect("stream open");
+    // After the refill, another budget's worth of fast failures is survivable.
+    for index in 0..STREAM_RECONNECT_ATTEMPTS - 1 {
+        let burst = cursor.script_stream_failing_with("error decoding response body");
+        burst
+            .send_with_id(
+                CursorEvent::Assistant {
+                    text: "c".to_owned(),
+                },
+                &format!("evt-c{index}"),
+            )
+            .expect("stream open");
+        drop(burst);
+    }
+    let last = cursor.script_stream();
+    last.send(finished("run-fake-1")).expect("stream open");
+    last.send(CursorEvent::Done).expect("stream open");
+    drop(last);
+
+    let turn = {
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        tokio::spawn(async move { service.prompt(&session, "hi").await })
+    };
+    // Let the lively connection outlive the health threshold before it dies.
+    // The bursts before it reconnect on the backoff schedule, which paused
+    // time advances through as the turn sleeps.
+    tokio::time::sleep(
+        STREAM_RECONNECT_DELAYS.iter().sum::<std::time::Duration>()
+            + STREAM_HEALTHY_RESUME
+            + std::time::Duration::from_secs(1),
+    )
+    .await;
+    drop(lively);
+
+    let stop = turn
+        .await
+        .expect("the turn task completes")
+        .expect("the stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        // The first connect, the bursts before the lively resume, the lively
+        // resume itself, the bursts after it, and the stream that finished.
+        1 + (STREAM_RECONNECT_ATTEMPTS - 1) + 1 + (STREAM_RECONNECT_ATTEMPTS - 1) + 1,
+        "the lively resume refilled the budget for the bursts after it"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()).concat(),
+        format!(
+            "{}b{}",
+            "a".repeat(STREAM_RECONNECT_ATTEMPTS),
+            "c".repeat(STREAM_RECONNECT_ATTEMPTS - 1)
+        )
+    );
+}
+
+/// Cursor does not heartbeat an open stream, and a run at work says nothing
+/// for minutes at a time - a tool call waiting on CI, a long build. Seen
+/// live: a run that opened its pull request a minute after its turn had
+/// given up, having spent its whole reconnect budget in the first minute of
+/// a silence that Cursor's own record said was fine. A quiet connection on a
+/// run still going is kept, and the record confirms the run is alive.
+#[tokio::test(start_paused = true)]
+async fn a_quiet_stream_is_kept_while_the_run_is_still_going() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let quiet = cursor.script_stream();
+    quiet
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "thinking".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    // The record is asked once at the first quiet check, and says: working.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Running,
+        text: None,
+    });
+
+    let turn = {
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        tokio::spawn(async move { service.prompt(&session, "hi").await })
+    };
+    // Past the first quiet check, well short of the silence that replaces a
+    // connection: the same connection then speaks again.
+    tokio::time::sleep(STREAM_QUIET_TIMEOUT + std::time::Duration::from_secs(5)).await;
+    quiet
+        .send(CursorEvent::Assistant {
+            text: " done".to_owned(),
+        })
+        .expect("stream open");
+    quiet.send(finished("run-fake-1")).expect("stream open");
+    quiet.send(CursorEvent::Done).expect("stream open");
+    drop(quiet);
+
+    let stop = turn
+        .await
+        .expect("the turn task completes")
+        .expect("the same stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![None],
+        "a connection that is merely quiet is not replaced"
+    );
+    assert_eq!(agent_texts(&notifier.updates()), vec!["thinking", " done"]);
+}
+
+/// Silence long enough does buy a fresh connection - insurance against a
+/// socket that died without saying so - but it never spends the reconnect
+/// budget, which rations a transport that is failing. A run that is quiet
+/// for far longer than the budget would allow of failures still streams.
+#[tokio::test(start_paused = true)]
+async fn a_long_silence_reconnects_without_spending_the_reconnect_budget() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Record checks per silent connection before it is replaced: the first
+    // at the quiet timeout, then every recheck until the silence is long.
+    let checks_per_silence = {
+        let mut silence = STREAM_QUIET_TIMEOUT;
+        let mut checks = 1;
+        while silence < STREAM_SILENCE_BEFORE_RECONNECT {
+            silence += STREAM_QUIET_RECHECK;
+            checks += 1;
+        }
+        checks
+    };
+    // More silent connections in a row than the reconnect budget allows of
+    // failing ones. Each is held open (the sender kept) and says nothing.
+    let silent_connections = STREAM_RECONNECT_ATTEMPTS + 2;
+    let mut held = Vec::new();
+    let first = cursor.script_stream();
+    first
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "thinking".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    held.push(first);
+    for _ in 0..checks_per_silence {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    for _ in 1..silent_connections {
+        held.push(cursor.script_stream());
+        for _ in 0..checks_per_silence {
+            cursor.script_run_result(RunOutcome {
+                status: RunStatus::Running,
+                text: None,
+            });
+        }
+    }
+    let speaking = cursor.script_stream();
+    speaking
+        .send(CursorEvent::Assistant {
+            text: " done".to_owned(),
+        })
+        .expect("stream open");
+    speaking.send(finished("run-fake-1")).expect("stream open");
+    speaking.send(CursorEvent::Done).expect("stream open");
+    drop(speaking);
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the run is still streamed after a long silence");
+    assert_eq!(stop, StopReason::EndTurn);
+    drop(held);
+    let positions = cursor.resume_positions();
+    assert_eq!(
+        positions.len(),
+        silent_connections + 1,
+        "every silent connection was replaced, past the failure budget: {positions:?}"
+    );
+    assert!(
+        positions[1..]
+            .iter()
+            .all(|position| position.as_deref() == Some("evt-1")),
+        "each replacement resumes from the last record heard: {positions:?}"
+    );
+    assert_eq!(agent_texts(&notifier.updates()), vec!["thinking", " done"]);
+}
+
+/// A resume never trips prefix reconciliation on a partially captured run.
+///
+/// The resume position is the last record this connection actually received,
+/// so what comes back starts exactly where the prefix check had got to: the
+/// rest of the captured prefix is matched as usual and only genuinely new
+/// records are appended.
+#[tokio::test(start_paused = true)]
+async fn a_resumed_stream_continues_the_captured_prefix_without_duplicating_it() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let session = service.session(&id).expect("session exists");
+    let run = CursorRunId::new("foreign");
+    let asked = NativeRecord {
+        id: Some("evt-1".to_owned()),
+        ..crate::testing::raw_record(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "asked elsewhere".into(),
+        }))
+    };
+    let half = NativeRecord {
+        id: Some("evt-2".to_owned()),
+        ..crate::testing::raw_record(CursorEvent::Assistant { text: "hel".into() })
+    };
+    {
+        let _gate = session.turn_gate.lock().await;
+        service
+            .ensure_journal(&id, &session)
+            .await
+            .expect("journal");
+        for record in [&asked, &half] {
+            service
+                .capture(
+                    &id,
+                    &session,
+                    Some(&run),
+                    JournalInput::Sse(record.clone()),
+                    Emit::Silent,
+                )
+                .await
+                .expect("capture");
+        }
+        // The first connection re-reads only the head of the captured prefix
+        // before the transport breaks.
+        let dropped = cursor.script_stream_failing_with("error decoding response body");
+        dropped.send_record(asked).expect("stream open");
+        drop(dropped);
+        // The resume picks up at the rest of the prefix and runs past it.
+        let resumed = cursor.script_stream();
+        resumed.send_record(half).expect("stream open");
+        resumed
+            .send(CursorEvent::Assistant { text: "lo".into() })
+            .expect("stream open");
+        resumed.send(finished("foreign")).expect("stream open");
+        resumed.send(CursorEvent::Done).expect("stream open");
+        drop(resumed);
+        service
+            .ingest_run(
+                &id,
+                &session,
+                &CursorAgentId::new("agent"),
+                &run,
+                &tokio_util::sync::CancellationToken::new(),
+                IngestMode::LIVE,
+            )
+            .await
+            .expect("a resumed stream reconciles");
+    }
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![None, Some("evt-1".to_owned())]
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["lo"],
+        "only the records past the captured prefix are delivered"
+    );
+    let entries = service.journal.read(&id).await.expect("journal");
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|entry| matches!(&entry.input, JournalInput::Sse(record)
+                if matches!(record.decode(), CursorEvent::Assistant { text } if text == "hel")))
+            .count(),
+        1,
+        "the matched prefix is not captured a second time"
+    );
+}
+
+/// Start a mirror of a run started elsewhere and hold it open.
+///
+/// The session has an agent whose only run, `R1`, Cursor still calls
+/// running; the mirror follows its stream and holds the turn gate for as
+/// long as the stream stays open. Returns the mirror's task and the stream
+/// the test feeds it.
+async fn mirror_following_a_live_run(
+    service: &Arc<Service>,
+    cursor: &FakeCursor,
+    id: &SessionId,
+) -> (tokio::task::JoinHandle<()>, crate::testing::ScriptSender) {
+    service.session(id).unwrap().state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("R1"),
+        status: RunStatus::Running,
+    }]);
+    let foreign = cursor.script_stream();
+    foreign
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "asked over there".into(),
+        }))
+        .unwrap();
+    let mirror = tokio::spawn({
+        let service = Arc::clone(service);
+        async move { service.sync_foreign_runs().await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            if service
+                .journal
+                .read(id)
+                .await
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e.input, JournalInput::Sse(_)))
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the mirror captures the foreign run");
+    assert!(service.has_active_turn(), "the mirror holds the turn gate");
+    (mirror, foreign)
+}
+
+/// The production hang (2026-09-27): a mirror following a run started from
+/// cursor.com held the turn gate, the prompt behind it waited with no way to
+/// be stopped, and everything queued after that prompt never sent.
+///
+/// A stop now ends the waiting prompt at once, as `Cancelled`, and asks
+/// Cursor to cancel the run the mirror was following - the same remote cancel
+/// any stop sends for a run this process did not start.
+#[tokio::test]
+async fn a_stop_ends_a_prompt_waiting_behind_a_mirror() {
+    let (service, cursor, _notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let (mirror, foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+
+    let prompt = tokio::spawn({
+        let service = Arc::clone(&service);
+        let id = id.clone();
+        async move { service.prompt(&id, "queued behind the mirror").await }
+    });
+    // The prompt reaches the gate and parks there: it has no awaits before it.
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+    assert!(!prompt.is_finished(), "the prompt waits behind the mirror");
+
+    service.cancel(&id).await.expect("cancel works");
+    let stop = tokio::time::timeout(std::time::Duration::from_secs(5), prompt)
+        .await
+        .expect("the stop ends the wait")
+        .expect("task joins")
+        .expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(_, run) if run.as_str() == "R1")),
+        "the run the mirror was following is asked to stop"
+    );
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..))),
+        "a stopped prompt never reaches Cursor"
+    );
+
+    // Cursor answers the cancel with the run's end; the mirror reconciles it
+    // and lets go of the gate.
+    foreign.send(cancelled("R1")).unwrap();
+    foreign.send(CursorEvent::Done).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), mirror)
+        .await
+        .expect("the mirror ends with the run")
+        .unwrap();
+    assert!(!service.has_active_turn());
+}
+
+/// A prompt parked behind the mirror already has its turn open on the
+/// client, so the rest of the cursor.com run must not stream into it. The
+/// mirror holds those frames back and asks for a reload, which shows the run
+/// in its own place, instead of checkpointing a delivery that never happened.
+#[tokio::test]
+async fn a_prompt_waiting_behind_a_mirror_holds_the_rest_of_the_run_for_a_reload() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let (mirror, foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+    notifier.wait_for_updates(1).await;
+    assert_eq!(user_texts(&notifier.updates()), ["asked over there"]);
+
+    let session = service.session(&id).unwrap();
+    let waiting = WaitingPrompt::new(&session);
+    foreign
+        .send(CursorEvent::Assistant {
+            text: "answered over there".into(),
+        })
+        .unwrap();
+    foreign.send(finished("R1")).unwrap();
+    foreign.send(CursorEvent::Done).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), mirror)
+        .await
+        .expect("the mirror ends with the run")
+        .unwrap();
+    drop(waiting);
+
+    assert!(
+        agent_texts(&notifier.updates()).is_empty(),
+        "nothing lands in the waiting prompt's turn"
+    );
+    assert_eq!(notifier.reloads(), vec![id.clone()]);
+    assert!(notifier.checkpoints().is_empty());
+    let loaded = load(&service, &id, &notifier).await;
+    assert_eq!(user_texts(&loaded), ["asked over there"]);
+    assert_eq!(agent_texts(&loaded), ["answered over there"]);
+}
+
+/// A prompt that stops waiting (a stop, or the gate budget running out) does
+/// not let the mirror resume streaming: the client is already missing what
+/// was held back, and the rest of the run would render without it.
+#[tokio::test]
+async fn a_mirror_that_held_frames_back_keeps_the_rest_of_the_run_for_the_reload() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let (mirror, foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+    notifier.wait_for_updates(1).await;
+
+    let session = service.session(&id).unwrap();
+    drop(WaitingPrompt::new(&session));
+    foreign
+        .send(CursorEvent::Assistant {
+            text: "answered over there".into(),
+        })
+        .unwrap();
+    foreign.send(finished("R1")).unwrap();
+    foreign.send(CursorEvent::Done).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), mirror)
+        .await
+        .expect("the mirror ends with the run")
+        .unwrap();
+
+    assert!(
+        agent_texts(&notifier.updates()).is_empty(),
+        "the rest of the run waits for the reload"
+    );
+    assert_eq!(notifier.reloads(), vec![id.clone()]);
+    let loaded = load(&service, &id, &notifier).await;
+    assert_eq!(agent_texts(&loaded), ["answered over there"]);
+}
+
+/// A prompt sent while the mirror's last frames were on their way reaches the
+/// service only after the mirror let go of the gate, with those frames
+/// already inside its turn on the client. Arriving that soon after the
+/// mirror streamed, it asks for a reload; a prompt well after does not.
+#[tokio::test(start_paused = true)]
+async fn a_prompt_right_after_a_mirror_streamed_asks_for_a_reload() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    service.prompt(&id, "first").await.unwrap();
+
+    let mirror_one = |run: &'static str, previous: &'static str| {
+        cursor.script_run_listings(vec![
+            RunListing {
+                id: CursorRunId::new(run),
+                status: RunStatus::Finished,
+            },
+            RunListing {
+                id: CursorRunId::new(previous),
+                status: RunStatus::Finished,
+            },
+        ]);
+        let foreign = cursor.script_stream();
+        foreign
+            .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+                text: format!("{run} question"),
+            }))
+            .unwrap();
+        foreign
+            .send(CursorEvent::Assistant {
+                text: format!("{run} answer"),
+            })
+            .unwrap();
+        foreign.send(finished(run)).unwrap();
+        foreign.send(CursorEvent::Done).unwrap();
+    };
+    let own = |run: &'static str| {
+        let events = cursor.script_stream();
+        events.send(finished(run)).unwrap();
+        events.send(CursorEvent::Done).unwrap();
+    };
+
+    mirror_one("run-foreign-1", "run-fake-1");
+    service.sync_foreign_runs().await;
+    assert!(notifier.reloads().is_empty());
+    own("run-fake-2");
+    service.prompt(&id, "right after").await.unwrap();
+    assert_eq!(notifier.reloads(), vec![id.clone()]);
+    load(&service, &id, &notifier).await;
+
+    mirror_one("run-foreign-2", "run-fake-2");
+    service.sync_foreign_runs().await;
+    tokio::time::advance(MIRROR_PROMPT_OVERLAP * 2).await;
+    own("run-fake-3");
+    service.prompt(&id, "much later").await.unwrap();
+    assert_eq!(notifier.reloads().len(), 1, "no overlap, no reload");
+}
+
+/// A stop reaches the mirror itself, not only the prompt behind it.
+///
+/// Cursor was observed to keep a run at `RUNNING` after a cancel, with a
+/// stream that says nothing more. A mirror that waited for that run's
+/// `result` frame would hold the turn gate for good. Instead the stop ends
+/// the following at the mirror's next check, the run is left as one a turn
+/// gave up on, and the next prompt runs without waiting behind it.
+#[tokio::test(start_paused = true)]
+async fn a_stop_ends_a_mirror_following_a_run_cursor_never_ends() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    // The quiet-stream checks and the fallback poll each read the record,
+    // and every read says the run is still going.
+    for _ in 0..8 {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    let (mirror, _foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+
+    service.cancel(&id).await.expect("cancel works");
+
+    // The stream stays open and silent; the stop is what ends the mirror.
+    tokio::time::timeout(std::time::Duration::from_secs(600), mirror)
+        .await
+        .expect("the stop ends the mirror")
+        .unwrap();
+    assert!(!service.has_active_turn(), "the mirror let go of the gate");
+    let entries = service.journal.read(&id).await.unwrap();
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.run.as_ref().map(CursorRunId::as_str) == Some("R1")
+                && matches!(e.input, JournalInput::Interrupted(_))),
+        "the run is recorded as one this session gave up on"
+    );
+    assert!(
+        !entries
+            .iter()
+            .any(|e| e.run.as_ref().map(CursorRunId::as_str) == Some("R1")
+                && e.input == JournalInput::Reconciled),
+        "an interrupted following is not reconciliation"
+    );
+    assert_eq!(
+        user_texts(&notifier.updates()),
+        ["asked over there"],
+        "what the mirror streamed before the stop stays shown"
+    );
+    assert!(notifier.reloads().is_empty());
+
+    // The next prompt does not wait behind the run Cursor never ended: it is
+    // skipped as abandoned, and the prompt runs.
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    let stop = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        service.prompt(&id, "next"),
+    )
+    .await
+    .expect("the prompt is not blocked by the abandoned run")
+    .expect("prompt resolves");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..))),
+        "the prompt reached Cursor"
+    );
+}
+
+/// A prompt behind a mirror does not wait forever, even with nobody to stop
+/// it: a mirror still following a run after the busy-agent budget ends the
+/// prompt with a refusal the person can read, instead of a turn that never
+/// ends and a queue that never drains.
+#[tokio::test(start_paused = true)]
+async fn a_prompt_gives_up_on_the_turn_gate_after_the_busy_budget() {
+    let (service, cursor, _notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    // Enough record reads for every quiet check across the budget.
+    for _ in 0..2000 {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    let (mirror, foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+
+    let outcome = tokio::time::timeout(
+        GATE_WAIT_BUDGET + std::time::Duration::from_secs(60),
+        service.prompt(&id, "queued behind the mirror"),
+    )
+    .await
+    .expect("the wait is bounded");
+    assert!(
+        matches!(&outcome, Err(SessionError::Rejected(refusal)) if refusal.message.contains("started outside Macro")),
+        "the prompt is refused in the person's terms, got {outcome:?}"
+    );
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..))),
+        "a refused prompt never reaches Cursor"
+    );
+    assert!(
+        service.has_active_turn(),
+        "giving up on the wait does not end the mirror"
+    );
+    drop(foreign);
+    mirror.abort();
+    let _ = mirror.await;
+}

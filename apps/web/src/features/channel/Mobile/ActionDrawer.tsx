@@ -2,13 +2,20 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { focusInput } from '@core/directive/focusInput';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
-import CheckSquareIcon from '@phosphor/check-square.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PencilIcon from '@phosphor/pencil.svg';
-import SmileyIcon from '@phosphor/smiley.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import type {
+  MessageActionEvent,
+  MessageActionHandler,
+  MessageActions,
+} from '@core/messages/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PencilIcon from '@icon/system/regular/pencil.svg';
+import SmileyIcon from '@icon/system/regular/smiley.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import {
   type Component,
   createSignal,
@@ -18,11 +25,6 @@ import {
   Show,
 } from 'solid-js';
 import { renderIcon } from '../Message/render-icon';
-import type {
-  MessageActionEvent,
-  MessageActionHandler,
-  MessageActions,
-} from '../Message/types';
 import { useMessageActionDrawer } from './message-action-drawer-context';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;
@@ -33,7 +35,8 @@ type ActionId =
   | 'copy-message-text'
   | 'edit'
   | 'delete'
-  | 'create-task';
+  | 'create-task'
+  | 'ask-macro';
 
 type ActionItem = {
   id: ActionId;
@@ -81,6 +84,12 @@ function buildActionItems(
       label: 'Create task',
       icon: CheckSquareIcon,
       onClick: actions?.onCreateTask,
+    },
+    {
+      id: 'ask-macro',
+      label: 'Ask Macro',
+      icon: SparkleIcon,
+      onClick: actions?.onChat,
     },
     {
       id: 'edit',
@@ -164,7 +173,10 @@ export function ActionDrawer() {
   const handleReaction = (emoji: string, event?: MessageActionEvent) => {
     const msg = message();
     if (!msg) return;
-    void actions()?.onReact?.({ message: msg, event, emoji });
+    fireAndForget(
+      actions()?.onReact?.({ message: msg, event, emoji }),
+      'channel-message-actions'
+    );
     drawerState.close();
     setShowEmojiSearch(false);
   };
@@ -175,7 +187,10 @@ export function ActionDrawer() {
   ) => {
     const msg = message();
     if (!msg) return;
-    void handler?.({ message: msg, event });
+    fireAndForget(
+      handler?.({ message: msg, event }),
+      'channel-message-actions'
+    );
     drawerState.close();
   };
 
@@ -202,15 +217,13 @@ export function ActionDrawer() {
       restoreFocus={false}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label="Message actions"
           class={showEmojiSearch() ? 'h-[80vh]' : undefined}
         >
           {/* Drag handle */}
-          <div class="flex justify-center pt-3 pb-2 shrink-0">
-            <div class="w-10 h-1 rounded-full bg-edge-muted" />
-          </div>
+          <MobileDrawer.Handle />
 
           <Show
             when={!showEmojiSearch()}
@@ -259,10 +272,9 @@ export function ActionDrawer() {
                 <MobileDrawer.Section class="flex flex-col shrink-0">
                   <For each={nonDestructiveActions()}>
                     {(action) => (
-                      <button
+                      <MobileDrawer.Item
                         type="button"
                         data-message-action={action.id}
-                        class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
                         ref={(el) => {
                           const getTarget = action.getFocusTarget;
                           if (getTarget) focusInput(el, () => ({ getTarget }));
@@ -273,7 +285,7 @@ export function ActionDrawer() {
                           {renderIcon(action.icon)}
                         </span>
                         {action.label}
-                      </button>
+                      </MobileDrawer.Item>
                     )}
                   </For>
                 </MobileDrawer.Section>
@@ -284,10 +296,10 @@ export function ActionDrawer() {
                 <MobileDrawer.Section class="flex flex-col shrink-0 mt-3">
                   <For each={destructiveActions()}>
                     {(action) => (
-                      <button
+                      <MobileDrawer.Item
                         type="button"
                         data-message-action={action.id}
-                        class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
+                        class="text-failure-ink"
                         ref={(el) => {
                           const getTarget = action.getFocusTarget;
                           if (getTarget) focusInput(el, () => ({ getTarget }));
@@ -298,7 +310,7 @@ export function ActionDrawer() {
                           {renderIcon(action.icon)}
                         </span>
                         {action.label}
-                      </button>
+                      </MobileDrawer.Item>
                     )}
                   </For>
                 </MobileDrawer.Section>

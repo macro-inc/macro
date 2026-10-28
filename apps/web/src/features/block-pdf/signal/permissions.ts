@@ -1,41 +1,36 @@
-import { commentsStore } from '@block-pdf/store/comments/commentStore';
-import { commentPlaceables } from '@block-pdf/store/comments/freeComments';
-import { highlightsUuidMap } from '@block-pdf/store/highlight';
-import { createBlockMemo } from '@core/block';
 import { useUserId } from '@core/context/user';
-import { useCanEdit } from '@core/signal/permissions';
-import { createSelector } from 'solid-js';
+import { createMemo, createSelector } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
+import { isThreadPlaceable } from '../type/placeables';
 
-export const useCanEditModificationData = useCanEdit;
-
-const ownedCommentAnchorUuids = createBlockMemo(() => {
-  const userId = useUserId()();
-  if (!userId) {
-    console.error('User ID not found, cannot get owned comment placeables');
-    return [];
-  }
-  const owned =
-    commentPlaceables()
-      ?.filter((p) => p.owner === userId)
-      .map((p) => p.internalId) ?? [];
-  return owned;
-});
-
-const ownedCommentIds = createBlockMemo(() => {
-  const userId = useUserId()();
-  if (!userId) {
-    console.error('User ID not found, cannot get owned comment placeables');
-    return [];
-  }
-  const owned =
-    Object.values(commentsStore.get ?? [])
-      ?.filter((c) => c.owner === userId)
-      .map((c) => c.id) ?? [];
-  return owned;
-});
-
-// true if user owns the comment placeable (by uuid)
 export const useOwnedCommentPlaceableSelector = () => {
+  const pdf = usePdfDocument();
+  const userId = useUserId();
+  const ownedCommentAnchorUuids = createMemo(() => {
+    const currentUserId = userId();
+    if (!currentUserId) {
+      console.error('User ID not found, cannot get owned comment placeables');
+      return [];
+    }
+
+    const anchors = pdf.annotations.anchors();
+    const owned =
+      anchors
+        ?.filter(
+          (anchor) =>
+            anchor.anchorType === 'placeable' && anchor.owner === currentUserId
+        )
+        .map((anchor) => anchor.uuid) ?? [];
+    const newComment = pdf.markup.draft();
+    if (
+      newComment &&
+      isThreadPlaceable(newComment) &&
+      newComment.owner === currentUserId
+    ) {
+      owned.push(newComment.internalId);
+    }
+    return owned;
+  });
   const ownedCommentSelector = createSelector(
     ownedCommentAnchorUuids,
     (uuid: string, owned) => (owned ?? []).includes(uuid)
@@ -43,18 +38,11 @@ export const useOwnedCommentPlaceableSelector = () => {
   return ownedCommentSelector;
 };
 
-export const useOwnedCommentSelector = () => {
-  const ownedCommentSelector = createSelector(
-    ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
-  );
-  return ownedCommentSelector;
-};
-
 export const useOwnedHighlightSelector = () => {
+  const pdf = usePdfDocument();
   const userId = useUserId();
   const ownedHighlightSelector = createSelector(
-    highlightsUuidMap,
+    pdf.annotations.highlightsByUuid,
     (uuid: string, owned) => {
       if (!owned) return false;
       const highlight = owned[uuid];

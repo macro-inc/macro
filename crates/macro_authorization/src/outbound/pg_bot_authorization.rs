@@ -101,6 +101,7 @@ impl BotAuthorizationRepo for PgBotAuthorizationRepo {
         &self,
         token: &str,
     ) -> Result<Option<BotTokenAuthorization>, Self::Err> {
+        let token_hash = bot_token::hash_token(token);
         let row = sqlx::query_as!(
             BotTokenAuthorizationRow,
             r#"
@@ -112,12 +113,12 @@ impl BotAuthorizationRepo for PgBotAuthorizationRepo {
                 b.team_id
             FROM bot_tokens bt
             JOIN bots b ON b.id = bt.bot_id
-            WHERE bt.token = $1
+            WHERE bt.token_hash = $1
               AND bt.revoked_at IS NULL
               AND (bt.expires_at IS NULL OR bt.expires_at > now())
               AND b.deleted_at IS NULL
             "#,
-            token,
+            &token_hash[..],
         )
         .fetch_optional(&self.pool)
         .await?;

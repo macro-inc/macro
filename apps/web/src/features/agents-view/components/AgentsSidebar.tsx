@@ -1,0 +1,507 @@
+import { createListController } from '@app/components/list';
+import {
+  CollapsibleSection,
+  SearchBar,
+  useViewControlHotkeys,
+  ViewSidebar,
+} from '@app/components/view-shell';
+import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import {
+  type EntityActionListState,
+  type EntityActionViewContext,
+  toEntityActionListState,
+} from '@app/features/next-soup/actions';
+import {
+  MaybeSoupEntityActionDrawerManager,
+  SoupEntityContextMenu,
+} from '@app/features/soup';
+import { t } from '@app/lib/i18n';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { unreadFilterFn } from '@entity/utils/filter';
+import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlugIcon from '@icon/system/regular/plugs-connected.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import { Key } from '@solid-primitives/keyed';
+import { cn, Dropdown } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
+import { createEffect, createSignal, type JSX, Show } from 'solid-js';
+import type { AgentKind } from '../core/agent-kind';
+import {
+  activeFilterCount,
+  type ConversationFilters,
+  type ConversationGrouping,
+  conversationFacts,
+  conversationMatchesFilters,
+  groupConversations,
+} from '../core/conversation-filters';
+import { compactAge } from '../core/format-age';
+import type { AgentsMode } from '../core/mode';
+import type { AgentsPage } from '../core/pages';
+import {
+  type AgentConversationEntity,
+  conversationTimestamp,
+} from '../core/recent-conversations';
+import { AGENTS_TOUR } from '../tour';
+import { AgentSessionListItem } from '../views/AgentSessionListItem';
+import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
+import {
+  ConversationListControls,
+  type ConversationListControlsProps,
+} from './ConversationListControls';
+
+/** Rows the filtered list should fill before paging stops waiting for a scroll. */
+const FILTERED_PAGE_FILL = 20;
+
+const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
+  supportsMarkDone: false,
+  supportsOpenInNewSplit: true,
+  senderBucket: undefined,
+};
+
+export type AgentsSidebarProps = Omit<
+  ConversationListControlsProps,
+  'filters' | 'grouping'
+> & {
+  /** Only conversations matching these are listed. */
+  filters: ConversationFilters;
+  grouping: ConversationGrouping;
+  activePage: AgentsPage | undefined;
+  onOpenPage: (page: AgentsPage) => void;
+  onCreateAgent: (kind: AgentKind) => void;
+  onCreateRoutine: () => void;
+  modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
+  activeConversationId: string | undefined;
+  search: string;
+  conversations: AgentConversationEntity[];
+  archived: AgentConversationEntity[];
+  loading: boolean;
+  error: boolean;
+  hasNextPage: boolean;
+  loadingNextPage: boolean;
+  onSearchChange: (search: string) => void;
+  /** Whether the list includes unlisted sessions: routine runs it hides by default. */
+  showUnlistedRuns: boolean;
+  onShowUnlistedRunsChange: (show: boolean) => void;
+  onOpenConversation: (
+    conversation: AgentConversationEntity,
+    event?: MouseEvent
+  ) => void;
+  onRetry: () => void;
+  onLoadMore: () => void;
+};
+
+function ConversationContextMenu(props: {
+  conversation: AgentConversationEntity;
+  list: EntityActionListState;
+  children: JSX.Element;
+}) {
+  return (
+    <SoupEntityContextMenu
+      entity={props.conversation}
+      list={props.list}
+      selectedEntities={() => []}
+      viewContext={AGENTS_ACTION_VIEW_CONTEXT}
+      as="div"
+      // The nav is a fixed-height flex column, so the trigger's default
+      // `h-full` would split that height between the rows; keep rows content-sized.
+      class="block h-auto w-full shrink-0"
+      onOpenChange={(open) => {
+        if (!open) return;
+        props.list.focus.set(props.conversation.id);
+      }}
+    >
+      {props.children}
+    </SoupEntityContextMenu>
+  );
+}
+
+function Row(props: {
+  conversation: AgentConversationEntity;
+  mode: AgentsMode;
+  active: boolean;
+  onOpen: (event: MouseEvent) => void;
+}) {
+  const title = () => props.conversation.name || 'Untitled chat';
+  return (
+    <Show
+      when={props.conversation.type === 'agent_session' && props.conversation}
+      fallback={
+        <ViewSidebar.Item
+          active={props.active}
+          title={title()}
+          data-kind="chat"
+          onClick={props.onOpen}
+          class="pl-3"
+        >
+          <span class="min-w-0 flex-1 truncate">{title()}</span>
+          <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
+            {compactAge(conversationTimestamp(props.conversation))}
+          </span>
+        </ViewSidebar.Item>
+      }
+    >
+      {(session) => (
+        <AgentSessionListItem
+          entity={session()}
+          surface="agents"
+          unread={unreadFilterFn(session())}
+          mode={props.mode}
+          active={props.active}
+          onOpen={props.onOpen}
+        />
+      )}
+    </Show>
+  );
+}
+
+export function AgentsSidebar(props: AgentsSidebarProps) {
+  const panel = useSplitPanelOrThrow();
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  const [conversationsOpen, setConversationsOpen] = createSignal(true);
+  let searchInput: HTMLInputElement | undefined;
+  const factsOf = (conversation: AgentConversationEntity) =>
+    conversationFacts(
+      conversation,
+      props.modeForConversation(conversation),
+      unreadFilterFn(conversation)
+    );
+  const matching = (conversations: AgentConversationEntity[]) =>
+    conversations.filter((conversation) =>
+      conversationMatchesFilters(factsOf(conversation), props.filters)
+    );
+  const conversations = () => matching(props.conversations);
+  const archived = () => matching(props.archived);
+  const groups = () =>
+    groupConversations(conversations(), factsOf, props.grouping);
+  const filtering = () => activeFilterCount(props.filters) > 0;
+  const actionController = createListController({
+    items: () => [...conversations(), ...archived()],
+    getKey: (conversation) => conversation.id,
+    isSelectable: () => false,
+  });
+  const actionList = toEntityActionListState({
+    controller: actionController,
+    getEntity: (conversation) => conversation,
+  });
+  const total = () => conversations().length + archived().length;
+  // Filters apply to one mixed query, so a short filtered list never scrolls
+  // far enough to ask for more; keep paging until it fills.
+  createEffect(() => {
+    if (
+      total() < FILTERED_PAGE_FILL &&
+      props.hasNextPage &&
+      !props.loading &&
+      !props.loadingNextPage &&
+      !props.error
+    )
+      props.onLoadMore();
+  });
+  // Both lists page through one query, so either reaching its end loads more.
+  const loadMoreNearEnd = (event: Event & { currentTarget: HTMLElement }) => {
+    const list = event.currentTarget;
+    if (!props.hasNextPage || props.loadingNextPage) return;
+    if (list.scrollTop + list.clientHeight >= list.scrollHeight - 200) {
+      props.onLoadMore();
+    }
+  };
+  const rows = (conversations: () => AgentConversationEntity[]) => (
+    <Key each={conversations()} by="id">
+      {(conversation) => (
+        <ConversationContextMenu
+          conversation={conversation()}
+          list={actionList}
+        >
+          <Row
+            conversation={conversation()}
+            mode={props.modeForConversation(conversation())}
+            active={props.activeConversationId === conversation().id}
+            onOpen={(event) => props.onOpenConversation(conversation(), event)}
+          />
+        </ConversationContextMenu>
+      )}
+    </Key>
+  );
+
+  const openSearch = () => {
+    setConversationsOpen(true);
+    setSearchOpen(true);
+    queueMicrotask(() => searchInput?.focus());
+  };
+  const closeSearch = () => {
+    props.onSearchChange('');
+    setSearchOpen(false);
+  };
+
+  useViewControlHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    search: {
+      description: 'Search agent chats',
+      condition: () => props.activePage !== 'routines',
+      run: () => {
+        openSearch();
+        return true;
+      },
+    },
+  });
+
+  return (
+    <MaybeSoupEntityActionDrawerManager>
+      <ViewSidebar.Root aria-label="Agents navigation">
+        <Show when={!isTouchDevice()}>
+          <ViewSidebar.Header
+            searchLabel="Search conversations"
+            searchOpen={searchOpen()}
+            onSearchOpenChange={(open) => (open ? openSearch() : closeSearch())}
+            search={() => (
+              <SearchBar
+                ref={searchInput}
+                placeholder="Search conversations"
+                label="Search conversations"
+                value={props.search}
+                onValueChange={props.onSearchChange}
+                onEscape={() => {
+                  if (!props.search) closeSearch();
+                }}
+              />
+            )}
+          >
+            <div class="flex min-w-0 items-center gap-1">
+              <ViewSidebar.CloseButton />
+              <ViewSidebar.Title>Agents</ViewSidebar.Title>
+            </div>
+          </ViewSidebar.Header>
+        </Show>
+
+        <Show when={!isTouchDevice()}>
+          <ViewSidebar.Primary>
+            <AgentCreateMenu
+              onCreate={props.onCreateAgent}
+              onRoutine={props.onCreateRoutine}
+              onConversation={() => props.onOpenPage('new')}
+            />
+          </ViewSidebar.Primary>
+        </Show>
+
+        <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
+          <Show when={!isTouchDevice()}>
+            <ViewSidebar.Nav aria-label="Agent tools">
+              <ViewSidebar.Item
+                active={props.activePage === 'agents'}
+                onClick={() => props.onOpenPage('agents')}
+                ref={tourTarget(AGENTS_TOUR.rosterNav)}
+              >
+                <ViewSidebar.Icon>
+                  <AgentIcon />
+                </ViewSidebar.Icon>
+                <span>Agents</span>
+              </ViewSidebar.Item>
+              <ViewSidebar.Item
+                active={props.activePage === 'routines'}
+                onClick={() => props.onOpenPage('routines')}
+              >
+                <ViewSidebar.Icon>
+                  <RoutineIcon />
+                </ViewSidebar.Icon>
+                <span>Routines</span>
+              </ViewSidebar.Item>
+              <ViewSidebar.Item
+                active={props.activePage === 'connections'}
+                onClick={() => props.onOpenPage('connections')}
+              >
+                <ViewSidebar.Icon>
+                  <PlugIcon />
+                </ViewSidebar.Icon>
+                <span>Connections</span>
+              </ViewSidebar.Item>
+            </ViewSidebar.Nav>
+          </Show>
+          <CollapsibleSection.Root
+            open={conversationsOpen()}
+            onOpenChange={setConversationsOpen}
+            class={cn(
+              'flex min-h-0 flex-col',
+              conversationsOpen() ? 'flex-1' : 'shrink-0'
+            )}
+          >
+            <CollapsibleSection.Header>
+              <CollapsibleSection.Trigger class="flex-1">
+                <span class="min-w-0 truncate">Conversations</span>
+                <CollapsibleSection.Indicator />
+              </CollapsibleSection.Trigger>
+              <ConversationListControls
+                filters={props.filters}
+                grouping={props.grouping}
+                onFilterChange={props.onFilterChange}
+                onClearFilters={props.onClearFilters}
+                onGroupingChange={props.onGroupingChange}
+              />
+              <Show when={isTouchDevice()}>
+                <CollapsibleSection.Action
+                  aria-label="Search conversations"
+                  aria-pressed={searchOpen()}
+                  class={cn(searchOpen() && 'bg-active text-ink')}
+                  onClick={() => (searchOpen() ? closeSearch() : openSearch())}
+                >
+                  <MagnifyingGlassIcon class="size-3.5" />
+                </CollapsibleSection.Action>
+              </Show>
+              <CollapsibleSection.Action
+                aria-label="Show hidden routine runs"
+                aria-pressed={props.showUnlistedRuns}
+                class={cn(props.showUnlistedRuns && 'bg-active text-ink')}
+                onClick={() =>
+                  props.onShowUnlistedRunsChange(!props.showUnlistedRuns)
+                }
+              >
+                <RoutineIcon class="size-3.5" />
+              </CollapsibleSection.Action>
+            </CollapsibleSection.Header>
+            <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
+              <Show when={isTouchDevice() && searchOpen()}>
+                <SearchBar
+                  ref={searchInput}
+                  placeholder="Search conversations"
+                  label="Search conversations"
+                  value={props.search}
+                  onValueChange={props.onSearchChange}
+                  onEscape={() => {
+                    if (!props.search) closeSearch();
+                  }}
+                  class="h-9 shrink-0 rounded-xl"
+                />
+              </Show>
+              <ViewSidebar.Nav
+                class="min-h-0 flex-1 shrink overflow-auto"
+                aria-label="Recent conversations"
+                aria-busy={props.loading || props.loadingNextPage}
+                onScroll={loadMoreNearEnd}
+              >
+                <Key each={groups()} by="id">
+                  {(group) => (
+                    <>
+                      <Show when={group().label}>
+                        {(label) => (
+                          <h3 class="flex shrink-0 items-center gap-1.5 px-(--sidebar-item-inset) pt-2 pb-1 text-xs font-medium text-ink-muted">
+                            {label()}
+                            <span class="text-ink-extra-muted tabular-nums">
+                              {group().items.length}
+                            </span>
+                          </h3>
+                        )}
+                      </Show>
+                      {rows(() => group().items)}
+                    </>
+                  )}
+                </Key>
+                <Show when={props.loading && total() === 0}>
+                  <AgentSessionListSkeleton />
+                </Show>
+                <Show when={props.error}>
+                  <ViewSidebar.Item onClick={props.onRetry}>
+                    <ViewSidebar.Icon />
+                    <span class="truncate">Retry loading</span>
+                  </ViewSidebar.Item>
+                </Show>
+                <Show when={!props.loading && !props.error && total() === 0}>
+                  <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
+                    {props.search.trim()
+                      ? `No results for "${props.search.trim()}"`
+                      : filtering()
+                        ? 'No conversations match these filters.'
+                        : 'No conversations yet.'}
+                  </p>
+                  <Show when={filtering()}>
+                    <ViewSidebar.Item onClick={props.onClearFilters}>
+                      <ViewSidebar.Icon />
+                      <span class="truncate">Clear filters</span>
+                    </ViewSidebar.Item>
+                  </Show>
+                </Show>
+                <Show when={props.loadingNextPage}>
+                  <AgentSessionListSkeleton loadingMore />
+                </Show>
+              </ViewSidebar.Nav>
+            </CollapsibleSection.Content>
+          </CollapsibleSection.Root>
+          <Show when={archived().length}>
+            <section
+              aria-label="Archived conversations"
+              class="mt-auto flex min-h-0 shrink-0 basis-1/4 flex-col border-t border-edge-muted pt-2"
+            >
+              <ViewSidebar.Toolbar class="shrink-0">
+                <h3 class="text-xs font-medium text-ink-muted">Archived</h3>
+                <span class="text-xs text-ink-extra-muted tabular-nums">
+                  {archived().length}
+                </span>
+              </ViewSidebar.Toolbar>
+              <ViewSidebar.Nav
+                class="min-h-0 flex-1 shrink overflow-auto"
+                onScroll={loadMoreNearEnd}
+              >
+                {rows(archived)}
+              </ViewSidebar.Nav>
+            </section>
+          </Show>
+        </ViewSidebar.Content>
+      </ViewSidebar.Root>
+    </MaybeSoupEntityActionDrawerManager>
+  );
+}
+
+export function AgentCreateMenu(props: {
+  onCreate: (kind: AgentKind) => void;
+  onRoutine: () => void;
+  onConversation: () => void;
+}) {
+  return (
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger
+        as={ViewCreateButton}
+        presentation="sidebar"
+        menu
+        aria-label="New conversation or agent"
+      />
+      <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
+        <Dropdown.Group>
+          <CreateMenuItem
+            icon={AgentIcon}
+            title={t('create.conversationLabel')}
+            description={t('create.guideConversation')}
+            onSelect={() => {
+              queueMicrotask(props.onConversation);
+            }}
+          />
+          <CreateMenuItem
+            icon={AgentIcon}
+            title={t('create.workAgentLabel')}
+            description={t('create.guideWorkAgent')}
+            onSelect={() => {
+              queueMicrotask(() => props.onCreate('agent'));
+            }}
+          />
+          <CreateMenuItem
+            icon={CodeIcon}
+            title={t('create.codingAgentLabel')}
+            description={t('create.guideCodingAgent')}
+            onSelect={() => {
+              queueMicrotask(() => props.onCreate('coder'));
+            }}
+          />
+          <CreateMenuItem
+            icon={RoutineIcon}
+            title={t('create.routineLabel')}
+            description={t('create.guideRoutine')}
+            onSelect={() => {
+              queueMicrotask(props.onRoutine);
+            }}
+          />
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}

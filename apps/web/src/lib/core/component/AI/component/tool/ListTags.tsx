@@ -1,4 +1,4 @@
-import Tag from '@phosphor-icons/core/regular/tag.svg';
+import Tag from '@icon/system/regular/tag.svg';
 import { TagDot } from '@property/tags/TagDot';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For } from 'solid-js';
@@ -17,7 +17,7 @@ const ListTagsToolResponse = (props: { tagSets: ListTagsSet[] }) => (
             <Tool.ListItem icon={<TagDot color={tag.color ?? undefined} />}>
               <div class="flex min-w-0 flex-1 items-center justify-between gap-2">
                 <span class="truncate text-xs text-ink">{tag.label}</span>
-                <span class="shrink-0 text-2xs text-ink-muted">
+                <span class="shrink-0 text-xxs text-ink-muted">
                   {set.scope}
                 </span>
               </div>

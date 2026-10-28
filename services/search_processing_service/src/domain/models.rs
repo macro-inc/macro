@@ -5,6 +5,10 @@ use sqs_client::search::SearchQueueMessage;
 use thiserror::Error;
 
 /// Reply returned by every backfill port.
+///
+/// For queue-backed backfills, completion means source publication only, not
+/// consumption, indexing, or OpenSearch refresh. Failed/stale jobs can be retried
+/// with the same scope; search upserts are idempotent.
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct BackfillReceipt {
     /// Total number of source rows the backfill processed.
@@ -144,14 +148,24 @@ pub struct ChatBackfillCursor {
     pub message_id: String,
 }
 
-/// Channel-message backfill filter. No scoping knobs yet — reserved so adding
-/// one later doesn't break the request shape.
+/// Channel-message backfill filter. Explicit scopes read from the primary so
+/// just-committed imported history is not missed due to replica lag.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct ChannelBackfillRequest {
+    /// `None` scans all channels; `Some([])` does no work.
+    pub channel_ids: Option<Vec<uuid::Uuid>>,
     pub deletion_filter: DeletionFilter,
     /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
     pub index_override: Option<String>,
+}
+
+/// Channel messages are enumerated by `(created_at ASC, id ASC)`. The UUID
+/// breaks timestamp ties, and edits do not move messages across page boundaries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelBackfillCursor {
+    pub created_at: DateTime<Utc>,
+    pub message_id: uuid::Uuid,
 }
 
 /// Keyset (seek-method) pagination cursor for document backfills.
@@ -208,6 +222,30 @@ pub struct ProjectBackfillRequest {
 pub struct ProjectBackfillCursor {
     pub updated_at: DateTime<Utc>,
     pub project_id: String,
+}
+
+/// Calendar event backfill filter. All `None` means "every event".
+///
+/// Only series masters are enumerated — recurring instances are not indexed.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct CalendarEventBackfillRequest {
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
+}
+
+/// Keyset (seek-method) pagination cursor for calendar event backfills.
+///
+/// `get_calendar_events_for_search_backfill` walks `calendar_events` in
+/// `(updated_at ASC, id ASC)` order; the cursor carries the last row's pair
+/// so the next page resumes with `WHERE (updated_at, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct CalendarEventBackfillCursor {
+    pub updated_at: DateTime<Utc>,
+    pub event_id: uuid::Uuid,
 }
 
 /// Email-thread backfill filter.

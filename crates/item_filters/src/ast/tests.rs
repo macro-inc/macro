@@ -136,34 +136,61 @@ fn it_expands_file_associations() {
                 {
                   "|": [
                     {
-                      "l": {
-                        "ft": "ai"
-                      }
+                      "|": [
+                        {
+                          "|": [
+                            {
+                              "|": [
+                                {
+                                  "l": {
+                                    "ft": "ai"
+                                  }
+                                },
+                                {
+                                  "l": {
+                                    "ft": "eps"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "l": {
+                                "ft": "ps"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "l": {
+                            "ft": "dxf"
+                          }
+                        }
+                      ]
                     },
                     {
                       "l": {
-                        "ft": "eps"
+                        "ft": "dwg"
                       }
                     }
                   ]
                 },
                 {
                   "l": {
-                    "ft": "ps"
+                    "ft": "fig"
                   }
                 }
               ]
             },
             {
               "l": {
-                "ft": "dxf"
+                "ft": "psd"
               }
             }
           ]
         },
         {
           "l": {
-            "ft": "dwg"
+            "ft": "psb"
           }
         }
       ]
@@ -196,6 +223,15 @@ fn it_expands_other_association() {
     let json = serde_json::to_string(&ast).unwrap();
 
     assert_eq!(json.trim(), include_str!("tests/other.json").trim());
+}
+
+#[test]
+fn native_spreadsheets_have_an_explicit_filter_and_are_not_other_files() {
+    assert_eq!(
+        document::resolve_file_types("spreadsheet"),
+        vec![FileType::Spreadsheet]
+    );
+    assert!(!document::resolve_file_types("assoc:other").contains(&FileType::Spreadsheet));
 }
 
 #[test]
@@ -451,12 +487,40 @@ fn it_expands_single_channel_thread_participant() {
 }
 
 #[test]
+fn notification_filter_dto_rejects_legacy_booleans_and_invalid_states() {
+    for value in [
+        json!({"done": true, "seen": false}),
+        json!({"states": ["active"]}),
+        json!({"states": [true]}),
+    ] {
+        assert!(serde_json::from_value::<crate::NotificationFilters>(value).is_err());
+    }
+}
+
+#[test]
+fn repeated_notification_states_do_not_build_an_unbounded_ast() {
+    let filter = EntityFilters {
+        document_filters: DocumentFilters {
+            notification_filters: crate::NotificationFilters {
+                states: vec![crate::NotificationState::Unseen; 10_000],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    assert_eq!(
+        serde_json::to_value(ast.document_filter.unwrap()).unwrap(),
+        json!({"l": {"ns": "unseen"}})
+    );
+}
+
+#[test]
 fn it_expands_document_notification_filters() {
     let f = EntityFilters {
         document_filters: DocumentFilters {
             notification_filters: crate::NotificationFilters {
-                done: Some(false),
-                seen: Some(false),
+                states: vec![crate::NotificationState::Unseen],
             },
             ..Default::default()
         },
@@ -473,8 +537,7 @@ fn it_expands_document_notification_filters() {
     .unwrap();
 
     let json = serde_json::to_string(&ast).unwrap();
-    assert!(json.contains(r#""nd":false"#));
-    assert!(json.contains(r#""ns":false"#));
+    assert_eq!(json, r#"{"l":{"ns":"unseen"}}"#);
 }
 
 #[test]
@@ -1171,8 +1234,10 @@ fn foreign_entity_notification_filters_expand_as_literals() {
     let f = EntityFilters {
         foreign_entity_filters: ForeignEntityFilters {
             notification_filters: crate::NotificationFilters {
-                done: Some(true),
-                seen: Some(false),
+                states: vec![
+                    crate::NotificationState::Done,
+                    crate::NotificationState::Unseen,
+                ],
             },
             ..Default::default()
         },
@@ -1190,12 +1255,12 @@ fn foreign_entity_notification_filters_expand_as_literals() {
 
     let json = serde_json::to_string(&ast).unwrap();
     assert!(
-        json.contains(r#""nd":true"#),
-        "expected done literal: {json}"
+        json.contains(r#""ns":"done""#),
+        "expected done state literal: {json}"
     );
     assert!(
-        json.contains(r#""ns":false"#),
-        "expected seen literal: {json}"
+        json.contains(r#""ns":"unseen""#),
+        "expected unseen state literal: {json}"
     );
 }
 
@@ -1205,8 +1270,7 @@ fn foreign_entity_notification_done_ands_with_source() {
         foreign_entity_filters: ForeignEntityFilters {
             foreign_entity_sources: vec!["github_pull_request".to_string()],
             notification_filters: crate::NotificationFilters {
-                done: Some(true),
-                seen: None,
+                states: vec![crate::NotificationState::Done],
             },
             ..Default::default()
         },
@@ -1226,7 +1290,7 @@ fn foreign_entity_notification_done_ands_with_source() {
     let exp = json!({
         "&": [
             { "l": { "fes": "github_pull_request" } },
-            { "l": { "nd": true } }
+            { "l": { "ns": "done" } }
         ]
     });
 
@@ -1593,4 +1657,193 @@ fn requests_crm_scope_reflects_email_crm_scope_tag() {
     assert!(!ast.requests_crm_scope());
     ast.email_filter.crm_scope = Some(CrmScope::Domains(vec!["example.com".into()]));
     assert!(ast.requests_crm_scope());
+}
+
+#[test]
+fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
+    let empty = EntityFilterAst::new_from_filters(EntityFilters::default()).unwrap();
+    assert!(empty.is_none());
+    let filter = EntityFilters {
+        initiative_filters: crate::InitiativeFilters {
+            include: true,
+            name: Some("Launch".into()),
+            ..Default::default()
+        },
+        property_filters: vec![crate::PropertyFilter {
+            property_definition_id: "00000001-0000-0000-0000-000000000002".into(),
+            entity_type: Some("INITIATIVE".into()),
+            option_ids: vec!["00000000-0000-0000-0000-000000000001".into()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    assert!(ast.initiative_filter.is_some());
+    assert!(ast.properties_filter.is_some());
+}
+
+#[test]
+fn database_rows_are_requested_by_include_or_id_outside_a_not() {
+    use database_row::{DatabaseRowLiteral, database_rows_requested};
+    let table = Uuid::from_u128(0x7ab1e);
+    let row = Uuid::from_u128(0x0001);
+
+    assert!(!database_rows_requested(None));
+    assert!(database_rows_requested(Some(&Expr::val(
+        DatabaseRowLiteral::Include
+    ))));
+    assert!(!database_rows_requested(Some(&Expr::is_not(Expr::val(
+        DatabaseRowLiteral::Include
+    )))));
+    assert_eq!(
+        serde_json::to_value(DatabaseRowLiteral::Include).unwrap(),
+        json!("inc")
+    );
+    assert!(database_rows_requested(Some(&Expr::val(
+        DatabaseRowLiteral::TableId(table)
+    ))));
+    assert!(database_rows_requested(Some(&Expr::or(
+        Expr::val(DatabaseRowLiteral::TableId(table)),
+        Expr::val(DatabaseRowLiteral::Id(row)),
+    ))));
+    assert!(!database_rows_requested(Some(&Expr::is_not(Expr::val(
+        DatabaseRowLiteral::TableId(table)
+    )))));
+    assert!(database_rows_requested(Some(&Expr::and(
+        Expr::val(DatabaseRowLiteral::TableId(table)),
+        Expr::is_not(Expr::val(DatabaseRowLiteral::Id(row))),
+    ))));
+
+    assert_eq!(
+        serde_json::to_value(EntityFilterAst {
+            database_row_filter: Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(table)))),
+            ..EntityFilterAst::default()
+        })
+        .unwrap()["drf"],
+        json!({ "l": { "t": "00000000-0000-0000-0000-00000007ab1e" } })
+    );
+}
+
+#[test]
+fn crm_document_literals_round_trip_through_the_rest_ast() {
+    let company_id = "0198a1b2-c3d4-7e5f-8061-728394a5b700";
+    let tree = json!({
+        "|": [
+            { "l": { "prop": {
+                "pd": "00000001-0000-0000-0000-00000000000c",
+                "v": { "er": company_id }
+            } } },
+            { "l": { "eap": { "Domain": "acme.com" } } }
+        ]
+    });
+    let expr: Expr<document::DocumentLiteral> = serde_json::from_value(tree.clone()).unwrap();
+
+    let Expr::Or(left, right) = &expr else {
+        panic!("expected an OR, got {expr:?}")
+    };
+    assert_matches!(
+        left.as_ref(),
+        Expr::Literal(document::DocumentLiteral::Property(
+            properties::PropertiesLiteral {
+                entity_type: None,
+                value: properties::PropertyMatchValue::EntityRef(_),
+                ..
+            }
+        ))
+    );
+    assert_matches!(
+        right.as_ref(),
+        Expr::Literal(document::DocumentLiteral::EmailAttachmentParticipant(
+            email::Email::Domain(domain)
+        )) if domain == "acme.com"
+    );
+    assert_eq!(serde_json::to_value(&expr).unwrap(), tree);
+}
+
+#[test]
+fn crm_association_round_trips_through_the_rest_ast() {
+    let company = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b700);
+    let contact = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b701);
+    let body = json!({
+        "crma": { "company": company },
+        "df": {
+            "&": [
+                { "!": { "l": { "dst": "task" } } },
+                { "|": [
+                    { "l": { "crm": { "contact": contact } } },
+                    { "l": { "nc": "Renewal" } }
+                ] }
+            ]
+        }
+    });
+    let ast: EntityFilterAst = serde_json::from_value(body.clone()).unwrap();
+
+    assert_eq!(ast.crm_association, Some(CrmAssociation::Company(company)));
+    assert_eq!(
+        ast.crm_associations(),
+        vec![
+            CrmAssociation::Company(company),
+            CrmAssociation::Contact(contact)
+        ]
+    );
+    assert!(!ast.is_empty());
+    let value = serde_json::to_value(&ast).unwrap();
+    assert_eq!(value["crma"], body["crma"]);
+    assert_eq!(value["df"], body["df"]);
+}
+
+#[test]
+fn crm_associations_deduplicate_repeated_records() {
+    let company = CrmAssociation::Company(Uuid::from_u128(1));
+    let ast = EntityFilterAst {
+        crm_association: Some(company),
+        document_filter: Some(Arc::new(Expr::or(
+            Expr::val(document::DocumentLiteral::CrmAssociated(company)),
+            Expr::is_not(Expr::val(document::DocumentLiteral::CrmAssociated(company))),
+        ))),
+        ..EntityFilterAst::default()
+    };
+
+    assert_eq!(ast.crm_associations(), vec![company]);
+    assert!(EntityFilterAst::default().crm_associations().is_empty());
+}
+
+#[test]
+fn agent_session_source_literals_use_the_column_values() {
+    use crate::ast::agent_session::{AgentSessionLiteral, AgentSessionSource};
+
+    let tree: Expr<AgentSessionLiteral> =
+        serde_json::from_value(json!({ "!": { "l": { "src": "routine" } } })).unwrap();
+    assert_matches!(&tree, Expr::Not(inner) => {
+        assert_matches!(
+            **inner,
+            Expr::Literal(AgentSessionLiteral::Source(AgentSessionSource::Routine))
+        );
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "!": { "l": { "src": "routine" } } })
+    );
+    assert_eq!(<&str>::from(AgentSessionSource::User), "user");
+    assert_eq!("routine".parse(), Ok(AgentSessionSource::Routine));
+}
+
+#[test]
+fn agent_session_visibility_literals_use_the_column_values() {
+    use crate::ast::agent_session::{AgentSessionLiteral, AgentSessionVisibility};
+
+    let tree: Expr<AgentSessionLiteral> =
+        serde_json::from_value(json!({ "!": { "l": { "vis": "unlisted" } } })).unwrap();
+    assert_matches!(&tree, Expr::Not(inner) => {
+        assert_matches!(
+            **inner,
+            Expr::Literal(AgentSessionLiteral::Visibility(AgentSessionVisibility::Unlisted))
+        );
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "!": { "l": { "vis": "unlisted" } } })
+    );
+    assert_eq!(<&str>::from(AgentSessionVisibility::Listed), "listed");
+    assert_eq!("unlisted".parse(), Ok(AgentSessionVisibility::Unlisted));
 }

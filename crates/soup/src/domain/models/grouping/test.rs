@@ -1,6 +1,6 @@
 use chrono::DateTime;
 use item_filters::ast::EntityFilterAst;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_grouping::GroupByField;
 use models_pagination::SimpleSortMethod;
 use models_soup::{item::SoupItem, project::SoupProject};
@@ -12,7 +12,7 @@ fn project(id: u128) -> SoupItem {
     SoupItem::Project(SoupProject {
         id: Uuid::from_u128(id),
         name: format!("Project {id}"),
-        owner_id: MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap(),
+        owner_id: Owner::from_principal_str("macro|user@example.com").unwrap(),
         parent_id: None,
         created_at: DateTime::default(),
         updated_at: DateTime::default(),

@@ -1,8 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+use entity_access::domain::models::{
+    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+    EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+};
+use macro_user_id::{
+    lowercased::Lowercase,
+    user_id::{MacroUserId, MacroUserIdStr},
+};
 use models_pagination::{Query, SimpleSortMethod};
 use serde_json::json;
 use uuid::Uuid;
@@ -600,4 +607,278 @@ async fn delete_returns_ok_when_deleted_and_not_found_when_missing() {
         .expect_err("second delete should return not found");
 
     assert_not_found(error, created.id);
+}
+
+/// Entity access stub that grants view access to an explicit allow list and
+/// answers `Unauthorized` — the way the real service reports "no access" — for
+/// everything else.
+#[derive(Clone, Default)]
+struct FakeEntityAccessService {
+    viewable: Arc<Mutex<HashSet<(String, String)>>>,
+}
+
+impl FakeEntityAccessService {
+    fn with_viewable(entries: impl IntoIterator<Item = (String, String)>) -> Self {
+        Self {
+            viewable: Arc::new(Mutex::new(entries.into_iter().collect())),
+        }
+    }
+}
+
+impl EntityAccessService for FakeEntityAccessService {
+    async fn generate_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        unreachable!("by-source lookups check permissions, they do not mint receipts")
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        _bot_id: BotId,
+        _scope: BotAccessScope,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        unreachable!("by-source lookups do not accept bot credentials")
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        unreachable!("by-source lookups use get_entity_permission")
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        unreachable!("by-source lookups use get_entity_permission")
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        unreachable!("by-source lookups use get_entity_permission")
+    }
+
+    async fn get_entity_permission(
+        &self,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
+        entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        assert_eq!(entity_type, EntityType::ForeignEntity);
+
+        let user_id = user_id
+            .expect("by-source lookups only check permissions for authenticated users")
+            .as_ref()
+            .to_string();
+        let viewable = self
+            .viewable
+            .lock()
+            .expect("fake entity access service lock poisoned");
+
+        if viewable.contains(&(user_id, entity_id.to_string())) {
+            return Ok(EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            });
+        }
+
+        Err(AccessError::Unauthorized)
+    }
+
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
+        unreachable!("foreign entities are not CRM entities")
+    }
+
+    async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        unreachable!("by-source lookups do not list entity users")
+    }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        unreachable!("by-source lookups do not resolve call channels")
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        unreachable!("by-source lookups do not resolve call channels")
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        unreachable!("by-source lookups do not resolve user teams")
+    }
+}
+
+const TEST_USER_ID: &str = "macro|user@macro.com";
+const PULL_REQUEST_SOURCE: &str = "github_pull_request";
+const PULL_REQUEST_KEY: &str = "macro/app/pull/42";
+
+fn caller_user(user_id: &str) -> ForeignEntityLookupCaller {
+    ForeignEntityLookupCaller::User(
+        MacroUserIdStr::try_from(user_id.to_string()).expect("test user id should parse"),
+    )
+}
+
+async fn store_pull_request_mapping(
+    service: &ForeignEntityServiceImpl<FakeForeignEntityRepository>,
+    stored_for_id: &str,
+) -> ForeignEntity {
+    service
+        .create_foreign_entity(CreateForeignEntity {
+            foreign_entity_id: PULL_REQUEST_KEY.to_string(),
+            foreign_entity_source: PULL_REQUEST_SOURCE.to_string(),
+            metadata: json!({ "number": 42 }),
+            stored_for_id: stored_for_id.to_string(),
+            stored_for_auth_entity: "document".to_string(),
+        })
+        .await
+        .expect("pull request mapping should be created")
+}
+
+fn assert_not_found_for_source(error: ForeignEntityError) {
+    let ForeignEntityError::NotFoundForSource {
+        foreign_entity_source,
+        foreign_entity_id,
+    } = error
+    else {
+        panic!("expected not found for source error, got {error:?}");
+    };
+
+    assert_eq!(foreign_entity_source, PULL_REQUEST_SOURCE);
+    assert_eq!(foreign_entity_id, PULL_REQUEST_KEY);
+}
+
+#[tokio::test]
+async fn by_source_returns_the_record_an_internal_caller_asked_for() {
+    let service = service();
+    let stored = store_pull_request_mapping(&service, "document-1").await;
+
+    let found = get_visible_foreign_entity_by_source(
+        &service,
+        &FakeEntityAccessService::default(),
+        &ForeignEntityLookupCaller::Internal,
+        PULL_REQUEST_SOURCE,
+        PULL_REQUEST_KEY,
+    )
+    .await
+    .expect("internal callers should see every mapping");
+
+    assert_eq!(found, stored);
+}
+
+#[tokio::test]
+async fn by_source_returns_the_first_record_the_user_may_view() {
+    let service = service();
+    let hidden = store_pull_request_mapping(&service, "document-hidden").await;
+    let visible = store_pull_request_mapping(&service, "document-visible").await;
+    let entity_access = FakeEntityAccessService::with_viewable([(
+        TEST_USER_ID.to_string(),
+        visible.id.to_string(),
+    )]);
+
+    let found = get_visible_foreign_entity_by_source(
+        &service,
+        &entity_access,
+        &caller_user(TEST_USER_ID),
+        PULL_REQUEST_SOURCE,
+        PULL_REQUEST_KEY,
+    )
+    .await
+    .expect("the mapping the user may view should be returned");
+
+    assert_eq!(found, visible);
+    assert_ne!(found.id, hidden.id);
+}
+
+#[tokio::test]
+async fn by_source_hides_records_the_user_may_not_view() {
+    let service = service();
+    store_pull_request_mapping(&service, "document-hidden").await;
+
+    let error = get_visible_foreign_entity_by_source(
+        &service,
+        &FakeEntityAccessService::default(),
+        &caller_user(TEST_USER_ID),
+        PULL_REQUEST_SOURCE,
+        PULL_REQUEST_KEY,
+    )
+    .await
+    .expect_err("a mapping the user cannot view should read as not found");
+
+    assert_not_found_for_source(error);
+}
+
+#[tokio::test]
+async fn by_source_returns_not_found_when_nothing_matches() {
+    let service = service();
+
+    let error = get_visible_foreign_entity_by_source(
+        &service,
+        &FakeEntityAccessService::default(),
+        &ForeignEntityLookupCaller::Internal,
+        PULL_REQUEST_SOURCE,
+        PULL_REQUEST_KEY,
+    )
+    .await
+    .expect_err("an unsynced pull request should read as not found");
+
+    assert_not_found_for_source(error);
+}
+
+#[tokio::test]
+async fn by_source_ignores_records_from_another_source() {
+    let service = service();
+    service
+        .create_foreign_entity(CreateForeignEntity {
+            foreign_entity_id: PULL_REQUEST_KEY.to_string(),
+            foreign_entity_source: "linear".to_string(),
+            metadata: json!({}),
+            stored_for_id: "document-1".to_string(),
+            stored_for_auth_entity: "document".to_string(),
+        })
+        .await
+        .expect("linear mapping should be created");
+
+    let error = get_visible_foreign_entity_by_source(
+        &service,
+        &FakeEntityAccessService::default(),
+        &ForeignEntityLookupCaller::Internal,
+        PULL_REQUEST_SOURCE,
+        PULL_REQUEST_KEY,
+    )
+    .await
+    .expect_err("a mapping from another source should not match");
+
+    assert_not_found_for_source(error);
 }

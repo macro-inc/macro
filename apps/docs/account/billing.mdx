@@ -1,23 +1,51 @@
 ---
 title: "Billing & Plans"
 icon: "credit-card"
-description: "Macro's free and premium plans, and how to manage your subscription."
+description: "Macro's Free, Pro, and Max plans, how AI usage is included, and how to manage your subscription."
 ---
 
-Macro has one paid plan, priced per person. The price is the same whether you're solo or on a team.
+Macro has a Free plan and two paid plans. Paid plans are priced per seat.
 
-|  | Free | Premium |
-| --- | --- | --- |
-| Price | \$0 | \$40 / month |
-| AI agent | Fast model only | All models |
-| AI tool calls | Limited | Unlimited |
-| Storage | 5 GB | 1 TB |
+|  | Free | Pro | Max |
+| --- | --- | --- | --- |
+| Price | \$0 | \$40 / month | \$200 / month |
+| AI agent | Fast model only | All agents and models | All agents and models |
+| Included AI usage | Limited | Standard | 10× Pro |
+| Beyond included AI | Upgrade to continue | Usage credits | Usage credits |
+| Connected email accounts | 2 | Unlimited | Unlimited |
+| Storage | 5 GB | 100 GB | 1 TB |
 
-Teams require a paid seat for every member; there's no free plan for teams. Your current plan is shown in **Settings → Account**, with an **Upgrade** button if you're on the free plan.
+Max also includes priority support, and paid plans remove the Macro watermark from emails you send.
+
+Paid teams require a paid seat for every member. Free teams can include unpaid members. Each seat has its own plan, so a team can mix Pro and Max seats. Team admins set each member's plan from the **Seat plan** menu in **Settings → Team**. Seat changes are prorated.
+
+**Settings → Billing** shows your current plan:
+
+- Free: **Get Pro** and **Get Max**
+- Pro: **Upgrade to Max**
+- Max: **Switch to Pro**
+
+On a team, these buttons change only your seat.
+
+## AI usage
+
+Each seat includes a monthly amount of AI usage. Agent chats and AI document editing count toward it. Unused usage does not transfer between seats or roll over.
+
+Free uses Gemini 3.8 Flash. The Free allowance is a hard cap. AI requests pause until the next calendar month or an upgrade.
+
+**Settings → Usage** shows **Monthly limit** as a percentage of included usage.
+
+When a paid seat's included usage runs out, AI requests pause until you add credits or upgrade:
+
+- **Usage credits**: prepaid usage. **Settings → Usage → Add more** adds \$25, \$50, or \$100. Credits are used after included usage and roll over.
+- **Automatic reload**: buys credits when the balance falls below **Minimum balance**, up to **Target balance**, with an optional **Maximum monthly spend**. If a charge fails, update the payment method and save the settings to retry.
+- **Max**: 10× the included usage of Pro. Upgrades take effect immediately and are prorated.
+
+On a team, the paying account buys credits and controls automatic reload. Other members can view usage but not change these settings.
 
 ## Managing your subscription
 
-Subscriptions are handled through Stripe. From **Settings → Account**, choose **Manage Subscription** to open the billing portal, where you can update your payment method, download invoices, or cancel. If you cancel, your plan stays active until the end of the billing period.
+Subscriptions are billed through Stripe. **Settings → Billing → Manage** opens the billing portal to update payment methods, download invoices, or cancel. Cancelled plans stay active until the end of the billing period.
 
 ## Self-hosting
 

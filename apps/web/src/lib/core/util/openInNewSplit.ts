@@ -5,7 +5,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  *
  * For @mention pills we want:
  * - default click/enter: open in a new split
- * - holding Option (alt): open in the current split
+ * - Shift-click: open in a new split, regardless of the default
  *
  * We also want touch opens to remain in the current split to avoid surprising
  * split creation. The call-site `e != null` heuristic can't detect touch on
@@ -13,9 +13,9 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
  * mobile has no split concept and navigates in place / via forward navigation.
  */
 export function openInNewSplitForMention(
-  altKey: boolean | undefined,
+  shiftKey: boolean | undefined,
   defaultOpenInNewSplit: boolean
 ): boolean {
   if (isTouchDevice()) return false;
-  return altKey ? false : defaultOpenInNewSplit;
+  return shiftKey === true || defaultOpenInNewSplit;
 }

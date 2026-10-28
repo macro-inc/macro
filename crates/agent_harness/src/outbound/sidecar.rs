@@ -17,6 +17,8 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{mpsc, oneshot};
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
+use tracing::Instrument as _;
+use tracing::instrument::WithSubscriber as _;
 
 #[cfg(test)]
 mod test;
@@ -26,17 +28,18 @@ mod test;
 /// Not `Clone` itself - `recv` has to be exclusive - so containers share one
 /// through an `Arc`, which is what makes them cloneable.
 pub struct SidecarTransport {
-    outbound: mpsc::UnboundedSender<Outbound>,
+    outbound: mpsc::UnboundedSender<OutboundFrame>,
     inbound: mpsc::UnboundedReceiver<ToServerMessage>,
 }
 
 /// The sidecar's sending half.
 pub struct SidecarSender {
-    outbound: mpsc::UnboundedSender<Outbound>,
+    outbound: mpsc::UnboundedSender<OutboundFrame>,
 }
 
-struct Outbound {
+struct OutboundFrame {
     frame: RawJsonRpcMessage,
+    parent: tracing::Span,
     completed: oneshot::Sender<Result<(), TransportError>>,
 }
 
@@ -72,7 +75,7 @@ impl SidecarTransport {
         };
         let _ = inbound_tx.send(ready);
 
-        tokio::spawn(pump(socket, outbound_rx, inbound_tx, on_frame));
+        tokio::spawn(pump(socket, outbound_rx, inbound_tx, on_frame).with_current_subscriber());
 
         Self {
             outbound: outbound_tx,
@@ -105,9 +108,14 @@ impl TransportSender<ToRuntimeMessage> for SidecarSender {
             return Ok(());
         };
 
+        let parent = tracing::Span::current();
         let (completed, result) = oneshot::channel();
         self.outbound
-            .send(Outbound { frame, completed })
+            .send(OutboundFrame {
+                frame,
+                parent,
+                completed,
+            })
             .map_err(|_| TransportError::Client("the sidecar connection is closed".to_owned()))?;
         result
             .await
@@ -118,7 +126,7 @@ impl TransportSender<ToRuntimeMessage> for SidecarSender {
 /// Relay frames until either side closes.
 async fn pump<Socket, Observer>(
     socket: WebSocketStream<Socket>,
-    mut outbound: mpsc::UnboundedReceiver<Outbound>,
+    mut outbound: mpsc::UnboundedReceiver<OutboundFrame>,
     inbound: mpsc::UnboundedSender<ToServerMessage>,
     on_frame: Observer,
 ) where
@@ -130,7 +138,10 @@ async fn pump<Socket, Observer>(
     loop {
         tokio::select! {
             outgoing = outbound.recv() => {
-                let Some(Outbound { frame, completed }) = outgoing else { break };
+                let Some(OutboundFrame { frame, parent, completed }) = outgoing else { break };
+                let method = frame_method(&frame);
+                // Serialization failure is fatal for this session because the
+                // caller's action cannot reach the agent.
                 let json = match serde_json::to_string(&frame) {
                     Ok(json) => json,
                     Err(error) => {
@@ -141,10 +152,32 @@ async fn pump<Socket, Observer>(
                         continue;
                     }
                 };
-                if let Err(error) = socket_tx.send(Message::Text(json.into())).await {
-                    let _ = completed.send(Err(TransportError::Client(error.to_string())));
+                let send = socket_tx.send(Message::Text(json.into()));
+                let span = tracing::info_span!(
+                    parent: &parent,
+                    "agent.acp.websocket_send",
+                    network.protocol.name = "websocket",
+                    rpc.system.name = tracing::field::Empty,
+                    rpc.method = tracing::field::Empty,
+                    otel.status_code = tracing::field::Empty,
+                    otel.status_description = tracing::field::Empty,
+                );
+                if let Some(method) = method {
+                    span.record("rpc.system.name", "jsonrpc");
+                    span.record("rpc.method", method);
+                }
+                let result = send
+                    .instrument(span.clone())
+                    .await
+                    .map_err(|error| format!("sending an ACP websocket frame failed: {error}"));
+                if let Err(error) = result {
+                    span.record("otel.status_code", "ERROR");
+                    span.record("otel.status_description", tracing::field::display(&error));
+                    drop(span);
+                    let _ = completed.send(Err(TransportError::Client(error)));
                     break;
                 }
+                drop(span);
                 let _ = completed.send(Ok(()));
             }
             incoming = socket_rx.next() => {
@@ -180,4 +213,12 @@ async fn pump<Socket, Observer>(
     }
 
     tracing::debug!("sidecar pump finished");
+}
+
+fn frame_method(frame: &RawJsonRpcMessage) -> Option<&str> {
+    match frame {
+        RawJsonRpcMessage::Request(request) => Some(request.method.as_ref()),
+        RawJsonRpcMessage::Notification(notification) => Some(notification.method.as_ref()),
+        RawJsonRpcMessage::Response(_) => None,
+    }
 }

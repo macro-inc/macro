@@ -1,0 +1,585 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { initSync } from '@ironcalc/wasm';
+import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  createSpreadsheetCalculator,
+  type SpreadsheetCalculator,
+  setCalculationClock,
+} from './calculation';
+import {
+  SPREADSHEET_DEFAULT_STYLE,
+  type SpreadsheetCells,
+} from './spreadsheet-document';
+
+function cells(values: Record<string, string>): SpreadsheetCells {
+  return Object.fromEntries(
+    Object.entries(values).map(([address, value]) => [address, { value }])
+  );
+}
+
+let calculator: SpreadsheetCalculator;
+
+beforeAll(async () => {
+  const require = createRequire(import.meta.url);
+  initSync({
+    module: readFileSync(require.resolve('@ironcalc/wasm/wasm_bg.wasm')),
+  });
+  calculator = await createSpreadsheetCalculator();
+});
+
+describe('spreadsheet calculation with IronCalc', () => {
+  it('copies formulas with relative, absolute, mixed, range and quoted references', () => {
+    const edits = calculator.copy([
+      {
+        from: { row: 3, column: 3 },
+        to: { row: 4, column: 3 },
+        cell: { value: '=B4-C4', bold: true, format: 'currency' },
+      },
+      {
+        from: { row: 3, column: 3 },
+        to: { row: 4, column: 4 },
+        cell: { value: '=$B$4+B$4+$B4+SUM(B4:C4)+IF(TRUE,0,LEN("B4"))' },
+      },
+      {
+        from: { row: 3, column: 3 },
+        to: { row: 2, column: 2 },
+        cell: { value: '=A1' },
+      },
+      {
+        from: { row: 0, column: 0 },
+        to: { row: 200, column: 0 },
+        cell: { value: "'00123" },
+      },
+    ]);
+    expect(edits.D5).toEqual({
+      ...SPREADSHEET_DEFAULT_STYLE,
+      value: '=B5-C5',
+      bold: true,
+      format: 'currency',
+    });
+    expect(edits.E5?.value).toBe(
+      '=$B$4+C$4+$B5+SUM(C5:D5)+IF(TRUE,0,LEN("B4"))'
+    );
+    expect(edits.C3?.value).toContain('#REF!');
+    expect(edits.A201?.value).toBe("'00123");
+  });
+
+  it('calculates formulas and spill results in appended rows', () => {
+    const result = calculator.calculate(
+      cells({ A201: '21', B201: '=A201*2', A299: '=SEQUENCE(2)' }),
+      300
+    );
+    expect(result.B201.number).toBe(42);
+    expect(result.A300.number).toBe(2);
+  });
+  it('evaluates dependent formulas, ranges, absolute references and comparisons', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: '100',
+        A2: '50',
+        B1: '=SUM(A1:A2)',
+        B2: '=$A$1*10%',
+        C1: '=IF(B1>100, B1-B2, 0)',
+        C2: '=AVERAGE(A1:A2)',
+      })
+    );
+    expect(result.B1.number).toBe(150);
+    expect(result.B2.number).toBe(10);
+    expect(result.C1.number).toBe(140);
+    expect(result.C2.number).toBe(75);
+  });
+
+  it('keeps formula dependencies independent of source key order', () => {
+    const source = cells({ A1: '7', B1: '=A1*2', C1: '=B1+1' });
+    expect(
+      calculator.calculate(Object.fromEntries(Object.entries(source).reverse()))
+    ).toEqual(calculator.calculate(source));
+  });
+
+  it('recalculates after edits and removes deleted values', () => {
+    expect(
+      calculator.calculate(cells({ A1: '5', B1: '=A1*2' })).B1.number
+    ).toBe(10);
+    expect(
+      calculator.calculate(cells({ A1: '9', B1: '=A1*2' })).B1.number
+    ).toBe(18);
+    const cleared = calculator.calculate(cells({ B1: '=A1*2' }));
+    expect(cleared.A1).toBeUndefined();
+    expect(cleared.B1.number).toBe(0);
+  });
+
+  it('reports circular references and formula errors without losing other cells', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: '=B1',
+        B1: '=A1',
+        C1: '=1/0',
+        D1: '=NO_SUCH_FUNCTION(1)',
+        E1: '3',
+      })
+    );
+    expect(result.A1.display).toBe('#CIRC!');
+    expect(result.B1.error).toContain('circular');
+    expect(result.C1.display).toBe('#DIV/0!');
+    expect(result.D1.display).toBe('#NAME?');
+    expect(result.E1.number).toBe(3);
+  });
+
+  it('propagates errors but evaluates IF lazily', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: '=1/0',
+        B1: '=A1+1',
+        C1: '=IF(TRUE,42,A1)',
+        D1: '=IFERROR(A1,0)',
+      })
+    );
+    expect(result.B1.display).toBe('#DIV/0!');
+    expect(result.C1.number).toBe(42);
+    expect(result.D1.number).toBe(0);
+  });
+
+  it('keeps text, escaped values and booleans distinct from numeric values', () => {
+    const result = calculator.calculate(
+      cells({ A1: "'00123", A2: 'hello', A3: 'TRUE', A4: '=A2&" world"' })
+    );
+    expect(result.A1).toEqual({ display: '00123' });
+    expect(result.A2).toEqual({ display: 'hello' });
+    expect(result.A3).toEqual({ display: 'TRUE' });
+    expect(result.A4.display).toBe('hello world');
+  });
+
+  it('preserves formulas that intentionally display an empty string', () => {
+    expect(calculator.calculate(cells({ A1: '=IF(TRUE,"",1)' })).A1).toEqual({
+      display: '',
+    });
+  });
+
+  it('formats values independently from the full-precision calculation', () => {
+    const result = calculator.calculate({
+      A1: { value: '=1/3', format: 'number' },
+      A2: { value: '=A1*3', format: 'currency' },
+      A3: { value: '0.12345', format: 'percent' },
+      A4: { value: '=0.1+0.2' },
+      A5: { value: '=1/10^20' },
+      A6: { value: '$12.34' },
+    });
+    expect(result.A1.display).toBe('0.33');
+    expect(result.A1.number).toBeCloseTo(1 / 3, 14);
+    expect(result.A2).toEqual({ display: '$1.00', number: 1 });
+    expect(result.A3.display).toBe('12.35%');
+    expect(result.A4.number).toBe(0.3);
+    expect(result.A5.number).toBe(1e-20);
+    expect(result.A6.number).toBe(12.34);
+  });
+
+  it('formats decimals, serial dates, times and scientific notation without rounding dependencies', () => {
+    const result = calculator.calculate({
+      A1: { value: '=1/3', format: 'number', decimals: 4 },
+      A2: { value: '=A1*3', format: 'currency', decimals: 0 },
+      A3: { value: '0.125', format: 'percent', decimals: 3 },
+      A4: { value: '=DATE(2026,9,17)', format: 'date' },
+      A5: { value: '=TIME(13,30,15)', format: 'time' },
+      A6: { value: '12345', format: 'scientific', decimals: 3 },
+      A7: { value: '60', format: 'date' },
+      A8: { value: '0', decimals: 2 },
+    });
+    expect(result.A1.display).toBe('0.3333');
+    expect(result.A1.number).toBeCloseTo(1 / 3, 14);
+    expect(result.A2).toEqual({ number: 1, display: '$1' });
+    expect(result.A3.display).toBe('12.500%');
+    expect(result.A4.display).toBe('9/17/2026');
+    expect(result.A5.display).toBe('1:30:15 PM');
+    expect(result.A6.display).toBe('1.235E4');
+    expect(result.A7.display).toBe('2/29/1900');
+    expect(result.A8.display).toBe('0.00');
+  });
+
+  it('formats accounting results with parentheses and a dash for zero', () => {
+    const result = calculator.calculate({
+      A1: { value: '1234.5', format: 'accounting' },
+      A2: { value: '=-A1*2', format: 'accounting' },
+      A3: { value: '=A1-1234.5', format: 'accounting' },
+      A4: { value: '=A1', format: 'accounting', decimals: 0 },
+    });
+    expect(result.A1).toEqual({ display: '$1,234.50', number: 1234.5 });
+    expect(result.A2).toEqual({ display: '$(2,469.00)', number: -2469 });
+    expect(result.A3).toEqual({ display: '$-', number: 0 });
+    expect(result.A4.display).toBe('$1,235');
+  });
+
+  it('reads results at Excel’s fifteen significant digits', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: '=979',
+        A2: '=9104+3',
+        A3: '=0.1+0.2',
+        A4: '=1/3',
+        A5: '=-9905',
+        A6: '=2^60',
+      })
+    );
+    expect(result.A1).toEqual({ number: 979, display: '979' });
+    expect(result.A2).toEqual({ number: 9107, display: '9107' });
+    expect(result.A3.number).toBe(0.3);
+    expect(result.A4.number).toBe(0.333333333333333);
+    expect(result.A5.number).toBe(-9905);
+    expect(result.A6.number).toBe(1.15292150460685e18);
+  });
+
+  it('counts with double negation over arrays, as Excel does', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: 'x',
+        A2: 'y',
+        A3: 'x',
+        B1: '5',
+        B2: '2',
+        C1: '=SUMPRODUCT(--(A1:A3="x"))',
+        C2: '=SUMPRODUCT(--(A1:A3="x"),B1:B3)',
+        C3: '=SUMPRODUCT(--(--(A1:A3="x")))',
+        C4: '=SUMPRODUCT(- -(A1:A3="y"))',
+        // Subtraction, precedence and literals keep their meaning.
+        D1: '=B1--B2',
+        D2: '=2^--B2',
+        D3: '=B1/--B2',
+        D4: '=--"5"+1',
+        D5: '="--"&A1',
+        D6: '=--B1%',
+        D7: '=--A1',
+      })
+    );
+    expect(result.C1.number).toBe(2);
+    expect(result.C2.number).toBe(5);
+    expect(result.C3.number).toBe(2);
+    expect(result.C4.number).toBe(1);
+    expect(result.D1.number).toBe(7);
+    expect(result.D2.number).toBe(4);
+    expect(result.D3.number).toBe(2.5);
+    expect(result.D4.number).toBe(6);
+    expect(result.D5.display).toBe('--x');
+    expect(result.D6.number).toBe(0.05);
+    expect(result.D7.display).toBe('#VALUE!');
+  });
+
+  it('shows typed dates and date arithmetic as dates without an explicit format', () => {
+    const result = calculator.calculate({
+      A1: { value: '9/28/2026' },
+      A2: { value: '2026-09-28' },
+      A3: { value: '=A1+7' },
+      A4: { value: '=DATE(2026,1,1)' },
+      A5: { value: '=A3-A1' },
+      A6: { value: '=A1+7', format: 'number' },
+      A7: { value: '5/1/1985' },
+      A8: { value: '=DATE(1985,5,1)' },
+      A9: { value: '=A1+1' },
+      A10: { value: '=A9+1' },
+      A11: { value: '46293' },
+      A12: { value: 'Sep 28, 2026' },
+      A13: { value: '=YEAR(A1)' },
+      A14: { value: '=A1+7', numberFormat: '0.0' },
+    });
+    expect(result.A1).toEqual({
+      display: '9/28/2026',
+      number: 46293,
+      date: true,
+    });
+    expect(result.A2).toEqual({
+      display: '9/28/2026',
+      number: 46293,
+      date: true,
+    });
+    expect(result.A3).toEqual({
+      display: '10/5/2026',
+      number: 46300,
+      date: true,
+    });
+    expect(result.A4).toEqual({
+      display: '1/1/2026',
+      number: 46023,
+      date: true,
+    });
+    // The engine formats a difference of dates as a date; a day count is not.
+    expect(result.A5).toEqual({ display: '7', number: 7 });
+    expect(result.A6.display).toBe('46,300.00');
+    expect(result.A7).toEqual({
+      display: '5/1/1985',
+      number: 31168,
+      date: true,
+    });
+    // Formula results before 2000 stay serial numbers; day counts are common there.
+    expect(result.A8).toEqual({ display: '31168', number: 31168 });
+    // Chained formulas are entered in grid order, so each inherits the format.
+    expect(result.A9).toEqual({
+      display: '9/29/2026',
+      number: 46294,
+      date: true,
+    });
+    expect(result.A10).toEqual({
+      display: '9/30/2026',
+      number: 46295,
+      date: true,
+    });
+    expect(result.A11).toEqual({ display: '46293', number: 46293 });
+    expect(result.A12).toEqual({ display: 'Sep 28, 2026' });
+    expect(result.A13).toEqual({ display: '2026', number: 2026 });
+    expect(result.A14.display).toBe('46300.0');
+  });
+
+  it('marks numbers shown as calendar dates, not times or plain numbers', () => {
+    const result = calculator.calculate({
+      A1: { value: '46293', format: 'date' },
+      A2: { value: '46293.5', numberFormat: 'mmm d, yyyy h:mm' },
+      A3: { value: '0.5', format: 'time' },
+      A4: { value: '0.5', numberFormat: 'h:mm' },
+      A5: { value: '46293', numberFormat: '#,##0 "days"' },
+      A6: { value: '$1,000' },
+    });
+    expect(result.A1.date).toBe(true);
+    expect(result.A2).toEqual({
+      display: 'Sep 28, 2026 12:00',
+      number: 46293.5,
+      date: true,
+    });
+    for (const address of ['A3', 'A4', 'A5', 'A6'])
+      expect(result[address].date).toBeUndefined();
+  });
+
+  it('shows serials in date formats as dates, and formulas on them inherit a date display', () => {
+    const result = calculator.calculate({
+      A1: { value: '46023', format: 'date', numberFormat: 'mmm yyyy' },
+      A2: { value: '=A1+31' },
+      A3: {
+        value: '46282',
+        format: 'date',
+        numberFormat: 'dddd, mmmm d, yyyy',
+      },
+      A4: { value: '=A3-A1' },
+      A5: { value: '46023', format: 'date' },
+      A6: { value: '=A1+31', format: 'number', decimals: 0 },
+    });
+    expect(result.A1).toEqual({
+      display: 'Jan 2026',
+      number: 46023,
+      date: true,
+    });
+    expect(result.A2).toEqual({
+      display: '2/1/2026',
+      number: 46054,
+      date: true,
+    });
+    expect(result.A3).toEqual({
+      display: 'Thursday, September 17, 2026',
+      number: 46282,
+      date: true,
+    });
+    expect(result.A4).toEqual({ display: '259', number: 259 });
+    expect(result.A5).toEqual({
+      display: '1/1/2026',
+      number: 46023,
+      date: true,
+    });
+    expect(result.A6.display).toBe('46,054');
+  });
+
+  it('keeps text-formatted values literal during calculation and copying', () => {
+    const result = calculator.calculate({
+      A1: { value: '=SUM(B1:B2)', format: 'text' },
+      A2: { value: '00123', format: 'text' },
+      A3: { value: '=RAND()', format: 'text' },
+      A4: { value: 'TRUE', format: 'text' },
+      A5: { value: '=ISTEXT(A2)' },
+    });
+    expect(result.A1).toEqual({ display: '=SUM(B1:B2)' });
+    expect(result.A2).toEqual({ display: '00123' });
+    expect(result.A3).toEqual({ display: '=RAND()' });
+    expect(result.A4).toEqual({ display: 'TRUE' });
+    expect(result.A5).toEqual({ display: 'TRUE' });
+    const copied = calculator.copy([
+      {
+        from: { row: 0, column: 0 },
+        to: { row: 1, column: 0 },
+        cell: {
+          value: '=B1',
+          format: 'text',
+          italic: true,
+          fontSize: 20,
+          fillColor: '#123456',
+          borderTop: true,
+        },
+      },
+    ]);
+    expect(copied.A2).toEqual({
+      ...SPREADSHEET_DEFAULT_STYLE,
+      value: '=B1',
+      format: 'text',
+      italic: true,
+      fontSize: 20,
+      fillColor: '#123456',
+      borderTop: true,
+    });
+    expect(
+      calculator.copy([
+        {
+          from: { row: 0, column: 0 },
+          to: { row: 1, column: 0 },
+          cell: { value: '' },
+        },
+      ]).A2
+    ).toEqual({ ...SPREADSHEET_DEFAULT_STYLE, value: '' });
+  });
+
+  it('includes array spills and detects blocked spill ranges', () => {
+    const result = calculator.calculate(cells({ A1: '=SEQUENCE(2,2)' }));
+    expect(result.A1.number).toBe(1);
+    expect(result.B1.number).toBe(2);
+    expect(result.A2.number).toBe(3);
+    expect(result.B2.number).toBe(4);
+    expect(
+      calculator.calculate(cells({ A1: '=SEQUENCE(2,2)', B2: 'occupied' })).A1
+        .display
+    ).toBe('#SPILL!');
+  });
+
+  it('reads TODAY and NOW from the calculation clock and repeats a seeded RAND', () => {
+    // 23 July 2026, 10:30 UTC: serial 46226.4375.
+    setCalculationClock({
+      time: Date.UTC(2026, 6, 23, 10, 30),
+      timezone: 'UTC',
+      seed: 7,
+    });
+    try {
+      const sources = cells({
+        A1: '=TODAY()',
+        A2: '=NOW()',
+        A3: '=RAND()',
+        A4: '=RANDBETWEEN(1,6)',
+        A5: '=_xlfn.RAND()<1',
+        A6: '="RAND()"',
+        A7: '=TEXT(TODAY(),"yyyy-mm-dd")',
+      });
+      const result = calculator.calculate(sources);
+      expect(result.A1.number).toBe(46226);
+      expect(result.A2.number).toBeCloseTo(46226.4375, 9);
+      expect(result.A3.number).toBeGreaterThanOrEqual(0);
+      expect(result.A3.number).toBeLessThan(1);
+      expect([1, 2, 3, 4, 5, 6]).toContain(result.A4.number);
+      expect(result.A5.display).toBe('TRUE');
+      expect(result.A6).toEqual({ display: 'RAND()' });
+      expect(result.A7.display).toBe('2026-07-23');
+      setCalculationClock({
+        time: Date.UTC(2026, 6, 23, 10, 30),
+        timezone: 'UTC',
+        seed: 7,
+      });
+      expect(calculator.calculate(sources).A3.number).toBe(result.A3.number);
+    } finally {
+      setCalculationClock(undefined);
+    }
+  });
+
+  it('reads TODAY in the time zone of the clock', () => {
+    // 02:00 UTC on 23 July 2026 is still 22 July in New York.
+    setCalculationClock({
+      time: Date.UTC(2026, 6, 23, 2),
+      timezone: 'America/New_York',
+    });
+    try {
+      expect(calculator.calculate(cells({ A1: '=TODAY()' })).A1.number).toBe(
+        46225
+      );
+    } finally {
+      setCalculationClock(undefined);
+    }
+  });
+
+  it('ignores source addresses outside the supported grid', () => {
+    const result = calculator.calculate(
+      cells({ A0: '1', A201: '2', XFE1: '3' })
+    );
+    expect(result).toEqual({});
+  });
+
+  it('calculates cross-sheet references, quoted names, and spills in one workbook', () => {
+    const result = calculator.calculateWorkbook([
+      {
+        id: 'budget',
+        name: 'Budget 2026',
+        rowCount: 200,
+        cells: cells({ A1: '12', A2: '8', B1: '=SUM(A1:A2)' }),
+      },
+      {
+        id: 'summary',
+        name: 'Summary',
+        rowCount: 200,
+        cells: cells({
+          A1: "='Budget 2026'!B1*2",
+          B1: '=SEQUENCE(2)',
+          C1: '=B2+A1',
+        }),
+      },
+    ]);
+    expect(result.budget.B1.number).toBe(20);
+    expect(result.summary.A1.number).toBe(40);
+    expect(result.summary.B2.number).toBe(2);
+    expect(result.summary.C1.number).toBe(42);
+  });
+
+  it('resolves reversed default sheet names and circular cross-sheet dependencies', () => {
+    const result = calculator.calculateWorkbook([
+      {
+        id: 'two',
+        name: 'Sheet2',
+        rowCount: 200,
+        cells: cells({ A1: '=Sheet1!A1', B1: '=Sheet1!B1' }),
+      },
+      {
+        id: 'one',
+        name: 'Sheet1',
+        rowCount: 200,
+        cells: cells({ A1: '42', B1: '=Sheet2!B1' }),
+      },
+    ]);
+    expect(result.two.A1.number).toBe(42);
+    expect(result.two.B1.display).toBe('#CIRC!');
+    expect(result.one.B1.display).toBe('#CIRC!');
+  });
+
+  it('translates references with the active workbook names during copying', () => {
+    const result = calculator.copy(
+      [
+        {
+          from: { row: 0, column: 0 },
+          to: { row: 1, column: 0 },
+          cell: { value: "='Budget 2026'!B4+Sheet2!$C$2" },
+        },
+      ],
+      { sheetNames: ['Budget 2026', 'Sheet2'], activeSheet: 1 }
+    );
+    expect(result.A2?.value).toBe("='Budget 2026'!B5+Sheet2!$C$2");
+  });
+
+  it('calculates a full-size ten-sheet workbook with cross-sheet dependencies', () => {
+    const sheets = Array.from({ length: 10 }, (_, index) => ({
+      id: `sheet-${index}`,
+      name: `Sheet${index + 1}`,
+      rowCount: 1000,
+      cells: cells({
+        A1: String(index + 1),
+        A1000: index ? `=Sheet${index}!A1000+A1` : '=A1',
+      }),
+    }));
+    const result = calculator.calculateWorkbook(sheets);
+    expect(Object.keys(result)).toHaveLength(10);
+    expect(result['sheet-9'].A1000.number).toBe(55);
+  }, 20_000);
+
+  it('frees a disposed calculator without affecting another editor', async () => {
+    const other = await createSpreadsheetCalculator();
+    other.dispose();
+    other.dispose();
+    expect(() => other.calculate({})).toThrow('disposed');
+    expect(calculator.calculate(cells({ A1: '42' })).A1.number).toBe(42);
+  });
+});

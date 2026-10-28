@@ -1,0 +1,9 @@
+# Fragment-rooted relation updates need only the parent's property identities.
+fragment PropertyAssignmentParent on GraphqlSoupEntity {
+  __typename
+  id
+  properties {
+    id
+    propertyDefinitionId
+  }
+}

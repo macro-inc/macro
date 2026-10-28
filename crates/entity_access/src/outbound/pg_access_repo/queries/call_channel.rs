@@ -10,33 +10,28 @@ use uuid::Uuid;
 #[derive(Clone, sqlx::FromRow)]
 pub struct CallChannelRow {
     /// The channel the call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The share permission ID for this call.
     pub share_permission_id: String,
 }
 
 /// Look up a call's channel and share permission by call ID.
 ///
-/// Checks both active calls and archived call records.
+/// Resolves the durable identity for native and imported calls.
 #[tracing::instrument(err, skip(pool))]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_call_channel(
     pool: &PgPool,
     call_id: &Uuid,
 ) -> Result<Option<CallChannelRow>, sqlx::Error> {
-    sqlx::query_as::<_, CallChannelRow>(
+    sqlx::query_as!(
+        CallChannelRow,
         r#"
-        SELECT channel_id, share_permission_id
-        FROM calls
+        SELECT channel_id AS "channel_id?", share_permission_id AS "share_permission_id!"
+        FROM call_entities
         WHERE id = $1
-        UNION ALL
-        SELECT channel_id, share_permission_id
-        FROM call_records
-        WHERE id = $1
-        LIMIT 1
         "#,
+        call_id,
     )
-    .bind(call_id)
     .fetch_optional(pool)
     .await
 }
@@ -62,7 +57,7 @@ pub async fn get_call_channel_by_channel_id(
     sqlx::query_as!(
         CallChannelRow,
         r#"
-        SELECT channel_id AS "channel_id!", share_permission_id AS "share_permission_id!"
+        SELECT channel_id AS "channel_id?", share_permission_id AS "share_permission_id!"
         FROM calls
         WHERE channel_id = $1
         UNION ALL

@@ -53,11 +53,11 @@ fn named_instance_shifts_into_its_port_window() {
     assert_ne!(instance.port(Port::FusionAuth), 9011);
     let proxy = instance.port(Port::Proxy);
     assert!(
-        render(&instance).contains(&format!("http://localhost:{proxy}/sync")),
+        render(&instance).contains(&format!("https://localhost:{proxy}/sync")),
         "sync-service should use the named instance proxy"
     );
     assert!(
-        render(&instance).contains(&format!("http://localhost:{proxy}/lexical")),
+        render(&instance).contains(&format!("https://localhost:{proxy}/lexical")),
         "lexical-service should use the named instance proxy"
     );
 }

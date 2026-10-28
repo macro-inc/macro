@@ -1,0 +1,1836 @@
+//! The per-session command queue: admission, the worker that drains it one
+//! command at a time, and routing to the replica that holds the session.
+
+use agent_fold::domain::model::{StopReason, TurnId, TurnSignal};
+use agent_session::domain::error::AgentSessionError;
+use agent_session::domain::events::{
+    AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
+    SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
+    WaitingForInputMetadata,
+};
+use agent_session::domain::model::{StoredQueuedAction, TurnPrompter};
+use futures::future::BoxFuture;
+
+use super::*;
+
+/// What [`AgentHarnessInner::dispatch_next`] found waiting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Dispatch {
+    /// The oldest queued action reached the runtime.
+    Dispatched,
+    /// Nothing was queued: the session is idle.
+    QueueEmpty,
+}
+
+pub(super) type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
+
+pub(super) struct QueuedCommand {
+    command: HarnessCommand,
+    completed: oneshot::Sender<Result<CommandOutcome>>,
+    /// The caller's span, carried across the queue so the work the worker does
+    /// on its own task still hangs off whatever triggered it.
+    span: tracing::Span,
+    /// Whether the worker resolves the session's managing replica before
+    /// executing. Commands admitted at an ingress route; a command received
+    /// *as* a forward executes here unconditionally, which is what makes
+    /// forwarding single-hop - two replicas with momentarily different lease
+    /// views cannot bounce a command between each other.
+    route: bool,
+}
+
+/// [`CommandForwarder`], object-safe.
+///
+/// Held erased inside the service so forwarding does not become an eighth
+/// type parameter on every impl block; the public port keeps its natural
+/// `impl Future` shape and this shim boxes at the one internal call site.
+pub(super) trait ErasedForwarder: Send + Sync + 'static {
+    fn forward<'a>(
+        &'a self,
+        session: AgentSessionId,
+        command: HarnessCommand,
+        target: crate::domain::ports::CommandTarget,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>>;
+}
+
+impl<F: CommandForwarder> ErasedForwarder for F {
+    fn forward<'a>(
+        &'a self,
+        session: AgentSessionId,
+        command: HarnessCommand,
+        target: crate::domain::ports::CommandTarget,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>> {
+        Box::pin(CommandForwarder::forward(self, session, command, target))
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
+    AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    pub(super) fn enqueue(
+        &self,
+        session_id: AgentSessionId,
+        mut command: HarnessCommand,
+        route: bool,
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
+        let caller = tracing::Span::current();
+        let result = loop {
+            let commands = self.commands(session_id);
+            let (completed, result) = oneshot::channel();
+            let queued = QueuedCommand {
+                command,
+                completed,
+                span: caller.clone(),
+                route,
+            };
+
+            match commands.send(queued) {
+                Ok(()) => break result,
+                Err(error) => {
+                    command = error.0.command;
+                    self.workers
+                        .remove_if(&session_id, |_, current| current.same_channel(&commands));
+                }
+            }
+        };
+
+        async move {
+            result
+                .await
+                .map_err(|_| HarnessError::CommandWorkerStopped(session_id))?
+        }
+    }
+
+    pub(super) fn commands(
+        &self,
+        session_id: AgentSessionId,
+    ) -> mpsc::UnboundedSender<QueuedCommand> {
+        match self.workers.entry(session_id) {
+            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                let (commands, receiver) = mpsc::unbounded_channel();
+                entry.insert(commands.clone());
+                self.spawn_worker(session_id, receiver);
+                commands
+            }
+        }
+    }
+
+    pub(super) fn spawn_worker(
+        &self,
+        session_id: AgentSessionId,
+        receiver: mpsc::UnboundedReceiver<QueuedCommand>,
+    ) {
+        // The worker outlives the call that created it, so it has to carry the
+        // subscriber forward itself or every command it runs traces nowhere.
+        let inner = self.inner.clone();
+        tokio::spawn(run_session_worker(session_id, inner, receiver).with_current_subscriber());
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Execute where the session's live actor is: locally when nobody (or
+    /// this replica) manages it, on the managing peer otherwise, and nowhere
+    /// at all when this replica is draining.
+    /// The routing decision is recorded on the span, not only logged: which of
+    /// the lease's answers came back, which peer it named, and whether the
+    /// command left this process. Those are the fields you group by when a
+    /// replica is mishandling commands, and a log line cannot be aggregated.
+    #[tracing::instrument(
+        err,
+        skip(self, command),
+        fields(
+            %session_id,
+            agent.session.management = tracing::field::Empty,
+            agent.session.manager_replica = tracing::field::Empty,
+            agent.command.forwarded = tracing::field::Empty,
+        )
+    )]
+    pub(super) async fn route_then_execute(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<CommandOutcome> {
+        let span = tracing::Span::current();
+        let manager = match self.sessions.management(session_id).await? {
+            // First, an open included: a replica on its way out has no
+            // business taking on new work of any shape, and the caller's
+            // retry lands on one that is staying.
+            SessionManagement::Draining => {
+                span.record("agent.session.management", "draining");
+                span.record("agent.command.forwarded", false);
+                return Err(AgentSessionError::Draining(session_id).into());
+            }
+            // Open creates the row and has no existing manager to route through.
+            _ if matches!(command, HarnessCommand::Open(_)) => {
+                span.record("agent.session.management", "open");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
+            SessionManagement::Unmanaged => {
+                span.record("agent.session.management", "unmanaged");
+                span.record("agent.command.forwarded", false);
+                // A new conversation has a reserved id but no session row yet. External
+                // personas still route to the replica holding their connection;
+                // an existing session uses its pinned harness configuration.
+                let (bot_id, kind) = match self.sessions.get_session(session_id).await {
+                    Ok(session) => (
+                        session.bot_id,
+                        AgentKind::for_session(session.bot_id, &session.harness),
+                    ),
+                    Err(AgentSessionError::NotFound(_)) => match &command {
+                        HarnessCommand::ConversationMessage(open) => {
+                            (open.bot_id, open.runtime.kind)
+                        }
+                        _ => return Err(AgentSessionError::NotFound(session_id).into()),
+                    },
+                    Err(error) => return Err(error.into()),
+                };
+                if kind != AgentKind::External {
+                    return self.execute(session_id, command).await;
+                }
+                let Some(harness) = self
+                    .runtimes
+                    .bound_harness(bot_id)
+                    .await
+                    .map_err(AgentSessionError::Unknown)?
+                else {
+                    return self.execute(session_id, command).await;
+                };
+                if self.runtimes.is_connected(harness) {
+                    return self.execute(session_id, command).await;
+                }
+                span.record("agent.command.forwarded", true);
+                return self
+                    .forwarder
+                    .forward(
+                        session_id,
+                        command,
+                        crate::domain::ports::CommandTarget::Harness(harness),
+                    )
+                    .await;
+            }
+            SessionManagement::Ours => {
+                span.record("agent.session.management", "ours");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
+            SessionManagement::Peer(manager) => manager,
+        };
+        span.record("agent.session.management", "peer");
+        span.record(
+            "agent.session.manager_replica",
+            tracing::field::display(manager.replica),
+        );
+        span.record("agent.command.forwarded", true);
+        tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
+        self.forwarder
+            .forward(
+                session_id,
+                command,
+                crate::domain::ports::CommandTarget::Replica(manager.replica),
+            )
+            .await
+    }
+
+    /// Run one command; see [`Self::execute_unboxed`].
+    ///
+    /// Boxed, like [`Self::dispatch_next`]: unoptimized builds give every
+    /// awaited future its own slot in the awaiting frame, and the routing and
+    /// worker code await a command in several places, each of which would
+    /// otherwise hold a copy of this large future on the stack.
+    pub(super) fn execute(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> BoxFuture<'_, Result<CommandOutcome>> {
+        Box::pin(self.execute_unboxed(session_id, command))
+    }
+
+    async fn execute_unboxed(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<CommandOutcome> {
+        // A conversation reserves its identity before startup. Commands are serialized
+        // under that identity, so only the first opens; every later post is a
+        // regular queued turn, including after the runtime has disconnected.
+        let mut _delivery_lease = None;
+        let command = match command {
+            HarnessCommand::ConversationMessage(mut open) => {
+                let mut origin = open.origin.announcement();
+                if origin.reply_placement != crate::domain::model::ReplyPlacement::Timeline {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+                let mut action_id = AgentActionId::from_uuid(origin.message_id);
+                if let Some(policy) = &self.conversations
+                    && !policy
+                        .authorize_prompt(session_id, open.bot_id, Some(open.origin.actor()))
+                        .await?
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+                if let Some(store) = &self.conversation_turns {
+                    let messages::domain::models::MessageParent::Channel(channel) = origin.parent
+                    else {
+                        return Err(AgentSessionError::Forbidden.into());
+                    };
+                    let record = store.admit(session_id, channel, open.clone()).await?;
+                    if record.state
+                        != crate::domain::conversation_turns::ConversationTurnState::Queued
+                        || record.session_id != session_id
+                    {
+                        return Ok(CommandOutcome::Completed);
+                    }
+                    open = record.command;
+                    origin = open.origin.announcement();
+                    action_id = record.action_id;
+                }
+                // Only a bootstrap takes the delivery lease: until the session
+                // opens it has no manager to route to, while an open session's
+                // turns are already serialized by its queue and its journal
+                // claims. Holding the lease, look again: another replica may
+                // have opened the session meanwhile.
+                let mut session = self.sessions.get_session(session_id).await;
+                if matches!(session, Err(AgentSessionError::NotFound(_)))
+                    && let Some(store) = &self.conversation_turns
+                {
+                    _delivery_lease = store.claim_delivery(session_id).await?;
+                    if _delivery_lease.is_none() {
+                        // Already durable; recovery routes it to the manager
+                        // after the other replica finishes bootstrapping.
+                        return Ok(CommandOutcome::Queued);
+                    }
+                    session = self.sessions.get_session(session_id).await;
+                }
+                match session {
+                    Ok(session) => {
+                        if session.bot_id != open.bot_id
+                            || !session.owner_id.is_user(open.origin.actor())
+                        {
+                            return Err(AgentSessionError::Forbidden.into());
+                        }
+                        let context = open.origin.context().cloned();
+                        HarnessCommand::Deliver(DeliverAction {
+                            id: action_id,
+                            actor: Some(open.origin.actor().clone()),
+                            action: open.origin.into_action(),
+                            announce: Some(origin),
+                            context,
+                        })
+                    }
+                    Err(AgentSessionError::NotFound(_)) => HarnessCommand::Open(open),
+                    Err(error) => return Err(error.into()),
+                }
+            }
+            command => command,
+        };
+        // Persist-as-we-go needs a current working copy before the first
+        // mutation, or a restart would overwrite the store with an empty
+        // queue. Open creates the row and has nothing to restore.
+        if !matches!(command, HarnessCommand::Open(_)) {
+            self.ensure_hydrated(session_id).await?;
+        }
+        match &command {
+            HarnessCommand::Open(open)
+                if AgentKind::of(open.bot_id) == AgentKind::SandboxedCoder
+                    && !is_macro_staff(open.origin.actor()) =>
+            {
+                return Err(AgentSessionError::Forbidden.into());
+            }
+            // The queue mutations sit behind the same staff gate as delivery:
+            // an edited entry is delivered later under its original identity,
+            // so rewriting (or dropping) what a Daytona session is about to
+            // run is the same privilege as prompting it.
+            HarnessCommand::Deliver(DeliverAction {
+                actor,
+                action: AgentAction::RespondToPermission(_),
+                ..
+            }) => {
+                if actor.is_none() {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
+            HarnessCommand::Deliver(DeliverAction { actor, .. })
+            | HarnessCommand::EditQueued { actor, .. }
+            | HarnessCommand::RemoveQueued { actor, .. }
+            | HarnessCommand::SteerQueued { actor, .. } => {
+                let session = self.sessions.get_session(session_id).await?;
+                if session.is_archived {
+                    return Err(AgentSessionError::Archived(session_id).into());
+                }
+                if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
+                    && !actor.as_ref().is_some_and(is_macro_staff)
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
+            HarnessCommand::DrainNotifications
+            | HarnessCommand::Open(_)
+            | HarnessCommand::ConversationMessage(_)
+            | HarnessCommand::Turn(_)
+            | HarnessCommand::ToolApproval(_)
+            | HarnessCommand::PresentTool { .. }
+            | HarnessCommand::SessionStopped { .. }
+            | HarnessCommand::Delete => {}
+            HarnessCommand::SetSandboxSize(_) => {
+                if self.sessions.get_session(session_id).await?.is_archived {
+                    return Err(AgentSessionError::Archived(session_id).into());
+                }
+            }
+        }
+
+        match command {
+            HarnessCommand::DrainNotifications => {
+                if let Some(outcome) = self
+                    .notification_completions
+                    .get(&session_id)
+                    .map(|entry| *entry)
+                    && let Some(store) = &self.notification_store
+                    && let Some(batch) = self
+                        .notification_batches
+                        .get(&session_id)
+                        .map(|entry| entry.clone())
+                {
+                    store.complete(batch.lease_id, outcome).await?;
+                    self.notification_batches.remove(&session_id);
+                    self.notification_completions.remove(&session_id);
+                }
+                // A terminal response can commit before observer takeover.
+                // Reconcile active leases as well as expired ones so a missed
+                // callback cannot keep renewing an already-finished turn.
+                if let Some(batch) = self
+                    .notification_batches
+                    .get(&session_id)
+                    .map(|entry| entry.clone())
+                {
+                    use agent_session::domain::action_history::RecordedAction;
+                    match self
+                        .sessions
+                        .recorded_action(session_id, batch.action_id)
+                        .await?
+                    {
+                        Some(RecordedAction::Finished {
+                            notification_noop,
+                            turn,
+                            stop,
+                            last_text,
+                        }) => {
+                            return self
+                                .execute(
+                                    session_id,
+                                    HarnessCommand::Turn(TurnSignal::TurnEnded {
+                                        turn,
+                                        action_id: Some(batch.action_id),
+                                        stop,
+                                        last_text,
+                                        notification_noop,
+                                    }),
+                                )
+                                .await;
+                        }
+                        Some(RecordedAction::Interrupted { .. }) | None => {
+                            self.execute(
+                                session_id,
+                                HarnessCommand::SessionStopped {
+                                    reason: "notification delivery was interrupted".into(),
+                                },
+                            )
+                            .await?;
+                        }
+                        Some(RecordedAction::Running { .. }) => {}
+                    }
+                }
+                self.restore_queue(session_id).await?;
+                if !self.busy.is_pending(session_id) {
+                    self.dispatch_next(session_id).await?;
+                }
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::ConversationMessage(_) => {
+                unreachable!("conversation messages were normalized before dispatch")
+            }
+            HarnessCommand::Open(command) => {
+                self.open(session_id, command).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            // Turn-occupying actions go through the queue - the running
+            // turn's end is what dispatches them. Everything else delivers
+            // now: a stop rides alongside the turn it cancels, and that
+            // turn's cancelled answer is an ordinary turn end.
+            HarnessCommand::Deliver(command) if command.action.occupies_turn() => {
+                self.enqueue_then_dispatch(session_id, command).await
+            }
+            HarnessCommand::Deliver(command) => {
+                self.deliver(session_id, command).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::EditQueued {
+                action_id,
+                prompt,
+                actor,
+            } => {
+                queue_result(
+                    self.queues
+                        .edit_prompt(session_id, action_id, prompt, actor),
+                    session_id,
+                )?;
+                self.persist_or_rollback(session_id).await?;
+                self.publish_queue(session_id).await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::RemoveQueued { action_id, .. } => {
+                queue_result(self.queues.remove(session_id, action_id), session_id)?;
+                self.persist_or_rollback(session_id).await?;
+                self.publish_queue(session_id).await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::SteerQueued { action_id, actor } => {
+                self.steer_queued(session_id, action_id, actor).await
+            }
+            HarnessCommand::Turn(TurnSignal::TurnEnded {
+                notification_noop,
+                stop,
+                last_text,
+                action_id: fold_action_id,
+                turn,
+                ..
+            }) => {
+                let duplicate = match fold_action_id {
+                    Some(action) => self
+                        .notification_finished
+                        .lock()
+                        .await
+                        .contains(&(session_id, action)),
+                    None => false,
+                };
+                if duplicate {
+                    return Ok(CommandOutcome::Completed);
+                }
+                if let Some(action) = fold_action_id {
+                    self.complete_external_reply(
+                        session_id,
+                        action,
+                        turn,
+                        ReplyOutcome::of_turn(&stop, last_text.clone()),
+                    )
+                    .await;
+                }
+                let mut ended = self.busy.turn(session_id);
+                if let (Some(turn), Some(action)) = (&ended, fold_action_id)
+                    && turn.action_id != action
+                {
+                    tracing::warn!(%session_id, %action, "ignoring a stale turn end");
+                    return Ok(CommandOutcome::Completed);
+                }
+                // The journal is told before the turn's mark is released, but
+                // a failure to tell it is logged, not returned: the session
+                // must still drain, and recovery marks a turn left running as
+                // interrupted.
+                if let Some(store) = &self.conversation_turns {
+                    if ended.is_none()
+                        && let Some(action) = fold_action_id
+                    {
+                        match store.by_action(action).await {
+                            Ok(record) => {
+                                ended = record
+                                    .filter(|record| record.session_id == session_id)
+                                    .and_then(|record| record.in_flight);
+                            }
+                            Err(error) => tracing::error!(
+                                ?error,
+                                %session_id,
+                                %action,
+                                "could not read the conversation turn that ended"
+                            ),
+                        }
+                    }
+                    if let Some(turn) = &ended {
+                        // Saved before the outcome makes the reply due, so any
+                        // replica that reconciles it shows what this one watched.
+                        let reply = self.reported_segments(session_id, turn.turn);
+                        if !reply.is_empty()
+                            && turn.announce.as_ref().is_some_and(|origin| {
+                                origin.reply_placement
+                                    == crate::domain::model::ReplyPlacement::Timeline
+                            })
+                            && let Err(error) = store.save_reply(turn.action_id, &reply).await
+                        {
+                            tracing::error!(?error, %session_id, "could not save a finished conversation reply");
+                        }
+                        let state = match &stop {
+                            StopReason::Cancelled => {
+                                crate::domain::conversation_turns::ConversationTurnState::Stopped
+                            }
+                            StopReason::Failed { .. } => {
+                                crate::domain::conversation_turns::ConversationTurnState::Failed
+                            }
+                            _ => {
+                                crate::domain::conversation_turns::ConversationTurnState::Succeeded
+                            }
+                        };
+                        if let Err(error) = store
+                            .finish(
+                                turn.action_id,
+                                state,
+                                ReplyOutcome::of_turn(&stop, last_text.clone()),
+                            )
+                            .await
+                        {
+                            tracing::error!(
+                                ?error,
+                                %session_id,
+                                action_id = %turn.action_id,
+                                "could not record how a conversation turn ended"
+                            );
+                        }
+                    }
+                }
+                if let Some(store) = &self.notification_store
+                    && let Some(batch) = self
+                        .notification_batches
+                        .get(&session_id)
+                        .map(|batch| batch.clone())
+                {
+                    {
+                        let mut finished = self.notification_finished.lock().await;
+                        finished.push_back((session_id, batch.action_id));
+                        if finished.len() > 1024 {
+                            finished.pop_front();
+                        }
+                    }
+                    let outcome = if notification_noop {
+                        agent_session::domain::notifications::NotificationOutcome::Noop
+                    } else {
+                        agent_session::domain::notifications::NotificationOutcome::Delivered
+                    };
+                    self.notification_completions.insert(session_id, outcome);
+                    match store.complete(batch.lease_id, outcome).await {
+                        Ok(()) => {
+                            self.notification_batches.remove(&session_id);
+                            self.notification_completions.remove(&session_id);
+                        }
+                        Err(error) => {
+                            tracing::warn!(?error, %session_id, "notification acknowledgment will retry")
+                        }
+                    }
+                }
+                // A recovered completion may already have acknowledged and
+                // removed its batch before the original observer arrives.
+                if notification_noop {
+                    self.busy.take(session_id);
+                    self.dispatch_next(session_id).await?;
+                    return Ok(CommandOutcome::Completed);
+                }
+                self.busy.take(session_id);
+                // A turn end with no record: this replica restarted mid-turn
+                // and the in-memory mark went with it, or the fold closed a
+                // turn nobody here prompted. The queue still drains; only the
+                // facts about *that* turn are unknowable.
+                if ended.is_none() {
+                    tracing::info!(%session_id, "turn ended with no in-flight record");
+                }
+                // The thread hears first, before any fact is published or
+                // the next prompt dispatched: a chat agent's pending reply
+                // is what the person who asked is looking at, and it must
+                // never outlive the turn it stands for. Per turn, not per
+                // settle - a second mention queued behind this one would
+                // otherwise leave the first spinning until both finished.
+                self.resolve_reply(
+                    session_id,
+                    ended.as_ref(),
+                    ReplyOutcome::of_turn(&stop, last_text.clone()),
+                )
+                .await;
+                // The answer is showing: the bot stops typing.
+                self.end_presentation(session_id, ended.as_ref()).await;
+                if let (Some(turn), Some(fold_action_id)) = (&ended, fold_action_id)
+                    && turn.action_id != fold_action_id
+                {
+                    tracing::warn!(
+                        %session_id,
+                        dispatched = %turn.action_id,
+                        folded = %fold_action_id,
+                        "the fold closed a different turn than the one dispatched"
+                    );
+                }
+                let stop_reason = wire_stop_reason(&stop);
+                if let Some(turn) = &ended {
+                    let turn = turn.clone();
+                    let queued_remaining = self.queues.list(session_id).len();
+                    let stop_reason = stop_reason.clone();
+                    self.publish_lifecycle(session_id, |identity| {
+                        AgentSessionLifecycleEvent::TurnEnded(TurnEndedMetadata {
+                            identity,
+                            turn: turn.turn,
+                            action_id: turn.action_id,
+                            actor: turn.actor,
+                            announcement_message_id: turn.announcement_message_id,
+                            stop_reason,
+                            queued_remaining,
+                        })
+                    })
+                    .await;
+                }
+                let dispatched = self.dispatch_next(session_id).await;
+                // Published whatever dispatching did: a claim, a requeued
+                // failure, and an emptied queue are all changes a viewer is
+                // watching for.
+                self.publish_queue(session_id).await;
+                let dispatched = dispatched?;
+                // Settled: the turn ended and nothing followed it. Emitted
+                // only with the turn's record, because "settled" without
+                // knowing what settled is a fact nobody can act on. The
+                // excerpt is the fold's last text for the turn: the same
+                // passage the chip shows once it is done.
+                if let (Dispatch::QueueEmpty, Some(turn)) = (dispatched, ended) {
+                    self.publish_lifecycle(session_id, |identity| {
+                        AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+                            identity,
+                            last_turn: Some(turn.ended(stop_reason, last_text)),
+                        })
+                    })
+                    .await;
+                }
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::SessionStopped { reason } => {
+                if let Some(store) = &self.notification_store
+                    && let Some(batch) = self
+                        .notification_batches
+                        .get(&session_id)
+                        .map(|entry| entry.clone())
+                {
+                    store.release(batch.lease_id).await?;
+                    self.notification_batches.remove(&session_id);
+                }
+                self.notification_completions.remove(&session_id);
+                let in_flight = self.busy.take(session_id);
+                // No `TurnEnded` follows a death, so this is the turn's last
+                // chance to stop its pending reply spinning, and to tell the
+                // journal it failed before recovery takes it for interrupted.
+                if let (Some(store), Some(turn)) = (&self.conversation_turns, &in_flight) {
+                    let reply = self.reported_segments(session_id, turn.turn);
+                    if !reply.is_empty()
+                        && turn.announce.as_ref().is_some_and(|origin| {
+                            origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+                        })
+                        && let Err(error) = store.save_reply(turn.action_id, &reply).await
+                    {
+                        tracing::error!(?error, %session_id, "could not save a stopped conversation reply");
+                    }
+                    if let Err(error) = store
+                        .finish(
+                            turn.action_id,
+                            crate::domain::conversation_turns::ConversationTurnState::Failed,
+                            ReplyOutcome::Failed,
+                        )
+                        .await
+                    {
+                        tracing::error!(?error, %session_id, "could not record a conversation turn its session stopped under");
+                    }
+                }
+                self.resolve_reply(session_id, in_flight.as_ref(), ReplyOutcome::Failed)
+                    .await;
+                self.end_presentation(session_id, in_flight.as_ref()).await;
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
+                        identity,
+                        reason,
+                        turn_in_flight: in_flight.as_ref().map(InFlightTurn::summary),
+                    })
+                })
+                .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Turn(TurnSignal::Progressed {
+                turn,
+                action_id,
+                phase,
+                segments,
+            }) => {
+                self.present_progress(session_id, turn, action_id, phase, segments)
+                    .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Turn(TurnSignal::ElicitationRaised { question, .. }) => {
+                let Some(turn) = self.busy.turn(session_id) else {
+                    tracing::warn!(%session_id, "elicitation raised with no in-flight record");
+                    return Ok(CommandOutcome::Completed);
+                };
+                // The question is held for the user and answered only in the
+                // session view (`hold_or_refuse_elicitation`), so a thread
+                // showing a spinner would spin until someone happened to open
+                // the session. Say so where the person who asked is looking.
+                // This is not an in-memory special case: it is the fallback
+                // for any runtime this harness does not control - a user-run
+                // macrod, a third-party agent - that elicits from a channel
+                // turn.
+                self.resolve_reply(
+                    session_id,
+                    Some(&turn),
+                    ReplyOutcome::NeedsInput {
+                        question: question.clone(),
+                    },
+                )
+                .await;
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                        announcement_message_id: turn.announcement_message_id,
+                        question,
+                    })
+                })
+                .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Turn(TurnSignal::ElicitationCleared { .. }) => {
+                let Some(turn) = self.busy.turn(session_id) else {
+                    tracing::warn!(%session_id, "elicitation cleared with no in-flight record");
+                    return Ok(CommandOutcome::Completed);
+                };
+                // The turn is running again; the thread goes back to waiting
+                // for its answer.
+                self.resolve_reply(session_id, Some(&turn), ReplyOutcome::Resumed)
+                    .await;
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::InputReceived(InputReceivedMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                    })
+                })
+                .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::PresentTool {
+                actor,
+                presentation,
+            } => {
+                self.sessions
+                    .present_tool(session_id, actor, presentation)
+                    .await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::ToolApproval(change) => {
+                self.tool_approval_changed(session_id, change).await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::SetSandboxSize(size) => {
+                self.apply_sandbox_size(session_id, size).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Delete => {
+                self.notification_finished
+                    .lock()
+                    .await
+                    .retain(|(session, _)| *session != session_id);
+                // Identity first: the row is gone once the delete succeeds.
+                let identity = self.identity(session_id).await;
+                self.delete(session_id).await?;
+                // The queue and busy mark die with the session: a deleted
+                // session's entries will never dispatch, and leaving them
+                // would leak them for the life of the process. The published
+                // empty snapshot is the viewers' goodbye.
+                self.busy.clear(session_id);
+                self.queues.drop_session(session_id);
+                self.hydrated.remove(&session_id);
+                self.publish_queue(session_id).await;
+                match identity {
+                    Ok(identity) => {
+                        self.lifecycle_publisher
+                            .publish(AgentSessionLifecycleEvent::Deleted(
+                                SessionDeletedMetadata { identity },
+                            ))
+                            .await;
+                    }
+                    Err(error) => tracing::warn!(
+                        error = ?error,
+                        %session_id,
+                        "skipping agent_session.deleted: identity unavailable"
+                    ),
+                }
+                Ok(CommandOutcome::Completed)
+            }
+        }
+    }
+
+    /// Queue a turn-occupying action, and dispatch the head of the queue
+    /// right away when no turn is running.
+    ///
+    /// The dispatched entry is usually the one just queued, but not
+    /// necessarily: entries can linger from a drain that failed, and FIFO
+    /// order holds regardless. The outcome reports what happened to *this*
+    /// action - still waiting, or on the wire.
+    ///
+    /// An action whose id this session already holds is the same action
+    /// arriving twice - a caller retrying a control request under the id it
+    /// named. It reports what became of the first copy instead of queueing a
+    /// second, so a retry cannot double-prompt. External sessions with a reply
+    /// store also check durable completion and original prompt history, so
+    /// finished actions remain deduplicated across reconnects and restarts.
+    /// Other sessions check only this replica's queued and in-flight actions.
+    ///
+    /// A channel follow-up (`announce` set) that lands on a running turn
+    /// steers: it goes to the front of the queue, a stop cancels the current
+    /// turn, and the chip is posted on that follow-up immediately - so it
+    /// flushes next, ahead of anything queued before it.
+    pub(super) async fn enqueue_then_dispatch(
+        &self,
+        session_id: AgentSessionId,
+        command: DeliverAction,
+    ) -> Result<CommandOutcome> {
+        self.authorize_action(&command).await?;
+        let action_id = command.id;
+        if let Some(store) = &self.external_replies
+            && store
+                .get(session_id, action_id)
+                .await?
+                .is_some_and(|reply| reply.completion.is_some())
+        {
+            return Ok(CommandOutcome::Completed);
+        }
+        if self.queues.contains(session_id, action_id) {
+            if command.announce.as_ref().is_some_and(|origin| {
+                origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+            }) && !self.busy.is_pending(session_id)
+            {
+                self.busy.admit(session_id);
+                if let Err(error) = self.dispatch_next(session_id).await {
+                    self.busy.clear(session_id);
+                    return Err(error);
+                }
+            }
+            return Ok(CommandOutcome::Queued);
+        }
+        if self
+            .busy
+            .turn(session_id)
+            .is_some_and(|turn| turn.action_id == action_id)
+        {
+            return Ok(CommandOutcome::Completed);
+        }
+        let session = self.sessions.get_session(session_id).await?;
+        // A persisted prompt proves delivery even if this replica has not yet
+        // recovered its completion callback. Never execute its effects again.
+        if self.external_replies.is_some()
+            && AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::External
+            && self
+                .sessions
+                .recorded_action(session_id, action_id)
+                .await?
+                .is_some()
+        {
+            return Ok(CommandOutcome::Completed);
+        }
+        if let Err(error) = self.admit_session(&session).await {
+            // Forwarding acknowledges bus acceptance before this worker runs.
+            // Publish even an ingress refusal so the submitting replica hears it.
+            if let HarnessError::Admission(failure) = &error {
+                self.publish_command_rejected(
+                    session_id,
+                    command.id,
+                    command.actor.clone(),
+                    None,
+                    *failure,
+                )
+                .await;
+            }
+            self.reject_waiting_on_denial(session_id, &error).await?;
+            return Err(error);
+        }
+        let prompt = match &command.action {
+            AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
+            _ => None,
+        };
+        let actor = command.actor.clone();
+        let announce = command.announce.clone();
+        let action = command.action.clone();
+        let steers = announce.as_ref().is_some_and(|origin| {
+            origin.reply_placement == crate::domain::model::ReplyPlacement::Thread
+        }) && self.busy.turn(session_id).is_some();
+        let dm_record = if announce.as_ref().is_some_and(|origin| {
+            origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+        }) && let Some(store) = &self.conversation_turns
+        {
+            store.by_action(action_id).await?
+        } else {
+            None
+        };
+        let entry = QueuedEntry {
+            action_id,
+            action: command.action,
+            actor: command.actor,
+            announce: command.announce,
+            context: command.context,
+            announced: None,
+            created_at: dm_record
+                .as_ref()
+                .map_or_else(chrono::Utc::now, |record| record.created_at),
+        };
+        let enqueued = if dm_record.is_some() {
+            self.queues.enqueue_chronological(session_id, entry)
+        } else if steers {
+            self.queues.enqueue_front(session_id, entry)
+        } else {
+            self.queues.enqueue(session_id, entry)
+        };
+        queue_result(enqueued, session_id)?;
+        self.persist_or_rollback(session_id).await?;
+        // Mentions are a fact about the prompt, not the turn: published as
+        // soon as the prompt is accepted, whether it dispatches now or waits.
+        if let Some(prompt) = prompt {
+            self.publish_mentions(
+                session_id,
+                action_id,
+                actor.clone(),
+                &prompt,
+                announce.as_ref().map(|origin| origin.message_id),
+            )
+            .await;
+        }
+
+        if steers {
+            self.steer_channel_follow_up(session_id, action_id, &action, actor.as_ref(), announce)
+                .await?;
+        }
+
+        let dispatched = if self.busy.is_pending(session_id) {
+            // Said out loud, with the turn it waits behind and that turn's
+            // age: a queue that never drains is otherwise silent on this
+            // replica, and the question "what is it waiting for, and since
+            // when" is the one that has to be answerable from the logs.
+            match self.busy.turn(session_id) {
+                Some(turn) => tracing::info!(
+                    %session_id,
+                    %action_id,
+                    in_flight_turn = turn.turn.0,
+                    in_flight_action_id = %turn.action_id,
+                    in_flight_age_secs = turn.age().num_seconds(),
+                    queued = self.queues.list(session_id).len(),
+                    "action queued behind the turn in flight"
+                ),
+                None => tracing::info!(
+                    %session_id,
+                    %action_id,
+                    queued = self.queues.list(session_id).len(),
+                    "action queued behind a command admitted but not yet dispatched"
+                ),
+            }
+            Ok(())
+        } else {
+            // Marked before dispatching, not only once `dispatch_next`'s own
+            // delivery succeeds: this closes the window between "a command
+            // was just handed off for this session" and "the runtime
+            // visibly started a turn", which a reaper watching only the
+            // latter cannot see. The turn itself is unknowable this early -
+            // `dispatch_next` fills it in with `mark_turn` once delivery
+            // names one - so this records only that something is coming. On
+            // failure nothing actually started, so the mark comes back off
+            // rather than sticking to a session with nothing running.
+            self.busy.admit(session_id);
+            let result = self.dispatch_next(session_id).await.map(drop);
+            if result.is_err() {
+                self.busy.clear(session_id);
+            }
+            result
+        };
+        self.publish_queue(session_id).await;
+        dispatched?;
+
+        Ok(if self.queues.contains(session_id, action_id) {
+            CommandOutcome::Queued
+        } else {
+            CommandOutcome::Completed
+        })
+    }
+
+    /// Move a queued action to the front and cancel the running turn so it
+    /// flushes next. The same idea as a channel follow-up's steer, for an
+    /// entry that is already waiting: the session page queues without
+    /// interrupting, and this is the explicit interrupt.
+    ///
+    /// A failed cancel is best-effort. The entry is already at the front, so
+    /// it still drains when the current turn ends on its own.
+    /// Keep the running turn's reply honest about tool calls held for the
+    /// owner: it names the oldest one waiting, and goes back to pending once
+    /// none are. Only the managing replica knows the turn, so a change for a
+    /// session with nothing in flight here has no reply to touch.
+    async fn tool_approval_changed(&self, session_id: AgentSessionId, change: ToolApprovalChange) {
+        let mut waiting_before = None;
+        let Some(turn) = self.busy.update_turn(session_id, |turn| {
+            waiting_before = turn.held_tool_calls.first().cloned();
+            match &change {
+                ToolApprovalChange::Held(call) => turn.held_tool_calls.push(call.clone()),
+                ToolApprovalChange::Settled { approval_id } => turn
+                    .held_tool_calls
+                    .retain(|held| held.approval_id != *approval_id),
+            }
+        }) else {
+            tracing::info!(%session_id, "held tool call changed with no in-flight record");
+            return;
+        };
+        let waiting = turn.held_tool_calls.first().cloned();
+        if waiting == waiting_before {
+            return;
+        }
+        let outcome = match waiting {
+            Some(call) => ReplyOutcome::AwaitingApproval(call),
+            None => ReplyOutcome::Resumed,
+        };
+        self.resolve_reply(session_id, Some(&turn), outcome).await;
+    }
+
+    async fn steer_queued(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> Result<CommandOutcome> {
+        self.revalidate_queue(session_id).await?;
+        queue_result(self.queues.move_to_front(session_id, action_id), session_id)?;
+        self.persist_or_rollback(session_id).await?;
+        if self.busy.turn(session_id).is_some()
+            && let Err(error) = self
+                .deliver(
+                    session_id,
+                    DeliverAction {
+                        id: AgentActionId::mint(),
+                        action: AgentAction::Stop,
+                        actor,
+                        announce: None,
+                        context: None,
+                    },
+                )
+                .await
+        {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                %action_id,
+                "failed to stop the running turn for a steered queue entry"
+            );
+        }
+        self.publish_queue(session_id).await;
+        Ok(CommandOutcome::Completed)
+    }
+
+    /// Cancel a running turn and post the chip on the channel follow-up that
+    /// interrupted it. The follow-up is already at the front of the queue,
+    /// so it flushes as the next prompt once the cancelled turn ends.
+    ///
+    /// Stop is delivered first: the fold records it as its own control turn,
+    /// and the chip has to name the prompt turn that comes after that, not
+    /// the id the fold would have handed out before the cancel. A failed
+    /// cancel is best-effort — the prompt is already queued and still drains
+    /// when the current turn ends on its own.
+    async fn steer_channel_follow_up(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        action: &AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+        announce: Option<AnnounceOrigin>,
+    ) -> Result<()> {
+        self.revalidate_queue(session_id).await?;
+        if let Err(error) = self
+            .deliver(
+                session_id,
+                DeliverAction {
+                    id: AgentActionId::mint(),
+                    action: AgentAction::Stop,
+                    actor: actor.cloned(),
+                    announce: None,
+                    context: None,
+                },
+            )
+            .await
+        {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                "failed to stop the running turn for a channel follow-up"
+            );
+        }
+
+        // Stop may have waited for a runtime reconnect; check again before
+        // posting a pending reply for the waiting follow-up.
+        self.revalidate_queue(session_id).await?;
+        // Front of the queue, so the next prompt turn is this one's.
+        let prompted_message_id = self.sessions.next_prompt_message_id(session_id).await?;
+        let announcement = self
+            .announcement(session_id, action, actor, announce, prompted_message_id)
+            .await?;
+        if let Some(announcement) = announcement {
+            let announced = self.announcer.announce(announcement).await?;
+            queue_result(
+                self.queues
+                    .mark_announced(session_id, action_id, announced.message_id),
+                session_id,
+            )?;
+            self.persist_or_rollback(session_id).await?;
+        }
+        Ok(())
+    }
+
+    /// Write the working copy through to the session store.
+    async fn write_queue(&self, session_id: AgentSessionId) -> Result<()> {
+        let stored = self
+            .queues
+            .snapshot(session_id)
+            .iter()
+            .map(QueuedEntry::to_stored)
+            .collect::<anyhow::Result<Vec<StoredQueuedAction>>>()
+            .map_err(AgentSessionError::Unknown)?;
+        self.sessions
+            .replace_queued_actions(session_id, &stored)
+            .await?;
+        Ok(())
+    }
+
+    /// Persist after a working-copy mutation. A failed write reloads the last
+    /// good row so this process does not keep a queue the store never saw.
+    pub(super) async fn persist_or_rollback(&self, session_id: AgentSessionId) -> Result<()> {
+        if let Err(error) = self.write_queue(session_id).await {
+            if let Err(reload) = self.reload_queue(session_id).await {
+                tracing::error!(
+                    error = ?reload,
+                    %session_id,
+                    "failed to reload the agent session queue after a persist error"
+                );
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Put a claimed entry back and persist. A persist failure here loses the
+    /// in-flight item on the next restart — the same as losing the turn mark.
+    async fn requeue_claimed(&self, session_id: AgentSessionId, entry: QueuedEntry) -> Result<()> {
+        if let Some(store) = &self.notification_store
+            && let Some((_, batch)) = self.notification_batches.remove(&session_id)
+        {
+            store.release(batch.lease_id).await?;
+        }
+        if matches!(&entry.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn))
+        {
+            return Ok(());
+        }
+
+        self.queues.requeue_front(session_id, entry);
+        self.write_queue(session_id).await.inspect_err(|error| {
+            tracing::error!(
+                error = ?error,
+                %session_id,
+                "failed to persist a requeued agent session action"
+            );
+        })
+    }
+
+    /// Replace the working copy from the session store.
+    async fn reload_queue(&self, session_id: AgentSessionId) -> Result<()> {
+        let stored = self.sessions.list_queued_actions(session_id).await?;
+        let entries = stored
+            .into_iter()
+            .map(QueuedEntry::from_stored)
+            .collect::<anyhow::Result<Vec<QueuedEntry>>>()
+            .map_err(AgentSessionError::Unknown)?;
+        self.queues.replace(session_id, entries);
+        Ok(())
+    }
+
+    /// Restore the working copy from the session store and mark it current.
+    /// Resume always does this so waiting prompts survive a replica restart.
+    pub(super) async fn restore_queue(&self, session_id: AgentSessionId) -> Result<()> {
+        self.reload_queue(session_id).await?;
+        self.hydrated.insert(session_id);
+        Ok(())
+    }
+
+    /// Load the durable queue the first time this process handles the session,
+    /// so a later persist cannot wipe waiting actions this replica never saw.
+    async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
+        if self.hydrated.contains(&session_id) {
+            return Ok(());
+        }
+        if let Err(error) = self.restore_queue(session_id).await {
+            self.hydrated.remove(&session_id);
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Push the queue as it now stands to the session's viewers.
+    ///
+    /// Best-effort, like every realtime publish: a dropped snapshot costs a
+    /// viewer liveness until the next change, and the queue itself is intact -
+    /// so this logs and never fails the command it rides on.
+    pub(super) async fn publish_queue(&self, session_id: AgentSessionId) {
+        let _ = self
+            .sessions
+            .publish_queue_changed(AgentSessionQueueChanged {
+                agent_session_id: session_id,
+                entries: self.queues.list(session_id),
+            })
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    %session_id,
+                    "failed to publish an agent session queue change"
+                );
+            });
+    }
+
+    /// Dispatch the next queued entry; see [`Self::dispatch_unboxed`].
+    ///
+    /// Boxed so the dispatch's large future lives on the heap rather than in
+    /// every frame that awaits it. Unoptimized builds give each awaited
+    /// future its own stack slot, and a direct message's first turn nests
+    /// open, dispatch, and delivery inside one command - deep enough to
+    /// overflow a worker thread's stack in a local build.
+    pub(super) fn dispatch_next(
+        &self,
+        session_id: AgentSessionId,
+    ) -> BoxFuture<'_, Result<Dispatch>> {
+        Box::pin(self.dispatch_unboxed(session_id))
+    }
+
+    /// Deliver the oldest queued action, marking the session busy on success.
+    ///
+    /// Composition runs first so a lexical failure never posts a chip for a
+    /// prompt that will not reach the agent. The chip is then announced
+    /// (from the raw text) before delivery, so it exists to anchor the turn
+    /// the agent streams into - and it is announced *at most once* per
+    /// entry: the claimed entry remembers a successful announce, so a
+    /// dispatch that fails after the chip posted retries without posting a
+    /// second one.
+    ///
+    /// A failed dispatch puts the entry back at the front: it stays next in
+    /// line for the next turn end or the next prompt, and stays visible in
+    /// the queue meanwhile. The error still propagates, so a caller whose
+    /// own action triggered this dispatch hears about it. A conversation
+    /// message that can never run is not put back: one its journal no longer
+    /// holds as waiting is dropped, one whose origin is gone fails, and the
+    /// next entry dispatches in its place.
+    #[tracing::instrument(name = "dispatch_next", err, skip(self), fields(%session_id))]
+    async fn dispatch_unboxed(&self, session_id: AgentSessionId) -> Result<Dispatch> {
+        let session = self.sessions.get_session(session_id).await?;
+        if session.is_archived {
+            self.queues.drop_session(session_id);
+            self.write_queue(session_id).await?;
+            self.publish_queue(session_id).await;
+            return Ok(Dispatch::QueueEmpty);
+        }
+        if self.notification_completions.contains_key(&session_id) {
+            self.busy.clear(session_id);
+            return Ok(Dispatch::QueueEmpty);
+        }
+        if self.queues.list(session_id).is_empty() {
+            self.stage_notifications(session_id).await?;
+            if self.busy.is_pending(session_id)
+                && self.notification_batches.contains_key(&session_id)
+            {
+                return Ok(Dispatch::Dispatched);
+            }
+        }
+        if self.queues.list(session_id).is_empty() {
+            self.busy.clear(session_id);
+            return Ok(Dispatch::QueueEmpty);
+        }
+        self.revalidate_queue(session_id).await?;
+        loop {
+            let Some(mut entry) = self.queues.claim_next(session_id) else {
+                self.busy.clear(session_id);
+                return Ok(Dispatch::QueueEmpty);
+            };
+            // Persist the remaining queue before any fallible work: a crash after
+            // this leaves the claimed entry as in-flight (lost, like the turn
+            // mark) and keeps every still-waiting action.
+            if let Err(error) = self.write_queue(session_id).await {
+                self.requeue_claimed(session_id, entry).await?;
+                return Err(error);
+            }
+
+            let conversation_store = self.conversation_turns.as_ref().filter(|_| {
+                entry.announce.as_ref().is_some_and(|origin| {
+                    origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+                })
+            });
+            // A conversation message's journal says whether it still waits.
+            // One whose turn already ended - failed, stopped when its owner
+            // started fresh, or retried under a new id - is dropped, not run.
+            if let Some(store) = conversation_store {
+                match store.by_action(entry.action_id).await {
+                    Ok(Some(record))
+                        if record.state
+                            == crate::domain::conversation_turns::ConversationTurnState::Queued => {
+                    }
+                    Ok(_) => continue,
+                    Err(error) => {
+                        self.requeue_claimed(session_id, entry).await?;
+                        return Err(error.into());
+                    }
+                }
+            }
+
+            // The turn this action opens, read before delivery appends the
+            // prompt to the log. Unchanged across a failed attempt, so a retry
+            // reports the same turn.
+            let prompted_message_id = match self.sessions.next_prompt_message_id(session_id).await {
+                Ok(message_id) => message_id,
+                Err(error) => {
+                    self.requeue_claimed(session_id, entry).await?;
+                    return Err(error.into());
+                }
+            };
+
+            // Compose a copy: the queued entry stays raw so a retry still edits
+            // and re-composes the user's text, and the chip (below) still shows
+            // what they typed rather than the composed payload.
+            let mut composed = entry.action.clone();
+            if let Err(error) = self
+                .compose_action(
+                    session_id,
+                    &mut composed,
+                    entry.actor.as_ref(),
+                    entry.announce.as_ref(),
+                    entry.context.as_ref(),
+                    prompted_message_id.turn == TurnId(0),
+                )
+                .await
+            {
+                // A conversation message whose origin is gone - deleted,
+                // moved, or no longer its sender's to answer - can never be
+                // composed, and put back it would hold every message behind
+                // it. Its turn fails instead, and the next message dispatches.
+                if let (HarnessError::InvalidOrigin(_), Some(store)) = (&error, conversation_store)
+                {
+                    tracing::warn!(
+                        ?error,
+                        %session_id,
+                        action_id = %entry.action_id,
+                        "dropping a conversation message whose origin is gone"
+                    );
+                    store.fail_queued(entry.action_id).await?;
+                    store
+                        .finalize_reply(entry.action_id, &ReplyOutcome::Failed)
+                        .await?;
+                    continue;
+                }
+                self.requeue_claimed(session_id, entry).await?;
+                return Err(error);
+            }
+
+            if let Err(error) = self.admit_session_id(session_id).await {
+                self.requeue_claimed(session_id, entry).await?;
+                self.reject_waiting_on_denial(session_id, &error).await?;
+                return Err(error);
+            }
+
+            match self
+                .attach_notifications(session_id, entry.action_id, &mut composed)
+                .await
+            {
+                Ok(true) => {}
+                Ok(false) => {
+                    self.queues.requeue_front(session_id, entry);
+                    self.write_queue(session_id).await?;
+                    return Ok(Dispatch::Dispatched);
+                }
+                Err(error) => {
+                    self.requeue_claimed(session_id, entry).await?;
+                    return Err(error);
+                }
+            }
+
+            // A reply shown in segments posts nothing until the agent has
+            // something to say or do: the bot types meanwhile.
+            let in_segments = entry.announce.as_ref().is_some_and(|origin| {
+                origin.reply_placement.voice_style() == crate::domain::model::VoiceStyle::Segments
+            });
+            let speaks_as_chip = match &entry.announce {
+                Some(origin) if origin.reuse_origin_message => true,
+                Some(origin)
+                    if origin.reply_placement == crate::domain::model::ReplyPlacement::Thread =>
+                {
+                    // Unknown is treated as a chip: a chip's message is never
+                    // rewritten into a reply, which is the safe mistake.
+                    self.reply_persona(&session)
+                        .await
+                        .map_or(true, |persona| persona.is_coding)
+                }
+                _ => false,
+            };
+            let mut flight = InFlightTurn {
+                action_id: entry.action_id,
+                turn: prompted_message_id.turn,
+                actor: entry.actor.clone(),
+                announce: entry.announce.clone(),
+                announcement_message_id: entry.announced,
+                dispatched_at: chrono::Utc::now(),
+                bot_id: Some(session.bot_id),
+                speaks_as_chip,
+                presented: Vec::new(),
+                held_tool_calls: Vec::new(),
+            };
+            if let Some(store) = conversation_store {
+                match store.claim(entry.action_id, &flight).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        if store
+                            .by_action(entry.action_id)
+                            .await?
+                            .is_some_and(|record| {
+                                record.state == crate::domain::conversation_turns::ConversationTurnState::Queued
+                            })
+                        {
+                            self.requeue_claimed(session_id, entry).await?;
+                            self.busy.clear(session_id);
+                            return Ok(Dispatch::QueueEmpty);
+                        }
+                        if let Some(store) = &self.notification_store
+                            && let Some((_, batch)) = self.notification_batches.remove(&session_id)
+                        {
+                            store.release(batch.lease_id).await?;
+                        }
+                        continue;
+                    }
+                    Err(error) => {
+                        self.requeue_claimed(session_id, entry).await?;
+                        return Err(error.into());
+                    }
+                }
+            }
+
+            if entry.announced.is_none() && !in_segments {
+                let announcement = match self
+                    .announcement(
+                        session_id,
+                        &entry.action,
+                        entry.actor.as_ref(),
+                        entry.announce.clone(),
+                        prompted_message_id,
+                    )
+                    .await
+                {
+                    Ok(announcement) => announcement,
+                    Err(error) => {
+                        self.requeue_claimed(session_id, entry).await?;
+                        return Err(error);
+                    }
+                };
+                if let Some(mut announcement) = announcement {
+                    announcement.reply_message_id = flight.announcement_message_id;
+                    match self.announcer.announce(announcement).await {
+                        Ok(announced) => entry.announced = Some(announced.message_id),
+                        Err(error) => {
+                            self.requeue_claimed(session_id, entry).await?;
+                            return Err(error);
+                        }
+                    }
+                }
+            }
+
+            // Recorded before delivery, since the runtime may call a tool the
+            // moment the prompt lands: the egress proxy judges every call by who
+            // prompted the turn it belongs to, and it may be serving the call on
+            // another replica.
+            if let Err(error) = self
+                .sessions
+                .set_turn_prompter(
+                    session_id,
+                    &TurnPrompter {
+                        action_id: entry.action_id,
+                        user: entry.actor.clone(),
+                        kind: if matches!(&entry.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn)) {
+                            agent_session::domain::model::PrompterKind::System
+                        } else { agent_session::domain::model::PrompterKind::User },
+                    },
+                )
+                .await
+            {
+                // A claimed conversation turn fails as an undelivered one
+                // does, so its journal never shows it running.
+                if let Some(store) = conversation_store {
+                    store
+                        .finish(
+                            entry.action_id,
+                            crate::domain::conversation_turns::ConversationTurnState::Failed,
+                            ReplyOutcome::Failed,
+                        )
+                        .await?;
+                    self.resolve_reply(session_id, Some(&flight), ReplyOutcome::Failed)
+                        .await;
+                }
+                self.requeue_claimed(session_id, entry).await?;
+                return Err(error.into());
+            }
+
+            let command = DeliverAction {
+                id: entry.action_id,
+                action: composed,
+                actor: entry.actor.clone(),
+                announce: entry.announce.clone(),
+                // Already composed into the action above.
+                context: None,
+            };
+            flight.announcement_message_id = entry.announced;
+            if let Some(store) = conversation_store
+                && let Err(error) = store.record_flight(entry.action_id, &flight).await
+            {
+                // Claimed but never delivered: it fails like an undelivered turn.
+                if let Err(error) = store
+                    .finish(
+                        entry.action_id,
+                        crate::domain::conversation_turns::ConversationTurnState::Failed,
+                        ReplyOutcome::Failed,
+                    )
+                    .await
+                {
+                    tracing::error!(?error, %session_id, "failed to persist an undelivered conversation turn");
+                }
+                self.resolve_reply(session_id, Some(&flight), ReplyOutcome::Failed)
+                    .await;
+                self.requeue_claimed(session_id, entry).await?;
+                return Err(error.into());
+            }
+            return match self.deliver(session_id, command).await {
+                Ok(()) => {
+                    let turn = InFlightTurn {
+                        action_id: entry.action_id,
+                        turn: prompted_message_id.turn,
+                        actor: entry.actor,
+                        announce: entry.announce,
+                        announcement_message_id: entry.announced,
+                        dispatched_at: chrono::Utc::now(),
+                        bot_id: flight.bot_id,
+                        speaks_as_chip: flight.speaks_as_chip,
+                        presented: flight.presented.clone(),
+                        held_tool_calls: Vec::new(),
+                    };
+                    self.busy.mark_turn(session_id, turn.clone());
+                    self.publish_typing(session_id, &turn, true).await;
+                    self.publish_lifecycle(session_id, |identity| {
+                        AgentSessionLifecycleEvent::TurnStarted(TurnStartedMetadata {
+                            identity,
+                            turn: turn.turn,
+                            action_id: turn.action_id,
+                            actor: turn.actor,
+                            announcement_message_id: turn.announcement_message_id,
+                        })
+                    })
+                    .await;
+                    Ok(Dispatch::Dispatched)
+                }
+                Err(error) => {
+                    if let Some(store) = conversation_store {
+                        store
+                            .finish(
+                                entry.action_id,
+                                crate::domain::conversation_turns::ConversationTurnState::Failed,
+                                ReplyOutcome::Failed,
+                            )
+                            .await?;
+                        self.resolve_reply(session_id, Some(&flight), ReplyOutcome::Failed)
+                            .await;
+                    }
+                    self.requeue_claimed(session_id, entry).await?;
+                    self.reject_waiting_on_denial(session_id, &error).await?;
+                    Err(error)
+                }
+            };
+        }
+    }
+}
+
+/// The stop reason as downstream reads it: the ACP wire word for the reasons
+/// ACP names, `error` for a prompt the runtime refused.
+fn wire_stop_reason(stop: &StopReason) -> String {
+    match stop {
+        StopReason::EndTurn => "end_turn".to_owned(),
+        StopReason::MaxTokens => "max_tokens".to_owned(),
+        StopReason::MaxTurnRequests => "max_turn_requests".to_owned(),
+        StopReason::Refusal => "refusal".to_owned(),
+        StopReason::Cancelled => "cancelled".to_owned(),
+        StopReason::Other { reason } => reason.clone(),
+        StopReason::Failed { .. } => "error".to_owned(),
+    }
+}
+
+/// Map a queue refusal into the session vocabulary, which is where the
+/// control surface's callers read their errors from.
+pub(super) fn queue_result<T>(
+    result: std::result::Result<T, QueueError>,
+    session_id: AgentSessionId,
+) -> Result<T> {
+    result.map_err(|error| {
+        HarnessError::Session(match error {
+            QueueError::NotFound => AgentSessionError::QueuedControlNotFound,
+            QueueError::NotEditable => AgentSessionError::QueuedControlNotEditable,
+            QueueError::Full => AgentSessionError::ControlQueueFull(session_id),
+        })
+    })
+}
+
+/// Whether a conversation message that failed to execute stays queued for
+/// recovery, because the failure means another replica will run it.
+fn leaves_turn_queued(error: &HarnessError) -> bool {
+    matches!(
+        error,
+        HarnessError::Forward(_)
+            | HarnessError::Session(
+                AgentSessionError::Draining(_)
+                    | AgentSessionError::ManagedElsewhere(_)
+                    | AgentSessionError::FencedOut(_)
+            )
+    )
+}
+
+pub(super) async fn run_session_worker<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>(
+    session_id: AgentSessionId,
+    inner: SharedInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >,
+    mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
+) where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    while let Some(queued) = receiver.recv().await {
+        let QueuedCommand {
+            command,
+            completed,
+            span,
+            route,
+        } = queued;
+        let conversation_action = match (&command, &inner.conversation_turns) {
+            (HarnessCommand::ConversationMessage(open), Some(store)) => {
+                match store
+                    .get(open.origin.announcement().message_id, open.bot_id)
+                    .await
+                {
+                    Ok(record) => record.map(|record| record.action_id),
+                    Err(error) => {
+                        let _ = completed.send(Err(error.into()));
+                        continue;
+                    }
+                }
+            }
+            _ => None,
+        };
+        let result = if route {
+            inner
+                .route_then_execute(session_id, command)
+                .instrument(span)
+                .await
+        } else {
+            inner.execute(session_id, command).instrument(span).await
+        };
+        if let Err(error) = &result
+            && !leaves_turn_queued(error)
+            && let (Some(action), Some(store)) = (conversation_action, &inner.conversation_turns)
+            && let Err(error) = store.fail_queued(action).await
+        {
+            tracing::error!(?error, %session_id, "failed to persist conversation command failure");
+        }
+        let _ = completed.send(result);
+    }
+}

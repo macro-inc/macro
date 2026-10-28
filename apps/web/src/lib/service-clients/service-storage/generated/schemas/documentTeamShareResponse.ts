@@ -11,7 +11,7 @@ import type { DocumentTeamShareResponseTeamId } from './documentTeamShareRespons
 owner's team membership.
  */
 export interface DocumentTeamShareResponse {
-  /** Whether the document is currently shared with the owner's team. */
+  /** Whether explicit team sharing is enabled; inherited team access does not count. */
   sharedWithTeam: boolean;
   /** The owner's team the document is (or would be) shared with. `None` when
 the owner does not belong to a team. */

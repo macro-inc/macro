@@ -7,8 +7,13 @@ use opensearch_client::search::model::SearchHit;
 use crate::api::{
     context::SearchHandlerState,
     search::{
-        call_record::enrich_call_records, channel::enrich_channel_messages, chat::enrich_chats,
-        document::enrich_documents, email::enrich_emails, project::enrich_projects,
+        calendar_event::enrich_calendar_events,
+        call_record::enrich_call_records,
+        channel::{enrich_channel_messages, enrich_channel_names, split_channel_hits},
+        chat::enrich_chats,
+        document::enrich_documents,
+        email::enrich_emails,
+        project::enrich_projects,
         simple::SearchError,
     },
 };
@@ -23,6 +28,13 @@ pub async fn enrich_search_response(
     search_term: Option<&str>,
 ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
     match entity_type {
+        SearchEntityType::AgentSessions => Ok(super::agent_session::enrich_agent_sessions(
+            ctx, user_id, results,
+        )
+        .await?
+        .into_iter()
+        .map(UnifiedSearchResponseItem::AgentSession)
+        .collect()),
         SearchEntityType::Documents => {
             let response = enrich_documents(ctx, user_id, results, search_term).await?;
             Ok(response
@@ -38,10 +50,17 @@ pub async fn enrich_search_response(
                 .collect())
         }
         SearchEntityType::Channels => {
-            let response = enrich_channel_messages(ctx, user_id, results).await?;
-            Ok(response
+            // Message hits from OpenSearch carry goto content; name hits from
+            // the Postgres channel name search have none and become channels.
+            let (message_hits, name_hits) = split_channel_hits(results);
+            let (messages, channels) = tokio::try_join!(
+                enrich_channel_messages(ctx, user_id, message_hits),
+                enrich_channel_names(ctx, user_id, name_hits),
+            )?;
+            Ok(messages
                 .into_iter()
                 .map(UnifiedSearchResponseItem::ChannelMessage)
+                .chain(channels.into_iter().map(UnifiedSearchResponseItem::Channel))
                 .collect())
         }
         SearchEntityType::Chats => {
@@ -63,6 +82,13 @@ pub async fn enrich_search_response(
             Ok(response
                 .into_iter()
                 .map(UnifiedSearchResponseItem::Call)
+                .collect())
+        }
+        SearchEntityType::CalendarEvents => {
+            let response = enrich_calendar_events(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::CalendarEvent)
                 .collect())
         }
         // CRM companies are enriched separately (they need the team

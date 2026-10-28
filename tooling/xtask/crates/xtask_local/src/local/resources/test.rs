@@ -49,6 +49,47 @@ fn every_queue_is_bound() {
 }
 
 #[test]
+fn slack_import_queues_match_deployment_and_have_redrive() {
+    use aws_sdk_sqs::types::QueueAttributeName;
+
+    let main = QUEUES
+        .iter()
+        .find(|queue| queue.name == macro_queues::SlackImportQueue::LOCAL)
+        .unwrap();
+    let dlq = QUEUES
+        .iter()
+        .find(|queue| queue.name == macro_queues::SlackImportDlq::LOCAL)
+        .unwrap();
+    assert_eq!(main.name, "slack-import-queue");
+    assert_eq!(dlq.name, "slack-import-dlq");
+    for queue in [main, dlq] {
+        assert!(matches!(queue.bindings[0].1, QueueForm::Url));
+        assert_eq!(queue.bindings[0].1.value(queue.name), queue_url(queue.name));
+    }
+    let attrs = main.attributes();
+    assert_eq!(attrs[&QueueAttributeName::VisibilityTimeout], "900");
+    let redrive: serde_json::Value =
+        serde_json::from_str(&attrs[&QueueAttributeName::RedrivePolicy]).unwrap();
+    assert_eq!(
+        redrive,
+        serde_json::json!({
+            "deadLetterTargetArn": queue_arn(dlq.name),
+            "maxReceiveCount": 5,
+        })
+    );
+    assert_eq!(
+        dlq.attributes()[&QueueAttributeName::MessageRetentionPeriod],
+        "1209600"
+    );
+    assert!(
+        QUEUES
+            .iter()
+            .filter(|queue| queue.name != main.name && queue.name != dlq.name)
+            .all(|queue| queue.attributes().is_empty())
+    );
+}
+
+#[test]
 fn webhook_fifo_queue_uses_a_full_url_override() {
     let queue = QUEUES
         .iter()

@@ -17,7 +17,6 @@ export const recommendedActions = [
   'review',
   'discuss',
 ] as const;
-export type RecommendedAction = (typeof recommendedActions)[number];
 
 /** Surface at most this many items — keep the list short and high-signal. */
 export const MAX_RECOMMENDATIONS = 3;
@@ -98,7 +97,7 @@ export type RecommendedItem = HomeRecommendations['items'][number];
 
 const RECOMMENDATION_PROMPT = [
   "You are an executive assistant triaging a busy professional's unified inbox. Important actionable emails are your primary focus; channel messages, mentions, document shares, and tasks are secondary.",
-  `Gather non-email candidates by calling ListNotifications exactly once with limit ${TRIAGE_INPUT_LIMIT}, done false, no seen filter, and includeTypes ["message", "channel", "document", "project", "chat", "call", "task", "github"]. Never use notification rows to decide whether an email is active or read. Do not mark, modify, or dismiss any notifications.`,
+  `Gather non-email candidates by calling ListNotifications exactly once with limit ${TRIAGE_INPUT_LIMIT}, states ["unseen", "seen"], and includeTypes ["message", "channel", "document", "project", "chat", "call", "task", "github"]. Never use notification rows to decide whether an email is active or read. Do not mark, modify, or dismiss any notifications.`,
   `Gather email candidates by calling ListEntities exactly once with includeTypes ["email"], emailView "inbox", emailPreset "signal", and limit ${TRIAGE_INPUT_LIMIT}. This is the canonical email source: inboxVisible determines whether an email is active and isRead is its read state. Do not look up or validate emails through ListNotifications.`,
   "If ListEntities returns email candidates, call ListInboxes exactly once. The current user's email addresses are the returned inboxes where isDelegated is false; use them only to recognize whether a message was addressed directly to the current user.",
   'Before recommending any email, call GetThread with its exact ListEntities id as threadId and limit 1. GetThread returns messages most recent first: read messages[0].bodyParsed in full and inspect messages[0].from, messages[0].to, and messages[0].cc. The ListEntities snippet and GetThread summary are not substitutes for reading bodyParsed. Never recommend an email if GetThread fails, returns no latest message, or bodyParsed is missing or insufficient to establish an action.',
@@ -136,7 +135,7 @@ export function pickRecommendations(
 /** What the Recommended section should render. */
 export type RecommendedView =
   | { kind: 'loading' }
-  | { kind: 'error' }
+  | { kind: 'error'; retryable: boolean }
   | { kind: 'items'; items: RecommendedItem[] }
   | { kind: 'connect-inbox' }
   | { kind: 'caught-up' };
@@ -149,6 +148,8 @@ export type RecommendedView =
 export function deriveRecommendedView(input: {
   loading: boolean;
   failed: boolean;
+  /** False when the failure would repeat on retry (the plan refused it). */
+  retryable: boolean;
   items: RecommendedItem[] | undefined;
   emailLinked: boolean;
 }): RecommendedView {
@@ -156,7 +157,9 @@ export function deriveRecommendedView(input: {
     return { kind: 'items', items: input.items };
   }
   if (input.loading && input.items === undefined) return { kind: 'loading' };
-  if (input.failed && input.items === undefined) return { kind: 'error' };
+  if (input.failed && input.items === undefined) {
+    return { kind: 'error', retryable: input.retryable };
+  }
   if (!input.emailLinked) return { kind: 'connect-inbox' };
   return { kind: 'caught-up' };
 }

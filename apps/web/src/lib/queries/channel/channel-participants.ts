@@ -8,7 +8,7 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 
-function channelParticipantsQueryOptions(channelId: string) {
+export function channelParticipantsQueryOptions(channelId: string) {
   return {
     queryKey: channelKeys.participants(channelId).queryKey,
     queryFn: async (): Promise<ApiChannelParticipant[]> => {
@@ -24,7 +24,10 @@ function channelParticipantsQueryOptions(channelId: string) {
 }
 
 export function useChannelParticipantsQuery(channelId: Accessor<string>) {
-  return useQuery(() => channelParticipantsQueryOptions(channelId()));
+  return useQuery(() => ({
+    ...channelParticipantsQueryOptions(channelId()),
+    enabled: !!channelId(),
+  }));
 }
 
 export function invalidateChannelParticipants(channelId: string) {

@@ -23,8 +23,16 @@ use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
-use super::inventory::services_for_mode;
+use super::inventory::{RustService, services_for_mode};
 use super::{Mode, repo_root};
+
+#[cfg(test)]
+mod test;
+
+/// The one Rust service with a second listener: the agent egress proxy inside
+/// `agent_harness_service`, on the container port `EGRESS_PORT` defaults to.
+const EGRESS_SERVICE: &str = "agent_harness_service";
+const EGRESS_CONTAINER_PORT: u16 = 8102;
 
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
@@ -55,6 +63,11 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("proxy/Caddyfile")
 }
 
+/// Checked-in development CA and localhost fixtures.
+pub fn tls_certs_dir() -> PathBuf {
+    repo_root().join("infra/local/certs")
+}
+
 /// Build the override (typed model), apply the merge tags, and write it.
 /// `static_frontend` mounts the staged app bundle into the proxy (headless
 /// stacks serve the frontend from Caddy instead of a dev server).
@@ -65,6 +78,7 @@ pub fn generate(
     static_frontend: bool,
     gmail_forwarder: bool,
 ) -> Result<PathBuf> {
+    super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
@@ -76,14 +90,9 @@ pub fn generate(
             environment: kv(&[("PORT", "8080")]),
             ..Default::default()
         };
-        // Named instances need their own host ports (replacing the base ports —
-        // emitted as `!override` in apply_tags). Only the self-contained local
-        // stacks remap; dev inherits the base-compose ports.
-        if mode.spec().runs_local_infra
-            && !instance.is_default()
-            && let Some(port) = svc.host_port
-        {
-            s.ports = dct::Ports::Short(vec![format!("{}:8080", instance.port(port))]);
+        let ports = published_ports(mode, instance, svc);
+        if !ports.is_empty() {
+            s.ports = dct::Ports::Short(ports);
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }
@@ -91,7 +100,12 @@ pub fn generate(
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
     // lives there too).
-    add_proxy_service(&mut services, instance, static_frontend);
+    add_proxy_service(
+        &mut services,
+        instance,
+        static_frontend,
+        mode.spec().runs_local_infra,
+    );
     add_localstack_service(&mut services, instance);
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
@@ -163,6 +177,28 @@ pub fn generate(
     Ok(path)
 }
 
+fn published_ports(mode: Mode, instance: &Instance, service: &RustService) -> Vec<String> {
+    let mut ports = Vec::new();
+    if !mode.spec().runs_local_infra {
+        return ports;
+    }
+    // Named instances replace inherited bindings. The harness has no base
+    // binding, so the default instance must publish its API port too.
+    if (!instance.is_default() || service.compose_name == EGRESS_SERVICE)
+        && let Some(port) = service.host_port
+    {
+        ports.push(format!("{}:8080", instance.port(port)));
+    }
+    if service.compose_name == EGRESS_SERVICE {
+        ports.push(format!(
+            "{}:{EGRESS_CONTAINER_PORT}",
+            instance.port(Port::AgentHarnessEgress)
+        ));
+        ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
+    }
+    ports
+}
+
 fn add_sdk_webhook_relay(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
@@ -208,7 +244,33 @@ fn add_localstack_service(
         "localstack".to_string(),
         Some(dct::Service {
             image: Some(LOCALSTACK_IMAGE.to_string()),
-            environment: kv(&[("SERVICES", "sqs,dynamodb,s3")]),
+            // `kms` for the Cursor API key CMK (see `localstack::create_kms_keys`).
+            // LocalStack only starts the services named here, so an omission
+            // shows up as `"kms": "disabled"` on its health endpoint rather
+            // than as a connection error.
+            environment: kv(&[("SERVICES", "sqs,dynamodb,s3,kms")]),
+            // Probe the readiness endpoint over loopback instead of the
+            // image's own healthcheck, which shells out to `localstack status
+            // services`. That CLI resolves `localhost.localstack.cloud`, a
+            // public name; where DNS cannot reach it the probe takes ~40s
+            // against its 10s timeout, so the container never reports healthy
+            // and `compose up --wait` fails the whole stack even though
+            // LocalStack is serving fine. Overriding only the probe keeps
+            // `LOCALSTACK_HOST` unset, so the hostname LocalStack advertises
+            // in returned SQS/S3 URLs stays `localstack`, which is how every
+            // other container addresses it.
+            healthcheck: Some(dct::Healthcheck {
+                test: Some(dct::HealthcheckTest::Multiple(vec![
+                    "CMD-SHELL".to_string(),
+                    "curl -fsS http://localhost:4566/_localstack/health".to_string(),
+                ])),
+                interval: Some("10s".to_string()),
+                timeout: Some("10s".to_string()),
+                retries: 5,
+                start_period: Some("180s".to_string()),
+                start_interval: Some("2s".to_string()),
+                ..Default::default()
+            }),
             ports: dct::Ports::Short(vec![format!("{}:4566", instance.port(Port::LocalStack))]),
             networks: net_aliases(&[
                 ("databases", &["localstack"]),
@@ -227,24 +289,43 @@ fn add_proxy_service(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
     static_frontend: bool,
+    previews: bool,
 ) {
     let proxy_port = instance.port(Port::Proxy);
-    let mut volumes = vec![dct::Volumes::Simple(format!(
-        "{}:/etc/caddy/Caddyfile:ro",
-        caddyfile_path(instance).display()
-    ))];
+    let mut volumes = vec![
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/Caddyfile:ro",
+            caddyfile_path(instance).display()
+        )),
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/certs:ro",
+            super::tls::certs_dir(instance).display()
+        )),
+    ];
     if static_frontend {
         volumes.push(dct::Volumes::Simple(format!(
             "{}:/srv/frontend:ro",
             super::frontend::static_dir(instance).display()
         )));
     }
+    let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
+    if previews {
+        ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
+        volumes.push(dct::Volumes::Simple(format!(
+            "{}:/data",
+            instance.artifact_dir().join("preview-caddy-data").display()
+        )));
+    }
     services.insert(
         "proxy".to_string(),
         Some(dct::Service {
             image: Some(CADDY_IMAGE.to_string()),
-            environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
-            ports: dct::Ports::Short(vec![format!("{proxy_port}:{proxy_port}")]),
+            environment: kv(&[
+                ("PROXY_PORT", &proxy_port.to_string()),
+                ("VITE_PORT", &instance.port(Port::Frontend).to_string()),
+            ]),
+            extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
+            ports: dct::Ports::Short(ports),
             volumes,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
             ..Default::default()
@@ -260,7 +341,8 @@ fn add_local_infra(
     instance: &Instance,
     static_frontend: bool,
 ) {
-    // FusionAuth: repoint at the generated kickstart (volumes replaced via tag).
+    // This per-instance directory belongs only to FusionAuth. Private SELinux
+    // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {
         environment: kv(&[(
             "FUSIONAUTH_APP_KICKSTART_FILE",
@@ -269,7 +351,7 @@ fn add_local_infra(
         volumes: vec![
             dct::Volumes::Simple("fusionauth_config:/usr/local/fusionauth/config".to_string()),
             dct::Volumes::Simple(format!(
-                "{}:/usr/local/fusionauth/kickstart:ro",
+                "{}:/usr/local/fusionauth/kickstart:ro,Z",
                 kickstart_dir(instance).display()
             )),
         ],
@@ -407,6 +489,18 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
                 }
             }
         }
+    }
+    // Generated companions do not inherit the base compose's common settings.
+    // Apply after adding aux overrides so every generated service is covered.
+    for service in services.values_mut().filter_map(Value::as_mapping_mut) {
+        service.insert(
+            "logging".into(),
+            serde_yaml::to_value(serde_json::json!({
+                "driver": "json-file",
+                "options": { "max-size": "20m", "max-file": "3" }
+            }))
+            .expect("logging configuration is serializable"),
+        );
     }
 }
 

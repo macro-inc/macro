@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET model = $2,\n                modified_at = NOW()\n            WHERE id = $1\n              AND model IS DISTINCT FROM $2\n            RETURNING modified_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "modified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "de9d4b68675dcede4ac130f3a1791362eb50f79bf650230f62ba7c7ce70a97a5"
+}

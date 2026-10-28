@@ -2,7 +2,9 @@
 //! storage, dependency-driven re-execution, teardown, clear.
 
 use cache_core::engine::{Engine, NetworkWrite, QueryRegistration, ReadResult};
-use cache_core::store::InMemoryStorage;
+use cache_core::revision::CacheRevision;
+use cache_core::store::{InMemoryStorage, Storage};
+use cache_core::value::{CacheValue, EntityKey};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -62,7 +64,7 @@ query ChannelNotifications($input: SoupInput!) {
           notifications {
             __typename
             id
-            seen
+            state
             viewedAt
           }
         }
@@ -89,7 +91,7 @@ mutation UpdateNotifications($input: UpdateNotificationsInput!) {
   updateNotifications(input: $input) {
     __typename
     id
-    seen
+    state
     viewedAt
   }
 }
@@ -128,6 +130,73 @@ fn consuming_engine_returns_exclusively_owned_storage() {
     let engine = Engine::new(InMemoryStorage::new());
     let storage: InMemoryStorage = engine.into_storage();
     assert!(storage.is_empty());
+}
+
+#[test]
+fn revision_tracks_logical_mutations_only_within_one_engine_generation() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        assert_eq!(engine.current_revision(), CacheRevision::ZERO);
+
+        let data = page(&[("doc-1", "A")]);
+        let first = engine
+            .write_query(None, QUERY, Some("Soup"), &vars(10), &data, None)
+            .await
+            .unwrap();
+        assert_eq!(first.revision.to_string(), "1");
+        assert!(first.revision_advanced);
+        assert_eq!(engine.current_revision(), first.revision);
+
+        engine
+            .read_query(None, QUERY, Some("Soup"), &vars(10))
+            .await
+            .unwrap();
+        assert_eq!(engine.current_revision(), first.revision);
+
+        // An idempotent authoritative write preserves existing observations.
+        let second = engine
+            .write_query(None, QUERY, Some("Soup"), &vars(10), &data, None)
+            .await
+            .unwrap();
+        assert!(second.changed.is_empty());
+        assert!(!second.revision_advanced);
+        assert_eq!(second.revision, first.revision);
+
+        let storage = engine.storage().clone();
+        let mut replacement = Engine::new(storage);
+        assert_eq!(replacement.current_revision(), CacheRevision::ZERO);
+        assert!(matches!(
+            replacement
+                .read_query(None, QUERY, Some("Soup"), &vars(10))
+                .await
+                .unwrap(),
+            ReadResult::Hit { .. }
+        ));
+        assert_eq!(replacement.current_revision(), CacheRevision::ZERO);
+
+        let cleared = replacement.clear().await.unwrap();
+        assert_eq!(cleared.to_string(), "1");
+        assert_eq!(replacement.current_revision(), cleared);
+    });
+}
+
+#[test]
+fn failed_commands_do_not_advance_revision() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let result = engine
+            .write_query(
+                None,
+                "query Broken {",
+                Some("Broken"),
+                &serde_json::Map::new(),
+                &json!({}),
+                None,
+            )
+            .await;
+        assert!(result.is_err());
+        assert_eq!(engine.current_revision(), CacheRevision::ZERO);
+    });
 }
 
 #[test]
@@ -195,14 +264,33 @@ fn hydration_persists_cache_only_fields_and_returns_only_projection() {
             Some(json!({ "user": { "soup": { "nextCursor": "cursor-2" } } }))
         );
 
-        let ReadResult::Hit { data: cached } = engine
-            .read_query(None, HYDRATION_QUERY, Some("SoupBackfill"), &vars(10))
+        assert!(matches!(
+            engine
+                .read_query(None, HYDRATION_QUERY, Some("SoupBackfill"), &vars(10))
+                .await
+                .unwrap(),
+            ReadResult::Miss
+        ));
+        let records = engine
+            .storage()
+            .get_batch(&[
+                EntityKey("GraphqlUser:user-1".into()),
+                EntityKey("GraphqlSoupDocument:doc-1".into()),
+            ])
             .await
-            .unwrap()
-        else {
-            panic!("expected hydrated query hit");
-        };
-        assert_eq!(cached, data);
+            .unwrap();
+        assert!(
+            !records[0]
+                .as_ref()
+                .unwrap()
+                .fields
+                .keys()
+                .any(|key| key.starts_with("soup("))
+        );
+        assert_eq!(
+            records[1].as_ref().unwrap().fields["name"],
+            CacheValue::String("Design doc".into())
+        );
     });
 }
 
@@ -359,7 +447,7 @@ fn incomplete_registered_write_is_conservatively_affected() {
                     "updateNotifications": [{
                         "__typename": "GraphqlNotification",
                         "id": "unrelated-notification",
-                        "seen": true,
+                        "state": "SEEN",
                         "viewedAt": null
                     }]
                 }),
@@ -396,7 +484,7 @@ fn incomplete_registered_write_is_conservatively_affected() {
                     "updateNotifications": [{
                         "__typename": "GraphqlNotification",
                         "id": "another-unrelated-notification",
-                        "seen": true,
+                        "state": "SEEN",
                         "viewedAt": null
                     }]
                 }),
@@ -423,7 +511,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                         "notifications": [{
                             "__typename": "GraphqlNotification",
                             "id": "notification-1",
-                            "seen": false,
+                            "state": "UNSEEN",
                             "viewedAt": null
                         }]
                     }],
@@ -480,8 +568,8 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
             panic!("expected cached channel after activity mutation");
         };
         assert_eq!(
-            data["user"]["soup"]["items"][0]["notifications"][0]["seen"],
-            json!(false)
+            data["user"]["soup"]["items"][0]["notifications"][0]["state"],
+            json!("UNSEEN")
         );
 
         let Json::Object(notification_variables) = json!({
@@ -502,7 +590,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                     "updateNotifications": [{
                         "__typename": "GraphqlNotification",
                         "id": "notification-1",
-                        "seen": true,
+                        "state": "SEEN",
                         "viewedAt": "2025-01-01T00:00:02Z"
                     }]
                 }),
@@ -524,7 +612,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
             panic!("expected cached channel after notification mutation");
         };
         let notification = &data["user"]["soup"]["items"][0]["notifications"][0];
-        assert_eq!(notification["seen"], json!(true));
+        assert_eq!(notification["state"], json!("SEEN"));
         assert_eq!(notification["viewedAt"], json!("2025-01-01T00:00:02Z"));
     });
 }
@@ -658,7 +746,7 @@ fn identity_witness_wipes_on_user_change() {
         assert_eq!(data["user"]["id"], serde_json::json!("user-2"));
 
         // external_reset drops local state and reports all local ops.
-        let ops = engine.external_reset();
+        let ops = engine.external_reset().unwrap();
         assert!(ops.contains(&1) && ops.contains(&2));
     });
 }

@@ -11,6 +11,37 @@ crate::queue! {
     }
 }
 
+#[test]
+fn slack_import_names_match_pulumi_queue_component() {
+    for (environment, suffix) in [
+        (Environment::Local, ""),
+        (Environment::Develop, "-dev"),
+        (Environment::Production, "-prod"),
+    ] {
+        assert_eq!(
+            SlackImportQueue::default_for_environment(environment).as_str(),
+            format!("slack-import-queue{suffix}")
+        );
+        assert_eq!(
+            SlackImportDlq::default_for_environment(environment).as_str(),
+            format!("slack-import-dlq{suffix}")
+        );
+    }
+    with_mock_override_env(
+        |name| Ok(format!("override-{name}")),
+        || {
+            assert_eq!(
+                SlackImportQueue::new().as_str(),
+                "override-OVERRIDE_SLACK_IMPORT_QUEUE"
+            );
+            assert_eq!(
+                SlackImportDlq::new().as_str(),
+                "override-OVERRIDE_SLACK_IMPORT_DLQ"
+            );
+        },
+    );
+}
+
 fn missing_override(_: &'static str) -> Result<String, std::env::VarError> {
     Err(std::env::VarError::NotPresent)
 }

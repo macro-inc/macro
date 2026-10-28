@@ -1,9 +1,9 @@
 /**
  * The fold, as the app calls it: async functions, worker behind them.
  *
- * One worker per tab, started on first use and kept — every agent channel
+ * One worker per tab, started on first use and kept — every agent surface
  * folds through it, so the wasm module is instantiated once rather than per
- * channel, and the live sessions' machines all live in one place.
+ * surface, and the live sessions' machines all live in one place.
  */
 
 import type {
@@ -11,8 +11,10 @@ import type {
   FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
-import type { FoldRequest, FoldResponse } from './protocol';
+import workerUrl from './fold.worker.ts?worker&url';
+import type { FoldInput, FoldRequest, FoldResponse } from './protocol';
+
+export type { FoldInput } from './protocol';
 
 /** A machine-backed read: the fold's messages plus its current metadata. */
 export type SessionFoldSnapshot = {
@@ -20,30 +22,51 @@ export type SessionFoldSnapshot = {
   metadata: SessionMetadata;
 };
 
-/** What a machine that has folded nothing knows — every field still absent. */
-const EMPTY_METADATA: SessionMetadata = {
-  model: null,
-  supportedModels: [],
-  title: null,
-  availableCommands: [],
-  status: null,
-};
-
 interface Pending {
   resolve: (response: Extract<FoldResponse, { ok: true }>) => void;
   reject: (error: Error) => void;
+}
+
+/**
+ * The worker's script never ran.
+ *
+ * Browsers can omit the error message for missing scripts, blocked scripts,
+ * or invalid packaging. Keep the URL for diagnosis without assuming a cause.
+ */
+export class AgentFoldWorkerUnavailable extends Error {
+  constructor(readonly workerUrl: string) {
+    super(`agent fold worker script could not be loaded (${workerUrl})`);
+    this.name = 'AgentFoldWorkerUnavailable';
+  }
+}
+
+/**
+ * What an `error` event from the worker means, as precisely as the browser
+ * lets us put it. The empty-message case is {@link AgentFoldWorkerUnavailable};
+ * anything else threw while starting up and says so itself.
+ */
+function workerStartupFailure(url: string, message: string): Error {
+  if (!message) return new AgentFoldWorkerUnavailable(url);
+  const error = new Error(`agent fold worker failed to start: ${message}`);
+  error.name = 'AgentFoldWorkerStartupFailed';
+  return error;
 }
 
 let worker: Worker | undefined;
 const pending = new Map<number, Pending>();
 let nextId = 0;
 
+/**
+ * Lazily constructed on purpose: on iOS, WKWebView deadlocks when a module
+ * Worker is constructed eagerly over `tauri://` (apps/web/AGENTS.md).
+ */
 function ensureWorker(): Worker {
   if (worker) return worker;
 
-  const started = new Worker(new URL('./fold.worker.ts', import.meta.url), {
-    type: 'module',
-  });
+  // Explicitly bundle the worker while retaining its URL for diagnostics.
+  // A standalone new URL('./fold.worker.ts', import.meta.url) makes Vite
+  // emit raw TypeScript as an asset instead of compiling a worker entry.
+  const started = new Worker(workerUrl, { type: 'module' });
 
   started.addEventListener('message', (event: MessageEvent<FoldResponse>) => {
     const response = event.data;
@@ -59,12 +82,14 @@ function ensureWorker(): Worker {
 
   started.addEventListener('error', (event) => {
     // The worker itself failed, so nothing in flight will ever be answered.
-    const error = new Error(`agent fold worker failed: ${event.message}`);
+    // One error event takes down every fold in flight, which is why a single
+    // failure reports as many: the count is concurrent folds, not causes.
+    const error = workerStartupFailure(workerUrl, event.message ?? '');
     for (const waiting of pending.values()) waiting.reject(error);
     pending.clear();
     // Dropped so the next call starts a fresh one rather than waiting on a
     // worker that is not listening. Every open machine died with it, so a
-    // follower has to reopen — see `openSession`.
+    // follower has to push a fresh snapshot.
     worker = undefined;
   });
 
@@ -79,93 +104,66 @@ function request(
   const message = build(id);
 
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    ensureWorker().postMessage(message);
+    try {
+      const target = ensureWorker();
+      pending.set(id, { resolve, reject });
+      target.postMessage(message);
+    } catch (error) {
+      pending.delete(id);
+      reject(error);
+    }
   });
 }
 
 /**
- * Fold a session's log into the messages a channel renders, keeping nothing.
- *
- * `entries` are passed through exactly as the raw-log endpoint served them:
- * the wasm side reads the same `{userId?, direction, content}` shape the
- * server writes, a recording stores, and the realtime event carries.
- *
- * For a session that is still running, {@link openSession} instead — that
- * leaves a machine behind for {@link pushSessionEntries} to continue.
+ * Start the shared fold on composer focus, while the user is still typing.
+ * A real request already starts the same worker, so repeat focus is free.
+ * No session is opened and a preload failure must not interrupt the input.
  */
-export async function foldSession(
-  sessionId: string,
-  entries: AgentSessionLogEntryDto[]
-): Promise<FoldedMessage[]> {
-  const response = await request((id) => ({
-    id,
-    kind: 'once',
-    sessionId,
-    entries,
-  }));
-  return response.kind === 'once' ? response.messages : [];
+export async function preloadAgentFold(): Promise<void> {
+  if (worker) return;
+  try {
+    await request((id) => ({ id, kind: 'preload' }));
+  } catch (error) {
+    console.warn('[agent-fold] fold could not be preloaded', error);
+  }
 }
 
 /**
- * Fold a fetched log and leave the machine open for what comes next.
+ * Fold inputs into a session's machine, in order, and hear what changed.
  *
- * Discards any machine already open for the session, because `entries` start
- * at the top of the log: seeding a machine that has already folded them would
- * derive every message a second time. So a caller opens once, when it has a
- * fresh snapshot, and pushes from then on.
+ * The first input a session ever sends must be a snapshot; the machine
+ * refuses live and speculative inputs before one, since folding from the
+ * middle of a log derives a session that never happened.
  */
-export async function openSession(
+export async function pushSession(
   sessionId: string,
-  entries: AgentSessionLogEntryDto[]
-): Promise<SessionFoldSnapshot> {
-  const response = await request((id) => ({
-    id,
-    kind: 'open',
-    sessionId,
-    entries,
-  }));
-  return response.kind === 'open'
-    ? { messages: response.messages, metadata: response.metadata }
-    : { messages: [], metadata: EMPTY_METADATA };
-}
-
-/**
- * Fold more frames into an open session, in log order.
- *
- * Rejects when the session has no open machine — the worker will not seed one
- * from the middle of a log, since the messages that would derive belong to a
- * session that never happened.
- */
-export async function pushSessionEntries(
-  sessionId: string,
-  entries: AgentSessionLogEntryDto[]
+  inputs: FoldInput[]
 ): Promise<FoldedStreamEvent[]> {
   const response = await request((id) => ({
     id,
     kind: 'push',
     sessionId,
-    entries,
+    inputs,
   }));
   return response.kind === 'push' ? response.changes : [];
 }
 
 /**
- * Every message an open session has folded so far.
+ * Everything a session's machine holds right now.
  *
- * For a reader joining a session someone else is already following: the open
- * machine is ahead of any snapshot that reader could fetch, so asking it beats
- * reopening it.
- *
- * Rejects when the session has no open machine.
+ * For a surface joining a session someone else is already following: the
+ * open machine is ahead of any snapshot that surface could fetch, so asking
+ * it beats refetching. Rejects when the session has no open machine.
  */
-export async function sessionMessages(
+export async function readSession(
   sessionId: string
 ): Promise<SessionFoldSnapshot> {
-  const response = await request((id) => ({ id, kind: 'messages', sessionId }));
-  return response.kind === 'messages'
-    ? { messages: response.messages, metadata: response.metadata }
-    : { messages: [], metadata: EMPTY_METADATA };
+  const response = await request((id) => ({ id, kind: 'read', sessionId }));
+  if (response.kind !== 'read') {
+    throw new Error(`unexpected fold response for session ${sessionId}`);
+  }
+  return { messages: response.messages, metadata: response.metadata };
 }
 
 /** Drop a session's machine once nothing is watching it. */

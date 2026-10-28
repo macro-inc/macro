@@ -1,8 +1,10 @@
 use super::*;
+use axum::{Router, body::Body, routing::get};
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
+use tower::ServiceExt;
 use tower_http::trace::{MakeSpan, OnFailure, OnResponse};
 use tracing::{
     Level,
@@ -13,6 +15,7 @@ use tracing::{
 #[derive(Default)]
 struct CapturedTracing {
     event_levels: Mutex<Vec<Level>>,
+    warning_fields: Mutex<Vec<HashMap<String, String>>>,
     span_level: Mutex<Option<Level>>,
     span_target: Mutex<Option<String>>,
     declared_span_fields: Mutex<HashSet<String>>,
@@ -89,6 +92,11 @@ impl tracing::Subscriber for TracingCapture {
             .lock()
             .unwrap()
             .push(*event.metadata().level());
+        if *event.metadata().level() == Level::WARN {
+            let mut fields = HashMap::new();
+            event.record(&mut FieldCapture(&mut fields));
+            self.captured.warning_fields.lock().unwrap().push(fields);
+        }
     }
 
     fn enter(&self, _span: &tracing::span::Id) {}
@@ -120,6 +128,7 @@ fn request_span_uses_info_and_safe_structured_fields() {
 
     let declared_fields = captured.declared_span_fields.lock().unwrap();
     assert!(declared_fields.contains("http.request.method"));
+    assert!(declared_fields.contains("http.route"));
     assert!(declared_fields.contains("url.path"));
     assert!(declared_fields.contains("request.id"));
     assert!(declared_fields.contains("http.response.status_code"));
@@ -132,6 +141,34 @@ fn request_span_uses_info_and_safe_structured_fields() {
     assert_eq!(fields.get("url.path").unwrap(), "\"/documents/123\"");
     assert_eq!(fields.get("request.id").unwrap(), "\"request-42\"");
     assert!(fields.values().all(|value| !value.contains("secret")));
+}
+
+#[tokio::test]
+async fn request_span_records_the_matched_route() {
+    let (subscriber, captured) = TracingCapture::new();
+    let _guard = set_default(subscriber);
+    let app = Router::new()
+        .route("/documents/{id}", get(|| async {}))
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
+
+    app.oneshot(
+        Request::builder()
+            .uri("/documents/123")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        captured
+            .recorded_span_fields
+            .lock()
+            .unwrap()
+            .get("http.route")
+            .unwrap(),
+        "\"/documents/{id}\""
+    );
 }
 
 #[test]
@@ -200,22 +237,34 @@ fn server_error_emits_only_failure_event() {
     assert_eq!(fields.get("otel.status_code").unwrap(), "\"ERROR\"");
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn starvation_detector_warns_when_runtime_blocked() {
     let (subscriber, captured) = TracingCapture::new();
     let _guard = set_default(subscriber);
 
     spawn_starvation_detector(Duration::from_millis(10));
 
-    // Let the detector initialize, consume its first tick, and enter the timing loop
-    tokio::time::sleep(Duration::from_millis(15)).await;
+    // Poll the detector so it consumes its immediate tick and starts waiting.
+    tokio::task::yield_now().await;
+    assert_eq!(captured.event_count(Level::WARN), 0);
 
-    // Block the runtime thread — simulates starvation
-    std::thread::sleep(Duration::from_millis(50));
+    // Jump past multiple ticks without polling the detector in between. Unlike
+    // real sleeps, this models exactly one stalled interval regardless of CI load.
+    tokio::time::advance(Duration::from_millis(50)).await;
+    tokio::task::yield_now().await;
 
-    // Let the detector observe the delay and emit the warning
-    tokio::time::sleep(Duration::from_millis(15)).await;
+    assert_eq!(captured.event_count(Level::WARN), 1);
+    {
+        let warnings = captured.warning_fields.lock().unwrap();
+        let fields = &warnings[0];
+        assert_eq!(fields.get("expected_ms").unwrap(), "10");
+        assert_eq!(fields.get("actual_ms").unwrap(), "50");
+        assert_eq!(fields.get("delay_ms").unwrap(), "40");
+    }
 
+    // The next on-time tick must not emit another starvation warning.
+    tokio::time::advance(Duration::from_millis(10)).await;
+    tokio::task::yield_now().await;
     assert_eq!(captured.event_count(Level::WARN), 1);
 }
 
@@ -318,7 +367,6 @@ fn inject_trace_headers_emits_current_span_traceparent() {
 
         let mut headers = http::HeaderMap::new();
         inject_trace_headers(&mut headers);
-
         let traceparent = headers
             .get("traceparent")
             .expect("traceparent header should be injected inside a span")

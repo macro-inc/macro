@@ -1,15 +1,8 @@
 #![deny(missing_docs)]
-//! Selection between the two MCP connector stacks.
+//! Per-provider selection and composition of native and Pipedream MCP tools.
 //!
-//! The native stack (`mcp_client`: in-house OAuth, servers connected
-//! by URL) and the Pipedream stack (`pipedream_mcp`: apps connected through
-//! Pipedream Connect) are deliberately separate — separate endpoints,
-//! tables, and toolsets. The one place they must meet is deciding which
-//! tools a user's agent actually gets. This crate owns that rule:
-//!
-//! 1. Load both stacks' connectors.
-//! 2. If the user has any Pipedream connectors, use only those.
-//! 3. Otherwise, use the native connectors.
+//! Enabled native connections take precedence for known providers. Other
+//! enabled Pipedream apps remain available, with one connection per provider.
 
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolInfo, ToolResult,
@@ -20,30 +13,53 @@ use mcp_client::domain::ports::McpServerStore;
 use mcp_client::domain::service::McpToolSet;
 use pipedream_mcp::domain::ports::{ConnectionStore, McpConnection};
 use pipedream_mcp::domain::service::PipedreamToolSet;
+use std::collections::HashSet;
 use std::pin::Pin;
+
+mod overlay;
+mod selection;
+pub use overlay::{NativeOverlayConnections, overlay_connection};
+use selection::native_matches;
+pub use selection::select_connections;
 use std::sync::Arc;
 
-/// Mangled MCP tool names start with this prefix on both stacks.
-const MANGLED_PREFIX: &str = "mcp__";
+#[cfg(test)]
+mod test;
 
-/// A connector identified in both stacks: the Pipedream app slug and the
+/// Mangled MCP tool names start with this prefix on both stacks.
+pub const MANGLED_PREFIX: &str = "mcp__";
+
+/// A connector identified in both stacks: the Pipedream app slugs and the
 /// native server URL that back the same product (e.g. `linear` /
 /// `https://mcp.linear.app/mcp`).
 #[derive(Clone, Copy, Debug)]
 pub struct ConnectorRef<'a> {
-    /// Pipedream app name slug, e.g. `linear`.
-    pub pipedream_app_slug: &'a str,
+    /// Pipedream app name slugs in preference order, e.g. `slack`, `slack_v2`.
+    pub pipedream_app_slugs: &'a [&'a str],
     /// The native stack's MCP server URL for the same product.
     pub native_server_url: &'a str,
 }
 
-/// The MCP tools loaded for a user — from exactly one stack, per the
-/// selection rule above.
+impl ConnectorRef<'_> {
+    /// Whether this connector recognizes the Pipedream app slug.
+    pub fn matches_pipedream_slug(&self, slug: &str) -> bool {
+        self.pipedream_app_slugs.contains(&slug)
+    }
+}
+
+/// The MCP tools loaded for a user, composed across both connection stacks.
 pub enum UserMcpTools {
     /// Tools served by Pipedream's remote MCP server.
     Pipedream(PipedreamToolSet),
     /// Tools served by directly-connected (native) MCP servers.
     Native(McpToolSet),
+    /// Disjoint providers served by the two stacks; native wins name collisions.
+    Mixed {
+        /// Directly connected providers.
+        native: McpToolSet,
+        /// Remaining hosted providers.
+        pipedream: PipedreamToolSet,
+    },
 }
 
 impl UserMcpTools {
@@ -52,6 +68,7 @@ impl UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => tools.is_empty(),
             UserMcpTools::Native(tools) => tools.is_empty(),
+            UserMcpTools::Mixed { native, pipedream } => native.is_empty() && pipedream.is_empty(),
         }
     }
 
@@ -60,12 +77,23 @@ impl UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => tools.searchable_catalog(),
             UserMcpTools::Native(tools) => tools.searchable_catalog(),
+            UserMcpTools::Mixed { native, pipedream } => {
+                let mut catalog = native.searchable_catalog();
+                let names: HashSet<_> = catalog.iter().map(|tool| tool.name.clone()).collect();
+                catalog.extend(
+                    pipedream
+                        .searchable_catalog()
+                        .into_iter()
+                        .filter(|tool| !names.contains(&tool.name)),
+                );
+                catalog
+            }
         }
     }
 }
 
 impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
-    fn try_tool_call<'a>(
+    fn dispatch_tool_call<'a>(
         &'a self,
         context: Context,
         request_context: RequestContext,
@@ -76,10 +104,17 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
     > {
         match self {
             UserMcpTools::Pipedream(tools) => {
-                tools.try_tool_call(context, request_context, tool_name, json)
+                tools.dispatch_tool_call(context, request_context, tool_name, json)
             }
             UserMcpTools::Native(tools) => {
-                tools.try_tool_call(context, request_context, tool_name, json)
+                tools.dispatch_tool_call(context, request_context, tool_name, json)
+            }
+            UserMcpTools::Mixed { native, pipedream } => {
+                if native.contains_tool(tool_name) {
+                    native.dispatch_tool_call(context, request_context, tool_name, json)
+                } else {
+                    pipedream.dispatch_tool_call(context, request_context, tool_name, json)
+                }
             }
         }
     }
@@ -88,13 +123,36 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => ToolSet::<Context>::request_schemas(tools),
             UserMcpTools::Native(tools) => ToolSet::<Context>::request_schemas(tools),
+            UserMcpTools::Mixed { .. } => {
+                let schemas: Vec<_> = self
+                    .catalog()
+                    .into_iter()
+                    .map(|tool| RequestSchema {
+                        name: tool.name,
+                        description: tool.description,
+                        schema: tool.schema,
+                    })
+                    .collect();
+                (!schemas.is_empty()).then_some(schemas)
+            }
         }
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.catalog()
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {
         match self {
             UserMcpTools::Pipedream(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
             UserMcpTools::Native(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
+            UserMcpTools::Mixed { native, pipedream } => {
+                let mut names = ToolSet::<Context>::searchable_toolset_names(native);
+                names.extend(ToolSet::<Context>::searchable_toolset_names(pipedream));
+                names.sort();
+                names.dedup();
+                names
+            }
         }
     }
 
@@ -106,6 +164,13 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
             UserMcpTools::Native(tools) => {
                 ToolSet::<Context>::routing_description(tools, tool_name)
             }
+            UserMcpTools::Mixed { native, pipedream } => {
+                if native.contains_tool(tool_name) {
+                    ToolSet::<Context>::routing_description(native, tool_name)
+                } else {
+                    ToolSet::<Context>::routing_description(pipedream, tool_name)
+                }
+            }
         }
     }
 }
@@ -113,7 +178,7 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
 /// Port for consumers (imports, onboarding) that need per-connector tools
 /// or connection state without knowing which stack serves them.
 pub trait ConnectorSelect: Send + Sync + 'static {
-    /// Load the user's full MCP toolset (all connectors, one stack).
+    /// Load the user's full MCP toolset (all enabled providers, across both stacks).
     fn user_toolset(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -179,6 +244,9 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Vec<pipedream_mcp::domain::models::PipedreamConnection> {
+        if !self.pipedream_connection.is_configured() {
+            return Vec::new();
+        }
         self.pipedream_store
             .list(user)
             .await
@@ -196,19 +264,26 @@ where
     #[tracing::instrument(skip_all)]
     async fn user_toolset(&self, user: &MacroUserIdStr<'static>) -> UserMcpTools {
         let pipedream = self.pipedream_connections(user).await;
-        if !pipedream.is_empty() {
-            return UserMcpTools::Pipedream(
-                PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()).await,
-            );
-        }
-
         let native = self
             .native_store
             .list(user)
             .await
             .inspect_err(|e| tracing::warn!(error = ?e, "failed to list native MCP servers"))
             .unwrap_or_default();
-        UserMcpTools::Native(McpToolSet::new(&native, self.native_store.clone()).await)
+        let (native, pipedream) = select_connections(native, pipedream);
+        if native.is_empty() {
+            return UserMcpTools::Pipedream(
+                PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()).await,
+            );
+        }
+        if pipedream.is_empty() {
+            return UserMcpTools::Native(McpToolSet::new(&native, self.native_store.clone()).await);
+        }
+        let (native, pipedream) = futures::join!(
+            McpToolSet::new(&native, self.native_store.clone()),
+            PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()),
+        );
+        UserMcpTools::Mixed { native, pipedream }
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -217,36 +292,36 @@ where
         user: &MacroUserIdStr<'static>,
         connector: ConnectorRef<'_>,
     ) -> anyhow::Result<Option<UserMcpTools>> {
-        let pipedream = self.pipedream_connections(user).await;
-        if !pipedream.is_empty() {
-            // The user is on the Pipedream stack: native connectors are
-            // ignored even if this particular app isn't connected there.
-            let matching: Vec<_> = pipedream
-                .into_iter()
-                .filter(|c| c.app_slug == connector.pipedream_app_slug)
-                .collect();
-            if matching.is_empty() {
-                return Ok(None);
-            }
-            return Ok(Some(UserMcpTools::Pipedream(
-                PipedreamToolSet::new(&matching, self.pipedream_connection.clone()).await,
-            )));
-        }
-
-        let matching: Vec<_> = self
+        let native = self
             .native_store
             .list(user)
             .await
-            .map_err(|e| anyhow::anyhow!("mcp store: {e:?}"))?
-            .into_iter()
-            .filter(|r| r.url == connector.native_server_url)
-            .collect();
-        if matching.is_empty() {
-            return Ok(None);
+            .map_err(|e| anyhow::anyhow!("mcp store: {e:?}"))?;
+        if let Some(record) = native.into_iter().find(|r| native_matches(r, connector)) {
+            return Ok(Some(UserMcpTools::Native(
+                McpToolSet::new(&[record], self.native_store.clone()).await,
+            )));
         }
-        Ok(Some(UserMcpTools::Native(
-            McpToolSet::new(&matching, self.native_store.clone()).await,
-        )))
+        let pipedream = self.pipedream_connections(user).await;
+        let matching = pipedream
+            .iter()
+            .filter(|r| r.enabled && connector.matches_pipedream_slug(&r.app_slug))
+            .min_by_key(|r| {
+                connector
+                    .pipedream_app_slugs
+                    .iter()
+                    .position(|slug| *slug == r.app_slug)
+            });
+        match matching {
+            Some(record) => Ok(Some(UserMcpTools::Pipedream(
+                PipedreamToolSet::new(
+                    std::slice::from_ref(record),
+                    self.pipedream_connection.clone(),
+                )
+                .await,
+            ))),
+            None => Ok(None),
+        }
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -255,43 +330,57 @@ where
         user: &MacroUserIdStr<'static>,
         connector: ConnectorRef<'_>,
     ) -> anyhow::Result<bool> {
-        let pipedream = self.pipedream_connections(user).await;
-        if !pipedream.is_empty() {
-            return Ok(pipedream
-                .iter()
-                .any(|c| c.app_slug == connector.pipedream_app_slug));
-        }
-
         let native = self
             .native_store
             .list(user)
             .await
             .map_err(|e| anyhow::anyhow!("mcp store: {e:?}"))?;
-        Ok(native
+        if native.iter().any(|r| native_matches(r, connector)) {
+            return Ok(true);
+        }
+        Ok(self
+            .pipedream_connections(user)
+            .await
             .iter()
-            .any(|r| r.credentials.is_some() && r.url == connector.native_server_url))
+            .any(|r| r.enabled && connector.matches_pipedream_slug(&r.app_slug)))
     }
 }
 
-/// Wraps a static [`AsyncToolCollection`] and the user's selected MCP tools,
-/// presenting them as a single toolset to the AI loop.
-pub struct CombinedToolSet<T> {
+/// Wraps a static [`AsyncToolCollection`] and a set of MCP tools, presenting
+/// them as a single toolset to the AI loop.
+///
+/// `Mcp` defaults to the per-user selection, [`UserMcpTools`]; the in-process
+/// agent runtime composes the same way over the servers it was handed.
+pub struct CombinedToolSet<T, Mcp = UserMcpTools> {
     static_tools: Arc<AsyncToolCollection<T>>,
-    mcp_tools: UserMcpTools,
+    mcp_tools: Mcp,
+    eager_mcp_tools: Vec<String>,
 }
 
-impl<T> CombinedToolSet<T> {
-    /// Combine the static tools with an already-selected MCP toolset.
-    pub fn new(static_tools: Arc<AsyncToolCollection<T>>, mcp_tools: UserMcpTools) -> Self {
+impl<T, Mcp> CombinedToolSet<T, Mcp> {
+    /// Combine the static tools with an already-built MCP toolset.
+    pub fn new(static_tools: Arc<AsyncToolCollection<T>>, mcp_tools: Mcp) -> Self {
         Self {
             static_tools,
             mcp_tools,
+            eager_mcp_tools: Vec::new(),
         }
+    }
+
+    /// Advertise these exact MCP names on the first model request when the
+    /// connected servers provide them. All other MCP tools remain searchable.
+    pub fn with_eager_mcp_tools(mut self, names: &[&str]) -> Self {
+        self.eager_mcp_tools = names.iter().map(|name| (*name).to_owned()).collect();
+        self
+    }
+
+    fn is_eager(&self, name: &str) -> bool {
+        self.eager_mcp_tools.iter().any(|eager| eager == name)
     }
 }
 
-impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
-    fn try_tool_call<'a>(
+impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T, Mcp> {
+    fn dispatch_tool_call<'a>(
         &'a self,
         context: T,
         request_context: RequestContext,
@@ -302,23 +391,39 @@ impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
     > {
         if tool_name.starts_with(MANGLED_PREFIX) {
             self.mcp_tools
-                .try_tool_call(context, request_context, tool_name, json)
+                .dispatch_tool_call(context, request_context, tool_name, json)
         } else {
             self.static_tools
-                .try_tool_call(context, request_context, tool_name, json)
+                .dispatch_tool_call(context, request_context, tool_name, json)
         }
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
-        // Only the static (first-party) tools are sent on every request. MCP
-        // tools are loaded on demand via the `SearchTools` tool — they are
-        // surfaced through `searchable_catalog`, not here — so a large or
-        // growing MCP catalog never bloats the request.
-        self.static_tools.request_schemas()
+        if self.eager_mcp_tools.is_empty() {
+            return self.static_tools.request_schemas();
+        }
+        let mut schemas = self.static_tools.request_schemas().unwrap_or_default();
+        schemas.extend(
+            self.mcp_tools
+                .searchable_catalog()
+                .into_iter()
+                .filter(|tool| self.is_eager(&tool.name))
+                .map(|tool| RequestSchema {
+                    name: tool.name,
+                    description: tool.description,
+                    schema: tool.schema,
+                }),
+        );
+        (!schemas.is_empty()).then_some(schemas)
     }
 
     fn searchable_catalog(&self) -> Vec<SearchableTool> {
-        self.mcp_tools.catalog()
+        ToolSet::<T>::searchable_catalog(&self.mcp_tools)
+            .into_iter()
+            // Catalog entries are deferred by providers that use tool search,
+            // even when their schemas are also present in request_schemas.
+            .filter(|tool| !self.is_eager(&tool.name))
+            .collect()
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {

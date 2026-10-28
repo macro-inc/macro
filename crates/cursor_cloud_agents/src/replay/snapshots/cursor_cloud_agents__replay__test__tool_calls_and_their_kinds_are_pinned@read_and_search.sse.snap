@@ -1,0 +1,29 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 199
+expression: calls
+input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
+---
+[
+    "tool_call \"file_search\" kind=Search status=InProgress",
+    "  update   Some(\"file_search\") kind=Some(Search) status=Some(InProgress)",
+    "tool_call \"get_mcp_tools\" kind=Other status=InProgress",
+    "  update   Some(\"get_mcp_tools\") kind=Some(Other) status=Some(InProgress)",
+    "  update   Some(\"file_search\") kind=Some(Search) status=Some(Completed)",
+    "  update   Some(\"get_mcp_tools\") kind=Some(Other) status=Some(Failed)",
+    "tool_call \"read_file\" kind=Read status=InProgress",
+    "tool_call \"get_mcp_tools\" kind=Other status=InProgress",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(InProgress)",
+    "  update   Some(\"get_mcp_tools\") kind=Some(Other) status=Some(InProgress)",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(Completed)",
+    "  update   Some(\"get_mcp_tools\") kind=Some(Other) status=Some(Completed)",
+    "tool_call \"grep_search\" kind=Search status=InProgress",
+    "  update   Some(\"grep_search\") kind=Some(Search) status=Some(InProgress)",
+    "  update   Some(\"grep_search\") kind=Some(Search) status=Some(Completed)",
+    "tool_call \"get_mcp_tools\" kind=Other status=InProgress",
+    "  update   Some(\"get_mcp_tools\") kind=Some(Other) status=Some(InProgress)",
+    "  update   Some(\"get_mcp_tools\") kind=Some(Other) status=Some(Completed)",
+    "tool_call \"mcp\" kind=Other status=InProgress",
+    "  update   Some(\"mcp\") kind=Some(Other) status=Some(InProgress)",
+    "  update   Some(\"mcp\") kind=Some(Other) status=Some(Completed)",
+]

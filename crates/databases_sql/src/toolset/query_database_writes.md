@@ -1,0 +1,8 @@
+
+
+To change records, first SELECT the rows you mean (their ids are in `rowIds`), then UPDATE or DELETE exactly those with `WHERE row_id IN (...)`. After changing rows, SELECT the affected records to verify the actual result. On a connection failure, inspect before retrying an INSERT.
+To create a row and relate it in one go, INSERT it with the relation column set to the target row ids (`INSERT INTO invites (guest, status) VALUES (['<guest row id>'], 'Sent')`); the new row's id is in `insertedRowIds`.
+
+Results come back as columns and rows of typed cells (`{"type": "text", "value": "Sam"}`; `null` is an empty cell), with `rowIds`, the id of the row behind each result row of a row-shaped SELECT. Each column names its `kind`. A select column lists its `options`, and its cells hold option ids: read their labels there. An entity column names its `target`, which is how the app renders its ids as clickable chips — prefer selecting an entity column over stringifying it. A `row_id` column has kind `row`: its cells are `{"type": "row", "value": "<row id>"}`, rows of the table it names as `relatedTable`, not Macro entities. Writes report `changesApplied` and, for inserts, the `insertedRowIds` the server minted.
+
+To answer a question about the data or draw a chart for the user, check the SELECT here, then save it with SaveDatabaseQuery and paste the block it returns: it stays live, where a pasted result goes stale.

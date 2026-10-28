@@ -15,7 +15,8 @@
               "Enum": [
                 "channel",
                 "team",
-                "user"
+                "user",
+                "bot"
               ]
             }
           }

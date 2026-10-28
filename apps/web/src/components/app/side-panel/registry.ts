@@ -6,7 +6,7 @@
 
 type SidePanelInstance = {
   setIsOpen: (open: boolean) => void;
-  isNarrow: () => boolean;
+  isOverlayMode: () => boolean;
 };
 
 const instances = new Set<SidePanelInstance>();
@@ -20,12 +20,12 @@ export function registerSidePanelInstance(instance: SidePanelInstance) {
 }
 
 /**
- * Show/hide every mounted side panel. Narrow layouts render the panel as a
- * full-screen overlay, so they are only ever hidden — never force-opened.
+ * Show/hide docked panels. Overlay menus are only ever hidden, never
+ * force-opened by the global chrome shortcut.
  */
 export function setAllSidePanelsOpen(open: boolean) {
   for (const instance of instances) {
-    if (open && instance.isNarrow()) continue;
+    if (open && instance.isOverlayMode()) continue;
     instance.setIsOpen(open);
   }
 }

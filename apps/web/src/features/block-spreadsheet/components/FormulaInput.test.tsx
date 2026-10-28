@@ -1,0 +1,215 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { afterEach, expect, it, vi } from 'vitest';
+import { FormulaInput } from './FormulaInput';
+
+afterEach(cleanup);
+it('accepts completion without committing, keeps caret/focus, and dismisses help before cancelling', async () => {
+  const key = vi.fn();
+  const blur = vi.fn();
+  const view = render(() => {
+    const [value, setValue] = createSignal('=SU');
+    return (
+      <FormulaInput
+        label="Formula"
+        value={value()}
+        class=""
+        onInput={setValue}
+        onKeyDown={key}
+        onBlur={blur}
+        complete={async (text) =>
+          text.endsWith('(')
+            ? { expecting: [{ Argument: ['SUM', 1] }], replace_from: 4 }
+            : { expecting: [{ FunctionName: 'SU' }], replace_from: 0 }
+        }
+      />
+    );
+  });
+  const input = view.getByRole('textbox', {
+    name: 'Formula',
+  }) as HTMLTextAreaElement;
+  input.focus();
+  input.setSelectionRange(3, 3);
+  fireEvent.input(input);
+  await screen.findByRole('listbox', { name: 'Formula suggestions' });
+  fireEvent.keyDown(input, { key: 'Tab' });
+  await waitFor(() => expect(input.value).toBe('=SUM('));
+  expect(input.selectionStart).toBe(5);
+  expect(document.activeElement).toBe(input);
+  expect(blur).not.toHaveBeenCalled();
+  expect(key).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+  await waitFor(() =>
+    expect(input.getAttribute('aria-describedby')).toBeTruthy()
+  );
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(key).not.toHaveBeenCalled();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(key).toHaveBeenCalledTimes(1);
+});
+
+it('opens help only after typing and closes it on an outside press or Escape until the next keystroke', async () => {
+  const complete = vi.fn(async () => ({
+    expecting: [{ FunctionName: 'SU' }],
+    replace_from: 0,
+  }));
+  const view = render(() => (
+    <>
+      <button type="button">Sheet2</button>
+      <FormulaInput
+        label="Formula"
+        value="=SU"
+        class=""
+        autoFocus
+        complete={complete}
+        onInput={() => {}}
+        onKeyDown={() => {}}
+        onBlur={() => {}}
+      />
+    </>
+  ));
+  const input = view.getByRole('textbox') as HTMLTextAreaElement;
+  input.setSelectionRange(3, 3);
+  fireEvent.select(input);
+  fireEvent.click(input);
+  await Promise.resolve();
+  expect(complete).not.toHaveBeenCalled();
+  expect(screen.queryByRole('listbox')).toBeNull();
+
+  fireEvent.input(input);
+  await screen.findByRole('listbox');
+  fireEvent.pointerDown(view.getByRole('button', { name: 'Sheet2' }));
+  expect(screen.queryByRole('listbox')).toBeNull();
+  fireEvent.select(input);
+  await Promise.resolve();
+  expect(screen.queryByRole('listbox')).toBeNull();
+
+  fireEvent.input(input);
+  await screen.findByRole('listbox');
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(screen.queryByRole('listbox')).toBeNull();
+  fireEvent.select(input);
+  await Promise.resolve();
+  expect(screen.queryByRole('listbox')).toBeNull();
+});
+
+it('does not request or display suggestions for a read-only formula', async () => {
+  const complete = vi.fn();
+  const view = render(() => (
+    <FormulaInput
+      label="Formula"
+      value="=SU"
+      class=""
+      readonly
+      complete={complete}
+      onInput={() => {}}
+      onKeyDown={() => {}}
+      onBlur={() => {}}
+    />
+  ));
+  view.getByRole('textbox').focus();
+  await Promise.resolve();
+  expect(complete).not.toHaveBeenCalled();
+  expect(screen.queryByRole('listbox')).toBeNull();
+});
+
+it.each(['readonly', 'pickingReference'] as const)(
+  'removes suggestion accessibility references when %s hides the popup',
+  async (property) => {
+    const [hidden, setHidden] = createSignal(false);
+    const view = render(() => (
+      <FormulaInput
+        label="Formula"
+        value="=SU"
+        class=""
+        readonly={property === 'readonly' && hidden()}
+        pickingReference={property === 'pickingReference' && hidden()}
+        complete={async () => ({
+          expecting: [{ FunctionName: 'SU' }],
+          replace_from: 0,
+        })}
+        onInput={() => {}}
+        onKeyDown={() => {}}
+        onBlur={() => {}}
+      />
+    ));
+    const input = view.getByRole('textbox') as HTMLTextAreaElement;
+    input.focus();
+    input.setSelectionRange(3, 3);
+    fireEvent.input(input);
+    await screen.findByRole('listbox');
+    expect(input.getAttribute('aria-controls')).toBeTruthy();
+    expect(input.getAttribute('aria-activedescendant')).toBeTruthy();
+    expect(input.getAttribute('aria-describedby')).toBeTruthy();
+    setHidden(true);
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(input.hasAttribute('aria-controls')).toBe(false);
+    expect(input.hasAttribute('aria-activedescendant')).toBe(false);
+    expect(input.hasAttribute('aria-describedby')).toBe(false);
+  }
+);
+
+it('commits on blur after starting a formula without a mention adapter', () => {
+  const blur = vi.fn();
+  const view = render(() => {
+    const [value, setValue] = createSignal('');
+    return (
+      <FormulaInput
+        label="Formula"
+        value={value()}
+        class=""
+        onInput={setValue}
+        onKeyDown={() => {}}
+        onBlur={blur}
+      />
+    );
+  });
+  const input = view.getByRole('textbox', { name: 'Formula' });
+  input.focus();
+  fireEvent.input(input, { target: { value: '=' } });
+  input.blur();
+  expect(blur).toHaveBeenCalledOnce();
+});
+
+it('colors reference text while the textarea keeps the caret in the text color', () => {
+  const view = render(() => (
+    <>
+      <style>{'textarea { color: rgb(255, 242, 204); }'}</style>
+      <FormulaInput
+        label="Formula"
+        value="=A1+B2"
+        class=""
+        references={[
+          { start: 1, end: 3, color: 'var(--color-blue)' },
+          { start: 4, end: 6, color: 'var(--color-red)' },
+        ]}
+        onInput={vi.fn()}
+        onKeyDown={vi.fn()}
+        onBlur={vi.fn()}
+      />
+    </>
+  ));
+  const input = view.getByRole('textbox', { name: 'Formula' });
+  expect(input.style.getPropertyValue('-webkit-text-fill-color')).toBe(
+    'transparent'
+  );
+  expect(getComputedStyle(input).color).toBe('rgb(255, 242, 204)');
+  const mirror = view.container.querySelector<HTMLElement>(
+    '[data-formula-mirror]'
+  )!;
+  expect(mirror.textContent).toBe('=A1+B2');
+  expect(mirror.style.color).toBe('rgb(255, 242, 204)');
+  const colored = [...mirror.querySelectorAll<HTMLSpanElement>('span span')]
+    .filter((span) => span.style.color)
+    .map((span) => [span.textContent, span.style.color]);
+  expect(colored).toEqual([
+    ['A1', 'var(--color-blue)'],
+    ['B2', 'var(--color-red)'],
+  ]);
+});

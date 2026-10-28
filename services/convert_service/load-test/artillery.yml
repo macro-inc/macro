@@ -1,5 +1,5 @@
 config:
-  target: "https://convert-service-dev.macro.com"
+  target: "https://dev-gateway.macro.com"
   processor: "./artillery-function.js"
   phases:
     - duration: 10
@@ -18,7 +18,7 @@ scenarios:
     flow:
       - function: "generateRandomData"
       - post:
-          url: "/internal/convert"
+          url: "/convert/internal/convert"
           json:
             from_bucket: "doc-storage-dev"
             to_bucket: "doc-storage-dev"

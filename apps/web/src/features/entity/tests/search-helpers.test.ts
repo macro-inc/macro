@@ -1,7 +1,7 @@
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FilePdfIcon from '@phosphor/file-pdf.svg';
-import FileTextIcon from '@phosphor/file-text.svg';
-import HashIcon from '@phosphor/hash.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import FilePdfIcon from '@icon/system/regular/file-pdf.svg';
+import HashIcon from '@icon/system/regular/hash-straight.svg';
 import { describe, expect, it } from 'vitest';
 import {
   getSearchIcon,
@@ -63,12 +63,12 @@ describe('search-helpers', () => {
   });
 
   describe('getSearchIcon', () => {
-    it('returns FileTextIcon for md type', () => {
+    it('returns FileIcon for md type', () => {
       const hit: ContentHitData = {
         type: 'md',
       } as ContentHitData;
 
-      expect(getSearchIcon(hit)).toBe(FileTextIcon);
+      expect(getSearchIcon(hit)).toBe(FileIcon);
     });
 
     it('returns FilePdfIcon for pdf type', () => {
@@ -95,12 +95,12 @@ describe('search-helpers', () => {
       expect(getSearchIcon(hit)).toBe(EnvelopeIcon);
     });
 
-    it('returns FileTextIcon for unknown types', () => {
+    it('returns FileIcon for unknown types', () => {
       const hit: ContentHitData = {
         type: 'unknown' as any,
       } as ContentHitData;
 
-      expect(getSearchIcon(hit)).toBe(FileTextIcon);
+      expect(getSearchIcon(hit)).toBe(FileIcon);
     });
 
     it('handles hits with additional properties', () => {

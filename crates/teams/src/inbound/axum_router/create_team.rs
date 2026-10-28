@@ -35,8 +35,8 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
     Json(req): Json<CreateTeamRequest>,
 ) -> Result<Json<Team>, CreateTeamError> {
     let user = &user.authorization.user;
-    // Teams are free up to FREE_TEAM_MAX_MEMBERS members - a subscription is
-    // linked when the owner has one, but is no longer required to create.
+    // Team creation and membership do not require a subscription. Link the
+    // owner's existing subscription when present for paid billing/entitlements.
     let subscription_id = state
         .service
         .is_user_premium(&user.macro_user_id)

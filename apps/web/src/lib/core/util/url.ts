@@ -68,11 +68,19 @@ export function transformShortIdInUrlPathname(pathname: string) {
   return newPathname;
 }
 
+/** Canonical route segments that differ from the entity type. Email threads
+ * open in Mail; /app/email is the legacy block URL. */
+const ROUTE_SEGMENTS = new Map([
+  ['routine', 'routines'],
+  ['email', 'mail'],
+]);
+
 export function buildSimpleEntityUrl(
   entity: { type: string; id: string },
   params?: Record<string, string>
 ): string {
-  const urlString = `${getWebOrigin()}/app/${entity.type}/${entity.id}`;
+  const type = ROUTE_SEGMENTS.get(entity.type) ?? entity.type;
+  const urlString = `${getWebOrigin()}/app/${type}/${entity.id}`;
   const url = new URL(urlString);
   if (params) {
     for (const [key, value] of Object.entries(params)) {

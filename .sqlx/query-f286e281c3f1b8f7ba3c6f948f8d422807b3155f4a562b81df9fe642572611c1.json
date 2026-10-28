@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_billing_account (user_id, period_start, period_end)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (user_id) DO UPDATE\n            SET period_start = EXCLUDED.period_start,\n                period_end = EXCLUDED.period_end,\n                updated_at = NOW()\n            WHERE ai_billing_account.period_start IS NULL\n               OR (EXCLUDED.period_start > ai_billing_account.period_start\n                   AND EXCLUDED.period_start >= ai_billing_account.period_end)\n               OR (EXCLUDED.period_start = ai_billing_account.period_start\n                   AND EXCLUDED.period_end > EXCLUDED.period_start)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f286e281c3f1b8f7ba3c6f948f8d422807b3155f4a562b81df9fe642572611c1"
+}

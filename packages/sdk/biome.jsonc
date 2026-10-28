@@ -5,6 +5,7 @@
       "**/*.ts",
       // orval output and copied specs are build artifacts, not style-checked.
       "!generated",
+      "!dist",
       "!specs",
       "!node_modules"
     ]

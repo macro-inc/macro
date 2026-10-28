@@ -3,15 +3,16 @@ import { formatCallDuration } from '@block-call/utils';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
-import { ItemPreview, useItemPreviewData } from '@core/component/ItemPreview';
+import {
+  firstPartyBotMark,
+  firstPartyBotMarkTone,
+} from '@core/component/firstPartyBotMark';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
-  createTheme,
-  twoLineClampMarkdownTheme,
+  inlineWrappingMarkdownTheme,
   unifiedListMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
-import { isMacroAgentId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { formatRelativeDay } from '@core/util/dateParser';
@@ -21,31 +22,35 @@ import {
   type EntityData,
   isGithubPrEntity,
   type Notification,
+  UnreadIndicator,
   unreadFilterFn,
   type WithNotification,
 } from '@entity';
-import MacroLogo from '@icon/macro-logo.svg';
+import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg?component-solid';
+import AtIcon from '@icon/system/regular/at.svg?component-solid';
+import BellSimpleIcon from '@icon/system/regular/bell-simple.svg?component-solid';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg?component-solid';
+import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
+import ChatTextIcon from '@icon/system/regular/chat-text.svg?component-solid';
+import FilesIcon from '@icon/system/regular/files.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
+import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
+import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
+import SmileyIcon from '@icon/system/regular/smiley.svg?component-solid';
+import AgentIcon from '@icon/system/regular/sparkle.svg?component-solid';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
-import FilesIcon from '@phosphor/files.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
-import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
-import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
-import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
-import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
-import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
-import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
+import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
-import { senderFromStorageId } from '@queries/channel/message-sender';
-import type { ItemEntity } from '@queries/preview';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
@@ -55,7 +60,6 @@ import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard } from './InboxCard';
 import {
-  formatCompactRelativeTimestamp,
   getGithubTitle,
   getInboxTaskProperties,
   getNotificationTag,
@@ -65,9 +69,15 @@ import {
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
   item: InboxCardDisplayItem;
+  /** Optional root-card styling for alternate list compositions. */
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  /** Set false when a parent list owns keyboard focus and activation. */
+  focusable?: boolean;
+  /** Render unread state beside the title instead of in a row gutter. */
+  showUnreadIndicator?: boolean;
 }
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
@@ -110,39 +120,7 @@ const getGithubSender = (entity: EntityData, notification?: Notification) => {
   return { id: login, fallbackName: login, imageUrl };
 };
 
-const getNotificationSenderFallbackName = (
-  notification: Notification
-): string | undefined => {
-  const content = notification.notification_metadata.content as
-    | { sender?: string; senderGithubLogin?: string }
-    | undefined;
-
-  switch (notification.notification_metadata.tag) {
-    case 'new_email':
-      return content?.sender ?? undefined;
-    case 'ai_response':
-      return 'Macro agent';
-    case 'channel_message_send':
-      return content?.sender ?? notification.sender_id ?? undefined;
-    case 'github_pr_status_changed':
-    case 'github_review_requested':
-    case 'github_pr_comment':
-    case 'github_pr_mention':
-    case 'github_pr_review':
-      return content?.senderGithubLogin ?? notification.sender_id ?? undefined;
-    default:
-      return undefined;
-  }
-};
-
 const getTimestamp = (entity: EntityData, notification?: Notification) => {
-  // Reminders sort on when they fire, so the row has to show that field too.
-  // The notification's time drifts from it for anything recurring, retried, or
-  // dispatched late, and the list then reads as unsorted.
-  if (entity.type === 'reminder') {
-    return entity.nextRunAt != null ? String(entity.nextRunAt) : undefined;
-  }
-
   const messageTime =
     entity.type === 'channel'
       ? entity.latestRootMessage?.createdAt
@@ -172,12 +150,13 @@ type SenderIconProps = {
 };
 
 export function SenderIcon(props: SenderIconProps) {
-  // Bot senders render their own avatar; Macro AI keeps its dedicated logo.
+  // Team bots render their uploaded avatar; first-party bots keep their brand
+  // mark, which UserIcon draws.
   const botSender = () => {
     const sender = props.senderId
       ? senderFromStorageId(props.senderId)
       : undefined;
-    if (sender?.type !== 'bot' || isMacroAgentId(sender.id)) return;
+    if (sender?.type !== 'bot' || firstPartyBotMark(sender.id)) return;
     return sender;
   };
 
@@ -204,9 +183,9 @@ function InboxAvatar(props: {
 }) {
   const parsedSender = () =>
     props.senderId ? senderFromStorageId(props.senderId) : undefined;
-  const isMacroAgent = () => {
+  const botMark = () => {
     const sender = parsedSender();
-    return sender?.type === 'bot' && isMacroAgentId(sender.id);
+    return sender?.type === 'bot' ? firstPartyBotMark(sender.id) : undefined;
   };
 
   return (
@@ -220,8 +199,13 @@ function InboxAvatar(props: {
       <Match when={props.imageUrl}>
         {(url) => <img src={url()} alt="" class="size-full object-cover" />}
       </Match>
-      <Match when={isMacroAgent()}>
-        <MacroLogo class="m-auto size-1/2 text-accent" />
+      <Match when={botMark()} keyed>
+        {(mark) => (
+          <Dynamic
+            component={mark.Icon}
+            class={cn('m-auto size-1/2', firstPartyBotMarkTone(mark))}
+          />
+        )}
       </Match>
       <Match when={props.senderId}>
         {(senderId) => <SenderIcon senderId={senderId()} />}
@@ -246,30 +230,48 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('ai_response', () => () => (
       <EntityIcon class={AVATAR_GLYPH_CLASS} targetType="chat" size="fill" />
     ))
-    .with('channel_mention', 'mentioned_in_document_comment', () => () => (
-      <AtIcon class={AVATAR_GLYPH_CLASS} />
-    ))
+    .with('channel_mention', () => () => <AtIcon class={AVATAR_GLYPH_CLASS} />)
+    .with(
+      'mentioned_in_document_comment',
+      'replied_to_document_comment_thread',
+      'commented_on_document',
+      () => () => <ChatTeardropIcon class={AVATAR_GLYPH_CLASS} />
+    )
     .with('document_mention', () => () => (
       <FilesIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with(
-      'channel_message_reply',
-      'replied_to_document_comment_thread',
-      () => () => <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
-    )
-    .with('commented_on_document', () => () => (
-      <ChatCircleIcon class={AVATAR_GLYPH_CLASS} />
+    .with('channel_message_reaction', () => () => (
+      <SmileyIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('channel_message_reply', () => () => (
+      <ArrowBendUpLeftIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('channel_message_send', () => () => (
       <ChatTextIcon class={AVATAR_GLYPH_CLASS} />
     ))
-    .with('channel_invite', 'invite_to_team', () => () => (
-      <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
-    ))
+    .with(
+      'entity_access_requested',
+      'entity_access_granted',
+      'channel_invite',
+      'invite_to_team',
+      () => () => <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
+    )
     .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('agent_session_settled', () => () => (
+      <AgentIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_waiting_for_input', () => () => (
+      <QuestionIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_mentioned', () => () => (
+      <AtIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('calendar_event_join_request', () => () => (
+      <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with(
       'github_pr_status_changed',
@@ -297,10 +299,12 @@ function ActionBubble(props: { tag: NotificationTag }) {
   );
 }
 
-function GithubStatusIcon(props: { status?: string }) {
+function GithubStatusIcon(props: { status?: string; draft?: boolean }) {
+  const isDraft = () => props.draft === true && props.status === 'open';
   const statusClass = () => {
     if (props.status === 'merged') return 'text-note';
     if (props.status === 'closed') return 'text-failure';
+    if (isDraft()) return 'text-ink-muted';
     if (props.status === 'open') return 'text-success';
     return undefined;
   };
@@ -507,9 +511,12 @@ const githubAction = (notification?: Notification): string => {
  */
 function BaseCard(props: {
   item: InboxCardDisplayItem;
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  focusable?: boolean;
+  showUnreadIndicator?: boolean;
   /** Contents of the avatar bubble (glyph or avatar); the circle is ours. */
   icon: JSX.Element;
   /**
@@ -524,6 +531,8 @@ function BaseCard(props: {
 }) {
   return (
     <InboxCard.Root
+      class={props.class}
+      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -534,6 +543,9 @@ function BaseCard(props: {
       </div>
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
+          <Show when={props.showUnreadIndicator && props.item.unread}>
+            <UnreadIndicator active class="mobile:hidden" />
+          </Show>
           <InboxCard.Title class="flex items-center gap-1">
             {props.titleLeading}
             {/* A flex row can't ellipsize bare text, so the text run always
@@ -574,20 +586,13 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
   );
 }
 
-const inlineWrappingMarkdownTheme = createTheme(
-  {
-    root: 'md inline pr-[2px] cursor-default',
-    paragraph: 'md-p text-[1em] inline',
-  },
-  twoLineClampMarkdownTheme
-);
-
 /**
  * The two-line clamped markdown body (the channel-style message preview),
  * reserving its height so short previews keep the row rhythm.
  */
 function CardClampedMarkdown(props: {
   text?: string;
+  inert?: boolean;
   /** Inline run rendered ahead of the text (e.g. a sender label or
    * attachment paperclip); wraps and clamps as part of the same lines. */
   prefix?: JSX.Element;
@@ -601,6 +606,7 @@ function CardClampedMarkdown(props: {
             markdown={value()}
             singleLine
             theme={inlineWrappingMarkdownTheme}
+            inert={props.inert}
           />
         )}
       </Show>
@@ -690,10 +696,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={!isDM()}
@@ -710,6 +713,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       title={text().title}
     >
       <CardClampedMarkdown
+        inert
         text={text().content}
         prefix={
           <>
@@ -751,14 +755,11 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
   // its three-line neighbors.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
-      <CardClampedMarkdown text={text().content} />
+      <CardClampedMarkdown inert text={text().content} />
     </BaseCard>
   );
 }
@@ -788,6 +789,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
       .with(
         P.union(
           { tag: 'channel_mention' },
+          { tag: 'channel_message_reaction' },
           { tag: 'channel_message_reply' },
           { tag: 'channel_message_send' }
         ),
@@ -798,6 +800,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
   const senderName = createSenderDisplayName(senderId);
   const currentUserId = useUserId();
+
   const senderLabel = () =>
     senderId() === currentUserId() ? 'You' : senderName();
 
@@ -870,6 +873,8 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   // the quoted-original block stacked beneath.
   return (
     <InboxCard.Root
+      class={props.class}
+      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -885,6 +890,9 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
       <InboxCard.Body class="contents">
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
+            <Show when={props.showUnreadIndicator && props.item.unread}>
+              <UnreadIndicator active class="mobile:hidden" />
+            </Show>
             <InboxCard.Title class="flex items-center gap-1">
               <span class="truncate">{text().title}</span>
             </InboxCard.Title>
@@ -904,6 +912,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                       <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
                     </Show>
                     <StaticMarkdown
+                      inert
                       markdown={context()}
                       singleLine
                       theme={unifiedListMarkdownTheme}
@@ -929,6 +938,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                       <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
                     </Show>
                     <StaticMarkdown
+                      inert
                       markdown={value()}
                       singleLine
                       theme={
@@ -987,7 +997,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
       return {
         action: buildActionLabel({
           sender: senderName(),
-          action: 'mentioned you',
+          action: 'mentioned you in a comment',
         }),
         content,
       };
@@ -995,7 +1005,10 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
     if (metadata?.tag === 'replied_to_document_comment_thread') {
       return {
-        action: buildActionLabel({ sender: senderName(), action: 'replied' }),
+        action: buildActionLabel({
+          sender: senderName(),
+          action: 'replied to a comment',
+        }),
         content,
       };
     }
@@ -1005,10 +1018,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1072,10 +1082,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1120,10 +1127,7 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
   // two-line clamp of the response summary with its height reserved.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1141,6 +1145,76 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
       title={text().title}
     >
       <CardClampedMarkdown text={text().content} />
+    </BaseCard>
+  );
+}
+
+/**
+ * An agent session the user was notified about: it finished, it is asking
+ * them something, or a prompt named them. The row is the session - title,
+ * agent icon, click opens it - and the body is what the agent said or
+ * asked, attributed to the bot (or to whoever wrote the mentioning prompt).
+ */
+export function AgentSessionCardLayout(props: InboxCardLayoutProps) {
+  const meta = () => {
+    const meta = props.item.notification?.notification_metadata;
+    return meta?.tag === 'agent_session_settled' ||
+      meta?.tag === 'agent_session_waiting_for_input' ||
+      meta?.tag === 'agent_session_mentioned'
+      ? meta
+      : undefined;
+  };
+  const mentionedBy = () => {
+    const current = meta();
+    return current?.tag === 'agent_session_mentioned'
+      ? (current.content.mentionedBy ?? undefined)
+      : undefined;
+  };
+  const mentionedByName = createSenderDisplayName(mentionedBy);
+  const currentUserId = useUserId();
+  const senderLabel = () => {
+    const current = meta();
+    if (!current) return undefined;
+    if (mentionedBy()) {
+      return mentionedBy() === currentUserId() ? 'You' : mentionedByName();
+    }
+    return current.content.botName;
+  };
+  const content = () => itemContent(props.item.entity, props.item.notification);
+
+  return (
+    <BaseCard
+      {...props}
+      icon={
+        <Show
+          when={props.item.notification}
+          fallback={
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(props.item.entity)}
+              size="fill"
+            />
+          }
+        >
+          <ActionBubble tag={getNotificationTag(props.item.notification)} />
+        </Show>
+      }
+      title={props.item.entity.name}
+    >
+      <InboxCard.Content class="text-sm text-ink/60 line-clamp-2">
+        <Show when={senderLabel()}>
+          {(label) => <span class="mr-1 whitespace-nowrap">{label()}:</span>}
+        </Show>
+        <Show when={content()?.trim()}>
+          {(text) => (
+            <StaticMarkdown
+              markdown={text()}
+              singleLine
+              theme={unifiedListMarkdownTheme}
+            />
+          )}
+        </Show>
+      </InboxCard.Content>
     </BaseCard>
   );
 }
@@ -1178,11 +1252,16 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
-      icon={<ActionBubble tag="new_email" />}
+      {...props}
+      icon={
+        <ActionBubble
+          tag={
+            props.item.notification?.notification_event_type === 'reminder'
+              ? 'reminder'
+              : 'new_email'
+          }
+        />
+      }
       titleLeading={
         <Show when={text().isDraft}>
           <DraftBadge />
@@ -1192,7 +1271,12 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
     >
       <Show when={text().subject?.trim()}>
         {(subject) => (
-          <InboxCard.Content class="truncate">{subject()}</InboxCard.Content>
+          <InboxCard.Content class="truncate">
+            {props.item.notification?.notification_event_type === 'reminder'
+              ? 'Reminder: '
+              : ''}
+            {subject()}
+          </InboxCard.Content>
         )}
       </Show>
 
@@ -1223,6 +1307,11 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
     if (!isGithubPrEntity(props.item.entity)) return;
 
     return props.item.entity.metadata.status;
+  });
+
+  const isDraft = createMemo(() => {
+    if (!isGithubPrEntity(props.item.entity)) return false;
+    return props.item.entity.metadata.draft === true;
   });
 
   const text = createMemo(() => {
@@ -1264,10 +1353,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={
@@ -1284,7 +1370,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
             />
           }
         >
-          <GithubStatusIcon status={status()} />
+          <GithubStatusIcon status={status()} draft={isDraft()} />
         </Show>
       }
       title={text().title}
@@ -1363,10 +1449,7 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
@@ -1400,11 +1483,21 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 }
 
 /**
- * A calendar event row exists because its alarm fired: the event title leads,
- * the occurrence's date sits on the second line, and its local time on the
- * third — three lines tall, matching the other inbox layouts.
+ * A calendar event row exists because its alarm fired or someone asked to
+ * join it: the event title leads, then who asked when they did, then the
+ * occurrence's date, and its local time on an alarm — three lines tall,
+ * matching the other inbox layouts.
  */
 export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
+  const senderName = createSenderDisplayName(
+    () => props.item.notification?.sender_id ?? undefined
+  );
+  const joinRequest = () =>
+    props.item.notification?.notification_metadata.tag ===
+    'calendar_event_join_request'
+      ? buildActionLabel({ sender: senderName(), action: 'asked to join' })
+      : undefined;
+
   const occurrence = () => {
     const meta = props.item.notification?.notification_metadata;
     if (meta?.tag === 'calendar_event_reminder') {
@@ -1435,127 +1528,28 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
       title={props.item.entity.name || '(No title)'}
     >
+      <Show when={joinRequest()}>
+        {(value) => (
+          <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
+        )}
+      </Show>
+
       <Show when={datePreview()}>
         {(value) => (
           <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
         )}
       </Show>
 
-      <Show when={timePreview()}>
+      <Show when={!joinRequest() && timePreview()}>
         {(value) => (
           <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
         )}
       </Show>
     </BaseCard>
-  );
-}
-
-/**
- * A reminder is self-set, so there is no sender and no action to describe.
- *
- * With something to point at, the description leads and the chip below says
- * what it is about. Standalone, there is nothing to link to, so the generic
- * title leads — matching `ReminderMetadata::format_title` on the backend, so
- * the row and the push notification read the same — and the description
- * becomes the body.
- */
-export function ReminderCardLayout(props: InboxCardLayoutProps) {
-  // The current description, not the notification's copy of it, so editing a
-  // reminder after it fires updates the row.
-  const description = () => props.item.entity.name;
-
-  const referenced = () =>
-    props.item.entity.type === 'reminder'
-      ? props.item.entity.referencedEntity
-      : undefined;
-
-  return (
-    <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
-      // Always the bell, never the referenced entity's icon: the row is a
-      // reminder first, and the thing it points at is named right below.
-      icon={<BellSimpleIcon class={AVATAR_GLYPH_CLASS} />}
-      title={
-        <Show when={referenced()} fallback="Reminder">
-          {(reference) => (
-            <ReminderTitle
-              description={description()}
-              id={reference().id}
-              type={reference().type}
-            />
-          )}
-        </Show>
-      }
-    >
-      {/* A reminder only says one thing, so the body reserves the two lines
-          its three-line neighbors use to keep the list rhythm even. The chip
-          replaces the description when there's something to point at. */}
-      <div class="min-h-[2lh] min-w-0">
-        <InboxCard.Content class="truncate">
-          <Show when={referenced()} fallback={description()}>
-            {(reference) => (
-              <ReminderReferenceChip
-                id={reference().id}
-                type={reference().type}
-              />
-            )}
-          </Show>
-        </InboxCard.Content>
-      </div>
-    </BaseCard>
-  );
-}
-
-/**
- * The reminder's description, unless it says nothing the chip below doesn't.
- *
- * The composer derives the description from the entity, so today it usually
- * *is* the referenced entity's name — printing it as the title would just
- * repeat the chip. Falling back to the generic title keeps the row readable
- * until descriptions become editable, and gets out of the way once they are.
- */
-function ReminderTitle(props: ItemEntity & { description: string }) {
-  const { item, name } = useItemPreviewData(() => ({
-    id: props.id,
-    type: props.type,
-  }));
-
-  const ownText = () => {
-    const description = props.description.trim();
-    // While the reference is resolving, `name()` is a placeholder, so the two
-    // cannot be compared yet — hold the generic title rather than flash text
-    // that is about to collapse into it.
-    if (!description || item().loading) return undefined;
-    return description === name().trim() ? undefined : description;
-  };
-
-  return <>{ownText() ?? 'Reminder'}</>;
-}
-
-/**
- * What the reminder is about, as an inline mention chip — the same icon, name,
- * and hover preview a document mention gets inside a message. `ItemPreview`
- * resolves the name and handles the deleted / no-access cases; the classes
- * strip its default boxed-button look back to inline text.
- */
-function ReminderReferenceChip(props: ItemEntity) {
-  return (
-    <ItemPreview
-      {...props}
-      class="inline-flex h-auto max-w-full rounded-none px-0 align-[-0.15em] ring-0 hover:bg-transparent border-none"
-      iconClass="mr-1 size-3.5"
-      textClass="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2"
-    />
   );
 }
 
@@ -1569,10 +1563,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
@@ -1649,8 +1640,8 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       <Match when={props.item.entity.type === 'channel_thread'}>
         <ChannelThreadCardLayout {...props} />
       </Match>
-      <Match when={props.item.entity.type === 'reminder'}>
-        <ReminderCardLayout {...props} />
+      <Match when={props.item.entity.type === 'agent_session'}>
+        <AgentSessionCardLayout {...props} />
       </Match>
       <Match when={props.item.entity.type === 'calendar_event'}>
         <CalendarEventCardLayout {...props} />

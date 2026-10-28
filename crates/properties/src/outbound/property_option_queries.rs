@@ -4,10 +4,48 @@ use std::collections::HashMap;
 
 use models_properties::db;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use sqlx::{Pool, Postgres};
+use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::model::UpdatePropertyOptionOutcome;
+use super::query_error::PropertyQueryError;
+use crate::domain::database_option_writer::ColorChange;
+
+use crate::domain::model::{
+    GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
+    UpdatePropertyOptionOutcome,
+};
+
+/// Keep selected options alive until their assignment commits. Validation
+/// happens after waiting for removals, so a stale writer cannot resurrect a
+/// deleted option in JSON. Ordered locks also support multi-select values.
+pub(super) async fn hold_selected_options(
+    connection: &mut sqlx::PgConnection,
+    definition: Uuid,
+    options: &[Uuid],
+) -> Result<(), PropertyQueryError> {
+    if options.is_empty() {
+        return Ok(());
+    }
+    // Take the definition before the options, like guarded removal and tag
+    // promotion. The entity row's foreign key will need this lock too.
+    sqlx::query_scalar!(
+        "SELECT id FROM property_definitions WHERE id = $1 FOR KEY SHARE",
+        definition
+    )
+    .fetch_optional(&mut *connection)
+    .await?;
+    let held = sqlx::query_scalar!(
+        "SELECT id FROM property_options WHERE property_definition_id = $1 AND id = ANY($2) ORDER BY id FOR KEY SHARE",
+        definition,
+        options
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    if let Some(missing) = options.iter().find(|id| !held.contains(id)) {
+        return Err(PropertyQueryError::MissingOption(*missing));
+    }
+    Ok(())
+}
 
 /// Gets a single property option by ID.
 #[tracing::instrument(skip(pool))]
@@ -39,11 +77,11 @@ pub async fn get_property_option(
 }
 
 /// Gets all property options for a property definition, ordered for display.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(executor))]
 pub async fn get_property_options(
-    pool: &Pool<Postgres>,
+    executor: impl PgExecutor<'_>,
     property_definition_id: Uuid,
-) -> anyhow::Result<Vec<PropertyOption>> {
+) -> Result<Vec<PropertyOption>, PropertyQueryError> {
     let rows = sqlx::query_as!(
         db::PropertyOption,
         r#"
@@ -62,11 +100,11 @@ pub async fn get_property_options(
         "#,
         property_definition_id
     )
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
 
     rows.into_iter()
-        .map(|row| row.try_into().map_err(anyhow::Error::from))
+        .map(|row| row.try_into().map_err(PropertyQueryError::from))
         .collect()
 }
 
@@ -124,7 +162,28 @@ pub async fn create_property_option(
     value: PropertyOptionValue,
     color: Option<String>,
 ) -> anyhow::Result<PropertyOption> {
-    let id = macro_uuid::generate_uuid_v7();
+    insert_property_option(
+        pool,
+        macro_uuid::generate_uuid_v7(),
+        property_definition_id,
+        display_order,
+        value,
+        color,
+    )
+    .await
+    .map_err(anyhow::Error::from)
+}
+
+/// Inserts a property option under an id the caller minted.
+#[tracing::instrument(skip(executor), err)]
+pub async fn insert_property_option(
+    executor: impl PgExecutor<'_>,
+    id: Uuid,
+    property_definition_id: Uuid,
+    display_order: i32,
+    value: PropertyOptionValue,
+    color: Option<String>,
+) -> Result<PropertyOption, PropertyQueryError> {
     let (number_value, string_value) = value.to_db_values();
 
     let row = sqlx::query!(
@@ -147,7 +206,7 @@ pub async fn create_property_option(
         string_value,
         color.clone()
     )
-    .fetch_one(pool)
+    .fetch_one(executor)
     .await?;
 
     Ok(PropertyOption {
@@ -159,6 +218,73 @@ pub async fn create_property_option(
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
+}
+
+/// Resolve an option without overwriting an existing option's metadata.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_or_create_property_option(
+    pool: &Pool<Postgres>,
+    property_definition_id: Uuid,
+    display_order: i32,
+    value: PropertyOptionValue,
+    color: Option<String>,
+) -> anyhow::Result<GetOrCreatePropertyOptionResult> {
+    if let Some(option) = get_property_options(pool, property_definition_id)
+        .await?
+        .into_iter()
+        .find(|option| option.value == value)
+    {
+        return Ok(GetOrCreatePropertyOptionResult {
+            option,
+            created: false,
+        });
+    }
+
+    match insert_property_option(
+        pool,
+        macro_uuid::generate_uuid_v7(),
+        property_definition_id,
+        display_order,
+        value.clone(),
+        color,
+    )
+    .await
+    {
+        Ok(option) => Ok(GetOrCreatePropertyOptionResult {
+            option,
+            created: true,
+        }),
+        Err(PropertyQueryError::Sqlx(error)) => {
+            // Only a collision on the value is recoverable. Do not hide a
+            // missing definition, connection failure, or unrelated constraint.
+            let duplicate_value = error.as_database_error().is_some_and(|error| {
+                error.is_unique_violation()
+                    && matches!(
+                        error.constraint(),
+                        Some(
+                            "unique_property_options_string_value"
+                                | "unique_property_options_string_value_sha256"
+                                | "unique_property_options_number_value"
+                        )
+                    )
+            });
+            if !duplicate_value {
+                return Err(error.into());
+            }
+            // The failed insert waits for the winning transaction to commit.
+            // A fresh read can therefore resolve its option under READ COMMITTED.
+            let option = get_property_options(pool, property_definition_id)
+                .await?
+                .into_iter()
+                .find(|option| option.value == value)
+                .ok_or(error)?;
+            Ok(GetOrCreatePropertyOptionResult {
+                option,
+                created: false,
+            })
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// Updates a property option's value, color, and display order in place.
@@ -214,6 +340,87 @@ pub async fn update_property_option(
     }
 }
 
+/// Changes one option of a definition in place: its value when `value` is
+/// given, its colour (`None` clears it) when `color` is.
+#[tracing::instrument(skip(executor), err)]
+pub async fn patch_property_option(
+    executor: impl PgExecutor<'_>,
+    property_definition_id: Uuid,
+    option_id: Uuid,
+    value: Option<PropertyOptionValue>,
+    color: ColorChange,
+) -> Result<UpdatePropertyOptionOutcome, PropertyQueryError> {
+    let (number_value, string_value) = value
+        .as_ref()
+        .map_or((None, None), PropertyOptionValue::to_db_values);
+    let (color_changes, new_color) = match color {
+        ColorChange::Keep => (false, None),
+        ColorChange::Clear => (true, None),
+        ColorChange::Set(color) => (true, Some(color)),
+    };
+    let result = sqlx::query_as!(
+        db::PropertyOption,
+        r#"
+        UPDATE property_options
+        SET number_value = CASE WHEN $3 THEN $4 ELSE number_value END,
+            string_value = CASE WHEN $3 THEN $5 ELSE string_value END,
+            color = CASE WHEN $6 THEN $7 ELSE color END,
+            updated_at = NOW()
+        WHERE id = $2 AND property_definition_id = $1
+        RETURNING
+            id,
+            property_definition_id,
+            display_order,
+            number_value,
+            string_value,
+            color,
+            created_at,
+            updated_at
+        "#,
+        property_definition_id,
+        option_id,
+        value.is_some(),
+        number_value,
+        string_value,
+        color_changes,
+        new_color,
+    )
+    .fetch_optional(executor)
+    .await;
+
+    match result {
+        Ok(Some(row)) => Ok(UpdatePropertyOptionOutcome::Updated(row.try_into()?)),
+        Ok(None) => Ok(UpdatePropertyOptionOutcome::NotFound),
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            Ok(UpdatePropertyOptionOutcome::DuplicateValue)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Empties the cells of database rows a definition's option removal left
+/// with no option, the way clearing a cell does, so a single-select cell
+/// reads as empty rather than as an empty list.
+#[tracing::instrument(skip(executor), err)]
+pub async fn clear_emptied_database_row_values(
+    executor: impl PgExecutor<'_>,
+    property_definition_id: Uuid,
+) -> Result<(), PropertyQueryError> {
+    sqlx::query!(
+        r#"
+        UPDATE entity_properties
+        SET values = 'null'::jsonb, updated_at = NOW()
+        WHERE property_definition_id = $1
+          AND entity_type = 'DATABASE_ROW'
+          AND values -> 'value' = '[]'::jsonb
+        "#,
+        property_definition_id,
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
 /// Deletes a property option and strips its id from every entity value that
 /// references it, atomically. Without the cleanup a stored value keeps the
 /// dead id and a later set-value that echoes the full id list fails option
@@ -226,7 +433,35 @@ pub async fn delete_property_option(
     property_option_id: Uuid,
 ) -> anyhow::Result<bool> {
     let mut tx = pool.begin().await?;
+    let deleted =
+        delete_options_in_tx(&mut tx, property_definition_id, &[property_option_id]).await?;
+    tx.commit().await?;
+    Ok(deleted == 1)
+}
 
+/// Deletes the given options in one statement each for the value cleanup and
+/// the delete. Returns how many options were deleted.
+pub(crate) async fn delete_options_in_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    property_definition_id: Uuid,
+    option_ids: &[Uuid],
+) -> Result<u64, PropertyQueryError> {
+    // Serialize removals before their cleanup snapshot. Otherwise an
+    // assignment can commit between cleanup and DELETE, leaving a stale id.
+    sqlx::query_scalar!(
+        "SELECT id FROM property_definitions WHERE id = $1 FOR UPDATE",
+        property_definition_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+    sqlx::query_scalar!(
+        "SELECT id FROM property_options WHERE property_definition_id = $1 AND id = ANY($2) ORDER BY id FOR UPDATE",
+        property_definition_id,
+        option_ids
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    let option_id_strings: Vec<String> = option_ids.iter().map(Uuid::to_string).collect();
     sqlx::query!(
         r#"
         UPDATE entity_properties
@@ -238,29 +473,158 @@ pub async fn delete_property_option(
                     (
                         SELECT jsonb_agg(elem)
                         FROM jsonb_array_elements(values -> 'value') AS elem
-                        WHERE elem <> to_jsonb($2::text)
+                        WHERE NOT (to_jsonb($2::text[]) @> elem)
                     ),
                     '[]'::jsonb
                 )
             ),
             updated_at = NOW()
         WHERE property_definition_id = $1
-          AND values @> jsonb_build_object('value', jsonb_build_array($2::text))
+          AND values -> 'value' ?| $2::text[]
         "#,
         property_definition_id,
-        property_option_id.to_string(),
+        &option_id_strings,
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
 
     let result = sqlx::query!(
-        "DELETE FROM property_options WHERE id = $1",
-        property_option_id
+        "DELETE FROM property_options WHERE property_definition_id = $1 AND id = ANY($2)",
+        property_definition_id,
+        option_ids
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
 
+    Ok(result.rows_affected())
+}
+
+/// Applies a [`PropertyOptionReplacePlan`] in one transaction, one statement
+/// per phase. Rewrites are staged through a placeholder value first so
+/// options can trade values under the per-definition uniqueness index.
+#[tracing::instrument(skip(pool, plan), err)]
+pub async fn replace_property_options(
+    pool: &Pool<Postgres>,
+    property_definition_id: Uuid,
+    plan: &PropertyOptionReplacePlan,
+) -> anyhow::Result<PropertyOptionReplaceOutcome> {
+    let mut tx = pool.begin().await?;
+
+    if !plan.delete.is_empty() {
+        let deleted = delete_options_in_tx(&mut tx, property_definition_id, &plan.delete).await?;
+        if deleted != plan.delete.len() as u64 {
+            return Ok(PropertyOptionReplaceOutcome::OptionNotFound);
+        }
+    }
+
+    if !plan.rewrite.is_empty() {
+        let rewrite_ids: Vec<Uuid> = plan.rewrite.iter().map(|r| r.option_id).collect();
+        let staged = sqlx::query!(
+            r#"
+            UPDATE property_options
+            SET string_value = chr(31) || id::text, number_value = NULL, updated_at = NOW()
+            WHERE property_definition_id = $1 AND id = ANY($2)
+            "#,
+            property_definition_id,
+            &rewrite_ids
+        )
+        .execute(&mut *tx)
+        .await?;
+        if staged.rows_affected() != rewrite_ids.len() as u64 {
+            return Ok(PropertyOptionReplaceOutcome::OptionNotFound);
+        }
+
+        let (number_values, string_values): (Vec<Option<f64>>, Vec<Option<String>>) =
+            plan.rewrite.iter().map(|r| r.value.to_db_values()).unzip();
+        let display_orders: Vec<i32> = plan.rewrite.iter().map(|r| r.display_order).collect();
+        let result = sqlx::query!(
+            r#"
+            UPDATE property_options AS option
+            SET
+                number_value = rewrite.number_value,
+                string_value = rewrite.string_value,
+                display_order = rewrite.display_order,
+                updated_at = NOW()
+            FROM UNNEST($2::uuid[], $3::float8[], $4::text[], $5::int4[])
+                AS rewrite(id, number_value, string_value, display_order)
+            WHERE option.property_definition_id = $1 AND option.id = rewrite.id
+            "#,
+            property_definition_id,
+            &rewrite_ids,
+            &number_values as _,
+            &string_values as _,
+            &display_orders
+        )
+        .execute(&mut *tx)
+        .await;
+        match result {
+            Ok(_) => {}
+            Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                return Ok(PropertyOptionReplaceOutcome::DuplicateValue);
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    if !plan.insert.is_empty() {
+        let ids: Vec<Uuid> = plan
+            .insert
+            .iter()
+            .map(|_| macro_uuid::generate_uuid_v7())
+            .collect();
+        let (number_values, string_values): (Vec<Option<f64>>, Vec<Option<String>>) =
+            plan.insert.iter().map(|i| i.value.to_db_values()).unzip();
+        let display_orders: Vec<i32> = plan.insert.iter().map(|i| i.display_order).collect();
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO property_options (
+                id, property_definition_id, display_order, number_value, string_value
+            )
+            SELECT insert.id, $1, insert.display_order, insert.number_value, insert.string_value
+            FROM UNNEST($2::uuid[], $3::int4[], $4::float8[], $5::text[])
+                AS insert(id, display_order, number_value, string_value)
+            "#,
+            property_definition_id,
+            &ids,
+            &display_orders,
+            &number_values as _,
+            &string_values as _
+        )
+        .execute(&mut *tx)
+        .await;
+        match result {
+            Ok(_) => {}
+            Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                return Ok(PropertyOptionReplaceOutcome::DuplicateValue);
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    let rows = sqlx::query_as!(
+        db::PropertyOption,
+        r#"
+        SELECT
+            id,
+            property_definition_id,
+            display_order,
+            number_value,
+            string_value,
+            color,
+            created_at,
+            updated_at
+        FROM property_options
+        WHERE property_definition_id = $1
+        ORDER BY display_order, number_value, LOWER(string_value)
+        "#,
+        property_definition_id
+    )
+    .fetch_all(&mut *tx)
+    .await?;
     tx.commit().await?;
 
-    Ok(result.rows_affected() > 0)
+    rows.into_iter()
+        .map(|row| row.try_into().map_err(anyhow::Error::from))
+        .collect::<anyhow::Result<Vec<_>>>()
+        .map(PropertyOptionReplaceOutcome::Replaced)
 }

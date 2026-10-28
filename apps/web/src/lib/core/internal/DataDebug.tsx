@@ -1,9 +1,9 @@
 import { Bar } from '@core/component/TopBar/Bar';
 import { useContacts } from '@core/user';
-import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
-import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
+import Refresh from '@icon/system/regular/arrow-clockwise.svg?component-solid';
+import Copy from '@icon/system/regular/copy.svg?component-solid';
 import { useHistoryQuery } from '@queries/history/history';
-import { Button } from '@ui';
+import { Button, Layer } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 
 interface SignalDebugCardProps {
@@ -52,14 +52,16 @@ function SignalDebugCard(props: SignalDebugCardProps) {
         <details>
           <summary class="text-accent text-sm">Raw JSON</summary>
           <div class="mt-2 relative">
-            <button
-              onClick={copyToClipboard}
-              class="absolute top-2 right-2 p-1 rounded bg-panel hover:bg-lift text-ink-muted hover:text-ink transition-colors z-10"
-              title="Copy to clipboard"
-            >
-              <Copy class="size-4" />
-            </button>
-            <pre class="text-xs bg-message p-3 rounded overflow-auto max-h-80 border border-edge">
+            <Layer offset={1}>
+              <button
+                onClick={copyToClipboard}
+                class="absolute top-2 right-2 p-1 rounded bg-panel hover:bg-surface text-ink-muted hover:text-ink transition-colors z-10"
+                title="Copy to clipboard"
+              >
+                <Copy class="size-4" />
+              </button>
+            </Layer>
+            <pre class="text-xs p-3 rounded overflow-auto max-h-80 border border-edge">
               {formatJson(props.data)}
             </pre>
           </div>
@@ -88,13 +90,14 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <Button variant="base" onClick={handleRefresh}>
-            <Refresh /> Refresh
+          <Button variant="secondary" onClick={handleRefresh}>
+            <Refresh class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+            Refresh
           </Button>
         }
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">
-        <div class="grid grid-cols-2 @width-md/split:-grid-cols-1 gap-6">
+        <div class="grid grid-cols-2 @max-md/split:grid-cols-1 gap-6">
           <SignalDebugCard
             title="useContacts()"
             data={contacts()}

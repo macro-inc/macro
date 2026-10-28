@@ -15,6 +15,12 @@ export const MACRO_AGENT_PRINCIPAL_ID = `bot|${MACRO_AGENT_BOT_ID}`;
 /** Display name for Macro. */
 export const MACRO_AGENT_NAME = 'Macro';
 
+/**
+ * User-facing name for Macro's built-in harness (`in-memory` / `macro-inmem`).
+ * Wire slugs stay as they are; this is only what the UI prints.
+ */
+export const MACRO_HARNESS_NAME = 'Macro Agent';
+
 /** Handle used to find Macro in the mention typeahead (`@macro`). */
 export const MACRO_AGENT_HANDLE = 'macro';
 

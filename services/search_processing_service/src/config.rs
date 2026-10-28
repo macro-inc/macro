@@ -24,6 +24,7 @@ maybe_env_vars! {
     pub struct BackfillDocumentsPageSize;
     pub struct BackfillEmailsPageSize;
     pub struct BackfillProjectsPageSize;
+    pub struct BackfillCalendarEventsPageSize;
     pub struct BackfillJobTtlSeconds;
 }
 
@@ -37,6 +38,7 @@ pub struct BackfillPageSizes {
     pub documents: usize,
     pub emails: usize,
     pub projects: usize,
+    pub calendar_events: usize,
 }
 
 const DEFAULT_CALLS_PAGE: usize = 2000;
@@ -45,6 +47,7 @@ const DEFAULT_CHANNELS_PAGE: usize = 5000;
 const DEFAULT_DOCUMENTS_PAGE: usize = 1000;
 const DEFAULT_EMAILS_PAGE: usize = 1000;
 const DEFAULT_PROJECTS_PAGE: usize = 2000;
+const DEFAULT_CALENDAR_EVENTS_PAGE: usize = 2000;
 const DEFAULT_BACKFILL_JOB_TTL_SECONDS: u64 = 24 * 60 * 60;
 
 fn parse_page_size(name: &str, raw_value: Option<&str>, default: usize) -> anyhow::Result<usize> {
@@ -92,6 +95,14 @@ pub struct Config {
     #[macro_config_default(8080)]
     pub port: usize,
 
+    /// Whether calendar events are written to the search index. Off by default
+    /// so a deployed environment can carry the code before its calendar index
+    /// exists: an upsert against a missing index would otherwise be
+    /// auto-created with a dynamic mapping, which is not the mapping this
+    /// service expects. Enable only after the create-indices run.
+    #[macro_config_default(false)]
+    pub calendar_search_enabled: bool,
+
     /// The queue max messages per poll
     #[macro_config_default(10)]
     pub queue_max_messages: i32,
@@ -136,6 +147,8 @@ pub struct Config {
     pub backfill_emails_page_size: BackfillEmailsPageSize,
     /// DB page size used when backfilling projects.
     pub backfill_projects_page_size: BackfillProjectsPageSize,
+    /// DB page size used when backfilling calendar events.
+    pub backfill_calendar_events_page_size: BackfillCalendarEventsPageSize,
 
     /// DynamoDB table name backing the backfill job registry. Items carry an
     /// `expires_at` epoch attribute that DynamoDB's TTL sweeps in the
@@ -186,6 +199,11 @@ impl Config {
                 "BACKFILL_PROJECTS_PAGE_SIZE",
                 self.backfill_projects_page_size.value(),
                 DEFAULT_PROJECTS_PAGE,
+            )?,
+            calendar_events: parse_page_size(
+                "BACKFILL_CALENDAR_EVENTS_PAGE_SIZE",
+                self.backfill_calendar_events_page_size.value(),
+                DEFAULT_CALENDAR_EVENTS_PAGE,
             )?,
         })
     }

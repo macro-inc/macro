@@ -7,5 +7,9 @@ mod util;
 
 mod test_cooperative_cancellation;
 mod test_eager_tools;
+mod test_prompt_cache;
+mod test_telemetry;
+mod test_thinking;
 mod test_tool;
 mod test_tool_search;
+mod test_user_tools;

@@ -1,51 +1,46 @@
-/*
- * Reactive urql-backed Soup items. Every loaded page remains subscribed to
- * its normalized GraphQL cache operation so cache writes update the list
- * directly. The public REST/GraphQL facade lives in ../items.ts.
- */
-
-import { readRecordsByKeys, selectRecords } from '@app/lib/graphql-cache';
-import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
-import { Telemetry } from '@macro-inc/observability';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import {
-  SoupDocument,
-  SoupItemFieldsFragmentDoc,
-  type SoupQuery,
-  type SoupQueryVariables,
-} from '@service-storage/graphql/generated/graphql';
-import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
-import {
-  getGraphqlSoupCacheHost,
-  getGraphqlSoupClient,
-  mapGraphqlSoupItem,
-  mapGraphqlSoupPage,
-} from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
+import { type Accessor, createMemo } from 'solid-js';
+import { arrayEquals } from '../../../core/util/compareUtils';
+import type { CacheRevision } from '../../../graphql-cache/protocol';
 import {
-  type Accessor,
-  createComputed,
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+  type GraphqlSoupItem,
+  mapGraphqlSoupItem,
+} from '../../../service-clients/service-storage/graphql-soup';
+import { createKeyedProjection } from '../create-keyed-projection';
+import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
-import { mapSoupPageToEntityList } from '../transform-utils';
+import { soupEntityTimestamp } from '../page-timestamp';
+import {
+  mapApiSoupItemToEntity,
+  mapSoupPageToEntityList,
+} from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
+import type { GroupedSoupPaging } from './create-grouped-soup-live-query';
+import {
+  createSoupLiveQuery,
+  type SoupLiveQueryOptions,
+} from './create-soup-live-query';
+import { createGraphqlSoupDoneProjection } from './done-projection';
+import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDone } from './optimistic-done';
+import { soupItemKey } from './reconciliation';
 
 export type GraphqlSoupAstItemsQueryArgs = {
   params: SoupAstParams;
   body: SoupAstBody;
 };
 
-export type GraphqlSoupAstItemsQueryOptions = {
+export type GraphqlSoupAstItemsQueryOptions = SoupLiveQueryOptions & {
   enabled: boolean;
   showSupportedForeignEntities?: boolean;
 };
 
 export type GraphqlSoupAstItemsQuery = {
+  groupedPaging?: GroupedSoupPaging;
+  /** Cache writes keep this list current. Grouped lists leave it out. */
+  cacheMaintained?: Accessor<boolean>;
+  localRevision?: Accessor<CacheRevision | undefined>;
+  localOptimistic?: Accessor<boolean>;
   data: Accessor<SoupAstItemsData | undefined>;
   /** Latest GraphQL transport or application error. */
   error: Accessor<CombinedError | undefined>;
@@ -55,6 +50,8 @@ export type GraphqlSoupAstItemsQuery = {
   isLoading: Accessor<boolean>;
   isFetching: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
+  /** The current error came from loading a continuation page. */
+  isFetchNextPageError: Accessor<boolean>;
   isPlaceholderData: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   fetchNextPage: () => Promise<void>;
@@ -64,175 +61,134 @@ export type GraphqlSoupAstItemsQuery = {
   refresh: () => Promise<void>;
 };
 
-/** Creates the live urql query for a flat Soup AST request. */
+/** Translate the legacy REST-shaped request and project reactive Soup records. */
 export function createGraphqlSoupAstItemsQuery(
   args: Accessor<GraphqlSoupAstItemsQueryArgs>,
   options: Accessor<GraphqlSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  const inputForCursor = (
-    cursor: string | null
-  ): GraphqlSoupInput | undefined => {
-    const { params, body } = args();
+  const input = createMemo(() => {
     try {
-      return makeGraphqlSoupInput({ params, body, cursor });
+      return makeGraphqlSoupInput({ ...args(), cursor: null }).initial;
     } catch {
-      // Unsupported GraphQL Soup AST — the public facade falls back to REST.
+      // The public facade still chooses REST for untranslatable filter ASTs.
       return undefined;
     }
+  });
+  const source = createSoupLiveQuery(input, options);
+  const sortMethod = createMemo(() => args().params.sort_method);
+  const showForeign = createMemo(() => options().showSupportedForeignEntities);
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDone = usePendingGraphqlSoupDone();
+  const projectDone = createGraphqlSoupDoneProjection();
+  const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
+
+  // One keyed UI projection for network, live, and Mail rows. Retain the
+  // fetched version separately: a local edit must not change page coverage.
+  type ProjectionRow = {
+    key: string;
+    record: GraphqlSoupItem;
+    fetched?: GraphqlSoupItem;
   };
-
-  const firstPageInput = createMemo(() => inputForCursor(null));
-  const isSupported = () => firstPageInput() !== undefined;
-  const [localPlaceholder, setLocalPlaceholder] = createSignal<
-    { data: SoupAstItemsData; optimistic: boolean } | undefined
-  >();
-  const [cacheRevision, setCacheRevision] = createSignal(0);
-  const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
-  let localRequest = 0;
-
-  createEffect(() => {
-    const host = getGraphqlSoupCacheHost();
-    if (!host) return;
-    const unsubscribe = host.onCacheChanged(() => {
-      setCacheRevision((revision) => revision + 1);
+  const records = createMemo((previous: ProjectionRow[]) => {
+    const fetched = new Map(
+      source.fetchedRecords().map((record) => [soupItemKey(record), record])
+    );
+    const visible = new Map(fetched);
+    for (const record of source.data() ?? [])
+      visible.set(soupItemKey(record), record);
+    const old = new Map(previous.map((row) => [row.key, row]));
+    return [...visible].map(([key, record]) => {
+      const row = old.get(key);
+      const baseline = fetched.get(key);
+      return row?.record === record && row.fetched === baseline
+        ? row
+        : { key, record, fetched: baseline };
     });
-    onCleanup(unsubscribe);
-  });
-
-  createEffect(() => {
-    cacheRevision();
-    const requestId = ++localRequest;
-    setLocalPlaceholder(undefined);
-    const input = firstPageInput();
-    const queryOptions = options();
-    const host = getGraphqlSoupCacheHost();
-    if (!queryOptions.enabled || !input || !host || !('initial' in input))
-      return;
-    const initial = input.initial;
-    if (!initial) return;
-    const filters = initial.filters ?? {};
-    const sortMethod = initial.sortMethod;
-    if (!sortMethod || sortMethod === 'VIEWED_AT') return;
-    const sortDirection = initial.sortDirection ?? 'DESC';
-    const limit = initial.limit ?? 20;
-
-    void host
-      .entityFilter({ filters, sortMethod, sortDirection, limit })
-      .then(async (result) => {
-        if (result.kind !== 'complete' || requestId !== localRequest) return;
-        const selected = await readRecordsByKeys(
-          host,
-          soupItemSelection,
-          result.keys
-        );
-        if (
-          requestId !== localRequest ||
-          selected.length !== result.keys.length
-        )
-          return;
-        const items = selected.flatMap(({ record }) => {
-          const item = mapGraphqlSoupItem(record);
-          return item ? [item] : [];
-        });
-        if (items.length !== result.keys.length) return;
-        setLocalPlaceholder({
-          optimistic: result.optimistic,
-          data: {
-            entities: mapSoupPageToEntityList(
-              { items, next_cursor: undefined },
-              {
-                instructionsIdQuery,
-                showSupportedForeignEntities:
-                  queryOptions.showSupportedForeignEntities,
-              }
-            ),
-            groups: undefined,
-          },
-        });
-      })
-      .catch(() => {
-        // Unsupported, incomplete, validation, and storage failures all use
-        // the already-running authoritative network request.
-      });
-  });
-
-  const query = createUrqlInfiniteQuery<
-    SoupQuery,
-    SoupQueryVariables,
-    string | null,
-    SoupAstItemsData
-  >(() => {
-    const firstInput = firstPageInput();
-    const queryOptions = options();
-    const showSupportedForeignEntities =
-      queryOptions.showSupportedForeignEntities;
-
-    return {
-      query: SoupDocument,
-      client: getGraphqlSoupClient(),
-      initialPageParam: null,
-      variables: (cursor) => {
-        const input = inputForCursor(cursor);
-        if (!input) {
-          throw new Error('GraphQL Soup input became unsupported');
-        }
-        return { input };
-      },
-      getNextPageParam: (lastPage) => mapGraphqlSoupPage(lastPage).next_cursor,
-      enabled: queryOptions.enabled && firstInput !== undefined,
-      requestPolicy: 'cache-and-network',
-      keepPreviousData: false,
-      select: ({ pages }) => ({
-        entities: pages.flatMap((page) =>
-          mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
-            instructionsIdQuery,
-            showSupportedForeignEntities,
-          })
-        ),
-        groups: undefined,
-      }),
-    };
-  });
-
-  const error = (): CombinedError | undefined => query.error ?? undefined;
-  createComputed(
-    on(error, (queryError) => {
-      if (queryError) {
-        Telemetry.error(queryError, { graphqlOperation: 'Soup' });
-      }
-    })
+  }, []);
+  const projected = createKeyedProjection(
+    records,
+    (row) => row.key,
+    ({ record, fetched }) => {
+      const sort = sortMethod();
+      const showSupportedForeignEntities = showForeign();
+      const view = { emailView: input()?.emailView };
+      const item = mapGraphqlSoupItem(record, view);
+      const fetchedItem =
+        fetched === record
+          ? item
+          : fetched
+            ? mapGraphqlSoupItem(fetched, view)
+            : undefined;
+      return {
+        key: soupItemKey(record),
+        item: () => item,
+        entity: item
+          ? mapSoupPageToEntityList(
+              { items: [item], next_cursor: undefined },
+              { showSupportedForeignEntities }
+            )[0]
+          : undefined,
+        timestamp: fetchedItem
+          ? soupEntityTimestamp(mapApiSoupItemToEntity(fetchedItem), sort)
+          : undefined,
+      };
+    }
   );
-
+  const byKey = createMemo(
+    () => new Map(projected().map((item) => [item.key, item]))
+  );
+  const visible = createMemo(
+    () =>
+      (source.data() ?? []).flatMap((record) => {
+        const item = byKey().get(soupItemKey(record));
+        return item ? [item] : [];
+      }),
+    undefined,
+    { equals: arrayEquals }
+  );
+  const entities = createMemo(() =>
+    visible().flatMap((item) => (item.entity ? [item.entity] : []))
+  );
+  const itemsById = createMemo(() =>
+    source.cachedMail()
+      ? Object.fromEntries(
+          visible().flatMap((row) => {
+            const item = row.item();
+            return item ? [[mapApiSoupItemToEntity(item).id, item]] : [];
+          })
+        )
+      : undefined
+  );
+  const oldestFetchedTimestamp = createMemo(() => {
+    let oldest = Infinity;
+    for (const record of source.fetchedRecords()) {
+      const timestamp = byKey().get(soupItemKey(record))?.timestamp;
+      if (timestamp !== undefined) oldest = Math.min(oldest, timestamp);
+    }
+    return Number.isFinite(oldest) ? oldest : undefined;
+  });
+  const hasData = createMemo(() => source.data() !== undefined);
+  const data = createMemo((): SoupAstItemsData | undefined =>
+    hasData()
+      ? {
+          entities: entities(),
+          itemsById: itemsById(),
+          cachedMail: source.cachedMail(),
+          groups: undefined,
+          oldestFetchedTimestamp: oldestFetchedTimestamp(),
+        }
+      : undefined
+  );
   return {
-    data: () => {
-      const local = localPlaceholder();
-      return local?.optimistic ? local.data : (query.data ?? local?.data);
-    },
-    error,
-    isSupported,
-    isEnabled: () => query.isEnabled,
-    isLoading: () => query.isLoading && localPlaceholder() === undefined,
-    isFetching: () => query.isFetching,
-    isFetchingNextPage: () => query.isFetchingNextPage,
-    isPlaceholderData: () => {
-      const local = localPlaceholder();
-      return (
-        local !== undefined && (query.data === undefined || local.optimistic)
-      );
-    },
-    hasNextPage: () => query.hasNextPage,
-    fetchNextPage: async () => {
-      await query.fetchNextPage();
-    },
-    resetToInitialPage: query.resetToInitialPage,
-    refresh: async () => {
-      if (firstPageInput() === undefined) return;
-      await query.refetch({
-        requestPolicy: 'network-only',
-        throwOnError: true,
-      });
-    },
+    ...source,
+    data: createMemo(() =>
+      projectDone(
+        source.queryScope(),
+        data(),
+        pendingDone(),
+        excludesDone(),
+        pendingDeleteIds()
+      )
+    ),
   };
 }

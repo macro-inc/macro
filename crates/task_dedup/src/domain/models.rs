@@ -103,8 +103,8 @@ pub enum TaskDedupError {
     #[error("duplicate match not found")]
     MatchNotFound,
     /// Persistence failed.
-    #[error(transparent)]
-    Storage(#[from] sqlx::Error),
+    #[error("storage error: {0}")]
+    Storage(rootcause::Report),
     /// Pipeline dependency failed.
     #[error(transparent)]
     Dependency(#[from] anyhow::Error),

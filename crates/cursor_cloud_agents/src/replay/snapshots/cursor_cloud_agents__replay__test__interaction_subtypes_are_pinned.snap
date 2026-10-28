@@ -1,0 +1,17 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 116
+expression: "kinds.iter().collect::<Vec<_>>()"
+---
+[
+    "(other) step-completed",
+    "(other) step-started",
+    "(other) text-delta",
+    "(other) thinking-completed",
+    "(other) thinking-delta",
+    "(other) turn-ended",
+    "token-delta",
+    "tool-call-completed",
+    "tool-call-started",
+    "user-message-appended",
+]

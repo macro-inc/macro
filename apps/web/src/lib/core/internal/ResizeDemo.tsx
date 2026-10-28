@@ -2,8 +2,8 @@ import { EntityIcon, type EntityIconProps } from '@core/component/EntityIcon';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { Resize } from '@core/component/Resize/Resize';
 import { Bar } from '@core/component/TopBar/Bar';
-import AddIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import AddIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { nanoid } from 'nanoid';
 import { createSignal, For, type ParentProps } from 'solid-js';
 
@@ -20,7 +20,7 @@ function PanelCard(
 ) {
   return (
     <div
-      class="size-full bg-surface flex overflow-hidden flex-col border border-edge focus-within:border-accent -ring-offset-2 focus-within:ring-2 focus-within:ring-accent group"
+      class="size-full bg-surface flex overflow-hidden flex-col border border-edge focus-within:border-accent ring-inset focus-within:ring-2 focus-within:ring-accent group"
       id={props.id}
     >
       <div class="bg-edge flex-0 p-2 text-ink flex items-center justify-between group-focus-within:bg-accent group-focus-within:text-surface">
@@ -78,7 +78,7 @@ function VerticalPanelCard(
 ) {
   return (
     <div
-      class="size-full bg-surface flex overflow-hidden flex-col border border-edge focus-within:border-accent -ring-offset-2 focus-within:ring-2 focus-within:ring-accent group"
+      class="size-full bg-surface flex overflow-hidden flex-col border border-edge focus-within:border-accent ring-inset focus-within:ring-2 focus-within:ring-accent group"
       id={props.id}
     >
       <div class="bg-edge flex-0 p-2 text-ink flex items-center justify-between group-focus-within:bg-accent group-focus-within:text-surface">
@@ -278,7 +278,7 @@ export default function ResizeDemo() {
   };
 
   return (
-    <div class="size-full flex-flex-col">
+    <div class="size-full flex flex-col">
       <Bar
         left={
           <div class="p-2 text-sm w-2xl truncate">

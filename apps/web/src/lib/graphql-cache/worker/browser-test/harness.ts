@@ -61,6 +61,7 @@ const run = async (): Promise<Record<string, unknown>> => {
     reason: string;
   }> = [];
   const replacements = new Set<number>();
+  const replacementStorageOutcomes = new Map<number, string>();
   const pushes = new Map<string, number>();
   const telemetry: EngineTelemetry[] = [];
   const pendingCommands = new Map<
@@ -106,6 +107,10 @@ const run = async (): Promise<Record<string, unknown>> => {
         break;
       case 'engine-replaced':
         replacements.add(tabEvent.ownerEpoch);
+        replacementStorageOutcomes.set(
+          tabEvent.ownerEpoch,
+          tabEvent.openOutcome
+        );
         break;
       case 'cache-push':
         pushes.set(envelope.tabId, (pushes.get(envelope.tabId) ?? 0) + 1);
@@ -367,6 +372,7 @@ const run = async (): Promise<Record<string, unknown>> => {
     pushReachedAllTabs: tabIds.every((tabId) => (pushes.get(tabId) ?? 0) > 0),
     ownerLockContentionEpochs: [1, 2, 3, 4],
     engineReplacedEpochs: [...replacements].toSorted(),
+    replacementStorageOutcomes: [...replacementStorageOutcomes.entries()],
     protocolErrors,
   };
 

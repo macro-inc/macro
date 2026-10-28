@@ -1,0 +1,14 @@
+---
+source: crates/codex_cloud_agents/tests/stdio.rs
+expression: frames
+---
+[
+  {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "error": {
+      "code": -32603,
+      "message": "cloud turn requested interactive input or approval unsupported by this adapter; remote cancellation requested"
+    }
+  }
+]

@@ -1,13 +1,14 @@
 pub mod backfill;
-/// Outbound adapters used by calendar backfill application services.
-pub mod calendar_backfill_adapters;
 pub mod context;
+pub mod invitation_extraction;
 /// The flag-selected CRM metadata resolver, re-exported for the
 /// pubsub_workers binary to construct.
 pub use context::CrmMetadataResolver;
 pub mod crm_cleanup;
 pub mod gmail_ops;
 pub mod inbox_sync;
+#[cfg(test)]
+mod label_write_sim;
 pub mod link_manager;
 pub mod scheduled;
 #[cfg(feature = "sfs_delete")]

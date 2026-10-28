@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT dd.id\n                FROM crm_domain_directory dd\n                WHERE dd.enriched_at IS NULL\n                  AND dd.enrichment_attempts < $2\n                  AND (dd.enrichment_attempted_at IS NULL OR dd.enrichment_attempted_at < $3)\n                  AND EXISTS (SELECT 1 FROM crm_domains d WHERE d.domain = dd.domain)\n                ORDER BY dd.enrichment_attempted_at NULLS FIRST, dd.created_at\n                LIMIT $1\n                FOR UPDATE OF dd SKIP LOCKED\n            )\n            UPDATE crm_domain_directory dd\n            SET enrichment_attempts = dd.enrichment_attempts + 1,\n                enrichment_attempted_at = now()\n            FROM candidate c\n            WHERE dd.id = c.id\n            RETURNING dd.domain\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int2",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "81e64debfcca3111e88cbdce997a9eb11fb0d1c66828a4361f7de63f9dffa91b"
+}

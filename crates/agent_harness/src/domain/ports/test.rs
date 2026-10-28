@@ -16,8 +16,13 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::ContainerManager;
-use crate::domain::model::SpawnContainer;
+use crate::domain::model::{AgentKind, SpawnContainer};
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
+use crate::testing::helpers::egress::test_egress;
+use agent_session::domain::model::ReplicaId;
+use agent_session::domain::ports::{
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
+};
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("owner@example.com").unwrap()
@@ -25,8 +30,10 @@ fn owner() -> MacroUserIdStr<'static> {
 
 fn params(id: AgentSessionId) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        purpose: agent_session::domain::model::SessionPurpose::Standalone,
+        repo_branch: None,
         id,
-        owner_id: owner(),
+        owner_id: model_owner::Owner::User(owner()),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         thread_id: None,
         originating_message_id: None,
@@ -34,6 +41,10 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         harness: "opencode".to_owned(),
         repo_url: Some("https://github.com/macro/macro".to_owned()),
         workspace: "/workspace".to_owned(),
+        sandbox_size: agent_session::domain::model::SandboxSize::Default,
+        instructions: None,
+        mcp_servers: Default::default(),
+        egress_token_hash: None,
     }
 }
 
@@ -43,7 +54,18 @@ fn prompt_texts(container: &ContainerMock) -> Vec<Vec<ContentBlock>> {
         .received_requests()
         .into_iter()
         .filter_map(|request| match request {
-            ClientRequest::PromptRequest(prompt) => Some(prompt.prompt),
+            ClientRequest::PromptRequest(prompt) => Some(
+                prompt
+                    .prompt
+                    .into_iter()
+                    .filter(|block| {
+                        !matches!(block, ContentBlock::Text(text)
+                            if text.meta.as_ref().and_then(|meta| meta.get(
+                                agent_runtime_protocol::domain::action::INVOCATION_CONTEXT_META
+                            )) == Some(&serde_json::Value::Bool(true)))
+                    })
+                    .collect(),
+            ),
             _ => None,
         })
         .collect()
@@ -57,22 +79,26 @@ async fn container_session_runs_and_logs_end_to_end() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     ));
     let containers = MockContainerManager::new();
-    let container = containers
+    let attachment = containers
         .spawn(SpawnContainer {
             session_id: id,
-            repo_url: "https://github.com/macro/macro".to_owned(),
+            kind: AgentKind::SandboxedCoder,
+            size: agent_session::domain::model::SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         .unwrap();
+    let container = containers.container(id).unwrap();
     let agent = container.agent();
 
     let record = sessions.create_session(params(id)).await.unwrap();
-    sessions
-        .attach_session(id, RuntimeAttachment::solo(container.clone()))
-        .await
-        .unwrap();
+    sessions.attach_session(id, attachment).await.unwrap();
     assert_eq!(record.id, id);
     assert_eq!(containers.spawned(), 1);
     assert!(agent.received_requests().is_empty());
@@ -97,6 +123,7 @@ async fn container_session_runs_and_logs_end_to_end() {
     agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-container-test"));
     agent.wait_for_requests(3).await;
+    agent.completes_prompt().await;
     send.await.unwrap().unwrap();
 
     assert_eq!(
@@ -114,15 +141,14 @@ async fn container_session_runs_and_logs_end_to_end() {
     assert!(matches!(logs[5].entry.content, Message::ToRuntime(_)));
     assert_eq!(logs[5].entry.user_id, Some(owner()));
 
-    sessions
-        .send_action(
-            id,
-            Some(owner()),
-            AgentAction::prompt("and run clippy"),
-            AgentActionId::mint(),
-        )
-        .await
-        .unwrap();
+    let send = sessions.send_action(
+        id,
+        Some(owner()),
+        AgentAction::prompt("and run clippy"),
+        AgentActionId::mint(),
+    );
+    let (result, ()) = tokio::join!(send, agent.completes_prompt());
+    result.unwrap();
     assert_eq!(containers.spawned(), 1);
     assert_eq!(containers.resumed(), 0);
     assert_eq!(
@@ -141,6 +167,10 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
         store.clone(),
         FoldedMessageService::new(store),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let first = ContainerMock::default();
     let second = ContainerMock::default();

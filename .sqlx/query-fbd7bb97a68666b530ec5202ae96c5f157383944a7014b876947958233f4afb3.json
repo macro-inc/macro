@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT period_start\n            FROM ai_billing_period_allowance\n            WHERE user_id = $1\n              AND period_start >= $2\n              AND period_start < $3\n            ORDER BY period_start\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "period_start",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fbd7bb97a68666b530ec5202ae96c5f157383944a7014b876947958233f4afb3"
+}

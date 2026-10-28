@@ -1,25 +1,26 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import IconSystemGallery from '@icon/system/IconSystemGallery';
+import { Tabs } from '@ui';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 // Theme color swatches - uses CSS variables from the theme
 const THEME_COLORS = [
-  // Row 1: Accent hue wheel (0, 60, 120, 180, 240)
-  { name: 'Accent', value: 'accent', css: 'var(--color-accent)' },
-  { name: 'Accent +60°', value: 'accent-60', css: 'var(--color-accent-60)' },
-  { name: 'Accent +120°', value: 'accent-120', css: 'var(--color-accent-120)' },
-  { name: 'Accent +180°', value: 'accent-180', css: 'var(--color-accent-180)' },
-  { name: 'Accent +240°', value: 'accent-240', css: 'var(--color-accent-240)' },
-  // Row 2: Accent hue wheel (30, 90, 150, 210, 270)
-  { name: 'Accent +30°', value: 'accent-30', css: 'var(--color-accent-30)' },
-  { name: 'Accent +90°', value: 'accent-90', css: 'var(--color-accent-90)' },
-  { name: 'Accent +150°', value: 'accent-150', css: 'var(--color-accent-150)' },
-  { name: 'Accent +210°', value: 'accent-210', css: 'var(--color-accent-210)' },
-  { name: 'Accent +270°', value: 'accent-270', css: 'var(--color-accent-270)' },
-  // Row 3: Accent hue wheel (300, 330) + semantic colors
-  { name: 'Accent +300°', value: 'accent-300', css: 'var(--color-accent-300)' },
-  { name: 'Accent +330°', value: 'accent-330', css: 'var(--color-accent-330)' },
+  // Rows 1–3: authored palette colors
+  { name: 'Red', value: 'red', css: 'var(--color-red)' },
+  { name: 'Orange', value: 'orange', css: 'var(--color-orange)' },
+  { name: 'Amber', value: 'amber', css: 'var(--color-amber)' },
+  { name: 'Yellow', value: 'yellow', css: 'var(--color-yellow)' },
+  { name: 'Lime', value: 'lime', css: 'var(--color-lime)' },
+  { name: 'Green', value: 'green', css: 'var(--color-green)' },
+  { name: 'Teal', value: 'teal', css: 'var(--color-teal)' },
+  { name: 'Cyan', value: 'cyan', css: 'var(--color-cyan)' },
+  { name: 'Blue', value: 'blue', css: 'var(--color-blue)' },
+  { name: 'Violet', value: 'violet', css: 'var(--color-violet)' },
+  { name: 'Purple', value: 'purple', css: 'var(--color-purple)' },
+  { name: 'Pink', value: 'pink', css: 'var(--color-pink)' },
+  // Row 3 continued: semantic colors
   { name: 'Failure', value: 'failure', css: 'var(--color-failure)' },
   { name: 'Success', value: 'success', css: 'var(--color-success)' },
   { name: 'Alert', value: 'alert', css: 'var(--color-alert)' },
@@ -146,6 +147,34 @@ for (const [name, component] of Object.entries(staticIcons)) {
 STATIC_ONLY_ICONS.sort((a, b) => a.name.localeCompare(b.name));
 
 export default function IconGallery() {
+  const [view, setView] = createSignal<'system' | 'animated'>('system');
+
+  return (
+    <div class="flex size-full min-h-0 flex-col bg-panel">
+      <SplitHeaderLeft>
+        <StaticSplitLabel label="Icon Gallery" />
+      </SplitHeaderLeft>
+      <div class="flex shrink-0 items-center gap-1 border-b border-edge-muted px-5 py-2 sm:px-8">
+        <Tabs
+          aria-label="Icon gallery"
+          options={[
+            { value: 'system', label: 'Original icons' },
+            { value: 'animated', label: 'Legacy animated icons' },
+          ]}
+          value={view()}
+          onChange={setView}
+        />
+      </div>
+      <div class="min-h-0 flex-1">
+        <Show when={view() === 'system'} fallback={<LegacyIconGallery />}>
+          <IconSystemGallery />
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function LegacyIconGallery() {
   const [selectedColor, setSelectedColor] = createSignal<ColorOption>(
     THEME_COLORS[0]
   );
@@ -215,16 +244,13 @@ export default function IconGallery() {
           border-radius: 0;
         }
       `}</style>
-      <SplitHeaderLeft>
-        <StaticSplitLabel label="Icon Gallery" />
-      </SplitHeaderLeft>
       <div class="mx-auto max-w-6xl">
         {/* Controls */}
         <div class="mb-6">
           {/* Color picker - 5 column grid of tiny rounded squares */}
           <div class="mb-3">
             <span class="mb-1.5 block text-xs text-ink">
-              Color: <span class="text-muted">{selectedColor().name}</span>
+              Color: <span class="text-ink-muted">{selectedColor().name}</span>
             </span>
             <div class="inline-grid grid-cols-5 gap-1">
               {/* Theme color swatches */}
@@ -245,7 +271,7 @@ export default function IconGallery() {
             </div>
             {/* Custom color option */}
             <div class="mt-1.5 flex items-center gap-1.5">
-              <span class="text-xxs text-muted">Custom</span>
+              <span class="text-xxs text-ink-muted">Custom</span>
               <label
                 class="relative size-2.5 rounded-[1px] transition-transform hover:scale-125"
                 classList={{
@@ -288,7 +314,7 @@ export default function IconGallery() {
                 onInput={(e) => setIconSize(Number(e.currentTarget.value))}
                 class="icon-gallery-slider w-24"
               />
-              <span class="w-8 text-xxs text-muted">{iconSize()}px</span>
+              <span class="w-8 text-xxs text-ink-muted">{iconSize()}px</span>
             </label>
             <button
               onClick={triggerAllAnimations}
@@ -324,7 +350,9 @@ export default function IconGallery() {
                         >
                           <Dynamic component={staticComponent()} />
                         </div>
-                        <span class="mt-2 text-[8px] text-muted">static</span>
+                        <span class="mt-2 text-[8px] text-ink-muted">
+                          static
+                        </span>
                       </div>
                     )}
                   </Show>
@@ -356,10 +384,10 @@ export default function IconGallery() {
                       />
                     </div>
                     <div class="mt-2 flex items-center gap-1">
-                      <span class="text-[8px] text-muted">animated</span>
+                      <span class="text-[8px] text-ink-muted">animated</span>
                       <button
                         onClick={() => triggerAnimation(pair.name)}
-                        class="flex size-2.5 items-center justify-center rounded-full border border-current text-muted transition-colors hover:bg-ink/10 hover:text-ink"
+                        class="flex size-2.5 items-center justify-center rounded-full border border-current text-ink-muted transition-colors hover:bg-ink/10 hover:text-ink"
                         title="Play animation"
                       >
                         <svg
@@ -398,7 +426,7 @@ export default function IconGallery() {
                 >
                   <icon.component />
                 </div>
-                <span class="mt-2 text-[8px] text-muted">{icon.name}</span>
+                <span class="mt-2 text-[8px] text-ink-muted">{icon.name}</span>
               </div>
             )}
           </For>

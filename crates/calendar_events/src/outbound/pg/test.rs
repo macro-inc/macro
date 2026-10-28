@@ -1,10 +1,19 @@
+#[cfg(feature = "outlook")]
+mod outlook;
 use super::*;
+mod point_events;
+mod snapshot_coverage;
+mod team_refresh;
+mod team_sharing;
+mod team_sync_coverage;
 use crate::domain::models::{
-    GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleWatchChannel,
-    REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+    GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleWatchChannel, OccurrenceException,
+    OccurrenceListing, ProviderEventSource, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
-use crate::domain::service::GoogleCalendarBackfillFailureService;
+use crate::domain::service::{CalendarService, GoogleCalendarBackfillFailureService};
+use crate::domain::team::{CalendarTeamRepository, TeamCalendarSharing};
+use crate::outbound::pg_team::PgCalendarTeamRepository;
 use chrono::{Duration, SubsecRound, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -125,12 +134,14 @@ fn timed_upsert(
             owner_id: owner_id.to_string(),
             ical_uid: uid.to_string(),
             calendar_id: Some(calendar_id),
+            sources: Vec::new(),
             title: title.to_string(),
             description: None,
             location: None,
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,
@@ -139,6 +150,8 @@ fn timed_upsert(
             recurrence_lines: vec!["RRULE:FREQ=DAILY;COUNT=2".to_string()],
             organizer_email: Some("organizer@example.com".to_string()),
             organizer_name: Some("Organizer".to_string()),
+            creator_email: Some("creator@example.com".to_string()),
+            creator_name: Some("Creator".to_string()),
             conference_url: None,
             conference_provider: None,
             sequence,
@@ -153,10 +166,16 @@ fn timed_upsert(
                 comment: None,
             }],
             reminders: EventReminders::default(),
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: starts_at,
             updated_at: starts_at + Duration::minutes(i64::from(sequence)),
         },
-        source: CalendarEventSource::Google(GoogleEventSource {
+        source: CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
+            observed_access_role: Some("owner".to_owned()),
             email_link_id: link_id,
             account_id,
             calendar_id,
@@ -333,6 +352,203 @@ async fn calendar_capability_transition_schedules_once_and_failed_jobs_can_retry
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_rearms_a_dead_lettered_pending_job(pool: PgPool) {
+    let owner_id = "macro|calendar-wedged-pending@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+
+    // The drain published the delivery; the deterministic failure then sat the
+    // job back to pending without touching the outbox — exactly the wedge.
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A job still inside its SQS retry budget keeps getting touched, so the
+    // reaper leaves it alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+
+    // The job reached a worker once (started_at set) and a deterministic
+    // failure sat it back to pending; once the delivery dead-letters nothing
+    // touches it again.
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET started_at = now() - interval '25 minutes', updated_at = now() - interval '20 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        1
+    );
+    let published_at = sqlx::query_scalar!(
+        "SELECT published_at FROM calendar_sync_outbox WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        published_at.is_none(),
+        "the reaper republishes the outbox row"
+    );
+
+    // Republished rows are no longer published, so a second pass is a no-op.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_leaves_a_never_delivered_queued_job_alone(pool: PgPool) {
+    let owner_id = "macro|calendar-queued@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+
+    // The drain published the delivery, but a backed-up queue means it has not
+    // reached a worker yet: started_at is still NULL though the outbox row and
+    // the job both look old.
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() - interval '30 minutes' WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET updated_at = now() - interval '30 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Republishing would only duplicate the delivery still in flight, so the
+    // reaper leaves an un-claimed job alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+    let published_at = sqlx::query_scalar!(
+        "SELECT published_at FROM calendar_sync_outbox WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        published_at.is_some(),
+        "the queued delivery stays published, not re-armed"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_rearms_a_running_job_behind_a_dead_lease(pool: PgPool) {
+    let owner_id = "macro|calendar-wedged-running@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+    let key = CalendarBackfillJobKey {
+        job_id,
+        email_link_id: link_id,
+    };
+
+    let CalendarBackfillClaim::Claimed { .. } = repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the freshly granted job should be claimable");
+    };
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A live lease means a worker is on it, so the reaper leaves it alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+
+    // The worker died: its lease expired long ago and no longer renews.
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET lease_expires_at = now() - interval '20 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        1
+    );
+    let row = sqlx::query!(
+        r#"
+        SELECT job.status, job.lease_token, outbox.published_at
+        FROM calendar_backfill_jobs job
+        JOIN calendar_sync_outbox outbox ON outbox.backfill_job_id = job.id
+        WHERE job.id = $1
+        "#,
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.status, "pending");
+    assert!(row.lease_token.is_none());
+    assert!(row.published_at.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(pool: PgPool) {
     let owner_id = "macro|calendar-downgrade@example.com";
     let link_id = insert_link(&pool, owner_id).await;
@@ -388,7 +604,10 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
         "Removed with scope",
         1,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id,
@@ -404,7 +623,8 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
             upsert: google,
         })
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
 
     let downgraded = repo
         .apply_google_grant(
@@ -672,7 +892,7 @@ async fn canonical_precedence_uses_the_selected_source_clock(pool: PgPool) {
 
     let canonical = sqlx::query!(
         r#"
-        SELECT title, canonical_source_updated_at, updated_at
+        SELECT title, schedule_updated_at, updated_at
         FROM calendar_events
         WHERE id = $1
         "#,
@@ -682,7 +902,7 @@ async fn canonical_precedence_uses_the_selected_source_clock(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(canonical.title, "Later sequence, earlier clock");
-    assert_eq!(canonical.canonical_source_updated_at, winning_clock);
+    assert_eq!(canonical.schedule_updated_at, winning_clock);
     assert_eq!(canonical.updated_at, later_clock);
 }
 
@@ -725,7 +945,10 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
         "Deleted Google event",
         1,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id,
@@ -806,7 +1029,10 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
             100,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
     assert!(occurrences.is_empty());
     assert_eq!(
         repo.sync_status(owner_id).await.unwrap(),
@@ -868,7 +1094,10 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
         "Stale worker event",
         1,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id,
@@ -987,7 +1216,10 @@ async fn google_snapshot_deletion_removes_an_event_without_a_surviving_source(po
         "Google canonical",
         2,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id,
@@ -1067,7 +1299,10 @@ async fn incremental_cancellation_tombstones_retire_sources_without_a_snapshot(p
         "Google canonical",
         2,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id,
@@ -1085,7 +1320,10 @@ async fn incremental_cancellation_tombstones_retire_sources_without_a_snapshot(p
         "Series instance",
         1,
     );
-    instance.source = CalendarEventSource::Google(GoogleEventSource {
+    instance.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id,
@@ -1197,16 +1435,462 @@ async fn occurrence_range_uses_overlap_indexes_and_preserves_attendees(pool: PgP
             100,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
 
     assert_eq!(result.len(), 2);
     assert!(result.iter().all(|(event, _)| event.attendees.len() == 1));
+    assert!(result.iter().all(|(event, _)| {
+        event.creator_email.as_deref() == Some("creator@example.com")
+            && event.creator_name.as_deref() == Some("Creator")
+    }));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn guest_policy_follows_the_canonical_copy(pool: PgPool) {
+    let owner_id = "macro|calendar-guests@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let locked_down = GuestPolicy {
+        can_modify: false,
+        can_invite_others: false,
+        can_see_other_guests: false,
+    };
+    let range = OccurrenceRange {
+        starts_at: Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap(),
+        start_date: NaiveDate::from_ymd_opt(2026, 7, 24).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 7, 26).unwrap(),
+    };
+    let mut first = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "guests@example.com",
+        "Planning",
+        1,
+    );
+    first.event.guest_policy = locked_down;
+    repo.upsert_event_fixture(first).await.unwrap();
+
+    let listed = repo
+        .list_occurrences(owner_id, range.clone(), None, 100)
+        .await
+        .unwrap();
+    assert!(!listed.is_empty());
+    assert!(
+        listed
+            .iter()
+            .all(|listing| listing.event.guest_policy == locked_down)
+    );
+
+    // The organizer restores Google's defaults; the next sync carries no
+    // switch at all and the entity follows.
+    let second = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "guests@example.com",
+        "Planning",
+        2,
+    );
+    repo.upsert_event_fixture(second).await.unwrap();
+
+    let listed = repo
+        .list_occurrences(owner_id, range, None, 100)
+        .await
+        .unwrap();
+    assert!(
+        listed
+            .iter()
+            .all(|listing| listing.event.guest_policy == GuestPolicy::default())
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_recorded_guest_policy_reaches_the_entity_and_every_copy(pool: PgPool) {
+    let owner_id = "macro|calendar-refused@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let event_id = repo
+        .upsert_event_fixture(timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "refused@example.com",
+            "Planning",
+            1,
+        ))
+        .await
+        .unwrap();
+    let hidden = GuestPolicy {
+        can_modify: false,
+        can_invite_others: true,
+        can_see_other_guests: false,
+    };
+
+    repo.record_guest_policy(event_id, hidden).await.unwrap();
+
+    let entity = sqlx::query!(
+        r#"
+        SELECT guests_can_modify, guests_can_invite_others, guests_can_see_other_guests
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!entity.guests_can_modify);
+    assert!(entity.guests_can_invite_others);
+    assert!(!entity.guests_can_see_other_guests);
+    let stored = sqlx::query_scalar!(
+        "SELECT normalized_payload FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let projection: StoredSourceProjection = serde_json::from_value(stored).unwrap();
+    assert_eq!(
+        projection.event.guest_policy, hidden,
+        "a restore from this copy keeps the recorded policy"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn source_projections_store_neither_viewer_capabilities_nor_a_default_policy(pool: PgPool) {
+    let owner_id = "macro|calendar-projection@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "projection@example.com",
+        "Planning",
+        1,
+    );
+    upsert.event.viewer_can = ViewerCapabilities {
+        rsvp: true,
+        ..ViewerCapabilities::NONE
+    };
+    let event_id = repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let stored = sqlx::query_scalar!(
+        "SELECT normalized_payload FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // Projections stored before these fields existed lack their keys, and an
+    // unchanged event must keep comparing equal to them.
+    assert!(stored["event"].get("viewerCan").is_none());
+    assert!(stored["event"].get("guestPolicy").is_none());
+    assert!(stored["event"].get("isSnapshot").is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_snapshot_stays_marked_on_reads_and_mutation_targets(pool: PgPool) {
+    let owner_id = "macro|calendar-snapshot@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "snapshot@example.com",
+        "Shared meeting",
+        1,
+    );
+    upsert.event.is_snapshot = true;
+    let event_id = repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let listed = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at: Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap(),
+                ends_at: Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap(),
+                start_date: NaiveDate::from_ymd_opt(2026, 7, 24).unwrap(),
+                end_date: NaiveDate::from_ymd_opt(2026, 7, 26).unwrap(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+    assert!(!listed.is_empty());
+    assert!(listed.iter().all(|listing| listing.event.is_snapshot));
+    let target = repo
+        .get_event_mutation_target(owner_id, event_id, None)
+        .await
+        .unwrap()
+        .expect("the owner may address their snapshot");
+    assert!(target.is_snapshot);
+    let stored = sqlx::query_scalar!(
+        "SELECT normalized_payload FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let projection: StoredSourceProjection = serde_json::from_value(stored).unwrap();
+    assert!(
+        projection.event.is_snapshot,
+        "a restore from this copy keeps it a snapshot"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_snapshot_an_invitation_reached_stays_its_owners_seat(pool: PgPool) {
+    let owner_id = "macro|calendar-seat@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let copy = |sequence, is_snapshot| {
+        let mut upsert = timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "shared@example.com",
+            "Shared meeting",
+            sequence,
+        );
+        upsert.event.is_snapshot = is_snapshot;
+        upsert
+    };
+    let is_snapshot = |event_id| {
+        let repo = &repo;
+        async move {
+            repo.get_event_mutation_target(owner_id, event_id, None)
+                .await
+                .unwrap()
+                .expect("the owner may address their copy")
+                .is_snapshot
+        }
+    };
+
+    let event_id = repo.upsert_event_fixture(copy(1, true)).await.unwrap();
+    repo.upsert_event_fixture(copy(2, true)).await.unwrap();
+    assert!(is_snapshot(event_id).await, "a later sync keeps a snapshot");
+
+    // The organizer's invitation lands on the snapshot's Google event.
+    repo.upsert_event_fixture(copy(3, false)).await.unwrap();
+    assert!(!is_snapshot(event_id).await);
+    // Answering can leave Google's copy looking like the import again.
+    repo.upsert_event_fixture(copy(4, true)).await.unwrap();
+    assert!(!is_snapshot(event_id).await, "the seat stays a seat");
+    let entity_is_snapshot = sqlx::query_scalar!(
+        "SELECT is_snapshot FROM calendar_events WHERE id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!entity_is_snapshot);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_snapshot_beside_the_real_meeting_stays_a_snapshot_when_addressed(pool: PgPool) {
+    let owner_id = "macro|calendar-snapshot-beside@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_id) = grant_and_provider_ids(&repo, link_id).await;
+    let team_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "team".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("writer".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    // The real invitation on the primary calendar is the canonical copy.
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::UserMutation(timed_upsert(
+            owner_id,
+            link_id,
+            (account_id, primary_id),
+            "beside@example.com",
+            "Shared meeting",
+            2,
+        )))
+        .await
+        .unwrap()
+        .event_id;
+    // A snapshot of the same meeting imported into another calendar shares
+    // the entity.
+    let mut snapshot = timed_upsert(
+        owner_id,
+        link_id,
+        (account_id, team_id),
+        "beside@example.com",
+        "Shared meeting",
+        1,
+    );
+    snapshot.event.is_snapshot = true;
+    snapshot.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("writer".to_owned()),
+        email_link_id: link_id,
+        account_id,
+        calendar_id: team_id,
+        provider_event_id: "snapshot-id".to_string(),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    repo.upsert_event(CalendarEventWrite::UserMutation(snapshot))
+        .await
+        .unwrap();
+
+    let canonical = repo
+        .get_event_mutation_target(owner_id, event_id, None)
+        .await
+        .unwrap()
+        .expect("the owner may address the meeting");
+    let addressed = repo
+        .get_event_mutation_target(owner_id, event_id, Some(team_id))
+        .await
+        .unwrap()
+        .expect("the owner may address their snapshot");
+
+    assert!(
+        !canonical.is_snapshot,
+        "the real invitation stays answerable"
+    );
+    assert_eq!(addressed.provider_event_id, "snapshot-id");
+    assert!(
+        addressed.is_snapshot,
+        "an answer addressed to the snapshot's calendar must not slip through"
+    );
 }
 
 /// A Google out-of-office auto-decline records the decline on the exception
 /// instance and never on the series master, so the occurrence carrying that
 /// exception must project the exception's attendees while its siblings keep
 /// the series answer.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn listing_keeps_the_series_event_beside_the_exception_and_its_link(pool: PgPool) {
+    let owner_id = "macro|calendar-listing@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "listing@example.com",
+        "Series title",
+        1,
+    );
+    let attendee = CalendarAttendee {
+        email: "guest@example.com".to_string(),
+        display_name: None,
+        response_status: AttendeeResponseStatus::Accepted,
+        is_organizer: false,
+        is_optional: false,
+        is_self: false,
+        comment: None,
+    };
+    upsert.event.attendees.push(attendee.clone());
+    let edited_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
+    let recurrence_id = edited_start.to_rfc3339();
+    upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
+    upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
+        visibility: None,
+        transparency: None,
+        sequence: None,
+        source_updated_at: None,
+        recurrence_id: recurrence_id.clone(),
+        original_time: EventStart::Timed(edited_start),
+        time: EventTime::Timed {
+            starts_at: edited_start,
+            ends_at: edited_start + Duration::hours(1),
+            time_zone: Some("UTC".to_string()),
+        },
+        title: Some("Edited title".to_string()),
+        description: None,
+        location: None,
+        status: Some(EventStatus::Tentative),
+        attendees: Some(vec![CalendarAttendee {
+            response_status: AttendeeResponseStatus::Declined,
+            ..attendee
+        }]),
+    }];
+    repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap();
+    let listings = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date: starts_at.date_naive(),
+                end_date: ends_at.date_naive(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(listings.len(), 2);
+    for listing in &listings {
+        assert_eq!(listing.link_id, link_id);
+        assert_eq!(listing.event.title, "Series title");
+        assert_eq!(listing.event.status, EventStatus::Confirmed);
+        assert_eq!(
+            listing.event.attendees[0].response_status,
+            AttendeeResponseStatus::Accepted,
+            "the series event is never rewritten by an exception"
+        );
+    }
+    let exception = listings
+        .iter()
+        .find(|listing| listing.occurrence.occurrence_key == recurrence_id)
+        .map(|listing| &listing.exception)
+        .expect("the exception occurrence is listed");
+    assert_eq!(exception.title.as_deref(), Some("Edited title"));
+    assert_eq!(exception.status, Some(EventStatus::Tentative));
+    assert_eq!(
+        exception
+            .attendees
+            .as_ref()
+            .map(|attendees| attendees[0].response_status),
+        Some(AttendeeResponseStatus::Declined)
+    );
+    let sibling = listings
+        .iter()
+        .find(|listing| listing.occurrence.occurrence_key != recurrence_id)
+        .map(|listing| &listing.exception)
+        .expect("the sibling occurrence is listed");
+    assert_eq!(*sibling, OccurrenceException::default());
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) {
     let owner_id = "macro|calendar-rsvp@example.com";
@@ -1237,6 +1921,12 @@ async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) 
     let recurrence_id = declined_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
+        visibility: None,
+        transparency: None,
+        sequence: None,
+        source_updated_at: None,
         recurrence_id: recurrence_id.clone(),
         original_time: EventStart::Timed(declined_start),
         time: EventTime::Timed {
@@ -1271,7 +1961,10 @@ async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) 
             100,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
 
     assert_eq!(result.len(), 2);
     let response_at = |key: &str| {
@@ -1289,6 +1982,210 @@ async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) 
     assert_eq!(
         response_at(&series_start.to_rfc3339()),
         Some(AttendeeResponseStatus::Accepted)
+    );
+}
+
+/// A single-occurrence edit lands on the exception, never on the master, so
+/// the occurrence carrying it must read the exception's content — on the
+/// entity and on the calendar copy a client shows — while its siblings keep
+/// the series content.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn occurrence_content_override_shadows_the_series_content(pool: PgPool) {
+    let owner_id = "macro|calendar-exception@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "edited@example.com",
+        "Series title",
+        1,
+    );
+    upsert.event.description = Some("Series description".to_string());
+    upsert.event.location = Some("Series room".to_string());
+
+    let edited_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
+    let recurrence_id = edited_start.to_rfc3339();
+    upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
+    upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
+        visibility: None,
+        transparency: None,
+        sequence: None,
+        source_updated_at: None,
+        recurrence_id: recurrence_id.clone(),
+        original_time: EventStart::Timed(edited_start),
+        time: EventTime::Timed {
+            starts_at: edited_start,
+            ends_at: edited_start + Duration::hours(1),
+            time_zone: Some("UTC".to_string()),
+        },
+        title: Some("Edited title".to_string()),
+        description: Some("Only this occurrence changed".to_string()),
+        location: None,
+        status: Some(EventStatus::Tentative),
+        attendees: None,
+    }];
+    repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap();
+    let result = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date: starts_at.date_naive(),
+                end_date: ends_at.date_naive(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+
+    assert_eq!(result.len(), 2);
+    let content_at = |key: &str| {
+        let (event, _) = result
+            .iter()
+            .find(|(_, occurrence)| occurrence.occurrence_key == key)
+            .expect("the occurrence is listed");
+        let copy = event
+            .sources
+            .first()
+            .expect("the listing carries the calendar copy");
+        (
+            event.title.as_str(),
+            event.description.as_deref(),
+            event.location.as_deref(),
+            event.status,
+            copy.title.as_str(),
+            copy.description.as_deref(),
+            copy.location.as_deref(),
+        )
+    };
+    assert_eq!(
+        content_at(&recurrence_id),
+        (
+            "Edited title",
+            Some("Only this occurrence changed"),
+            Some("Series room"),
+            EventStatus::Tentative,
+            "Edited title",
+            Some("Only this occurrence changed"),
+            Some("Series room"),
+        ),
+        "the exception's content replaces the series content on the entity and its copy, \
+         and a field the exception leaves unset inherits the series value"
+    );
+    let series_start = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
+    assert_eq!(
+        content_at(&series_start.to_rfc3339()),
+        (
+            "Series title",
+            Some("Series description"),
+            Some("Series room"),
+            EventStatus::Confirmed,
+            "Series title",
+            Some("Series description"),
+            Some("Series room"),
+        ),
+        "a sibling occurrence keeps the series content"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mention_preview_shows_the_previewed_occurrences_content(pool: PgPool) {
+    let owner_id = "macro|mention-exception@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "mention-edited@example.com",
+        "Series title",
+        1,
+    );
+    upsert.event.description = Some("Series description".to_string());
+    upsert.event.location = Some("Series room".to_string());
+    let event_id = upsert.event.id;
+    let edited_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
+    let recurrence_id = edited_start.to_rfc3339();
+    upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
+    upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
+        visibility: None,
+        transparency: None,
+        sequence: None,
+        source_updated_at: None,
+        recurrence_id: recurrence_id.clone(),
+        original_time: EventStart::Timed(edited_start),
+        time: EventTime::Timed {
+            starts_at: edited_start,
+            ends_at: edited_start + Duration::hours(1),
+            time_zone: Some("UTC".to_string()),
+        },
+        title: Some("Edited title".to_string()),
+        description: Some("Only this occurrence changed".to_string()),
+        location: None,
+        status: None,
+        attendees: None,
+    }];
+    repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let now = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let series_key = Utc
+        .with_ymd_and_hms(2026, 7, 24, 14, 0, 0)
+        .unwrap()
+        .to_rfc3339();
+    let previews = repo
+        .mention_previews(
+            owner_id,
+            [recurrence_id.clone(), series_key]
+                .map(|key| CalendarMentionRequestItem {
+                    event_id,
+                    occurrence_key: Some(key),
+                })
+                .to_vec(),
+            now,
+        )
+        .await
+        .unwrap();
+    let content = |preview: &CalendarMentionPreview| match preview {
+        CalendarMentionPreview::Accessible(event) => (
+            event.title.clone(),
+            event.description.clone(),
+            event.location.clone(),
+        ),
+        other => panic!("expected an accessible preview: {other:?}"),
+    };
+
+    assert_eq!(
+        content(&previews[0]),
+        (
+            "Edited title".to_string(),
+            Some("Only this occurrence changed".to_string()),
+            Some("Series room".to_string()),
+        ),
+        "the exception's content replaces the series content, and an unset field inherits it"
+    );
+    assert_eq!(
+        content(&previews[1]),
+        (
+            "Series title".to_string(),
+            Some("Series description".to_string()),
+            Some("Series room".to_string()),
+        ),
     );
 }
 
@@ -1314,6 +2211,12 @@ async fn explicitly_empty_override_attendees_do_not_inherit_the_series_list(pool
     let recurrence_id = emptied_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
+        visibility: None,
+        transparency: None,
+        sequence: None,
+        source_updated_at: None,
         recurrence_id: recurrence_id.clone(),
         original_time: EventStart::Timed(emptied_start),
         time: EventTime::Timed {
@@ -1344,7 +2247,10 @@ async fn explicitly_empty_override_attendees_do_not_inherit_the_series_list(pool
             100,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
 
     assert_eq!(result.len(), 2);
     let attendees_at = |key: &str| {
@@ -1388,13 +2294,19 @@ async fn occurrence_cursor_is_stable_when_occurrences_share_a_start(pool: PgPool
     let first_page = repo
         .list_occurrences(owner_id, range.clone(), None, 2)
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
     assert_eq!(first_page.len(), 2);
     let cursor = CalendarOccurrenceCursor::from_occurrence(&first_page[1].1);
     let second_page = repo
         .list_occurrences(owner_id, range, Some(cursor), 2)
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
     assert_eq!(second_page.len(), 1);
 
     let mut event_ids: Vec<_> = first_page
@@ -1452,6 +2364,22 @@ async fn watch_channels_round_trip_from_recording_to_targeted_rearm(pool: PgPool
         .unwrap()
         .id;
 
+    assert!(
+        repo.record_watch_unsupported(key, Uuid::new_v4(), account_id, calendar_id)
+            .await
+            .is_err(),
+        "a stale lease must not record push refusals"
+    );
+    repo.record_watch_unsupported(key, lease_token, account_id, calendar_id)
+        .await
+        .unwrap();
+    let refused = repo
+        .upsert_google_calendar(key, lease_token, account_id, provider_calendar.clone())
+        .await
+        .unwrap();
+    assert!(refused.watch_unsupported_at.is_some());
+    assert!(!refused.needs_watch_renewal(Utc::now()));
+
     let channel = GoogleWatchChannel {
         channel_id: Uuid::new_v4(),
         resource_id: "resource-1".to_string(),
@@ -1479,6 +2407,10 @@ async fn watch_channels_round_trip_from_recording_to_targeted_rearm(pool: PgPool
         .await
         .unwrap();
     assert_eq!(stored.watch_expires_at, Some(channel.expires_at));
+    assert_eq!(
+        stored.watch_unsupported_at, None,
+        "an opened channel clears an earlier push refusal"
+    );
 
     // Notifications resolve the channel to its inbox; unknown or mismatched
     // identifiers resolve to nothing.
@@ -1615,7 +2547,10 @@ async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
             title,
             1,
         );
-        upsert.source = CalendarEventSource::Google(GoogleEventSource {
+        upsert.source = CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
+            observed_access_role: Some("owner".to_owned()),
             email_link_id: link_id,
             account_id,
             calendar_id,
@@ -1708,6 +2643,9 @@ async fn delegated_inbox_source_grants_calendar_visibility(pool: PgPool) {
         repo.list_occurrences(primary_id, range.clone(), None, 100)
             .await
             .unwrap()
+            .into_iter()
+            .map(OccurrenceListing::into_occurrence_event)
+            .collect::<Vec<_>>()
             .len(),
         2
     );
@@ -1715,6 +2653,9 @@ async fn delegated_inbox_source_grants_calendar_visibility(pool: PgPool) {
         repo.list_occurrences("macro|stranger@example.com", range, None, 100)
             .await
             .unwrap()
+            .into_iter()
+            .map(OccurrenceListing::into_occurrence_event)
+            .collect::<Vec<_>>()
             .is_empty()
     );
 }
@@ -1779,7 +2720,10 @@ async fn identical_uids_from_distinct_inboxes_remain_distinct_and_link_scoped(po
             100,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
 
     assert_eq!(result.len(), 2);
     assert!(
@@ -1890,7 +2834,10 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
         4,
     );
     latest.event.updated_at += Duration::days(2);
-    latest.source = CalendarEventSource::Google(GoogleEventSource {
+    latest.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id: primary_calendar_id,
@@ -1909,7 +2856,10 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
         "Sibling",
         1,
     );
-    sibling.source = CalendarEventSource::Google(GoogleEventSource {
+    sibling.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id: sibling_calendar_id,
@@ -1929,7 +2879,10 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
         4,
     );
     stale.event.updated_at -= Duration::days(2);
-    stale.source = CalendarEventSource::Google(GoogleEventSource {
+    stale.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id: primary_calendar_id,
@@ -2240,7 +3193,8 @@ async fn user_mutation_write_persists_a_google_echo_without_a_lease(pool: PgPool
     let event_id = repo
         .upsert_event(CalendarEventWrite::UserMutation(upsert))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
 
     let row = sqlx::query!(
         r#"
@@ -2280,7 +3234,8 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
             1,
         )))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
     sqlx::query!(
         r#"
         INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
@@ -2295,7 +3250,7 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
     .unwrap();
 
     let target = repo
-        .get_event_mutation_target(owner_id, event_id)
+        .get_event_mutation_target(owner_id, event_id, None)
         .await
         .unwrap()
         .expect("owner sees the mutation target");
@@ -2308,19 +3263,113 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
     assert_eq!(target.calendar_id, provider.1);
     assert_eq!(target.provider_calendar_id, "primary");
     assert_eq!(target.owner_id, owner_id);
-    assert_eq!(target.token_identity.provider, "GMAIL");
+    let inbox = format!("calendar-{link_id}@example.com");
+    assert_eq!(target.token_identity.provider, CalendarProvider::Google);
+    assert_eq!(target.token_identity.email_address, inbox);
+    assert!(
+        target
+            .actor
+            .as_ref()
+            .is_some_and(|actor| actor.matches(&inbox))
+    );
 
     let delegated = repo
-        .get_event_mutation_target(delegate_id, event_id)
+        .get_event_mutation_target(delegate_id, event_id, None)
         .await
-        .unwrap();
-    assert!(delegated.is_some(), "delegate sees the mutation target");
+        .unwrap()
+        .expect("delegate sees the mutation target");
+    assert_eq!(delegated.token_identity.email_address, inbox);
+    assert!(
+        delegated.actor.is_none(),
+        "a delegate without their own inbox has no actor"
+    );
 
     let hidden = repo
-        .get_event_mutation_target(stranger_id, event_id)
+        .get_event_mutation_target(stranger_id, event_id, None)
         .await
         .unwrap();
     assert!(hidden.is_none(), "stranger cannot see the mutation target");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn primary_time_zone_is_the_primary_calendars(pool: PgPool) {
+    let owner_id = "macro|calendar-time-zone@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _) = grant_and_provider_ids(&repo, link_id).await;
+    repo.upsert_calendar_fixture(
+        account_id,
+        ProviderCalendar {
+            provider_calendar_id: "primary".to_string(),
+            name: "Primary".to_string(),
+            description: None,
+            time_zone: Some("America/New_York".to_string()),
+            color: None,
+            access_role: Some("owner".to_string()),
+            is_primary: true,
+            is_selected: true,
+            default_reminders: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let zone = repo.primary_time_zone(owner_id).await.unwrap();
+    assert_eq!(zone.as_deref(), Some("America/New_York"));
+
+    let stranger = repo
+        .primary_time_zone("macro|calendar-time-zone-stranger@example.com")
+        .await
+        .unwrap();
+    assert!(stranger.is_none(), "a stranger has no primary calendar");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn creation_target_actor_is_owned_inboxes_not_the_calendar_inbox(pool: PgPool) {
+    let owner_id = "macro|calendar-create-actor@example.com";
+    let delegate_id = "macro|calendar-create-delegate@example.com";
+    insert_user(&pool, owner_id).await;
+    insert_user(&pool, delegate_id).await;
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    grant_and_provider_ids(&repo, link_id).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+        VALUES ($1, $2, $3)
+        "#,
+        delegate_id,
+        owner_id,
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let inbox = format!("calendar-{link_id}@example.com");
+    let owner = repo
+        .get_creation_target(owner_id, None, None)
+        .await
+        .unwrap()
+        .expect("owner resolves a creation target");
+    assert_eq!(owner.token_identity.email_address, inbox);
+    assert!(
+        owner
+            .actor
+            .as_ref()
+            .is_some_and(|actor| actor.matches(&inbox))
+    );
+
+    let delegated = repo
+        .get_creation_target(delegate_id, None, None)
+        .await
+        .unwrap()
+        .expect("delegate resolves a creation target");
+    assert_eq!(delegated.token_identity.email_address, inbox);
+    assert!(
+        delegated.actor.is_none(),
+        "a delegate without their own inbox has no actor"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2339,6 +3388,10 @@ async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) 
     assert_eq!(target.calendar_id, calendar_id);
     assert_eq!(target.owner_id, owner_id);
     assert!(!target.is_read_only);
+    assert!(
+        target.is_primary,
+        "resolving without a calendar id lands on the primary calendar"
+    );
 
     let explicit = repo
         .get_creation_target(owner_id, Some(link_id), None)
@@ -2418,6 +3471,129 @@ async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: PgPool) {
+    let owner_id = "macro|calendar-sync-error@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let account_id = google_job.account_id.unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let primary = ProviderCalendar {
+        provider_calendar_id: "primary".to_string(),
+        name: "Primary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("owner".to_string()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: Vec::new(),
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(key, lease_token, account_id, primary.clone())
+        .await
+        .unwrap()
+        .id;
+
+    let message = "Precondition check failed. (reasons: conditionNotMet)";
+    let sync_error = || async {
+        repo.list_visible_calendars(owner_id).await.unwrap()[0]
+            .sync_error
+            .clone()
+    };
+
+    // A couple of isolated failures stay below the badge threshold.
+    for _ in 0..2 {
+        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+            .await
+            .unwrap();
+    }
+    assert_eq!(sync_error().await, None);
+
+    // A third failure crosses the threshold and surfaces to the user.
+    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+        .await
+        .unwrap();
+    assert_eq!(sync_error().await.as_deref(), Some(message));
+
+    // A successful sync clears the badge and resets the failure counter.
+    repo.commit_google_calendar_sync(
+        key,
+        lease_token,
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id,
+            next_sync_token: "recovered".to_string(),
+            observed_provider_event_ids: Some(Vec::new()),
+            materialized_range: Some(OccurrenceRange::historical_sync(
+                Utc::now().trunc_subsecs(6),
+            )),
+            cancelled_provider_event_ids: Vec::new(),
+        },
+        0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(sync_error().await, None);
+
+    // A fresh failure after recovery starts the count over, so one blip does
+    // not immediately re-badge.
+    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+        .await
+        .unwrap();
+    assert_eq!(sync_error().await, None);
+
+    // A badged calendar that drops off the provider list and later returns
+    // starts clean rather than resurrecting its old badge.
+    for _ in 0..2 {
+        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+            .await
+            .unwrap();
+    }
+    assert_eq!(sync_error().await.as_deref(), Some(message));
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
+        .await
+        .unwrap();
+    assert!(
+        repo.list_visible_calendars(owner_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let resurrected_id = repo
+        .upsert_google_calendar(key, lease_token, account_id, primary)
+        .await
+        .unwrap()
+        .id;
+    assert_eq!(resurrected_id, calendar_id);
+    assert_eq!(sync_error().await, None);
+    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+        .await
+        .unwrap();
+    assert_eq!(sync_error().await, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgPool) {
     let owner_id = "macro|calendar-remove-source@example.com";
     let link_id = insert_link(&pool, owner_id).await;
@@ -2455,7 +3631,8 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
     let event_id = repo
         .upsert_event(CalendarEventWrite::UserMutation(primary_copy))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
     let mut team_copy = timed_upsert(
         owner_id,
         link_id,
@@ -2464,7 +3641,10 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
         "Team copy",
         1,
     );
-    team_copy.source = CalendarEventSource::Google(GoogleEventSource {
+    team_copy.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("writer".to_owned()),
         email_link_id: link_id,
         account_id,
         calendar_id: secondary_id,
@@ -2477,7 +3657,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
         .await
         .unwrap();
 
-    repo.remove_google_source(account_id, primary_id, "provider-shared-remove@example.com")
+    repo.remove_provider_source(account_id, primary_id, "provider-shared-remove@example.com")
         .await
         .unwrap();
     let row = sqlx::query!(
@@ -2498,7 +3678,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
         "the surviving calendar's copy is promoted back to canonical"
     );
 
-    repo.remove_google_source(account_id, secondary_id, "team-copy-id")
+    repo.remove_provider_source(account_id, secondary_id, "team-copy-id")
         .await
         .unwrap();
     let remaining = sqlx::query_scalar!(
@@ -2529,12 +3709,14 @@ fn reminder_upsert(
             owner_id: owner_id.to_string(),
             ical_uid: uid.to_string(),
             calendar_id: Some(calendar_id),
+            sources: Vec::new(),
             title: "Reminder subject".to_string(),
             description: None,
             location: None,
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,
@@ -2543,16 +3725,24 @@ fn reminder_upsert(
             recurrence_lines: Vec::new(),
             organizer_email: None,
             organizer_name: None,
+            creator_email: None,
+            creator_name: None,
             conference_url: None,
             conference_provider: None,
             sequence: 0,
             is_read_only: false,
             attendees: Vec::new(),
             reminders,
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: starts_at - Duration::days(1),
             updated_at: starts_at - Duration::days(1),
         },
-        source: CalendarEventSource::Google(GoogleEventSource {
+        source: CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
+            observed_access_role: Some("owner".to_owned()),
             email_link_id: link_id,
             account_id,
             calendar_id,
@@ -2573,6 +3763,22 @@ fn reminder_upsert(
             },
             is_cancelled: false,
         }],
+    }
+}
+
+fn reminder_attendee(email: &str, declined: bool, is_self: bool) -> CalendarAttendee {
+    CalendarAttendee {
+        email: email.to_string(),
+        display_name: None,
+        response_status: if declined {
+            AttendeeResponseStatus::Declined
+        } else {
+            AttendeeResponseStatus::Accepted
+        },
+        is_organizer: false,
+        is_optional: false,
+        is_self,
+        comment: None,
     }
 }
 
@@ -2716,6 +3922,111 @@ async fn calendar_default_reminders_fan_out_to_use_default_events(pool: PgPool) 
             starts_at - Duration::minutes(10)
         )],
         "explicit overrides are untouched by a defaults change"
+    );
+}
+
+/// Status-style events (working location, out of office, focus time,
+/// birthdays) never resolve the calendar's default reminders — Google's
+/// clients offer no notification setting on them — while explicit overrides
+/// still schedule firings.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn status_events_ignore_calendar_default_reminders(pool: PgPool) {
+    let owner_id = "macro|working-location@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let primary_with_defaults = |minutes: &[u32]| ProviderCalendar {
+        provider_calendar_id: "primary".to_string(),
+        name: "Primary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("owner".to_string()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: minutes
+            .iter()
+            .map(|minutes| EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes: *minutes,
+            })
+            .collect(),
+    };
+    let updated = repo
+        .upsert_calendar_fixture(account_id, primary_with_defaults(&[10]))
+        .await
+        .unwrap();
+    assert_eq!(updated, calendar_id);
+
+    let mut working_location = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, calendar_id),
+        "office",
+        starts_at,
+        EventReminders::default(),
+    );
+    working_location.event.event_type = EventType::WorkingLocation;
+    let follows_defaults = repo.upsert_event_fixture(working_location).await.unwrap();
+    let meeting = repo
+        .upsert_event_fixture(reminder_upsert(
+            owner_id,
+            link_id,
+            (account_id, calendar_id),
+            "meeting",
+            starts_at,
+            EventReminders::default(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, follows_defaults).await,
+        Vec::new(),
+        "useDefault resolves to nothing on a status event"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, meeting).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            10,
+            starts_at - Duration::minutes(10)
+        )],
+        "an ordinary event on the same calendar still follows the defaults"
+    );
+
+    let mut with_override = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, calendar_id),
+        "office-override",
+        starts_at,
+        popup_reminders(&[5]),
+    );
+    with_override.event.event_type = EventType::WorkingLocation;
+    let overridden = repo.upsert_event_fixture(with_override).await.unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, overridden).await,
+        vec![(starts_at.to_rfc3339(), 5, starts_at - Duration::minutes(5))],
+        "an explicit override on a status event still fires"
+    );
+
+    repo.upsert_calendar_fixture(account_id, primary_with_defaults(&[30]))
+        .await
+        .unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, follows_defaults).await,
+        Vec::new(),
+        "a defaults change never schedules a status event"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, meeting).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            30,
+            starts_at - Duration::minutes(30)
+        )],
+        "the same defaults change still fans out to ordinary events"
     );
 }
 
@@ -2915,7 +4226,7 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         popup_reminders(&[10]),
     );
     declined.event.attendees = vec![CalendarAttendee {
-        email: "self@example.com".to_string(),
+        email: format!("calendar-{link_id}@example.com"),
         display_name: None,
         response_status: AttendeeResponseStatus::Declined,
         is_organizer: false,
@@ -2946,6 +4257,75 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(past, Vec::new());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reminder_decline_follows_owner_inbox_not_calendar_self(pool: PgPool) {
+    let owner_id = "macro|reminder-owner-inbox@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let owner_inbox = format!("calendar-{link_id}@example.com");
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let starts_at = (Utc::now() + Duration::minutes(10)).trunc_subsecs(0);
+
+    let mut coworker_declined = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "coworker-declined",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    coworker_declined.event.attendees = vec![
+        reminder_attendee("jackson@example.com", true, true),
+        reminder_attendee(&owner_inbox, false, false),
+    ];
+    let coworker_event_id = repo.upsert_event_fixture(coworker_declined).await.unwrap();
+
+    let mut owner_declined = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "owner-declined",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    owner_declined.event.attendees = vec![
+        reminder_attendee("jackson@example.com", false, true),
+        reminder_attendee(&owner_inbox, true, false),
+    ];
+    let owner_event_id = repo.upsert_event_fixture(owner_declined).await.unwrap();
+
+    let due = repo
+        .due_reminder_firings(Utc::now(), None, 100)
+        .await
+        .unwrap();
+    let firing_for = |event_id| {
+        due.iter()
+            .find(|firing| firing.event_id == event_id)
+            .expect("event has a due firing")
+            .clone()
+    };
+
+    let coworker = repo
+        .find_due_reminder(&firing_for(coworker_event_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        !coworker.declined,
+        "a coworker's declined self row must not suppress the owner's reminder"
+    );
+
+    let owner = repo
+        .find_due_reminder(&firing_for(owner_event_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        owner.declined,
+        "the owner's own declined inbox must suppress the reminder even when is_self is on a coworker"
+    );
 }
 
 /// The provider classification has to survive the write and come back on the
@@ -2988,7 +4368,10 @@ async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
             100,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
 
     let (event, _) = occurrences.first().expect("the event is in range");
     assert_eq!(
@@ -3089,7 +4472,8 @@ async fn connected_calendar(
             ),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
     sqlx::query!(
         r#"
         INSERT INTO calendar_event_reminder_deliveries (
@@ -3115,7 +4499,7 @@ async fn disconnecting_calendar_removes_the_data_and_records_the_opt_out(pool: P
         connected_calendar(&pool, &repo, owner_id, link_id).await;
 
     let disconnected = repo
-        .disconnect_google_calendar(owner_id, link_id)
+        .disconnect_provider_calendar(owner_id, link_id)
         .await
         .unwrap()
         .expect("the owner's inbox is disconnectable");
@@ -3128,7 +4512,10 @@ async fn disconnecting_calendar_removes_the_data_and_records_the_opt_out(pool: P
         }]
     );
     assert_eq!(disconnected.token_identity.fusionauth_user_id, owner_id);
-    assert_eq!(disconnected.token_identity.provider, "GMAIL");
+    assert_eq!(
+        disconnected.token_identity.provider,
+        CalendarProvider::Google
+    );
 
     let remaining = sqlx::query!(
         r#"
@@ -3196,7 +4583,7 @@ async fn a_reissued_grant_keeps_calendar_off_until_it_is_requested_again(pool: P
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     connected_calendar(&pool, &repo, owner_id, link_id).await;
-    repo.disconnect_google_calendar(owner_id, link_id)
+    repo.disconnect_provider_calendar(owner_id, link_id)
         .await
         .unwrap()
         .unwrap();
@@ -3269,7 +4656,7 @@ async fn only_the_owner_can_disconnect_an_inbox_calendar(pool: PgPool) {
     connected_calendar(&pool, &repo, owner_id, link_id).await;
 
     assert!(
-        repo.disconnect_google_calendar("macro|delegate@example.com", link_id)
+        repo.disconnect_provider_calendar("macro|delegate@example.com", link_id)
             .await
             .unwrap()
             .is_none()
@@ -3355,7 +4742,7 @@ async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
     let CalendarMentionPreview::Accessible(own) = &previews[0] else {
         panic!("author preview should be accessible: {:?}", previews[0]);
     };
-    assert_eq!(own.viewer_event_id, author_event_id);
+    assert_eq!(own.viewer_event_id, Some(author_event_id));
     assert_eq!(own.title, "Smart Macro Discussion");
     assert!(own.is_recurring);
     assert_eq!(own.attendee_count, 1);
@@ -3378,9 +4765,194 @@ async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
     let CalendarMentionPreview::Accessible(resolved) = &previews[0] else {
         panic!("attendee preview should be accessible: {:?}", previews[0]);
     };
-    assert_eq!(resolved.viewer_event_id, attendee_event_id);
+    assert_eq!(resolved.viewer_event_id, Some(attendee_event_id));
     assert_eq!(previews[1], CalendarMentionPreview::NoAccess);
     assert_eq!(previews[2], CalendarMentionPreview::DoesNotExist);
+}
+
+async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'calendar_event', $2::uuid::text, 'channel', 'view')
+        "#,
+        event_id,
+        channel_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_channel(pool: &PgPool, owner_id: &str, members: &[&str]) -> Uuid {
+    let channel_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel_id,
+        owner_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for member in members {
+        sqlx::query!(
+            "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+            channel_id,
+            *member,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    channel_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool) {
+    let author_id = "macro|shared-author@example.com";
+    let attendee_id = "macro|shared-attendee@example.com";
+    let member_id = "macro|shared-member@example.com";
+    let former_id = "macro|shared-former@example.com";
+    let stranger_id = "macro|shared-stranger@example.com";
+    let author_link = insert_link(&pool, author_id).await;
+    let attendee_link = insert_link(&pool, attendee_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let author_provider = provider_ids(&repo, author_link).await;
+    let attendee_provider = provider_ids(&repo, attendee_link).await;
+
+    let mut author_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "shared@example.com",
+        "Pilates",
+        1,
+    );
+    author_copy.event.description = Some("Bring a mat".to_string());
+    let shared_event_id = author_copy.event.id;
+    repo.upsert_event_fixture(author_copy).await.unwrap();
+    let attendee_copy = timed_upsert(
+        attendee_id,
+        attendee_link,
+        attendee_provider,
+        "shared@example.com",
+        "Pilates",
+        1,
+    );
+    let attendee_event_id = attendee_copy.event.id;
+    repo.upsert_event_fixture(attendee_copy).await.unwrap();
+    let mut private_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "shared-private@example.com",
+        "Doctor",
+        1,
+    );
+    private_copy.event.visibility = EventVisibility::Private;
+    let private_event_id = private_copy.event.id;
+    repo.upsert_event_fixture(private_copy).await.unwrap();
+    let unshared_copy = timed_upsert(
+        author_id,
+        author_link,
+        author_provider,
+        "unshared@example.com",
+        "Unshared",
+        1,
+    );
+    let unshared_event_id = unshared_copy.event.id;
+    repo.upsert_event_fixture(unshared_copy).await.unwrap();
+
+    let channel_id = insert_channel(
+        &pool,
+        author_id,
+        &[author_id, attendee_id, member_id, former_id],
+    )
+    .await;
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        former_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    share_with_channel(&pool, shared_event_id, channel_id).await;
+    share_with_channel(&pool, private_event_id, channel_id).await;
+
+    let now = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let request = |event_id| CalendarMentionRequestItem {
+        event_id,
+        occurrence_key: None,
+    };
+
+    // A member without a copy sees the shared projection read-only.
+    let previews = repo
+        .mention_previews(
+            member_id,
+            vec![
+                request(shared_event_id),
+                request(private_event_id),
+                request(unshared_event_id),
+            ],
+            now,
+        )
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(shared) = &previews[0] else {
+        panic!("member preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(shared.viewer_event_id, None);
+    assert_eq!(shared.title, "Pilates");
+    assert_eq!(shared.description.as_deref(), Some("Bring a mat"));
+    assert!(shared.occurrence_key.is_some());
+    // Private events stay hidden despite the grant, and a grant covers only
+    // the event it names.
+    assert_eq!(previews[1], CalendarMentionPreview::NoAccess);
+    assert_eq!(previews[2], CalendarMentionPreview::NoAccess);
+
+    // A member with their own copy keeps resolving to it.
+    let previews = repo
+        .mention_previews(attendee_id, vec![request(shared_event_id)], now)
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(own) = &previews[0] else {
+        panic!("attendee preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(own.viewer_event_id, Some(attendee_event_id));
+
+    // So does the owner, who can open the private event they shared.
+    let previews = repo
+        .mention_previews(author_id, vec![request(private_event_id)], now)
+        .await
+        .unwrap();
+    let CalendarMentionPreview::Accessible(owned) = &previews[0] else {
+        panic!("owner preview should be accessible: {:?}", previews[0]);
+    };
+    assert_eq!(owned.viewer_event_id, Some(private_event_id));
+
+    // Nonparticipants and people who left the channel get nothing.
+    for outsider in [stranger_id, former_id] {
+        let previews = repo
+            .mention_previews(outsider, vec![request(shared_event_id)], now)
+            .await
+            .unwrap();
+        assert_eq!(previews[0], CalendarMentionPreview::NoAccess, "{outsider}");
+    }
+
+    // A cancelled event no longer previews for anyone.
+    sqlx::query!(
+        "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
+        shared_event_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let previews = repo
+        .mention_previews(member_id, vec![request(shared_event_id)], now)
+        .await
+        .unwrap();
+    assert_eq!(previews[0], CalendarMentionPreview::DoesNotExist);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -3472,4 +5044,2346 @@ async fn mention_preview_picks_the_requested_or_nearest_occurrence(pool: PgPool)
         .unwrap();
     let (_, key) = preview_time(&previews[0]);
     assert_eq!(key.as_deref(), Some(first_start.to_rfc3339().as_str()));
+}
+
+async fn insert_team(pool: &PgPool, owner_id: &str, member_ids: &[&str]) -> Uuid {
+    for member_id in member_ids {
+        insert_user(pool, member_id).await;
+    }
+    let team_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)"#,
+        team_id,
+        owner_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for member_id in member_ids {
+        sqlx::query!(
+            r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
+            member_id,
+            team_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    team_id
+}
+
+fn ooo_upsert(
+    owner_id: &str,
+    link_id: Uuid,
+    provider: (Uuid, Uuid),
+    uid: &str,
+    title: &str,
+) -> CalendarEventUpsert {
+    let mut upsert = timed_upsert(owner_id, link_id, provider, uid, title, 1);
+    upsert.event.event_type = EventType::OutOfOffice;
+    upsert.event.attendees.clear();
+    upsert.event.recurrence_lines.clear();
+    upsert
+}
+
+fn july_2026_range() -> OccurrenceRange {
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 27, 0, 0, 0).unwrap();
+    OccurrenceRange {
+        starts_at,
+        ends_at,
+        start_date: starts_at.date_naive(),
+        end_date: ends_at.date_naive(),
+    }
+}
+
+/// An explicit detail grant and successful provider snapshot for OOO fixtures.
+async fn enable_team_details(repo: &PgCalendarRepository, users: &[&str]) {
+    sqlx::query!(
+        "INSERT INTO calendar_team_sharing(user_id,sharing) SELECT unnest($1::text[]),'all' ON CONFLICT(user_id) DO UPDATE SET sharing='all'",
+        users as &[&str]
+    ).execute(&repo.pool).await.unwrap();
+    mark_team_sources_verified(repo, users).await;
+}
+
+/// A successful provider snapshot for OOO fixtures, leaving sharing untouched.
+async fn mark_team_sources_verified(repo: &PgCalendarRepository, users: &[&str]) {
+    sqlx::query!(
+        "UPDATE calendar_accounts SET sync_status='ready',last_synced_at=now(),last_sync_error=NULL WHERE owner_id=ANY($1::text[]) AND sync_status<>'disabled'",
+        users as &[&str]
+    ).execute(&repo.pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE calendars SET synced_at=now() WHERE account_id IN (SELECT id FROM calendar_accounts WHERE owner_id=ANY($1::text[]))",
+        users as &[&str]
+    ).execute(&repo.pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE calendars SET snapshot_normalization_version=1 WHERE account_id IN (SELECT id FROM calendar_accounts WHERE owner_id=ANY($1::text[]))",
+        users as &[&str]
+    ).execute(&repo.pool).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_returns_teammates_status_only(pool: PgPool) {
+    let requester = "macro|gab@example.com";
+    let teammate = "macro|teammate@example.com";
+    let outsider = "macro|outsider@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    insert_team(&pool, outsider, &[outsider]).await;
+    let requester_link = insert_link(&pool, requester).await;
+    let teammate_link = insert_link(&pool, teammate).await;
+    let outsider_link = insert_link(&pool, outsider).await;
+    let repo = PgCalendarRepository::new(pool);
+    let requester_provider = provider_ids(&repo, requester_link).await;
+    let teammate_provider = provider_ids(&repo, teammate_link).await;
+    let outsider_provider = provider_ids(&repo, outsider_link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        requester,
+        requester_link,
+        requester_provider,
+        "own-ooo@example.com",
+        "My own OOO",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        teammate_link,
+        teammate_provider,
+        "teammate-ooo@example.com",
+        "Vacation",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(timed_upsert(
+        teammate,
+        teammate_link,
+        teammate_provider,
+        "teammate-meeting@example.com",
+        "Regular meeting",
+        1,
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        outsider,
+        outsider_link,
+        outsider_provider,
+        "outsider-ooo@example.com",
+        "Elsewhere",
+    ))
+    .await
+    .unwrap();
+
+    enable_team_details(&repo, &[teammate]).await;
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row.owner_id == teammate));
+    assert!(
+        rows.iter()
+            .all(|row| row.title.as_deref() == Some("Vacation"))
+    );
+    let starts: Vec<_> = rows
+        .iter()
+        .map(|row| match row.time {
+            EventTime::Timed { starts_at, .. } => starts_at,
+            EventTime::AllDay { .. } => panic!("out-of-office fixtures are timed"),
+        })
+        .collect();
+    assert!(starts.windows(2).all(|pair| pair[0] <= pair[1]));
+
+    let empty = repo
+        .list_team_out_of_office(outsider, july_2026_range(), 100)
+        .await
+        .unwrap();
+    assert!(empty.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_requires_an_active_primary_calendar_source(pool: PgPool) {
+    let requester = "macro|viewer@example.com";
+    let subscribed = "macro|subscribed@example.com";
+    let disabled = "macro|disabled@example.com";
+    insert_team(&pool, requester, &[requester, subscribed, disabled]).await;
+    let subscribed_link = insert_link(&pool, subscribed).await;
+    let disabled_link = insert_link(&pool, disabled).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+
+    // An out-of-office event on a calendar the teammate merely subscribes to
+    // is someone else's status and must not surface as theirs.
+    let subscribed_account = repo.upsert_google_account(subscribed_link).await.unwrap();
+    let subscribed_calendar = repo
+        .upsert_calendar_fixture(
+            subscribed_account,
+            ProviderCalendar {
+                provider_calendar_id: "someone-else".to_string(),
+                name: "Someone else".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("reader".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        subscribed,
+        subscribed_link,
+        (subscribed_account, subscribed_calendar),
+        "subscribed-ooo@example.com",
+        "Not their own",
+    ))
+    .await
+    .unwrap();
+
+    let disabled_provider = provider_ids(&repo, disabled_link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        disabled,
+        disabled_link,
+        disabled_provider,
+        "disabled-ooo@example.com",
+        "Stale",
+    ))
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"UPDATE calendar_accounts SET sync_status = 'disabled' WHERE email_link_id = $1"#,
+        disabled_link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    enable_team_details(&repo, &[subscribed, disabled]).await;
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert!(rows.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_hides_private_status_even_with_detail_sharing(pool: PgPool) {
+    let requester = "macro|asker@example.com";
+    let teammate = "macro|double@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    let first_link = insert_link(&pool, teammate).await;
+    let second_link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool);
+    let first_provider = provider_ids(&repo, first_link).await;
+    let second_provider = provider_ids(&repo, second_link).await;
+    let mut private_ooo = ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "shared-ooo@example.com",
+        "Surgery",
+    );
+    private_ooo.event.visibility = EventVisibility::Private;
+    repo.upsert_event_fixture(private_ooo).await.unwrap();
+    let mut duplicate = ooo_upsert(
+        teammate,
+        second_link,
+        second_provider,
+        "shared-ooo@example.com",
+        "Surgery",
+    );
+    duplicate.event.visibility = EventVisibility::Private;
+    repo.upsert_event_fixture(duplicate).await.unwrap();
+
+    enable_team_details(&repo, &[teammate]).await;
+    let service = CalendarService::new(repo).with_team_sharing_enabled(true);
+    let rows = service
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert!(
+        rows.is_empty(),
+        "the OOO endpoint must not reveal the category of private busy time"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_shows_busy_only_status_without_its_title(pool: PgPool) {
+    let viewer = "macro|ooo-viewer@example.com";
+    let unset = "macro|ooo-unset@example.com";
+    let busy = "macro|ooo-busy@example.com";
+    let hidden = "macro|ooo-hidden@example.com";
+    insert_team(&pool, viewer, &[viewer, unset, busy, hidden]).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    for (owner, uid) in [
+        (unset, "unset-ooo@example.com"),
+        (busy, "busy-ooo@example.com"),
+        (hidden, "hidden-ooo@example.com"),
+    ] {
+        let link = insert_link(&pool, owner).await;
+        let provider = provider_ids(&repo, link).await;
+        repo.upsert_event_fixture(ooo_upsert(owner, link, provider, uid, "Beach trip"))
+            .await
+            .unwrap();
+    }
+    mark_team_sources_verified(&repo, &[unset, busy, hidden]).await;
+    let team = PgCalendarTeamRepository::new(pool);
+    team.set_sharing(busy, TeamCalendarSharing::BusyOnly)
+        .await
+        .unwrap();
+    team.set_sharing(hidden, TeamCalendarSharing::None)
+        .await
+        .unwrap();
+
+    let rows = CalendarService::new(repo)
+        .with_team_sharing_enabled(true)
+        .list_team_out_of_office(viewer, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    // A member who never chose a setting shares busy blocks by default.
+    let mut owners: Vec<_> = rows.iter().map(|row| row.owner_id.as_str()).collect();
+    owners.sort_unstable();
+    owners.dedup();
+    assert_eq!(owners, [busy, unset]);
+    assert!(
+        rows.iter().all(|row| row.title.is_none()),
+        "busy-only sharing discloses the status, never the title"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_reads_each_sources_own_event_type(pool: PgPool) {
+    let viewer = "macro|type-viewer@example.com";
+    let teammate = "macro|type-teammate@example.com";
+    insert_team(&pool, viewer, &[viewer, teammate]).await;
+    let link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        link,
+        provider,
+        "canonical-default@example.com",
+        "Parental leave",
+    ))
+    .await
+    .unwrap();
+    // The entity's stored type follows its canonical source, which can be a
+    // non-out-of-office copy of the same event; the primary calendar's own
+    // source still says out of office.
+    sqlx::query!(
+        "UPDATE calendar_events SET event_type = 'default' WHERE owner_id = $1",
+        teammate,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    enable_team_details(&repo, &[teammate]).await;
+
+    let rows = repo
+        .list_team_out_of_office(viewer, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows.iter()
+            .all(|row| row.owner_id == teammate && row.title.as_deref() == Some("Parental leave"))
+    );
+}
+
+fn shift_upsert_days(upsert: &mut CalendarEventUpsert, days: i64) {
+    let delta = Duration::days(days);
+    if let EventTime::Timed {
+        starts_at, ends_at, ..
+    } = &mut upsert.event.time
+    {
+        *starts_at += delta;
+        *ends_at += delta;
+    }
+    for occurrence in &mut upsert.occurrences {
+        if let EventTime::Timed {
+            starts_at, ends_at, ..
+        } = &mut occurrence.time
+        {
+            *starts_at += delta;
+            *ends_at += delta;
+        }
+        occurrence.occurrence_key = occurrence.time.occurrence_key();
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_deduplicates_before_the_limit(pool: PgPool) {
+    let requester = "macro|limit-viewer@example.com";
+    let teammate = "macro|limit-double@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    let first_link = insert_link(&pool, teammate).await;
+    let second_link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool);
+    let first_provider = provider_ids(&repo, first_link).await;
+    let second_provider = provider_ids(&repo, second_link).await;
+
+    // The earliest event exists on both of the teammate's inboxes, so its
+    // occurrences arrive first and duplicated.
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "dup-ooo@example.com",
+        "Duplicated",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        second_link,
+        second_provider,
+        "dup-ooo@example.com",
+        "Duplicated",
+    ))
+    .await
+    .unwrap();
+    let mut later = ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "later-ooo@example.com",
+        "Later",
+    );
+    shift_upsert_days(&mut later, 1);
+    repo.upsert_event_fixture(later).await.unwrap();
+
+    enable_team_details(&repo, &[teammate]).await;
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 3)
+        .await
+        .unwrap();
+
+    // Duplicates collapse before the limit: the page fills with distinct
+    // occurrences and the later unique event still claims a slot, so a
+    // full page keeps signalling truncation accurately.
+    assert_eq!(rows.len(), 3);
+    let mut identities: Vec<_> = rows
+        .iter()
+        .map(|row| (row.ical_uid.as_str(), row.occurrence_key.as_str()))
+        .collect();
+    identities.sort_unstable();
+    identities.dedup();
+    assert_eq!(identities.len(), 3);
+    assert!(
+        rows.iter()
+            .any(|row| row.ical_uid == "later-ooo@example.com")
+    );
+}
+
+/// A shared calendar an account subscribes to, on which Google's
+/// vacation-calendar script re-imports members' out-of-office events under
+/// the same UID with a bracketed title and the type flattened to `default`.
+async fn insert_shared_calendar(
+    repo: &PgCalendarRepository,
+    account_id: Uuid,
+    access_role: &str,
+    default_reminders: &[u32],
+) -> Uuid {
+    repo.upsert_calendar_fixture(
+        account_id,
+        ProviderCalendar {
+            provider_calendar_id: "c_shared@group.calendar.google.com".to_string(),
+            name: "Macro Vacation".to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some(access_role.to_string()),
+            is_primary: false,
+            is_selected: true,
+            default_reminders: default_reminders
+                .iter()
+                .map(|minutes| EventReminderOverride {
+                    method: REMINDER_METHOD_POPUP.to_string(),
+                    minutes: *minutes,
+                })
+                .collect(),
+        },
+    )
+    .await
+    .unwrap()
+}
+
+/// The member's own out-of-office event on their primary calendar, carrying
+/// distinctive values for every per-copy field so a copy that overwrites one
+/// is caught: editable, busy, private, with an explicit 30-minute reminder,
+/// created by the member.
+fn member_primary_upsert(
+    owner_id: &str,
+    link_id: Uuid,
+    provider: (Uuid, Uuid),
+    uid: &str,
+    starts_at: DateTime<Utc>,
+) -> CalendarEventUpsert {
+    let mut upsert = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        uid,
+        starts_at,
+        popup_reminders(&[30]),
+    );
+    upsert.event.title = "OOO".to_string();
+    upsert.event.event_type = EventType::OutOfOffice;
+    upsert.event.is_read_only = false;
+    upsert.event.transparency = EventTransparency::Opaque;
+    upsert.event.visibility = EventVisibility::Private;
+    upsert.event.creator_email = Some("teo@example.com".to_string());
+    upsert.event.creator_name = Some("Teo".to_string());
+    upsert
+}
+
+/// The shared calendar's re-imported copy of the member's event: the same
+/// provider event id, the same sequence, a provider `updated` stamp one hour
+/// newer than the member's own copy, and every per-copy field reframed the
+/// way Google records a copy — bracketed title, `default` type, reader
+/// access, marked free, default visibility, its own reminder, the script's
+/// creator.
+fn shared_copy_upsert(
+    owner_id: &str,
+    link_id: Uuid,
+    provider: (Uuid, Uuid),
+    uid: &str,
+    starts_at: DateTime<Utc>,
+) -> CalendarEventUpsert {
+    let (account_id, calendar_id) = provider;
+    let mut upsert = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        uid,
+        starts_at,
+        popup_reminders(&[5]),
+    );
+    upsert.event.title = "[teo] OOO".to_string();
+    upsert.event.event_type = EventType::Default;
+    upsert.event.is_read_only = true;
+    upsert.event.transparency = EventTransparency::Transparent;
+    upsert.event.visibility = EventVisibility::Default;
+    upsert.event.creator_email = Some("script@example.com".to_string());
+    upsert.event.creator_name = Some("Vacation script".to_string());
+    upsert.event.updated_at += Duration::hours(1);
+    upsert.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("reader".to_owned()),
+        email_link_id: link_id,
+        account_id,
+        calendar_id,
+        provider_event_id: format!("provider-{uid}"),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    upsert
+}
+
+struct EntityContent {
+    title: String,
+    event_type: String,
+    is_read_only: bool,
+    transparency: String,
+    visibility: String,
+    reminders_use_default: bool,
+    reminder_overrides: serde_json::Value,
+    creator_email: Option<String>,
+    sequence: i32,
+    schedule_updated_at: DateTime<Utc>,
+}
+
+async fn entity_content(pool: &PgPool, event_id: Uuid) -> EntityContent {
+    sqlx::query_as!(
+        EntityContent,
+        r#"
+        SELECT title, event_type, is_read_only, transparency, visibility,
+               reminders_use_default, reminder_overrides, creator_email,
+               sequence, schedule_updated_at
+        FROM calendar_events WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// Assert the entity carries the [`member_primary_upsert`] values rather than
+/// a shared copy's.
+fn assert_primary_content(content: &EntityContent) {
+    assert_eq!(content.title, "OOO", "title");
+    assert_eq!(content.event_type, "out_of_office", "event_type");
+    assert!(!content.is_read_only, "is_read_only");
+    assert_eq!(content.transparency, "opaque", "transparency");
+    assert_eq!(content.visibility, "private", "visibility");
+    assert!(!content.reminders_use_default, "reminders_use_default");
+    assert_eq!(
+        content.reminder_overrides,
+        serde_json::json!([{ "method": REMINDER_METHOD_POPUP, "minutes": 30 }]),
+        "reminder_overrides",
+    );
+    assert_eq!(content.creator_email.as_deref(), Some("teo@example.com"));
+}
+
+fn range_around(starts_at: DateTime<Utc>) -> OccurrenceRange {
+    let range_start = starts_at - Duration::days(1);
+    let range_end = starts_at + Duration::days(1);
+    OccurrenceRange {
+        starts_at: range_start,
+        ends_at: range_end,
+        start_date: range_start.date_naive(),
+        end_date: range_end.date_naive(),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn shared_calendar_copy_records_its_content_without_touching_the_primary_entity(
+    pool: PgPool,
+) {
+    let member = "macro|teo@example.com";
+    let viewer = "macro|watcher@example.com";
+    insert_team(&pool, member, &[member, viewer]).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    // The member's own copy syncs first. The shared copy arrives an hour
+    // later with the same sequence and a newer provider stamp.
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    let outcome = repo
+        .upsert_event(CalendarEventWrite::Fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            uid,
+            starts_at,
+        )))
+        .await
+        .unwrap();
+    assert_eq!(
+        outcome.event_id, event_id,
+        "both copies attach to one entity"
+    );
+    assert_eq!(
+        outcome.change,
+        CalendarEventChange::Updated,
+        "a new copy is a change readers must refetch"
+    );
+
+    assert_primary_content(&entity_content(&pool, event_id).await);
+
+    // The listing carries both copies, the primary first, and attributes the
+    // event to the primary calendar.
+    let rows = repo
+        .list_occurrences(member, range_around(starts_at), None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+    let (event, _) = rows.first().expect("the merged event lists once");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(event.calendar_id, Some(primary_calendar_id));
+    assert_eq!(event.title, "OOO");
+    assert_eq!(event.event_type, EventType::OutOfOffice);
+    let copies: Vec<_> = event
+        .sources
+        .iter()
+        .map(|source| {
+            (
+                source.calendar_id,
+                source.title.as_str(),
+                source.event_type,
+                source.is_read_only,
+                source.transparency,
+                source.reminders.popup_minutes(&[]),
+                source.creator_email.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        copies,
+        vec![
+            (
+                primary_calendar_id,
+                "OOO",
+                EventType::OutOfOffice,
+                false,
+                EventTransparency::Opaque,
+                vec![30],
+                Some("teo@example.com"),
+            ),
+            (
+                shared_calendar_id,
+                "[teo] OOO",
+                EventType::Default,
+                true,
+                EventTransparency::Transparent,
+                vec![5],
+                Some("script@example.com"),
+            ),
+        ]
+    );
+
+    // The semantic team overlay cannot reveal the primary copy's private OOO
+    // category, even when the member explicitly shares ordinary event details.
+    enable_team_details(&repo, &[member]).await;
+    let team = repo
+        .list_team_out_of_office(viewer, range_around(starts_at), 100)
+        .await
+        .unwrap();
+    assert!(team.is_empty(), "private OOO remains generic availability");
+
+    // Reminders fire once, per the member's own 30-minute setting.
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            30,
+            starts_at - Duration::minutes(30)
+        )]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_late_primary_sync_reclaims_the_entity_from_a_shared_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let viewer = "macro|watcher@example.com";
+    insert_team(&pool, member, &[member, viewer]).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    // The shared copy backfills first, so the entity starts life as the copy.
+    let event_id = repo
+        .upsert_event_fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    let seeded = entity_content(&pool, event_id).await;
+    assert_eq!(
+        (seeded.title.as_str(), seeded.event_type.as_str()),
+        ("[teo] OOO", "default")
+    );
+    assert!(
+        {
+            enable_team_details(&repo, &[member]).await;
+            repo.list_team_out_of_office(viewer, range_around(starts_at), 100)
+                .await
+                .unwrap()
+                .is_empty()
+        },
+        "a copy on a subscribed calendar is not the member's own status"
+    );
+
+    // The member's primary copy syncs later with an older provider stamp. It
+    // loses the freshness comparison but owns the entity outright.
+    let outcome = repo
+        .upsert_event(CalendarEventWrite::Fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        )))
+        .await
+        .unwrap();
+    assert_eq!(outcome.event_id, event_id);
+    assert_eq!(outcome.change, CalendarEventChange::Updated);
+
+    let content = entity_content(&pool, event_id).await;
+    assert_primary_content(&content);
+    assert_eq!(
+        content.schedule_updated_at,
+        starts_at - Duration::days(1),
+        "the schedule stamp follows the primary copy"
+    );
+    let rows = repo
+        .list_occurrences(member, range_around(starts_at), None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+    assert_eq!(rows[0].0.calendar_id, Some(primary_calendar_id));
+    assert_eq!(
+        rows[0]
+            .0
+            .sources
+            .iter()
+            .map(|source| source.calendar_id)
+            .collect::<Vec<_>>(),
+        vec![primary_calendar_id, shared_calendar_id]
+    );
+    assert!(
+        repo.list_team_out_of_office(viewer, range_around(starts_at), 100)
+            .await
+            .unwrap()
+            .is_empty(),
+        "a private primary copy must not reveal the member's OOO category"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            30,
+            starts_at - Duration::minutes(30)
+        )]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_hourly_shared_copy_reimport_never_reclaims_the_entity(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+
+    // Every import carries the original's sequence and a later provider
+    // `updated`.
+    let mut copy = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    );
+    for _ in 0..3 {
+        copy.event.updated_at += Duration::hours(1);
+        repo.upsert_event_fixture(copy.clone()).await.unwrap();
+        assert_primary_content(&entity_content(&pool, event_id).await);
+    }
+    let copy_title = sqlx::query_scalar!(
+        r#"SELECT title FROM calendar_event_sources WHERE event_id = $1 AND calendar_id = $2"#,
+        event_id,
+        shared_calendar_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        copy_title, "[teo] OOO",
+        "the copy's own row keeps its content"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_primary_edit_propagates_over_a_fresher_shared_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The member renames their event and drops the reminder; the echo carries
+    // a higher sequence than the copy and rewrites the entity.
+    let mut edited = member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        starts_at,
+    );
+    edited.event.sequence = 1;
+    edited.event.title = "Out of office".to_string();
+    edited.event.reminders = EventReminders::default();
+    edited.event.updated_at += Duration::hours(2);
+    repo.upsert_event(CalendarEventWrite::UserMutation(edited))
+        .await
+        .unwrap();
+
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(content.title, "Out of office");
+    assert_eq!(content.sequence, 1);
+    assert!(content.reminders_use_default);
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        Vec::new(),
+        "an out-of-office event following calendar defaults schedules nothing"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mutation_target_addresses_the_primary_by_default_and_the_named_calendar_copy(
+    pool: PgPool,
+) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    repo.upsert_event_fixture(member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+    let event_id = repo
+        .upsert_event_fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+
+    let default_target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(default_target.calendar_id, primary_calendar_id);
+    assert_eq!(default_target.provider_calendar_id, "primary");
+    assert_eq!(
+        default_target.observed_access_role.as_deref(),
+        Some("owner")
+    );
+    assert!(!default_target.is_read_only);
+
+    let copy_target = repo
+        .get_event_mutation_target(member, event_id, Some(shared_calendar_id))
+        .await
+        .unwrap()
+        .expect("the shared copy is addressable by its calendar");
+    assert_eq!(copy_target.calendar_id, shared_calendar_id);
+    assert_eq!(copy_target.observed_access_role.as_deref(), Some("reader"));
+    assert_eq!(
+        copy_target.provider_calendar_id,
+        "c_shared@group.calendar.google.com"
+    );
+    assert!(
+        copy_target.is_read_only,
+        "the copy's own access role decides"
+    );
+
+    let elsewhere = repo
+        .get_event_mutation_target(member, event_id, Some(Uuid::now_v7()))
+        .await
+        .unwrap();
+    assert!(
+        elsewhere.is_none(),
+        "a calendar without a copy of the event is not a target"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn calendar_default_reminder_changes_follow_the_primary_calendar(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[5]).await;
+    let uid = "meeting@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    // A regular meeting following calendar defaults on the member's primary,
+    // then the shared calendar's copy with a newer stamp.
+    let event_id = repo
+        .upsert_event_fixture(reminder_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+            EventReminders::default(),
+        ))
+        .await
+        .unwrap();
+    let mut copy = reminder_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+        EventReminders::default(),
+    );
+    copy.event.updated_at += Duration::hours(1);
+    repo.upsert_event_fixture(copy).await.unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        Vec::new(),
+        "the primary calendar has no default reminders"
+    );
+
+    // Changing the shared calendar's defaults must not reach an event it
+    // merely holds a copy of.
+    insert_shared_calendar(&repo, account_id, "reader", &[15]).await;
+    assert_eq!(scheduled_firings(&pool, event_id).await, Vec::new());
+
+    // Changing the primary calendar's defaults must.
+    repo.upsert_calendar_fixture(
+        account_id,
+        ProviderCalendar {
+            provider_calendar_id: "primary".to_string(),
+            name: "Primary".to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some("owner".to_string()),
+            is_primary: true,
+            is_selected: true,
+            default_reminders: vec![EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes: 10,
+            }],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            10,
+            starts_at - Duration::minutes(10)
+        )]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retiring_the_primary_copy_promotes_the_shared_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    let retired = repo
+        .remove_provider_source(account_id, primary_calendar_id, &format!("provider-{uid}"))
+        .await
+        .unwrap();
+    assert_eq!(
+        retired,
+        vec![RetiredCalendarEvent {
+            event_id,
+            owner_id: member.to_string(),
+            deleted: false,
+        }]
+    );
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(
+        (
+            content.title.as_str(),
+            content.event_type.as_str(),
+            content.is_read_only
+        ),
+        ("[teo] OOO", "default", true),
+        "the surviving copy becomes canonical"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(starts_at.to_rfc3339(), 5, starts_at - Duration::minutes(5))],
+        "the schedule follows the surviving copy's reminders"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_user_edit_through_the_shared_copy_moves_the_schedule_but_keeps_primary_content(
+    pool: PgPool,
+) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The member drags the event while viewing the shared calendar. Google
+    // confirms the move on that copy; the entity's schedule must follow it
+    // even though the copy is not canonical.
+    let moved_start = starts_at + Duration::hours(2);
+    let mut echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    echo.event.sequence = 1;
+    echo.event.updated_at = starts_at + Duration::hours(1);
+    let outcome = repo
+        .upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+    assert_eq!(outcome.change, CalendarEventChange::Updated);
+
+    let content = entity_content(&pool, event_id).await;
+    assert_primary_content(&content);
+    let rows = repo
+        .list_occurrences(member, range_around(moved_start), None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+    let (event, occurrence) = rows.first().expect("the moved occurrence lists");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        occurrence.time,
+        EventTime::Timed {
+            starts_at: moved_start,
+            ends_at: moved_start + Duration::hours(1),
+            time_zone: None,
+        }
+    );
+    assert_eq!(
+        event.title, "OOO",
+        "content still comes from the primary copy"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(
+            moved_start.to_rfc3339(),
+            30,
+            moved_start - Duration::minutes(30)
+        )],
+        "reminders follow the new time with the primary copy's offset"
+    );
+
+    // A plain sync of the shared copy with the same schedule stays a
+    // non-canonical write and leaves everything alone.
+    let mut resync = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    resync.event.sequence = 1;
+    resync.event.updated_at = starts_at + Duration::hours(2);
+    repo.upsert_event_fixture(resync).await.unwrap();
+    assert_primary_content(&entity_content(&pool, event_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The primary calendar disappears while its source row still exists.
+    // Reads already ignore it, so writes must too: the next shared-copy sync
+    // promotes the live copy instead of freezing the entity on the dead one.
+    sqlx::query!(
+        "UPDATE calendars SET is_deleted = true WHERE id = $1",
+        primary_calendar_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut resync = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    );
+    resync.event.updated_at += Duration::hours(1);
+    repo.upsert_event_fixture(resync).await.unwrap();
+
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(
+        (
+            content.title.as_str(),
+            content.event_type.as_str(),
+            content.is_read_only
+        ),
+        ("[teo] OOO", "default", true)
+    );
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("the live copy is the mutation target");
+    assert_eq!(target.calendar_id, shared_calendar_id);
+    let rows = repo
+        .list_occurrences(member, range_around(starts_at), None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+    assert_eq!(rows[0].0.calendar_id, Some(shared_calendar_id));
+    assert_eq!(
+        rows[0]
+            .0
+            .sources
+            .iter()
+            .map(|source| source.calendar_id)
+            .collect::<Vec<_>>(),
+        vec![shared_calendar_id]
+    );
+
+    // Retiring the shared copy now finds no live source and removes the entity
+    // rather than resurrecting the deleted calendar's copy.
+    let retired = repo
+        .remove_provider_source(account_id, shared_calendar_id, &format!("provider-{uid}"))
+        .await
+        .unwrap();
+    assert_eq!(
+        retired,
+        vec![RetiredCalendarEvent {
+            event_id,
+            owner_id: member.to_string(),
+            deleted: true,
+        }]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_older_canonical_resync_cannot_undo_a_user_edit_made_through_another_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The member moves the event through the shared calendar; Google stamps
+    // that copy an hour after the primary's last update.
+    let moved_start = starts_at + Duration::hours(2);
+    let mut echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    echo.event.sequence = 1;
+    echo.event.updated_at = starts_at + Duration::hours(1);
+    repo.upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+
+    // The primary copy syncs a change that is older than the edit and keeps
+    // its own sequence — a description Google recorded before the move. Its
+    // content lands, its stale schedule does not.
+    let mut stale_primary = member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        starts_at,
+    );
+    stale_primary.event.description = Some("Dentist, then lunch".to_string());
+    stale_primary.event.updated_at = starts_at + Duration::minutes(30);
+    repo.upsert_event_fixture(stale_primary).await.unwrap();
+
+    let rows = repo
+        .list_occurrences(member, range_around(moved_start), None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+    let (event, occurrence) = rows.first().expect("the moved occurrence lists");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        occurrence.time,
+        EventTime::Timed {
+            starts_at: moved_start,
+            ends_at: moved_start + Duration::hours(1),
+            time_zone: None,
+        },
+        "an older canonical state leaves the user's move in place"
+    );
+    assert_eq!(event.description.as_deref(), Some("Dentist, then lunch"));
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(
+            moved_start.to_rfc3339(),
+            30,
+            moved_start - Duration::minutes(30)
+        )]
+    );
+
+    // The primary copy itself changes, advancing its sequence. Its provider
+    // stamp is still older than the edit's, but a change to the canonical copy
+    // owns the schedule again regardless of the clock.
+    let mut fresh_primary = member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        moved_start + Duration::hours(1),
+    );
+    fresh_primary.event.sequence = 1;
+    fresh_primary.event.updated_at = starts_at + Duration::minutes(45);
+    repo.upsert_event_fixture(fresh_primary).await.unwrap();
+    let rows = repo
+        .list_occurrences(member, range_around(moved_start), None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rows[0].1.time,
+        EventTime::Timed {
+            starts_at: moved_start + Duration::hours(1),
+            ends_at: moved_start + Duration::hours(2),
+            time_zone: None,
+        }
+    );
+}
+
+/// The member's own copy with the guests and conference only the primary
+/// carries, so a copy that drops either is caught.
+fn member_primary_meeting(
+    owner_id: &str,
+    link_id: Uuid,
+    provider: (Uuid, Uuid),
+    uid: &str,
+    starts_at: DateTime<Utc>,
+) -> CalendarEventUpsert {
+    let mut upsert = member_primary_upsert(owner_id, link_id, provider, uid, starts_at);
+    upsert.event.event_type = EventType::Default;
+    upsert.event.attendees = vec![reminder_attendee("guest@example.com", false, false)];
+    upsert.event.conference_url = Some("https://meet.google.com/abc-defg-hij".to_string());
+    upsert.event.conference_provider = Some(ConferenceProvider::GoogleMeet);
+    upsert
+}
+
+async fn listed_event(
+    repo: &PgCalendarRepository,
+    member: &str,
+    around: DateTime<Utc>,
+) -> (CalendarEvent, CalendarOccurrence) {
+    let rows = repo
+        .list_occurrences(member, range_around(around), None, 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(OccurrenceListing::into_occurrence_event)
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 1, "one occurrence lists");
+    rows.into_iter().next().unwrap()
+}
+
+fn timed(starts_at: DateTime<Utc>) -> EventTime {
+    EventTime::Timed {
+        starts_at,
+        ends_at: starts_at + Duration::hours(1),
+        time_zone: None,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_primary_copy_arriving_after_a_shared_copy_takes_the_schedule(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-meeting@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    // The shared copy seeds the entity with a flattened schedule and a newer
+    // provider stamp. The primary copy arrives afterwards with an older stamp,
+    // guests, a conference, and a different time.
+    let event_id = repo
+        .upsert_event_fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    let primary_start = starts_at + Duration::hours(1);
+    repo.upsert_event_fixture(member_primary_meeting(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        primary_start,
+    ))
+    .await
+    .unwrap();
+
+    let (event, occurrence) = listed_event(&repo, member, primary_start).await;
+    assert_eq!(event.id, event_id);
+    assert_eq!(occurrence.time, timed(primary_start));
+    assert_eq!(event.attendees.len(), 1);
+    assert_eq!(
+        event.conference_url.as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
+    );
+    assert_eq!(event.calendar_id, Some(primary_calendar_id));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_user_edit_through_the_shared_copy_keeps_the_primary_guests_and_conference(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let uid = "teo-meeting@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    repo.upsert_event_fixture(member_primary_meeting(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    let moved_start = starts_at + Duration::hours(2);
+    let mut echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    echo.event.sequence = 1;
+    echo.event.updated_at = starts_at + Duration::hours(1);
+    repo.upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+
+    let (event, occurrence) = listed_event(&repo, member, moved_start).await;
+    assert_eq!(occurrence.time, timed(moved_start));
+    assert_eq!(
+        event.attendees.len(),
+        1,
+        "the copy's empty guest list does not replace the primary's"
+    );
+    assert_eq!(
+        event.conference_url.as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
+    );
+    assert_eq!(event.title, "OOO");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn echoes_landing_out_of_order_keep_the_newer_schedule(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    repo.upsert_event_fixture(member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // Two edits race: one through the shared copy stamped T1, one through the
+    // primary stamped T2. Google applied them in that order, but the primary's
+    // echo persists first.
+    let later_start = starts_at + Duration::hours(3);
+    let mut primary_echo = member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        later_start,
+    );
+    primary_echo.event.sequence = 1;
+    primary_echo.event.updated_at = starts_at + Duration::hours(2);
+    repo.upsert_event(CalendarEventWrite::UserMutation(primary_echo))
+        .await
+        .unwrap();
+    let mut shared_echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at + Duration::hours(2),
+    );
+    shared_echo.event.sequence = 1;
+    shared_echo.event.updated_at = starts_at + Duration::hours(1);
+    repo.upsert_event(CalendarEventWrite::UserMutation(shared_echo))
+        .await
+        .unwrap();
+
+    let (_, occurrence) = listed_event(&repo, member, later_start).await;
+    assert_eq!(
+        occurrence.time,
+        timed(later_start),
+        "the older echo does not roll the schedule back"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_copy_that_wrote_the_schedule_keeps_writing_it(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The member moves the shared copy, then the script that maintains that
+    // calendar moves it back. The shared copy wrote the schedule, so its own
+    // later sync follows through, while the primary's content stays.
+    let moved_start = starts_at + Duration::hours(2);
+    let mut echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    echo.event.sequence = 1;
+    echo.event.updated_at = starts_at + Duration::hours(1);
+    repo.upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+    let mut reset = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    );
+    reset.event.sequence = 1;
+    reset.event.updated_at = starts_at + Duration::hours(2);
+    repo.upsert_event_fixture(reset).await.unwrap();
+
+    let (event, occurrence) = listed_event(&repo, member, starts_at).await;
+    assert_eq!(event.id, event_id);
+    assert_eq!(occurrence.time, timed(starts_at));
+    assert_primary_content(&entity_content(&pool, event_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_writable_copy_outranks_a_fresher_reader_copy_without_a_primary(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _primary_calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+    let secondary_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "secondary".to_string(),
+                name: "Projects".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "projects@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let mut own_copy = reminder_upsert(
+        member,
+        link_id,
+        (account_id, secondary_calendar_id),
+        uid,
+        starts_at,
+        EventReminders::default(),
+    );
+    own_copy.event.title = "Planning".to_string();
+    own_copy.event.is_read_only = false;
+    let event_id = repo.upsert_event_fixture(own_copy).await.unwrap();
+    let mut reader_copy = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    );
+    reader_copy.event.title = "[teo] Planning".to_string();
+    repo.upsert_event_fixture(reader_copy).await.unwrap();
+
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(content.title, "Planning");
+    assert!(!content.is_read_only, "the writable copy is canonical");
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.calendar_id, secondary_calendar_id);
+    assert!(!target.is_read_only);
+    let (event, _) = listed_event(&repo, member, starts_at).await;
+    assert_eq!(event.calendar_id, Some(secondary_calendar_id));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_writable_copy_outranks_a_fresher_copy_whose_calendar_role_is_unknown(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _primary_calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+    let secondary_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "secondary".to_string(),
+                name: "Projects".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let unknown_role_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "c_shared@group.calendar.google.com".to_string(),
+                name: "Macro Vacation".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: None,
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let uid = "projects@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let mut own_copy = reminder_upsert(
+        member,
+        link_id,
+        (account_id, secondary_calendar_id),
+        uid,
+        starts_at,
+        EventReminders::default(),
+    );
+    own_copy.event.title = "Planning".to_string();
+    own_copy.event.is_read_only = false;
+    let event_id = repo.upsert_event_fixture(own_copy).await.unwrap();
+    let mut unknown_role_copy = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, unknown_role_calendar_id),
+        uid,
+        starts_at,
+    );
+    unknown_role_copy.event.title = "[teo] Planning".to_string();
+    repo.upsert_event_fixture(unknown_role_copy).await.unwrap();
+
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(content.title, "Planning");
+    assert!(!content.is_read_only, "the writable copy is canonical");
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.calendar_id, secondary_calendar_id);
+    let (event, _) = listed_event(&repo, member, starts_at).await;
+    assert_eq!(event.calendar_id, Some(secondary_calendar_id));
+    assert_eq!(
+        event
+            .sources
+            .iter()
+            .map(|copy| copy.calendar_id)
+            .collect::<Vec<_>>(),
+        vec![secondary_calendar_id, unknown_role_calendar_id]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_calendar_role_change_moves_the_entity_to_the_new_canonical_copy_on_reconcile(
+    pool: PgPool,
+) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let secondary_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "secondary".to_string(),
+                name: "Projects".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let dropped_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "c_third@group.calendar.google.com".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("reader".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let uid = "projects@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let mut own_copy = reminder_upsert(
+        member,
+        link_id,
+        (account_id, secondary_calendar_id),
+        uid,
+        starts_at,
+        EventReminders::default(),
+    );
+    own_copy.event.title = "Planning".to_string();
+    own_copy.event.is_read_only = false;
+    let event_id = repo.upsert_event_fixture(own_copy).await.unwrap();
+    let mut reader_copy = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    );
+    reader_copy.event.title = "[teo] Planning".to_string();
+    repo.upsert_event_fixture(reader_copy).await.unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, dropped_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+    assert_eq!(entity_content(&pool, event_id).await.title, "Planning");
+
+    sqlx::query!(
+        "UPDATE calendars SET access_role = 'writer' WHERE id = $1",
+        shared_calendar_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let announced = repo
+        .reconcile_google_calendar_list(
+            key,
+            lease_token,
+            account_id,
+            vec![
+                primary_calendar_id,
+                secondary_calendar_id,
+                shared_calendar_id,
+            ],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        announced
+            .iter()
+            .map(|outcome| (outcome.event_id, outcome.deleted))
+            .collect::<Vec<_>>(),
+        vec![(event_id, false)],
+        "losing a copy and unlocking another announce the event once"
+    );
+
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(
+        content.title, "[teo] Planning",
+        "the fresher copy is canonical once its calendar is writable"
+    );
+    assert!(
+        !content.is_read_only,
+        "the copy's read-only flag follows the calendar's new role"
+    );
+    let mirrors_canonical = sqlx::query_scalar!(
+        r#"
+        SELECT content_source_id = calendar_event_canonical_source_id(id) AS "mirrors!"
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(mirrors_canonical);
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.calendar_id, shared_calendar_id);
+    assert!(!target.is_read_only);
+    let (event, _) = listed_event(&repo, member, starts_at).await;
+    assert_eq!(event.calendar_id, Some(shared_calendar_id));
+    assert_eq!(
+        event
+            .sources
+            .iter()
+            .map(|copy| (copy.calendar_id, copy.is_read_only))
+            .collect::<Vec<_>>(),
+        vec![(shared_calendar_id, false), (secondary_calendar_id, false)]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_calendar_role_change_refreshes_the_read_only_flag_of_its_only_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let event_id = repo
+        .upsert_event_fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            "vacation@example.com",
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    assert!(entity_content(&pool, event_id).await.is_read_only);
+
+    sqlx::query!(
+        "UPDATE calendars SET access_role = 'writer' WHERE id = $1",
+        shared_calendar_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let announced = repo
+        .reconcile_google_calendar_list(
+            key,
+            lease_token,
+            account_id,
+            vec![primary_calendar_id, shared_calendar_id],
+        )
+        .await
+        .unwrap();
+
+    assert!(!entity_content(&pool, event_id).await.is_read_only);
+    assert_eq!(
+        announced
+            .iter()
+            .map(|outcome| (outcome.event_id, outcome.deleted))
+            .collect::<Vec<_>>(),
+        vec![(event_id, false)],
+        "the unlocked event announces itself so search and clients refresh"
+    );
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.calendar_id, shared_calendar_id);
+    assert!(!target.is_read_only);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_another(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let third_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "c_third@group.calendar.google.com".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("reader".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+    let mut third = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, third_calendar_id),
+        uid,
+        starts_at,
+    );
+    third.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("reader".to_owned()),
+        email_link_id: link_id,
+        account_id,
+        calendar_id: third_calendar_id,
+        provider_event_id: format!("third-{uid}"),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    repo.upsert_event_fixture(third).await.unwrap();
+
+    let moved_start = starts_at + Duration::hours(2);
+    let mut echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    echo.event.sequence = 1;
+    echo.event.updated_at = starts_at + Duration::hours(1);
+    repo.upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+
+    // Retiring the third copy re-derives the entity from the primary. The
+    // shared copy that wrote the schedule survives with a fresher stamp, so
+    // the move stays while the content is the primary's.
+    repo.remove_provider_source(account_id, third_calendar_id, &format!("third-{uid}"))
+        .await
+        .unwrap();
+    let (event, occurrence) = listed_event(&repo, member, moved_start).await;
+    assert_eq!(event.id, event_id);
+    assert_eq!(occurrence.time, timed(moved_start));
+    assert_primary_content(&entity_content(&pool, event_id).await);
+}
+
+mod changes;
+mod channel_grants;
+mod details;
+mod export;
+mod guest_policy;
+mod invitations;
+mod join_requests;
+mod meeting_copies;
+mod meeting_uid;
+#[cfg(feature = "notes")]
+mod notes;
+mod organizer_calendar;
+mod source_access;
+
+mod replacement;
+
+async fn link_email(pool: &PgPool, link_id: Uuid) -> String {
+    sqlx::query_scalar!(
+        r#"SELECT email_address::text AS "email_address!" FROM email_links WHERE id = $1"#,
+        link_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+fn attendee(email: &str, is_organizer: bool) -> CalendarAttendee {
+    CalendarAttendee {
+        email: email.to_string(),
+        display_name: None,
+        response_status: AttendeeResponseStatus::Accepted,
+        is_organizer,
+        is_optional: false,
+        is_self: false,
+        comment: None,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mention_previews_say_how_the_viewer_holds_the_meeting(pool: PgPool) {
+    let organizer_id = "macro|copy-organizer@example.com";
+    let guest_id = "macro|copy-guest@example.com";
+    let holder_id = "macro|copy-holder@example.com";
+    let member_id = "macro|copy-member@example.com";
+    let organizer_link = insert_link(&pool, organizer_id).await;
+    let guest_link = insert_link(&pool, guest_id).await;
+    let holder_link = insert_link(&pool, holder_id).await;
+    let organizer_email = link_email(&pool, organizer_link).await;
+    let guest_email = link_email(&pool, guest_link).await;
+    let holder_email = link_email(&pool, holder_link).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let uid = "held@example.com";
+
+    let copy = |owner_id: &str, link_id, provider, attendees: Vec<CalendarAttendee>| {
+        let mut upsert = timed_upsert(owner_id, link_id, provider, uid, "Planning", 1);
+        upsert.event.organizer_email = Some(organizer_email.clone());
+        upsert.event.attendees = attendees;
+        upsert
+    };
+    let organizer_copy = copy(
+        organizer_id,
+        organizer_link,
+        provider_ids(&repo, organizer_link).await,
+        vec![
+            attendee(&organizer_email, true),
+            attendee(&guest_email, false),
+        ],
+    );
+    let shared_event_id = organizer_copy.event.id;
+    repo.upsert_event_fixture(organizer_copy).await.unwrap();
+    let guest_copy = copy(
+        guest_id,
+        guest_link,
+        provider_ids(&repo, guest_link).await,
+        vec![
+            attendee(&organizer_email, true),
+            attendee(&guest_email, false),
+        ],
+    );
+    repo.upsert_event_fixture(guest_copy).await.unwrap();
+    // A snapshot lists its holder as the only guest so Google accepts it.
+    let mut snapshot = copy(
+        holder_id,
+        holder_link,
+        provider_ids(&repo, holder_link).await,
+        vec![attendee(&holder_email, false)],
+    );
+    snapshot.event.is_snapshot = true;
+    repo.upsert_event_fixture(snapshot).await.unwrap();
+    let channel_id = insert_channel(
+        &pool,
+        organizer_id,
+        &[organizer_id, guest_id, holder_id, member_id],
+    )
+    .await;
+    share_with_channel(&pool, shared_event_id, channel_id).await;
+
+    let now = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let held_as = |viewer: &'static str| {
+        let repo = &repo;
+        async move {
+            let previews = repo
+                .mention_previews(
+                    viewer,
+                    vec![CalendarMentionRequestItem {
+                        event_id: shared_event_id,
+                        occurrence_key: None,
+                    }],
+                    now,
+                )
+                .await
+                .unwrap();
+            let CalendarMentionPreview::Accessible(event) = &previews[0] else {
+                panic!("{viewer} preview should be accessible: {:?}", previews[0]);
+            };
+            event.viewer_copy
+        }
+    };
+    assert_eq!(
+        held_as(organizer_id).await,
+        Some(CalendarMentionViewerCopy::Event)
+    );
+    assert_eq!(
+        held_as(guest_id).await,
+        Some(CalendarMentionViewerCopy::Invitation)
+    );
+    assert_eq!(
+        held_as(holder_id).await,
+        Some(CalendarMentionViewerCopy::Snapshot)
+    );
+    assert_eq!(held_as(member_id).await, None);
 }

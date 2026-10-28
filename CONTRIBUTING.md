@@ -42,13 +42,23 @@ Keep PR bodies concise and write them yourself. A few sentences covering what
 changed and why, a link to the issue, and anything a reviewer needs to know.
 No generated boilerplate, no exhaustive file-by-file change lists.
 
+Describe the code change only. Leave out names of people and customers,
+contact details, @mentions, and references to support channels, tickets, or
+conversations; state the reason in general terms. The `PR Privacy Check`
+workflow fails PRs whose title, body, or commits contain contact details,
+mentions, or support links; run `just pr-privacy` to check before pushing.
+
 ## Development setup
 
-See [docs/RUNNING_LOCALLY.md](docs/RUNNING_LOCALLY.md) for running the full app locally.
+You do not need the local stack if you only change the frontend.
+
+If you only change the frontend, run the [frontend against hosted services](docs/development/running-locally.md#run-the-frontend-against-hosted-services).
+
+If you change a backend service, the database, or behavior that must stay on your machine, [run the local stack](docs/development/running-locally.md#run-the-local-stack).
 
 ## Before you push
 
-- Follow the [style guide](docs/STYLE_GUIDE.md).
+- Follow the [style guide](docs/development/style-guide.md).
 - Format and lint: `cargo fmt` and `just clippy` for Rust changes.
 - Run the tests for the crates you touched: `cargo test -p <crate>`.
 - If you changed SQL queries or migrations, run `just prepare_db` from the

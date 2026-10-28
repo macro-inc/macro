@@ -1,13 +1,24 @@
 //! Outbound adapters for the documents domain.
 
+#[cfg(feature = "service")]
+pub mod document_sync;
+
 #[cfg(feature = "document_create_adapters")]
 pub mod document_bytes_upload;
+#[cfg(feature = "outbound")]
+pub mod editing_activity;
 #[cfg(feature = "ai_tools")]
 pub mod editing_worker_client;
+#[cfg(feature = "ai_tools")]
+pub mod lexical_comment_marks;
 #[cfg(feature = "markdown_init")]
 pub mod markdown_init;
+#[cfg(feature = "document_create_adapters")]
+pub mod mention_tracker;
 #[cfg(feature = "outbound")]
 pub mod pg_document_repo;
+#[cfg(feature = "ai_tools")]
+pub mod s3_document_files;
 #[cfg(feature = "outbound")]
 pub mod s3_markdown_source;
 #[cfg(feature = "outbound")]
@@ -16,3 +27,9 @@ pub mod s3_upload_url;
 pub mod s3_utf8_object_reader;
 #[cfg(feature = "outbound")]
 pub mod sync_service_probe;
+
+#[cfg(feature = "purge")]
+pub mod document_purge;
+
+#[cfg(feature = "axum")]
+pub mod markdown_text;

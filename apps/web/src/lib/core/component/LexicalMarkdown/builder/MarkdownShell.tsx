@@ -1,7 +1,8 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isMobile } from '@core/mobile/isMobile';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { onElementConnect } from '@solid-primitives/lifecycle';
+import { Telemetry } from '@macro-inc/observability';
 import { cn } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
@@ -16,13 +17,16 @@ import {
   createSignal,
   on,
   onCleanup,
+  onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
 import { ActionMenu } from '../component/menu/ActionsMenu';
 import { EmojiMenu } from '../component/menu/EmojiMenu';
 import { FloatingFormatMenu } from '../component/menu/FloatingFormatMenu';
+import { FloatingGifMenu } from '../component/menu/FloatingGifMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
 import { MentionsMenu } from '../component/menu/MentionsMenu';
 import { SkillsMenu } from '../component/menu/SkillsMenu';
@@ -34,6 +38,7 @@ import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
 import { autoRegister, registerCommandEffect } from '../plugins';
 import {
   editorIsEmpty,
+  editorStateAsMarkdown,
   focusEditorWithoutScroll,
   initializeEditorEmpty,
   initializeEditorWithState,
@@ -43,11 +48,16 @@ import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '../utils/fileUploadUtils';
+import { MarkdownShellContent } from './MarkdownShellContent';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
-export const MarkdownShell: Component<
-  { config: EditorBuilder } & EditorComponentProps
-> = (props) => {
+export type MarkdownShellProps = EditorComponentProps & {
+  config: EditorBuilder;
+  /** Accessible name independent of a changing visual placeholder. */
+  ariaLabel?: string;
+};
+
+export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
   const handle = props.config.buildHandle();
   const state = handle._internal;
   const {
@@ -62,6 +72,8 @@ export const MarkdownShell: Component<
 
   // Track initialization so onChange is not fired during setup
   let didInitializeContent = false;
+  const [connected, setConnected] = createSignal(false);
+  let externalMarkdown: string | undefined;
 
   const onConnect = () => {
     if (props.autofocus) {
@@ -73,7 +85,10 @@ export const MarkdownShell: Component<
     const hasInitialContent =
       props.initialState !== undefined || props.initialValue !== undefined;
 
-    if (props.initialState) {
+    if (props.value !== undefined) {
+      setEditorStateFromMarkdown(editor, props.value);
+      externalMarkdown = editorStateAsMarkdown(editor);
+    } else if (props.initialState) {
       initializeEditorWithState(editor, props.initialState);
     } else if (props.initialValue) {
       setEditorStateFromMarkdown(editor, props.initialValue);
@@ -85,12 +100,23 @@ export const MarkdownShell: Component<
 
     // The deferred markdownState effect misses the synchronous change inside
     // init, so push the initial value out to onChange manually.
-    if (hasInitialContent) {
+    if (hasInitialContent && props.value === undefined) {
       builderConfig.handlers.onChange?.(markdownState());
     }
 
+    setConnected(true);
     props.onConnect?.();
   };
+
+  createEffect(() => {
+    const value = props.value;
+    if (!connected() || value === undefined) return;
+    untrack(() => {
+      if (value === editorStateAsMarkdown(editor)) return;
+      setEditorStateFromMarkdown(editor, value);
+      externalMarkdown = editorStateAsMarkdown(editor);
+    });
+  });
 
   // Track editable state
   createEffect(() => {
@@ -105,6 +131,9 @@ export const MarkdownShell: Component<
       markdownState,
       () => {
         if (!didInitializeContent) return;
+        const external = markdownState() === externalMarkdown;
+        externalMarkdown = undefined;
+        if (external) return;
         builderConfig.handlers.onChange?.(markdownState());
       },
       { defer: true }
@@ -184,6 +213,8 @@ export const MarkdownShell: Component<
             undefined,
             state.fileDropConfig!.constrainedMediaDimensions
           )
+        ).catch((error) =>
+          Telemetry.error(error, { surface: 'markdown-file-drop' })
         );
       }
     : undefined;
@@ -195,11 +226,17 @@ export const MarkdownShell: Component<
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
         class={cn(
-          'relative h-full overflow-y-auto min-h-8 scrollbar-hidden',
+          'relative h-full overflow-y-auto min-h-8 scrollbar-hidden text-base',
           props.class
         )}
         on:keydown={(e) => e.stopPropagation()}
         on:click={(e) => {
+          // Embedded controls own focus and need Solid's delegated clicks.
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-lexical-interactive]')
+          )
+            return;
           e.stopPropagation();
           if (!isMobile()) editor.focus();
         }}
@@ -214,16 +251,24 @@ export const MarkdownShell: Component<
             : undefined
         }
       >
-        {/* Content Editable */}
-        <div
-          ref={(el) => {
-            onElementConnect(el, () => {
-              editor.setRootElement(el);
+        <MarkdownShellContent
+          connectRoot={(element) => {
+            const connect = () => {
+              if (editor.getRootElement() === element) return;
+              editor.setRootElement(element);
               onConnect();
+            };
+            // Mounted editors must accept typing before the next resize/paint.
+            onMount(() => {
+              if (element.isConnected) connect();
             });
-            props.refFn?.(el);
+            onElementConnect(element, connect);
+            props.refFn?.(element);
           }}
-          contentEditable={!props.disabled}
+          disabled={!!props.disabled}
+          showPlaceholder={showPlaceholder()}
+          placeholder={props.placeholder}
+          ariaLabel={props.ariaLabel}
         />
 
         <DecoratorRenderer editor={editor} />
@@ -231,14 +276,6 @@ export const MarkdownShell: Component<
         {/* Node Accessories (code blocks) */}
         <Show when={state.accessoryStore}>
           {(store) => <NodeAccessoryRenderer editor={editor} store={store()} />}
-        </Show>
-
-        <Show when={showPlaceholder()}>
-          <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            <p class="my-1.5 pointer-events-none">
-              {props.placeholder ?? '...'}
-            </p>
-          </div>
         </Show>
 
         <Show when={state.dragInsertStore}>
@@ -347,11 +384,27 @@ export const MarkdownShell: Component<
           )}
         </Show>
 
-        {/* Floating Link & Selection Format Menus */}
+        {/* Agent Commands Menu */}
+        <Show when={state.agentCommandsMenuOps}>
+          {(menu) => (
+            <SkillsMenu
+              editor={editor}
+              menu={menu()}
+              agentCommands={
+                builderConfig.agentCommands?.commands ?? (() => [])
+              }
+              useBlockBoundary={false}
+              portalScope={props.portalScope}
+            />
+          )}
+        </Show>
+
+        {/* Floating Link, Format, and GIF Menus */}
         <Show
           when={
             builderConfig.links?.floatingMenu ||
-            builderConfig.floatingFormatMenu
+            builderConfig.floatingFormatMenu ||
+            state.actionsMenuOps
           }
         >
           <FloatingMenuGroup>
@@ -364,6 +417,16 @@ export const MarkdownShell: Component<
               <FloatingFormatMenu
                 portalScope={props.portalScope}
                 showLinkButton={!!builderConfig.links?.floatingMenu}
+                extendedInlineFormats={
+                  typeof builderConfig.floatingFormatMenu === 'object' &&
+                  builderConfig.floatingFormatMenu.extendedInlineFormats
+                }
+              />
+            </Show>
+            <Show when={state.actionsMenuOps}>
+              <FloatingGifMenu
+                canEdit={() => !props.disabled}
+                portalScope={props.portalScope}
               />
             </Show>
           </FloatingMenuGroup>

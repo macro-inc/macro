@@ -1,8 +1,8 @@
 use super::PgAccessRepository;
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotId, ChannelRoleResult, CrmEntityAccess, EntityType,
-        ParticipantRole, TeamRole,
+        AccessError, AccessLevel, AgentSessionParent, BotId, ChannelRoleResult, CrmEntityAccess,
+        EntityType, ParticipantRole, TeamRole,
     },
     ports::AccessRepository,
 };
@@ -18,6 +18,9 @@ const TEAM_ADMIN: &str = "macro|admin@team.com";
 const TEAM_OWNER: &str = "macro|owner@team.com";
 const USER_WITHOUT_TEAM: &str = "macro|noteam@team.com";
 const TEAM_BETA_OWNER: &str = "macro|multi@team.com";
+
+mod agent_session_parent;
+mod channel_call_chat;
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()
@@ -721,6 +724,38 @@ async fn team_item_access_includes_team_channels_and_bot_grants(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_item_access_resolves_bot_typed_grant(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
+    let document_id = Uuid::new_v4();
+
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    insert_pg_bot_entity_access(
+        &pool,
+        document_id,
+        "document",
+        bot_principal.as_ref(),
+        "bot",
+        AccessLevel::Owner,
+    )
+    .await?;
+
+    let access = PgAccessRepository::new(pool)
+        .get_team_entity_access(
+            bot_id,
+            team_id,
+            &document_id.to_string(),
+            EntityType::Document,
+        )
+        .await?;
+
+    assert_eq!(access, Some(AccessLevel::Owner));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_item_access_allows_public_link_sharing(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
@@ -918,6 +953,119 @@ async fn team_channel_role_uses_scoped_channel_rules(pool: PgPool) -> anyhow::Re
             .await?,
         ChannelRoleResult::Role(ParticipantRole::Admin),
     );
+    Ok(())
+}
+
+/// A direct agent conversation between `owner` and `bot_id`, holding just the
+/// two of them as opening one does.
+async fn insert_pg_direct_agent_conversation(
+    pool: &PgPool,
+    channel_id: Uuid,
+    owner: &str,
+    bot_id: BotId,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
+        channel_id,
+        owner,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO comms_channel_agents (channel_id, bot_id, kind, user_id) VALUES ($1, $2, 'direct', $3)",
+        channel_id,
+        bot_id.as_uuid(),
+        owner,
+    )
+    .execute(pool)
+    .await?;
+    let principal = bot_id.into_storage_id();
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'owner'), ($1, $3, 'member')",
+        channel_id,
+        owner,
+        principal.as_ref(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Any member of a persona's team can mint its team-scope token, so the
+/// conversation one teammate has with the persona must stay out of it: its
+/// channel, and everything shared there, including the conversation's
+/// sessions.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_scope_does_not_reach_a_direct_agent_conversation(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let shared_channel_id = Uuid::new_v4();
+    let conversation_id = Uuid::new_v4();
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    insert_pg_bot_channel(&pool, shared_channel_id, "private", None).await?;
+    insert_pg_bot_participant(&pool, shared_channel_id, bot_id, "member").await?;
+    insert_pg_direct_agent_conversation(&pool, conversation_id, PG_BOT_OWNER, bot_id).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    assert_eq!(
+        repo.get_team_channel_role(&shared_channel_id, team_id, bot_id)
+            .await?,
+        ChannelRoleResult::Role(ParticipantRole::Member),
+    );
+    assert_eq!(
+        repo.get_team_channel_role(&conversation_id, team_id, bot_id)
+            .await?,
+        ChannelRoleResult::NoAccess,
+    );
+    for (entity_type, stored_type) in [
+        (EntityType::Document, "document"),
+        (EntityType::AgentSession, "agent_session"),
+    ] {
+        let in_shared_channel = Uuid::new_v4();
+        insert_pg_bot_entity_access(
+            &repo.pool,
+            in_shared_channel,
+            stored_type,
+            &shared_channel_id.to_string(),
+            "channel",
+            AccessLevel::Edit,
+        )
+        .await?;
+        assert_eq!(
+            repo.get_team_entity_access(
+                bot_id,
+                team_id,
+                &in_shared_channel.to_string(),
+                entity_type,
+            )
+            .await?,
+            Some(AccessLevel::Edit),
+            "{stored_type} shared in a channel",
+        );
+
+        let in_conversation = Uuid::new_v4();
+        insert_pg_bot_entity_access(
+            &repo.pool,
+            in_conversation,
+            stored_type,
+            &conversation_id.to_string(),
+            "channel",
+            AccessLevel::Edit,
+        )
+        .await?;
+        assert_eq!(
+            repo.get_team_entity_access(
+                bot_id,
+                team_id,
+                &in_conversation.to_string(),
+                entity_type,
+            )
+            .await?,
+            None,
+            "{stored_type} shared in the direct conversation",
+        );
+    }
     Ok(())
 }
 
@@ -1123,5 +1271,130 @@ async fn reminder_access_is_owner_for_the_owner_and_nothing_for_anyone_else(
         .expect_err("a malformed id is a bad request, not a denial");
     assert!(matches!(malformed, AccessError::BadRequest(_)));
 
+    Ok(())
+}
+
+async fn insert_calendar_event(pool: &PgPool, owner_id: &str, visibility: &str) -> Uuid {
+    let link_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+        VALUES ($1, $2, $2, $1::text || '@example.com', 'GMAIL')
+        "#,
+    )
+    .bind(link_id)
+    .bind(owner_id)
+    .execute(pool)
+    .await
+    .unwrap();
+    let event_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title, visibility,
+            canonical_source_kind, starts_at, ends_at
+        )
+        VALUES ($1, $2, $3, $1::text, 'Pilates', $4, 'google', now(), now() + interval '1 hour')
+        "#,
+    )
+    .bind(event_id)
+    .bind(owner_id)
+    .bind(link_id)
+    .bind(visibility)
+    .execute(pool)
+    .await
+    .unwrap();
+    event_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn calendar_event_channel_share_grants_current_participants_view(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let owner = "macro|calendar-owner@example.com";
+    let member = "macro|calendar-member@example.com";
+    let former = "macro|calendar-former@example.com";
+    let stranger = "macro|calendar-stranger@example.com";
+    let shared = insert_calendar_event(&pool, owner, "default").await;
+    let private = insert_calendar_event(&pool, owner, "private").await;
+    let unshared = insert_calendar_event(&pool, owner, "default").await;
+
+    let channel_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+    )
+    .bind(channel_id)
+    .bind(owner)
+    .execute(&pool)
+    .await?;
+    for (participant, left) in [(owner, false), (member, false), (former, true)] {
+        sqlx::query(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+            VALUES ($1, $2, 'member', CASE WHEN $3 THEN now() END)
+            "#,
+        )
+        .bind(channel_id)
+        .bind(participant)
+        .bind(left)
+        .execute(&pool)
+        .await?;
+    }
+    for event_id in [shared, private] {
+        sqlx::query(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'calendar_event', $2::uuid::text, 'channel', 'view')
+            "#,
+        )
+        .bind(event_id)
+        .bind(channel_id)
+        .execute(&pool)
+        .await?;
+    }
+
+    let repo = PgAccessRepository::new(pool.clone());
+    let access = |event_id: Uuid, user: &'static str| {
+        let repo = repo.clone();
+        async move {
+            repo.get_calendar_event_access(&event_id.to_string(), Some(&user_id(user)))
+                .await
+                .unwrap()
+        }
+    };
+
+    assert_eq!(access(shared, owner).await, Some(AccessLevel::Owner));
+    assert_eq!(access(private, owner).await, Some(AccessLevel::Owner));
+    assert_eq!(access(shared, member).await, Some(AccessLevel::View));
+    assert_eq!(access(private, member).await, None);
+    assert_eq!(access(unshared, member).await, None);
+    assert_eq!(access(shared, former).await, None);
+    assert_eq!(access(shared, stranger).await, None);
+
+    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
+        .bind(shared)
+        .execute(&pool)
+        .await?;
+    assert_eq!(access(shared, member).await, None);
+    assert_eq!(access(shared, owner).await, Some(AccessLevel::Owner));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn direct_recipients_exclude_inherited_grants(pool: PgPool) -> anyhow::Result<()> {
+    let entity_id = Uuid::now_v7();
+    for (source, kind) in [
+        ("macro|direct@example.com".to_string(), "user"),
+        (Uuid::now_v7().to_string(), "team"),
+        (Uuid::now_v7().to_string(), "channel"),
+    ] {
+        sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'call', $2, $3::text::entity_access_source_type, 'view')", entity_id, source, kind).execute(&pool).await?;
+    }
+    let repo = PgAccessRepository::new(pool);
+    let users = repo
+        .get_direct_entity_users(&entity_id, EntityType::Call)
+        .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].as_ref(), "macro|direct@example.com");
     Ok(())
 }

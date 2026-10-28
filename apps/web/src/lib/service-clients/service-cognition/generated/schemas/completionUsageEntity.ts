@@ -6,6 +6,6 @@
  */
 
 /**
- * The entity the completion related to, if any.
+ * Related entity, if any.
  */
 export type CompletionUsageEntity = string | null;

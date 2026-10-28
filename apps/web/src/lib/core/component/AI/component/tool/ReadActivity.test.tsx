@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 
+import { ActivityContextProvider } from '@app/features/activity/context/activity-context';
+import { createMockActivityContext } from '@app/features/activity/tests/mock-context';
 import type { PropertyDefinitionDomain } from '@property/types';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { cleanup, render, screen } from '@solidjs/testing-library';
@@ -27,12 +29,30 @@ const definitions = [
   } as unknown as PropertyDefinitionDomain,
 ];
 
-vi.mock('@property/editor/hooks/useAllProperties', () => ({
-  useAllProperties: () => () => definitions,
+vi.mock('@app/features/activity/open-entity-in-split', () => ({
+  openEntityInSplit: vi.fn(),
 }));
 
-vi.mock('@core/component/LexicalMarkdown/component/core/BlockLink', () => ({
-  openDocument: vi.fn(),
+// Module-load quarantine, not a dependency substitute: the connection-gateway
+// websocket connects when imported, which jsdom cannot do.
+vi.mock('@service-connection/websocket', () => ({
+  ws: { send() {}, addEventListener() {}, removeEventListener() {} },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect() {},
+  createConnectionWebsocketEffect() {},
+  parseWebsocketPayload: () => undefined,
+}));
+
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { send() {}, addEventListener() {}, removeEventListener() {} },
+  createWebSocketJob: () => Promise.reject(new Error('no websocket in tests')),
+}));
+
+// The real EntityIcon reaches the command launcher through `@ui`, which reads
+// `getIconConfig` back before EntityIcon finishes initializing.
+vi.mock('@core/component/EntityIcon', () => ({
+  EntityIcon: () => null,
+  getIconConfig: () => ({ icon: () => null }),
 }));
 
 vi.mock(
@@ -43,15 +63,17 @@ vi.mock(
   })
 );
 
-vi.mock('@property/hooks', () => ({
-  usePropertyEntityDisplay: () => ({
+const context = createMockActivityContext({
+  propertyDefinition: (id) => () =>
+    definitions.find((definition) => definition.id === id()),
+  entityDisplay: () => ({
     name: () => 'Launch plan',
     icon: () => null,
     isLoading: () => false,
     blockOrFileType: () => null,
     linkParams: () => undefined,
   }),
-}));
+});
 
 function renderTool(
   activities: NamedTool<'ReadActivity', 'response'>['data']['activities']
@@ -71,18 +93,24 @@ function renderTool(
   };
 
   return render(() => (
-    <Dynamic
-      component={
-        readActivityHandler.render as Component<Record<string, unknown>>
-      }
-      tool={tool}
-      response={response}
-      chat_id="chat-1"
-      message_id="message-1"
-      part_index={0}
-      isComplete
-      renderContext={{ isStreaming: false, grouped: false }}
-    />
+    <ActivityContextProvider value={context}>
+      <Dynamic
+        component={
+          readActivityHandler.render as Component<Record<string, unknown>>
+        }
+        tool={tool}
+        response={response}
+        chat_id="chat-1"
+        message_id="message-1"
+        part_index={0}
+        isComplete
+        renderContext={{
+          isStreaming: false,
+          grouped: false,
+          followedBy: () => false,
+        }}
+      />
+    </ActivityContextProvider>
   ));
 }
 
@@ -133,6 +161,22 @@ describe('ReadActivity renderer', () => {
     expect(screen.getByRole('button', { name: /1 activity/i })).toBeTruthy();
     expect(container.textContent).toContain('Created');
     expect(container.textContent).not.toContain('agent-session-raw-id');
+  });
+
+  it('renders a database as a named entity', () => {
+    const { container } = renderTool([
+      {
+        actorId: 'macro|user@example.com',
+        entityType: 'database',
+        entityId: 'database-raw-id',
+        action: { type: 'created' },
+        occurredAt: '2026-08-19T17:30:00Z',
+      },
+    ]);
+
+    expect(screen.getByRole('button', { name: /1 activity/i })).toBeTruthy();
+    expect(container.textContent).toContain('Launch plan');
+    expect(container.textContent).not.toContain('database-raw-id');
   });
 
   it('reports an empty range without an expand control', () => {

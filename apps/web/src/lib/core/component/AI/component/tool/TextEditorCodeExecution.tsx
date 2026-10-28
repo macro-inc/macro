@@ -9,7 +9,7 @@ import {
   allSupportedExtensionSet,
   isCodeEditorExtensionSupported,
 } from '@core/util/languageQuery';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg';
+import Terminal from '@icon/system/regular/terminal.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   TextEditorCodeExecutionContent,
@@ -54,7 +54,7 @@ function CreateResult(props: {
   result: TextEditorCodeExecutionCreateResult;
   toolId: string;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const [createdFile, setCreatedFile] = createSignal<CreatedFileInfo | null>(
     createdFilesMap[props.toolId] ?? null
   );
@@ -78,11 +78,14 @@ function CreateResult(props: {
     }
   });
 
-  const handleClick = () => {
+  const handleClick = (event: MouseEvent) => {
     const file = createdFile();
     if (file) {
       const blockName = fileTypeToBlockName(file.extension);
-      replaceOrInsertSplit({ type: blockName, id: file.documentId });
+      openWithSplit(
+        { type: blockName, id: file.documentId },
+        { activate: true, preferNewSplit: event.shiftKey }
+      );
     }
   };
 
@@ -132,7 +135,7 @@ function InlineTextEditorResult(props: {
           props.content.type === 'text_editor_code_execution_tool_result_error'
         }
       >
-        <span class="text-ink-error">Failed</span>
+        <span class="text-failure">Failed</span>
       </Match>
       <Match
         when={props.content.type === 'text_editor_code_execution_view_result'}
@@ -206,7 +209,9 @@ const handler = createToolRenderer({
   render: (ctx) => (
     <BaseTool icon={Terminal} renderContext={ctx.renderContext} type="call">
       <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
-        <span class="min-w-0 truncate">Uploaded code</span>
+        <span class="min-w-0 truncate">
+          {ctx.response ? 'Uploaded code' : 'Upload code'}
+        </span>
         <Show when={ctx.response}>
           {(response) => (
             <div class="shrink-0">

@@ -1,7 +1,7 @@
 import type { EntityData } from '@entity';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { blockSenderWithToast } from '@queries/email/thread';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeBlockSenderAction = () => {
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
@@ -22,7 +22,10 @@ export const makeBlockSenderAction = () => {
     }
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

@@ -1,0 +1,313 @@
+import {
+  CollapsibleSection,
+  SearchBar,
+  ViewSidebar,
+} from '@app/components/view-shell';
+import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
+import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
+import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { useFavoriteDisplayName } from '@app/util/favorites';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
+import { fireAndForget } from '@core/util/fireAndForget';
+import DatabaseIcon from '@icon/system/regular/database.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { Button, cn, Scroll } from '@ui';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { DriveNavigation } from '../components/drive-navigation';
+import { FolderTree } from '../components/folder-tree';
+import { useDriveView } from '../context/drive-context';
+import { buildFolderTree, filterFolderTree } from '../core/folder-tree';
+import { DriveCreateMenu } from '../drive-create-menu';
+import { DriveLocationMenu } from '../drive-location-menu';
+
+/** Past this many databases, the section scrolls within its own height. */
+const DATABASE_SCROLL_THRESHOLD = 10;
+
+function DriveDatabases(props: { onNavigate?: () => void }) {
+  const { sidebar, actions } = useDriveView();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  createScrollTopFade(scrollRoot);
+
+  return (
+    <Scroll
+      fill={false}
+      scrollRef={setScrollRoot}
+      class={cn(
+        sidebar.databases().length > DATABASE_SCROLL_THRESHOLD &&
+          'max-h-[calc(10*var(--sidebar-row-height)+9*var(--sidebar-row-gap))] touch:max-h-[calc(10*2.75rem+9*var(--sidebar-row-gap))]'
+      )}
+    >
+      <ViewSidebar.Nav aria-label="Databases">
+        <For each={sidebar.databases()}>
+          {(database) => (
+            <ViewSidebar.Item
+              title={database.name}
+              onClick={(event) => {
+                actions.openEntity(database, event);
+                props.onNavigate?.();
+              }}
+            >
+              <ViewSidebar.Icon>
+                <DatabaseIcon class="size-4" />
+              </ViewSidebar.Icon>
+              <span class="truncate">{database.name}</span>
+            </ViewSidebar.Item>
+          )}
+        </For>
+      </ViewSidebar.Nav>
+    </Scroll>
+  );
+}
+
+function DriveFavorite(props: { favorite: Favorite; onNavigate?: () => void }) {
+  const { actions } = useDriveView();
+
+  const name = useFavoriteDisplayName(props.favorite);
+
+  return (
+    <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
+      <ViewSidebar.Item
+        title={name()}
+        onClick={(event) => {
+          actions.openFavorite(props.favorite, name(), event);
+          props.onNavigate?.();
+        }}
+      >
+        <ViewSidebar.Icon>
+          <FavoriteIcon favorite={props.favorite} class="size-4" />
+        </ViewSidebar.Icon>
+        <span class="truncate">{name()}</span>
+      </ViewSidebar.Item>
+    </FavoriteContextMenu>
+  );
+}
+
+/** Also used by the narrow-layout navigation menu. */
+export function DriveSidebarContent(props: { onNavigate?: () => void }) {
+  const { state, sidebar } = useDriveView();
+
+  const [folderSearch, setFolderSearch] = createSignal('');
+
+  const [searchingFolders, setSearchingFolders] = createSignal(false);
+
+  const tree = createMemo(() => buildFolderTree(sidebar.folders()));
+
+  const filteredTree = createMemo(() =>
+    filterFolderTree(tree(), folderSearch())
+  );
+
+  const selectedFolder = () => {
+    const location = state.value().location;
+
+    return location.kind === 'folder' ? location.id : undefined;
+  };
+
+  const selectFolder = (id: string | null) => {
+    state.selectFolder(id);
+    props.onNavigate?.();
+  };
+
+  return (
+    <>
+      <DriveNavigation
+        locationMenu={DriveLocationMenu}
+        location={state.value().location}
+        onNavigate={(tab) => {
+          state.selectTab(tab);
+          props.onNavigate?.();
+        }}
+      />
+      <Show when={sidebar.favorites().length > 0}>
+        <CollapsibleSection.Root
+          open={state.value().favoritesOpen}
+          onOpenChange={state.setFavoritesOpen}
+        >
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Content>
+            <ViewSidebar.Nav aria-label="Favorite files and folders">
+              <For each={sidebar.favorites()}>
+                {(favorite) => (
+                  <DriveFavorite
+                    favorite={favorite}
+                    onNavigate={props.onNavigate}
+                  />
+                )}
+              </For>
+            </ViewSidebar.Nav>
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
+      </Show>
+      <Show when={sidebar.databases().length > 0}>
+        <CollapsibleSection.Root
+          open={state.value().databasesOpen}
+          onOpenChange={state.setDatabasesOpen}
+        >
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Databases</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Content>
+            <DriveDatabases onNavigate={props.onNavigate} />
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
+      </Show>
+      <CollapsibleSection.Root
+        open={state.value().rootOpen}
+        onOpenChange={state.setRootOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger class="flex-1">
+            <span class="min-w-0 truncate">Folders</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Action
+            aria-label="Search folders"
+            onClick={() => {
+              const open = !searchingFolders();
+
+              setSearchingFolders(open);
+              setFolderSearch('');
+
+              if (open) state.setRootOpen(true);
+            }}
+          >
+            <SearchIcon class="size-3.5" />
+          </CollapsibleSection.Action>
+        </CollapsibleSection.Header>
+        <CollapsibleSection.Content>
+          <Show when={searchingFolders()}>
+            <SearchBar
+              label="Search folders"
+              placeholder="Search folders"
+              value={folderSearch()}
+              onValueChange={setFolderSearch}
+              class="mb-2"
+            />
+          </Show>
+          <ViewSidebar.Nav aria-label="Folders">
+            <DriveLocationMenu location={{ kind: 'folder', id: null }}>
+              <ViewSidebar.Item
+                active={selectedFolder() === null}
+                onClick={() => selectFolder(null)}
+              >
+                <ViewSidebar.Icon>
+                  <FolderIcon class="size-4" />
+                </ViewSidebar.Icon>
+                <span>Drive</span>
+              </ViewSidebar.Item>
+            </DriveLocationMenu>
+            <ViewSidebar.Branch>
+              <Show
+                when={!sidebar.foldersLoading()}
+                fallback={
+                  <p
+                    role="status"
+                    class="px-3 py-2 text-sm text-ink-extra-muted"
+                  >
+                    Loading folders…
+                  </p>
+                }
+              >
+                <Show
+                  when={!sidebar.foldersError()}
+                  fallback={
+                    <div class="p-3 text-sm text-ink-muted">
+                      Folders couldn’t be loaded.
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          fireAndForget(sidebar.retryFolders(), 'drive-view')
+                        }
+                      >
+                        Try again
+                      </Button>
+                    </div>
+                  }
+                >
+                  <FolderTree
+                    locationMenu={DriveLocationMenu}
+                    nodes={filteredTree()}
+                    selectedId={selectedFolder()}
+                    expandedIds={state.value().expandedFolderIds}
+                    searching={!!folderSearch().trim()}
+                    onToggle={state.toggleFolder}
+                    onSelect={selectFolder}
+                  />
+                  <Show when={filteredTree().length === 0}>
+                    <p class="px-3 py-2 text-sm text-ink-extra-muted">
+                      {folderSearch()
+                        ? 'No matching folders'
+                        : 'No folders yet'}
+                    </p>
+                  </Show>
+                </Show>
+              </Show>
+            </ViewSidebar.Branch>
+          </ViewSidebar.Nav>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </>
+  );
+}
+
+/** The import card, offering local uploads beside connected apps. */
+function DriveImportPromotion() {
+  const { actions } = useDriveView();
+  return (
+    <ConnectorImportSidebar
+      category="files"
+      class="mt-auto"
+      alternatives={[
+        {
+          icon: UploadIcon,
+          label: 'Upload files',
+          description: 'Choose files from this computer.',
+          onSelect: actions.uploadFiles,
+        },
+        {
+          icon: FolderIcon,
+          label: 'Upload a folder',
+          description: 'Bring over a folder and everything in it.',
+          onSelect: actions.uploadFolder,
+        },
+      ]}
+    />
+  );
+}
+
+export function DriveSidebar() {
+  const { state } = useDriveView();
+  return (
+    <ViewSidebar.Root aria-label="Drive navigation">
+      <ViewSidebar.Header
+        searchLabel="Search files"
+        search={() => (
+          <SearchBar
+            label="Search files"
+            placeholder="Search files"
+            value={state.value().search}
+            onValueChange={state.setSearch}
+          />
+        )}
+      >
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton />
+          <ViewSidebar.Title>Drive</ViewSidebar.Title>
+        </div>
+      </ViewSidebar.Header>
+      <ViewSidebar.Primary>
+        <DriveCreateMenu />
+      </ViewSidebar.Primary>
+      <ViewSidebar.Content>
+        <DriveSidebarContent />
+        <DriveImportPromotion />
+      </ViewSidebar.Content>
+    </ViewSidebar.Root>
+  );
+}

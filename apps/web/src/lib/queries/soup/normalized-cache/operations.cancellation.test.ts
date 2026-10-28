@@ -10,7 +10,7 @@
  */
 
 import type { QueryKey } from '@tanstack/solid-query';
-import { QueryClient, QueryObserver } from '@tanstack/solid-query';
+import { hashKey, QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
@@ -220,7 +220,9 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     expect(observer.getCurrentResult().data).toEqual(['thread-1']);
 
     // Active observer + invalidation → refetch in flight.
-    testQueryClient.invalidateQueries({ queryKey: sourceListKey });
+    const invalidated = testQueryClient.invalidateQueries({
+      queryKey: sourceListKey,
+    });
     await vi.waitFor(() => {
       expect(source.state().fetchStatus).toBe('fetching');
     });
@@ -241,6 +243,7 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     source.setServerItems(['should-not-land']);
     await source.releaseNextFetch();
     expect(observer.getCurrentResult().data).toEqual(['thread-1']);
+    await invalidated;
   });
 
   it('channel-shaped partials (nested id) still cancel dependent queries', async () => {
@@ -248,7 +251,9 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     const { observer } = source.mount();
     await source.releaseNextFetch();
 
-    testQueryClient.invalidateQueries({ queryKey: sourceListKey });
+    const invalidated = testQueryClient.invalidateQueries({
+      queryKey: sourceListKey,
+    });
     await vi.waitFor(() => {
       expect(source.state().fetchStatus).toBe('fetching');
     });
@@ -271,6 +276,7 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     source.setServerItems(['should-not-land']);
     await source.releaseNextFetch();
     expect(observer.getCurrentResult().data).toEqual(['channel-1']);
+    await invalidated;
   });
 
   it('does not cancel a dependent query mid initial fetch (no data yet)', async () => {
@@ -293,5 +299,29 @@ describe('destination-folder refetch vs optimistic soup updates', () => {
     await source.releaseNextFetch();
     expect(observer.getCurrentResult().data).toEqual(['thread-1']);
     expect(source.state().status).toBe('success');
+  });
+});
+
+describe('optimistic update cancellation cost', () => {
+  it('does not re-hash dependent keys against every cached query', async () => {
+    const queryKeyHashFn = vi.fn(hashKey);
+    testQueryClient = new QueryClient({
+      defaultOptions: { queries: { queryKeyHashFn, retry: false } },
+    });
+    for (let index = 0; index < 500; index += 1) {
+      testQueryClient.setQueryData(['unrelated', index], index);
+    }
+    testQueryClient.setQueryData(sourceListKey, ['thread-1']);
+    queryKeyHashFn.mockClear();
+
+    mockNormalizer.getDependentQueriesByIds.mockReturnValue([sourceListKey]);
+    optimisticUpdateSoupEntity({
+      tag: 'emailThread',
+      data: { id: 'thread-1', isRead: true },
+      frecency_score: 0,
+    } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
+
+    // An exact-key cancel hashed the key once per cached query (501+).
+    expect(queryKeyHashFn.mock.calls.length).toBeLessThan(10);
   });
 });

@@ -1,13 +1,8 @@
-import RefreshIcon from '@phosphor/arrow-clockwise.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import { DebugSuspense } from '@channel/DebugSuspense';
+import RefreshIcon from '@icon/system/regular/arrow-clockwise.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import { Button } from '@ui';
-import {
-  createSignal,
-  ErrorBoundary,
-  type JSX,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createSignal, ErrorBoundary, type JSX, Show } from 'solid-js';
 
 interface HomeSectionBoundaryProps {
   title: string;
@@ -50,9 +45,8 @@ function HomeSectionError(props: HomeSectionErrorProps) {
 
           <div class="mt-2 flex gap-2">
             <Button
-              variant="base"
+              variant="secondary"
               size="sm"
-              depth={2}
               class="w-fit bg-surface"
               onClick={props.reset}
             >
@@ -97,7 +91,8 @@ export function HomeSectionBoundary(props: HomeSectionBoundaryProps) {
         />
       )}
     >
-      <Suspense
+      <DebugSuspense
+        name={`Home.section.${props.title}`}
         fallback={
           props.fallback === undefined ? (
             <HomeSectionFallback />
@@ -107,7 +102,7 @@ export function HomeSectionBoundary(props: HomeSectionBoundaryProps) {
         }
       >
         {props.children}
-      </Suspense>
+      </DebugSuspense>
     </ErrorBoundary>
   );
 }

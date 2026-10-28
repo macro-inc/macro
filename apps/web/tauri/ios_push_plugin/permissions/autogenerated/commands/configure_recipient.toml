@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-configure-recipient"
+description = "Enables the configure_recipient command without any pre-configured scope."
+commands.allow = ["configure_recipient"]
+
+[[permission]]
+identifier = "deny-configure-recipient"
+description = "Denies the configure_recipient command without any pre-configured scope."
+commands.deny = ["configure_recipient"]

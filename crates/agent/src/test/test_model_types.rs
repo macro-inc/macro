@@ -8,4 +8,8 @@ fn test_from_string() {
 
     let bad = "claude-big-burger";
     assert!(Model::try_from(bad).is_err());
+
+    let fireworks = Model::try_from("fireworks/kimi-k3").expect("short fireworks id");
+    assert_eq!(fireworks.provider(), "fireworks");
+    assert_eq!(fireworks.name(), "kimi-k3");
 }

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) FILTER (WHERE deleted_at IS NULL) AS \"live!\",\n                   count(*) FILTER (WHERE deleted_at IS NOT NULL) AS \"deleted!\"\n            FROM entity WHERE entity_type = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "live!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleted!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "2fef588eb0c7c780c425d80b68e1ee5c64de8e69b9962c11040424d5965589df"
+}

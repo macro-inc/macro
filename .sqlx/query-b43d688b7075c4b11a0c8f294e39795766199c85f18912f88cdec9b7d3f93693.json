@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT source_id FROM entity_access WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'user' AND granted_from_project_id IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b43d688b7075c4b11a0c8f294e39795766199c85f18912f88cdec9b7d3f93693"
+}

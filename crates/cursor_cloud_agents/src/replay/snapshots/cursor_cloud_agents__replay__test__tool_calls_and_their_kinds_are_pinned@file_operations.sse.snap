@@ -1,0 +1,25 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 199
+expression: calls
+input_file: crates/cursor_acp/fixtures/real/file_operations.sse
+---
+[
+    "tool_call \"edit_file\" kind=Edit status=InProgress",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(Completed)",
+    "tool_call \"read_file\" kind=Read status=InProgress",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(InProgress)",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(Completed)",
+    "tool_call \"edit_file\" kind=Edit status=InProgress",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(Completed)",
+    "tool_call \"delete_file\" kind=Delete status=InProgress",
+    "  update   Some(\"delete_file\") kind=Some(Delete) status=Some(InProgress)",
+    "  update   Some(\"delete_file\") kind=Some(Delete) status=Some(Completed)",
+    "tool_call \"delete_file\" kind=Delete status=InProgress",
+    "  update   Some(\"delete_file\") kind=Some(Delete) status=Some(InProgress)",
+    "  update   Some(\"delete_file\") kind=Some(Delete) status=Some(Completed)",
+]

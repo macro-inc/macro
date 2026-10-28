@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(m) AS \"message!: Json<StoredMessage>\" FROM comms_messages m\n            JOIN comms_message_threads t ON t.root_id = m.id\n            WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2\n                AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)\n                AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS (\n                    SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))\n                AND ($6::uuid[] IS NULL OR m.id = ANY($6))\n                AND ($7::bool IS NULL OR (t.anchor IS NOT NULL) = $7)\n                AND (($8::timestamptz IS NULL AND $9::timestamptz IS NULL)\n                    OR (($8::timestamptz IS NULL OR m.created_at >= $8) AND ($9::timestamptz IS NULL OR m.created_at < $9))\n                    OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL\n                        AND ($8::timestamptz IS NULL OR r.created_at >= $8) AND ($9::timestamptz IS NULL OR r.created_at < $9)))\n                AND ($3::timestamptz IS NULL OR (m.created_at, m.id) > ($3, $4::uuid))\n            ORDER BY m.created_at ASC, m.id ASC LIMIT $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8",
+        "UuidArray",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5729100777c9a6e4f96858e0cf484db9a188117abcc2abd2001d8f78357a8402"
+}

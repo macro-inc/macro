@@ -13,6 +13,9 @@ use std::{
 };
 use tokio::{sync::mpsc::Sender, task::AbortHandle};
 
+#[cfg(test)]
+mod test;
+
 #[async_trait]
 pub trait ConnectionRepo: Send + Sync {
     /// Inserts a new [StoredConnectionEntity] into storage
@@ -53,12 +56,13 @@ pub trait ConnectionRepo: Send + Sync {
     /// Deletes a [StoredConnectionEntity] from the database
     async fn remove_entity(&self, entity: &EntityConnection<'_>) -> anyhow::Result<()>;
 
-    /// Updates the last_ping timestamp for a given connection entity
+    /// Updates the last_ping timestamp for a given connection entity, or
+    /// returns `None` when there is no entry for it
     async fn update_last_entity_ping(
         &self,
         entity: &EntityConnection<'_>,
         timestamp: u64,
-    ) -> anyhow::Result<StoredConnectionEntity>;
+    ) -> anyhow::Result<Option<StoredConnectionEntity>>;
 
     /// Updates the last_ping timestamp for a given top level connection
     async fn update_user_connection_last_ping(
@@ -143,18 +147,23 @@ impl ConnectionManager {
     /// IMPORTANT: this removes all entities associated with the connection_id
     /// and not just a specific entity like document, chat, channel activity.
     pub async fn remove_connection(&self, connection_id: &str) -> Result<()> {
-        // if the connection exists, then we kill the task
-        // that forwards the messages to the websocket
-        if let Some(connection) = self.connections.get(connection_id) {
-            // Only abort the task if it has not already been aborted
+        // Removing twice is the normal case, not an edge one: a refused send
+        // removes the connection and aborts its forwarder, and the socket
+        // handler removes it again when it sees that task end. Taking the
+        // entry out is the one step that cannot happen twice, so it is what
+        // the count and the abort hang off - `fetch_sub` on a count already
+        // at zero wraps to `usize::MAX`.
+        if let Some((_, connection)) = self.connections.remove(connection_id) {
+            self.connection_count
+                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            // Killing the task that forwards messages to the websocket.
             if !connection.abort_handle.is_finished() {
                 connection.abort_handle.abort();
             }
         }
-        self.connections.remove(connection_id);
-        self.connection_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
+        // Unconditional: a connection this instance never held still has rows
+        // to clear, and the delete is idempotent.
         self.persistence
             .remove_all_entries_for_by_connection_id(connection_id)
             .await?;
@@ -174,40 +183,105 @@ impl ConnectionManager {
 
     /// Updates the last_ping timestamp for a given connection entity
     /// This also propogates to the last_ping timestamp for the top level user connection
+    ///
+    /// A ping for an entity with no entry re-creates it: the client is still
+    /// watching, so a lost `open` (a failed write, a row cleared under a live
+    /// connection) must not hide the user until they reopen the entity.
     #[tracing::instrument(err, skip(self))]
-    pub async fn refresh_connection_entity(&self, entity: &EntityConnection<'_>) -> Result<()> {
+    pub async fn refresh_connection_entity(
+        &self,
+        connection_entity: UserEntityConnection<'_>,
+    ) -> Result<()> {
         let updated_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        let connection_id = entity.connection_id.clone();
+        let connection_id = connection_entity.extra.connection_id.to_string();
+        let user_id = connection_entity.user_id.to_string();
 
-        // Update the last_ping on the specific entity associated with the connection_id
-        let entity = self
+        let refreshed = self
             .persistence
-            .update_last_entity_ping(entity, updated_timestamp)
+            .update_last_entity_ping(&connection_entity.extra, updated_timestamp)
             .await?;
+        if refreshed.is_none() {
+            tracing::warn!(
+                connection_id = %connection_id,
+                entity_type = %connection_entity.extra.extra.entity_type,
+                entity_id = %connection_entity.extra.extra.entity_id,
+                "ping for an untracked entity; re-creating its entry"
+            );
+            self.persistence
+                .insert_connection_entry(connection_entity)
+                .await?;
+        }
 
-        // // Update the user connection last_ping
         self.persistence
-            .update_user_connection_last_ping(&connection_id, &entity.user_id, updated_timestamp)
+            .update_user_connection_last_ping(&connection_id, &user_id, updated_timestamp)
             .await?;
 
         Ok(())
     }
 
-    /// Sends a message to a a connection
-    /// If the connection is not found, or dropped, then we remove the connection id
-    /// from the map, and should kill (TODO:) any remaining tasks associated with the connection
+    /// Offers a message to a connection's outbound queue, and drops the
+    /// connection if it will not take it.
+    ///
+    /// Never waits. The queue is this connection's alone but the callers are
+    /// everyone, so a consumer that has stopped draining must cost them
+    /// nothing: waiting for capacity here is indistinguishable from being
+    /// down to whoever is publishing, and a publisher holding its own
+    /// deadline fails the work behind the send rather than the one delivery.
+    ///
+    /// A full queue is not a slow consumer, it is a consumer already a whole
+    /// queue behind, so it is treated the same as a closed one: the
+    /// connection goes, which also aborts the forwarder that stopped
+    /// draining, and the client reconnects.
+    #[tracing::instrument(
+        name = "connection_gateway.queue_send",
+        err,
+        skip(self, id, message),
+        fields(
+            connection.id = id,
+            connection.queue.observed_depth = tracing::field::Empty,
+            connection.queue.max_capacity = tracing::field::Empty,
+        )
+    )]
     pub async fn send_message(&self, id: &str, message: Message) -> Result<()> {
         let sender = match self.connections.get(id) {
             Some(connection) => connection.sender.clone(),
             None => anyhow::bail!("connection not found"),
         };
 
-        if let Err(err) = sender.send(OutgoingMessage::Message(message)).await {
+        let remaining_capacity = sender.capacity();
+        let max_capacity = sender.max_capacity();
+        let depth = max_capacity.saturating_sub(remaining_capacity);
+        let span = tracing::Span::current();
+        span.record("connection.queue.observed_depth", depth as u64);
+        span.record("connection.queue.max_capacity", max_capacity as u64);
+
+        if let Err(err) = sender.try_send(OutgoingMessage::Message(message)) {
+            tracing::warn!(
+                connection.id = id,
+                connection.queue.observed_depth = depth,
+                connection.queue.max_capacity = max_capacity,
+                "websocket outbound queue would not take a message; dropping the connection"
+            );
             self.remove_connection(id).await?;
             anyhow::bail!("failed to send message: {}", err);
+        }
+
+        Ok(())
+    }
+
+    /// Send a raw binary frame to a connection held by this instance.
+    pub async fn send_binary(&self, id: &str, bytes: Vec<u8>) -> Result<()> {
+        let sender = match self.connections.get(id) {
+            Some(connection) => connection.sender.clone(),
+            None => anyhow::bail!("connection not found"),
+        };
+
+        if let Err(err) = sender.try_send(OutgoingMessage::Binary(bytes)) {
+            self.remove_connection(id).await?;
+            anyhow::bail!("failed to send binary message: {}", err);
         }
 
         Ok(())

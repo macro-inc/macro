@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_entity_mentions\n               (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)\n           SELECT input.id, 'message', input.message_id, 'user', input.user_id,\n               input.sender_id, input.created_at\n           FROM UNNEST($1::uuid[], $2::text[], $3::text[], $4::text[], $5::timestamptz[])\n               AS input(id, message_id, user_id, sender_id, created_at)\n           ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8c4c0691b05fc128568678813e4d02f08dba64fd908363763f46360f09470bb4"
+}

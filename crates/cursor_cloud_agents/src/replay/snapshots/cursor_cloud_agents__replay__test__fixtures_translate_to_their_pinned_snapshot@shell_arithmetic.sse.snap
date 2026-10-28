@@ -1,0 +1,293 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 210
+expression: updates(sse)
+input_file: crates/cursor_acp/fixtures/real/shell_arithmetic.sse
+---
+[
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Running a single shell"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " command to compute "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "5 + 5."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " compute"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "5"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " +"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "5"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " with"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " one"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " shell"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " command"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " report"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " result"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-8be7fce4-493c-4301-9473-949fda2ad369-0 fc_14f7b514-b183-98c1-8188-98fada187431_0",
+    "title": "run_terminal_cmd",
+    "kind": "execute",
+    "status": "in_progress",
+    "rawInput": {
+      "command": "echo $((5 + 5))",
+      "timeout": 600000,
+      "toolCallId": "call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0",
+      "simpleCommands": [
+        "echo"
+      ],
+      "parsingResult": {
+        "executableCommands": [
+          {
+            "name": "echo",
+            "args": [
+              {
+                "type": "arithmetic_expansion",
+                "value": "$((5 + 5))"
+              }
+            ],
+            "fullText": "echo $((5 + 5))"
+          }
+        ]
+      },
+      "fileOutputThresholdBytes": "40000",
+      "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+      "hardTimeout": 86400000,
+      "description": "Compute 5 plus 5 in shell",
+      "closeStdin": true,
+      "conversationId": "bc-30a98094-3301-4c4b-8b6e-30720b7d9a87"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-8be7fce4-493c-4301-9473-949fda2ad369-0 fc_14f7b514-b183-98c1-8188-98fada187431_0",
+    "kind": "execute",
+    "status": "completed",
+    "title": "run_terminal_cmd",
+    "rawInput": {
+      "command": "echo $((5 + 5))",
+      "timeout": 600000,
+      "toolCallId": "call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0",
+      "simpleCommands": [
+        "echo"
+      ],
+      "parsingResult": {
+        "executableCommands": [
+          {
+            "name": "echo",
+            "args": [
+              {
+                "type": "arithmetic_expansion",
+                "value": "$((5 + 5))"
+              }
+            ],
+            "fullText": "echo $((5 + 5))"
+          }
+        ]
+      },
+      "fileOutputThresholdBytes": "40000",
+      "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+      "hardTimeout": 86400000,
+      "description": "Compute 5 plus 5 in shell",
+      "closeStdin": true,
+      "conversationId": "bc-30a98094-3301-4c4b-8b6e-30720b7d9a87"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "command": "echo $((5 + 5))",
+          "stdout": "10\n",
+          "executionTime": 292,
+          "interleavedOutput": "10\n",
+          "localExecutionTimeMs": 69
+        },
+        "isBackground": false
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "The shell command returned"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " 10."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "5"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " +"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "5"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " **"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "10"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**."
+    }
+  }
+]

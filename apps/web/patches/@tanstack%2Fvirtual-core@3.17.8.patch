@@ -1,0 +1,193 @@
+diff --git a/dist/cjs/index.cjs b/dist/cjs/index.cjs
+index e470032a9572b3ced764ca02238a8c6be435a9d4..29006e6bf44bdfa02fb32de5f789ad16d7b63260 100644
+--- a/dist/cjs/index.cjs
++++ b/dist/cjs/index.cjs
+@@ -276,6 +276,7 @@ class Virtualizer {
+         isScrollingResetDelay: 150,
+         enabled: true,
+         isRtl: false,
++        useIOSScrollDeferral: true,
+         useScrollendEvent: false,
+         useAnimationFrameWithResizeObserver: false,
+         laneAssignmentMode: "estimate",
+@@ -304,7 +305,7 @@ class Virtualizer {
+             anchor = [item.key, this.getScrollOffset() - item.start];
+           }
+           const behavior = merged.followOnAppend === true ? "auto" : merged.followOnAppend || null;
+-          if (behavior && nextCount > prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
++          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
+             followOnAppend = behavior;
+           }
+         }
+@@ -489,7 +490,7 @@ class Virtualizer {
+       if (anchor && this.scrollElement && this.options.enabled) {
+         const [key, _offset, followOnAppend, anchorDelta] = anchor;
+         if (key !== null && !followOnAppend) {
+-          if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++          if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+             if (anchorDelta !== 0) {
+               this._iosDeferredAdjustment += anchorDelta;
+             }
+@@ -938,6 +939,7 @@ class Virtualizer {
+     };
+     this.getMaxScrollOffset = () => {
+       if (!this.scrollElement) return 0;
++      if (this.options.maxScrollOffset) return this.options.maxScrollOffset(this);
+       if ("scrollHeight" in this.scrollElement) {
+         return this.options.horizontal ? this.scrollElement.scrollWidth - this.scrollElement.clientWidth : this.scrollElement.scrollHeight - this.scrollElement.clientHeight;
+       } else {
+@@ -1134,7 +1136,7 @@ class Virtualizer {
+     if (process.env.NODE_ENV !== "production" && this.options.debug) {
+       console.info("correction", delta);
+     }
+-    if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++    if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+       this._iosDeferredAdjustment += delta;
+       return false;
+     } else {
+diff --git a/dist/cjs/index.d.cts b/dist/cjs/index.d.cts
+index cc1001b8a14d06aa73a3a9e8f59870557ee9e7d6..7db7e6bb0ceee199af3d5b074aff5829bc527256 100644
+--- a/dist/cjs/index.d.cts
++++ b/dist/cjs/index.d.cts
+@@ -81,6 +81,14 @@ export interface VirtualizerOptions<TScrollElement extends Element | Window, TIt
+     followOnAppend?: FollowOnAppend;
+     scrollEndThreshold?: number;
+     isScrollingResetDelay?: number;
++    /** Disable only when scrollToFn provides its own touch-safe compensation. */
++    useIOSScrollDeferral?: boolean;
++    /**
++     * The furthest scroll offset, for scrollers whose extent the virtualizer
++     * already knows. Without it the end is read from the DOM, which forces a
++     * layout whenever rows just changed.
++     */
++    maxScrollOffset?: (instance: Virtualizer<TScrollElement, TItemElement>) => number;
+     useScrollendEvent?: boolean;
+     enabled?: boolean;
+     isRtl?: boolean;
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index 6b43c0aea7ed9eeef75cbfb1351fcbd243913bdd..fb253293d2e62ebf1cec79e7d3b0a2606add797d 100644
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -81,6 +81,14 @@ export interface VirtualizerOptions<TScrollElement extends Element | Window, TIt
+     followOnAppend?: FollowOnAppend;
+     scrollEndThreshold?: number;
+     isScrollingResetDelay?: number;
++    /** Disable only when scrollToFn provides its own touch-safe compensation. */
++    useIOSScrollDeferral?: boolean;
++    /**
++     * The furthest scroll offset, for scrollers whose extent the virtualizer
++     * already knows. Without it the end is read from the DOM, which forces a
++     * layout whenever rows just changed.
++     */
++    maxScrollOffset?: (instance: Virtualizer<TScrollElement, TItemElement>) => number;
+     useScrollendEvent?: boolean;
+     enabled?: boolean;
+     isRtl?: boolean;
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 2495b26cf2c3589213546b3958eaadf2eb6b751d..d4a250db1b57b7025a3e4c29ca40372b739e2cc6 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -274,6 +274,7 @@ class Virtualizer {
+         isScrollingResetDelay: 150,
+         enabled: true,
+         isRtl: false,
++        useIOSScrollDeferral: true,
+         useScrollendEvent: false,
+         useAnimationFrameWithResizeObserver: false,
+         laneAssignmentMode: "estimate",
+@@ -302,7 +303,7 @@ class Virtualizer {
+             anchor = [item.key, this.getScrollOffset() - item.start];
+           }
+           const behavior = merged.followOnAppend === true ? "auto" : merged.followOnAppend || null;
+-          if (behavior && nextCount > prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
++          if (behavior && nextCount >= prevCount && this.isAtEnd(prevOptions.scrollEndThreshold) && (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)) {
+             followOnAppend = behavior;
+           }
+         }
+@@ -487,7 +488,7 @@ class Virtualizer {
+       if (anchor && this.scrollElement && this.options.enabled) {
+         const [key, _offset, followOnAppend, anchorDelta] = anchor;
+         if (key !== null && !followOnAppend) {
+-          if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++          if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+             if (anchorDelta !== 0) {
+               this._iosDeferredAdjustment += anchorDelta;
+             }
+@@ -936,6 +937,7 @@ class Virtualizer {
+     };
+     this.getMaxScrollOffset = () => {
+       if (!this.scrollElement) return 0;
++      if (this.options.maxScrollOffset) return this.options.maxScrollOffset(this);
+       if ("scrollHeight" in this.scrollElement) {
+         return this.options.horizontal ? this.scrollElement.scrollWidth - this.scrollElement.clientWidth : this.scrollElement.scrollHeight - this.scrollElement.clientHeight;
+       } else {
+@@ -1132,7 +1134,7 @@ class Virtualizer {
+     if (process.env.NODE_ENV !== "production" && this.options.debug) {
+       console.info("correction", delta);
+     }
+-    if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++    if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+       this._iosDeferredAdjustment += delta;
+       return false;
+     } else {
+diff --git a/src/index.ts b/src/index.ts
+index dc6f1010c4d4758de9c46fb8d69209e582e47171..4fd68cc54f16ba0a715a12f5d745236e45a103a6 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -367,6 +367,14 @@ export interface VirtualizerOptions<
+   followOnAppend?: FollowOnAppend
+   scrollEndThreshold?: number
+   isScrollingResetDelay?: number
++  /** Disable only when scrollToFn provides its own touch-safe compensation. */
++  useIOSScrollDeferral?: boolean
++  /**
++   * The furthest scroll offset, for scrollers whose extent the virtualizer
++   * already knows. Without it the end is read from the DOM, which forces a
++   * layout whenever rows just changed.
++   */
++  maxScrollOffset?: (instance: Virtualizer<TScrollElement, TItemElement>) => number
+   useScrollendEvent?: boolean
+   enabled?: boolean
+   isRtl?: boolean
+@@ -553,6 +561,7 @@ export class Virtualizer<
+       isScrollingResetDelay: 150,
+       enabled: true,
+       isRtl: false,
++      useIOSScrollDeferral: true,
+       useScrollendEvent: false,
+       useAnimationFrameWithResizeObserver: false,
+       laneAssignmentMode: 'estimate',
+@@ -617,7 +626,8 @@ export class Virtualizer<
+ 
+         if (
+           behavior &&
+-          nextCount > prevCount &&
++          // Server acknowledgements can replace the last key without adding a row.
++          nextCount >= prevCount &&
+           this.isAtEnd(prevOptions.scrollEndThreshold) &&
+           (prevCount === 0 || merged.getItemKey(nextCount - 1) !== prevLastKey)
+         ) {
+@@ -700,6 +710,7 @@ export class Virtualizer<
+     }
+ 
+     if (
++      this.options.useIOSScrollDeferral &&
+       isIOSWebKit() &&
+       (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)
+     ) {
+@@ -962,6 +973,7 @@ export class Virtualizer<
+         // applyScrollAdjustment does — accumulate the delta and let
+         // _flushIosDeferredIfReady handle it once the scroll settles.
+         if (
++          this.options.useIOSScrollDeferral &&
+           isIOSWebKit() &&
+           (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)
+         ) {
+@@ -1692,6 +1704,7 @@ export class Virtualizer<
+ 
+   private getMaxScrollOffset = () => {
+     if (!this.scrollElement) return 0
++    if (this.options.maxScrollOffset) return this.options.maxScrollOffset(this)
+ 
+     if ('scrollHeight' in this.scrollElement) {
+       // Element

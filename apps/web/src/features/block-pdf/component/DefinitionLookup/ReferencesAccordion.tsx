@@ -1,10 +1,10 @@
 import { Accordion } from '@kobalte/core/accordion';
 import { Scrollbars } from 'solid-custom-scrollbars';
-import { createSignal, Index } from 'solid-js';
+import { createMemo, createSignal, Index, Show } from 'solid-js';
 import { styled } from 'solid-styled-components';
+import { usePdfDocument } from '../../context/pdf-document-context';
 import Reference from '../../model/Reference';
 import type Term from '../../model/Term';
-import { useTableOfContentsValue } from '../../store/tableOfContents';
 import { OpenRefInNewTabIcon } from './OpenRefInNewTabIcon';
 import {
   AccordionText,
@@ -31,15 +31,10 @@ interface IProps {
 }
 
 export function ReferencesAccordion(props: IProps) {
-  const tableOfContents = useTableOfContentsValue();
-  const idToSectionMap = () => tableOfContents().idToSectionMap;
-
-  const references = () =>
-    Array.from(props.term.references).map((e) =>
-      Reference.fromXML(e, {
-        idToSectionMap: idToSectionMap(),
-      })
-    );
+  const idToSectionMap = usePdfDocument().outline.sectionReferenceMap;
+  const references = createMemo(() =>
+    Array.from(props.term.references).map(Reference.fromXML)
+  );
 
   const [expandedItem, setExpandedItem] = createSignal(['0']);
 
@@ -47,7 +42,7 @@ export function ReferencesAccordion(props: IProps) {
     <>
       <DefinitionCount>
         Found {references().length} reference
-        {references().length > 1 || references().length === 0 ? 's' : ''}
+        <Show when={references().length !== 1}>s</Show>
       </DefinitionCount>
       <Scrollbars
         autoHide
@@ -60,10 +55,12 @@ export function ReferencesAccordion(props: IProps) {
         <Accordion value={expandedItem()} onChange={setExpandedItem}>
           <Index each={references()}>
             {(r, idx) => {
-              let text = 'On page ' + (r().pageNum + 1);
-              if (r().sectionName) {
-                text = `In ${r().sectionName} on page ${r().pageNum + 1}`;
-              }
+              const section = () => {
+                const sectionId = r().sectionId;
+                if (sectionId == null) return;
+                return idToSectionMap()[sectionId];
+              };
+
               return (
                 <Accordion.Item value={idx.toString()}>
                   <BootstrapCard
@@ -78,7 +75,19 @@ export function ReferencesAccordion(props: IProps) {
                         setExpandedItem([idx.toString()]);
                       }}
                     >
-                      <AccordionText>{text}</AccordionText>
+                      <AccordionText>
+                        <Show
+                          when={section()}
+                          fallback={<>On page {r().pageNum + 1}</>}
+                        >
+                          {(section) => (
+                            <>
+                              In {section().fullDescriptor} on page{' '}
+                              {r().pageNum + 1}
+                            </>
+                          )}
+                        </Show>
+                      </AccordionText>
                       <OpenRefInNewTabIcon reference={r()} term={props.term} />
                     </button>
                     <Accordion.Content>

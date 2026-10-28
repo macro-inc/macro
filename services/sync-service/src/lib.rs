@@ -1,21 +1,28 @@
+mod ai_peer;
+mod auth;
+mod cf_worker;
 mod constants;
+mod d1;
 mod domain;
+mod dss_internal;
+mod durable_object;
 mod error;
 mod generated;
-mod inbound;
 pub mod keepalive;
+mod lexical_service;
 mod metrics;
 mod mutex;
-mod outbound;
-#[cfg(feature = "openapi")]
-pub mod swagger;
+mod secrets;
+mod socket;
+mod state;
+mod storage;
 mod tags;
 mod timeout;
 
 use tracing_subscriber::{
     EnvFilter, fmt::time::UtcTime, layer::SubscriberExt, util::SubscriberInitExt,
 };
-use worker::{Context, Env, HttpRequest, Result, event};
+use worker::{Context, Env, Result, event};
 
 pub const GIT_DESCRIBE: &str = env!("GIT_DESCRIBE");
 
@@ -58,44 +65,21 @@ fn start() {
 }
 
 #[event(fetch)]
-async fn fetch(
-    req: HttpRequest,
-    env: Env,
-    ctx: Context,
-) -> Result<axum::http::Response<axum::body::Body>> {
-    use tower_service::Service;
+async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::Response> {
+    use crate::cf_worker::router;
     use tracing::Instrument;
 
-    // WebSocket connects can't set headers, so they carry the traceparent as a
-    // query parameter instead.
-    let traceparent = worker_rs_otel::traceparent_from_headers(req.headers()).or_else(|| {
-        req.uri().query()?.split('&').find_map(|pair| {
-            let value = pair
-                .strip_prefix(worker_rs_otel::TRACEPARENT)?
-                .strip_prefix('=')?;
-            worker_rs_otel::parse_traceparent(value)
-        })
-    });
+    let traceparent = worker_rs_otel::traceparent_from_request(&req);
     let (remote_id, remote_parent) = worker_rs_otel::remote_fields(traceparent.as_ref());
+    let method = req.method().to_string();
+    let path = req.path();
     let span = tracing::info_span!(
         "request",
-        http.method = %req.method(),
-        http.path = %req.uri().path(),
+        http.method = %method,
+        http.path = %path,
         trace.remote_id = %remote_id,
         trace.remote_parent = %remote_parent,
     );
 
-    let mut router = crate::inbound::worker::outer_router(env.clone());
-    worker_rs_otel::scope(
-        &env,
-        &ctx,
-        async move {
-            Ok(router
-                .call(req)
-                .await
-                .unwrap_or_else(|e: std::convert::Infallible| match e {}))
-        }
-        .instrument(span),
-    )
-    .await
+    worker_rs_otel::scope(&env, &ctx, router(env.clone(), req).instrument(span)).await
 }

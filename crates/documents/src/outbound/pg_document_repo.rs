@@ -8,13 +8,17 @@ mod tests;
 mod copy;
 mod create;
 mod edit;
+mod legacy_upgrade;
 mod markdown_backfill;
 mod share;
 
 use document_sub_type::DocumentSubType;
+use entity_registry::BotFacts;
+use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
-use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use model_owner::Owner;
+use models_permissions::share_permission::{LinkShare, SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
 use model_entity::{Entity, EntityType};
@@ -22,21 +26,81 @@ use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
-    BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    DocumentTeamShare, EditDocumentRepoArgs, TeamTaskMetadata, Thread,
+    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, DocumentError,
+    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
+    OwnerTeam, TeamTaskMetadata, TeamTaskNumber,
 };
 use crate::domain::ports::DocumentRepo;
 
+pub use markdown_backfill::PgMarkdownBackfillRepo;
+
 /// PostgreSQL-backed document repository.
 #[derive(Clone)]
-pub struct PgDocumentRepo {
+pub struct PgDocumentRepo<B> {
     pool: PgPool,
+    registrar: OwnedEntityRegistrar<B>,
 }
 
-impl PgDocumentRepo {
+impl<B: BotFacts + 'static> PgDocumentRepo<B> {
     /// Create a new repository backed by the given connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    ///
+    /// Created and copied documents register their owner grants through
+    /// `registrar`.
+    pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
+        Self { pool, registrar }
+    }
+
+    async fn reused_email_document(
+        &self,
+        document_id: String,
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
+        let metadata = self.get_document_metadata(&document_id).await?;
+        Ok(EmailImportRepoOutcome::Reused(metadata))
+    }
+
+    async fn reused_linked_email_attachment(
+        &self,
+        email_attachment_id: uuid::Uuid,
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
+        let existing_id =
+            create::find_document_id_for_email_attachment(&self.pool, email_attachment_id)
+                .await?
+                .ok_or_else(|| {
+                    sqlx::Error::Protocol(
+                        "email attachment already linked but document is missing".into(),
+                    )
+                })?;
+        self.reused_email_document(existing_id).await
+    }
+
+    async fn find_reusable_email_document_by_sha(
+        &self,
+        owner: &str,
+        sha: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+        create::find_live_email_document_id_by_sha(&mut conn, owner, sha).await
+    }
+
+    async fn link_existing_email_document(
+        &self,
+        document_id: &str,
+        email_attachment_id: uuid::Uuid,
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
+        let mut transaction = self.pool.begin().await?;
+        match create::link_document_email(&mut transaction, document_id, email_attachment_id).await
+        {
+            Ok(()) => {
+                transaction.commit().await?;
+                self.reused_email_document(document_id.to_string()).await
+            }
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                transaction.rollback().await?;
+                self.reused_linked_email_attachment(email_attachment_id)
+                    .await
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -55,7 +119,13 @@ async fn update_document_modified(pool: &PgPool, document_id: &str) -> Result<()
     Ok(())
 }
 
-impl DocumentRepo for PgDocumentRepo {
+fn registry_protocol_error(
+    error: rootcause::Report<entity_registry_db_utils::EntityRegistryError>,
+) -> sqlx::Error {
+    sqlx::Error::Protocol(error.to_string())
+}
+
+impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
     type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self))]
@@ -149,9 +219,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentMetadata {
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_name: row.document_name,
                 file_type: row.file_type,
                 sha: row.sha,
@@ -221,9 +290,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentBasic {
                 document_id: row.document_id,
                 document_name: row.document_name,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 file_type: row.file_type,
                 sub_type: row.sub_type,
                 branched_from_id: row.branched_from_id,
@@ -238,10 +306,34 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_user_name(
+        &self,
+        user_id: &str,
+    ) -> Result<(Option<String>, Option<String>), Self::Err> {
+        let ids = vec![user_id.to_owned()];
+        // The name row is created by the first name write, so a user who
+        // never set a name has none.
+        let row = sqlx::query!(
+            r#"
+            SELECT 
+                u.id as user_profile_id, 
+                mui.first_name, 
+                mui.last_name
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = ANY($1)
+        "#,
+            &ids
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map_or((None, None), |row| (row.first_name, row.last_name)))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn soft_delete_document(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
-        // Delete pins
         sqlx::query!(
             r#"
             DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
@@ -252,7 +344,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Delete from history
         sqlx::query!(
             r#"
             DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
@@ -263,7 +354,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Soft delete the document
         sqlx::query!(
             r#"
             UPDATE "Document"
@@ -274,6 +364,12 @@ impl DocumentRepo for PgDocumentRepo {
         )
         .execute(&mut *transaction)
         .await?;
+
+        if let Ok(id) = macro_uuid::string_to_uuid(document_id) {
+            entity_registry_db_utils::mark_deleted(&mut transaction, id, chrono::Utc::now())
+                .await
+                .map_err(registry_protocol_error)?;
+        }
 
         transaction.commit().await?;
         Ok(())
@@ -405,11 +501,23 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_team_default_link_share(
-        &self,
-        user_id: &str,
-    ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
-        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+    async fn get_owner_team(&self, owner: &Owner) -> Result<Option<OwnerTeam>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT t.id AS "team_id!", t.default_link_share AS "default_link_share?: LinkShare"
+            FROM owner_team($1) ot
+            JOIN team t ON t.id = ot.team_id
+            LIMIT 1
+            "#,
+            owner.principal_id(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| OwnerTeam {
+            team_id: row.team_id,
+            default_link_share: TeamLinkShareDefault(row.default_link_share),
+        }))
     }
 
     #[tracing::instrument(err, skip(self, args, share_permission))]
@@ -417,127 +525,120 @@ impl DocumentRepo for PgDocumentRepo {
         &self,
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> Result<DocumentMetadata, Self::Err> {
-        let CreateDocumentRepoArgs {
-            id,
-            sha,
-            document_name,
-            user_id,
-            file_type,
-            project_id,
-            team_id,
-            email_attachment_id,
-            created_at: provided_created_at,
-            sub_type: requested_sub_type,
-            skip_history,
-            attribution: _,
-        } = args;
+    ) -> Result<DocumentMetadata, DocumentError> {
+        let mut transaction = self.pool.begin().await?;
+        let metadata =
+            create::insert_new_document(&mut transaction, &self.registrar, args, &share_permission)
+                .await?;
+        transaction.commit().await?;
+        Ok(metadata)
+    }
 
-        let now = chrono::Utc::now();
-        let created_at = provided_created_at.as_ref().unwrap_or(&now);
+    #[tracing::instrument(err, skip(self, args, share_permission))]
+    async fn import_email_attachment_document(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+        share_permission: SharePermissionV2,
+    ) -> Result<EmailImportRepoOutcome, DocumentError> {
+        let ImportEmailAttachmentRepoArgs {
+            email_attachment_id,
+            owner,
+            mut document,
+        } = args;
+        // Imports do not carry task-creation consent, including reuse paths.
+        document.share_with_team = false;
+
+        // Unlocked reuse: attachment already linked, or a live email doc with
+        // this sha already exists. The advisory lock is only required when a
+        // concurrent import might insert the first document for (owner, sha).
+        if let Some(existing_id) =
+            create::find_document_id_for_email_attachment(&self.pool, email_attachment_id).await?
+        {
+            return self.reused_email_document(existing_id).await;
+        }
+
+        let owner = Owner::User(owner);
+        let owner_principal = owner.principal_id();
+        if let Some(existing_id) = self
+            .find_reusable_email_document_by_sha(&owner_principal, &document.sha)
+            .await?
+        {
+            return self
+                .link_existing_email_document(&existing_id, email_attachment_id)
+                .await;
+        }
 
         let mut transaction = self.pool.begin().await?;
 
-        // Fetch project name if project_id provided
-        let project_name: Option<String> = if let Some(ref proj_id) = project_id {
-            sqlx::query_scalar!(
-                r#"SELECT name FROM "Project" WHERE id = $1"#,
-                &proj_id.to_string(),
-            )
-            .fetch_optional(&mut *transaction)
-            .await?
-        } else {
-            None
-        };
-
-        let document_id = create::insert_document_row(
+        if let Some(existing_id) = create::reuse_email_document(
             &mut transaction,
-            id.as_ref(),
-            &user_id,
-            &document_name,
-            file_type,
-            project_id.as_ref(),
-            created_at,
+            &owner_principal,
+            &document.sha,
+            email_attachment_id,
         )
-        .await?;
-
-        // Insert document sub-type
-        let sub_type: Option<DocumentSubType> =
-            create::set_document_sub_type(&mut transaction, &document_id, requested_sub_type)
-                .await?;
-
-        if sub_type == Some(DocumentSubType::Task)
-            && let Some(team_id) = team_id.as_ref()
+        .await?
         {
-            create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
+            transaction.commit().await?;
+            return self.reused_email_document(existing_id).await;
         }
 
-        // Insert document version (DocumentBom for docx, DocumentInstance for others)
-        let document_version = create::set_document_version(
+        let metadata = create::insert_new_document(
             &mut transaction,
-            &document_id,
-            file_type,
-            sha,
-            created_at,
+            &self.registrar,
+            CreateDocumentRepoArgs { owner, document },
+            &share_permission,
         )
         .await?;
 
-        // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
-
-        // Add to user history (if not skipped)
-        if !skip_history {
-            create::insert_history(&mut transaction, &document_id, &user_id, created_at).await?;
-        }
-
-        // Insert user entity access (Owner level)
-        entity_access_db_utils::insert_entity_access_row(
+        match create::link_document_email(
             &mut transaction,
-            &document_id,
-            entity_access_db_utils::EntityType::Document,
-            user_id.as_ref(),
-            entity_access_db_utils::EntityAccessSourceType::User,
-            entity_access_db_utils::AccessLevel::Owner,
+            &metadata.document_id,
+            email_attachment_id,
         )
-        .await?;
-
-        // Link to email attachment if provided
-        if let Some(attachment_id) = email_attachment_id {
-            sqlx::query!(
-                r#"
-                INSERT INTO "document_email" (document_id, email_attachment_id)
-                VALUES ($1, $2)
-                "#,
-                &document_id.to_string(),
-                attachment_id,
-            )
-            .execute(&mut *transaction)
-            .await?;
+        .await
+        {
+            Ok(()) => {}
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                transaction.rollback().await?;
+                return self
+                    .reused_linked_email_attachment(email_attachment_id)
+                    .await;
+            }
+            Err(e) => return Err(e.into()),
         }
 
         transaction.commit().await?;
-
-        Ok(DocumentMetadata::new_document(
-            &document_id.to_string(),
-            document_version.id,
-            user_id,
-            &document_name,
-            file_type,
-            &document_version.sha,
-            None,
-            None,
-            None,
-            project_id.map(|s| s.to_string()).as_deref(),
-            project_name.as_deref(),
-            document_version.created_at,
-            document_version.updated_at,
-            sub_type,
-        ))
+        Ok(EmailImportRepoOutcome::Created(metadata))
     }
 
     #[tracing::instrument(err, skip(self, args))]
-    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), Self::Err> {
+    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), DocumentError> {
+        use share_permission_db_utils::team_share;
+
         let mut transaction = self.pool.begin().await?;
+        if let Some(command) = &args.team_share {
+            if command.expected().entity.entity_type != EntityType::Document
+                || command.expected().entity.entity_id != args.document_id
+                || args
+                    .share_permission
+                    .as_ref()
+                    .and_then(|p| p.team_share_access_level)
+                    != Some(command.target().map(|grant| grant.level.into()))
+            {
+                return Err(DocumentError::BadRequest(
+                    "team-share command does not match edit".to_string(),
+                ));
+            }
+            team_share::apply(&mut transaction, command)
+                .await
+                .map_err(share::map_team_share_error)?;
+        } else if args
+            .share_permission
+            .as_ref()
+            .is_some_and(|p| p.team_share_access_level.is_some())
+        {
+            return Err(DocumentError::Unauthorized);
+        }
 
         use crate::domain::models::FileTypeUpdate;
         let file_type_db = args.file_type.map(|update| match update {
@@ -560,7 +661,11 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         if args.revoke_non_owner_user_access {
-            let owner = edit::get_document_owner(&mut transaction, &args.document_id).await?;
+            let owner = Owner::from_principal_str(
+                &edit::get_document_owner(&mut transaction, &args.document_id).await?,
+            )
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let owner_principal = owner.principal_id();
 
             // SAFETY: document IDs are UUID strings.
             let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
@@ -569,7 +674,7 @@ impl DocumentRepo for PgDocumentRepo {
                 &mut transaction,
                 &entity_id,
                 EntityType::Document,
-                &owner,
+                &owner_principal,
             )
             .await?;
         }
@@ -616,10 +721,16 @@ impl DocumentRepo for PgDocumentRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_document_by_id(&self, document_id: &str) -> Result<(), Self::Err> {
-        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
-            .execute(&self.pool)
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id)
+            .execute(&mut *transaction)
             .await?;
-
+        if let Ok(id) = macro_uuid::string_to_uuid(document_id) {
+            entity_registry_db_utils::delete_entity(&mut transaction, id)
+                .await
+                .map_err(registry_protocol_error)?;
+        }
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -750,6 +861,25 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_team_task_number(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<TeamTaskNumber>, Self::Err> {
+        sqlx::query_as!(
+            TeamTaskNumber,
+            r#"
+            SELECT t.slug AS "team_slug!", tt.task_num
+            FROM team_task tt
+            JOIN team t ON t.id = tt.team_id
+            WHERE tt.document_id = $1
+            "#,
+            document_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_document_id_by_team_task_number(
         &self,
         team_id: &uuid::Uuid,
@@ -832,27 +962,48 @@ impl DocumentRepo for PgDocumentRepo {
         .await
     }
 
-    #[tracing::instrument(err, skip(self))]
-    async fn share_with_team(
+    #[tracing::instrument(err, skip(self, github_keys), fields(github_keys = github_keys.len()))]
+    async fn get_github_pull_request_task_links(
         &self,
-        team_id: &uuid::Uuid,
-        document_id: &str,
-    ) -> Result<(), Self::Err> {
-        share::share_with_team(&self.pool, team_id, document_id).await
+        github_keys: &[String],
+    ) -> Result<Vec<(String, String)>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT github_key, task_id
+            FROM github_pr_tasks
+            WHERE github_key = ANY($1)
+            ORDER BY created_at ASC, task_id ASC
+            "#,
+            github_keys,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.github_key, row.task_id))
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_team_share(&self, document_id: &str) -> Result<DocumentTeamShare, Self::Err> {
+    async fn get_team_share_facts(
+        &self,
+        document_id: &str,
+    ) -> Result<models_permissions::share_permission::team_share::TeamShareFacts, DocumentError>
+    {
+        share::get_team_share_facts(&self.pool, document_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_share(&self, document_id: &str) -> Result<DocumentTeamShare, DocumentError> {
         share::get_team_share(&self.pool, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn set_team_share(
         &self,
-        document_id: &str,
-        share: bool,
-    ) -> Result<DocumentTeamShare, Self::Err> {
-        share::set_team_share(&self.pool, document_id, share).await
+        command: models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
+    ) -> Result<DocumentTeamShare, DocumentError> {
+        share::set_team_share(&self.pool, command).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -946,9 +1097,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentMetadata {
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_name: row.document_name,
                 file_type: row.file_type,
                 sha: row.sha,
@@ -1032,7 +1182,7 @@ impl DocumentRepo for PgDocumentRepo {
     ) -> Result<DocumentMetadata, Self::Err> {
         let CopyDocumentRepoArgs {
             original_document,
-            user_id,
+            owner,
             document_name,
             file_type,
             team_id,
@@ -1045,7 +1195,7 @@ impl DocumentRepo for PgDocumentRepo {
                 copy::copy_docx_document(
                     &mut transaction,
                     &original_document,
-                    user_id.clone(),
+                    &owner,
                     &document_name,
                 )
                 .await
@@ -1054,7 +1204,7 @@ impl DocumentRepo for PgDocumentRepo {
                 copy::copy_non_docx_document(
                     &mut transaction,
                     &original_document,
-                    user_id.clone(),
+                    &owner,
                     &document_name,
                 )
                 .await
@@ -1070,23 +1220,18 @@ impl DocumentRepo for PgDocumentRepo {
             create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
         }
 
-        // Create share permission
         create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
-        // Insert user entity access (Owner level)
-        entity_access_db_utils::insert_entity_access_row(
-            &mut transaction,
-            &document_id,
-            entity_access_db_utils::EntityType::Document,
-            user_id.as_ref(),
-            entity_access_db_utils::EntityAccessSourceType::User,
-            entity_access_db_utils::AccessLevel::Owner,
-        )
-        .await?;
+        self.registrar
+            .register_owned_entity(
+                &mut transaction,
+                NewEntityRecord::new(document_id, RegisteredEntityType::Document, owner.clone()),
+            )
+            .await
+            .map_err(registry_protocol_error)?;
 
-        // Insert user history
         let now = chrono::Utc::now();
-        create::insert_history(&mut transaction, &document_id, &user_id, &now).await?;
+        create::insert_history(&mut transaction, &document_id, owner.as_user(), &now).await?;
 
         transaction.commit().await?;
 
@@ -1103,101 +1248,5 @@ impl DocumentRepo for PgDocumentRepo {
         copy::copy_pdf_parts(&mut transaction, new_document_id, original_document_id).await?;
         transaction.commit().await?;
         Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_document_comments(
-        &self,
-        document_id: &str,
-    ) -> Result<Vec<CommentThread>, Self::Err> {
-        let threads = sqlx::query!(
-            r#"
-            SELECT
-                t.id as "thread_id!",
-                t.resolved as "resolved!",
-                t."documentId" as "document_id!",
-                t."createdAt"::timestamptz as "created_at",
-                t."updatedAt"::timestamptz as "updated_at",
-                t."deletedAt"::timestamptz as "deleted_at",
-                t.metadata as "metadata",
-                t.owner as "owner!"
-            FROM "Thread" t
-            WHERE t."documentId" = $1 AND t."deletedAt" IS NULL
-            "#,
-            document_id,
-        )
-        .map(|row| Thread {
-            thread_id: row.thread_id,
-            resolved: row.resolved,
-            document_id: row.document_id,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            metadata: row.metadata,
-            owner: row.owner,
-        })
-        .fetch_all(&self.pool)
-        .await?;
-
-        let comments = sqlx::query!(
-            r#"
-            SELECT
-                c.id as "comment_id!",
-                c."threadId" as "thread_id!",
-                c.owner as "owner!",
-                c.sender,
-                c.text as "text!",
-                c.metadata,
-                c."createdAt"::timestamptz as "created_at",
-                c."updatedAt"::timestamptz as "updated_at",
-                c."deletedAt"::timestamptz as "deleted_at",
-                c.order
-            FROM "Comment" c
-            JOIN "Thread" t ON c."threadId" = t.id
-            WHERE t."documentId" = $1
-                AND t."deletedAt" IS NULL
-                AND c."deletedAt" IS NULL
-            ORDER BY c."createdAt" ASC
-            "#,
-            document_id,
-        )
-        .map(|row| Comment {
-            comment_id: row.comment_id,
-            thread_id: row.thread_id,
-            owner: row.owner,
-            sender: row.sender,
-            text: row.text,
-            metadata: row.metadata,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            order: row.order,
-        })
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut comments_by_thread: std::collections::HashMap<i64, Vec<Comment>> =
-            std::collections::HashMap::new();
-        for comment in comments {
-            comments_by_thread
-                .entry(comment.thread_id)
-                .or_default()
-                .push(comment);
-        }
-
-        let comment_threads = threads
-            .into_iter()
-            .map(|thread| {
-                let thread_comments = comments_by_thread
-                    .remove(&thread.thread_id)
-                    .unwrap_or_default();
-                CommentThread {
-                    thread,
-                    comments: thread_comments,
-                }
-            })
-            .collect();
-
-        Ok(comment_threads)
     }
 }

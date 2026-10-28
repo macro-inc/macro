@@ -5,6 +5,7 @@ export type SoupQueryMeta = {
   groupBy?: GroupByField;
   groupKey?: string;
   itemFilter?: SoupApiItemFilter;
+  insertFilter?: SoupApiItemFilter;
 };
 
 export function getSoupQueryMeta(meta: unknown): SoupQueryMeta {
@@ -17,6 +18,9 @@ export function getSoupQueryMeta(meta: unknown): SoupQueryMeta {
   if (typeof raw.groupKey === 'string') soupMeta.groupKey = raw.groupKey;
   if (typeof raw.itemFilter === 'function') {
     soupMeta.itemFilter = raw.itemFilter as SoupApiItemFilter;
+  }
+  if (typeof raw.insertFilter === 'function') {
+    soupMeta.insertFilter = raw.insertFilter as SoupApiItemFilter;
   }
 
   return soupMeta;

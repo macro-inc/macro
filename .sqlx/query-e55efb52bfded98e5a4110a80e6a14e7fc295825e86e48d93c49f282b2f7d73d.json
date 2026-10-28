@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(SUM(CASE WHEN allocated THEN postpaid ELSE postpaid_hold END), 0)::bigint AS \"amount!\"\n           FROM ai_funding_reservation WHERE payer_id = $1 AND period_start = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "amount!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e55efb52bfded98e5a4110a80e6a14e7fc295825e86e48d93c49f282b2f7d73d"
+}

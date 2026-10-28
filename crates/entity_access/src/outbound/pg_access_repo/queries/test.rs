@@ -299,3 +299,57 @@ async fn get_entity_users_excludes_delegate_scoped_to_other_link(
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn foreign_recipients_follow_exact_source_and_current_team_membership(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "sharedbox@corp.test").await;
+    insert_user(&pool, DELEGATE, "primary@corp.test").await;
+    let team = Uuid::now_v7();
+    insert_team(&pool, team).await;
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'member')",
+        team,
+        DELEGATE
+    )
+    .execute(&pool)
+    .await?;
+    let personal = Uuid::now_v7();
+    let shared = Uuid::now_v7();
+    for (id, source, kind) in [
+        (personal, OWNER.to_owned(), "user"),
+        (shared, team.to_string(), "team"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO foreign_entity (id, foreign_entity_id, foreign_entity_source, metadata, stored_for_id, stored_for_auth_entity) VALUES ($1, 'macro/app/pull/7', 'github_pull_request', '{}', $2, $3)",
+            id, source, kind,
+        ).execute(&pool).await?;
+    }
+    assert_eq!(
+        get_entity_users(&pool, &personal, EntityType::ForeignEntity).await?,
+        vec![MacroUserIdStr::parse_from_str(OWNER)?.into_owned()]
+    );
+    assert_eq!(
+        get_entity_users(&pool, &shared, EntityType::ForeignEntity).await?,
+        vec![MacroUserIdStr::parse_from_str(DELEGATE)?.into_owned()]
+    );
+    sqlx::query!(
+        "DELETE FROM team_user WHERE team_id = $1 AND user_id = $2",
+        team,
+        DELEGATE
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        get_entity_users(&pool, &shared, EntityType::ForeignEntity)
+            .await?
+            .is_empty()
+    );
+    assert!(
+        get_entity_users(&pool, &Uuid::now_v7(), EntityType::ForeignEntity)
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}

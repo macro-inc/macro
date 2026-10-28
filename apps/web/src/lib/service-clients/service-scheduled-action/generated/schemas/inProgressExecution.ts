@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { InProgressExecutionChatId } from './inProgressExecutionChatId';
+import type { InProgressExecutionResource } from './inProgressExecutionResource';
 
 export interface InProgressExecution {
   action_id: string;
   chat_id?: InProgressExecutionChatId;
+  resource?: InProgressExecutionResource;
 }

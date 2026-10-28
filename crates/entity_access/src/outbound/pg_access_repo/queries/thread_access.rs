@@ -4,7 +4,16 @@
 mod test;
 
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+#[cfg(feature = "explain_binary")]
+use crate::{
+    domain::models::{AccessGrant, TeamRole},
+    outbound::pg_access_repo::queries::list_entity_access_grants,
+};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+#[cfg(feature = "explain_binary")]
+use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -258,4 +267,247 @@ pub async fn get_thread_access(
     let crm_level = crm_granted?.then_some(AccessLevel::Comment);
 
     Ok([highest_level, crm_level].into_iter().flatten().max())
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn explain_thread_access(
+    pool: &PgPool,
+    thread_id: &Uuid,
+    source_ids: &SourceIds,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let mut grants = Vec::new();
+    if let Some(user_id) = user_id {
+        grants.extend(explain_thread_inbox(pool, thread_id, user_id).await?);
+        grants.extend(explain_thread_crm(pool, thread_id, user_id).await?);
+    }
+
+    grants.extend(
+        list_entity_access_grants(pool, thread_id, EntityType::EmailThread, source_ids).await?,
+    );
+    grants.extend(explain_thread_link_shares(pool, thread_id, source_ids).await?);
+    if !source_ids.0.is_empty() {
+        grants.extend(explain_thread_containing_project(pool, thread_id, source_ids).await?);
+    }
+
+    Ok(grants)
+}
+
+#[cfg(feature = "explain_binary")]
+async fn explain_thread_inbox(
+    pool: &PgPool,
+    thread_id: &Uuid,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let user_id_str = user_id.as_ref();
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            l.macro_id AS "mailbox_owner!",
+            (l.macro_id = $2) AS "is_owner!"
+        FROM public.email_threads t
+        JOIN public.email_links l ON l.id = t.link_id
+        WHERE t.id = $1::uuid
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM public.macro_user_links mul
+                  WHERE mul.link_id = l.id
+                    AND mul.primary_macro_id = $2
+              )
+          )
+        "#,
+        thread_id,
+        user_id_str
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(vec![]);
+    };
+
+    if row.is_owner {
+        Ok(vec![AccessGrant::InboxOwner])
+    } else {
+        let mailbox_owner = MacroUserIdStr::try_from(row.mailbox_owner)
+            .map_err(|error| sqlx::Error::Decode(error.into()))?;
+        Ok(vec![AccessGrant::InboxDelegate { mailbox_owner }])
+    }
+}
+
+#[cfg(feature = "explain_binary")]
+async fn explain_thread_link_shares(
+    pool: &PgPool,
+    thread_id: &Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let thread_id_str = thread_id.to_string();
+    let mut grants = Vec::new();
+
+    let public_levels = sqlx::query_scalar!(
+        r#"
+        SELECT
+            "linkShareAccessLevel" AS "access_level!: AccessLevel"
+        FROM "SharePermission"
+        WHERE "linkShare" = 'PUBLIC'
+          AND "linkShareAccessLevel" IS NOT NULL
+          AND id IN (
+              SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $1
+          )
+        "#,
+        &thread_id_str
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(
+        public_levels
+            .into_iter()
+            .map(|access_level| AccessGrant::PublicLink { access_level }),
+    );
+
+    if source_ids.0.is_empty() {
+        return Ok(grants);
+    }
+
+    let team_rows = sqlx::query!(
+        r#"
+        SELECT
+            sp."linkShareAccessLevel" AS "access_level!: AccessLevel",
+            owner_tu.team_id AS "owner_team_id!"
+        FROM "SharePermission" sp
+        JOIN team_user owner_tu
+          ON owner_tu.team_id::text = ANY($2)
+        WHERE sp."linkShareAccessLevel" IS NOT NULL
+          AND sp."linkShare" = 'TEAM'
+          AND sp.id IN (
+              SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $1
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM email_threads t
+              JOIN email_links l ON l.id = t.link_id
+              WHERE t.id = $3::uuid
+                AND owner_tu.user_id = l.macro_id
+          )
+        "#,
+        &thread_id_str,
+        &source_ids.0,
+        thread_id,
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(team_rows.into_iter().map(|row| AccessGrant::TeamLink {
+        access_level: row.access_level,
+        owner_team_id: row.owner_team_id,
+    }));
+
+    Ok(grants)
+}
+
+#[cfg(feature = "explain_binary")]
+async fn explain_thread_containing_project(
+    pool: &PgPool,
+    thread_id: &Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT DISTINCT pea.entity_id::text AS "project_id!"
+        FROM email_threads t
+        JOIN entity_access pea
+          ON pea.entity_id::text = t.project_id
+         AND pea.entity_type = 'project'
+         AND pea.source_id = ANY($2)
+        WHERE t.id = $1::uuid
+        "#,
+        thread_id,
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| AccessGrant::ContainingProject {
+            project_id: row.project_id,
+        })
+        .collect())
+}
+
+#[cfg(feature = "explain_binary")]
+async fn explain_thread_crm(
+    pool: &PgPool,
+    thread_id: &Uuid,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let user_id_str = user_id.as_ref();
+    let rows = sqlx::query!(
+        r#"
+        WITH thread_owner AS (
+            SELECT el.macro_id
+            FROM email_threads t
+            JOIN email_links el ON el.id = t.link_id
+            WHERE t.id = $1::uuid
+        ),
+        shared_teams AS (
+            SELECT tcs.team_id, requester.team_role
+            FROM team_user requester
+            JOIN team_user owner_member ON owner_member.team_id = requester.team_id
+            JOIN thread_owner o ON o.macro_id = owner_member.user_id
+            JOIN team_crm_settings tcs ON tcs.team_id = requester.team_id
+            WHERE requester.user_id = $2
+              AND tcs.crm_enabled
+        ),
+        participants AS (
+            SELECT DISTINCT LOWER(ec.email_address) AS email
+            FROM email_messages m
+            JOIN email_contacts ec ON ec.id = m.from_contact_id
+            WHERE m.thread_id = $1::uuid
+            UNION
+            SELECT DISTINCT LOWER(ec.email_address)
+            FROM email_messages m
+            JOIN email_message_recipients r ON r.message_id = m.id
+            JOIN email_contacts ec ON ec.id = r.contact_id
+            WHERE m.thread_id = $1::uuid
+        )
+        SELECT st.team_id, st.team_role AS "team_role!: TeamRole"
+        FROM shared_teams st
+        WHERE EXISTS (
+            SELECT 1
+            FROM participants p
+            WHERE split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
+        )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM participants p
+              JOIN crm_contacts ct ON ct.email = p.email
+              JOIN crm_companies c ON c.id = ct.company_id
+              WHERE c.team_id = st.team_id
+                AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
+                AND (
+                    NOT c.email_sync
+                    OR (
+                        (ct.hidden OR c.hidden)
+                        AND st.team_role = 'member'
+                    )
+                )
+          )
+        "#,
+        thread_id,
+        user_id_str
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| AccessGrant::CrmTeam {
+            team_id: row.team_id,
+            team_role: row.team_role,
+            access_level: AccessLevel::Comment,
+        })
+        .collect())
 }

@@ -1,12 +1,64 @@
-import { Discussion, DiscussionProvider } from '@core/comments/discussion';
-import { createDocumentDiscussionSource } from '../comments/documentDiscussionSource';
+import { useUrlParams } from '@core/component/ParamsProvider';
+import { useIsAuthenticated } from '@core/context/user';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
+import { EntityDiscussion } from '@core/messages/EntityDiscussion';
+import {
+  useMessageLink,
+  useMessageRootsQuery,
+} from '@queries/messages/document-messages';
+import { Match, Switch } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
-/** Document discussion: the document annotations source feeding the shared UI. */
-export function DocumentDiscussion() {
-  const source = createDocumentDiscussionSource();
+/**
+ * Unanchored document roots rendered with the shared message components. On
+ * touch devices the composer moves to the floating accessory region and the
+ * conversation shows only once it has roots, as the editor page does.
+ */
+type DocumentDiscussionProps = {
+  editorHasFocus: boolean;
+  label?: string;
+};
+
+export function DocumentDiscussion(props: DocumentDiscussionProps) {
+  const authenticated = useIsAuthenticated();
   return (
-    <DiscussionProvider source={source}>
-      <Discussion />
-    </DiscussionProvider>
+    <Switch>
+      <Match when={authenticated() === true}>
+        <AuthenticatedDocumentDiscussion {...props} />
+      </Match>
+      <Match when={authenticated() === false}>
+        <p class="mt-3 text-xs text-ink-muted">Sign in to view comments.</p>
+      </Match>
+    </Switch>
+  );
+}
+
+function AuthenticatedDocumentDiscussion(props: DocumentDiscussionProps) {
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
+  const id = documentId();
+  const documentKind = kind();
+  const blockName = documentKind === 'document' ? 'md' : documentKind;
+  const parent = () => ({ type: 'document' as const, id });
+  const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
+  const target = useMessageLink(parent, params.commentId);
+  const roots = useMessageRootsQuery(parent);
+  const discussionTarget = () =>
+    roots.isSuccess &&
+    roots.data.find((thread) => thread.id === target.rootId())?.state.anchor ===
+      null
+      ? target.messageId()
+      : null;
+  return (
+    <EntityDiscussion
+      parent={parent()}
+      targetId={discussionTarget()}
+      scrollReady={state.editor.md.locationReady === true}
+      canWrite={permissions.canComment()}
+      canModerate={permissions.isOwner()}
+      link={{ type: blockName, id }}
+      label={props.label}
+      floatingComposerOnTouch
+      editorHasFocus={props.editorHasFocus}
+    />
   );
 }

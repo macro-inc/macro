@@ -1,8 +1,16 @@
 Macro's SDK: a Typescript library for harnessing the power of Macro
 
+**[Read the SDK documentation](https://sdk.macro.com)** — a quick start,
+plain-English entity guide, and complete API reference, served by the SDK docs Worker.
+
 - **`generated/`**: generated Typescript types and a HeyAPI client from Macro's
   OpenAPI specs.
 - **`src/`**: a hand-written ergonomic SDK layer that provides an "orm"-y API.
+
+The [SDK reference build](../sdk-docs/README.md) uses TypeDoc to generate linked
+Markdown and HTML from these sources. The [generated Markdown](../sdk-docs/reference/README.md)
+is checked in alongside SDK changes; the HTML can be served with the included
+static docs Worker.
 
 ## Usage
 
@@ -11,34 +19,76 @@ Macro's SDK: a Typescript library for harnessing the power of Macro
 To get started, make a Macro client
 
 ```ts
-import { Macro } from '@macro/sdk';
+import { Macro } from '@macro-inc/sdk';
 
 const macro = new Macro({ }); // uses MACRO_API_KEY env var
 ```
 
 ### Authenticating
 
-The SDK can authenticate as a **user** (a Macro API token, sent as an
-`Authorization` bearer) or as a **bot** (an `mbot_` API key, created under
-Settings → Bots in the web app). With no explicit `auth`, the SDK falls back
-to the `MACRO_API_KEY` (user) or `MACRO_BOT_TOKEN` (bot) env var.
+Every request the SDK sends carries exactly one Macro credential. There are three kinds.
+
+| Credential | Minted in | Prefix | Acts as |
+| --- | --- | --- | --- |
+| API key | Settings → API Keys | `mak_` | the user who minted it |
+| Bot token | Settings → Bots | `mbot_` | the bot, optionally on behalf of a user |
+| Bearer token | a signed-in session | none (JWT) | the signed-in user |
+
+#### API key
+
+The default for scripts and integrations. Put the key in `MACRO_API_KEY` and construct with no options.
 
 ```ts
-const asUser = new Macro({ auth: { type: 'user', token: myApiToken } });
-const asBot = new Macro({ auth: { type: 'bot', token: myBotKey } });
+import { Macro } from '@macro-inc/sdk';
+
+const macro = new Macro({});
+const me = await macro.users.me();
 ```
 
-A bot can act on behalf of a user it's authorized for (its owner, or a member
-of its owning team):
+Or pass it in code. `token` accepts an API key or a bearer token. The SDK picks the header from the prefix.
 
 ```ts
+const macro = new Macro({ token: process.env.MACRO_API_KEY });
+```
+
+The explicit form names the credential kind. Use it when the key is not from an env var, or when it predates the `mak_` prefix.
+
+```ts
+const macro = new Macro({
+  auth: { type: 'user', apiKey: process.env.MACRO_API_KEY },
+});
+```
+
+An API key always acts as the user who minted it. `requestedAs` is bot-only.
+
+#### Bot token
+
+```ts
+const asBot = new Macro({ auth: { type: 'bot', token: process.env.MACRO_BOT_TOKEN } });
 const asWolf = asBot.requestedAs('macro|wolf@macro.com');
 ```
 
-Bot requests carry an access scope: `user` (the requested-as user's access —
-the default whenever `requestedAs` is used) or `team` (the owning team's
-access, for team-owned bots — the default otherwise). Pass
-`auth: { type: 'bot', token, scope: ... }` to override.
+Bot requests carry an access scope. `user` uses the requested-as user's access, and is the default when `requestedAs` is set. `team` uses the owning team's access, for team-owned bots, and is the default otherwise. Pass `auth: { type: 'bot', token, scope: ... }` to override.
+
+#### Bearer token
+
+A session token, for code running with a signed-in user. Sent as `Authorization: Bearer`. The function form refreshes it.
+
+```ts
+const macro = new Macro({ auth: { type: 'user', token: () => session.accessToken() } });
+```
+
+#### Which header goes out
+
+The backend rejects a request carrying two credentials with `400 ambiguous credentials`. The SDK sets exactly one.
+
+| You passed | Header sent |
+| --- | --- |
+| `apiKey: '…'` | `x-macro-user-api-key: …` |
+| `token: 'mak_…'` or `MACRO_API_KEY=mak_…` | `x-macro-user-api-key: mak_…` |
+| `token: '<jwt>'` or `MACRO_API_KEY=<jwt>` | `Authorization: Bearer <jwt>` |
+| `token: 'mbot_…'` | throws. Use `auth: { type: 'bot', token }` or `MACRO_BOT_TOKEN`. |
+| `type: 'bot'` | `x-macro-bot-token` plus `x-macro-bot-scope` |
 
 ### Accessing our API
 
@@ -53,6 +103,36 @@ const name = await doc.name();
 const owner = await doc.owner();
 const email = await owner.email();
 ```
+
+### Forms
+
+Forms collect answers into a table. Respondents can read questions and submit
+without permission to read the response database.
+
+```ts
+const form = await macro.forms.create({ name: 'Workshop registration' });
+const table = await form.table();
+const name = await table.addColumn({ name: 'Name', type: { type: 'text' } });
+await form.replaceLayout([
+  {
+    kind: 'questions',
+    title: 'About you',
+    questions: [{ column: name, required: true }],
+  },
+]);
+const [question] = await form.questions();
+if (!question) throw new Error('The form has no questions');
+const receipt = await form.submit([
+  { question, value: { type: 'text', value: 'Ada' } },
+]);
+```
+
+Pass `table` to `macro.forms.create` to ask about an existing table's columns.
+`editResponse` replaces the caller's answers while the form is open;
+`myResponse` reads only that caller's receipt. Editors use `responseSummary`,
+and `tally` is available to viewers when the owner enables `tallyVisible`.
+Use `sharePermissions` and `updateSharePermissions` for sharing grants, and
+`update({ audience: 'public' })` to allow anonymous responses.
 
 ### Creating, mutating, and deleting
 
@@ -100,13 +180,157 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Databases
+
+Databases are collections of tables. Tables, columns, and views are parts of
+a database, not entities of their own, so they come back as handles that
+resolve through the database's schema.
+
+SQL is available through `database.query(sql)` or
+`macro.databases.query(sql, { database })`. The scoped database resolves
+unqualified names; joins can reach any other database the caller can view.
+Results contain discriminated cell values, typed source rows and table-version
+handles. SQL can also write; a statement executes once without automatic retries.
+
+```ts
+const database = macro.databases.byId('database-id');
+const result = await database.query('SELECT "Name" FROM "Guests"');
+console.log(result.result?.rows);
+await database.query(`UPDATE "Guests" SET "Status" = 'Going' WHERE "Name" = 'Sam'`, {
+  baseVersions: result.readVersions,
+});
+```
+
+`baseVersions` guards written tables atomically. Check `truncatedTables`:
+nonempty means a read hit the row cap and aggregates may be partial. SQL schemas
+are dynamic, so result cells use a generated tagged union rather than an inferred
+TypeScript interface for each table. The HTTP route is `POST /databases/query`.
+
+The SDK's schema methods write typed ops through one endpoint,
+`POST /databases/{id}/ops`. The methods below each send a one-op batch: the
+SDK mints the new table, column, and option ids (UUIDv7) itself and builds the
+handle it returns from the op's result.
+
+```ts
+const database = await macro.databases.create({ name: 'Events' });
+const guests = await database.createTable({ name: 'Guests' });
+const email = await guests.addColumn({ name: 'Email', type: { type: 'text' } });
+
+// A select column only accepts labels you give it, at creation or later.
+const rsvp = await guests.addColumn({
+  name: 'RSVP',
+  type: { type: 'select', multi: false },
+  options: ['Yes', 'No'],
+  after: email,
+});
+await rsvp.addOptions(['Maybe']); // labels it already has are skipped
+
+await guests.rename('Attendees');
+await rsvp.rename('Response');
+
+// A relation column holds rows of another table, named by handle.
+const hosts = await database.createTable({ name: 'Hosts' });
+await guests.addColumn({
+  name: 'Host',
+  type: { type: 'relation', table: hosts },
+});
+
+// See what each type change would do to the existing values first.
+const casts = await rsvp.casts();
+await rsvp.changeType({ to: { type: 'select', multi: true } });
+
+// A type change converts every value or refuses, naming the misfits. To keep
+// the original, add a column of the new type after it, filled with the values
+// that convert ("Response (Text)" unless you pass a name).
+await rsvp.convertIntoNewColumn({ to: { type: 'text' } });
+
+// Tabs: a new database starts with a "Table 1". Reorder by naming every
+// table once, or delete one; a database keeps at least one.
+const tables = await database.tables();
+await database.reorderTables(tables.toReversed());
+await (await database.table('Table 1'))?.delete();
+```
+
+Changing a column's type, reordering columns, and deleting a column send the
+table version last read as the batch's base version: if the table changed
+since, the server refuses with a 409 and nothing is written.
+`convertIntoNewColumn` is the exception to one op per call: it reads the
+conversion (`POST …/columns/{c}/conversion`, which changes nothing), then sends
+one batch that creates the column and fills it, at the version that read saw.
+
+To do several things at once, send the ops yourself. They apply in order in
+one transaction, later ops see what earlier ones did, and a refused op leaves
+the whole batch unwritten. Each op names the resource it changes (a `table`,
+`column`, `rows`, or `view`) and what `change` it makes; each result answers
+with the same `kind` and what happened as its own `change`. Ids for new
+tables, columns, options, and views are yours to mint, so a later op of the
+batch can name them:
+
+```ts
+import { v7 as uuidv7 } from 'uuid';
+
+const notes = uuidv7();
+const results = await database.applyOps(
+  [
+    {
+      kind: 'column',
+      table: guests.id,
+      column: notes,
+      change: {
+        kind: 'create',
+        definition: { source: 'new', name: 'Notes', type: { type: 'text' } },
+      },
+    },
+    {
+      kind: 'rows',
+      table: guests.id,
+      change: {
+        kind: 'insert',
+        rows: [
+          [
+            { column: email.id, value: { type: 'text', value: 'ada@example.com' } },
+            { column: notes, value: { type: 'text', value: 'Vegetarian' } },
+          ],
+        ],
+      },
+    },
+  ],
+  { baseVersions: [{ table: guests, version: await guests.version() }] },
+);
+// results[1] is { kind: 'rows', table, tableVersion, change: { kind: 'inserted', rows: [rowId] } }
+```
+
+A refusal throws `MacroOpRefusedError`, naming the op at fault (`op`, and
+`row` / `column` when one is) and, when the batch minted an id that already
+names something, that id as `taken` (`{ kind: 'table' | 'column' | 'option' |
+'view', id }`). A retried batch whose first attempt committed refuses this way.
+
+```ts
+import { MacroOpRefusedError } from '@macro-inc/sdk';
+
+try {
+  await database.createTable({ name: 'Guests' });
+} catch (error) {
+  if (error instanceof MacroOpRefusedError) console.log(error.op, error.taken);
+}
+```
+
+A table's views are handles too. A board view reads where its cards sit:
+
+```ts
+for (const view of await guests.views()) {
+  const layout = await view.layout();
+  if (layout.kind === 'board') console.log(await view.positions());
+}
+```
+
 ### Rich message helper
 
 Use the `msg` tagged template to build rich message bodies for channel messages
 or documents.
 
 ```ts
-import { msg, here } from '@macro/sdk';
+import { msg, here } from '@macro-inc/sdk';
 
 const channel = macro.channels.byId('chan_1');
 const user = macro.users.byId('user_1');
@@ -130,11 +354,228 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
-# Webhook Events
+### Routines
 
-Pass a `webhookSecret` (or set `MACRO_WEBHOOK_SECRET`) to receive events. You
-should use a framework like Hono or Express to handle the webhook request and
-pass it to the SDK which will handle verification and dispatching.
+Create scheduled or event-triggered agent tasks through `macro.routines`.
+Routine configuration takes typed agent and event resource handles:
+
+```ts
+const routine = await macro.routines.create({
+  name: 'Daily summary',
+  prompt: 'Summarize my open tasks.',
+  userPrompt: 'A daily task summary',
+  trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
+});
+await routine.setEnabled(false);
+const transcript = await routine.execute(); // Chat or AgentSession, if available
+const executions = await routine.history(); // Each retains its parent routine
+```
+
+Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
+`entities` takes typed references such as `{ type: 'document', entity: doc }`.
+Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
+`routine.update(options)` replaces task and trigger settings; `delete()` removes it.
+Routines run as their owner, so share one as a template instead:
+`routine.shareAsTemplate({ description, variables })` publishes a snapshot,
+`routine.template()` reads it (undefined when not shared), and
+`routine.activateTemplate(options)` creates the caller's own routine from it.
+`routine.sourceTemplate()` returns the routine a template came from.
+
+### Agents, conversations and hosts
+
+`macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes
+channel, team and host handles. Updates replace the configuration.
+`channel.agentConversations()` returns conversations with session and turn handles;
+`conversation.startFresh(session)` and `turn.retry(actionId)` expose explicit
+conversation controls. `session.toolApprovalById(id).answer(answer)` answers a
+permission request scoped to that session.
+
+`macro.harnesses.list/me/byId` manages agent hosts. `createPairing(options)` returns
+separate pairing and device handles plus a device secret. Approve through
+`pairing.approve(...)`, then `device.claim(deviceSecret)`; a pending claim returns
+`undefined`. Host tokens and device secrets are never stored in entity handles.
+Self-host operations (`me`, `agents`, `sessions`, `deleteSelf`) require the backend's
+host authentication; ordinary user or bot credentials do not grant those rights.
+
+### Drafts, filters and follow-ups
+
+```ts
+const inbox = (await macro.email.links())[0];
+const draft = await macro.email.createDraft({
+  subject: 'Follow-up',
+  to: [{ email: 'ada@example.com' }],
+  bodyHtml: '<p>Thanks for meeting.</p>',
+}, inbox);
+await draft.update({ subject: 'Follow-up notes', bodyText: 'Thanks for meeting.' });
+const upload = await draft.addAttachment({ fileName: 'notes.txt', sha, size });
+// Upload bytes to upload.uploadUrl, then verify before sending:
+await upload.attachment.complete();
+await draft.schedule('2026-11-01T09:00:00Z');
+await draft.unschedule();
+```
+
+HTML input is UTF-8 encoded for the wire contract. Draft writes retain the draft's
+inbox selection, including delegated inboxes. `update` replaces content; omitted
+recipients and body fields follow the server's replacement semantics.
+`draft.forwardAttachment(attachment)` returns a draft-scoped attachment handle.
+Use its `remove()` method to detach it. `email.scheduled({ inbox, pageSize })`
+automatically pages; breaking iteration stops further requests.
+
+`email.filters(inbox)` and `email.upsertFilter(options, inbox)` return filter handles
+with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
+`email.contacts()` returns the service's address/interaction buckets.
+`thread.calendarInvitations()` reads resolved invitations. `thread.followup()` and
+`thread.setFollowup(command)` expose revision-aware reminder state; commands require
+caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
+returns thread handles alongside reminder snapshots.
+
+### CRM pipelines and initiatives
+
+`macro.crm.pipelines.create/list/byId` returns pipeline handles. Rename, sharing,
+permissions and trash operations live on the pipeline. `pipeline.table()` returns
+its table handle, with column and row handles. `rows()` and `queryRows({ rows, query })`
+fetch through the pipeline's authorization boundary and auto-paginate.
+`pipeline.applyOps(ops, { baseVersions: [{ table, version }] })` accepts the generated
+atomic database operation contract, including batch-local UUIDs, like
+`Database.applyOps`. Table and column reads share a schema cache invalidated by
+successful batches. Call `row.refresh()` to reload a row after a batch changes it.
+
+`macro.initiatives.create/list/byId` groups tasks and members. Relations return user
+and task handles; `initiative.update({ name, members, sharePermission })` and
+`delete()` manage it.
+
+### Access requests and message threads
+
+Documents, chats, projects, initiatives, databases, calls, email threads and agent
+sessions expose `.access`. `access.state()` returns review rights, typed requests,
+and an optional continuation offset. `submit(level)`, `cancel(revision)`,
+`request.resolve(level)`, `direct()`, `grant(user, level)`, and `remove(user)` use
+server authorization and optimistic request revisions. Omit the level on
+`request.resolve()` to decline. Resolved request handles retain their result even
+after they leave the pending listing.
+
+New sharing updates use `SharePermissionOptions`: channel grants name a channel
+handle, operation (`add`, `replace`, `remove`) and optional access level.
+
+Channels, documents, CRM companies/contacts and calls expose
+`messageThreadById(id)` for thread resolution, anchor detachment and deletion.
+`timelinePage({ messages, around, cursor, limit })` returns a mixed timeline with
+seeded message handles and typed activity actors. Selectors must belong to the same
+parent. Cursors are opaque; pass the returned cursor on the next request.
+`channel.recordActivity(type)` records a view or interaction; `channels.activity()`
+reads activity handles. `ChannelPicture.byId(uploadId)` references an uploaded
+picture for `channel.setPicture(picture)`; omit it to clear the picture.
+
+### Meetings and calendar browsing
+
+`macro.meetings.create/list/active/lookup` returns meeting handles. `list()` contains
+the caller's newest 100 standalone meetings; use `lookup(invitationToken)` for
+channel meetings and other invitations. A seeded meeting retains its lookup token
+when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
+`inviteUsers(users)`, `invitePermissions` and `webUrl` live on the meeting.
+`call.meeting()` creates or reads its shareable meeting; calls also expose
+`editTranscript(assignments)` and `toggleTeamShare()`.
+
+`calendar.occurrences(viewport)` auto-paginates and seeds event handles.
+`calendar.teamPage(viewport)` includes the roster and an optional next cursor;
+`teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
+`availabilityCalendars`, `calendar.setContributesToAvailability`, `teamSharing` and
+`setTeamSharing` manage availability and sharing preferences.
+
+`calendar.noteDocuments(query)` suggests owned markdown and optional team handles.
+Use `event.linkNote(document, occurrence, { team })` to grant meeting viewers view
+access; omit `team` for meeting access only. One-time notes follow reschedules;
+recurring notes stay on the selected occurrence. `event.notes(occurrence)` returns
+`CalendarNote` handles with `setTeam(team?)` and `unlink()`. Existing editing and
+other document sharing stay unchanged. Owners can discover every durable grant
+through `document.meetingNotes()` and unlink it even when the meeting is unavailable.
+
+### Document lifecycle and other resources
+
+`documents.createUpload(options)` reserves a binary document and returns upload
+instructions. `document.prepareSave(parts)`, `save(options)` and `simpleSave()` expose
+the existing content lifecycle; upload bytes before committing. Version handles
+come from `document.version(number)`. PDF highlights and comment anchors are scoped
+handles from `anchors()` / `createHighlight(options)`, with kind-checked edits and
+deletion. `documents.byTeamSlug('ENG-42')` resolves a task reference.
+`sharePermissions`, `permissionsToken` and `documents.validatePermissionsToken`
+expose document access contracts.
+
+`macro.githubPullRequests.byId(foreignEntityId)` reads stored GitHub snapshots;
+`changes()` returns a changeset handle with `patch()`. `macro.entityMentions.create`
+takes typed source/target references and returns a deletable mention handle.
+`macro.unfurls.get(url)` and `bulk(urls)` read URL preview metadata.
+
+`macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
+the handle only retains metadata. `list()` and `key.delete()` manage keys.
+`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
+
+`chat.send({ content, model, attachments, toolset })` starts a generation and returns
+its chat, response message and cancellable stream handle. Use
+`generation.message.refresh()` after it changes; reading an unfinished response
+may report that it is not yet available. Tools can perform writes unless disabled.
+`macro.ai.usage({ from, until, users, features })` reads AI usage.
+
+# Events
+
+`macro.events` is always available. The default transport is a live SSE
+stream — no public URL, persisted webhook, or signing secret required.
+
+```ts
+const macro = new Macro({
+  token: process.env.MACRO_API_KEY,
+});
+
+const me = await macro.users.me();
+
+macro.events.on('message.posted', async ({ metadata, target }) => {
+  if (metadata.sender === me.id) return; // don't reply to ourselves
+  if (target.type === 'channel') await target.message.reply('hi!');
+  else await target.comment.reply('hi!');
+});
+
+const stop = await macro.events.listen();
+// later: stop();
+```
+
+`listen()` opens `GET /webhook/events/stream` with the same `WebhookFilters`
+model as persisted webhooks. If you omit `filters`, it derives one filter from
+the event names already registered with `.on()`. Pass `scope: 'team'` for a
+team workspace (defaults to `'user'`). Delivery is best-effort: there is no
+replay if you disconnect.
+
+Handlers receive the same hydrated payloads as webhook deliveries — ORM
+handles for every entity the event names.
+
+Four families are delivered: `document.*`, `channel.*`, `message.*`, and
+`agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
+`attachment_created`, `attachment_removed`) cover channel messages and document
+comments alike: `metadata.parent` names the channel or document, and the
+hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
+reply) or a `Document` plus `Comment`. `macro.events.onSelfMention` subscribes to
+`message.mentioned` deliveries that name the caller.
+Agent-session events describe a coding agent's life: `opened`, `turn_started`,
+`turn_ended`, `settled` (a turn ended with nothing queued behind it),
+`waiting_for_input` (the agent asked its owner a question), `input_received`,
+`mentioned` (a prompt named other users who can see the session), `stopped`,
+`renamed`, and `deleted`. Each carries the session's identity and
+hydrates to an `AgentSession` handle, the owner `User`, and, for a session
+opened from a channel thread, the `Channel`, `Thread`, and magic-chip
+`Message` the turn renders into.
+
+```ts
+macro.events.on('agent_session.settled', async ({ metadata, session, thread }) => {
+  console.log(`${metadata.identity.bot_name} finished: ${metadata.last_turn?.excerpt}`);
+  await thread?.reply(msg`Done — see ${session}`);
+});
+```
+
+### Persisted webhooks
+
+To receive the same events as HTTPS POSTs instead of (or in addition to) SSE,
+register a webhook and pass a `webhookSecret` (or set `MACRO_WEBHOOK_SECRET`).
+Use a framework like Hono or Express to handle the request; the SDK verifies
+the signature and dispatches.
 
 ```ts
 const macro = new Macro({
@@ -142,20 +583,87 @@ const macro = new Macro({
   webhookSecret: process.env.MACRO_WEBHOOK_SECRET,
 });
 
-const me = await macro.users.me();
-
-macro.events.on('channel.message_posted', async ({ metadata, message }) => {
-  if (metadata.sender === me.id) return; // don't reply to ourselves
-  await message.reply('hi!');
+macro.events.on('message.posted', async ({ metadata, target }) => {
+  if (metadata.sender === me.id || target.type !== 'channel') return;
+  await target.message.reply('hi!');
 });
 
 // Hono
 app.post('/webhook', (c) => macro.events.webhook()(c.req.raw));
 ```
 
+Call chat events have `event.target.type === 'call'`, with a `CallRecord` in
+`event.target.call` and a `CallMessage` in `event.target.message`. Read with
+`content()`, or call `reply(body)`, `edit(body)`, and `delete()`. Replies always
+join the call's single chat thread, even when responding to another reply.
+`macro.calls.byId(callId).message(messageId)` creates the same lazy message handle.
+
+# Upgrading to 0.2
+
+Channel messages, document comments, and CRM company and contact comments share
+one API, `/messages/{parent_type}/{parent_id}`, and the SDK entities follow it.
+The old channel message, document comment, and CRM comment routes are removed
+from the server in the same release, so 0.1 clients stop working against it.
+The public `Channel`, `Message`, `Thread`, `Document`, `Company`, and `Contact`
+methods keep their names; these details changed:
+
+- `Channel.messages()` and `Channel.messagesAfter()` page with the structured
+  `MessageCursor` and yield `Message` handles seeded from the shared message
+  record (`mentions` are now populated from list reads too).
+- `Channel.typing(action)` takes `'start' | 'stop'` and posts to
+  `/messages/channel/{id}/typing`.
+- `Message.from(client, channelId, record)` replaces `Message.from(client, record)`,
+  `Message.fromReply`, and `Message.received`.
+- `Comment` ids are message UUIDs: `Comment.commentId` is gone, `Comment.threadId()`
+  is async and returns the root comment id, `Comment.edit` accepts a rich body, and
+  `Comment.reply` exists. `Document.comment(body, { threadId })` takes a string
+  thread id and a rich body; `Document.comments()` returns `{ thread: ThreadState,
+  comments }` per live thread.
+- `CrmComment` is a message-backed comment on its company or contact
+  (`parent: { type: 'crm_company' | 'crm_contact', id }`). Its ids are message
+  UUIDs (imported comments kept their old ids); `text`, `createdAt`,
+  `updatedAt`, and `deletedAt` are lazy accessors; `threadId()` and `author()`
+  are async; `edit` accepts a rich body; and `reply` exists. `owner`, `sender`,
+  `order`, and `metadata` are gone. `Company.comments()` and
+  `Contact.comments()` return `{ thread: ThreadState, comments }` per live
+  thread; `comment(body, { threadId })` replaces `comment({ text, threadId })`;
+  `commentById(id)` returns a handle; `editComment` and `deleteComment` are
+  replaced by `CrmComment.edit` and `CrmComment.delete`. Deleting a thread's
+  root keeps its replies, as it does for channel and document threads.
+- Webhook and SSE events `channel.message_posted`, `channel.mentioned`,
+  `channel.message_patched`, `channel.message_deleted`,
+  `channel.message_attachment_created`, and `channel.message_attachment_removed`
+  are replaced by `message.posted`, `message.mentioned`, `message.patched`,
+  `message.deleted`, `message.attachment_created`, and
+  `message.attachment_removed`. Their metadata carries `parent` instead of
+  `channel_id`, and handlers receive `target` (see Events above) instead of
+  `channel`/`message`/`thread`. `onSelfMention` handlers now receive
+  `message.mentioned` events. Update persisted webhook filters accordingly.
+
+Removed storage operations and their replacements: `getChannelMessages` →
+`messageTimeline`; `getChannelMessagesCatchUp` → `messageTimeline` with
+`activity_after`; `getThreadReplies` → `entityMessageGetThread`;
+`getMessageWithContext` → `entityMessageGetMessage` / `messageTimeline` with
+`around`; `postMessage` → `entityMessageCreate`; `patchMessage` →
+`entityMessageEdit`; `deleteMessage` → `entityMessageDeleteMessage`;
+`postReaction` → `entityMessageReact`; `postTyping` → `entityMessageTyping`;
+`getDocumentComments` → `messageTimeline` + `entityMessageGetThread` on a
+document parent; `createComment` → `entityMessageCreate`; `editComment` →
+`entityMessageEdit`; `deleteComment` → `entityMessageDeleteMessage`;
+`listCrmComments` → `messageTimeline` + `entityMessageGetThread` on a
+`crm_company` or `crm_contact` parent; `createCrmComment` →
+`entityMessageCreate`; `editCrmComment` → `entityMessageEdit`;
+`deleteCrmComment` → `entityMessageDeleteMessage`.
+
 # Developing
 
 This section is just if you are contributing to the SDK.
+
+## Releases
+
+See [Releasing the SDK](RELEASING.md) for patch version bumps, npm setup,
+and tag-triggered publishing. Agents can use the
+[`release-sdk`](../../.agents/skills/release-sdk/SKILL.md) skill.
 
 ## Coverage checking
 
@@ -170,8 +678,166 @@ support by adding a wrapper to the appropriate model. There is CI to ensure that
 we don't forget to add coverage or explicitly skip coverage for new generated
 functions (endpoints).
 
-## Webhook events
+## Events
 
 Event names and payloads are **generated from the backend**: the Rust webhook
 crate exposes a `WebhookEvent` union in the storage OpenAPI spec, and
-`src/events/types.ts` derives `EventName` / `EventPayload` from it.
+`src/events/types.ts` derives `EventName` / `EventPayload` from it. SSE
+(`listen()`) and persisted webhooks (`webhook()`) dispatch the same union.
+
+### AI generation and decisions
+
+Shared cognition endpoints are available through `macro.ai`. They use the
+authenticated user's model access and AI allowance. For generation using only
+supplied context, explicitly set `toolset: { type: 'none' }`:
+
+```ts
+const answer = await macro.ai.structuredCompletion({
+  prompt: 'Summarize these supplied notes: ...',
+  model: 'google/gemini-3.8-flash',
+  toolset: { type: 'none' },
+  output_schema: {
+    name: 'Summary',
+    schema: {
+      type: 'object',
+      properties: { summary: { type: 'string' } },
+      required: ['summary'],
+    },
+  },
+});
+const decision = await macro.ai.decide({
+  input: { subject: 'Invoice due tomorrow', body: 'Please pay by Friday.' },
+  questions: { needsAction: 'Does this ask the recipient to take action?' },
+});
+console.log(answer.outcome, decision.probabilities.needsAction);
+```
+
+Decision probabilities estimate yes independently for each named question; they
+do not authorize any action. Structured completions with tools enabled can modify
+data, so inspect `outcome` and `toolActivity` even when generation is interrupted.
+
+### Workspace browsing
+
+Use `macro.workspace.page(options)` for a bounded page or
+`macro.workspace.list(options)` for lazy automatic pagination. Results include
+existing entity handles plus generated API snapshots, so metadata does not
+require a second request:
+
+```ts
+const page = await macro.workspace.page({
+  includeTypes: ['document'],
+  sortBy: 'recently_updated',
+  limit: 5,
+});
+for (const item of page.items) {
+  if (item.type === 'document') console.log(item.id, item.name);
+}
+console.log({ hasMore: page.hasMore, nextCursor: page.nextCursor });
+```
+
+The namespace supports documents (including tasks), AI chats, projects, email,
+channels, channel threads, call records, calendar events and foreign entities.
+Options preserve source scope through server-side type, time, property, task,
+favorites, tag and inbox filters. Tags accept personal/team scopes and any/all
+matching; ambiguous all-matches and unknown labels fail explicitly. Inbox names
+resolve against all accessible inboxes, including delegated inboxes. `limit`
+controls page size (default 50, maximum 500); break a `for await` loop to stop
+without fetching another page. The TypeDoc namespace reference includes task,
+date-window, signal-email and scoped-tag examples.
+
+### Saved code executions
+
+An execution is a lazy entity handle scoped to its agent session. Construct it
+with the execution ID from an `ExecuteCode` receipt, then read fields on the handle:
+
+```ts
+const session = macro.agentSessions.byId(sessionId);
+const execution = session.codeExecutions.byId(executionId);
+const status = await execution.status();
+const source = await execution.source();
+const result = await execution.result();
+const calls = await execution.calls();
+await execution.refresh(); // Reload after a running execution changes.
+```
+
+Constructing the handle makes no request. Field reads share a cached record;
+`refresh()` reloads it. `execution.session()` returns the parent session handle.
+Every read remains authorized and scoped by both session and execution identity.
+
+### Persistent code-execution reviews
+
+A code execution can prepare a saved UI review and finish immediately. The review
+is presented immediately through the ordinary ACP tool-call stream and remains
+editable after the execution exits. `session.reviews.create(...)` uses the same
+presentation without requiring a code execution. The session owner can
+send one email, send all remaining emails, create a reviewed calendar event, or
+answer a question. External actions only happen on submission.
+
+```js
+const execution = macro.agentSessions.byId(sessionId)
+  .codeExecutions.byId(executionId);
+const review = await execution.reviews.create({
+  kind: 'email',
+  title: 'Follow-up emails',
+  drafts: people.map((person) => ({
+    subject: 'Following up',
+    body: `Hello ${person.name},\n\nThanks for joining us.`,
+    to: [{ email: person.email, name: person.name }],
+  })),
+});
+return { data: { prepared: people.length }, reviews: [await review.reference()] };
+```
+
+`execution.reviews.list()` returns fresh `SessionReview` handles.
+`session.reviews.byId(id)` constructs a lazy handle; `review.items()` returns item
+handles with `edit(draft)`, `submit()`, and `dismiss()` methods. `submitAll()` and
+`dismissAll()` act on the pending items. Writes use the saved revision. After a
+conflict, refresh and inspect the review; never automatically retry a send whose
+outcome is unknown. These SDK methods have the same user authorization as the
+ordinary API: review cards offer a user workflow, not a separate security grant.
+
+### External chats and WhatsApp
+
+Pair your personal account in Macro's External view first. Your WhatsApp chat
+list (`whatsapp.chats()`) holds groups and direct chats; adding one makes an
+independent `ExternalChat` entity (a group or a direct chat, with `provider`
+`whatsapp`) with its own history and ordinary sharing, and its earlier messages
+are imported from your phone. `externalChats.list()` returns every added chat
+you can view; shared viewers can read without WhatsApp. Sending and media
+uploads require your own connected account in the chat, using your personal
+session or own API credential; only the owner sends in a direct chat, and bots
+never send. Adding and removing require a personal bearer session. Each user is
+limited to one send request per second across all chats.
+
+```ts
+const personal = new Macro({
+  auth: { type: 'user', token: () => session.accessToken() },
+});
+let chat;
+for (const entry of await personal.whatsapp.chats()) {
+  if (await entry.canAdd()) {
+    chat = await entry.add();
+    break;
+  }
+}
+if (chat && (await chat.canSend())) {
+  const [someone] = await chat.participants();
+  const send = await chat.send(
+    {
+      type: 'text',
+      text: someone ? `Hello @${someone.mentionToken}` : 'Hello',
+      mentions: someone ? [someone] : [],
+    },
+    { idempotencyKey: crypto.randomUUID() },
+  );
+  await send.refresh();
+  console.log(await send.state());
+}
+for (const shared of await personal.externalChats.list()) {
+  for await (const message of shared.messages()) console.log(await message.body());
+}
+```
+
+Keep the same idempotency key when retrying the same request. A delivery state of
+`unknown` must be reconciled; never automatically resend it. Uploads, quoted
+messages, mentions, mutations, and delivery references must belong to the same chat.

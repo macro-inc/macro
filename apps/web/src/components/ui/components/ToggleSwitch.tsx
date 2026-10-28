@@ -38,6 +38,18 @@ const SWITCH_SIZES = {
   },
 } as const;
 
+/**
+ * An on/off switch for a setting that applies immediately. If the change
+ * needs a save step, use a Checkbox instead.
+ *
+ * @do Use a switch only when the change takes effect immediately.
+ * @do Label the setting in its on-state ("Read receipts", not "Disable read
+ *   receipts").
+ * @do Use `size="md"` in settings and `size="sm"` in toolbars.
+ * @dont Do not put a switch in a form that has a Save button — use a Checkbox.
+ * @dont Do not pair a switch with an on/off text label; the control already
+ *   says it.
+ */
 export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
   const [local, others] = splitProps(props, [
     'defaultChecked',
@@ -79,7 +91,10 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
 
   return (
     <KobalteSwitch
-      class={cn('inline-flex items-center gap-2', local.class)}
+      class={cn(
+        'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-50',
+        local.class
+      )}
       defaultChecked={local.defaultChecked}
       onChange={handleChange}
       disabled={local.disabled}

@@ -538,3 +538,49 @@ fn enforce_term_limits_truncates_on_char_boundary() {
     let out = enforce_term_limits(vec![long]).expect("single term is under the count cap");
     assert_eq!(out[0].chars().count(), MAX_TERM_CHARS);
 }
+
+/// The flag is the only thing keeping calendar events out of a deployed
+/// environment's search results, so the override direction matters: a request
+/// that asks for them must still get nothing while the flag is off.
+#[test]
+fn the_calendar_flag_overrides_what_the_request_asked_for() {
+    assert!(
+        calendar_events_searchable(true, true),
+        "requested and enabled is the only combination that searches calendar"
+    );
+    assert!(
+        !calendar_events_searchable(true, false),
+        "an explicit request must not defeat a disabled environment"
+    );
+    assert!(
+        !calendar_events_searchable(false, true),
+        "an enabled environment must still honour a NIL-excluded request"
+    );
+    assert!(!calendar_events_searchable(false, false));
+}
+
+#[test]
+fn channel_name_cursor_round_trips_through_the_unified_cursor() {
+    let entity_id = Uuid::now_v7();
+    let cursor = SearchCursor {
+        chat_name_cursor: SearchCursorOption::Done,
+        content_cursor: SearchCursorOption::Done,
+        project_name_cursor: SearchCursorOption::Done,
+        crm_company_cursor: SearchCursorOption::Done,
+        channel_name_cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+            entity_id,
+            updated_at: ts(1000),
+        })),
+    };
+
+    let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
+
+    assert!(
+        !decoded.is_exhausted(),
+        "a pending channel name cursor keeps the page alive"
+    );
+    let SearchCursorOption::NotDone(Some(channel_cursor)) = decoded.channel_name_cursor else {
+        panic!("expected the channel name cursor to survive the round trip");
+    };
+    assert_eq!(channel_cursor.as_updated_at(), Some((entity_id, ts(1000))));
+}

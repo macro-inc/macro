@@ -1,37 +1,27 @@
 import { useOwnedCommentPlaceableSelector } from '@block-pdf/signal/permissions';
-import {
-  activePlaceableIdSignal,
-  placeableModeSignal,
-} from '@block-pdf/signal/placeables';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
-import {
-  useCanComment,
-  useCanEdit,
-  useIsDocumentOwner,
-} from '@core/signal/permissions';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Signature from '@phosphor/signature.svg';
-import Textbox from '@phosphor/textbox.svg';
-import Trash from '@phosphor/trash-simple.svg';
-import Cancel from '@phosphor/x.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import Signature from '@icon/system/regular/signature.svg';
+import Textbox from '@icon/system/regular/textbox.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
+import Cancel from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
-import { placeableIdMap, useDeletePlaceable } from '../store/placeables';
+import { usePdfDocument } from '../context/pdf-document-context';
+import { useDeletePlaceable, usePlaceableIdMap } from '../store/placeables';
 import { PayloadMode } from '../type/placeables';
 
 export function MarkupToolbar() {
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const isDocumentOwner = useIsDocumentOwner();
-
-  const [mode, setMode] = placeableModeSignal;
-
-  const activePlaceableId = activePlaceableIdSignal.get;
+  const pdf = usePdfDocument();
+  const canEdit = pdf.permissions.canEdit;
+  const canComment = pdf.permissions.canComment;
+  const isDocumentOwner = pdf.permissions.isOwner;
+  const placeableIdMap = usePlaceableIdMap();
   const deletePlaceable = useDeletePlaceable();
-  const showCancel = () => mode() !== PayloadMode.NoMode;
+  const showCancel = () => pdf.markup.mode() !== PayloadMode.NoMode;
   const ownedCommentSelector = useOwnedCommentPlaceableSelector();
   const showDelete = createMemo(() => {
-    const uuid = activePlaceableId();
+    const uuid = pdf.markup.activeId();
     if (!uuid) return false;
     const activePlaceable = placeableIdMap()?.[uuid];
     if (!activePlaceable) return false;
@@ -45,33 +35,40 @@ export function MarkupToolbar() {
       <div class="flex flex-row items-center">
         <Show when={canEdit()}>
           <Button
+            aria-label="Text Box"
+            tooltip="Text Box"
             size="icon-sm"
-            label="Text Box"
             variant="ghost"
             onClick={() => {
-              setMode(PayloadMode.FreeTextAnnotation);
+              pdf.markup.commands.beginPlacement(
+                PayloadMode.FreeTextAnnotation
+              );
             }}
           >
-            <Textbox />
+            <Textbox class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
+            aria-label="Signature"
+            tooltip="Signature"
             size="icon-sm"
-            label="Signature"
             variant="ghost"
-            onClick={() => setMode(PayloadMode.Signature)}
+            onClick={() =>
+              pdf.markup.commands.beginPlacement(PayloadMode.Signature)
+            }
           >
-            <Signature />
+            <Signature class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
         <Button
+          aria-label="Comment"
+          tooltip="Comment"
           size="icon-sm"
-          label="Comment"
           variant="ghost"
           onClick={() => {
-            setMode(PayloadMode.Thread);
+            pdf.markup.commands.beginPlacement(PayloadMode.Thread);
           }}
         >
-          <ChatTeardrop />
+          <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Show
           when={showCancel()}
@@ -80,8 +77,8 @@ export function MarkupToolbar() {
               when={showDelete()}
               fallback={
                 <div class="invisible">
-                  <Button size="icon-sm">
-                    <Cancel />
+                  <Button variant="ghost" size="icon-sm">
+                    <Cancel class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                 </div>
               }
@@ -91,12 +88,12 @@ export function MarkupToolbar() {
                 variant="danger"
                 tooltip="Delete"
                 onClick={() => {
-                  const activePlaceableIndex_ = activePlaceableId();
+                  const activePlaceableIndex_ = pdf.markup.activeId();
                   if (activePlaceableIndex_ == null) return;
                   deletePlaceable(activePlaceableIndex_);
                 }}
               >
-                <Trash />
+                <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
           }
@@ -106,10 +103,10 @@ export function MarkupToolbar() {
             variant="danger"
             tooltip="Cancel"
             onClick={() => {
-              setMode(PayloadMode.NoMode);
+              pdf.markup.commands.cancelPlacement();
             }}
           >
-            <Cancel />
+            <Cancel class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </div>

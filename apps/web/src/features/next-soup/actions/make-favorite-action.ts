@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import {
@@ -6,7 +7,7 @@ import {
   useFavoritesData,
   useRemoveFavoriteMutation,
 } from '@queries/favorites/favorites';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Toggle an entity in the user's favorites.
@@ -22,8 +23,10 @@ export const makeFavoriteAction = () => {
   const addMutation = useAddFavoriteMutation();
   const removeMutation = useRemoveFavoriteMutation();
 
+  // Foreign entities (pull requests included) are not offered; favorites
+  // already saved for them stay removable from the sidebar.
   const canExecute = (entity: EntityData): boolean =>
-    favoriteEntityType(entity.type) !== undefined;
+    entity.type !== 'foreign' && favoriteEntityType(entity.type) !== undefined;
 
   const isFavorited = (entity: EntityData): boolean => {
     const type = favoriteEntityType(entity.type);
@@ -44,8 +47,6 @@ export const makeFavoriteAction = () => {
     if (addMutation.isPending || removeMutation.isPending) return;
 
     const shouldRemove = favoritable.every((entity) => isFavorited(entity));
-    const verb = shouldRemove ? 'Removed' : 'Added';
-    const preposition = shouldRemove ? 'from' : 'to';
 
     // On add, skip entities already favorited so counts reflect real work.
     const targets = shouldRemove
@@ -70,19 +71,36 @@ export const makeFavoriteAction = () => {
     if (failed === 0) {
       toast.success(
         succeeded > 1
-          ? `${verb} ${succeeded} items ${preposition} favorites`
-          : `${verb} ${preposition} favorites`
+          ? t(
+              shouldRemove
+                ? 'entityActions.toastRemovedCountFromFavorites'
+                : 'entityActions.toastAddedCountToFavorites',
+              { count: succeeded }
+            )
+          : t(
+              shouldRemove
+                ? 'entityActions.toastRemovedFromFavorites'
+                : 'entityActions.toastAddedToFavorites'
+            )
       );
     } else if (succeeded === 0) {
-      toast.failure('Failed to update favorites');
+      toast.failure(t('entityActions.toastFavoritesUpdateFailed'));
     } else {
       toast.failure(
-        `${verb} ${succeeded} of ${results.length} items ${preposition} favorites; ${failed} failed`
+        t(
+          shouldRemove
+            ? 'entityActions.toastRemovedSomeFromFavorites'
+            : 'entityActions.toastAddedSomeToFavorites',
+          { succeeded, count: results.length, failed }
+        )
       );
     }
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     // Favoriting doesn't change the list contents; keep selection/focus.
     await execute(entities);
   };

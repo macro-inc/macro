@@ -4,6 +4,7 @@ import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { handleFolderSelect } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { createMemo, Show } from 'solid-js';
 
 false && fileSelector;
@@ -32,10 +33,12 @@ export function FolderDropZone() {
             use:fileSelector={{
               multiple: true,
               onSelect: (files) => {
-                handleFileUpload(files);
+                handleFileUpload(files).catch((error) =>
+                  Telemetry.error(error, { surface: 'file-upload' })
+                );
               },
             }}
-            class="cursor-pointer border-0 bg-transparent p-0 font-inherit text-inherit underline"
+            class="border-0 bg-transparent p-0 font-[inherit] text-inherit underline"
           >
             Upload files
           </button>{' '}
@@ -47,7 +50,7 @@ export function FolderDropZone() {
                 await handleFolderSelect(files, handleFileUpload);
               },
             }}
-            class="cursor-pointer border-0 bg-transparent p-0 font-inherit text-inherit underline"
+            class="border-0 bg-transparent p-0 font-[inherit] text-inherit underline"
           >
             Upload folders
           </button>

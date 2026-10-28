@@ -11,7 +11,13 @@ use super::models::{Patch, SoupRealtimeMessage, SoupRealtimePatch};
 /// Inbound use-case port driven by entity update transports.
 pub trait SoupRealtimeService: Send + Sync + 'static {
     /// Publishes one entity patch to every current accessor of its access source.
-    fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report>;
+    ///
+    /// Waits for capacity and returns success only after all publications succeed.
+    /// Failures may occur after partial delivery, so retries can produce duplicates.
+    fn notify_users(
+        &self,
+        patch: SoupRealtimePatch,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Receives recipient-targeted Soup patches.
@@ -74,4 +80,13 @@ pub trait SoupRealtimePublisher: Send + Sync + 'static {
         &self,
         message: SoupRealtimeMessage,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Finds session entities whose displayed PR metadata depends on a pull request.
+pub trait PullRequestSessions: Send + Sync + 'static {
+    /// Return linked sessions; recipients must still be resolved using each session's access.
+    fn linked_sessions(
+        &self,
+        github_key: &str,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Report>> + Send;
 }

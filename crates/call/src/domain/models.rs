@@ -10,6 +10,9 @@ use item_filters::{
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamSharePolicyError,
+};
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -18,8 +21,8 @@ pub struct Call {
     /// Unique call identifier.
     pub id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
-    /// Name of the RTC room (typically the channel_id as a string).
+    pub channel_id: Option<Uuid>,
+    /// Name of the RTC room, unique per call session.
     pub room_name: String,
     /// User who created the call.
     pub created_by: String,
@@ -35,7 +38,7 @@ pub struct ArchivedCall {
     /// The archived call record identifier.
     pub call_id: Uuid,
     /// The channel the call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: String,
     /// When the call started.
@@ -46,8 +49,19 @@ pub struct ArchivedCall {
     pub duration_ms: i64,
     /// Whether a recording egress was started before the call was archived.
     pub has_recording: bool,
-    /// Number of distinct participants over the call's lifetime.
-    pub participant_count: usize,
+    /// Macro accounts that joined the call over its lifetime, once each.
+    pub participants: Vec<String>,
+}
+
+/// The people known to have been on, or invited to, an archived call.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallPeople {
+    /// Macro accounts that joined the call, plus the owner of its meeting link.
+    pub user_ids: Vec<MacroUserIdStr<'static>>,
+    /// Email addresses invited to the calendar event carrying the call's
+    /// meeting link. External guests join without an account, so this is the
+    /// only record of who they are.
+    pub invitee_emails: Vec<String>,
 }
 
 /// A participant in an active call.
@@ -66,10 +80,14 @@ pub struct CallParticipant {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallTokenResponse {
+    /// RTC participant identity.
+    pub participant_id: String,
+    /// Meeting link capability, when joined using a link.
+    pub share_token: Option<String>,
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call is associated with.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The RTC token for connecting to the room.
     pub token: String,
     /// The RTC room name.
@@ -110,6 +128,8 @@ pub enum RingStatus {
     Ringing,
     /// This user joined the call on some device — stop ringing (answered elsewhere).
     Answered,
+    /// This user declined the call on some device — stop ringing (declined elsewhere).
+    Declined,
     /// The call is over (or was replaced by a newer call) — stop ringing (remote ended).
     Ended,
 }
@@ -130,6 +150,15 @@ pub struct VerifiedRingToken {
     pub identity: String,
     /// The room the token grants access to, if any.
     pub room: Option<String>,
+}
+
+/// An RTC room that currently exists on the provider.
+#[derive(Debug, Clone)]
+pub struct RtcRoom {
+    /// The room name; Macro names rooms after their call id.
+    pub name: String,
+    /// When the provider created the room.
+    pub created_at: DateTime<Utc>,
 }
 
 /// Response for the leave/end call operation.
@@ -154,6 +183,33 @@ pub struct CallActiveResponse {
     pub created_by: String,
     /// When the call was created.
     pub created_at: DateTime<Utc>,
+}
+
+/// A currently active call, as returned by the batch active-calls listing.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveCallSummary {
+    /// The call identifier.
+    pub call_id: Uuid,
+    /// The channel this call belongs to.
+    pub channel_id: Uuid,
+    /// User who created the call.
+    pub created_by: String,
+    /// When the call was created.
+    pub created_at: DateTime<Utc>,
+    /// Number of active participants. Always >= 1 — calls with no active
+    /// participants (e.g. orphaned by a dropped RTC webhook) are excluded.
+    pub participant_count: i64,
+}
+
+/// Response listing all active calls in channels the caller is a member of.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveCallsResponse {
+    /// The active calls, newest first.
+    pub calls: Vec<ActiveCallSummary>,
 }
 
 /// Configuration for S3 egress output.
@@ -191,6 +247,8 @@ pub struct CallWebhookEvent {
     pub room_name: Option<String>,
     /// Participant identity associated with the event, if any.
     pub participant_identity: Option<MacroUserIdStr<'static>>,
+    /// Non-account guest identity, classified separately from Macro users.
+    pub guest_identity: Option<super::meetings::GuestId>,
     /// Egress ID associated with the event, if any.
     pub egress_id: Option<String>,
     /// File download URL from a completed egress, if any.
@@ -282,16 +340,21 @@ pub struct CallTranscriptCustomSpeakerResult {
     pub custom_speaker: String,
 }
 
-/// Edit call request
+/// Edit call request, as supplied by inbound callers.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EditCallRecordRequest {
-    /// Updated share permissions.
+    /// Updated share permissions. `teamShareAccessLevel` shares the call with
+    /// the creator's team and only accepts `view` or `null` (revoke). While
+    /// the call is live it sets the pending share-with-team toggle, which is
+    /// applied when the call is archived; afterwards only the call's creator
+    /// may change it.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
-    /// If `Some(true)`, grant the creator's team View access on the call.
-    /// If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+    /// Deprecated alias for `sharePermission.teamShareAccessLevel`:
+    /// `Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+    /// `None` is a no-op. Supplying both with disagreeing values is rejected.
     /// The team is resolved from the call's `created_by`, not the acting user.
     pub share_with_team: Option<bool>,
     /// Updated user-supplied display name for the call. `None` is a no-op;
@@ -300,6 +363,26 @@ pub struct EditCallRecordRequest {
     /// this column — patching while the call is still active is a no-op for
     /// this field.
     pub custom_name: Option<String>,
+}
+
+/// Arguments the domain service hands to the repository when editing a call.
+///
+/// Only the service can produce the authorized team-share command, so inbound
+/// callers cannot request a team grant the owner policy has not approved.
+#[derive(Debug)]
+pub struct EditCallRecordRepoArgs {
+    /// Share permission updates, if changing (link and channel sharing).
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Display name update; see [`EditCallRecordRequest::custom_name`].
+    pub custom_name: Option<String>,
+    /// Creator-authorized canonical team-share write for an archived call,
+    /// present only when the request carried an explicit
+    /// `teamShareAccessLevel` or the legacy `shareWithTeam`.
+    pub team_share: Option<AuthorizedTeamShareCommand>,
+    /// Pending share-with-team intent for a call that is still live; applied
+    /// as canonical team sharing when the call is archived.
+    pub live_share_with_team: Option<bool>,
 }
 
 /// One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
@@ -364,11 +447,26 @@ pub struct CallRecordTranscriptSegment {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallRecordParticipant {
-    /// The user id.
+    /// The Macro user id.
     pub user_id: String,
     /// When the user joined the call.
     pub joined_at: DateTime<Utc>,
     /// When the user left (None if still in an active call).
+    pub left_at: Option<DateTime<Utc>>,
+}
+
+/// A non-account guest as returned in a [`CallRecord`].
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordGuest {
+    /// Opaque guest identity; matches the guest's transcript `speaker_id`.
+    pub id: super::meetings::GuestId,
+    /// Guest-provided display name.
+    pub display_name: String,
+    /// When the guest joined the call.
+    pub joined_at: DateTime<Utc>,
+    /// When the guest left (None if still in an active call).
     pub left_at: Option<DateTime<Utc>>,
 }
 
@@ -381,9 +479,9 @@ pub struct CallRecord {
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
-    /// The RTC room name.
-    pub room_name: String,
+    pub channel_id: Option<Uuid>,
+    /// The RTC room name. `None` for imported calls, which never had a room.
+    pub room_name: Option<String>,
     /// User who created the call.
     pub created_by: String,
     /// When the call started (created_at for active, started_at for archived).
@@ -417,7 +515,14 @@ pub struct CallRecord {
     /// AI-generated summary of the call. Only set on archived `call_records`
     /// once summarization has run; active calls always return `None`.
     pub summary: Option<String>,
-    /// Whether the call is shared with the creator's team.
+    /// The canonical access level granted to the creator's team, or `None`
+    /// when the call is not shared with the team. Calls only ever grant
+    /// `View`, and only once archived: while the call is live this is `None`
+    /// and `share_with_team` carries the pending toggle.
+    pub team_share_access_level: Option<AccessLevel>,
+    /// Whether the call is shared with the creator's team. While the call is
+    /// live this is the pending toggle applied at archive; afterwards it
+    /// mirrors `team_share_access_level`.
     pub share_with_team: bool,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
@@ -428,10 +533,32 @@ pub struct CallRecord {
     /// single-record read; `None` in list contexts.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_access_level: Option<AccessLevel>,
-    /// Participants (both active and historic).
+    /// Whether the authenticated viewer has declined this call on any device.
+    /// Set on the single-record read so clients that missed `call_declined`
+    /// can still stop ringing via reconciliation; `false` in list contexts.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub viewer_has_declined: bool,
+    /// Macro-account participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
+    /// Non-account guests (both active and historic). Guests only ever exist
+    /// on standalone meeting calls, never on channel calls.
+    pub guests: Vec<CallRecordGuest>,
     /// Transcript segments ordered by `sequence_num`.
     pub transcript: Vec<CallRecordTranscriptSegment>,
+    /// External provenance for calls imported from another provider; `None`
+    /// for calls recorded in Macro.
+    pub source: Option<CallRecordSource>,
+}
+
+/// Where an imported call came from.
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CallRecordSource {
+    /// Provider that supplied the call.
+    pub provider: crate::domain::records::CallProvider,
+    /// Link to the call in the provider's app, if it has one.
+    pub external_url: Option<String>,
 }
 
 /// Storage object keys associated with a deleted archived call record.
@@ -476,7 +603,7 @@ pub struct CallRecordPreviewData {
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// Resolved display name for the channel.
     pub channel_name: Option<String>,
     /// User-supplied or AI-generated display name for the call. Only set on
@@ -527,6 +654,28 @@ pub struct GetCallRecordsRequest {
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<CallLiteral>>,
 }
 
+/// The order and keyset position of one page of a user's call records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallRecordPage {
+    /// Order by start time; otherwise by last activity (end time, or start
+    /// time for a call that has not ended), the way Soup sorts calls.
+    pub by_start: bool,
+    /// Resume strictly after this sort timestamp and call id.
+    pub after: Option<(DateTime<Utc>, Uuid)>,
+}
+
+impl CallRecordPage {
+    /// The page a Soup query asks for.
+    pub fn from_query<F>(query: &Query<Uuid, SimpleSortMethod, F>) -> Self {
+        let by_start = matches!(query.sort_method(), SimpleSortMethod::CreatedAt);
+        let after = match query {
+            Query::Sort(..) => None,
+            Query::Cursor(cursor) => Some((cursor.val.last_val, cursor.id)),
+        };
+        Self { by_start, after }
+    }
+}
+
 /// Errors that can occur when adding a participant to a call at the
 /// repository boundary. Splitting the "already-active-elsewhere" case into
 /// a typed variant lets the service handle it without looking at the
@@ -563,7 +712,36 @@ pub enum CallError {
     /// The request body violates an API contract (e.g. exceeds a size cap).
     #[error("{0}")]
     InvalidRequest(String),
+    /// The caller is authenticated but not allowed to perform this change
+    /// (for example, only the call's creator may change team sharing).
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+    /// The requested change conflicts with the persisted state (for example a
+    /// stale team-share revision); the caller should reload and retry.
+    #[error("conflict: {0}")]
+    Conflict(String),
     /// An internal error occurred.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
+}
+
+impl From<TeamSharePolicyError> for CallError {
+    fn from(error: TeamSharePolicyError) -> Self {
+        match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                Self::Forbidden(error.to_string())
+            }
+            TeamSharePolicyError::InvalidRevision => Self::Conflict(error.to_string()),
+            TeamSharePolicyError::MissingTeam
+            | TeamSharePolicyError::InvalidLevel
+            | TeamSharePolicyError::ContradictoryInputs => Self::InvalidRequest(error.to_string()),
+        }
+    }
+}
+
+/// Team memory may only include calls associated with a channel.
+/// Standalone invitations and their records always keep team sharing disabled.
+#[cfg(feature = "ports")]
+pub(crate) fn permitted_team_memory_intent(channel_id: Option<Uuid>, enabled: bool) -> bool {
+    channel_id.is_some() && enabled
 }

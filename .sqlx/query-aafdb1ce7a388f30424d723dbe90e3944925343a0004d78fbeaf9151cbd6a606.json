@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_notification_item_unsubscribe (user_id, item_id, item_type, snoozed_until)\n               VALUES ($1, $2, $3, $4)\n               ON CONFLICT (user_id, item_id) DO UPDATE\n               SET item_type = EXCLUDED.item_type, snoozed_until = EXCLUDED.snoozed_until",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aafdb1ce7a388f30424d723dbe90e3944925343a0004d78fbeaf9151cbd6a606"
+}

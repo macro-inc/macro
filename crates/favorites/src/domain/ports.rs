@@ -2,11 +2,30 @@
 
 use std::collections::HashSet;
 
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::{
+    models::{
+        AccessError, EntityAccessReceipt, EntityPermission, RequiredPermission, ViewAccessLevel,
+        ViewOnly,
+    },
+    ports::EntityAccessService,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use crate::domain::models::{Favorite, FavoritesError};
+use crate::domain::models::{
+    Favorite, FavoriteFilter, FavoritesError, FavoritesMutationActor, SetFavoriteResult,
+};
+
+/// Minimum permission to favorite an entity: view access to an item, or any
+/// channel permission. Channels never resolve to an item access level.
+#[derive(Debug, Clone, Copy)]
+pub struct FavoriteView;
+
+impl RequiredPermission for FavoriteView {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.satisfies::<ViewAccessLevel>() || permission.satisfies::<ViewOnly>()
+    }
+}
 
 /// Outbound persistence port for favorites.
 pub trait FavoritesRepo: Send + Sync + 'static {
@@ -29,11 +48,13 @@ pub trait FavoritesRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
 
-    /// List the user's favorites in manual order, hydrated with display
-    /// metadata. Favorites pointing at deleted entities are omitted.
+    /// List the user's favorites matching `filter`, in manual order, hydrated
+    /// with display metadata. Favorites pointing at deleted entities are
+    /// omitted.
     fn list_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> impl Future<Output = Result<Vec<Favorite>, Self::Err>> + Send;
 
     /// Remove the favorite for the given entity from the user's collection.
@@ -62,12 +83,69 @@ pub trait FavoritesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<HashSet<Entity<'static>>, Self::Err>> + Send;
 }
 
+/// Authorization port used by favorites mutation use cases.
+pub trait FavoritesAuthorizer: Send + Sync + 'static {
+    /// Verify that the actor can view the entity being added to favorites.
+    fn authorize_favorite(
+        &self,
+        actor: &FavoritesMutationActor,
+        entity: &Entity<'static>,
+    ) -> impl Future<Output = Result<EntityAccessReceipt<FavoriteView>, FavoritesError>> + Send;
+}
+
+impl<A> FavoritesAuthorizer for A
+where
+    A: EntityAccessService,
+{
+    async fn authorize_favorite(
+        &self,
+        actor: &FavoritesMutationActor,
+        entity: &Entity<'static>,
+    ) -> Result<EntityAccessReceipt<FavoriteView>, FavoritesError> {
+        self.generate_entity_access_receipt::<FavoriteView>(
+            &actor.user_id,
+            actor.organization_id,
+            &entity.entity_id,
+            entity.entity_type,
+        )
+        .await
+        .map_err(|error| match error {
+            AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+                FavoritesError::Unauthorized
+            }
+            AccessError::NotFound(_) => FavoritesError::NotFound,
+            AccessError::BadRequest(message) => FavoritesError::BadRequest(message.to_string()),
+            error @ (AccessError::Unavailable(_) | AccessError::Internal(_)) => {
+                FavoritesError::Internal(anyhow::Error::new(error))
+            }
+        })
+    }
+}
+
+/// Inbound service port for favorite and ordering mutations.
+pub trait FavoritesMutationService: Send + Sync + 'static {
+    /// Set whether an entity belongs to the actor's favorites collection.
+    fn set_favorite(
+        &self,
+        actor: FavoritesMutationActor,
+        entity: Entity<'static>,
+        favorite: bool,
+    ) -> impl Future<Output = Result<SetFavoriteResult, FavoritesError>> + Send;
+
+    /// Persist a complete manual order and return the authoritative collection.
+    fn reorder_favorites(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        ordered: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<Vec<Favorite>, FavoritesError>> + Send;
+}
+
 /// Inbound service port: the favorites API used by drivers (HTTP, soup enrichment).
 pub trait FavoritesService: Send + Sync + 'static {
     /// Add an entity to the user's favorites (idempotent).
     fn add_favorite(
         &self,
-        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+        receipt: &EntityAccessReceipt<FavoriteView>,
     ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
 
     /// Add an entity after a trusted caller has already established that the
@@ -82,10 +160,11 @@ pub trait FavoritesService: Send + Sync + 'static {
         entity: &Entity<'_>,
     ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
 
-    /// List the user's favorites in manual order.
+    /// List the user's favorites in manual order, restricted by `filter`.
     fn list_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> impl Future<Output = Result<Vec<Favorite>, FavoritesError>> + Send;
 
     /// Remove the favorite for the given entity from the user's collection.

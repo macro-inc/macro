@@ -1,17 +1,56 @@
+import {
+  fetchCrmCompanyPreviews,
+  fetchCrmContactPreviews,
+  fetchCrmPipelinePreviews,
+} from '@app/features/crm/preview-adapter';
+import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
-
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import type { ApiThread } from '@service-email/generated/schemas';
+import { scheduledActionClient } from '@service-scheduled-action/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import { entityMessagesClient } from '@service-storage/messages';
 import { formatDocumentName } from '@service-storage/util/filename';
 import type { InfiniteData } from '@tanstack/solid-query';
-import { normalizeMessageSender } from '../channel/message-sender';
+import { fetchAgentSessionMentionPreviews } from '../agent-session/mention-fetchers';
 import { queryClient } from '../client';
 import { emailKeys } from '../email/keys';
 import { threadQueryOptions } from '../email/thread';
+import { representativeThreadMessage } from '../email/thread-subject';
+import { normalizeMessageSender } from '../messages/message-sender';
+import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
+
+async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
+  const previews = await fetchAgentSessionMentionPreviews(
+    ids,
+    isFeatureEnabled(enableGraphqlSoup)
+  );
+  return [...previews].map(([id, preview]): PreviewItem => {
+    const base = {
+      id,
+      type: 'agent_session' as const,
+      loading: false as const,
+    };
+    if (preview.access !== 'access') return { ...base, access: preview.access };
+    return {
+      ...base,
+      access: 'access',
+      name: preview.data.name,
+      rawName: preview.data.name,
+      owner: preview.data.ownerId,
+      updatedAt: preview.data.updatedAt,
+    };
+  });
+}
 
 async function fetchChannelPreviews(
   channelIds: string[]
@@ -41,6 +80,7 @@ async function fetchChannelPreviews(
           rawName: channel.channel_name,
           name: channel.channel_name,
           channelType: channel.channel_type,
+          profilePictureId: channel.profile_picture_id,
         };
       case 'no_access':
       case 'does_not_exist':
@@ -58,24 +98,16 @@ export async function fetchMessageContext(
   messageId: string,
   signal?: AbortSignal
 ): Promise<MessageContext | null> {
-  const msgResult = await storageServiceClient.getMessageWithContext({
-    channel_id: channelId,
-    message_id: messageId,
-    signal,
-  });
-
-  if (msgResult.isErr()) {
+  if (signal?.aborted) return null;
+  try {
+    const message = await entityMessagesClient.get(
+      { type: 'channel', id: channelId },
+      messageId
+    );
+    return signal?.aborted ? null : normalizeMessageSender(message);
+  } catch {
     return null;
   }
-
-  const msgData = msgResult.value;
-  const message = msgData.messages[0];
-
-  if (!message) {
-    return null;
-  }
-
-  return normalizeMessageSender(message);
 }
 
 async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -106,16 +138,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
-          subType:
-            doc.sub_type === null || doc.sub_type === undefined
-              ? undefined
-              : {
-                  type: doc.sub_type.type,
-                  is_completed:
-                    'is_completed' in doc.sub_type
-                      ? doc.sub_type.is_completed
-                      : undefined,
-                },
+          subType: toSubType(doc.sub_type) ?? undefined,
         };
       case 'no_access':
       case 'does_not_exist':
@@ -236,50 +259,39 @@ async function fetchProjectPreviews(
   });
 }
 
-/**
- * Fetches CRM company previews via `GET /crm/companies/{id}`. Mirrors the
- * email preview fetcher's shape — N parallel REST calls rather than a
- * batch endpoint, since the CRM REST surface is per-id today and
- * companies are a smaller cardinality than mentions in flight.
- *
- * The backend already gates hidden visibility by role (admin/owner sees
- * hidden, non-admin 404s), so the fetcher doesn't need to repeat that
- * logic.
- */
-async function fetchCrmCompanyPreviews(
-  companyIds: string[]
+/** Task projects through the authorized Soup list; absent ids have no access. */
+async function fetchInitiativePreviews(
+  initiativeIds: string[]
 ): Promise<PreviewItem[]> {
-  return await Promise.all(
-    companyIds.map(async (id) => {
-      const base = { id, type: 'crm_company' as const };
-      const result = await storageServiceClient.getCompany({ companyId: id });
+  const result = await storageServiceClient.getSoupItems({
+    params: {},
+    body: {
+      ...QUERY_FILTERS_BASE,
+      initiative_filters: { initiative_ids: initiativeIds },
+      limit: initiativeIds.length,
+    },
+  });
 
-      if (result.isErr()) {
-        // The backend returns 404 for every unreachable reason (wrong
-        // team, hidden+member, doesn't exist) — deliberate, so existence
-        // can't be probed across teams. Maps to "No Access" for parity
-        // with the email fetcher's per-id convention; "Deleted" would be
-        // misleading since we can't actually tell.
-        return {
-          ...base,
-          access: 'no_access' as const,
-          loading: false as const,
-        };
-      }
+  if (result.isErr()) {
+    console.error('Failed to fetch project previews');
+    return [];
+  }
 
-      const company = result.value;
-      const displayName =
-        company.name ?? company.domains[0]?.domain ?? 'Unknown Company';
-
-      return {
-        ...base,
-        access: 'access' as const,
-        loading: false as const,
-        rawName: displayName,
-        name: displayName,
-        updatedAt: company.updatedAt,
-      };
-    })
+  return result.value.items.flatMap((item): PreviewItem[] =>
+    item.tag === 'initiative'
+      ? [
+          {
+            id: item.data.id,
+            type: 'initiative',
+            access: 'access',
+            loading: false,
+            rawName: item.data.name,
+            name: item.data.name,
+            owner: item.data.ownerId,
+            updatedAt: item.data.updatedAt,
+          },
+        ]
+      : []
   );
 }
 
@@ -324,7 +336,11 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         const result = await emailClient.getThread({
           thread_id: threadId,
           offset: 0,
-          limit: 1,
+          // Fetch a page rather than a single message: the newest message can
+          // be a subjectless draft (or, for a non-owner, be filtered out
+          // entirely), so a limit-1 fetch would resolve the thread as "No
+          // Subject" even though a real message in it has one.
+          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
         });
 
         if (result.isErr()) {
@@ -337,10 +353,10 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         thread = result.value.thread;
       }
 
-      const firstMessage = thread.messages[0];
-      const subject = firstMessage?.subject ?? 'No Subject';
+      const representative = representativeThreadMessage(thread.messages);
+      const subject = representative?.subject ?? 'No Subject';
       const sender =
-        firstMessage?.from?.email ?? firstMessage?.from?.name ?? undefined;
+        representative?.from?.email ?? representative?.from?.name ?? undefined;
 
       return {
         ...base,
@@ -404,6 +420,74 @@ async function fetchCalendarEventPreviews(
   });
 }
 
+/**
+ * A database previews as the viewer's own read of it: an owner or anyone it
+ * is shared with gets its name; one deleted or trashed is gone.
+ */
+async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'database', loading: false } as const;
+      const detail = await storageServiceClient.databases.get({ id });
+      if (detail.isErr())
+        return { ...base, access: failedReadAccess(detail.error) };
+      const { database } = detail.value;
+      if (database.trashed_at !== null)
+        return { ...base, access: 'does_not_exist' };
+      return {
+        ...base,
+        access: 'access',
+        rawName: database.name,
+        name: database.name,
+        owner: database.owner_id,
+      };
+    })
+  );
+}
+
+/**
+ * A form previews from its own detail, which viewers (respondents) can read
+ * too; one that is gone reads as deleted.
+ */
+async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'form', loading: false } as const;
+      const detail = await storageServiceClient.forms.get({ id });
+      if (detail.isErr())
+        return { ...base, access: failedReadAccess(detail.error) };
+      const { form } = detail.value;
+      return {
+        ...base,
+        access: 'access',
+        rawName: form.name,
+        name: form.name,
+        owner: form.ownerId,
+      };
+    })
+  );
+}
+
+/** A routine previews from its own read; one that is gone reads as deleted. */
+async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'routine', loading: false } as const;
+      const routine = await scheduledActionClient.getRoutine(id);
+      if (routine.isErr())
+        return { ...base, access: failedReadAccess(routine.error) };
+      return {
+        ...base,
+        access: 'access',
+        rawName: routine.value.name,
+        name: routine.value.name,
+        owner: routine.value.owner,
+        updatedAt: routine.value.updated_at,
+      };
+    })
+  );
+}
+
 function filterMapToId(items: Array<ItemEntity>, type: ItemEntity['type']) {
   return items.filter((i) => i.type === type).map(({ id }) => id);
 }
@@ -416,18 +500,25 @@ function doFetch(
   return Promise.resolve([]);
 }
 
-export async function fetchPreviewBatch(
+export async function fetchRestPreviewBatch(
   items: ItemEntity[]
 ): Promise<Map<string, PreviewItem>> {
   const results = await Promise.all([
+    doFetch(fetchSessionPreviews, filterMapToId(items, 'agent_session')),
     doFetch(fetchChatPreviews, filterMapToId(items, 'chat')),
     doFetch(fetchCallPreviews, filterMapToId(items, 'call')),
     doFetch(fetchChannelPreviews, filterMapToId(items, 'channel')),
     doFetch(fetchDocumentPreviews, filterMapToId(items, 'document')),
     doFetch(fetchProjectPreviews, filterMapToId(items, 'project')),
+    doFetch(fetchInitiativePreviews, filterMapToId(items, 'initiative')),
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
     doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
+    doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
+    doFetch(fetchCrmPipelinePreviews, filterMapToId(items, 'crm_pipeline')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
+    doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
+    doFetch(fetchFormPreviews, filterMapToId(items, 'form')),
+    doFetch(fetchRoutinePreviews, filterMapToId(items, 'routine')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {

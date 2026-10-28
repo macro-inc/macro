@@ -1,0 +1,452 @@
+import ArrowBendDownRight from '@icon/system/regular/arrow-bend-down-right.svg';
+import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CommentIcon from '@icon/system/regular/chat-circle.svg';
+import Check from '@icon/system/regular/check.svg';
+import CurrencyDollar from '@icon/system/regular/currency-dollar.svg';
+import FunctionIcon from '@icon/system/regular/function.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import Percent from '@icon/system/regular/percent.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import TextB from '@icon/system/regular/text-b.svg';
+import TextIndent from '@icon/system/regular/text-indent.svg';
+import TextItalic from '@icon/system/regular/text-italic.svg';
+import TextOutdent from '@icon/system/regular/text-outdent.svg';
+import TextStrikethrough from '@icon/system/regular/text-strikethrough.svg';
+import TextUnderline from '@icon/system/regular/text-underline.svg';
+import X from '@icon/system/regular/x.svg';
+import { Button, type ButtonProps } from '@ui/components/Button';
+import { Show } from 'solid-js';
+import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
+import type { TableReferences } from '../core/formula-completion';
+import type {
+  FormulaReferenceSpan,
+  FormulaTextSelection,
+} from '../core/formula-reference';
+import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
+import type { CompleteFormula } from '../primitives/create-formula-assistance';
+import { createTouchPress } from '../primitives/create-touch-press';
+import { FormulaInput } from './FormulaInput';
+import {
+  DataFormatMenu,
+  InsertMenu,
+  PasteMenu,
+  ViewMenu,
+} from './SpreadsheetActionMenus';
+import {
+  AlignmentMenu,
+  BorderMenu,
+  CellColorMenu,
+  FontFamilyMenu,
+  FunctionMenu,
+  NumberFormatMenu,
+  VerticalAlignmentMenu,
+  ZoomMenu,
+} from './SpreadsheetToolbarMenus';
+
+function ToolbarButton(props: ButtonProps) {
+  return (
+    <Button
+      variant="ghost"
+      {...props}
+      size="icon-sm"
+      class="h-7 w-7 min-h-7 min-w-7 p-1 font-normal touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
+    />
+  );
+}
+
+function Divider() {
+  return (
+    <div aria-hidden="true" class="mx-1.5 h-5 w-px shrink-0 bg-edge-muted" />
+  );
+}
+
+function FontSizeControl(props: SpreadsheetToolbarProps) {
+  const size = () => props.cell?.fontSize ?? 10;
+  const setSize = (value: number) => {
+    if (Number.isFinite(value))
+      props.onStyle({ fontSize: Math.max(8, Math.min(36, Math.round(value))) });
+  };
+  return (
+    <div class="flex shrink-0 items-center gap-0.5">
+      <ToolbarButton
+        size="icon-sm"
+        aria-label="Decrease font size"
+        disabled={props.readonly || size() <= 8}
+        onClick={() => setSize(size() - 1)}
+      >
+        <Minus class="size-[18px]" />
+      </ToolbarButton>
+      <input
+        aria-label="Font size"
+        title="Font size"
+        inputmode="numeric"
+        type="number"
+        min={8}
+        max={36}
+        value={size()}
+        disabled={props.readonly}
+        class="h-7 w-9 touch:h-[44px] touch:w-[44px] touch:text-[max(16px,1rem)] appearance-none rounded-[3px] border border-edge-muted bg-transparent text-center text-[13px] text-ink outline-none focus:border-accent disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        onChange={(event) => {
+          setSize(Number(event.currentTarget.value));
+          event.currentTarget.value = String(size());
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            event.currentTarget.blur();
+            props.onRestoreFocus?.();
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.currentTarget.value = String(size());
+            event.currentTarget.blur();
+            props.onRestoreFocus?.();
+          }
+        }}
+      />
+      <ToolbarButton
+        size="icon-sm"
+        aria-label="Increase font size"
+        disabled={props.readonly || size() >= 36}
+        onClick={() => setSize(size() + 1)}
+      >
+        <Plus class="size-[18px]" />
+      </ToolbarButton>
+    </div>
+  );
+}
+
+function TextStyleControls(props: SpreadsheetToolbarProps) {
+  return (
+    <>
+      <ToolbarButton
+        size="icon-sm"
+        aria-label="Bold"
+        tooltip="Bold (⌘/Ctrl B)"
+        aria-pressed={!!props.cell?.bold}
+        variant={props.cell?.bold ? 'primary' : 'ghost'}
+        disabled={props.readonly}
+        onClick={() => props.onStyle({ bold: !props.cell?.bold })}
+      >
+        <TextB class="size-[18px]" />
+      </ToolbarButton>
+      <ToolbarButton
+        size="icon-sm"
+        aria-label="Italic"
+        tooltip="Italic (⌘/Ctrl I)"
+        aria-pressed={!!props.cell?.italic}
+        variant={props.cell?.italic ? 'primary' : 'ghost'}
+        disabled={props.readonly}
+        onClick={() => props.onStyle({ italic: !props.cell?.italic })}
+      >
+        <TextItalic class="size-[18px]" />
+      </ToolbarButton>
+      <ToolbarButton
+        size="icon-sm"
+        aria-label="Strikethrough"
+        aria-pressed={!!props.cell?.strikethrough}
+        variant={props.cell?.strikethrough ? 'primary' : 'ghost'}
+        disabled={props.readonly}
+        onClick={() =>
+          props.onStyle({ strikethrough: !props.cell?.strikethrough })
+        }
+      >
+        <TextStrikethrough class="size-[18px]" />
+      </ToolbarButton>
+      <ToolbarButton
+        size="icon-sm"
+        aria-label="Underline"
+        tooltip="Underline (⌘/Ctrl U)"
+        aria-pressed={!!props.cell?.underline}
+        variant={props.cell?.underline ? 'primary' : 'ghost'}
+        disabled={props.readonly}
+        onClick={() => props.onStyle({ underline: !props.cell?.underline })}
+      >
+        <TextUnderline class="size-[18px]" />
+      </ToolbarButton>
+    </>
+  );
+}
+
+export function SpreadsheetToolbar(props: SpreadsheetToolbarProps) {
+  const decimals = () =>
+    props.cell?.decimals != null && props.cell.decimals >= 0
+      ? props.cell.decimals
+      : 2;
+  return (
+    <div class="shrink-0 border-b border-edge-muted">
+      <div
+        role="toolbar"
+        aria-label="Spreadsheet formatting"
+        class="flex h-10 min-w-0 shrink-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain px-3 touch:h-[48px] touch:touch-pan-x touch:px-1"
+      >
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Undo"
+          tooltip="Undo (⌘/Ctrl Z)"
+          disabled={props.readonly || !props.canUndo}
+          onClick={() => props.onCommand('undo')}
+        >
+          <ArrowCounterClockwise class="size-[18px]" />
+        </ToolbarButton>
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Redo"
+          tooltip="Redo (⌘/Ctrl Shift Z)"
+          disabled={props.readonly || !props.canRedo}
+          onClick={() => props.onCommand('redo')}
+        >
+          <ArrowClockwise class="size-[18px]" />
+        </ToolbarButton>
+        <PasteMenu {...props} />
+        <Divider />
+        <ZoomMenu {...props} />
+        <ViewMenu {...props} />
+        <Divider />
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Format as currency"
+          disabled={props.readonly}
+          onClick={() => props.onStyle({ format: 'currency' })}
+        >
+          <CurrencyDollar class="size-[18px]" />
+        </ToolbarButton>
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Format as percent"
+          disabled={props.readonly}
+          onClick={() => props.onStyle({ format: 'percent' })}
+        >
+          <Percent class="size-[18px]" />
+        </ToolbarButton>
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Decrease decimal places"
+          disabled={props.readonly || decimals() === 0}
+          onClick={() => props.onStyle({ decimals: decimals() - 1 })}
+        >
+          <span class="font-sans text-[11px] font-normal tracking-tight">
+            .0←
+          </span>
+        </ToolbarButton>
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Increase decimal places"
+          disabled={props.readonly || decimals() === 10}
+          onClick={() => props.onStyle({ decimals: decimals() + 1 })}
+        >
+          <span class="font-sans text-[11px] font-normal tracking-tight">
+            .00→
+          </span>
+        </ToolbarButton>
+        <NumberFormatMenu {...props} />
+        <Divider />
+        <FontFamilyMenu {...props} />
+        <FontSizeControl {...props} />
+        <Divider />
+        <TextStyleControls {...props} />
+        <CellColorMenu {...props} kind="textColor" />
+        <CellColorMenu {...props} kind="fillColor" />
+        <Divider />
+        <BorderMenu {...props} />
+        <AlignmentMenu {...props} />
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Decrease indent"
+          disabled={props.readonly}
+          onClick={() => {
+            props.onCommand('indent-decrease');
+            props.onRestoreFocus?.();
+          }}
+        >
+          <TextOutdent class="size-[18px]" />
+        </ToolbarButton>
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Increase indent"
+          disabled={props.readonly}
+          onClick={() => {
+            props.onCommand('indent-increase');
+            props.onRestoreFocus?.();
+          }}
+        >
+          <TextIndent class="size-[18px]" />
+        </ToolbarButton>
+        <VerticalAlignmentMenu {...props} />
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Wrap text"
+          aria-pressed={!!props.cell?.wrap}
+          variant={props.cell?.wrap ? 'primary' : 'ghost'}
+          disabled={props.readonly}
+          onClick={() => props.onStyle({ wrap: !props.cell?.wrap })}
+        >
+          <ArrowBendDownRight class="size-[18px]" />
+        </ToolbarButton>
+        <Divider />
+        <FunctionMenu {...props} />
+        <DataFormatMenu {...props} />
+        <InsertMenu {...props} />
+        <ToolbarButton
+          size="icon-sm"
+          aria-label="Find and replace"
+          tooltip="Find and replace (⌘/Ctrl F)"
+          onClick={() => props.onCommand('find')}
+        >
+          <MagnifyingGlass class="size-[18px]" />
+        </ToolbarButton>
+        <Show when={props.onComment}>
+          <Divider />
+          <Button
+            size="sm"
+            variant="ghost"
+            class="shrink-0 h-7 gap-1.5 px-2 text-[13px] touch:min-h-[44px]"
+            disabled={!props.canComment}
+            onClick={() => props.onComment?.()}
+            tooltip="Comment on selected cells (⌘/Ctrl Alt M)"
+          >
+            <CommentIcon class="size-[18px]" />
+            Comment
+          </Button>
+        </Show>
+        <Show when={props.readonly}>
+          <span class="ml-auto shrink-0 px-2 text-[10px] text-ink-muted">
+            View only
+          </span>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+export function FormulaBar(props: {
+  mentions?: SpreadsheetMentions;
+  address: string;
+  value: string;
+  readonly: boolean;
+  editing?: boolean;
+  complete: CompleteFormula;
+  tableReferences?: () => TableReferences | undefined;
+  selectionRequest?: FormulaTextSelection;
+  references?: FormulaReferenceSpan[];
+  pickingReference?: boolean;
+  onSelectionChange?: (start: number, end: number) => void;
+  onNavigate: (address: string) => void;
+  onEdit: () => void;
+  onInput: (value: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  onReturnToGrid: () => void;
+}) {
+  const commitPress = createTouchPress(
+    () => {
+      props.onCommit();
+      props.onReturnToGrid();
+    },
+    () => props.readonly || !props.editing
+  );
+  const cancelPress = createTouchPress(
+    () => {
+      props.onCancel();
+      props.onReturnToGrid();
+    },
+    () => props.readonly || !props.editing
+  );
+  return (
+    <div class="flex h-7 shrink-0 items-center border-b border-edge-muted font-sans text-[13px] touch:h-[44px]">
+      <input
+        aria-label="Go to cell"
+        class="h-full w-24 shrink-0 border-r border-edge-muted bg-transparent px-3 font-sans text-ink outline-none focus:bg-accent-bg touch:w-18 touch:px-2 touch:text-[max(16px,1rem)]"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck={false}
+        enterkeyhint="go"
+        value={props.address}
+        onFocus={(event) => event.currentTarget.select()}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            props.onNavigate(event.currentTarget.value);
+            event.currentTarget.value = props.address;
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            event.currentTarget.value = props.address;
+            props.onReturnToGrid();
+          }
+        }}
+        onBlur={(event) => {
+          event.currentTarget.value = props.address;
+        }}
+      />
+      <FunctionIcon class="mx-2 size-3.5 shrink-0 text-ink-subtle" />
+      <FormulaInput
+        mentions={props.mentions}
+        label="Formula bar"
+        complete={props.complete}
+        tableReferences={props.tableReferences}
+        selectionRequest={props.selectionRequest}
+        references={props.references}
+        pickingReference={props.pickingReference}
+        onSelectionChange={props.onSelectionChange}
+        placeholder={
+          props.readonly
+            ? 'Select a cell to inspect its value'
+            : 'Enter a value or formula, like =SUM(A1:A10)'
+        }
+        readonly={props.readonly}
+        class="h-full min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-1 pr-3 font-sans text-[13px] leading-[18px] text-ink outline-none placeholder:text-ink-placeholder touch:py-[12px] touch:pr-1 touch:text-[max(16px,1rem)] touch:leading-[20px]"
+        value={props.value}
+        onFocus={props.onEdit}
+        onInput={props.onInput}
+        onBlur={props.onCommit}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.isComposing) return;
+          if (event.key === 'Enter' && !event.altKey) {
+            event.preventDefault();
+            props.onCommit();
+            (event.currentTarget as HTMLTextAreaElement).blur();
+            props.onReturnToGrid();
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            props.onCancel();
+            (event.currentTarget as HTMLTextAreaElement).blur();
+            props.onReturnToGrid();
+          }
+        }}
+      />
+      <Show when={props.editing && !props.readonly}>
+        <div
+          class="hidden shrink-0 items-center touch:flex"
+          onPointerDown={(event) => event.preventDefault()}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <Button
+            variant="ghost"
+            aria-label="Cancel edit"
+            tooltip="Cancel edit"
+            {...cancelPress}
+            size="icon-sm"
+            class="size-[44px]"
+          >
+            <X class="size-5" />
+          </Button>
+          <Button
+            aria-label="Apply edit"
+            tooltip="Apply edit"
+            {...commitPress}
+            size="icon-sm"
+            variant="primary"
+            class="size-[44px]"
+          >
+            <Check class="size-5" />
+          </Button>
+        </div>
+      </Show>
+    </div>
+  );
+}

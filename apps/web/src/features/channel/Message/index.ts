@@ -6,6 +6,13 @@ import {
   useSearchHighlightTermsLookup,
 } from './context';
 
+export type {
+  MessageActionContext,
+  MessageActionEvent,
+  MessageActionHandler,
+  MessageActions,
+  MessageData,
+} from '@core/messages/types';
 export { ActionMenu } from './ActionMenu';
 export { Attachments } from './Attachments';
 export { ChannelCreatedIndicator } from './ChannelCreatedIndicator';
@@ -17,13 +24,6 @@ export { MediaPreview } from './MediaPreview';
 export { Message } from './Message';
 export { MessageFlag } from './MessageFlag';
 export { NewDivider } from './NewDivider';
-export type {
-  MessageActionContext,
-  MessageActionEvent,
-  MessageActionHandler,
-  MessageActions,
-  MessageData,
-} from './types';
 export {
   MessageActionsProvider,
   SearchHighlightTermsProvider,

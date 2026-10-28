@@ -8,9 +8,10 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { NamedSubType } from '@entity';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueuePreviewWakeup,
@@ -26,6 +27,7 @@ import {
   type ComponentProps,
   createEffect,
   Match,
+  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -36,9 +38,10 @@ import {
   getPreviewItemIconType,
 } from './EntityIcon';
 import { HoverCard } from './HoverCard';
+import { TaskStatusIcon } from './TaskStatusIcon';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
-  const [item] = useItemPreview(entity);
+  const [item, { documentProperties }] = useItemPreview(entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
@@ -72,7 +75,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     }
   }
 
-  async function onPreviewClick(
+  function onPreviewClick(
     type: ItemType | undefined,
     id: string,
     fileType?: FileType,
@@ -103,12 +106,42 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const ItemEntityIcon = (
     localProps?: Partial<Omit<ComponentProps<typeof EntityIcon>, 'targetType'>>
   ) => {
-    return <EntityIcon targetType={targetType()} {...localProps} />;
-    // return <EntityIcon targetType={'task'} {...localProps} />;
+    const statusId = () => {
+      const preview = item();
+      if (!isAccessiblePreviewItem(preview) || preview.type !== 'document')
+        return;
+      const property = preview.documentMetadata?.properties.find(
+        (property) =>
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
+      );
+      return property?.valueType === 'SELECT_STRING'
+        ? property.value?.[0]
+        : undefined;
+    };
+    const completed = () => {
+      const preview = item();
+      return isAccessiblePreviewItem(preview) &&
+        preview.subType?.type === 'task'
+        ? preview.subType.is_completed
+        : undefined;
+    };
+    return (
+      <Show
+        when={targetType() === 'task'}
+        fallback={<EntityIcon targetType={targetType()} {...localProps} />}
+      >
+        <TaskStatusIcon
+          {...localProps}
+          statusId={statusId()}
+          completed={completed()}
+        />
+      </Show>
+    );
   };
 
   return {
     item,
+    documentProperties,
     name,
     onPreviewClick,
     targetType,
@@ -117,7 +150,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
 }
 
 const DEFAULT_BUTTON_CLASS =
-  'text-ink text-sm border border-edge-muted rounded-xs hover:bg-hover flex flex-row h-6 px-2 justify-center items-center';
+  'text-ink text-sm border border-edge-muted/50 rounded-md hover:bg-hover flex flex-row h-6 px-2 justify-center items-center';
 const DEFAULT_ICON_CLASS = 'flex justify-start items-center w-3.5 h-3.5 mr-2';
 const DEFAULT_TEXT_CLASS = 'flex-1 text-left leading-5 min-w-0 truncate';
 
@@ -284,7 +317,11 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                       props.disableHoverCard || isTouchDevice() || !blockName()
                     }
                     trigger={
-                      <button class={buttonClass()} {...navHandlers}>
+                      <button
+                        type="button"
+                        class={buttonClass()}
+                        {...navHandlers}
+                      >
                         <div class={iconClass()}>
                           <ItemEntityIcon size={iconSize()} />
                         </div>

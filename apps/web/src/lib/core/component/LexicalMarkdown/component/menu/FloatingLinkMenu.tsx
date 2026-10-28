@@ -1,19 +1,19 @@
-import { UnfurlLink } from '@core/component/Link';
+import { LinkHoverCard } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
+import NewTab from '@icon/system/regular/arrow-square-out.svg';
+import Check from '@icon/system/regular/check-circle.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Link from '@icon/system/regular/link.svg';
+import Trash from '@icon/system/regular/link-break.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import LinkText from '@icon/system/regular/text-t.svg';
 import { mergeRegister } from '@lexical/utils';
-import NewTab from '@phosphor/arrow-square-out.svg';
-import Check from '@phosphor/check-circle.svg';
-import Copy from '@phosphor/copy.svg';
-import Link from '@phosphor/link.svg';
-import Trash from '@phosphor/link-break.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import LinkText from '@phosphor/text-t.svg';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
-import { Button, Tooltip } from '@ui';
+import { Button, Surface } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -25,6 +25,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  on,
   onCleanup,
   onMount,
   type ParentProps,
@@ -61,7 +62,8 @@ export function FloatingLinkMenu(props: {
   closePopup?: () => void;
   autoLinkMatchMode?: AutoLinkMatchMode;
 }) {
-  const { plugins, editor } = useContext(LexicalWrapperContext) ?? {};
+  const { plugins, editor, isInteractable } =
+    useContext(LexicalWrapperContext) ?? {};
   if (!plugins || !editor) {
     console.error(
       'FloatingLinkMenu requires plugins and editor from LexicalWrapperContext!'
@@ -93,10 +95,7 @@ export function FloatingLinkMenu(props: {
   // Switch on submit behavior
   const [createMode, setCreateMode] = createSignal(false);
 
-  let [activeInput, setActiveInput] = createSignal<HTMLInputElement>();
-
   let urlInputRef!: HTMLInputElement | undefined;
-  let linkTextInputRef: HTMLInputElement | undefined;
   let menuRef: HTMLDivElement | undefined;
 
   const reset = () => {
@@ -107,6 +106,15 @@ export function FloatingLinkMenu(props: {
     setPreviewHover(false);
     setCreateMode(false);
   };
+
+  createEffect(
+    on(
+      () => isInteractable?.(),
+      (interactable) => {
+        if (interactable === false) reset();
+      }
+    )
+  );
 
   // Passed to link plugin in to be called when the mouse hovers over a link.
   const onHoverLink = (link?: ILinkInfo) => {
@@ -162,6 +170,7 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleUnlink = () => {
+    if (!editor.isEditable()) return;
     editor.dispatchCommand(UNLINK_COMMAND, undefined);
     reset();
     setTimeout(() => {
@@ -175,15 +184,19 @@ export function FloatingLinkMenu(props: {
     openExternalUrl(url);
   };
 
-  const copyLink = () => {
+  const copyLink = async () => {
     if (!pendingLinkInfo()) return;
     try {
-      navigator.clipboard.writeText(pendingLinkInfo()!.url || '');
-      toast.success('Copied link to clipboard');
-    } catch {}
+      await navigator.clipboard.writeText(pendingLinkInfo()!.url || '');
+    } catch {
+      toast.failure('Could not copy link');
+      return;
+    }
+    toast.success('Copied link to clipboard');
   };
 
   const handleEditClick = () => {
+    if (!editor.isEditable()) return;
     setIsEditing(true);
     setTimeout(() => {
       if (urlInputRef) {
@@ -193,6 +206,7 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleSubmit = () => {
+    if (!editor.isEditable()) return;
     const prev = linkInfo();
     const pending = pendingLinkInfo();
     if (!prev || !pending) {
@@ -262,7 +276,8 @@ export function FloatingLinkMenu(props: {
         pendingLinkInfo()?.url === undefined
       ) {
         setTimeout(() => {
-          editor.dispatchCommand(UNLINK_COMMAND, undefined);
+          if (editor.isEditable())
+            editor.dispatchCommand(UNLINK_COMMAND, undefined);
         });
       }
       reset();
@@ -357,7 +372,7 @@ export function FloatingLinkMenu(props: {
       <Show when={linkInfo()?.linkRef || linkInfo()?.selection}>
         <ScopedPortal scope="block">
           <div
-            class="p-2 fixed border border-edge-muted bg-surface top-0 left-0 text-sm z-modal-content rounded-sm shadow-lg min-w-80"
+            class="fixed top-0 left-0 z-modal-content w-80 max-w-[calc(100vw-1rem)] text-sm menu-open-animation"
             use:floatWithElement={floatWithElementProps()}
             use:floatWithSelection={floatWithSelectionProps()}
             use:clickOutside={() => {
@@ -366,7 +381,9 @@ export function FloatingLinkMenu(props: {
             }}
             ref={menuRef}
           >
-            {props.children}
+            <Surface depth={2} hideBorder class="menu-surface p-1.5">
+              {props.children}
+            </Surface>
           </div>
         </ScopedPortal>
       </Show>
@@ -380,7 +397,7 @@ export function FloatingLinkMenu(props: {
           {(link) => (
             <ScopedPortal>
               <div
-                class="p-2 absolute top-0 left-0 z-10 border border-edge-muted bg-surface w-80 shadow-lg rounded-sm"
+                class="fixed top-0 left-0 z-modal-content"
                 use:floatWithElement={{
                   element: () => link().linkRef,
                   useBlockBoundary: true,
@@ -389,7 +406,7 @@ export function FloatingLinkMenu(props: {
                 <Show
                   when={unfurledDetails()}
                   fallback={
-                    <UnfurlLink
+                    <LinkHoverCard
                       unfurled={{
                         url: link().url ?? '',
                         title: link().linkText ?? '',
@@ -397,7 +414,7 @@ export function FloatingLinkMenu(props: {
                     />
                   }
                 >
-                  {(details) => <UnfurlLink unfurled={details()} />}
+                  {(details) => <LinkHoverCard unfurled={details()} />}
                 </Show>
               </div>
             </ScopedPortal>
@@ -406,14 +423,9 @@ export function FloatingLinkMenu(props: {
       </Match>
       <Match when={menuOpen()}>
         <MenuWrapper>
-          <div class="flex items-center">
-            <div
-              class="flex items-center rounded grow gap-1 p-1 pr-2"
-              classList={{
-                'bg-active': activeInput() === urlInputRef,
-              }}
-            >
-              <Link class="text-ink-extra-muted size-4" />
+          <div class="flex items-center gap-1.5">
+            <div class="flex h-8 min-w-0 grow items-center gap-2 rounded-md border border-edge-muted bg-surface px-2 focus-within:border-accent">
+              <Link class="size-4 shrink-0 text-ink-extra-muted" />
               <input
                 ref={urlInputRef}
                 tabIndex={2}
@@ -426,76 +438,63 @@ export function FloatingLinkMenu(props: {
                     url: e.currentTarget.value,
                   });
                 }}
-                onFocus={() => {
-                  setActiveInput(urlInputRef);
-                  setIsEditing(true);
-                }}
-                onBlur={() => {
-                  // setActiveInput();
-                }}
+                onFocus={() => setIsEditing(true)}
                 placeholder="https://example.com"
-                class="grow text-ellipsis ease-in-out placeholder-gray-400"
+                class="min-w-0 grow bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
               />
             </div>
-            <div class="relative flex items-center justify-end shrink">
-              <div class="flex ease-in-out" classList={{ hidden: expanded() }}>
+            <div
+              class="relative flex shrink-0 items-center justify-end"
+              classList={{ hidden: expanded() }}
+            >
+              <div class="flex items-center gap-0.5 ease-in-out">
                 <Button
                   onClick={openInNewTab}
-                  class="p-1 hover:bg-hover hover-transition-bg"
-                  variant="active"
+                  variant="primary"
                   size="icon-sm"
                   tooltip="Open in new tab"
                 >
-                  <NewTab />
+                  <NewTab class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={handleEditClick}
-                  class="p-1 hover:bg-hover hover-transition-bg"
                   variant="ghost"
                   size="icon-sm"
                   tooltip="Edit link"
                 >
-                  <Pencil />
+                  <Pencil class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={copyLink}
-                  class="p-1 hover:bg-hover hover-transition-bg"
                   variant="ghost"
                   size="icon-sm"
                   tooltip="Copy link"
                 >
-                  <Copy />
+                  <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <Button
                   onClick={handleUnlink}
-                  class="p-1 hover:bg-hover hover-transition-bg"
                   variant="ghost"
                   size="icon-sm"
                   tooltip="Remove link"
                 >
-                  <Trash />
+                  <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </div>
             </div>
           </div>
           <div
-            class="flex gap-1 ease-in-out overflow-hidden"
+            class="flex overflow-hidden ease-in-out"
             classList={{
               'max-h-0 mt-0': !expanded(),
-              'max-h-24 mt-1': expanded(),
+              'max-h-24 mt-1.5': expanded(),
             }}
           >
-            <div
-              class="flex items-center gap-1 rounded grow p-1 pr-2"
-              classList={{
-                'bg-active': activeInput() === linkTextInputRef,
-              }}
-            >
-              <LinkText class="text-ink-extra-muted size-4" />
+            <div class="flex h-8 min-w-0 grow items-center gap-2 rounded-md border border-edge-muted bg-surface px-2 focus-within:border-accent">
+              <LinkText class="size-4 shrink-0 text-ink-extra-muted" />
               <input
                 tabIndex={3}
                 type="text"
-                ref={linkTextInputRef}
                 value={pendingLinkInfo()?.linkText ?? ''}
                 onInput={(e) => {
                   if (!pendingLinkInfo()) return;
@@ -504,37 +503,29 @@ export function FloatingLinkMenu(props: {
                     linkText: e.currentTarget.value,
                   });
                 }}
-                onFocus={() => {
-                  setActiveInput(linkTextInputRef);
-                  setIsEditing(true);
-                }}
-                onBlur={() => {
-                  setActiveInput();
-                }}
+                onFocus={() => setIsEditing(true)}
                 placeholder="Link text"
-                class="grow text-ellipsis ease-in-out placeholder-gray-400"
+                class="min-w-0 grow bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
               />
             </div>
           </div>
           <div
-            class="flex gap-1 ease-in-out overflow-hidden justify-end"
+            class="flex justify-end overflow-hidden ease-in-out"
             classList={{
               'max-h-0 mt-0': !expanded(),
-              'max-h-24 mt-1': expanded(),
+              'max-h-24 mt-1.5': expanded(),
             }}
           >
-            <Tooltip label="Apply link changes">
-              <Button
-                onClick={handleSubmit}
-                class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
-                variant="base"
-                disabled={
-                  !pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText
-                }
-              >
-                <Check /> Apply
-              </Button>
-            </Tooltip>
+            <Button
+              onClick={handleSubmit}
+              variant="primary"
+              size="sm"
+              tooltip="Apply link changes"
+              disabled={!pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText}
+            >
+              <Check class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Apply
+            </Button>
           </div>
         </MenuWrapper>
       </Match>

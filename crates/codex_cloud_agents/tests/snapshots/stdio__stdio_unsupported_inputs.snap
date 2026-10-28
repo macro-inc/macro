@@ -1,0 +1,37 @@
+---
+source: crates/codex_cloud_agents/tests/stdio.rs
+expression: "normalize(&json!({\"image\":image,\"empty\":empty,\"unsupported_mode\":unknown}),\n&session)"
+---
+{
+  "image": [
+    {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+        "code": -32602,
+        "message": "Only text prompts are supported"
+      }
+    }
+  ],
+  "empty": [
+    {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+        "code": -32602,
+        "message": "Provide a nonempty text prompt (maximum 64 KiB)"
+      }
+    }
+  ],
+  "unsupported_mode": [
+    {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "error": {
+        "code": -32601,
+        "message": "Method not found",
+        "data": "session/set_mode"
+      }
+    }
+  ]
+}

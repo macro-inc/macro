@@ -4,7 +4,7 @@ import {
   HoverCard as KobalteHoverCard,
 } from '@kobalte/core/hover-card';
 import { cn } from '@ui/utils/classname';
-import type { JSX, Setter } from 'solid-js';
+import type { Accessor, JSX, Setter } from 'solid-js';
 import {
   createContext,
   createEffect,
@@ -16,18 +16,58 @@ import {
 type NestedHoverCardContext = {
   count: () => number;
   setCount: Setter<number>;
+  entry: HoverCardEntry;
 };
 
 const HoverCardPortalNestedPreviewOpenContext = createContext<
   NestedHoverCardContext | undefined
 >(undefined);
 
-// Top-level open cards. When a new card opens, close any already-open siblings
-// so only one card is visible at a time — Kobalte instances are independent
-// and a missed pointerleave (common during scroll) can leave multiple stranded.
-const openTopLevelHoverCards = new Set<() => void>();
+/**
+ * Keeps the nearest parent hover card mounted while a portaled child surface
+ * is active. Use this for menus and editors whose content leaves the hover
+ * card's DOM subtree when it opens.
+ */
+export function useHoldParentHoverCardOpen(active: Accessor<boolean>) {
+  const parentContext = useContext(HoverCardPortalNestedPreviewOpenContext);
 
-type HoverCardComponentProps = {
+  createEffect(() => {
+    if (!parentContext || !active()) return;
+    parentContext.setCount((count) => count + 1);
+    onCleanup(() => parentContext.setCount((count) => count - 1));
+  });
+}
+
+/** Returns whether the calling component is rendered inside a hover card. */
+export function useIsInsideHoverCard() {
+  return useContext(HoverCardPortalNestedPreviewOpenContext) !== undefined;
+}
+
+type HoverCardEntry = {
+  parent?: HoverCardEntry;
+  close: () => void;
+  registeredGroup?: string;
+  trigger?: HTMLElement;
+};
+
+const DEFAULT_CHOKE_GROUP = 'hover-card';
+
+// Kobalte hover-card instances do not coordinate with each other. Keep one
+// open branch per group: a card opened from another card's *content* preserves
+// its ancestors, while every unrelated card (including one whose trigger is
+// merely inside another trigger) is closed.
+const openHoverCardsByGroup = new Map<string, Set<HoverCardEntry>>();
+
+function isAncestor(candidate: HoverCardEntry, entry: HoverCardEntry) {
+  let parent = entry.parent;
+  while (parent) {
+    if (parent === candidate) return true;
+    parent = parent.parent;
+  }
+  return false;
+}
+
+export type HoverCardComponentProps = {
   /** The trigger content to hover over */
   trigger: JSX.Element;
   /** The content to show in the hover card */
@@ -55,16 +95,40 @@ type HoverCardComponentProps = {
   triggerAriaLabel?: string;
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
+  /** Receives the underlying Kobalte trigger element. */
+  triggerRef?: (element: HTMLElement) => void;
   /** Tab index for the trigger element. Use -1 to remove from tab order. */
   triggerTabIndex?: number;
   /** Whether to disable the hover card */
   disabled?: boolean;
+  /**
+   * Cards in the same choke group share one open branch. Opening an unrelated
+   * card closes the current branch; opening a card rendered inside another
+   * card's content preserves its ancestors. Defaults to the app-wide rich
+   * hover-card group. Pass false to opt out of coordination.
+   */
+  chokeGroup?: string | false;
   /**
    * Don't open from the synthetic pointerenter fired when the trigger mounts
    * under a stationary cursor (e.g. a chip inserted via keyboard); require
    * real pointer movement first.
    */
   requirePointerMovement?: boolean;
+  /**
+   * Keep the card open when a pointer-down lands on its own trigger. Use
+   * when clicking the trigger shows the card instead of navigating away;
+   * otherwise the pointer-down dismisses it and the click reopens it.
+   */
+  keepOpenOnTriggerPress?: boolean;
+  /** Dismiss on outside scrolling (default: true). Disable for stationary triggers. */
+  closeOnScroll?: boolean;
+  /**
+   * Let pointer events reach whatever the card overlays. Use for a purely
+   * informational card that covers interactive content: without it the card
+   * holds itself open under the pointer and swallows clicks meant for the
+   * surface below.
+   */
+  passThroughPointerEvents?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
   /**
@@ -77,6 +141,12 @@ type HoverCardComponentProps = {
   portalMount?: HTMLElement;
   /** Placement of the hover card */
   placement?: HoverCardRootProps['placement'];
+  /** Whether the card should flip when it would overflow. */
+  flip?: HoverCardRootProps['flip'];
+  /** Whether the card should be constrained to the viewport. */
+  fitViewport?: HoverCardRootProps['fitViewport'];
+  /** Minimum distance between the card and the viewport edge. */
+  overflowPadding?: HoverCardRootProps['overflowPadding'];
 };
 
 /**
@@ -90,14 +160,91 @@ export function HoverCard(props: HoverCardComponentProps) {
 
   const [nestedOpenCount, setNestedOpenCount] = createSignal(0);
   const [isHoverCardOpen, setIsHoverCardOpen] = createSignal(false);
-  let contentEl: HTMLElement | undefined;
+  const [contentEl, setContentEl] = createSignal<HTMLElement>();
+
+  let entry: HoverCardEntry;
+
+  const unregister = () => {
+    const group = entry.registeredGroup;
+    if (group === undefined) return;
+
+    const entries = openHoverCardsByGroup.get(group);
+    entries?.delete(entry);
+    if (entries?.size === 0) openHoverCardsByGroup.delete(group);
+    entry.registeredGroup = undefined;
+  };
+
+  const closeSelf = () => {
+    unregister();
+    setIsHoverCardOpen(false);
+    props.onOpenChange?.(false);
+  };
+
+  entry = {
+    parent: parentNestedContext?.entry,
+    close: closeSelf,
+  };
+
+  const register = (): boolean => {
+    const group = props.chokeGroup ?? DEFAULT_CHOKE_GROUP;
+    if (group === false) {
+      unregister();
+      return true;
+    }
+
+    if (entry.registeredGroup !== group) unregister();
+
+    let entries = openHoverCardsByGroup.get(group);
+    if (!entries) {
+      entries = new Set();
+      openHoverCardsByGroup.set(group, entries);
+    }
+
+    const competitors = [...entries].filter(
+      (openEntry) => openEntry !== entry && !isAncestor(openEntry, entry)
+    );
+
+    // When triggers contain each other, the deepest trigger is the user's
+    // actual target. Keep it even if a broader ancestor trigger's longer open
+    // delay expires afterward.
+    const deeperTriggerIsOpen = competitors.some(
+      (openEntry) =>
+        entry.trigger &&
+        openEntry.trigger &&
+        entry.trigger.contains(openEntry.trigger)
+    );
+    if (deeperTriggerIsOpen) return false;
+
+    // Register before closing competitors so their `unregister` calls cannot
+    // remove this group's set from the map during the handoff.
+    entries.add(entry);
+    entry.registeredGroup = group;
+
+    for (const openEntry of competitors) {
+      openEntry.close();
+    }
+
+    return true;
+  };
+
+  const isDisabled = () => props.disabled || isTouchDevice();
 
   // Keep the internal open signal in sync with controlled `open` so the
-  // nested-card tracking effect below still fires when consumers control state.
+  // nested-card tracking and choke group still work when consumers control state.
   createEffect(() => {
     if (props.open !== undefined) {
-      setIsHoverCardOpen(props.open);
+      const open = props.open && !isDisabled();
+      const accepted = open ? register() : false;
+      if (!open) unregister();
+      setIsHoverCardOpen(accepted);
+      if (open && !accepted) props.onOpenChange?.(false);
     }
+  });
+
+  // `disabled` is reactive (property cards use it while their editor popover
+  // is open), so an already-open uncontrolled card must close immediately.
+  createEffect(() => {
+    if (isDisabled() && isHoverCardOpen()) closeSelf();
   });
 
   createEffect(() => {
@@ -108,13 +255,6 @@ export function HoverCard(props: HoverCardComponentProps) {
       });
     }
   });
-
-  const closeSelf = () => {
-    setIsHoverCardOpen(false);
-    props.onOpenChange?.(false);
-  };
-
-  const isTopLevel = parentNestedContext === undefined;
 
   // Distinguish real hovers from the synthetic pointerenter browsers fire
   // when the trigger mounts under a stationary cursor: only coordinate
@@ -143,7 +283,10 @@ export function HoverCard(props: HoverCardComponentProps) {
   }
 
   const handleOpenChange = (open: boolean) => {
-    if (open && props.requirePointerMovement && !pointerMoved) {
+    if (
+      open &&
+      (isDisabled() || (props.requirePointerMovement && !pointerMoved))
+    ) {
       return;
     }
 
@@ -151,24 +294,18 @@ export function HoverCard(props: HoverCardComponentProps) {
       return;
     }
 
-    if (open && isTopLevel) {
-      for (const close of openTopLevelHoverCards) {
-        if (close !== closeSelf) close();
-      }
-      openTopLevelHoverCards.add(closeSelf);
-    } else if (!open && isTopLevel) {
-      openTopLevelHoverCards.delete(closeSelf);
+    if (open && !register()) {
+      setIsHoverCardOpen(false);
+      props.onOpenChange?.(false);
+      return;
     }
+    if (!open) unregister();
 
     setIsHoverCardOpen(open);
     props.onOpenChange?.(open);
   };
 
-  onCleanup(() => {
-    if (isTopLevel) openTopLevelHoverCards.delete(closeSelf);
-  });
-
-  const isDisabled = () => props.disabled || isTouchDevice();
+  onCleanup(unregister);
 
   const shouldForceMount = () => nestedOpenCount() > 0;
 
@@ -177,11 +314,11 @@ export function HoverCard(props: HoverCardComponentProps) {
   // rapid scrolling never fires the close — leaving cards stranded as new
   // triggers slide under the cursor.
   createEffect(() => {
-    if (!isHoverCardOpen()) return;
+    if (!isHoverCardOpen() || props.closeOnScroll === false) return;
 
     const onScroll = (e: Event) => {
-      const target = e.target as Node | null;
-      if (contentEl && target && contentEl.contains(target)) return;
+      const target = e.target;
+      if (target instanceof Node && contentEl()?.contains(target)) return;
       handleOpenChange(false);
     };
 
@@ -194,6 +331,33 @@ export function HoverCard(props: HoverCardComponentProps) {
     });
   });
 
+  // Kobalte positions the card inside a wrapper element of its own, so opting
+  // the content out of hit testing is not enough: the wrapper is the same size
+  // and still takes the pointer.
+  createEffect(() => {
+    if (!props.passThroughPointerEvents) return;
+    const positioner = contentEl()?.closest<HTMLElement>(
+      '[data-popper-positioner]'
+    );
+    if (!positioner) return;
+    positioner.style.pointerEvents = 'none';
+    onCleanup(() => positioner.style.removeProperty('pointer-events'));
+  });
+
+  // Kobalte forwards these to the content's DismissableLayer but leaves them
+  // out of the hover-card content types.
+  const dismissableLayerProps = {
+    onPointerDownOutside: (e: Event) => {
+      if (
+        props.keepOpenOnTriggerPress &&
+        e.target instanceof Node &&
+        entry.trigger?.contains(e.target)
+      ) {
+        e.preventDefault();
+      }
+    },
+  };
+
   return (
     <KobalteHoverCard
       getAnchorRect={
@@ -203,14 +367,21 @@ export function HoverCard(props: HoverCardComponentProps) {
         })
       }
       placement={props.placement ?? 'bottom-start'}
+      flip={props.flip}
+      fitViewport={props.fitViewport}
+      overflowPadding={props.overflowPadding}
       openDelay={props.openDelay ?? 100}
       closeDelay={props.closeDelay ?? 150}
       gutter={props.gutter ?? 8}
-      open={props.open ?? isHoverCardOpen()}
+      open={!isDisabled() && isHoverCardOpen()}
       onOpenChange={handleOpenChange}
       forceMount={shouldForceMount()}
     >
       <KobalteHoverCard.Trigger
+        ref={(element) => {
+          entry.trigger = element;
+          props.triggerRef?.(element);
+        }}
         as={props.triggerAs ?? 'span'}
         aria-label={props.triggerAriaLabel}
         class={props.triggerClass}
@@ -223,16 +394,24 @@ export function HoverCard(props: HoverCardComponentProps) {
       <KobalteHoverCard.Portal mount={props.portalMount}>
         <KobalteHoverCard.Content
           ref={(el) => {
-            contentEl = el;
+            setContentEl(el);
             props.contentRef?.(el);
           }}
+          {...dismissableLayerProps}
           class={cn(
             props.contentZIndexClass ?? 'z-tool-tip',
+            // `!` because the dismissable layer writes `pointer-events: auto`
+            // onto this element.
+            props.passThroughPointerEvents && 'pointer-events-none!',
             props.contentClass
           )}
         >
           <HoverCardPortalNestedPreviewOpenContext.Provider
-            value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
+            value={{
+              count: nestedOpenCount,
+              setCount: setNestedOpenCount,
+              entry,
+            }}
           >
             {props.content}
           </HoverCardPortalNestedPreviewOpenContext.Provider>

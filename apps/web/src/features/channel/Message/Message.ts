@@ -1,5 +1,6 @@
 import { ActionMenu } from './ActionMenu';
 import { AgentBadge } from './AgentBadge';
+import { AgentSessionLink } from './AgentSessionLink';
 import { Attachments } from './Attachments';
 import { Content } from './Content';
 import { DateDivider } from './DateDivider';
@@ -23,6 +24,7 @@ export const Message = {
   Slot,
   SenderName: MessageSenderName,
   AgentBadge,
+  AgentSessionLink,
   FromPill,
   SenderIcon,
   Timestamp,

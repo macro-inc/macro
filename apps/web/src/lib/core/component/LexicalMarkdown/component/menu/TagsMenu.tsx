@@ -1,8 +1,10 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
-import PlusIcon from '@phosphor/plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
-import { DEFAULT_TAG_COLOR, type TAG_COLORS } from '@property/tags/tagColors';
+import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from '@property/tags/tagColors';
+import { queryReadyGate } from '@queries/gate';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
 import {
   invalidateTags,
@@ -35,6 +37,10 @@ import type { MenuOperations } from '../../shared/inlineMenu';
 import { InlineFollowupMenu } from './InlineFollowupMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
+// Surface's border + vertical padding
+const PANEL_DECORATION_HEIGHT = 18;
+const MAX_CONTENT_HEIGHT = 256;
+
 type TagMenuItem = {
   optionId: string;
   propertyDefinitionId: string;
@@ -50,24 +56,6 @@ type PendingTagCreate = {
   value: string;
   color: string;
 };
-
-const TAG_COLOR_OPTIONS = [
-  { color: '#E5484D', name: 'Red' },
-  { color: '#E54D2E', name: 'Tomato' },
-  { color: '#F76B15', name: 'Orange' },
-  { color: '#FFB224', name: 'Amber' },
-  { color: '#F5D90A', name: 'Yellow' },
-  { color: '#46A758', name: 'Green' },
-  { color: '#12A594', name: 'Teal' },
-  { color: '#0091FF', name: 'Blue' },
-  { color: '#3E63DD', name: 'Indigo' },
-  { color: '#8E4EC6', name: 'Purple' },
-  { color: '#E93D82', name: 'Pink' },
-  { color: '#889096', name: 'Gray' },
-] as const satisfies readonly {
-  color: (typeof TAG_COLORS)[number];
-  name: string;
-}[];
 
 const FOLLOWUP_MENU_OPEN_DELAY_MS = 40;
 
@@ -176,7 +164,10 @@ export function TagsMenu(props: {
     createLabel().length >= 2 && !exactTagMatchExists();
   const createRowIndex = () => items().length;
   const itemCount = () => items().length + (showCreateRow() ? 1 : 0);
-  const teamName = () => currentTeamQuery.data?.team.name?.trim() || 'Team';
+  const teamName = () =>
+    (queryReadyGate(currentTeamQuery) &&
+      currentTeamQuery.data?.team.name?.trim()) ||
+    'Team';
   const scopeOptions = createMemo<{ scope: TagScope; label: string }[]>(() => [
     { scope: 'team', label: `Shared with ${teamName()}` },
     { scope: 'user', label: 'Personal' },
@@ -342,7 +333,7 @@ export function TagsMenu(props: {
       return;
     }
     const scope = scopeOptions()[selectedScopeIndex()]?.scope;
-    if (scope) void createTag(scope);
+    if (scope) fireAndForget(createTag(scope), 'tags-menu');
   };
 
   useMenuKeyboardNavigation({
@@ -401,7 +392,7 @@ export function TagsMenu(props: {
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return '16rem';
-    return `${Math.min(256, Math.max(0, h - 18))}px`;
+    return `${Math.min(MAX_CONTENT_HEIGHT, Math.max(0, h - PANEL_DECORATION_HEIGHT))}px`;
   };
 
   return (
@@ -409,6 +400,7 @@ export function TagsMenu(props: {
       <Show when={props.menu.isOpen()}>
         <ScopedPortal scope={props.portalScope}>
           <div
+            data-holds-prompts
             class="w-64 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
             ref={(el) => {
               floatWithSelection(el, () => ({
@@ -416,13 +408,15 @@ export function TagsMenu(props: {
                 reactiveOnContainer: props.editor.getRootElement(),
                 useBlockBoundary: props.useBlockBoundary,
                 onAvailableHeight: setMenuAvailableHeight,
+                fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,
               }));
               clickOutside(el, () => () => closeMenu());
             }}
           >
             <Surface
               depth={2}
-              class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
+              hideBorder
+              class="menu-surface rounded-xl py-1.5"
             >
               <Show
                 when={createStep()}
@@ -466,7 +460,9 @@ export function TagsMenu(props: {
                       setCreateStep('scope');
                     }}
                     onScopeMouseEnter={setSelectedScopeIndex}
-                    onScopeSelect={(scope) => void createTag(scope)}
+                    onScopeSelect={(scope) =>
+                      fireAndForget(createTag(scope), 'tags-menu')
+                    }
                   />
                 )}
               </Show>

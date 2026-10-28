@@ -63,6 +63,21 @@ fn sort_uses_view_history(sort_method_str: &str) -> bool {
     matches!(sort_method_str, "viewed_at" | "viewed_updated")
 }
 
+/// A viewed_at predicate also requires the caller-specific history row in
+/// the candidate stage, even when ordering uses a non-viewed timestamp.
+fn filter_uses_view_history(ast: &Expr<EmailLiteral>) -> bool {
+    ast.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(EmailLiteral::ViewedAt(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
+fn uses_view_history(ast: &Expr<EmailLiteral>, sort_method_str: &str) -> bool {
+    sort_uses_view_history(sort_method_str) || filter_uses_view_history(ast)
+}
+
 /// Pushes the `user_source_ids AS (…), SharedEmailThreads AS (…)` CTE pair
 /// (without the leading `WITH` keyword and without trailing comma) into the
 /// builder. Caller is responsible for emitting the `WITH` keyword and any
@@ -107,15 +122,16 @@ fn push_thread_candidate_select(
     sort_ts_field: &str,
     source: ThreadCandidateSource,
 ) {
-    let defer_uh = !sort_uses_view_history(&params.sort_method_str);
+    let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
-    // Multi-inbox owned scans fan out one ordered, LIMITed subscan per link:
-    // `link_id = ANY(...)` index scans can't return ordered output (pre-PG17),
-    // forcing a fetch-and-sort of every candidate thread across all inboxes.
-    // Per-link scans walk the index in order and stop at LIMIT.
+    // Owned scans fan out one ordered, LIMITed subscan per link.
+    // `link_id = ANY(...)` cannot return index order, even for a single id,
+    // so the planner fetches every matching thread and sorts. A per-link
+    // equality walk stops at LIMIT. Team scope stays on ANY: a per-link
+    // LIMIT would starve the cross-mailbox dedupe.
     let per_link_fanout = matches!(source, ThreadCandidateSource::Owned)
         && params.team_id.is_none()
-        && params.link_ids.len() > 1;
+        && !params.link_ids.is_empty();
 
     if per_link_fanout {
         builder.push(
@@ -137,6 +153,7 @@ fn push_thread_candidate_select(
                     t.link_id,
                     t.inbox_visible,
                     t.is_read,
+                    t.is_signal,
                     t.project_id,
         "#,
     );
@@ -309,11 +326,12 @@ fn push_thread_candidate_select(
 
     let view_thread_filter = build_view_thread_filter(view);
     if !view_thread_filter.is_empty() {
-        view_thread_filter.push_into(builder);
+        view_thread_filter.push_into(builder, &params.user_id);
     }
 
     if has_thread_literals(email_filter) {
-        build_thread_email_filter(email_filter, sort_ts_field).push_into(builder);
+        build_thread_email_filter(email_filter, sort_ts_field, &params.resolved)
+            .push_into(builder, &params.user_id);
     }
 
     // Ensure the candidate LIMIT only counts threads that will survive the
@@ -323,9 +341,10 @@ fn push_thread_candidate_select(
     // `matching_threads` CTE referenced via
     // `t.id IN (SELECT thread_id FROM matching_threads)`.
     if wants_message_exists_pushdown(view) {
-        build_thread_message_exists_filter(email_filter, view, &params.resolved).push_into(builder);
+        build_thread_message_exists_filter(email_filter, view, &params.resolved)
+            .push_into(builder, &params.user_id);
     } else if has_address_literals(email_filter) {
-        build_thread_address_filter(email_filter).push_into(builder);
+        build_thread_address_filter(email_filter).push_into(builder, &params.user_id);
     }
 
     // Team-scoped: the cursor moves outside the dedupe wrapper (see
@@ -413,10 +432,10 @@ fn build_query(
 ) -> QueryBuilder<'static, Postgres> {
     let sort_ts_field = get_sort_timestamp_field(view);
     let view_message_filter = build_view_message_filter(view);
-    // When viewed-history isn't the sort key, the `email_user_history` join is
-    // pushed past the candidate `LIMIT` so it runs once per returned row
-    // instead of once per candidate thread (see `sort_uses_view_history`).
-    let defer_uh = !sort_uses_view_history(&params.sort_method_str);
+    // When neither ordering nor filtering needs view history, the
+    // `email_user_history` join is pushed past the candidate `LIMIT` so it
+    // runs once per returned row instead of once per candidate thread.
+    let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
     // When the candidate stage pushes a full per-message EXISTS (view-level
@@ -457,7 +476,7 @@ fn build_query(
                     builder.push(",\n        ");
                 }
                 builder.push(format!("{name} AS MATERIALIZED (\n            "));
-                body.push_into(&mut builder);
+                body.push_into(&mut builder, &params.user_id);
                 builder.push("\n        )");
                 needs_comma = true;
             }
@@ -465,7 +484,7 @@ fn build_query(
                 builder.push(",\n        ");
             }
             builder.push("matching_threads AS MATERIALIZED (\n            ");
-            ctes.body.push_into(&mut builder);
+            ctes.body.push_into(&mut builder, &params.user_id);
             builder.push("\n        )");
         }
         builder.push("\n        ");
@@ -478,6 +497,7 @@ fn build_query(
             t.provider_id,
             t.inbox_visible,
             t.is_read,
+            t.is_signal,
             t.effective_ts AS sort_ts,
             t.created_at,
             t.updated_at,
@@ -493,9 +513,8 @@ fn build_query(
         builder.push("t.viewed_at,");
     }
 
-    // The is_important output column reflects Gmail's IMPORTANT label — a
-    // different notion from the Importance filter, which reads the
-    // denormalized email_threads.is_signal heuristic.
+    // Provider attention is evidence. The Importance filter separately uses
+    // Macro Signal, including the user's overrides.
     builder.push(
         r#"
             t.project_id,
@@ -514,16 +533,13 @@ fn build_query(
                     SELECT EXISTS (
                         SELECT 1
                         FROM email_messages m_imp
-                        JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE m_imp.thread_id = t.id
-                          AND l.name = 'IMPORTANT'
-                          AND l.link_id = t.link_id
+                        JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                        WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                     )
                 )
             END AS is_important,
             c.email_address AS sender_email,
-            c.name AS sender_name,
+            COALESCE(lmp.from_name, c.name) AS sender_name,
             c.sfs_photo_url as sender_photo_url,
             el.macro_id AS owner_id,
             el.id AS link_id
@@ -645,25 +661,27 @@ fn build_query(
                    m.subject,
                    m.snippet,
                    m.from_contact_id,
+                   m.from_name,
                    m.is_draft
             FROM email_messages m
             WHERE m.thread_id = t.id
               AND "#,
     );
-    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder);
+    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder, &params.user_id);
 
     // Add view-specific message filters
     if !view_message_filter.is_empty() {
-        view_message_filter.push_into(&mut builder);
+        view_message_filter.push_into(&mut builder, &params.user_id);
     }
 
     if has_message_literals(email_filter) {
-        build_message_email_filter(email_filter, &params.resolved).push_into(&mut builder);
+        build_message_email_filter(email_filter, &params.resolved, sort_ts_field)
+            .push_into(&mut builder, &params.user_id);
     }
 
     builder.push(
         r#"
-            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC
+            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
             LIMIT 1
         ) AS lmp
         -- Step 3: Join to get the sender's details
@@ -999,6 +1017,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
                 is_read: row.try_get("is_read")?,
                 is_draft: row.try_get("is_draft")?,
                 is_important: row.try_get("is_important")?,
+                is_signal: row.try_get("is_signal")?,
                 sort_ts: row.try_get("sort_ts")?,
                 name: row.try_get("name")?,
                 snippet: row.try_get("snippet")?,

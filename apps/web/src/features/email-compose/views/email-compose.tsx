@@ -1,0 +1,348 @@
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderBadge,
+  StaticSplitLabel,
+} from '@components/app/split-layout/components/SplitLabel';
+import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
+import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ComposerSurface } from '@ui';
+import { createResource, createSignal, Show } from 'solid-js';
+import { MessageOperationRecovery } from '../../email-message/views/message-operation-recovery';
+import { DraftBackMenu } from '../components/draft-back-menu';
+import { DraftSyncStatus } from '../components/draft-sync-status';
+import { EmailScheduleBar } from '../components/email-schedule-summary';
+import { SignaturePreview } from '../components/signature-preview';
+import type { EmailComposeContext } from '../context/compose-capabilities';
+import { ComposeProvider } from '../context/compose-context';
+import type { ComposeContextValue } from '../primitives/compose-view-state';
+import { createDraftSyncStatus } from '../primitives/draft-sync-status';
+import {
+  createEmailComposer,
+  type EmailComposerOptions,
+  hasComposeUndo,
+} from '../primitives/email-composer';
+import { ComposeLayout } from '../views/compose-layout';
+import { EmailComposeToolbar } from '../views/compose-toolbar';
+export type EmailComposeViewProps = Pick<
+  EmailComposerOptions,
+  | 'host'
+  | 'draft'
+  | 'draftId'
+  | 'recipientOptions'
+  | 'onRecipientsChange'
+  | 'initialTo'
+  | 'initialInboxId'
+  | 'initialSubject'
+  | 'initialBodyText'
+  | 'initialAttachments'
+> & { context: EmailComposeContext };
+export function EmailComposeView(props: EmailComposeViewProps) {
+  // The split mounts one composer per initial draft. Keep this content load
+  // fixed to that mount; live queue changes refresh identity, not editor text.
+  const initialDraftId = props.draft?.db_id ?? props.draftId;
+  const readInitialDraft = props.context.drafts.readDraft;
+  const [saved, { refetch }] = createResource(
+    () => readInitialDraft && initialDraftId,
+    async (id) => {
+      const result = await readInitialDraft!(id);
+      if (!result?.draft && !props.draft && !hasComposeUndo(id)) {
+        throw new Error('This draft is not available on this device.');
+      }
+      return result;
+    }
+  );
+  const [reloadRequest, setReloadRequest] = createSignal<{
+    draftId: string;
+    threadId: string;
+  }>();
+  const [reloaded, { refetch: retryReload }] = createResource(
+    reloadRequest,
+    async ({ draftId, threadId }) => {
+      const draft = await props.context.drafts.reloadDraft?.(draftId, threadId);
+      if (!draft) throw new Error('The mailbox draft is not available yet.');
+      return draft;
+    }
+  );
+  return (
+    <Show
+      when={!saved.loading && !reloaded.loading}
+      fallback={<div role="status">Loading draft…</div>}
+    >
+      <Show
+        when={!saved.error && !reloaded.error}
+        fallback={
+          <div role="alert">
+            Unable to load this draft.{' '}
+            <button
+              onClick={() =>
+                fireAndForget(
+                  reloadRequest() ? retryReload() : refetch(),
+                  'email-compose'
+                )
+              }
+            >
+              Retry
+            </button>
+          </div>
+        }
+      >
+        <LoadedEmailComposeView
+          {...props}
+          draft={reloaded() ?? saved()?.draft ?? props.draft}
+          draftPersistence={saved()?.persistence}
+          onReloadDraft={(draftId, threadId) =>
+            setReloadRequest({ draftId, threadId })
+          }
+          localDraft={saved()?.local}
+          localAttachments={saved()?.attachments}
+        />
+      </Show>
+    </Show>
+  );
+}
+
+function LoadedEmailComposeView(
+  props: EmailComposeViewProps &
+    Pick<
+      EmailComposerOptions,
+      'draftPersistence' | 'localDraft' | 'localAttachments'
+    > & {
+      onReloadDraft: (draftId: string, threadId: string) => void;
+    }
+) {
+  const composeContext = props.context;
+  const state = createEmailComposer({
+    drafts: composeContext.drafts,
+    operations: composeContext.operations,
+    attachmentStorage: composeContext.attachmentStorage,
+    delivery: composeContext.delivery,
+    draftLifecycle: composeContext.draftLifecycle,
+    notices: composeContext.notices,
+    accounts: composeContext.accounts,
+    connectivity: composeContext.connectivity,
+    editorFiles: composeContext.editorFiles,
+    viewerEmail: composeContext.viewerEmail,
+    hasPaidAccess: composeContext.hasPaidAccess,
+    recipients: composeContext.recipients,
+    recipientName: composeContext.recipientName,
+    host: props.host,
+    draft: props.draft,
+    draftId: props.draftId,
+    draftPersistence: props.draftPersistence,
+    localDraft: props.localDraft,
+    localAttachments: props.localAttachments,
+    recipientOptions: props.recipientOptions,
+    onRecipientsChange: props.onRecipientsChange,
+    initialTo: props.initialTo,
+    initialInboxId: props.initialInboxId,
+    initialSubject: props.initialSubject,
+    initialBodyText: props.initialBodyText,
+    initialAttachments: props.initialAttachments,
+  });
+  const sync = createDraftSyncStatus({
+    drafts: composeContext.drafts,
+    draftId: state.draftId,
+    localSaveState: state.localSaveState,
+    retry: state.retryDraft,
+    discard: state.deleteDraftAndReset,
+  });
+  const {
+    editor,
+    previewName,
+    hasInboxError,
+    draftDirty,
+    deleteDraftAndReset,
+    signature,
+    includeSignature,
+    setIncludeSignature,
+  } = state;
+  const ctxValue: ComposeContextValue = {
+    ...state.context,
+    bodyActions: {
+      focusSibling: props.host?.focusSibling,
+      recipientAdded: (email) =>
+        composeContext.notices.feedback.success(`${email} added to CC`),
+      readDroppedFiles: composeContext.editorFiles.readDroppedFiles,
+      insertFiles: (editor, input) =>
+        composeContext.editorFiles.uploadEditorFiles({
+          editor,
+          ...input,
+          onUploaded: (ids) =>
+            ids.forEach(composeContext.editorFiles.makePublic),
+        }),
+    },
+    isMobile: composeContext.presentation.isMobile,
+    scheduleEnabled: composeContext.presentation.scheduleEnabled,
+    onUpgrade: composeContext.presentation.onUpgrade,
+    viewerLoading: composeContext.presentation.viewerLoading,
+    signaturePreview: () => (
+      <Show
+        when={
+          composeContext.presentation.signaturesEnabled() &&
+          includeSignature() &&
+          signature()
+        }
+      >
+        {(html) => (
+          <SignaturePreview
+            mobile={composeContext.presentation.isMobile()}
+            prepareLinks={composeContext.presentation.prepareSignatureLinks}
+            html={html()}
+            dismissable={!state.context.disabled()}
+            onDismiss={() => setIncludeSignature(false)}
+          />
+        )}
+      </Show>
+    ),
+  };
+  const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
+  const statusLabel = () => ctxValue.deliveryState?.() ?? 'draft';
+  const statusTooltip = () => {
+    const schedule = ctxValue.schedule.state();
+    if (schedule.type === 'scheduled')
+      return `Scheduled for ${schedule.confirmedTime.toLocaleString()}. Use the send-time control to propose an update or cancel.`;
+    if (statusLabel() === 'sent') return 'This email has been sent.';
+    if (statusLabel() === 'missing')
+      return 'This draft is no longer available.';
+    return 'This is a draft email.';
+  };
+
+  if (composeContext.presentation.isMobile()) {
+    // Backing out of a compose that has a draft asks whether to keep it.
+    props.host?.registerBack?.(() => {
+      if (!ctxValue.hasDraft() || !draftDirty()) return false;
+      setDraftBackMenuOpen(true);
+      return true;
+    });
+  }
+
+  const leaveCompose = async () => {
+    try {
+      await state.flushLocal();
+    } catch (error) {
+      composeContext.notices.reportError(error);
+      return;
+    }
+    setDraftBackMenuOpen(false);
+    props.host?.goBack?.();
+  };
+
+  const SyncStatus = () => (
+    <DraftSyncStatus
+      state={sync.state()}
+      busy={sync.busy()}
+      error={sync.error()}
+      onRetry={sync.retry}
+      onKeepEditing={sync.keepEditing}
+    />
+  );
+
+  return (
+    <ComposeProvider value={ctxValue}>
+      {/* On touch devices the composer fills the screen and keeps its send
+          actions in the header, so it holds the bottom accessory slot empty
+          and the page's New button cannot float over the message. Persistent
+          prompts wait too, as they do over the full-screen reply composer. */}
+      <FloatRegion region="accessory" />
+      <Show when={!composeContext.presentation.isMobile()}>
+        <SplitHeaderLeft>
+          <StaticSplitLabel
+            class="ph-no-capture"
+            label={ctxValue.subject() || previewName?.() || 'Draft email'}
+            iconType="email"
+            badges={[
+              <SplitHeaderBadge
+                text={statusLabel()}
+                tooltip={statusTooltip()}
+              />,
+            ]}
+          />
+        </SplitHeaderLeft>
+      </Show>
+      <div
+        class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm"
+        data-holds-prompts
+      >
+        <Show when={state.operationSource}>
+          {(source) => (
+            <MessageOperationRecovery
+              source={source()}
+              onReloadDraft={() => {
+                const draftId = state.currentDraftId();
+                const threadId = state.currentThreadId();
+                if (draftId && threadId) props.onReloadDraft(draftId, threadId);
+              }}
+            />
+          )}
+        </Show>
+        {/* No overflow clipping on desktop: the card clips its own content, and
+            clipping here would slice the composer shadow flat at the top and
+            bottom while the side padding lets it show. */}
+        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 touch:my-0 px-2 sm:px-4 touch:px-0 touch:overflow-y-auto touch:scrollbar-hidden touch:min-h-full">
+          <WrapUnlessMobile
+            wrapper={(children) => (
+              // The same card as the chat composer and the thread's message
+              // cards, so a fresh draft reads as one of the app's composers.
+              <div class="flex size-full min-h-0 flex-col">
+                <ComposerSurface
+                  as="div"
+                  class="relative z-10 min-h-0 flex-1 overflow-clip touch:rounded-xl touch:border touch:border-edge-muted"
+                >
+                  {children}
+                </ComposerSurface>
+                {/* Tucked under the card so its fill shows through the rounded
+                    corners, like the agent composer's repository drawer. */}
+                <EmailScheduleBar
+                  state={ctxValue.schedule.state()}
+                  operation={ctxValue.schedule.operation()}
+                  onSelectTime={ctxValue.schedule.onSelect}
+                  onCancelSchedule={ctxValue.schedule.onCancel}
+                  onCheckStatus={ctxValue.schedule.onCheckStatus}
+                  class="-mt-6 rounded-b-[20px] border border-t-0 border-edge-muted px-4 pt-8 pb-2"
+                />
+              </div>
+            )}
+          >
+            <ComposeLayout
+              toolbar={<EmailComposeToolbar editor={editor} />}
+              notice={
+                // A missing inbox must not hide a draft that only this
+                // device holds, so both notices can show together.
+                hasInboxError() || sync.state() ? (
+                  <div class="flex flex-col gap-2">
+                    <Show when={hasInboxError()}>
+                      <EmailPermissionsBanner />
+                    </Show>
+                    <SyncStatus />
+                  </div>
+                ) : undefined
+              }
+              // Full-frame mobile/tablet: the surface runs under the floating
+              // chrome while the body, signature and attachment pills rest
+              // above it (ComposeLayout owns the top inset).
+              class="size-full p-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)] touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
+            />
+          </WrapUnlessMobile>
+        </div>
+      </div>
+      <Show when={composeContext.presentation.isMobile()}>
+        <DraftBackMenu
+          open={draftBackMenuOpen()}
+          onOpenChange={setDraftBackMenuOpen}
+          onSave={leaveCompose}
+          onDelete={async () => {
+            try {
+              if (!(await deleteDraftAndReset())) return;
+            } catch {
+              setDraftBackMenuOpen(false);
+              return;
+            }
+            setDraftBackMenuOpen(false);
+          }}
+        />
+      </Show>
+    </ComposeProvider>
+  );
+}

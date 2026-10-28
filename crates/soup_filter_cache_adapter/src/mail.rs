@@ -1,0 +1,1027 @@
+//! Canonical email facts and keyset pagination over synchronized Mail.
+use super::*;
+use cache_core::{
+    engine::{Engine, EngineError},
+    normalize::normalize,
+    predicate::{PredicateIndexStorage, ProjectionState},
+    store::Storage,
+    value::{CacheValue, EntityKey, Record},
+};
+use item_filter_index::mail as vocabulary;
+use predicate_index::{ExactFact, IntegerFact};
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use soup_filter_projection::{
+    MailCacheProjectionFacts, SoupCacheProjectionSupplement, SoupCacheProjectionWireError,
+    decode_cache_projection_supplement,
+};
+use std::borrow::Cow;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod test;
+
+const TYPE: &str = "GraphqlSoupEmailThread";
+const EXACT_ATTRIBUTES: &[&str] = &[
+    "id",
+    "mail-link-id",
+    "mail-owner",
+    "mail-read",
+    "mail-inbox",
+    "mail-signal",
+    "mail-has-message",
+    "mail-calendar",
+    "mail-shared",
+    "mail-all-message",
+    "mail-draft-message",
+    "mail-sent-message",
+];
+const SORT_ATTRIBUTES: &[&str] = &["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"];
+const FIELDS: &[&str] = &[
+    "linkId",
+    "ownerId",
+    "isRead",
+    "inboxVisible",
+    "isSignal",
+    "cacheProjection",
+    "latestInboundMessageTs",
+    "reminderReturnedAt",
+    "updatedAt",
+    "mailAllPreview",
+    "mailDraftPreview",
+    "mailSentPreview",
+];
+fn error(e: impl std::fmt::Display) -> SoupFilterCacheAdapterError {
+    SoupFilterCacheAdapterError(e.to_string())
+}
+fn string<'a>(r: &'a Record, field: &str) -> Option<&'a str> {
+    match r.fields.get(field)? {
+        CacheValue::String(s) => Some(s),
+        _ => None,
+    }
+}
+fn opaque_string<'a>(r: &'a Record, field: &str) -> Option<Cow<'a, str>> {
+    match r.fields.get(field)? {
+        CacheValue::String(value) => Some(Cow::Borrowed(value)),
+        CacheValue::Opaque(value) => serde_json::from_str::<String>(value).ok().map(Cow::Owned),
+        _ => None,
+    }
+}
+fn timestamp(r: &Record, field: &str) -> Option<Option<i64>> {
+    match r.fields.get(field)? {
+        CacheValue::Null => Some(None),
+        CacheValue::String(s) => chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|ts| Some(ts.timestamp_micros())),
+        _ => None,
+    }
+}
+fn bool_fact(r: &Record, field: &str, attribute: &str) -> Option<ExactFact> {
+    let CacheValue::Bool(value) = r.fields.get(field)? else {
+        return None;
+    };
+    boolean_fact(*value, attribute)
+}
+
+// Match the server INBOX view without inventing an inbound message on a sent-only thread.
+fn inbox_timestamp(record: &Record) -> Option<Option<i64>> {
+    Some(timestamp(record, "latestInboundMessageTs")?.max(timestamp(record, "reminderReturnedAt")?))
+}
+fn boolean_fact(value: bool, attribute: &str) -> Option<ExactFact> {
+    Some(ExactFact {
+        attribute: vocabulary::token(attribute),
+        value: ExactValue::new([u8::from(value)]).ok()?,
+    })
+}
+fn uuid_fact(attribute: &str, value: &str) -> Option<ExactFact> {
+    Some(ExactFact {
+        attribute: vocabulary::token(attribute),
+        value: ExactValue::new(uuid::Uuid::parse_str(value).ok()?.as_bytes()).ok()?,
+    })
+}
+fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
+    match record.fields.get(field)? {
+        CacheValue::Null => Some(None),
+        CacheValue::Ref(key) => Some(Some(
+            uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlMailPreviewMessage:")?).ok()?,
+        )),
+        _ => None,
+    }
+}
+
+/// Decodes a record's server capsule when it describes this record's Mail facts.
+fn verified_supplement(
+    key: &RecordKey,
+    encoded: &str,
+) -> Result<Option<SoupCacheProjectionSupplement>, SoupCacheProjectionWireError> {
+    let supplement = decode_cache_projection_supplement(encoded)?;
+    Ok((supplement.record_key() == key
+        && supplement.target_profile() == &vocabulary::profile()
+        && supplement.partition() == &vocabulary::partition())
+        .then_some(supplement))
+}
+
+fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
+    let encoded = opaque_string(record, "cacheProjection")?;
+    let supplement = verified_supplement(&key, &encoded).ok()??;
+    let cache_facts = supplement.mail_facts()?;
+    project_with_facts(key, record, cache_facts)
+}
+
+fn project_with_facts(
+    key: RecordKey,
+    record: &Record,
+    cache_facts: &MailCacheProjectionFacts,
+) -> Option<IndexDocument> {
+    let id = key.as_str().strip_prefix(&format!("{TYPE}:"))?;
+    let owner = string(record, "ownerId")?;
+    if owner.is_empty() {
+        return None;
+    }
+    let mut facts = vec![
+        ExactFact {
+            attribute: vocabulary::token("mail-owner"),
+            value: ExactValue::utf8(owner).ok()?,
+        },
+        boolean_fact(cache_facts.has_calendar_attachment(), "mail-calendar")?,
+        boolean_fact(cache_facts.has_thread_share(), "mail-shared")?,
+        uuid_fact("id", id)?,
+        uuid_fact("mail-link-id", string(record, "linkId")?)?,
+        bool_fact(record, "isRead", "mail-read")?,
+        bool_fact(record, "inboxVisible", "mail-inbox")?,
+        bool_fact(record, "isSignal", "mail-signal")?,
+    ];
+    let all = preview_ref(record, "mailAllPreview")?;
+    let draft = preview_ref(record, "mailDraftPreview")?;
+    let sent = preview_ref(record, "mailSentPreview")?;
+    if all.is_none() && (draft.is_some() || sent.is_some()) {
+        return None;
+    }
+    facts.push(boolean_fact(all.is_some(), "mail-has-message")?);
+    for (attribute, id) in [
+        ("mail-all-message", all),
+        ("mail-draft-message", draft),
+        ("mail-sent-message", sent),
+    ] {
+        if let Some(id) = id {
+            facts.push(uuid_fact(attribute, &id.to_string())?);
+        }
+    }
+    let updated = timestamp(record, "updatedAt")??;
+    let all = cache_facts.latest_non_spam_message_ts().unwrap_or(updated);
+    let mut times = vec![IntegerFact {
+        attribute: vocabulary::token("mail-all-ts"),
+        value: all,
+    }];
+    if let Some(inbox) = inbox_timestamp(record)? {
+        times.push(IntegerFact {
+            attribute: vocabulary::token("mail-inbox-ts"),
+            value: inbox,
+        });
+    }
+    if let Some(outbound) = cache_facts.latest_outbound_message_ts() {
+        times.push(IntegerFact {
+            attribute: vocabulary::token("mail-sent-ts"),
+            value: outbound,
+        });
+    }
+    Some(IndexDocument {
+        record_key: key,
+        profile: vocabulary::profile(),
+        partition: vocabulary::partition(),
+        exact_facts: facts,
+        integer_facts: times.clone(),
+        sort_facts: times,
+    })
+}
+
+/// Compact contribution fields needed by the shared Mail projection adapter.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DraftFacts {
+    message_count: u32,
+    latest_non_spam_message_ts: Option<chrono::DateTime<chrono::Utc>>,
+    latest_outbound_message_ts: Option<chrono::DateTime<chrono::Utc>>,
+    has_calendar_attachment: bool,
+}
+#[derive(Deserialize)]
+struct DraftEntry {
+    facts: DraftFacts,
+}
+#[derive(Deserialize)]
+struct DraftState {
+    baseline: DraftFacts,
+    drafts: Vec<DraftEntry>,
+}
+
+/// Apply complete draft contributions without fabricating server capsules.
+/// This is shared by browser and desktop and independent of cached query pages.
+pub async fn draft_optimistic_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
+    storage: &S,
+    query: &str,
+    operation: Option<&str>,
+    variables: &Map<String, Value>,
+    data: &Value,
+) -> Result<Vec<OptimisticProjectionMutation>, ProjectionError<S::Error>> {
+    let field = match operation {
+        Some("SaveEmailDraft") => "saveEmailDraft",
+        Some("DeleteEmailDraft") => "deleteEmailDraft",
+        _ => return Ok(vec![]),
+    };
+    let Some(thread) = data.get(field).and_then(|payload| payload.get("thread")) else {
+        return Ok(vec![]);
+    };
+    let Some(state) = thread
+        .get("mailDraftState")
+        .filter(|state| !state.is_null())
+    else {
+        return Ok(vec![]);
+    };
+    let state: DraftState = serde_json::from_value(state.clone()).map_err(error)?;
+    let Some(id) = thread.get("id").and_then(Value::as_str) else {
+        return Ok(vec![]);
+    };
+    let key = EntityKey::entity(TYPE, &[id]);
+    let record_key = RecordKey::new(key.to_string()).map_err(error)?;
+    let parsed = Document::parse(query).map_err(error)?;
+    let op = parsed.operation(operation).map_err(error)?;
+    let records = normalize(schema, op, variables, data).map_err(error)?;
+    let Some(record) = records.get(&key).filter(|record| {
+        FIELDS
+            .iter()
+            .all(|field| record.fields.contains_key(*field))
+    }) else {
+        return Ok(vec![]);
+    };
+    let shared = if let Some(encoded) = opaque_string(record, "cacheProjection") {
+        let supplement = verified_supplement(&record_key, &encoded).map_err(error)?;
+        let Some(facts) = supplement.as_ref().and_then(|s| s.mail_facts()) else {
+            return Ok(vec![]);
+        };
+        facts.has_thread_share()
+    } else {
+        // Only a newly created thread may establish facts without a server capsule.
+        if storage
+            .get_batch(std::slice::from_ref(&key))
+            .await
+            .map_err(ProjectionError::Storage)?
+            .into_iter()
+            .next()
+            .flatten()
+            .is_some()
+        {
+            return Ok(vec![]);
+        }
+        if state.baseline.message_count != 0 {
+            return Ok(vec![]);
+        }
+        false
+    };
+    let contributions = std::iter::once(&state.baseline)
+        .chain(state.drafts.iter().map(|entry| &entry.facts))
+        .collect::<Vec<_>>();
+    if contributions.iter().all(|facts| facts.message_count == 0) {
+        return Ok(vec![OptimisticProjectionMutation::Delete {
+            record_key,
+            profile: vocabulary::profile(),
+            partition: vocabulary::partition(),
+        }]);
+    }
+    let facts = MailCacheProjectionFacts::new(
+        contributions
+            .iter()
+            .filter_map(|facts| facts.latest_non_spam_message_ts)
+            .max()
+            .map(|ts| ts.timestamp_micros()),
+        contributions
+            .iter()
+            .filter_map(|facts| facts.latest_outbound_message_ts)
+            .max()
+            .map(|ts| ts.timestamp_micros()),
+        contributions
+            .iter()
+            .any(|facts| facts.has_calendar_attachment),
+        shared,
+    );
+    Ok(project_with_facts(record_key, record, &facts)
+        .map(OptimisticProjectionMutation::Replace)
+        .into_iter()
+        .collect())
+}
+
+/// Mail projection extraction failures retain storage errors for host recovery.
+#[derive(Debug, thiserror::Error)]
+pub enum ProjectionError<S: std::error::Error + 'static> {
+    /// Storage failure, including errors that require a physical reset.
+    #[error(transparent)]
+    Storage(S),
+    /// Invalid GraphQL input or projection evidence.
+    #[error(transparent)]
+    Adapter(#[from] SoupFilterCacheAdapterError),
+}
+
+/// Compose full canonical snapshots, or bounded patches preserving completeness.
+/// Canonical preview edges are independent of the source query's view/filter.
+/// A missing v2 field cannot borrow completeness from an older projection.
+pub async fn projection_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
+    storage: &S,
+    query: &str,
+    operation: Option<&str>,
+    variables: &Map<String, Value>,
+    data: &Value,
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    projection_updates_for_write(schema, storage, query, operation, variables, data, true).await
+}
+
+/// Prepare Mail facts without consulting the old user's records when the write
+/// will reset cache identity. Complete incoming snapshots remain projectable;
+/// partial incoming rows remain incomplete instead of borrowing old metadata.
+/// The cache engine, not this adapter, performs the actual identity reset.
+pub async fn projection_updates_for_write<S: Storage>(
+    schema: &cache_core::meta::Schema,
+    storage: &S,
+    query: &str,
+    operation: Option<&str>,
+    variables: &Map<String, Value>,
+    data: &Value,
+    reuse_stored_identity: bool,
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    // A revalidation of an absent/inaccessible thread must also revoke its
+    // local membership. This includes retrying an already-committed delete,
+    // whose idempotent response can no longer identify the removed thread.
+    // A deleted standalone thread likewise has no object to normalize.
+    let removed_thread_id = if operation == Some("EmailThreadPage")
+        && data.pointer("/user/emailThread") == Some(&Value::Null)
+    {
+        variables.get("threadId").and_then(Value::as_str)
+    } else if operation == Some("DeleteEmailDraft")
+        && data
+            .pointer("/deleteEmailDraft/threadDeleted")
+            .and_then(Value::as_bool)
+            == Some(true)
+    {
+        data.pointer("/deleteEmailDraft/threadId")
+            .and_then(Value::as_str)
+    } else {
+        None
+    };
+    if let Some(id) = removed_thread_id {
+        return Ok(vec![ProjectionMutation::Delete(
+            RecordKey::new(format!("{TYPE}:{id}")).map_err(error)?,
+        )]);
+    }
+    let parsed = Document::parse(query).map_err(error)?;
+    let op = parsed.operation(operation).map_err(error)?;
+    let updates = normalize(schema, op, variables, data)
+        .map_err(error)?
+        .into_iter()
+        .filter(|(key, record)| {
+            key.as_ref().starts_with(&format!("{TYPE}:"))
+                && FIELDS
+                    .iter()
+                    .any(|field| record.fields.contains_key(*field))
+        })
+        .collect::<Vec<_>>();
+    if updates.is_empty() {
+        return Ok(vec![]);
+    }
+    let keys = updates
+        .iter()
+        .map(|(key, _)| key.clone())
+        .collect::<Vec<_>>();
+    let bases = if reuse_stored_identity {
+        storage
+            .get_batch(&keys)
+            .await
+            .map_err(ProjectionError::Storage)?
+    } else {
+        vec![None; keys.len()]
+    };
+    Ok(updates
+        .into_iter()
+        .zip(bases)
+        .filter_map(|((key, update), base)| {
+            let key = RecordKey::new(key.to_string()).ok()?;
+            let full = FIELDS
+                .iter()
+                .all(|field| update.fields.contains_key(*field));
+            let changed = update.fields.keys().cloned().collect::<HashSet<_>>();
+            let mut merged = base.unwrap_or_default();
+            merged.merge(update);
+            let incomplete = || ProjectionMutation::MarkIncomplete {
+                record_key: key.clone(),
+                profile: vocabulary::profile(),
+                partition: vocabulary::partition(),
+                kind: ProjectionIncompleteKind::Missing,
+            };
+            let Some(document) = project(key.clone(), &merged) else {
+                return Some(incomplete());
+            };
+            if full {
+                return Some(ProjectionMutation::Replace(document));
+            }
+            // Sort patches cannot express deletion. Suppress a capsule-only
+            // projection until a full snapshot replaces cleared INBOX/SENT sorts.
+            if (changed.contains("latestInboundMessageTs")
+                || changed.contains("reminderReturnedAt"))
+                && inbox_timestamp(&merged)?.is_none()
+            {
+                return Some(incomplete());
+            }
+            if changed.contains("cacheProjection") {
+                let encoded = opaque_string(&merged, "cacheProjection")?;
+                let supplement = decode_cache_projection_supplement(&encoded).ok()?;
+                if supplement
+                    .mail_facts()?
+                    .latest_outbound_message_ts()
+                    .is_none()
+                {
+                    return Some(incomplete());
+                }
+            }
+            let affected = |attribute: &str| match attribute {
+                "mail-link-id" => changed.contains("linkId"),
+                "mail-owner" => changed.contains("ownerId"),
+                "mail-calendar" | "mail-shared" | "mail-sent-ts" => {
+                    changed.contains("cacheProjection")
+                }
+                "mail-inbox-ts" => {
+                    changed.contains("latestInboundMessageTs")
+                        || changed.contains("reminderReturnedAt")
+                }
+                "mail-all-message" => changed.contains("mailAllPreview"),
+                "mail-draft-message" => changed.contains("mailDraftPreview"),
+                "mail-sent-message" => changed.contains("mailSentPreview"),
+                "mail-read" => changed.contains("isRead"),
+                "mail-inbox" => changed.contains("inboxVisible"),
+                "mail-signal" => changed.contains("isSignal"),
+                "mail-has-message" => changed.contains("mailAllPreview"),
+                "mail-all-ts" => {
+                    changed.contains("cacheProjection") || changed.contains("updatedAt")
+                }
+                _ => false,
+            };
+            let exact = EXACT_ATTRIBUTES
+                .iter()
+                .copied()
+                .filter(|attr| affected(attr))
+                .map(|attr| ExactAttributePatch {
+                    attribute: vocabulary::token(attr),
+                    values: document
+                        .exact_facts
+                        .iter()
+                        .filter(|fact| fact.attribute == vocabulary::token(attr))
+                        .map(|fact| fact.value.clone())
+                        .collect(),
+                })
+                .collect();
+            let integers = SORT_ATTRIBUTES
+                .iter()
+                .copied()
+                .filter(|attr| affected(attr))
+                .map(|attr| predicate_index::IntegerAttributePatch {
+                    attribute: vocabulary::token(attr),
+                    values: document
+                        .integer_facts
+                        .iter()
+                        .filter(|fact| fact.attribute == vocabulary::token(attr))
+                        .map(|fact| fact.value)
+                        .collect(),
+                })
+                .collect();
+            Some(ProjectionMutation::Patch {
+                record_key: key,
+                profile: vocabulary::profile(),
+                partition: vocabulary::partition(),
+                exact,
+                integers,
+                sorts: document
+                    .sort_facts
+                    .into_iter()
+                    .filter(|fact| affected(fact.attribute.as_str()))
+                    .collect(),
+            })
+        })
+        .collect())
+}
+
+/// Email optimism patches only a known authoritative base; it cannot prove
+/// message eligibility or invent a complete mailbox projection for a new row.
+pub fn optimistic_updates(updates: Vec<ProjectionMutation>) -> Vec<OptimisticProjectionMutation> {
+    updates
+        .into_iter()
+        .flat_map(|update| {
+            let mut sort_uncertainty = None;
+            let mutation = match update {
+                ProjectionMutation::Patch {
+                    record_key,
+                    profile,
+                    partition,
+                    exact,
+                    integers,
+                    sorts,
+                } => OptimisticProjectionMutation::Patch {
+                    record_key,
+                    profile,
+                    partition,
+                    exact,
+                    integers,
+                    sorts,
+                },
+                ProjectionMutation::Replace(document) => {
+                    // Missing INBOX/SENT timestamps are normal. Apply the complete
+                    // attribute patch even when these optional sorts are absent.
+                    // Sort patches cannot delete old values, so only queries using
+                    // those missing sorts need uncertainty, not the whole row.
+                    let missing_sorts = SORT_ATTRIBUTES
+                        .iter()
+                        .filter(|attribute| {
+                            !document
+                                .sort_facts
+                                .iter()
+                                .any(|fact| fact.attribute.as_str() == **attribute)
+                        })
+                        .map(|attribute| vocabulary::token(attribute))
+                        .collect::<Vec<_>>();
+                    if !missing_sorts.is_empty() {
+                        sort_uncertainty = Some(OptimisticProjectionMutation::Unknown {
+                            record_key: document.record_key.clone(),
+                            profile: document.profile.clone(),
+                            partition: document.partition.clone(),
+                            affected_attributes: missing_sorts,
+                        });
+                    }
+                    OptimisticProjectionMutation::Patch {
+                        record_key: document.record_key,
+                        profile: document.profile,
+                        partition: document.partition,
+                        // Full replacements cover every attribute, including empty
+                        // sets for removed preview references and optional facts.
+                        exact: EXACT_ATTRIBUTES
+                            .iter()
+                            .map(|attribute| ExactAttributePatch {
+                                attribute: vocabulary::token(attribute),
+                                values: document
+                                    .exact_facts
+                                    .iter()
+                                    .filter(|fact| fact.attribute.as_str() == *attribute)
+                                    .map(|fact| fact.value.clone())
+                                    .collect(),
+                            })
+                            .collect(),
+                        integers: SORT_ATTRIBUTES
+                            .iter()
+                            .map(|attribute| predicate_index::IntegerAttributePatch {
+                                attribute: vocabulary::token(attribute),
+                                values: document
+                                    .integer_facts
+                                    .iter()
+                                    .filter(|fact| fact.attribute.as_str() == *attribute)
+                                    .map(|fact| fact.value)
+                                    .collect(),
+                            })
+                            .collect(),
+                        sorts: document.sort_facts,
+                    }
+                }
+                ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile,
+                    partition,
+                    ..
+                } => OptimisticProjectionMutation::Unknown {
+                    record_key,
+                    profile,
+                    partition,
+                    affected_attributes: vec![],
+                },
+                ProjectionMutation::Delete(record_key) => OptimisticProjectionMutation::Delete {
+                    record_key,
+                    profile: vocabulary::profile(),
+                    partition: vocabulary::partition(),
+                },
+                _ => unreachable!("Mail projection update family"),
+            };
+            // Mark uncertainty after patching: the empty integer replacements
+            // would otherwise clear it while leaving an old sort value intact.
+            [Some(mutation), sort_uncertainty].into_iter().flatten()
+        })
+        .collect()
+}
+
+/// Invalidate canonical Mail facts when a thread is invalidated externally.
+pub fn dirty_updates(keys: &[String]) -> Vec<ProjectionMutation> {
+    keys.iter()
+        .filter(|key| key.starts_with(&format!("{TYPE}:")))
+        .filter_map(|key| {
+            Some(ProjectionMutation::MarkIncomplete {
+                record_key: RecordKey::new(key.clone()).ok()?,
+                profile: vocabulary::profile(),
+                partition: vocabulary::partition(),
+                kind: ProjectionIncompleteKind::Dirty,
+            })
+        })
+        .collect()
+}
+
+/// A cache-engine generation identity, distinct from its reusable revision counter.
+pub fn new_generation() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+/// Explicit Mail local-page request. Never translates a server cursor.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageRequest {
+    /// ALL, INBOX, DRAFTS or SENT.
+    pub view: String,
+    /// Opaque query-bound local continuation.
+    pub cursor: Option<String>,
+    /// A page's `end_cursor`: read from the top through that row, and at
+    /// least `limit` rows (up to 5,000), so a list re-read after writes ends
+    /// where it did.
+    pub through: Option<String>,
+}
+/// A row position, valid across writes for one engine generation and query.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Cursor {
+    generation: String,
+    query: String,
+    key: RecordKey,
+    value: i64,
+}
+
+/// Rows past this read through a position are left to the next page.
+const MAX_THROUGH_ROWS: usize = 5_000;
+
+/// Local Mail results are complete only over known cached projections, not the mailbox.
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum PageResult {
+    /// Matching cached email keys and an exclusive continuation.
+    MailPage {
+        /// Effective cache revision.
+        revision: String,
+        /// Normalized matching email keys.
+        keys: Vec<String>,
+        /// View-correct display timestamps, aligned with keys.
+        sort_timestamps: Vec<String>,
+        /// Query-bound local continuation.
+        next_cursor: Option<String>,
+        /// Position of the last row, to read through it again after writes.
+        end_cursor: Option<String>,
+        /// Whether queued optimistic work contributes to this page.
+        optimistic: bool,
+    },
+    /// Query is beyond the first Mail slice.
+    Unsupported,
+    /// The identity-scoped readable-account catalog has not been cached yet.
+    Incomplete {
+        /// Revision whose catalog is unavailable.
+        revision: String,
+    },
+    /// Generation or query changed. Restart at page one.
+    StaleCursor {
+        /// Current revision to restart from.
+        revision: String,
+    },
+}
+
+/// Mail page failures retain typed engine/storage errors for host recovery.
+#[derive(Debug, thiserror::Error)]
+pub enum PageError<S: std::error::Error + 'static> {
+    /// Cache failure, including storage errors that may require a physical reset.
+    #[error(transparent)]
+    Engine(#[from] EngineError<S>),
+    /// Invalid request or unsupported projection evidence.
+    #[error(transparent)]
+    Adapter(#[from] SoupFilterCacheAdapterError),
+}
+
+/// Evaluate a bounded local page without requiring this query to have a server baseline.
+pub async fn page<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    generation: &str,
+    filters: Value,
+    sort_method: &str,
+    direction: &str,
+    limit: u16,
+    request: PageRequest,
+) -> Result<PageResult, PageError<S::Error>> {
+    page_impl(
+        engine,
+        generation,
+        filters,
+        sort_method,
+        direction,
+        limit,
+        request,
+        false,
+    )
+    .await
+}
+
+/// Evaluate Mail using complete property-aware projections.
+pub async fn page_current<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    generation: &str,
+    filters: Value,
+    sort_method: &str,
+    direction: &str,
+    limit: u16,
+    request: PageRequest,
+) -> Result<PageResult, PageError<S::Error>> {
+    page_impl(
+        engine,
+        generation,
+        filters,
+        sort_method,
+        direction,
+        limit,
+        request,
+        true,
+    )
+    .await
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "retains the host page API while selecting the projection version"
+)]
+async fn page_impl<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    generation: &str,
+    filters: Value,
+    sort_method: &str,
+    direction: &str,
+    limit: u16,
+    request: PageRequest,
+    current: bool,
+) -> Result<PageResult, PageError<S::Error>> {
+    let revision = engine.current_revision().to_string();
+    // A read through a position takes `limit` as its fewest rows and pages
+    // the index at its own size.
+    let page_size = if request.through.is_some() {
+        predicate_index::MAX_QUERY_LIMIT - 1
+    } else {
+        limit
+    };
+    if limit == 0 || page_size >= predicate_index::MAX_QUERY_LIMIT {
+        return Err(error(format!(
+            "Mail page limit must be 1..{}",
+            predicate_index::MAX_QUERY_LIMIT - 1
+        ))
+        .into());
+    }
+    let Some(viewer) = engine.current_identity().await? else {
+        return Ok(PageResult::Incomplete { revision });
+    };
+    let user = EntityKey(format!("GraphqlUser:{viewer}").into());
+    let records = engine
+        .storage()
+        .get_batch(&[user])
+        .await
+        .map_err(EngineError::Storage)?;
+    let Some(Some(record)) = records.first() else {
+        return Ok(PageResult::Incomplete { revision });
+    };
+    let Some(CacheValue::List(links)) = record.fields.get("emailLinks") else {
+        return Ok(PageResult::Incomplete { revision });
+    };
+    let links = links
+        .iter()
+        .map(|value| match value {
+            CacheValue::Ref(key) => {
+                uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlEmailLink:")?).ok()
+            }
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>();
+    let Some(links) = links else {
+        return Ok(PageResult::Incomplete { revision });
+    };
+    let ast = materialize_graphql_filter(filters).map_err(error)?;
+    let sort = match sort_method {
+        "CREATED_AT" => SoupIndexSort::CreatedAt,
+        "UPDATED_AT" => SoupIndexSort::UpdatedAt,
+        _ => SoupIndexSort::Unsupported,
+    };
+    let direction = match direction {
+        "ASC" => SortDirection::Asc,
+        "DESC" => SortDirection::Desc,
+        _ => return Err(error("invalid sort direction").into()),
+    };
+    let compile = if current {
+        item_filter_index::properties::compile_mail
+    } else {
+        vocabulary::compile
+    };
+    let outcome = compile(
+        &ast,
+        SoupFlatRequest {
+            sort,
+            direction,
+            limit: page_size + 1,
+            has_cursor: false,
+        },
+        &request.view,
+        &links,
+        &viewer,
+    )
+    .map_err(error)?;
+    let LocalCompileOutcome::Supported(query) = outcome else {
+        return Ok(PageResult::Unsupported);
+    };
+    // Positions name rows of this query whatever page size reads them.
+    let fingerprint = uuid::Uuid::new_v5(
+        &uuid::Uuid::NAMESPACE_OID,
+        serde_json::to_string(&query.with_limit(1).map_err(error)?)
+            .map_err(error)?
+            .as_bytes(),
+    )
+    .to_string();
+    // A position stays valid across writes: rows that moved past it since are
+    // read again by the caller's next evaluation of the rows above it.
+    let decode = |cursor: &str| {
+        if cursor.len() > 4096 {
+            return Err(error("oversized Mail cursor"));
+        }
+        let cursor: Cursor = serde_json::from_str(cursor).map_err(error)?;
+        Ok((cursor.generation == generation && cursor.query == fingerprint).then_some(cursor))
+    };
+    let window = match (request.cursor, request.through) {
+        (Some(_), Some(_)) => {
+            return Err(error("a Mail page takes a cursor or a through position, not both").into());
+        }
+        (Some(cursor), None) => {
+            let Some(cursor) = decode(&cursor)? else {
+                return Ok(PageResult::StaleCursor { revision });
+            };
+            let query = query.after(cursor.value, cursor.key).map_err(error)?;
+            read_page(engine, &query, limit).await?
+        }
+        (None, Some(through)) => {
+            let Some(through) = decode(&through)? else {
+                return Ok(PageResult::StaleCursor { revision });
+            };
+            let fewest = usize::from(limit).min(MAX_THROUGH_ROWS);
+            read_through(engine, &query, page_size, fewest, &through).await?
+        }
+        (None, None) => read_page(engine, &query, limit).await?,
+    };
+    let sort_timestamps = window
+        .values
+        .iter()
+        .map(|value| {
+            chrono::DateTime::from_timestamp_micros(*value)
+                .map(|ts| ts.to_rfc3339())
+                .ok_or_else(|| error("invalid page timestamp"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let end_cursor = window
+        .keys
+        .last()
+        .zip(window.values.last())
+        .map(|(key, value)| {
+            serde_json::to_string(&Cursor {
+                generation: generation.into(),
+                query: fingerprint.clone(),
+                key: key.clone(),
+                value: *value,
+            })
+            .map_err(error)
+        })
+        .transpose()?;
+    Ok(PageResult::MailPage {
+        revision,
+        keys: window
+            .keys
+            .into_iter()
+            .map(|key| key.as_str().to_owned())
+            .collect(),
+        sort_timestamps,
+        next_cursor: end_cursor.clone().filter(|_| window.more),
+        end_cursor,
+        optimistic: window.optimistic,
+    })
+}
+
+/// Matching rows in index order, with their sort values.
+struct Window {
+    keys: Vec<RecordKey>,
+    values: Vec<i64>,
+    /// Matching rows remain after the last one.
+    more: bool,
+    optimistic: bool,
+}
+
+/// One page of `limit` rows. `query` asks for one more, to tell whether rows remain.
+async fn read_page<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &ValidatedIndexQuery,
+    limit: u16,
+) -> Result<Window, PageError<S::Error>> {
+    // Unknown rows never become fabricated matches; the UI labels this cached mail.
+    let result = engine.reconcile_predicate_index(query, &[]).await?;
+    let mut keys = result.value.keys;
+    let more = keys.len() > usize::from(limit);
+    keys.truncate(usize::from(limit));
+    let values = sort_values(engine, query, &keys).await?;
+    Ok(Window {
+        keys,
+        values,
+        more,
+        optimistic: result.value.optimistic,
+    })
+}
+
+/// Rows from the top through `through`, and at least `fewest` of them, in
+/// index pages of `page_size` that `query` reads. The pages are read within
+/// one engine borrow, so no write lands between them.
+async fn read_through<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &ValidatedIndexQuery,
+    page_size: u16,
+    fewest: usize,
+    through: &Cursor,
+) -> Result<Window, PageError<S::Error>> {
+    let mut window = read_page(engine, query, page_size).await?;
+    let mut checked = 0;
+    loop {
+        let end = window
+            .keys
+            .iter()
+            .zip(&window.values)
+            .enumerate()
+            .skip(checked)
+            .position(|(index, (key, value))| {
+                index >= fewest && query.sorts_after((*value, key), (through.value, &through.key))
+            })
+            .map(|offset| checked + offset)
+            .or_else(|| (window.keys.len() > MAX_THROUGH_ROWS).then_some(MAX_THROUGH_ROWS));
+        if let Some(end) = end.map(|end| end.min(MAX_THROUGH_ROWS)) {
+            window.keys.truncate(end);
+            window.values.truncate(end);
+            window.more = true;
+            return Ok(window);
+        }
+        let (Some(key), Some(value), true) =
+            (window.keys.last(), window.values.last(), window.more)
+        else {
+            return Ok(window);
+        };
+        checked = window.keys.len();
+        let next = query.after(*value, key.clone()).map_err(error)?;
+        let page = read_page(engine, &next, page_size).await?;
+        window.keys.extend(page.keys);
+        window.values.extend(page.values);
+        window.more = page.more;
+        window.optimistic |= page.optimistic;
+    }
+}
+
+/// View-correct sort values of `keys`, from their effective projections.
+async fn sort_values<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    query: &ValidatedIndexQuery,
+    keys: &[RecordKey],
+) -> Result<Vec<i64>, PageError<S::Error>> {
+    let bases = engine
+        .storage()
+        .load_projection_states(keys)
+        .await
+        .map_err(EngineError::Storage)?;
+    let shadows = engine
+        .storage()
+        .load_optimistic_projections(keys)
+        .await
+        .map_err(EngineError::Storage)?;
+    let values = bases
+        .iter()
+        .zip(&shadows)
+        .map(|(base, shadow)| {
+            let document = match shadow.as_ref().map(|shadow| &shadow.state) {
+                Some(predicate_index::OptimisticProjectionState::Complete(doc)) => Some(doc),
+                Some(_) => None,
+                None => match base {
+                    Some(ProjectionState::Complete(doc)) => Some(doc),
+                    _ => None,
+                },
+            }
+            .ok_or_else(|| error("page has no complete sort evidence"))?;
+            document
+                .sort_facts
+                .iter()
+                .find(|fact| fact.attribute == query.as_query().sort_attribute)
+                .map(|fact| fact.value)
+                .ok_or_else(|| error("missing page sort"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(values)
+}

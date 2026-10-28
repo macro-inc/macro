@@ -46,3 +46,29 @@ async fn get_team_default_link_share_returns_none_without_a_team(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("team_share"))
+)]
+async fn get_share_permission_id_returns_initiative_share_permission(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    assert_eq!(
+        get_share_permission_id(&pool, "20000000-0000-0000-0000-000000000007", "initiative")
+            .await?,
+        "initiative"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_share_permission_id_rejects_unsupported_item_type(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let error = get_share_permission_id(&pool, "20000000-0000-0000-0000-000000000007", "reminder")
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "unsupported item type reminder");
+    Ok(())
+}

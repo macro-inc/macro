@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id)\n        SELECT * FROM UNNEST($1::uuid[], $2::varchar[], $3::varchar[], $4::varchar[], $5::varchar[], $6::varchar[])\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "VarcharArray",
+        "VarcharArray",
+        "VarcharArray",
+        "VarcharArray",
+        "VarcharArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e79c2b1ccfeacc66703adc9e342120cb8bf19ff928b35f90735924e2e2d801f"
+}

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, entity_type, entity_id, width, height FROM comms_attachments WHERE message_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "height",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "e4fd703322372750303f508242e0b393af65496555977b1bb9d953557841fe1d"
+}

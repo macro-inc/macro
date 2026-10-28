@@ -2,18 +2,20 @@ import { analytics } from '@app/lib/analytics';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
-
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   refetchHistory,
   useUpsertToHistoryMutation,
 } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { Project } from '@service-storage/generated/schemas/project';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/solid-query';
 import { v4 as uuidv4 } from 'uuid';
 import { queryClient } from '../client';
+import { refreshActiveGraphqlFoldersQueries } from './graphql-folders';
 import { storageKeys } from './keys';
 
 const PROJECTS_STALE_TIME = 5 * 60 * 1000;
@@ -59,29 +61,37 @@ function filterByUserId(
   return projects.filter((project) => project.userId === userId);
 }
 
-export function useProjectsQuery() {
-  const userId = useUserId();
-
-  return useQuery(() => ({
+// Cached callbacks outlive the caller; only the resolved user id enters them.
+function projectsListQueryOptions(userId: string | undefined) {
+  return {
     ...projectsQueryOptions(),
-    placeholderData: (prev) => prev,
+    placeholderData: keepPreviousData,
     select: (data: ProjectsQueryResponse): Project[] => {
       const allProjects = [...data.projects, ...data.pending];
       const sorted = sortProjects(allProjects);
 
       if (!ENABLE_PROJECT_SHARING) {
-        return filterByUserId(sorted, userId());
+        return filterByUserId(sorted, userId);
       }
 
       return sorted;
     },
-  }));
+  };
+}
+
+export function useProjectsQuery() {
+  const userId = useUserId();
+
+  return useQuery(() => projectsListQueryOptions(userId()));
 }
 
 export function invalidateProjects() {
-  return queryClient.invalidateQueries({
-    queryKey: storageKeys.projects.list.queryKey,
-  });
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: storageKeys.projects.list.queryKey,
+    }),
+    refreshActiveGraphqlFoldersQueries(),
+  ]);
 }
 
 /**
@@ -118,6 +128,15 @@ export async function createProject(params: {
       itemId: projectId,
       itemType: 'project',
     });
+    // Drive's folder contents are a Soup list, not the projects list: insert
+    // the new folder there too so it appears in its parent without a reload.
+    fireAndForget(
+      refetchSoupEntity(projectId, 'project', {
+        ownTouch: true,
+        refreshGraphql: true,
+      }),
+      'project-creation'
+    );
     await Promise.all([invalidateProjects(), refetchHistory()]);
     return projectId;
   }
@@ -232,7 +251,7 @@ function _useCreateProjectMutation(
           queryClient.invalidateQueries({
             queryKey: storageKeys.projects.list.queryKey,
           });
-          refetchHistory();
+          fireAndForget(refetchHistory(), 'project-creation');
         },
       },
       callbacks

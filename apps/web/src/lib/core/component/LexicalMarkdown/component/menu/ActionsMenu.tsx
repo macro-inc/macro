@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
+import { enableDatabases } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -24,6 +26,7 @@ import {
   REMOVE_ACTION_SEARCH_COMMAND,
 } from '../../plugins';
 import { ACTIONS } from '../../plugins/actions/actions';
+import { availableActions } from '../../plugins/actions/available-actions';
 import type { Action, ActionContext } from '../../plugins/actions/types';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
@@ -34,6 +37,7 @@ false && floatWithElement;
 
 // Surface's p-px border (2px) + py-2 padding (16px)
 const PANEL_DECORATION_HEIGHT = 18;
+const MAX_CONTENT_HEIGHT = 256;
 
 function ActionsMenuItem(props: {
   action: Action;
@@ -58,6 +62,11 @@ function ActionsMenuItem(props: {
       on:mouseup={(e) => {
         e.preventDefault();
         e.stopPropagation();
+      }}
+      on:pointerdown={(e) => {
+        // Keep the editor focused so /gif (and other slash actions) can run.
+        // iOS still emits mousedown after a cancelled pointerdown; cancel both.
+        e.preventDefault();
       }}
       on:mousedown={(e) => {
         e.preventDefault();
@@ -134,7 +143,10 @@ export function ActionMenu(props: {
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
     if (h === undefined) return undefined;
-    return Math.min(256, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    return Math.min(
+      MAX_CONTENT_HEIGHT,
+      Math.max(0, h - PANEL_DECORATION_HEIGHT)
+    );
   };
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -164,12 +176,13 @@ export function ActionMenu(props: {
     if (idx >= 0) merged[idx] = override;
     else merged.push(override);
   }
-  const validActions = merged.filter((action) => {
-    if (props.ignoreActionIds?.includes(action.id)) return false;
-    const { dependencies } = action;
-    if (dependencies === undefined || dependencies.length === 0) return true;
-    return props.editor.hasNodes(dependencies);
-  });
+  const databasesEnabled = useFeatureFlag(enableDatabases);
+  const validActions = () =>
+    availableActions(merged, {
+      databasesEnabled: databasesEnabled().enabled,
+      ignoreActionIds: props.ignoreActionIds,
+      hasNodes: (dependencies) => props.editor.hasNodes(dependencies),
+    });
 
   createEffect(() => {
     setSelectedIndex(0);
@@ -177,7 +190,7 @@ export function ActionMenu(props: {
   });
 
   const filteredItems = createMemo(() => {
-    return fuzzyFilter(searchTerm(), validActions, (item) =>
+    return fuzzyFilter(searchTerm(), validActions(), (item) =>
       [item.name, ...item.keywords].join(' ')
     );
   });
@@ -249,7 +262,11 @@ export function ActionMenu(props: {
 
   onMount(() => {
     const focusOut = () => {
-      closeMenu();
+      // A newly inserted decorator can focus a control during reconciliation.
+      // Dispatch after that commit so closing the menu gets a writable state.
+      queueMicrotask(() => {
+        if (isOpen()) closeMenu();
+      });
     };
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {
@@ -309,6 +326,7 @@ export function ActionMenu(props: {
           reactiveOnContainer: props.editor.getRootElement(),
           useBlockBoundary: props.useBlockBoundary,
           onAvailableHeight: setMenuAvailableHeight,
+          fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,
         }
       : undefined;
 
@@ -316,6 +334,7 @@ export function ActionMenu(props: {
     <Show when={isOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-60 cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithElement={floatWithElementProps()}
           use:floatWithSelection={floatWithSelectionProps()}
@@ -323,10 +342,7 @@ export function ActionMenu(props: {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Surface
-            depth={2}
-            class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
-          >
+          <Surface depth={2} hideBorder class="menu-surface rounded-xl py-1.5">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{

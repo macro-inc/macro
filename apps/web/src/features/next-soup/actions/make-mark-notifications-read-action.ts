@@ -1,19 +1,27 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { isWithNotification } from '@entity/types/notification';
 import {
   notificationIsRead,
   toNotificationEntity,
 } from '@entity/utils/notification';
-import type { NotificationSource, UnifiedNotification } from '@notifications';
+import {
+  type NotificationSource,
+  shownUnseenNotificationIds,
+  type UnifiedNotification,
+} from '@notifications';
 import { compositeEntity } from '@notifications/types';
 import {
   type NotificationEntityRef,
   toNotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotificationsReadOptions = {
   notificationSource: () => NotificationSource;
@@ -57,13 +65,21 @@ export const makeMarkNotificationsReadAction = (
   const execute = async (entities: EntityData[]) => {
     const notificationsById = new Map<string, UnifiedNotification>();
     const entityRefs: NotificationEntityRef[] = [];
-    const useEntityMutations = ENABLE_GRAPHQL_SOUP();
+    const expectedNotificationIds: string[] = [];
+    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     let targetCount = 0;
 
     for (const entity of entities) {
       const entityRef = toNotificationEntityRef(entity);
       if (useEntityMutations && entityRef) {
         entityRefs.push(entityRef);
+        expectedNotificationIds.push(
+          ...shownUnseenNotificationIds(
+            options.notificationSource(),
+            toNotificationEntity(entity),
+            isWithNotification(entity) ? entity.notifications?.() : undefined
+          )
+        );
         targetCount += 1;
         continue;
       }
@@ -86,6 +102,7 @@ export const makeMarkNotificationsReadAction = (
           ? updateNotificationsForEntities({
               entities: entityRefs,
               operation: 'MARK_SEEN',
+              expectedNotificationIds,
             })
           : Promise.resolve(),
         notifications.length > 0
@@ -93,20 +110,23 @@ export const makeMarkNotificationsReadAction = (
           : Promise.resolve(),
       ]);
     } catch {
-      toast.failure('Failed to mark as read');
+      toast.failure(t('entityActions.toastMarkReadFailed'));
       return;
     }
 
     toast.success(
       targetCount > 1
-        ? `Marked ${targetCount} items as read`
-        : 'Marked as read',
+        ? t('entityActions.toastMarkedReadCount', { count: targetCount })
+        : t('entityActions.toastMarkedRead'),
       { duration: 3_000, stack: true, hideOnMobile: true }
     );
   };
 
   /** Rows remain in place; this only updates their notification read state. */
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_events\n        SET status = $2,\n            starts_at = $3,\n            ends_at = $4,\n            start_date = $5,\n            end_date = $6,\n            time_zone = $7,\n            recurrence_lines = $8,\n            organizer_email = $9,\n            organizer_name = $10,\n            conference_url = $11,\n            conference_provider = $12,\n            schedule_source_id = $13,\n            schedule_updated_at = $14,\n            updated_at = GREATEST(calendar_events.updated_at, $14)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date",
+        "Text",
+        "TextArray",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "424b96f762d77b564a23ec262d928cc4744f3cca9278e2b1ace20d074bed0bc4"
+}

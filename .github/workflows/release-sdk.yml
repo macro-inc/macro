@@ -1,0 +1,72 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/release_sdk.rs
+name: Release SDK
+'on':
+  push:
+    branches:
+    - main
+    paths:
+    - packages/sdk/package.json
+    - '.github/workflows/release-sdk.yml'
+jobs:
+  release:
+    name: Release @macro-inc/sdk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: '1.3.5'
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        registry-url: https://registry.npmjs.org
+    - name: Setup npm
+      run: npm install --global 'npm@^11.5.1'
+    - name: Install dependencies
+      run: bun install --frozen-lockfile
+      working-directory: packages/sdk
+    - id: resolve
+      name: Resolve release version
+      run: bun scripts/resolve-release.ts
+      working-directory: packages/sdk
+    - name: Validate SDK
+      if: steps.resolve.outputs.release == 'true'
+      run: bun run check && bun test && bun run coverage && bun run build
+      working-directory: packages/sdk
+    - name: Publish package
+      if: steps.resolve.outputs.release == 'true'
+      run: npm publish --access public --tag "${{ steps.resolve.outputs.dist_tag }}"
+      working-directory: packages/sdk
+    - name: Tag the release
+      if: steps.resolve.outputs.release == 'true'
+      run: |
+        set -euo pipefail
+        git tag "${{ steps.resolve.outputs.tag }}" "$GITHUB_SHA"
+        git push origin "refs/tags/${{ steps.resolve.outputs.tag }}"
+    - name: Summarize
+      if: always()
+      run: |
+        case "${{ steps.resolve.outputs.release }}" in
+          true)
+            echo "Published @macro-inc/sdk@${{ steps.resolve.outputs.version }} (${{ steps.resolve.outputs.tag }})" >> "$GITHUB_STEP_SUMMARY"
+            ;;
+          false)
+            echo "No SDK release: packages/sdk version ${{ steps.resolve.outputs.version }} is already published." >> "$GITHUB_STEP_SUMMARY"
+            ;;
+          *)
+            echo "SDK release did not resolve; see the failed step above." >> "$GITHUB_STEP_SUMMARY"
+            ;;
+        esac
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false

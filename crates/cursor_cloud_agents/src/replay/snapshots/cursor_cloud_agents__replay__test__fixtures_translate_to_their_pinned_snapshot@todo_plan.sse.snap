@@ -1,0 +1,4415 @@
+---
+source: crates/cursor_cloud_agents/src/replay/test.rs
+assertion_line: 208
+expression: updates(sse)
+input_file: crates/cursor_cloud_agents/fixtures/real/todo_plan.sse
+---
+[
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Planning a three-item"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " todo list for adding"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " a CI badge to the README."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " I'll mark each item"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " complete as I finish"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " it."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nI'll use the TodoWrite"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " tool to create the "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "task list. I won't edit"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " files or push changes."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nI'll read the README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " and CI configuration"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " files now while creating"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " the task list."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " create"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " three"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "item"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " todo"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " list"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " for"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " adding"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " then"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " work"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " through"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " each"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " item"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " by"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " reading"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " repo"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " only"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "—"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "no"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " edits"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " commits"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " or"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " P"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Rs"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-0 fc_d7b53244-54e0-9efd-97ee-35b881075df0_0",
+    "title": "todo_write",
+    "kind": "think",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-0 fc_d7b53244-54e0-9efd-97ee-35b881075df0_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-0 fc_d7b53244-54e0-9efd-97ee-35b881075df0_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        },
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_PENDING",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-0 fc_d7b53244-54e0-9efd-97ee-35b881075df0_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        },
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_PENDING",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        },
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_PENDING",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-0 fc_d7b53244-54e0-9efd-97ee-35b881075df0_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        },
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_PENDING",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        },
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_PENDING",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-2 fc_d7b53244-54e0-9efd-97ee-35b881075df0_2",
+    "title": "file_search",
+    "kind": "search",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-0 fc_d7b53244-54e0-9efd-97ee-35b881075df0_0",
+    "kind": "think",
+    "status": "completed",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        },
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_PENDING",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        },
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_PENDING",
+          "createdAt": "1787345178035",
+          "updatedAt": "1787345178035"
+        }
+      ]
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "todos": [
+            {
+              "id": "1",
+              "content": "Identify existing CI workflow and badge URL",
+              "status": "TODO_STATUS_IN_PROGRESS",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345178058"
+            },
+            {
+              "id": "2",
+              "content": "Determine README placement and markdown for the CI badge",
+              "status": "TODO_STATUS_PENDING",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345178058"
+            },
+            {
+              "id": "3",
+              "content": "Record the exact README change to make (without applying it)",
+              "status": "TODO_STATUS_PENDING",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345178058"
+            }
+          ],
+          "totalCount": 3
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-2 fc_d7b53244-54e0-9efd-97ee-35b881075df0_2",
+    "kind": "search",
+    "status": "in_progress",
+    "title": "file_search",
+    "rawInput": {
+      "globPattern": ".github/workflows/*.{yml,yaml}"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-1 fc_d7b53244-54e0-9efd-97ee-35b881075df0_1",
+    "title": "file_search",
+    "kind": "search",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-1 fc_d7b53244-54e0-9efd-97ee-35b881075df0_1",
+    "kind": "search",
+    "status": "in_progress",
+    "title": "file_search",
+    "rawInput": {
+      "globPattern": "README*"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-1 fc_d7b53244-54e0-9efd-97ee-35b881075df0_1",
+    "kind": "search",
+    "status": "completed",
+    "title": "file_search",
+    "rawInput": {
+      "globPattern": "README*"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "files": [
+            "./packages/collaboration/README.md",
+            "./packages/collaboration/src/websocket/README.md",
+            "./services/unfurl_service/README.md",
+            "./packages/lexical-core/README.md",
+            "./services/sync-service/README.md",
+            "./services/email_scheduled_handler/README.md",
+            "./packages/sdk/README.md",
+            "./services/document_storage_service/README.md",
+            "./services/search_processing_service/README.md",
+            "./packages/loro-mirror/README.md",
+            "./services/contacts_service/README.md",
+            "./README.md",
+            "./services/email_refresh_handler/README.md",
+            "./services/sha_cleanup_worker/README.md",
+            "./services/bots/stripe-payment-bot/README.md",
+            "./services/mcp_auth_proxy/README.md",
+            "./services/bots/anthropic-status-bot/README.md",
+            "./services/document_cognition_service/README.md",
+            "./services/delete_chat_handler/README.md",
+            "./apps/web/tauri/src-tauri/README.md",
+            "./services/email_service/src/bin/cleanup_unused_sfs/README.md",
+            "./services/email_service/src/bin/find_used_sfs_ids/README.md",
+            "./services/email_service/src/bin/backfill_gmail_attachments/README.md",
+            "./services/email_service/src/bin/backfill_contacts/README.md",
+            "./services/email_service/src/bin/find_unused_sfs_ids/README.md",
+            "./services/email_service/src/bin/backfill_sfs_attachments/README.md",
+            "./services/convert_service/load-test/README.md",
+            "./services/document_cognition_service/load-test/README.md",
+            "./services/convert_service/helpers/README.md",
+            "./services/document_text_extractor/README.md",
+            "./services/deleted_item_poller/README.md",
+            "./services/email_sfs_delete_handler/README.md",
+            "./services/notification_service/README.md",
+            "./services/docx_unzip_handler/README.md",
+            "./services/connection_gateway/README.md",
+            "./services/lexical-service/README.md",
+            "./services/organization_retention_handler/README.md",
+            "./services/user_link_cleanup_handler/README.md",
+            "./services/cla-worker/README.md",
+            "./services/worker_trigger/README.md",
+            "./apps/web/src/features/block-image/README.md",
+            "./apps/web/README.md",
+            "./apps/web/src/features/block-chat/README.md",
+            "./services/email_suppression_handler/README.md",
+            "./apps/web/src/features/block-canvas/README.md",
+            "./infra/stacks/fusion-auth/README.md",
+            "./infra/stacks/fusionauth-instance/README.md",
+            "./apps/web/src/features/block-md/README.md",
+            "./infra/stacks/opensearch/README.md",
+            "./infra/stacks/opensearch/helpers/README.md",
+            "./infra/stacks/cloud-storage-cache/README.md",
+            "./infra/stacks/web-app/README.md",
+            "./infra/preview/README.md",
+            "./infra/README.md",
+            "./apps/web/src/features/block-code/README.md",
+            "./apps/web/src/features/entity/README.md",
+            "./apps/web/src/features/block-project/README.md",
+            "./apps/web/src/features/property/README.md",
+            "./apps/docs/README.md",
+            "./tooling/seed_cli/README.md",
+            "./tooling/seed_cli/src/entity/email/README.md",
+            "./crates/client/README.md",
+            "./crates/client/turso-opfs/README.md",
+            "./apps/web/src/lib/service-clients/service-cognition/README.md",
+            "./apps/web/src/components/app/split-layout/README.md",
+            "./apps/web/src/lib/service-clients/service-connection/README.md",
+            "./crates/mcp_client/src/domain/provider_registry/slack/README.md",
+            "./apps/web/src/lib/service-clients/service-sync/README.md",
+            "./crates/opensearch_query_builder/README.md",
+            "./apps/web/src/lib/filesystem/README.md",
+            "./crates/properties_service/README.md",
+            "./apps/web/src/lib/core/README.md",
+            "./crates/chat/README.md",
+            "./crates/properties/README.md",
+            "./crates/comms_db_client/README.md",
+            "./crates/notification_db_client/README.md",
+            "./crates/macro_db_client/README.md",
+            "./apps/web/src/lib/core/component/AI/component/tool/ReadMetadata.tsx",
+            "./crates/teams/README.md",
+            "./crates/email_db_client/README.md",
+            "./crates/webhook/README.md",
+            "./crates/kafka_util/README.md",
+            "./crates/local_e2e_test_support/README.md",
+            "./crates/soup_realtime/README.md",
+            "./crates/integration_tests/local_e2e/README.md",
+            "./crates/opensearch_client/README.md",
+            "./crates/bots/README.md",
+            "./crates/anthropic/README.md"
+          ],
+          "totalFiles": 88
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-20b10124-a135-422e-bcc8-2420998ff34e-2 fc_d7b53244-54e0-9efd-97ee-35b881075df0_2",
+    "kind": "search",
+    "status": "completed",
+    "title": "file_search",
+    "rawInput": {
+      "globPattern": ".github/workflows/*.{yml,yaml}"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "files": [
+            "./.github/workflows/check_generated.yml",
+            "./.github/workflows/deploy_cla_worker.yml",
+            "./.github/workflows/preview-fly-cleanup.yml",
+            "./.github/workflows/build_dmg_on_tag.yml",
+            "./.github/workflows/sdk-check.yml",
+            "./.github/workflows/deploy-lexical-service.yml",
+            "./.github/workflows/assign-labels.yml",
+            "./.github/workflows/code_check_infra.yml",
+            "./.github/workflows/deploy_web_app.yml",
+            "./.github/workflows/deploy-pulumi-stack.yml",
+            "./.github/workflows/web-app-check-main.yml",
+            "./.github/workflows/cargo_deny.yml",
+            "./.github/workflows/deploy-service-generic.yml",
+            "./.github/workflows/deploy_ai_editing_worker.yml",
+            "./.github/workflows/cargo_workspace_dependency_check.yml",
+            "./.github/workflows/deploy_all_services.yml",
+            "./.github/workflows/deploy_preview.yml",
+            "./.github/workflows/build_desktop_on_tag.yml",
+            "./.github/workflows/build-rust-ci-image.yml",
+            "./.github/workflows/check_node_modules_nix.yml",
+            "./.github/workflows/build_agent_daemon_on_tag.yml",
+            "./.github/workflows/code_check_cloud_storage.yml",
+            "./.github/workflows/deploy_sync_service.yml",
+            "./.github/workflows/deploy_fusionauth_instance.yml",
+            "./.github/workflows/ensure_daytona_snapshot.yml",
+            "./.github/workflows/release-production.yml",
+            "./.github/workflows/deploy_on_push.yml",
+            "./.github/workflows/migrate-macro-db.yml",
+            "./.github/workflows/cla.yml",
+            "./.github/workflows/build_appimage_on_tag.yml",
+            "./.github/workflows/code_check_conventions.yml",
+            "./.github/workflows/reusable_deploy_service.yml",
+            "./.github/workflows/push_local_stack_binaries.yml",
+            "./.github/workflows/reusable_preview_service.yml",
+            "./.github/workflows/assign-author.yml",
+            "./.github/workflows/docs-check.yml",
+            "./.github/workflows/preview-fly.yml",
+            "./.github/workflows/cleanup_preview.yml",
+            "./.github/workflows/cancel_stuck_cloud_storage_deploys.yml",
+            "./.github/workflows/pulumi_preview_pr.yml"
+          ],
+          "totalFiles": 40
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Found the README and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI workflow files."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nIdentified `code_check_cloud_storage.yml`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " as the primary CI workflow."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " Checking the git remote"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " URL."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " found"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " root"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " Git"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Hub"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " workflows"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " Next"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " I’ll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " identify"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " primary"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " workflow"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " URL"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3 fc_192d9881-3315-9c09-8467-812c167c70d1_0",
+    "title": "read_file",
+    "kind": "read",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4 fc_192d9881-3315-9c09-8467-812c167c70d1_1",
+    "title": "read_file",
+    "kind": "read",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5 fc_192d9881-3315-9c09-8467-812c167c70d1_2",
+    "title": "grep_search",
+    "kind": "search",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3 fc_192d9881-3315-9c09-8467-812c167c70d1_0",
+    "kind": "read",
+    "status": "in_progress",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/README.md",
+      "limit": 80
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4 fc_192d9881-3315-9c09-8467-812c167c70d1_1",
+    "kind": "read",
+    "status": "in_progress",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_cloud_storage.yml"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/.github/workflows/code_check_cloud_storage.yml",
+      "limit": 40
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5 fc_192d9881-3315-9c09-8467-812c167c70d1_2",
+    "kind": "search",
+    "status": "in_progress",
+    "title": "grep_search",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "pattern": "badge|github.com/.*/actions",
+      "path": "/workspace/README.md",
+      "glob": "README.md",
+      "caseInsensitive": false,
+      "multiline": false,
+      "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2",
+      "offset": 0
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6 fc_192d9881-3315-9c09-8467-812c167c70d1_3",
+    "title": "run_terminal_cmd",
+    "kind": "execute",
+    "status": "in_progress",
+    "rawInput": {
+      "command": "git remote -v && git rev-parse --abbrev-ref HEAD",
+      "timeout": 600000,
+      "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3",
+      "simpleCommands": [
+        "git",
+        "git"
+      ],
+      "parsingResult": {
+        "executableCommands": [
+          {
+            "name": "git",
+            "args": [
+              {
+                "type": "word",
+                "value": "remote"
+              },
+              {
+                "type": "word",
+                "value": "-v"
+              }
+            ],
+            "fullText": "git remote -v"
+          },
+          {
+            "name": "git",
+            "args": [
+              {
+                "type": "word",
+                "value": "rev-parse"
+              },
+              {
+                "type": "word",
+                "value": "--abbrev-ref"
+              },
+              {
+                "type": "word",
+                "value": "HEAD"
+              }
+            ],
+            "fullText": "git rev-parse --abbrev-ref HEAD"
+          }
+        ]
+      },
+      "fileOutputThresholdBytes": "40000",
+      "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+      "hardTimeout": 86400000,
+      "description": "Get git remote URL and branch",
+      "closeStdin": true,
+      "conversationId": "bc-44fac838-ffed-4477-930b-0cc824c83a5b"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5 fc_192d9881-3315-9c09-8467-812c167c70d1_2",
+    "kind": "search",
+    "status": "completed",
+    "title": "grep_search",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "pattern": "badge|github.com/.*/actions",
+      "path": "/workspace/README.md",
+      "glob": "README.md",
+      "caseInsensitive": false,
+      "multiline": false,
+      "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2",
+      "offset": 0
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "pattern": "badge|github.com/.*/actions",
+          "path": "/workspace/README.md",
+          "outputMode": "content",
+          "workspaceResults": {
+            "/workspace": {
+              "content": {
+                "matches": [
+                  {
+                    "file": "README.md",
+                    "matches": [
+                      {
+                        "lineNumber": 232,
+                        "content": "<img width=\"520\" alt=\"ISO 27001 and SOC 2 Type II badges\" src=\".github/readme/security-badges.svg\" />"
+                      }
+                    ]
+                  }
+                ],
+                "totalLines": 1,
+                "totalMatchedLines": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4 fc_192d9881-3315-9c09-8467-812c167c70d1_1",
+    "kind": "read",
+    "status": "completed",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_cloud_storage.yml"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/.github/workflows/code_check_cloud_storage.yml",
+      "limit": 40
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs\nname: cloud storage code check\nenv:\n  CARGO_INCREMENTAL: '0'\n  CARGO_TERM_COLOR: always\n  CARGO_PROFILE_DEV_DEBUG: limited\n  CARGO_PROFILE_TEST_DEBUG: limited\n  RUST_BACKTRACE: '1'\n  RUSTFLAGS: '-C link-arg=-fuse-ld=lld'\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-small\n    outputs:\n      should_run: ${{ steps.filter.outputs.should_run }}\n      nextest_filter: ${{ steps.nextest-filter.outputs.nextest_filter }}\n      doppler_config_bins: ${{ steps.doppler-bins.outputs.doppler_config_bins }}\n    steps:\n    - name: Checkout\n      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd\n      with:\n        clean: 'false'\n        fetch-depth: '0'\n        persist-credentials: 'false'\n    - name: Setup Rust\n      uses: './.github/actions/setup-rust'\n      with:\n        sccache: 'false'\n        rust-cache: 'false'\n    - id: filter\n      name: Filter changed paths",
+          "totalLines": 385,
+          "fileSize": 15568,
+          "path": "/workspace/.github/workflows/code_check_cloud_storage.yml",
+          "readRange": {
+            "startLine": 1,
+            "endLine": 40
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3 fc_192d9881-3315-9c09-8467-812c167c70d1_0",
+    "kind": "read",
+    "status": "completed",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/README.md",
+      "limit": 80
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />",
+          "totalLines": 266,
+          "fileSize": 19987,
+          "path": "/workspace/README.md",
+          "readRange": {
+            "startLine": 1,
+            "endLine": 80
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6 fc_192d9881-3315-9c09-8467-812c167c70d1_3",
+    "kind": "execute",
+    "status": "completed",
+    "title": "run_terminal_cmd",
+    "rawInput": {
+      "command": "git remote -v && git rev-parse --abbrev-ref HEAD",
+      "timeout": 600000,
+      "toolCallId": "call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3",
+      "simpleCommands": [
+        "git",
+        "git"
+      ],
+      "parsingResult": {
+        "executableCommands": [
+          {
+            "name": "git",
+            "args": [
+              {
+                "type": "word",
+                "value": "remote"
+              },
+              {
+                "type": "word",
+                "value": "-v"
+              }
+            ],
+            "fullText": "git remote -v"
+          },
+          {
+            "name": "git",
+            "args": [
+              {
+                "type": "word",
+                "value": "rev-parse"
+              },
+              {
+                "type": "word",
+                "value": "--abbrev-ref"
+              },
+              {
+                "type": "word",
+                "value": "HEAD"
+              }
+            ],
+            "fullText": "git rev-parse --abbrev-ref HEAD"
+          }
+        ]
+      },
+      "fileOutputThresholdBytes": "40000",
+      "timeoutBehavior": "TIMEOUT_BEHAVIOR_BACKGROUND",
+      "hardTimeout": 86400000,
+      "description": "Get git remote URL and branch",
+      "closeStdin": true,
+      "conversationId": "bc-44fac838-ffed-4477-930b-0cc824c83a5b"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "command": "git remote -v && git rev-parse --abbrev-ref HEAD",
+          "stdout": "origin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (fetch)\norigin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (push)\ncursor/ci-badge-readme-2041\n",
+          "executionTime": 449,
+          "interleavedOutput": "origin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (fetch)\norigin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (push)\ncursor/ci-badge-readme-2041\n",
+          "localExecutionTimeMs": 66
+        },
+        "isBackground": false
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "The primary CI workflow"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " is `code_check_cloud_storage.yml`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " named \"cloud storage"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " code check\"."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nThe repository is "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "`macro-inc/macro`. The"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI badge SVG and link"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " URLs are ready. Item"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " 1 will be marked complete"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " next. Item 2 will follow."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Primary"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "code"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "check"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "storage"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".yml"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " on"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "inc"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " I’ll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " mark"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " that"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " done"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " pick"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " where"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " should"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " sit"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " in"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0",
+    "title": "todo_write",
+    "kind": "think",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1",
+    "title": "read_file",
+    "kind": "read",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2",
+    "title": "read_file",
+    "kind": "read",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3",
+    "title": "read_file",
+    "kind": "read",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1",
+    "kind": "read",
+    "status": "in_progress",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/README.md",
+      "offset": 220,
+      "limit": 50
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2",
+    "kind": "read",
+    "status": "in_progress",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/web-app-check-main.yml"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/.github/workflows/web-app-check-main.yml",
+      "limit": 25
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3",
+    "kind": "read",
+    "status": "in_progress",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_infra.yml"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/.github/workflows/code_check_infra.yml",
+      "limit": 15
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1",
+    "kind": "read",
+    "status": "completed",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/README.md",
+      "offset": 220,
+      "limit": 50
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "├── infra/         Pulumi definitions\n├── docker/        local Compose stack\n├── nix/           pinned dev shell and build inputs\n└── tooling/       repo scripts and code generators\n```\n\nServices follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.\n\n<br />\n\n# Security\n\n<img width=\"520\" alt=\"ISO 27001 and SOC 2 Type II badges\" src=\".github/readme/security-badges.svg\" />\n\nEnterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified. We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).\n\n<br />\n\n# License\n\nMacro is fully open source — not \"open core\" — under the GNU Affero General Public License v3.0. See `LICENSE.txt` for details.\n\nYou can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.macro.com/faq) covers what that involves. If you want to build on top of Macro under a different license, contact [licensing@macro.com](mailto:licensing@macro.com). For managed hosting or commercial arrangements, contact [self-host@macro.com](mailto:self-host@macro.com).\n\n<br />\n\n# Community\n\nHave an idea, want to contribute, or want to work on Macro?\n\n- Feature requests: [contact@macro.com](mailto:contact@macro.com)\n- Contributions: see our [contribution guidelines](CONTRIBUTING.md)\n- Hiring: [teo@macro.com](mailto:teo@macro.com)\n\n<br />\n\n# Star us on GitHub\n\nIf Macro is interesting/useful to you, please scroll up and give the repo a star (scroll to the top of this page -> click `Star` in top right). Stars are how most users hear about Macro because they move us up GitHub's search and trending pages.\n\n<a href=\"https://github.com/macro-inc/macro\">\n  <picture>\n    <source media=\"(prefers-color-scheme: dark)\" srcset=\".github/readme/star-history-dark.svg\" />\n    <img alt=\"Star history for macro-inc/macro, from launch to 3608 stars\" src=\".github/readme/star-history-light.svg\" width=\"100%\" />\n  </picture>\n</a>\n",
+          "totalLines": 266,
+          "fileSize": 19987,
+          "path": "/workspace/README.md",
+          "readRange": {
+            "startLine": 220,
+            "endLine": 266
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345185084"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345185084"
+        },
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345185084"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345185085"
+        },
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345185085"
+        }
+      ],
+      "merge": true
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0",
+    "kind": "think",
+    "status": "completed",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "1",
+          "content": "Identify existing CI workflow and badge URL",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345185085"
+        },
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345185085"
+        }
+      ],
+      "merge": true
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "todos": [
+            {
+              "id": "1",
+              "content": "Identify existing CI workflow and badge URL",
+              "status": "TODO_STATUS_COMPLETED",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345185088"
+            },
+            {
+              "id": "2",
+              "content": "Determine README placement and markdown for the CI badge",
+              "status": "TODO_STATUS_IN_PROGRESS",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345185088"
+            },
+            {
+              "id": "3",
+              "content": "Record the exact README change to make (without applying it)",
+              "status": "TODO_STATUS_PENDING",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345178058"
+            }
+          ],
+          "totalCount": 3,
+          "wasMerge": true
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2",
+    "kind": "read",
+    "status": "completed",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/web-app-check-main.yml"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/.github/workflows/web-app-check-main.yml",
+      "limit": 25
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs\nname: Web App Pr Checks\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-tiny-no-cache\n    outputs:\n      should_run: ${{ steps.filter.outputs.should_run }}\n      api_changed: ${{ steps.filter.outputs.api_changed }}\n    steps:\n    - name: Checkout Repo\n      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10\n    - id: filter\n      name: Filter changed paths\n      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590\n      with:",
+          "totalLines": 297,
+          "fileSize": 11057,
+          "path": "/workspace/.github/workflows/web-app-check-main.yml",
+          "readRange": {
+            "startLine": 1,
+            "endLine": 25
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10 fc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3",
+    "kind": "read",
+    "status": "completed",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/.github/workflows/code_check_infra.yml"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/.github/workflows/code_check_infra.yml",
+      "limit": 15
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs\nname: infra code check\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-small",
+          "totalLines": 113,
+          "fileSize": 3703,
+          "path": "/workspace/.github/workflows/code_check_infra.yml",
+          "readRange": {
+            "startLine": 1,
+            "endLine": 15
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Items 2 and 3 can now"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " be completed."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nThe CI badge will "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "be placed right after"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " the header navigation"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " links in the centered"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " layout, following standard"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " GitHub README conventions."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nThe exact CI badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " markdown is ready. "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Item 2 will be marked"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " complete, and item "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "3 will be completed "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "by recording the change"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " in the response."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Placement"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " clear"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ":"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " belongs"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " in"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " centered"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " header"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " after"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " nav"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " links"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " I’ll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " record"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " exact"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " markdown"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " next"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " still"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " without"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " editing"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " file"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11 fc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0",
+    "title": "todo_write",
+    "kind": "think",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11 fc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345189519"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11 fc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345189519"
+        },
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345189519"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11 fc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345189520"
+        },
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345189520"
+        }
+      ],
+      "merge": true
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11 fc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0",
+    "kind": "think",
+    "status": "completed",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "2",
+          "content": "Determine README placement and markdown for the CI badge",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345189520"
+        },
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_IN_PROGRESS",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345189520"
+        }
+      ],
+      "merge": true
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "todos": [
+            {
+              "id": "1",
+              "content": "Identify existing CI workflow and badge URL",
+              "status": "TODO_STATUS_COMPLETED",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345185088"
+            },
+            {
+              "id": "2",
+              "content": "Determine README placement and markdown for the CI badge",
+              "status": "TODO_STATUS_COMPLETED",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345189524"
+            },
+            {
+              "id": "3",
+              "content": "Record the exact README change to make (without applying it)",
+              "status": "TODO_STATUS_IN_PROGRESS",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345189524"
+            }
+          ],
+          "totalCount": 3,
+          "wasMerge": true
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Item 3 is now marked"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " complete after recording"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " the exact README change."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-afee3a02-6c61-432e-98d0-58c560451742-12 fc_799a0b10-3002-9652-ab72-188838537dca_0",
+    "title": "todo_write",
+    "kind": "think",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-afee3a02-6c61-432e-98d0-58c560451742-12 fc_799a0b10-3002-9652-ab72-188838537dca_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345192963"
+        }
+      ]
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-afee3a02-6c61-432e-98d0-58c560451742-12 fc_799a0b10-3002-9652-ab72-188838537dca_0",
+    "kind": "think",
+    "status": "in_progress",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345192963"
+        }
+      ],
+      "merge": true
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-afee3a02-6c61-432e-98d0-58c560451742-12 fc_799a0b10-3002-9652-ab72-188838537dca_0",
+    "kind": "think",
+    "status": "completed",
+    "title": "todo_write",
+    "rawInput": {
+      "todos": [
+        {
+          "id": "3",
+          "content": "Record the exact README change to make (without applying it)",
+          "status": "TODO_STATUS_COMPLETED",
+          "createdAt": "1787345178058",
+          "updatedAt": "1787345192963"
+        }
+      ],
+      "merge": true
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "todos": [
+            {
+              "id": "1",
+              "content": "Identify existing CI workflow and badge URL",
+              "status": "TODO_STATUS_COMPLETED",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345185088"
+            },
+            {
+              "id": "2",
+              "content": "Determine README placement and markdown for the CI badge",
+              "status": "TODO_STATUS_COMPLETED",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345189524"
+            },
+            {
+              "id": "3",
+              "content": "Record the exact README change to make (without applying it)",
+              "status": "TODO_STATUS_COMPLETED",
+              "createdAt": "1787345178058",
+              "updatedAt": "1787345192967"
+            }
+          ],
+          "totalCount": 3,
+          "wasMerge": true
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "All three todo items"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " are complete. I am "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "preparing a brief summary"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " of the completed tasks."
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\nI located the README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " file. I identified "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "where to place the CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " badge. I determined"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " the exact markdown "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "syntax. No files were"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " modified."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " created"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " three"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "item"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " todo"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " list"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " worked"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " through"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " each"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " one"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " by"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " reading"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " repo"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " only"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " All"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " three"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " are"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " marked"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " **"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "completed"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " No"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " files"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " were"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " edited"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " nothing"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " was"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " committed"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " pushed"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " or"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " opened"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " as"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " PR"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".\n\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "1"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " workflow"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " URL"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "  \n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "The"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " main"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " backend"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " workflow"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "github"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "workflows"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "code"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "check"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "storage"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".yml"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " (`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " storage"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " code"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " check"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`)"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " on"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "inc"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " Badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " URL"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ":\n\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "https"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "://"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "github"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".com"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "inc"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "actions"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "workflows"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "code"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "check"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "storage"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".yml"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".svg"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`\n\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "2"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " placement"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "  \n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "The"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " root"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".md"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " has"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " centered"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " header"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " ("
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "logo"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " +"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " nav"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " links"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ")"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " no"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " today"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " The"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " natural"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " spot"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " inside"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " that"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " centered"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " block"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ","
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " after"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " nav"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " links"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " ("
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "around"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " line"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "23"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ")."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "3"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " Exact"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " change"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " to"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " make"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " ("
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "not"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " applied"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ")**"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "  \n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Insert"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " this"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " after"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "</"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "p"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ">`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " in"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " header"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ":\n\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "```"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "markdown"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " <"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "p"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ">\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "   "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " <"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " href"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "=\""
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "https"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "://"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "github"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".com"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "inc"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "actions"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "workflows"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "code"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "check"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "storage"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".yml"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "\">"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "     "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " <"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "img"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " alt"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "=\""
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "CI"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "\""
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " src"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "=\""
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "https"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "://"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "github"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".com"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "inc"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "actions"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "workflows"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "code"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "check"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "cloud"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "_"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "storage"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".yml"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "badge"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".svg"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "\""
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " />"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "   "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " </"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "a"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ">\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " "
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " </"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "p"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ">\n"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "```"
+    }
+  }
+]

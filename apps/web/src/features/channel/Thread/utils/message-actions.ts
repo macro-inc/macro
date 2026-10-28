@@ -1,6 +1,12 @@
 import { getChannelParams } from '@channel/Channel/link';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { quoteMarkdown } from '@macro-inc/lexical-core/utils/quote-markdown';
+import {
+  buildReplyTargetMarkdown,
+  isReplyTargetData,
+  markdownToPlainText,
+  type ReplyTargetParent,
+  stripLeadingReplyTargetMarkdown,
+} from '@macro-inc/lexical-core';
 import type { MessageData } from '../../Message';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
@@ -37,11 +43,16 @@ export function canEditMessage(
 
 export function canDeleteMessage(
   message: Pick<ActionableMessage, 'sender_id' | 'deleted_at'>,
-  currentUserId: string | undefined
+  currentUserId: string | undefined,
+  /**
+   * Document owners may delete comments they did not write. Channel members
+   * leave this false; bot posts stay deletable without it.
+   */
+  canModerate = false
 ): boolean {
+  if (message.deleted_at) return false;
   return (
-    (isOwnMessage(message, currentUserId) || isBotMessage(message)) &&
-    !message.deleted_at
+    canModerate || isOwnMessage(message, currentUserId) || isBotMessage(message)
   );
 }
 
@@ -51,18 +62,69 @@ export function canReplyToMessage(
   return !message.deleted_at;
 }
 
-export function buildQuoteReplyValue(input: {
-  quotedContent: string;
-  existingValue?: string;
-}): string {
-  const quote = quoteMarkdown(input.quotedContent);
+function oneLinePreview(text: string): string {
+  return text.trim().replace(/\s+/g, ' ');
+}
+
+function stripMagicChipMarkdown(markdown: string): string {
+  return markdown.replace(/<m-magic-chip>.*?<\/m-magic-chip>/gs, '');
+}
+
+export function buildReplyTargetValue(
+  input: {
+    message: Pick<MessageData, 'id' | 'content' | 'sender_id' | 'thread_id'>;
+    selectedText?: string;
+    renderedText?: string;
+    existingValue?: string;
+  } & (
+    | { channelId: string; parent?: never }
+    | { parent: ReplyTargetParent; channelId?: never }
+  )
+): string {
+  const parent: ReplyTargetParent = input.parent ?? {
+    type: 'channel',
+    id: input.channelId,
+  };
+  if (parent.type === 'channel' && !input.message.thread_id) {
+    return input.existingValue ?? '';
+  }
+
+  for (const match of (input.existingValue ?? '').matchAll(
+    /<m-reply-target>(.*?)<\/m-reply-target>/gs
+  )) {
+    try {
+      const target: unknown = JSON.parse(match[1]);
+      if (
+        isReplyTargetData(target) &&
+        target.targetMessageId === input.message.id
+      ) {
+        return input.existingValue ?? '';
+      }
+    } catch {
+      // Malformed references should not prevent adding a valid reply target.
+    }
+  }
+
+  const messageText = markdownToPlainText(
+    stripMagicChipMarkdown(
+      stripLeadingReplyTargetMarkdown(input.message.content)
+    )
+  );
+  const displayText = oneLinePreview(
+    input.selectedText || input.renderedText || messageText
+  );
+  const replyTarget = buildReplyTargetMarkdown({
+    parent,
+    targetMessageId: input.message.id,
+    targetThreadId: input.message.thread_id ?? input.message.id,
+    displayText,
+    senderId: input.message.sender_id,
+  });
   const existingValue = input.existingValue?.trimStart() ?? '';
 
-  if (!quote) return existingValue;
-
   return existingValue
-    ? `${quote}\n\n${existingValue}`
-    : `${quote}\n\n${EMPTY_REPLY_PARAGRAPH}`;
+    ? `${replyTarget}\n\n${existingValue}`
+    : `${replyTarget}\n\n${EMPTY_REPLY_PARAGRAPH}`;
 }
 
 export function hasReactionFromUser(

@@ -8,6 +8,7 @@ version = "0.1.0"
 anyhow = { workspace = true }
 connection_gateway_models = { path = "../connection_gateway_models" }
 model-entity = { path = "../model-entity" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

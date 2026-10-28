@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Query, State},
-    http::StatusCode,
+    extract::{FromRef, Path, Query, State},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -23,7 +23,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         CalendarEvent, CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
-        CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceRange,
+        CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, EventTime,
+        OccurrenceRange,
     },
     ports::CalendarOccurrenceService,
     service::CalendarValidationError,
@@ -74,6 +75,11 @@ where
             "/calendar-events/preview",
             post(mention_previews::<S, Auth>),
         )
+        .route(
+            "/calendar-events/team-out-of-office",
+            get(list_team_out_of_office::<S, Auth>),
+        )
+        .route("/calendar-events/{event_id}/ics", get(event_ics::<S, Auth>))
         .with_state(state)
 }
 
@@ -219,13 +225,18 @@ where
     let next_cursor = has_more
         .then(|| occurrences.last())
         .flatten()
-        .map(|(_, occurrence)| {
-            Base64Str::encode_json(CalendarOccurrenceCursor::from_occurrence(occurrence))
-                .type_erase()
+        .map(|listing| {
+            Base64Str::encode_json(CalendarOccurrenceCursor::from_occurrence(
+                &listing.occurrence,
+            ))
+            .type_erase()
         });
     let items = occurrences
         .into_iter()
-        .map(|(event, occurrence)| CalendarOccurrenceItem { event, occurrence })
+        .map(|listing| {
+            let (event, occurrence) = listing.into_occurrence_event();
+            CalendarOccurrenceItem { event, occurrence }
+        })
         .collect();
 
     Ok(Json(CalendarOccurrenceResponse {
@@ -234,6 +245,127 @@ where
         next_cursor,
         sync_status,
     }))
+}
+
+/// Query parameters for the team out-of-office viewport.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeQuery {
+    /// Inclusive UTC viewport start.
+    start: DateTime<Utc>,
+    /// Exclusive UTC viewport end.
+    end: DateTime<Utc>,
+    /// Inclusive local date boundary for all-day events.
+    start_date: Option<NaiveDate>,
+    /// Exclusive local date boundary for all-day events.
+    end_date: Option<NaiveDate>,
+    /// Maximum number of occurrences, from 1 through 2,000.
+    #[param(minimum = 1, maximum = 2000)]
+    limit: Option<u16>,
+}
+
+/// One teammate's out-of-office occurrence.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeItem {
+    /// Macro user id of the teammate who is out.
+    owner_id: String,
+    /// The teammate's calendar event id.
+    event_id: Uuid,
+    /// Stable occurrence key within the event.
+    occurrence_key: String,
+    /// Event title, absent unless the teammate shares event details.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    /// Occurrence time span.
+    time: EventTime,
+}
+
+/// Team out-of-office viewport response.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeResponse {
+    items: Vec<TeamOutOfOfficeItem>,
+    has_more: bool,
+}
+
+/// Return teammates' out-of-office occurrences in the requested viewport.
+#[tracing::instrument(skip_all, err)]
+#[utoipa::path(
+    get,
+    path = "/calendar-events/team-out-of-office",
+    tag = "calendar_events",
+    params(TeamOutOfOfficeQuery),
+    responses(
+        (status = 200, description = "Teammates' out-of-office occurrences in the requested viewport", body = TeamOutOfOfficeResponse),
+        (status = 400, description = "Invalid or unsupported calendar viewport"),
+        (status = 401, description = "Authentication required"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn list_team_out_of_office<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(query): Query<TeamOutOfOfficeQuery>,
+) -> Result<Json<TeamOutOfOfficeResponse>, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let default_end_date = default_end_date(query.end);
+    let range = OccurrenceRange {
+        starts_at: query.start,
+        ends_at: query.end,
+        start_date: query.start_date.unwrap_or_else(|| query.start.date_naive()),
+        end_date: query
+            .end_date
+            .or(default_end_date)
+            .ok_or(CalendarApiError {
+                status: StatusCode::BAD_REQUEST,
+                message: "calendar end is outside the supported date range",
+            })?,
+    };
+    let (limit, repository_limit) = query_limits(query.limit)?;
+    let mut occurrences = state
+        .service
+        .list_team_out_of_office(
+            user.authorization.user.macro_user_id.as_ref(),
+            range,
+            repository_limit,
+        )
+        .await
+        .map_err(|error| {
+            if error
+                .as_ref()
+                .downcast_current_context::<CalendarValidationError>()
+                .is_some()
+            {
+                return CalendarApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    message: "calendar range must be positive, at most 370 days, inside the maintained one-year-history/two-year-future window, with limit 1–2000",
+                };
+            }
+            tracing::error!(error = ?error, "failed to query team out-of-office occurrences");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to query team out-of-office occurrences",
+            }
+        })?;
+    let has_more = occurrences.len() > usize::from(limit);
+    occurrences.truncate(usize::from(limit));
+    let items = occurrences
+        .into_iter()
+        .map(|row| TeamOutOfOfficeItem {
+            owner_id: row.owner_id,
+            event_id: row.event_id,
+            occurrence_key: row.occurrence_key,
+            title: row.title,
+            time: row.time,
+        })
+        .collect();
+
+    Ok(Json(TeamOutOfOfficeResponse { items, has_more }))
 }
 
 /// One mentioned event to resolve for the requester.
@@ -258,7 +390,8 @@ pub struct CalendarMentionPreviewRequest {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CalendarMentionPreviewKind {
-    /// The requester holds a copy of the meeting on a visible calendar.
+    /// The requester holds a copy of the meeting on a visible calendar, or
+    /// sees the mentioned copy read-only through a channel share.
     Access,
     /// The event exists but is on no calendar the requester can see.
     NoAccess,
@@ -275,7 +408,8 @@ pub struct CalendarMentionPreviewItem {
     /// Visibility of the mentioned event to the requester.
     #[serde(rename = "type")]
     kind: CalendarMentionPreviewKind,
-    /// Preview of the requester's own copy, present only with access.
+    /// Preview of the requester's own copy, or of the channel-shared copy,
+    /// present only with access.
     #[serde(skip_serializing_if = "Option::is_none")]
     event: Option<CalendarMentionEvent>,
 }
@@ -285,6 +419,69 @@ pub struct CalendarMentionPreviewItem {
 #[serde(rename_all = "camelCase")]
 pub struct CalendarMentionPreviewResponse {
     items: Vec<CalendarMentionPreviewItem>,
+}
+
+/// Export an event the requester can see — their own, or one shared with a
+/// channel they belong to — as an iCalendar file named after its title.
+#[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
+#[utoipa::path(
+    get,
+    path = "/calendar-events/{event_id}/ics",
+    tag = "calendar_events",
+    params(("event_id" = Uuid, Path, description = "Calendar event entity id")),
+    responses(
+        (status = 200, description = "The event as an iCalendar document", content_type = "text/calendar", body = String),
+        (status = 401, description = "Authentication required"),
+        (status = 404, description = "Event not found or not visible to the requester"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn event_ics<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(event_id): Path<Uuid>,
+) -> Result<Response, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let ics = state
+        .service
+        .event_ics(user.authorization.user.macro_user_id.as_ref(), event_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = ?error, "failed to export calendar event");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to export calendar event",
+            }
+        })?
+        .ok_or(CalendarApiError {
+            status: StatusCode::NOT_FOUND,
+            message: "calendar event was not found",
+        })?;
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                "text/calendar; charset=utf-8".to_string(),
+            ),
+            (header::CONTENT_DISPOSITION, ics_disposition(&ics.title)),
+        ],
+        ics.document,
+    )
+        .into_response())
+}
+
+/// An attachment named after the event title. The plain `filename` is an
+/// ASCII fallback; clients that read `filename*` (RFC 6266) get the title.
+fn ics_disposition(title: &str) -> String {
+    let title = title.trim();
+    let name = if title.is_empty() { "event" } else { title };
+    format!(
+        "attachment; filename=\"event.ics\"; filename*=UTF-8''{}.ics",
+        urlencoding::encode(name)
+    )
 }
 
 /// Resolve mentioned calendar events to the requester's own projections.

@@ -1,0 +1,869 @@
+import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { FileDropOverlay } from '@core/component/FileDropOverlay';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
+import { keyboardShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/keyboard-shortcuts';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { fileSelector } from '@core/directive/fileSelector';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
+import { isIOS } from '@solid-primitives/platform';
+import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
+import type { LexicalEditor } from 'lexical';
+import { $getRoot } from 'lexical';
+import {
+  type Accessor,
+  createResource,
+  createSignal,
+  For,
+  onMount,
+  Show,
+} from 'solid-js';
+import { MessageOperationRecovery } from '../../email-message/views/message-operation-recovery';
+import { createAttachmentViewer } from '../components/attachment-viewer';
+import { DraftBackMenu } from '../components/draft-back-menu';
+import { DraftSyncStatus } from '../components/draft-sync-status';
+import { EmailDateSelector } from '../components/email-date-selector';
+import {
+  EmailScheduleBar,
+  EmailScheduleSummary,
+} from '../components/email-schedule-summary';
+import { MacroSignatureButton } from '../components/macro-signature-button';
+import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
+import { SignaturePreview } from '../components/signature-preview';
+import type { EmailComposeContext } from '../context/compose-capabilities';
+import { getOrInitEmailFormContext } from '../context/email-form-context';
+import { decodeBase64Utf8 } from '../core/decode-base64';
+import { plainTextToHtml } from '../core/plain-text-to-html';
+import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
+import { createDraftSyncStatus } from '../primitives/draft-sync-status';
+import { EMAIL_FORMAT_SHORTCUTS } from '../primitives/format-shortcuts';
+import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
+import { ReplyEnvelope } from './reply-envelope';
+
+false && fileFolderDrop;
+false && fileSelector;
+
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  createReplyComposer,
+  type ReplyComposerOptions,
+} from '../primitives/reply-composer';
+
+type ReplyInputViewProps = Omit<
+  ReplyComposerOptions,
+  | 'drafts'
+  | 'attachmentStorage'
+  | 'delivery'
+  | 'draftLifecycle'
+  | 'notices'
+  | 'accounts'
+  | 'connectivity'
+  | 'editorFiles'
+  | 'viewerEmail'
+  | 'hasPaidAccess'
+  | 'recordMention'
+  | 'focusAfterReplyRequest'
+> & {
+  context: EmailComposeContext;
+  onReloadDraft?: () => void;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  unframed?: boolean;
+  mobileCompose?: {
+    portalMount: Accessor<HTMLDivElement | undefined>;
+    onClose: () => void;
+    registerClose: (handler: () => void) => void;
+  };
+};
+export function ReplyInputView(props: ReplyInputViewProps) {
+  const initialId = props.draft?.db_id;
+  const read = props.context.drafts.readDraft;
+  const [saved, { refetch }] = createResource(
+    () => read && initialId,
+    async (id) => await read!(id)
+  );
+  const restoredHtml = () => {
+    const draft = saved()?.draft;
+    if (!draft) return props.preloadedHtml;
+    if (draft.body_html_sanitized != null)
+      return decodeBase64Utf8(draft.body_html_sanitized);
+    return draft.body_text ? plainTextToHtml(draft.body_text) : '';
+  };
+  return (
+    <Show
+      when={!saved.loading}
+      fallback={<div role="status">Loading draft…</div>}
+    >
+      <Show
+        when={!saved.error}
+        fallback={
+          <div role="alert">
+            Unable to load local draft.{' '}
+            <button onClick={() => fireAndForget(refetch(), 'email-compose')}>
+              Retry
+            </button>
+          </div>
+        }
+      >
+        <LoadedReplyInputView
+          {...props}
+          draft={saved()?.draft ?? props.draft}
+          localDraft={saved()?.local}
+          localAttachments={saved()?.attachments}
+          preloadedHtml={restoredHtml()}
+        />
+      </Show>
+    </Show>
+  );
+}
+
+function LoadedReplyInputView(props: ReplyInputViewProps) {
+  const composeContext = props.context;
+  const ctx = props.session;
+  const [isDragging, setIsDragging] = createSignal<boolean>();
+  let composeContainerRef: HTMLDivElement | undefined;
+  let bottomBarRef: HTMLDivElement | undefined;
+  const [editor, setEditor] = createSignal<LexicalEditor>();
+  const state = createReplyComposer(
+    {
+      drafts: composeContext.drafts,
+      operations: composeContext.operations,
+      attachmentStorage: composeContext.attachmentStorage,
+      delivery: composeContext.delivery,
+      draftLifecycle: composeContext.draftLifecycle,
+      notices: composeContext.notices,
+      accounts: composeContext.accounts,
+      connectivity: composeContext.connectivity,
+      editorFiles: composeContext.editorFiles,
+      viewerEmail: composeContext.viewerEmail,
+      hasPaidAccess: composeContext.hasPaidAccess,
+      recordMention: composeContext.recordMention,
+      focusAfterReplyRequest: () => !composeContext.presentation.isTouch(),
+      session: props.session,
+      sourceEntityId: props.sourceEntityId,
+      replyingTo: props.replyingTo,
+      isEditingExisting: props.isEditingExisting,
+      draft: props.draft,
+      localDraft: props.localDraft,
+      localAttachments: props.localAttachments,
+      preloadedHtml: props.preloadedHtml,
+      formSeed: props.formSeed,
+      onEngaged: props.onEngaged,
+      sideEffectOnSend: props.sideEffectOnSend,
+      onMarkDone: props.onMarkDone,
+      setShowReply: props.setShowReply,
+      host: props.host,
+    },
+    editor,
+    { container: () => composeContainerRef, footer: () => bottomBarRef },
+    getOrInitEmailFormContext
+  );
+  const sync = createDraftSyncStatus({
+    drafts: composeContext.drafts,
+    draftId: state.savedDraftId,
+    localSaveState: state.localSaveState,
+    retry: state.retryDraft,
+    discard: state.deleteDraftAndReset,
+  });
+  const {
+    form,
+    activeInboxId,
+    activeInboxEmail,
+    setIncludeSignature,
+    setScrollContainer,
+    composerExpanded,
+    setComposerExpanded,
+    quoteCollapsed,
+    setQuoteCollapsed,
+    savedDraftId,
+    handleEditorConnect,
+    isSending,
+    collectDraft,
+    scheduleDraftSave,
+    persistDraftOnSenderSwitch,
+    hasPaidAccess,
+    sendEmail,
+    deleteDraftAndReset,
+    handleAddAttachments,
+    handleRemoveAttachment,
+    handleSendTimeChange,
+    scheduleState,
+    selectedSendTime,
+    scheduleActionLabel,
+    scheduleOperation,
+    cancelSchedule,
+    checkScheduleStatus,
+    schedulePickerDisabled,
+    editingDisabled,
+    sendUnavailableReason,
+    sendActionDisabled,
+    toggleQuotedText,
+  } = state;
+  const sendActionHidden = () =>
+    composeContext.presentation.isTouch() &&
+    !state.hasBodyText() &&
+    state.replyType() !== 'forward';
+  const signatureHtml = () =>
+    composeContext.presentation.signaturesEnabled()
+      ? state.signatureHtml()
+      : undefined;
+  const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
+  const requestClose = () => {
+    // The full-screen dialog owns Escape; dismiss the nested draft choices first.
+    if (draftBackMenuOpen()) {
+      setDraftBackMenuOpen(false);
+      return;
+    }
+    if (collectDraft()) setDraftBackMenuOpen(true);
+    else fireAndForget(deleteDraftAndReset(), 'email-compose');
+  };
+  const saveAndClose = async () => {
+    try {
+      await state.flushLocal();
+    } catch (error) {
+      composeContext.notices.reportError(error);
+      return;
+    }
+    setDraftBackMenuOpen(false);
+    props.mobileCompose?.onClose();
+  };
+  onMount(() => props.mobileCompose?.registerClose(requestClose));
+  const isMobileCompose = () => props.mobileCompose !== undefined;
+  const composePortalScope = () =>
+    isMobileCompose() ? ('local' as const) : undefined;
+  const scrollAreaSignatureHtml = () =>
+    isMobileCompose() ? signatureHtml() : undefined;
+  const footerSignatureHtml = () =>
+    isMobileCompose() ? undefined : signatureHtml();
+  // File sharing and editor plugin wiring belong to this view. The controller only
+  // needs to know when editor content has changed and requires another save.
+  const editorConfig = buildConfig('markdown')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .namespace('email-base-input-markdown')
+    .withMentions({
+      onUserMention: state.handleUserMention,
+      onDocumentMention: (item) => {
+        composeContext.editorFiles.makePublic(item.id);
+        scheduleDraftSave();
+      },
+    })
+    .withEmojis()
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
+    .withHistory({ timeGap: 400 })
+    .withMedia()
+    .withCode()
+    .withCheckboxToTask()
+    .withRestoreFocus()
+    .withSelectionData()
+    .withFloatingFormatMenu()
+    .use(keyboardShortcutsPlugin({ shortcuts: EMAIL_FORMAT_SHORTCUTS }))
+    .use(registerToggleAppendedThread)
+    .onChange(state.onContentChange)
+    .withFilePaste({
+      onPasteFilesAndDirs: (files, directories) => {
+        if (editingDisabled()) return;
+        composeContext.editorFiles.uploadEditorFiles({
+          editor: editor(),
+          sourceId: props.sourceEntityId,
+          files,
+          directories,
+          onUploaded: (ids) => {
+            ids.forEach(composeContext.editorFiles.makePublic);
+            scheduleDraftSave();
+          },
+          onVideos: handleAddAttachments,
+        });
+      },
+    });
+  if (isIOS || isNativeMobilePlatform()) {
+    editorConfig.use(
+      iosCursorScrollPlugin({ scrollContainer: state.scrollContainer })
+    );
+  }
+  const markdownHandle = editorConfig.buildHandle();
+  setEditor(markdownHandle.lexical);
+  // Set up hotkey scope for the compose message component
+  const [attachComposeHotkeys, composeHotkeyScope] =
+    useHotkeyDOMScope('compose-message');
+  useTouchOutsideToDismissKeyboard(() => composeContainerRef);
+
+  onMount(() => {
+    if (composeContainerRef) {
+      attachComposeHotkeys(composeContainerRef);
+
+      registerHotkey({
+        hotkey: 'cmd+enter',
+        scopeId: composeHotkeyScope,
+        description: 'Send email',
+        keyDownHandler: () => {
+          sendEmail().catch(composeContext.notices.reportError);
+          return true;
+        },
+        runWithInputFocused: true,
+        hotkeyToken: TOKENS.email.send,
+        displayPriority: 9,
+      });
+
+      registerHotkey({
+        hotkey: 'shift+cmd+enter',
+        scopeId: composeHotkeyScope,
+        description: 'Send and mark done',
+        keyDownHandler: () => {
+          sendEmail(true).catch(composeContext.notices.reportError);
+          return true;
+        },
+        runWithInputFocused: true,
+        hotkeyToken: TOKENS.email.sendAndMarkDone,
+        displayPriority: 10,
+      });
+
+      registerDraftActionHotkeys({
+        scopeId: composeHotkeyScope,
+        disabled: editingDisabled,
+        discard: () => fireAndForget(deleteDraftAndReset(), 'email-compose'),
+        attach: handleAddAttachments,
+      });
+
+      const recipients = state.recipients;
+      registerCcBccHotkeys({
+        scopeId: composeHotkeyScope,
+        disabled: recipients.disabled,
+        cc: {
+          reveal: () => {
+            recipients.setShowExpandedRecipients(true);
+            recipients.setShowCc(true);
+          },
+          input: recipients.ccRef,
+        },
+        bcc: {
+          reveal: () => {
+            recipients.setShowExpandedRecipients(true);
+            recipients.setShowBcc(true);
+          },
+          input: recipients.bccRef,
+        },
+      });
+
+      registerHotkey({
+        hotkey: 'arrowup',
+        scopeId: composeHotkeyScope,
+        description: 'Select last message',
+        runWithInputFocused: true,
+        condition: () => {
+          const ed = editor();
+          if (!ed) return false;
+          const rootEl = ed.getRootElement();
+          if (!rootEl || !rootEl.contains(document.activeElement)) return false;
+          return ed.read(() => {
+            const text = $getRoot().getTextContent();
+            return text.trim().length === 0;
+          });
+        },
+        keyDownHandler: () => {
+          return ctx.exitToThread('last');
+        },
+        hotkeyToken: TOKENS.email.previousMessage,
+      });
+
+      registerHotkey({
+        hotkey: 'escape',
+        scopeId: composeHotkeyScope,
+        description: 'Close reply',
+        keyDownHandler: () => {
+          if (isMobileCompose()) {
+            requestClose();
+            return true;
+          }
+          const draft = collectDraft();
+          const isEmpty = draft === null;
+
+          if (isEmpty) {
+            // Delete draft and close reply
+            deleteDraftAndReset().catch(() => {});
+          } else {
+            // Move focus back to the message
+            ctx.exitToThread('selected');
+          }
+          return true;
+        },
+        // Let editable fields handle Escape before closing the reply.
+        runWithInputFocused: false,
+        hotkeyToken: TOKENS.email.cancelReply,
+        displayPriority: 8,
+      });
+    }
+  });
+
+  const attachmentViewer = createAttachmentViewer();
+
+  const AttachmentsRow = (rowProps?: { class?: string }) => (
+    <Show when={form.attachments.list().length > 0}>
+      <div
+        class={cn(
+          'ph-no-capture shrink-0 flex gap-1 flex-wrap w-full py-2',
+          rowProps?.class
+        )}
+      >
+        <For each={form.attachments.list()}>
+          {(attachment) => (
+            <EmailAttachmentPill
+              attachment={{
+                fileName:
+                  attachment.type === 'local'
+                    ? attachment.file.name
+                    : attachment.type === 'remote' && attachment.uploadPending
+                      ? `${attachment.fileName} — upload unfinished`
+                      : attachment.fileName,
+                mimeType:
+                  attachment.type === 'local'
+                    ? attachment.file.type
+                    : attachment.type === 'remote'
+                      ? attachment.contentType
+                      : attachment.mimeType,
+              }}
+              removable={!editingDisabled()}
+              onRemove={() => {
+                if (!editingDisabled())
+                  fireAndForget(
+                    handleRemoveAttachment(attachment),
+                    'email-compose'
+                  );
+              }}
+              onClick={attachmentViewer.onClickFor(attachment)}
+            />
+          )}
+        </For>
+        <attachmentViewer.Viewer />
+      </div>
+    </Show>
+  );
+
+  const AttachButton = () => (
+    <Button
+      variant="ghost"
+      ref={(el) =>
+        fileSelector(el, () => ({
+          multiple: true,
+          onSelect: handleAddAttachments,
+        }))
+      }
+      size="icon-md"
+      tooltip="Attach"
+      disabled={editingDisabled()}
+    >
+      <Paperclip class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+    </Button>
+  );
+
+  const SyncStatus = () => (
+    <DraftSyncStatus
+      state={sync.state()}
+      busy={sync.busy()}
+      error={sync.error()}
+      onRetry={sync.retry}
+      onKeepEditing={sync.keepEditing}
+    />
+  );
+
+  return (
+    <>
+      <Surface
+        class={cn(
+          'relative flex flex-col flex-1 max-w-full min-h-0',
+          isMobileCompose() &&
+            'h-full overflow-y-auto overscroll-y-none pb-[max(16px,var(--safe-bottom,0px))]',
+          isMobileCompose()
+            ? 'rounded-none'
+            : props.unframed
+              ? 'rounded-lg'
+              : 'rounded-xl bg-menu-glass glass-input'
+        )}
+        style={
+          props.unframed ? { 'background-color': 'transparent' } : undefined
+        }
+        hideBorder={props.unframed}
+        ref={(el) => {
+          composeContainerRef = el;
+          if (isMobileCompose()) setScrollContainer(el);
+        }}
+        depth={isMobileCompose() ? 0 : 2}
+        solid
+      >
+        <Show when={state.operationSource}>
+          {(source) => (
+            <MessageOperationRecovery
+              source={source()}
+              onReloadDraft={props.onReloadDraft}
+            />
+          )}
+        </Show>
+        <Show
+          when={
+            state.replyType() === 'forward' &&
+            props
+              .replyingTo()
+              ?.attachments.some((attachment) => attachment.reference_url)
+          }
+        >
+          <p class="px-3 py-2 text-sm text-ink-muted" role="status">
+            Linked cloud attachments are available in the original Outlook
+            message. Share their links from Outlook to include them in this
+            forward.{' '}
+            <a
+              href={
+                props
+                  .replyingTo()
+                  ?.attachments.find((attachment) => attachment.reference_url)
+                  ?.reference_url ?? undefined
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline"
+            >
+              Open in Outlook
+            </a>
+          </p>
+        </Show>
+        <Show when={isMobileCompose()}>
+          <MobileReplyToolbar
+            onBack={requestClose}
+            attachRef={(element) =>
+              fileSelector(element, () => ({
+                multiple: true,
+                onSelect: handleAddAttachments,
+              }))
+            }
+            sendDisabled={sendActionDisabled() || sendActionHidden()}
+            sendLabel={scheduleActionLabel()}
+            sending={isSending()}
+            editingDisabled={editingDisabled()}
+            onSend={() => sendEmail()}
+            scheduleSummary={
+              <EmailScheduleSummary
+                state={scheduleState()}
+                operation={scheduleOperation()}
+                onSelectTime={handleSendTimeChange}
+                onCancelSchedule={cancelSchedule}
+                onCheckStatus={checkScheduleStatus}
+              />
+            }
+            scheduleControl={
+              <Show when={composeContext.presentation.scheduleEnabled}>
+                <EmailDateSelector
+                  mobile
+                  compact
+                  state={scheduleState()}
+                  selectedTime={selectedSendTime()}
+                  onSelectTime={handleSendTimeChange}
+                  onCancelSchedule={cancelSchedule}
+                  operation={scheduleOperation()}
+                  disabled={schedulePickerDisabled()}
+                />
+              </Show>
+            }
+          />
+        </Show>
+        <SyncStatus />
+        <ReplyEnvelope
+          fields={state.recipients}
+          values={form.recipients}
+          options={props.session.recipientOptions}
+          inboxes={composeContext.accounts.inboxes}
+          activeInboxId={activeInboxId}
+          senderEmail={activeInboxEmail}
+          onSenderChange={persistDraftOnSenderSwitch}
+          subject={form.subject}
+          onSubjectChange={(subject) => {
+            form.setSubject(subject);
+            scheduleDraftSave();
+          }}
+          showSubject={!!props.isEditingExisting}
+          mobile={isMobileCompose}
+          portalScope={composePortalScope}
+          replyType={state.replyType}
+          disabled={editingDisabled}
+        />
+        <div
+          class={cn(
+            isMobileCompose()
+              ? 'relative flex-1 flex flex-col'
+              : 'size-full flex flex-col min-h-0',
+            state.recipients.showExpandedRecipients() && 'mt-4'
+          )}
+        >
+          <div
+            ref={(el) => {
+              if (!isMobileCompose()) setScrollContainer(el);
+            }}
+            class={cn(
+              'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
+              isMobileCompose()
+                ? 'max-h-none flex-1 overflow-visible px-4 pt-6 pb-4'
+                : cn(
+                    'overflow-y-auto mobile:max-h-[calc(32*var(--dvh,1dvh))]',
+                    composerExpanded()
+                      ? // Cap to the thread viewport (minus composer chrome) so the
+                        // recipients row and send bar stay on screen together
+                        'max-h-[min(calc(60*var(--dvh,1dvh)),calc(var(--thread-height,9999px)-14rem))]'
+                      : 'max-h-56'
+                  )
+            )}
+            onScroll={(e) => {
+              if (composerExpanded() || e.currentTarget.scrollTop <= 0) return;
+              setComposerExpanded(true);
+              // Keep the send bar pinned while the box grows
+              requestAnimationFrame(() => {
+                bottomBarRef?.scrollIntoView({ block: 'nearest' });
+              });
+            }}
+            onclick={() => {
+              editor()?.focus();
+            }}
+            use:fileFolderDrop={{
+              onDragStart: (valid) => setIsDragging(valid),
+              onDragEnd: () => setIsDragging(false),
+              onDrop: (files, directories, event) => {
+                if (editingDisabled()) return;
+                const currentEditor = editor();
+                if (!currentEditor || !event) return;
+                composeContext.editorFiles.uploadEditorFiles({
+                  editor: currentEditor,
+                  sourceId: props.sourceEntityId,
+                  files,
+                  directories,
+                  dropEvent: event,
+                  onUploaded: (ids) => {
+                    setIsDragging(false);
+                    ids.forEach(composeContext.editorFiles.makePublic);
+                    scheduleDraftSave();
+                  },
+                  onVideos: handleAddAttachments,
+                });
+              },
+            }}
+          >
+            <div
+              class={cn(
+                'absolute size-full inset-0',
+                !isDragging() && 'hidden'
+              )}
+            >
+              <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
+            </div>
+            <MarkdownShell
+              config={editorConfig}
+              class={cn(
+                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
+                // Quoted thread collapses behind the "⋯" pill below
+                // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
+                // variants turn the underscore in .macro_quote into a space)
+                quoteCollapsed() && 'quote-collapsed',
+                isDragging() && 'blur'
+              )}
+              disabled={editingDisabled()}
+              placeholder={
+                isMobileCompose()
+                  ? 'Use `@` to reference files'
+                  : 'Reply — @mention to share or cc people'
+              }
+              portalScope={isMobileCompose() ? 'local' : 'split'}
+              refFn={(el) => props.markdownDomRef?.(el)}
+              onConnect={handleEditorConnect}
+            />
+            <Show when={!hasPaidAccess()}>
+              <div class="text-ink/50 mt-[1lh]" data-watermark>
+                <MacroSignatureButton
+                  visible={
+                    !composeContext.presentation.viewerLoading() &&
+                    !composeContext.hasPaidAccess()
+                  }
+                  onUpgrade={composeContext.presentation.onUpgrade}
+                />
+              </div>
+            </Show>
+            <Show when={isMobileCompose()}>
+              <AttachmentsRow />
+            </Show>
+            <Show when={scrollAreaSignatureHtml()}>
+              {(html) => (
+                <SignaturePreview
+                  mobile={composeContext.presentation.isMobile()}
+                  prepareLinks={
+                    composeContext.presentation.prepareSignatureLinks
+                  }
+                  html={html()}
+                  dismissable={!editingDisabled()}
+                  onDismiss={() => {
+                    // Dismissal is composer-local state worth keeping — latch
+                    // the seed so a draft upgrade can't remount it away.
+                    props.onEngaged?.();
+                    setIncludeSignature(false);
+                  }}
+                />
+              )}
+            </Show>
+          </div>
+          {/* Quoted-text controls live below the scroll area so they stay
+            anchored to the composer bottom instead of scrolling with (and
+            floating over) tall content. */}
+          <Show when={form.replyAppended() && quoteCollapsed()}>
+            <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+                tooltip="Show quoted text"
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  setQuoteCollapsed(false);
+                  setComposerExpanded(true);
+                }}
+              >
+                <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
+              </Button>
+            </div>
+          </Show>
+          <Show
+            when={
+              props.replyingTo() &&
+              // The collapse pill above already covers this state
+              !(form.replyAppended() && quoteCollapsed())
+            }
+          >
+            <div
+              class="shrink-0 pt-1"
+              data-corvu-no-drag=""
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Tooltip
+                label={
+                  form.replyAppended() ? 'Hide quoted text' : 'Show quoted text'
+                }
+              >
+                <KToggleButton
+                  as={Button}
+                  variant="ghost"
+                  size="icon-sm"
+                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"
+                  pressed={form.replyAppended()}
+                  disabled={editingDisabled()}
+                  onChange={toggleQuotedText}
+                >
+                  <DotsThree class="size-5 shrink-0" />
+                </KToggleButton>
+              </Tooltip>
+            </div>
+          </Show>
+          <Show when={!isMobileCompose()}>
+            {/* Below the scroll area so quoted email content can never overlap it */}
+            <AttachmentsRow class="px-4" />
+            <Show when={footerSignatureHtml()}>
+              {(html) => (
+                <SignaturePreview
+                  mobile={composeContext.presentation.isMobile()}
+                  prepareLinks={
+                    composeContext.presentation.prepareSignatureLinks
+                  }
+                  html={html()}
+                  dismissable={!editingDisabled()}
+                  onDismiss={() => {
+                    // Dismissal is composer-local state worth keeping — latch
+                    // the seed so a draft upgrade can't remount it away.
+                    props.onEngaged?.();
+                    setIncludeSignature(false);
+                  }}
+                />
+              )}
+            </Show>
+            {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
+            <div
+              ref={bottomBarRef}
+              class="shrink-0 flex min-w-0 justify-end pt-1.5"
+            >
+              <div class="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  onClick={deleteDraftAndReset}
+                  tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+                  size="icon-md"
+                  disabled={editingDisabled()}
+                >
+                  <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+                </Button>
+                <AttachButton />
+                <Show
+                  when={
+                    composeContext.presentation.scheduleEnabled &&
+                    !sendActionHidden()
+                  }
+                >
+                  <div class="shrink-0">
+                    <EmailDateSelector
+                      mobile={false}
+                      compact
+                      state={scheduleState()}
+                      selectedTime={selectedSendTime()}
+                      onSelectTime={handleSendTimeChange}
+                      onCancelSchedule={cancelSchedule}
+                      operation={scheduleOperation()}
+                      disabled={schedulePickerDisabled()}
+                    />
+                  </div>
+                </Show>
+                <SendButton
+                  appearance="composer"
+                  disabled={sendActionDisabled()}
+                  pending={isSending()}
+                  hidden={sendActionHidden()}
+                  onClick={() => sendEmail()}
+                  tooltip={{
+                    content: sendUnavailableReason() ?? scheduleActionLabel(),
+                    shortcut: sendUnavailableReason() ? undefined : 'cmd+enter',
+                  }}
+                  aria-label={scheduleActionLabel()}
+                />
+              </div>
+            </div>
+          </Show>
+        </div>
+      </Surface>
+      <Show when={isMobileCompose()}>
+        <DraftBackMenu
+          mount={props.mobileCompose?.portalMount()}
+          open={draftBackMenuOpen()}
+          onOpenChange={setDraftBackMenuOpen}
+          onSave={saveAndClose}
+          onDelete={async () => {
+            try {
+              await deleteDraftAndReset();
+            } catch {
+              setDraftBackMenuOpen(false);
+            }
+          }}
+        />
+      </Show>
+      <Show when={!isMobileCompose()}>
+        {/* The desktop reply sits in its message card; the bar spans the card's
+          padding so it reads as the card's footer, like the standalone
+          composer's drawer. */}
+        <EmailScheduleBar
+          state={scheduleState()}
+          operation={scheduleOperation()}
+          onSelectTime={handleSendTimeChange}
+          onCancelSchedule={cancelSchedule}
+          onCheckStatus={checkScheduleStatus}
+          class="-mx-4 -mb-4 mt-3 rounded-b-[26.25px] border-t border-edge-muted px-4 py-2 touch:rounded-b-lg mobile:rounded-none"
+        />
+      </Show>
+    </>
+  );
+}

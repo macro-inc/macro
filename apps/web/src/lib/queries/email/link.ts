@@ -1,5 +1,7 @@
-import { useUserId } from '@core/context/user';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateCalendarViews } from '@queries/calendar/sync';
 import { queryClient } from '@queries/client';
@@ -8,8 +10,10 @@ import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
+import { refreshMailAccounts } from './mail-accounts';
 
 const LINK_STALE_TIME = 5 * 60 * 1000;
 
@@ -26,23 +30,32 @@ const queryEnabled = () => true;
  * prompt — nothing renders from this query.
  */
 export function useInboxHealthProbeQuery() {
+  const authenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: emailKeys.linksHealthProbe.queryKey,
-    queryFn: async () => {
-      await emailClient.healthCheckLinks();
-      return null;
-    },
+    queryFn: probeInboxHealth,
+    enabled: authenticated() === true,
     staleTime: HEALTH_PROBE_STALE_TIME,
     refetchOnWindowFocus: true,
     retry: false,
   }));
 }
 
+async function probeInboxHealth() {
+  await emailClient.healthCheckLinks();
+  return null;
+}
+
+function fetchEmailLinks() {
+  return throwOnErr(() => emailClient.getLinks());
+}
+
 export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
+  const authenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: emailKeys.links.queryKey,
-    queryFn: async () => throwOnErr(async () => await emailClient.getLinks()),
-    enabled: enabled(),
+    queryFn: fetchEmailLinks,
+    enabled: authenticated() === true && enabled(),
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always',
   }));
@@ -53,16 +66,59 @@ export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
  * Delegated inboxes are primary for their own account, hence the macro_id
  * guard. `undefined` until links load or if none match.
  */
+export function findPrimaryEmailLinkId(
+  links: readonly { id: string; is_primary: boolean; macro_id: string }[],
+  userId: string | undefined
+): string | undefined {
+  if (!userId) return undefined;
+  return links.find((link) => link.is_primary && link.macro_id === userId)?.id;
+}
+
 export function usePrimaryEmailLinkId() {
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   return createMemo(() => {
-    const uid = userId();
-    if (!uid) return undefined;
-    return linksQuery.data?.links.find(
-      (link) => link.is_primary && link.macro_id === uid
-    )?.id;
+    // Offline GraphQL mail can render before this REST lookup completes.
+    // Reading its pending resource would suspend the surrounding email view.
+    if (!queryReadyGate(linksQuery)) return undefined;
+    return findPrimaryEmailLinkId(linksQuery.data.links ?? [], userId());
   });
+}
+
+async function fetchMessageLinkId(messageId: string) {
+  const message = await throwOnErr(() =>
+    emailClient.getMessage({ message_id: messageId })
+  );
+  return message.link_id;
+}
+
+function messageInboxQueryOptions(messageId: string | undefined) {
+  return {
+    queryKey: emailKeys.messageInbox(messageId).queryKey,
+    queryFn: () => (messageId ? fetchMessageLinkId(messageId) : null),
+    enabled: messageId !== undefined,
+    staleTime: LINK_STALE_TIME,
+    retry: false,
+  };
+}
+
+/**
+ * The inbox a message belongs to. For a surface that holds a message id but
+ * not the account that received it — an AI-drafted reply, whose tool
+ * arguments name the message it answers — this is how it can show the sender
+ * the reply will actually go out as. Exposes loading, failure and retry so
+ * composers can require a known sender before sending.
+ */
+export function useMessageInboxQuery(messageId: Accessor<string | undefined>) {
+  return useQuery(() => messageInboxQueryOptions(messageId()));
+}
+
+/** The `X-Email-Link-Id` value for a target inbox; see useNonPrimaryEmailLinkIdHeader. */
+export function nonPrimaryEmailLinkIdHeader(
+  linkId: string | undefined | null,
+  primaryLinkId: string | undefined
+): string | undefined {
+  return !linkId || linkId === primaryLinkId ? undefined : linkId;
 }
 
 /**
@@ -77,9 +133,9 @@ export function useEmailSignature(
   const linksQuery = useEmailLinksQuery();
   return createMemo(() => {
     const id = linkId();
-    if (!id) return undefined;
+    if (!id || !queryReadyGate(linksQuery)) return undefined;
     return (
-      linksQuery.data?.links.find((link) => link.id === id)?.settings
+      linksQuery.data.links.find((link) => link.id === id)?.settings
         .signature ?? undefined
     );
   });
@@ -94,34 +150,35 @@ export function useEmailSignature(
  */
 export function useNonPrimaryEmailLinkIdHeader() {
   const primaryLinkId = usePrimaryEmailLinkId();
-  return (linkId: string | undefined | null): string | undefined =>
-    !linkId || linkId === primaryLinkId() ? undefined : linkId;
+  return (linkId: string | undefined | null) =>
+    nonPrimaryEmailLinkIdHeader(linkId, primaryLinkId());
+}
+
+async function refreshSenderCatalog(): Promise<void> {
+  try {
+    await refreshMailAccounts();
+  } catch (error) {
+    Telemetry.error(error);
+  }
 }
 
 export function invalidateEmailLinks() {
+  // Connection, reauthorization and link-removal events must refresh the
+  // GraphQL catalog consumed by both From and the sidebar, not only legacy reads.
+  fireAndForget(refreshSenderCatalog(), 'email-links');
   queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.invalidateQueries({
     queryKey: emailKeys.links.queryKey,
   });
 }
 
-type DisableCalendarContext = {
-  previousLinks: ListLinksResponse | undefined;
-};
-type DisableCalendarCallbacks = MutationCallbacks<
-  void,
-  Error,
-  string,
-  DisableCalendarContext
->;
+type DisableCalendarCallbacks = MutationCallbacks<void, Error, string>;
 
 /**
  * Turns calendar off for one inbox: the backend deletes its calendar data and
- * drops the calendar scopes from its Google grant. The cached link flips to
- * `calendar_disabled` + `needs_calendar_permission` right away and drops
- * `has_calendar_data`, which is what swaps the settings row back to "Enable
- * calendar", retires the turn-off control, and keeps the enable prompt quiet.
- * The emptied calendar caches are refetched.
+ * drops the calendar scopes from its Google grant. Publish the disabled state
+ * only after deletion finishes: offering Enable while deletion holds the
+ * inbox's grant lock makes the consent callback wait behind that deletion.
  */
 export function useDisableCalendarMutation(
   callbacks?: DisableCalendarCallbacks
@@ -131,16 +188,12 @@ export function useDisableCalendarMutation(
       await throwOnErr(() => emailClient.disableLinkCalendar({ linkId }));
     },
 
-    ...withCallbacks<void, Error, string, DisableCalendarContext>(
+    ...withCallbacks<void, Error, string>(
       {
-        onMutate: async (linkId) => {
+        onSuccess: async (_data, linkId) => {
           await queryClient.cancelQueries({
             queryKey: emailKeys.links.queryKey,
           });
-
-          const previousLinks = queryClient.getQueryData<ListLinksResponse>(
-            emailKeys.links.queryKey
-          );
 
           queryClient.setQueryData<ListLinksResponse>(
             emailKeys.links.queryKey,
@@ -160,21 +213,8 @@ export function useDisableCalendarMutation(
               }
           );
 
-          return { previousLinks };
-        },
-
-        onSuccess: () => {
           invalidateEmailLinks();
           invalidateCalendarViews();
-        },
-
-        onError: (_error, _linkId, context) => {
-          if (context?.previousLinks) {
-            queryClient.setQueryData(
-              emailKeys.links.queryKey,
-              context.previousLinks
-            );
-          }
         },
       },
       callbacks

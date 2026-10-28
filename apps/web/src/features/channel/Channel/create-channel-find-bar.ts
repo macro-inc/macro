@@ -2,15 +2,16 @@ import {
   createFindBarController,
   type FindBarController,
 } from '@core/component/createFindBarController';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { extractSearchTerms } from '@core/util/searchHighlight';
 import {
   type ChannelMessageEntity,
   isChannelMessageEntity,
   type WithSearch,
 } from '@entity';
-import { channelMessagesQueryOptions } from '@queries/channel/channel-messages';
-import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
 import { queryClient } from '@queries/client';
+import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
+import { messageTimelineQueryOptions } from '@queries/messages/timeline';
 import {
   useSearchChannelQuery,
   validateSearchServiceText,
@@ -120,7 +121,7 @@ export function createChannelFindBar(
         if (idx === 0 || rs.length === 0) return;
         if (!searchQuery.hasNextPage || searchQuery.isFetchingNextPage) return;
         if (rs.length - idx <= FIND_BAR_PREFETCH_THRESHOLD) {
-          searchQuery.fetchNextPage();
+          fireAndForget(searchQuery.fetchNextPage(), 'channel-find-bar');
         }
       });
 
@@ -144,7 +145,10 @@ export function createChannelFindBar(
           const threadId = rs[i].threadId;
           if (!threadId) continue;
           queryClient.prefetchQuery(
-            threadRepliesQueryOptions(channelId, threadId)
+            threadRepliesQueryOptions(
+              { type: 'channel', id: channelId },
+              threadId
+            )
           );
         }
       });
@@ -174,7 +178,10 @@ export function createChannelFindBar(
           seen.add(aroundId);
           if (options.isMessageLoaded(aroundId)) continue;
           queryClient.prefetchInfiniteQuery(
-            channelMessagesQueryOptions(channelId, aroundId)
+            messageTimelineQueryOptions(
+              { type: 'channel', id: channelId },
+              aroundId
+            )
           );
         }
       });

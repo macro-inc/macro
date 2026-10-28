@@ -1,5 +1,8 @@
 export function isEditableInput(target: Element | undefined | null) {
   if (!target) return false;
+  // Composite editors (such as a spreadsheet grid between cell edits) own
+  // typing/navigation even though they are not native text inputs.
+  if (target.hasAttribute('data-keyboard-input')) return true;
   // Check if target is an input
   if (target instanceof HTMLInputElement) {
     // Exclude checkbox and radio which aren't text-editable

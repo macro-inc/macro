@@ -9,8 +9,16 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(feature = "explain_binary")]
+mod access_explanation;
+
+#[cfg(feature = "explain_binary")]
+pub use access_explanation::{
+    AccessExplanation, AccessGrant, EmailAttachmentReason, ForeignEntityAuthEntity,
+};
 pub use bot_id::{BotId, BotIdStr};
 pub use model_entity::EntityType;
+pub use models_entity_access_management::EntityAccessSourceType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 pub use models_permissions::share_permission::access_level::{
     CommentAccessLevel, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
@@ -34,6 +42,15 @@ pub enum BotAccessScope {
 }
 
 impl BotAccessScope {
+    /// User scope for a caller that knows only the acting user, such as an AI
+    /// tool request, which carries no organization context.
+    pub fn user(user_id: MacroUserIdStr<'static>) -> Self {
+        Self::User {
+            user_id,
+            user_org_id: None,
+        }
+    }
+
     /// Returns the verified acting user's identifier for user scope.
     pub fn user_id(&self) -> Option<&MacroUserIdStr<'static>> {
         match self {
@@ -66,6 +83,11 @@ impl BotAccessScope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "scope", rename_all = "snake_case")]
 pub enum BotReceiptScope {
+    /// An autonomous webhook authorized only by its active channel membership.
+    Channel {
+        /// The sole channel authorized by this receipt.
+        channel_id: Uuid,
+    },
     /// Access was resolved as a verified acting user.
     User {
         /// The verified acting user's identifier.
@@ -83,7 +105,7 @@ impl BotReceiptScope {
     pub fn acting_user_id(&self) -> Option<&MacroUserIdStr<'static>> {
         match self {
             Self::User { acting_user } => Some(acting_user),
-            Self::Team { .. } => None,
+            Self::Team { .. } | Self::Channel { .. } => None,
         }
     }
 
@@ -91,7 +113,7 @@ impl BotReceiptScope {
     pub fn team_id(&self) -> Option<Uuid> {
         match self {
             Self::Team { team_id } => Some(*team_id),
-            Self::User { .. } => None,
+            Self::User { .. } | Self::Channel { .. } => None,
         }
     }
 }
@@ -199,7 +221,7 @@ pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
 ///
 /// Items (documents, chats, projects, threads) use access levels.
 /// Channels use view-only permission or participant roles.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EntityPermission {
@@ -369,12 +391,36 @@ pub enum ChannelRoleResult {
 }
 
 /// A given entity
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Entity {
     /// The id of the entity
     pub entity_id: String,
     /// The type of the entity
     pub entity_type: EntityType,
+}
+
+/// A live conversation whose current access can be inherited by its agent session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentSessionParent {
+    /// Document discussion, including documents with legacy string identifiers.
+    Document(String),
+    /// Call chat, identified by the active or archived call.
+    Call(Uuid),
+}
+
+impl From<AgentSessionParent> for Entity {
+    fn from(parent: AgentSessionParent) -> Self {
+        match parent {
+            AgentSessionParent::Document(entity_id) => Self {
+                entity_id,
+                entity_type: EntityType::Document,
+            },
+            AgentSessionParent::Call(call_id) => Self {
+                entity_id: call_id.to_string(),
+                entity_type: EntityType::Call,
+            },
+        }
+    }
 }
 
 /// Authentication context retained for a bot entity-access receipt.
@@ -625,12 +671,17 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
 #[derive(Debug, Clone)]
 pub struct CallChannelInfo {
     /// The channel the call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The share permission ID for this call.
     pub share_permission_id: String,
 }
 
 /// Errors that can occur during access checking.
+///
+/// The variants are the domain's failure vocabulary; causes never appear as
+/// typed payloads. Where a cause exists (a database error, a failed lookup)
+/// it travels inside a [`rootcause::Report`] attached to the variant, so it
+/// is visible in logs but structurally opaque to domain logic.
 #[derive(Debug, thiserror::Error)]
 pub enum AccessError {
     /// User does not have access to the requested resource.
@@ -641,9 +692,10 @@ pub enum AccessError {
     #[error("{0}")]
     UnauthorizedWithMessage(&'static str),
 
-    /// Database error during access check.
-    #[error("Database error: {0}")]
-    DatabaseError(#[from] sqlx::Error),
+    /// Access could not be checked because a backing service failed
+    /// transiently; retrying may succeed. The cause is attached.
+    #[error("access check temporarily unavailable: {0}")]
+    Unavailable(rootcause::Report),
 
     /// Bad request parameters.
     #[error("Bad request: {0}")]
@@ -653,7 +705,15 @@ pub enum AccessError {
     #[error("Not found: {0}")]
     NotFound(&'static str),
 
-    /// Internal server error.
-    #[error("Internal error")]
-    Internal,
+    /// Internal server error; retrying will not help. The cause is attached.
+    #[error("Internal error: {0}")]
+    Internal(rootcause::Report),
+}
+
+impl AccessError {
+    /// Non-retryable internal failure with a short reason attached to the
+    /// report, for sites that have no underlying cause to carry.
+    pub fn internal(reason: &'static str) -> Self {
+        Self::Internal(rootcause::report!(reason).into_dynamic())
+    }
 }

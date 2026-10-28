@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { keepImportMetaDev } from './keep-import-meta-dev';
 
 describe('keepImportMetaDev', () => {
-  it('keeps DEV for local-backend static builds (stack up, Fly preview)', () => {
+  it('keeps DEV for local-backend static builds (stack up)', () => {
     expect(
       keepImportMetaDev({
         command: 'build',
@@ -27,7 +27,7 @@ describe('keepImportMetaDev', () => {
       keepImportMetaDev({
         command: 'serve',
         mode: 'development',
-        localBackendOrigin: 'http://localhost:8090',
+        localBackendOrigin: 'https://localhost:8090',
       })
     ).toBe(false);
   });

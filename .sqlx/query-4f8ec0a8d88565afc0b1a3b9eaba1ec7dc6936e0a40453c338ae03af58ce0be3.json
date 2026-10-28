@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH occurrences AS (\n                SELECT s.provider_event_id, o.value->>'recurrenceId' AS recurrence_id,\n                    COALESCE((o.value->'time'->>'startsAt')::timestamptz,\n                        (o.value->'time'->>'startDate')::date::timestamp AT TIME ZONE COALESCE(c.time_zone,'UTC')) AS starts_at,\n                    COALESCE((o.value->'time'->>'endsAt')::timestamptz,\n                        (o.value->'time'->>'endDate')::date::timestamp AT TIME ZONE COALESCE(c.time_zone,'UTC')) AS ends_at,\n                    COALESCE(x.value->'automaticDecline',s.automatic_decline) AS policy\n                FROM calendar_event_sources s JOIN calendars c ON c.id=s.calendar_id\n                CROSS JOIN LATERAL jsonb_array_elements(s.normalized_payload->'occurrences') o(value)\n                LEFT JOIN LATERAL (\n                    SELECT value FROM jsonb_array_elements(s.normalized_payload->'overrides')\n                    WHERE value->>'recurrenceId'=o.value->>'recurrenceId' LIMIT 1\n                ) x ON true\n                WHERE s.calendar_id=$1 AND s.source_kind='outlook' AND NOT s.is_read_only\n                    AND COALESCE((o.value->>'isCancelled')::bool,false)=false\n            )\n            SELECT a.provider_event_id AS \"away!\", a.recurrence_id AS \"away_recurrence?\",\n                i.provider_event_id AS \"invitation!\", i.recurrence_id AS \"invitation_recurrence?\"\n            FROM occurrences a JOIN occurrences i ON i.provider_event_id<>a.provider_event_id\n            LEFT JOIN calendar_outlook_away_checks checked ON checked.work_id=$2\n                AND checked.away_id=a.provider_event_id AND checked.away_recurrence=COALESCE(a.recurrence_id,'')\n                AND checked.invitation_id=i.provider_event_id AND checked.invitation_recurrence=COALESCE(i.recurrence_id,'')\n            WHERE a.policy->'properties'->>'autoDeclineMode'<>'decline_none'\n                AND i.ends_at>now() AND a.starts_at<i.ends_at AND i.starts_at<a.ends_at\n                AND (checked.next_check_at IS NULL OR checked.next_check_at<=now())\n                AND NOT EXISTS(SELECT 1 FROM calendar_outlook_declines d\n                    WHERE d.mailbox_key=calendar_outlook_mailbox_key($3)\n                    AND d.invitation_id=i.provider_event_id AND d.recurrence_id IS NOT DISTINCT FROM i.recurrence_id)\n            ORDER BY checked.checked_at NULLS FIRST,i.starts_at,a.provider_event_id,a.recurrence_id,i.provider_event_id,i.recurrence_id\n            LIMIT 20\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "away!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "away_recurrence?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "invitation!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "invitation_recurrence?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "4f8ec0a8d88565afc0b1a3b9eaba1ec7dc6936e0a40453c338ae03af58ce0be3"
+}

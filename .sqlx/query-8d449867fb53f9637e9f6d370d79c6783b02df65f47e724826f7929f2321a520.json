@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.overage_enabled, a.overage_limit_cents, a.overage_suspended_at, a.authorization_revision,\n                        f.next_sequence FROM ai_billing_account a JOIN ai_funding_state f USING (user_id) WHERE a.user_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "overage_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "overage_limit_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "overage_suspended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "authorization_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "next_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8d449867fb53f9637e9f6d370d79c6783b02df65f47e724826f7929f2321a520"
+}

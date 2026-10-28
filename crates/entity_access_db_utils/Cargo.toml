@@ -14,6 +14,7 @@ tracing = { workspace = true }
 
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+model_owner = { path = "../model_owner" }
 models_entity_access_management = { path = "../models_entity_access_management", features = [
   "db",
 ] }

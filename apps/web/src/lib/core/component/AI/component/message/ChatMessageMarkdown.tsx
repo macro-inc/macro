@@ -46,6 +46,9 @@ export function ChatMessageMarkdown(props: {
       setStateRef={props.setStateRef}
       stateRefKey={props.stateRefKey}
       target="internal"
+      // Streaming reparses the tree; viewport gating would reset resolved
+      // mentions to placeholders on every update, including the final one.
+      lazy={false}
     />
   );
 }

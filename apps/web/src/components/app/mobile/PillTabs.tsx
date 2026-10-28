@@ -1,8 +1,8 @@
-import { hapticImpact } from '@core/mobile/haptics';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
+  type ComponentProps,
   createEffect,
   createMemo,
   createSignal,
@@ -11,14 +11,12 @@ import {
   on,
   onCleanup,
   Show,
+  splitProps,
 } from 'solid-js';
+import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
-import { MobileTouchMenu } from './MobileTouchMenu';
+import { MobileDrawer } from './MobileDrawer';
 import { computeVisiblePillValues } from './pillTabsLayout';
-import { pressPulse } from './pressPulse';
-
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
 
 const PILL_CLASS =
   'h-10 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium island';
@@ -33,8 +31,8 @@ const MENU_STRIP_CLASS =
 
 const SCROLL_STRIP_CLASS =
   // The scrollport clips at its box, so the vertical padding must cover the
-  // full light-mode island shadow bloom (4px offset + 8px spread + 20px blur
-  // = 32px); the matching negative margin cancels its layout impact. The
+  // island's glass shadow bloom (14px offset + 32px blur - 22px spread, well
+  // inside 32px); the matching negative margin cancels its layout impact. The
   // strip is tap-transparent so the enlarged halo never swallows touches
   // meant for content behind it — the content row re-enables pointer events
   // for the pills. A pointer-events:none scroller receives no native scroll
@@ -63,9 +61,9 @@ type PillTabsProps<T extends string> = {
   value: T | undefined;
   onChange: (value: T) => void;
   /**
-   * Overflow strategy: by default pills that do not fit collapse into an
-   * ellipsis menu; when set the strip scrolls horizontally instead and the
-   * active pill is kept scrolled into view.
+   * Overflow strategy: by default pills that do not fit move into a drawer
+   * opened by an ellipsis button. When set, the strip scrolls horizontally
+   * and the active pill is kept scrolled into view.
    */
   scrollable?: boolean;
   /** Extra classes on the scroll strip (the outer, clipping box). */
@@ -87,6 +85,8 @@ type PillTabsProps<T extends string> = {
    * logic accounts for a sticky leading element's width.
    */
   leading?: JSXElement;
+  /** Scrollable variant only: content after the built-in pills. */
+  trailing?: JSXElement;
 };
 
 /**
@@ -109,38 +109,31 @@ export function PillTabs<T extends string>(props: PillTabsProps<T>) {
   );
 }
 
-function PillButton<T extends string>(props: {
-  item: PillTabItem<T>;
-  active: boolean;
-  onSelect: () => void;
-}) {
+export function PillButton(
+  props: ComponentProps<'button'> & { active: boolean; iconOnly?: boolean }
+) {
+  const [local, rest] = splitProps(props, ['active', 'iconOnly', 'class']);
   return (
     <button
       type="button"
-      use:pressPulse
-      data-checked={props.active ? '' : undefined}
-      aria-pressed={props.active}
-      aria-label={props.item.ariaLabel}
+      data-checked={local.active ? '' : undefined}
+      aria-pressed={local.active}
       class={cn(
         PILL_CLASS,
-        props.item.iconOnly && ICON_PILL_CLASS,
-        props.active
-          ? 'bg-accent text-surface ring-accent'
-          : 'text-ink-extra-muted'
+        local.iconOnly && ICON_PILL_CLASS,
+        local.active
+          ? 'bg-accent text-surface'
+          : 'bg-chrome text-ink-extra-muted',
+        local.class
       )}
+      {...rest}
       onPointerDown={(e) => {
         e.preventDefault();
+        const handler = rest.onPointerDown;
+        if (typeof handler === 'function') handler(e);
+        else if (handler) handler[0](handler[1], e);
       }}
-      // Haptic on activation, not on touch-down: a pan that starts on a pill
-      // never activates it (the pan handler suppresses the click), so it must
-      // not buzz either.
-      onClick={() => {
-        hapticImpact('light');
-        props.onSelect();
-      }}
-    >
-      {props.item.label}
-    </button>
+    />
   );
 }
 
@@ -165,6 +158,7 @@ function snapInsets(content: HTMLElement) {
 function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
   const [stripRef, setStripRef] = createSignal<HTMLDivElement>();
   const [contentRef, setContentRef] = createSignal<HTMLDivElement>();
+  const stripSize = createElementSize(stripRef);
 
   // Horizontal panning, driven manually from the content row's pointer
   // events: the strip is pointer-events:none (so its shadow halo passes
@@ -295,10 +289,12 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
       () =>
         [
           props.value,
+          stripSize.width,
           props.items.map((item) => item.value).join('\u0000'),
         ] as const,
       () => {
-        queueMicrotask(() => {
+        if (!stripSize.width) return;
+        const frame = requestAnimationFrame(() => {
           const strip = stripRef();
           const active = strip?.querySelector<HTMLElement>('[data-checked]');
           if (!strip || !active) return;
@@ -313,14 +309,15 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
           const itemRight = itemLeft + itemRect.width;
           const viewRight = strip.scrollLeft + strip.clientWidth;
           if (itemLeft - minLeft < strip.scrollLeft) {
-            strip.scrollTo({ left: itemLeft - minLeft, behavior: 'smooth' });
+            strip.scrollTo({ left: itemLeft - minLeft, behavior: 'instant' });
           } else if (itemRight + padRight > viewRight) {
             strip.scrollTo({
               left: itemRight + padRight - strip.clientWidth,
-              behavior: 'smooth',
+              behavior: 'instant',
             });
           }
         });
+        onCleanup(() => cancelAnimationFrame(frame));
       }
     )
   );
@@ -341,18 +338,22 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
         <For each={props.items}>
           {(item) => (
             <PillButton
-              item={item}
               active={props.value === item.value}
-              onSelect={() => props.onChange(item.value)}
-            />
+              iconOnly={item.iconOnly}
+              aria-label={item.ariaLabel}
+              onClick={() => props.onChange(item.value)}
+            >
+              {item.label}
+            </PillButton>
           )}
         </For>
+        {props.trailing}
       </div>
     </div>
   );
 }
 
-/** Pills that do not fit move into an ellipsis overflow menu. */
+/** Pills that do not fit move into a drawer opened by the ellipsis button. */
 function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
   const [stripRef, setStripRef] = createSignal<HTMLDivElement>();
   const [measureRef, setMeasureRef] = createSignal<HTMLDivElement>();
@@ -451,32 +452,68 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
       <For each={visibleItems()}>
         {(item) => (
           <PillButton
-            item={item}
             active={props.value === item.value}
-            onSelect={() => props.onChange(item.value)}
-          />
+            iconOnly={item.iconOnly}
+            aria-label={item.ariaLabel}
+            onClick={() => props.onChange(item.value)}
+          >
+            {item.label}
+          </PillButton>
         )}
       </For>
       <Show when={overflowItems().length > 0}>
         <MobileDockIsland class="shrink-0">
-          <MobileTouchMenu>
-            <MobileTouchMenu.Trigger icon={DotsThreeIcon} />
-            <MobileTouchMenu.Content>
-              <For each={overflowItems()}>
-                {(item) => (
-                  <MobileTouchMenu.Item
-                    id={item.value}
-                    active={props.value === item.value}
-                    onSelect={() => props.onChange(item.value)}
-                  >
-                    {item.label}
-                  </MobileTouchMenu.Item>
-                )}
-              </For>
-              <MobileTouchMenu.Separator />
-              <MobileTouchMenu.Footer>Tabs</MobileTouchMenu.Footer>
-            </MobileTouchMenu.Content>
-          </MobileTouchMenu>
+          <MobileDrawer
+            side="bottom"
+            preventScroll={false}
+            preventScrollbarShift={false}
+            closeOnOutsidePointerStrategy="pointerdown"
+          >
+            <MobileDrawer.Trigger
+              as={MobileDockButton}
+              ariaLabel="More tabs"
+              icon={DotsThreeIcon}
+              class="size-10"
+              iconClass="size-6 [&_svg]:size-6"
+            />
+            <MobileDrawer.Portal>
+              <MobileDrawer.Overlay />
+              <MobileDrawer.Content aria-label="More tabs">
+                <MobileDrawer.Handle />
+                <MobileDrawer.ScrollBody>
+                  <div class="mx-3 flex flex-col gap-1 px-1">
+                    <For each={overflowItems()}>
+                      {(item) => (
+                        <MobileDrawer.Close
+                          as={MobileDrawer.Item}
+                          // Let text tabs name themselves instead of Close's default label.
+                          aria-label={item.ariaLabel ?? ''}
+                          aria-pressed={props.value === item.value}
+                          class={
+                            props.value === item.value
+                              ? 'text-accent'
+                              : undefined
+                          }
+                          onClick={() => {
+                            props.onChange(item.value);
+                          }}
+                        >
+                          {item.label}
+                        </MobileDrawer.Close>
+                      )}
+                    </For>
+                    <div class="-mx-1 h-px shrink-0 bg-edge" />
+                    <MobileDrawer.Close
+                      aria-label="Tabs"
+                      class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
+                    >
+                      Tabs
+                    </MobileDrawer.Close>
+                  </div>
+                </MobileDrawer.ScrollBody>
+              </MobileDrawer.Content>
+            </MobileDrawer.Portal>
+          </MobileDrawer>
         </MobileDockIsland>
       </Show>
       <div

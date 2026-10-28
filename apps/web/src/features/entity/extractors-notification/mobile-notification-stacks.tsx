@@ -41,6 +41,7 @@ export type EntityRowConfig = {
 function MobileStackRowLayout(props: {
   stack: NotificationStack;
   entity: WithNotification<EntityData>;
+  scheduleStatus?: JSX.Element;
   unread: boolean;
   onClick?: (e: MouseEvent) => void;
 }) {
@@ -53,7 +54,9 @@ function MobileStackRowLayout(props: {
       class="w-full text-sm grid"
       onClick={props.onClick}
       style={{
-        'grid-template-columns': 'auto 1fr 8ch',
+        'grid-template-columns': props.scheduleStatus
+          ? 'auto 1fr auto'
+          : 'auto 1fr 8ch',
         'grid-template-rows': 'auto auto auto',
         'grid-template-areas':
           '"icon title timestamp" "icon body body" "icon body body"',
@@ -92,8 +95,9 @@ function MobileStackRowLayout(props: {
 
       <Entity.Slot
         placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-light pt-3 pr-4 tabular-nums"
+        class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light pt-3 pr-4 tabular-nums"
       >
+        {props.scheduleStatus}
         <NotificationTimestamp stack={props.stack} />
       </Entity.Slot>
 
@@ -127,6 +131,7 @@ function MobileStackRowLayout(props: {
 function MobileStackRow(props: {
   stack: NotificationStack;
   entity: WithNotification<EntityData>;
+  scheduleStatus?: JSX.Element;
   entityRowConfig?: EntityRowConfig;
 }) {
   const ctx = useContext(SwipableRowContext);
@@ -166,6 +171,7 @@ function MobileStackRow(props: {
     return (
       <MobileStackRowLayout
         stack={props.stack}
+        scheduleStatus={props.scheduleStatus}
         entity={props.entity}
         unread={unread()}
         onClick={handleClick}
@@ -188,6 +194,7 @@ function MobileStackRow(props: {
     >
       <MobileStackRowLayout
         stack={props.stack}
+        scheduleStatus={props.scheduleStatus}
         entity={props.entity}
         unread={unread()}
         onClick={handleClick}
@@ -207,6 +214,7 @@ function keyStack(stack: NotificationStack): KeyedStack {
 interface MobileNotificationStackRowsProps {
   stacks: NotificationStack[];
   entity: WithNotification<EntityData>;
+  scheduleStatus?: JSX.Element;
   entityRowConfig?: EntityRowConfig;
   visibleCount?: number;
 }
@@ -240,6 +248,9 @@ export function MobileNotificationStackRows(
       {(stack) => (
         <MobileStackRow
           stack={stack}
+          scheduleStatus={
+            stack.id === stacks[0]?.id ? props.scheduleStatus : undefined
+          }
           entity={props.entity}
           entityRowConfig={props.entityRowConfig}
         />

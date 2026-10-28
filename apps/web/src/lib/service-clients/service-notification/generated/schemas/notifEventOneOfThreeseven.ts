@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubReviewRequested } from './githubReviewRequested';
+import type { ExternalChatMessageMetadata } from './externalChatMessageMetadata';
 import type { NotifEventOneOfThreesevenTag } from './notifEventOneOfThreesevenTag';
 
 /**
- * The user's review was requested on a GitHub pull request.
+ * A live message in a shared external chat.
  */
 export type NotifEventOneOfThreeseven = {
-  /** The user's review was requested on a GitHub pull request. */
-  content: GithubReviewRequested;
+  /** A live message in a shared external chat. */
+  content: ExternalChatMessageMetadata;
   tag: NotifEventOneOfThreesevenTag;
 };

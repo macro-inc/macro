@@ -1,6 +1,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import type {
+  OpenSplitResult,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -59,27 +60,34 @@ export async function navigateToChannelMessage(
   options?: {
     splitManager?: SplitManager;
     preferNewSplit?: boolean;
-    /**
-     * The split this navigation originates from. When it is an engaged
-     * preview controller, the open is redirected into its viewer split and
-     * never steals the keyboard from the controller.
-     */
+    /** The split this navigation originates from. */
     sourceHandle?: SplitHandle;
+    /** Runs once the destination has actually been applied or reused. */
+    onApplied?: VoidFunction;
   }
 ) {
   const splitManager = options?.splitManager ?? globalSplitManager();
   if (!splitManager) return;
 
+  let onApplied = options?.onApplied;
+  const reportApplied = () => {
+    const callback = onApplied;
+    onApplied = undefined;
+    callback?.();
+  };
+  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
+    if (!result) return;
+    if (result.status === 'opened' || result.status === 'reused') {
+      reportApplied();
+    }
+  };
+
   const existing = splitManager.getSplitByContent('channel', channelId);
   if (existing) {
-    // The channel already showing in the source's own viewer is a plain
-    // retarget; activating it would pull focus out of the controller.
-    const isSourcesViewer =
-      options?.sourceHandle?.isControllerSplit() &&
-      options.sourceHandle.viewerId() === existing.id;
-    if (!isSourcesViewer) existing.activate();
+    existing.activate();
+    reportApplied();
   } else {
-    splitManager.openWithSplit(
+    const result = splitManager.openWithSplit(
       {
         type: 'channel',
         id: channelId,
@@ -90,8 +98,10 @@ export async function navigateToChannelMessage(
         referredFrom: null,
         preferNewSplit: options?.preferNewSplit,
         handle: options?.sourceHandle,
+        ...(options?.onApplied ? { onApplied: reportApplied } : {}),
       }
     );
+    reportImmediateResult(result);
   }
 
   await goToChannelMessage(orchestrator, channelId, messageId, threadId);

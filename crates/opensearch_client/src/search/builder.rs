@@ -98,6 +98,8 @@ pub trait SearchQueryConfig {
     const TITLE_KEY: &'static str;
     /// Content field
     const CONTENT_KEY: &'static str = "content";
+    /// Fields searched for each content term; highlights still use `CONTENT_KEY`.
+    const CONTENT_FIELDS: &'static [&'static str] = &[Self::CONTENT_KEY];
     /// The entity index for the search query
     const ENTITY_INDEX: OpenSearchEntityType;
 }
@@ -282,9 +284,9 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let terms: Cow<'_, [&str]> =
             Cow::Owned(self.terms.iter().map(|t| t.as_str()).collect::<Vec<&str>>());
 
-        let must_array = vec![generate_terms_must_query(
+        let must_array = vec![super::query::generate_terms_must_query_for_fields(
             query_key,
-            T::CONTENT_KEY,
+            T::CONTENT_FIELDS,
             terms,
             self.term_combine,
         )];
@@ -294,6 +296,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     /// Builds a query targeting the title field (TITLE_KEY)
     pub fn build_title_term_query<'a>(&'a self) -> Result<QueryType<'a>> {
+        self.build_field_term_query(T::TITLE_KEY)
+    }
+
+    /// Builds a query matching every term against one text field.
+    pub fn build_field_term_query<'a>(&'a self, field: &'a str) -> Result<QueryType<'a>> {
         if self.terms.is_empty() {
             return Err(OpensearchClientError::NoTermsProvided);
         }
@@ -304,7 +311,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         Ok(generate_terms_must_query(
             query_key,
-            T::TITLE_KEY,
+            field,
             terms,
             self.term_combine,
         ))

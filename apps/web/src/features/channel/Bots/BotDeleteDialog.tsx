@@ -1,4 +1,4 @@
-import TrashIcon from '@phosphor/trash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Button, Dialog, Surface } from '@ui';
 
 export function BotDeleteDialog(props: {
@@ -38,12 +38,12 @@ export function BotDeleteDialog(props: {
             </Button>
             <Button
               type="button"
-              variant="danger"
+              variant="secondary"
               size="sm"
               disabled={props.pending}
               onClick={props.onConfirm}
             >
-              <TrashIcon />
+              <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               {props.pending ? 'Deleting…' : 'Delete bot'}
             </Button>
           </div>

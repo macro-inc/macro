@@ -268,6 +268,34 @@ fn entity_ref_parsing() {
 }
 
 #[test]
+fn email_thread_keeps_supplied_html() {
+    let spec = minimal(serde_json::json!({
+        "scenario": "html-mail",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "emails": {
+            "alice-inbox": {
+                "owner": "alice",
+                "threads": {
+                    "wide": {
+                        "subject": "Wide HTML",
+                        "from": "notifications@github.com",
+                        "body": "plain",
+                        "body_html": "<pre style='color:#555'>diff</pre>"
+                    }
+                }
+            }
+        }
+    }))
+    .unwrap();
+    let thread = &spec.emails["alice-inbox"].threads["wide"];
+    assert_eq!(
+        thread.body_html.as_deref(),
+        Some("<pre style='color:#555'>diff</pre>")
+    );
+    assert_eq!(thread.body.as_deref(), Some("plain"));
+}
+
+#[test]
 fn project_chain_walks_parents() {
     let spec = minimal(serde_json::json!({
         "scenario": "chain",

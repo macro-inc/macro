@@ -13,7 +13,7 @@ use crate::domain::{
         GithubAppInstallationSource, GithubKey, MacroTaskId, ResolvedTeamTaskReference,
         TeamTaskReference,
     },
-    ports::GithubSyncRepo,
+    ports::{GithubInstallationLister, GithubSyncRepo},
 };
 
 /// PostgreSQL-backed github repository.
@@ -26,6 +26,31 @@ impl PgGithubSyncRepo {
     /// Create a new repository backed by the given connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+impl GithubInstallationLister for PgGithubSyncRepo {
+    type Err = sqlx::Error;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_installation_ids(
+        &self,
+        after: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<String>, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT id AS "id!"
+            FROM github_app_installation
+            WHERE $1::text IS NULL OR id > $1
+            ORDER BY id
+            LIMIT $2
+            "#,
+            after,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 }
 
@@ -338,6 +363,34 @@ impl GithubSyncRepo for PgGithubSyncRepo {
         }
 
         Ok(sources)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> Result<Vec<String>, Self::Err> {
+        // `source_id` is text for both source types, so team ids are compared
+        // in their canonical string form rather than cast row by row.
+        let team_source_ids: Vec<String> = team_ids.iter().map(uuid::Uuid::to_string).collect();
+
+        let installation_ids: Vec<String> = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT id AS "id!"
+            FROM github_app_installation
+            WHERE (source_type = 'user'::github_app_installation_source_type AND source_id = $1)
+               OR (source_type = 'team'::github_app_installation_source_type
+                   AND source_id = ANY($2::text[]))
+            ORDER BY id
+            "#,
+            macro_id,
+            &team_source_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(installation_ids)
     }
 
     #[tracing::instrument(skip(self), err)]

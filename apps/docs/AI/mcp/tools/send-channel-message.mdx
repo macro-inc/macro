@@ -1,16 +1,18 @@
 ---
 title: SendChannelMessage
-description: "Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message"
+description: >-
+  Send or reply to a channel on behalf of the user.
 ---
 
 # SendChannelMessage
 
-Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message
+Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message. To send an image or video, first upload it with CreateChannelMediaUpload (where available) and pass the returned attachment here; to attach a Macro document, pass its document ID.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `content` | string | Yes | Message content in macro markdown format. This uses the same syntax as markdown documents |
+| `content` | string | Yes | Message content in macro markdown format. This uses the same syntax as markdown documents. May be empty when attachments are sent. |
 | `channel_id` | string | Yes | The channel id to send the message to |
 | `thread_id` | string | No | An optional thread id to reply too |
+| `attachments` | ChannelMessageAttachmentInput[] | No | Optional images, videos, or documents to attach, at most 10. Upload media before sending; a media attachment whose upload has not finished shows as broken. |

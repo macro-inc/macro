@@ -15,6 +15,7 @@ use macro_authorization::{
     AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
     OptionalMacroAuthorizationExtractor,
 };
+use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -63,7 +64,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(req, state))]
+    #[tracing::instrument(err(level = Level::INFO), skip(req, state))]
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
@@ -80,7 +81,9 @@ where
                 Some(user.macro_user_id.clone())
             }
             MacroAuthorization::Bot(_) => None,
-            MacroAuthorization::Internal(None) => return Err(ExtractorError::Unauthorized),
+            MacroAuthorization::Harness(_) | MacroAuthorization::Internal(None) => {
+                return Err(ExtractorError::Unauthorized);
+            }
         };
 
         let Path(PinParams { pinned_item_id }) = req
@@ -135,7 +138,9 @@ where
                     _marker: PhantomData,
                 }
             }
-            MacroAuthorization::Internal(None) => return Err(ExtractorError::Unauthorized),
+            MacroAuthorization::Harness(_) | MacroAuthorization::Internal(None) => {
+                return Err(ExtractorError::Unauthorized);
+            }
         };
 
         Ok(Self {

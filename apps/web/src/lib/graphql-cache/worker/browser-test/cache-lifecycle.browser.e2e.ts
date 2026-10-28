@@ -36,6 +36,163 @@ const cacheResources = (urls: string[]) => ({
   ],
 });
 
+test('Cache reconnects in place across persisted page lifecycle events', async ({
+  page,
+}, testInfo) => {
+  const scope = `cache-restore-${crypto.randomUUID()}`;
+  await page.goto(
+    `${harnessPath(testInfo.project.name)}?treatment=true&scope=${scope}`
+  );
+  await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
+  await page.evaluate(async () => {
+    await window.cacheLifecycleHarness.startSingle();
+    await window.cacheLifecycleHarness.write('before-navigation');
+    await window.cacheLifecycleHarness.watchNavigation();
+    const editor = document.createElement('textarea');
+    editor.id = 'unsaved-editor';
+    editor.value = 'unsaved local text';
+    document.body.append(editor);
+  });
+  const original = await page.evaluate(() =>
+    window.cacheLifecycleHarness.navigationState()
+  );
+  for (let cycle = 0; cycle < 2; cycle += 1) {
+    const transactionId = await page.evaluate(() =>
+      window.cacheLifecycleHarness.queueMutationForRestore()
+    );
+    const result = await page.evaluate(async () => {
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      let cancellation: string | undefined;
+      try {
+        await window.cacheLifecycleHarness.write('must-not-write');
+      } catch (error) {
+        cancellation = (error as Error).name;
+      }
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      return { cancellation, read: await window.cacheLifecycleHarness.read() };
+    });
+    expect(result.cancellation).toBe('CacheNavigationError');
+    expect(isHit(result.read)).toBe(true);
+    expect(JSON.stringify(result.read)).not.toContain('must-not-write');
+    await page.evaluate(
+      (cycle) => window.cacheLifecycleHarness.write(`after-restore-${cycle}`),
+      cycle
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.cacheLifecycleHarness.navigationState().cacheChanges
+        )
+      )
+      .toBeGreaterThan(original.cacheChanges + cycle);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.cacheLifecycleHarness.navigationState().settledMutations
+        )
+      )
+      .toContain(transactionId);
+    const restored = await page.evaluate(() =>
+      window.cacheLifecycleHarness.navigationState()
+    );
+    expect(restored.mutationReplays).toBe(cycle + 1);
+    expect(restored.clientId).toBe(original.clientId);
+    expect(restored.affectedOperations).toContainEqual([4242]);
+    expect(restored.restoredGenerations).toContain('reset');
+    expect(await page.locator('#unsaved-editor').inputValue()).toBe(
+      'unsaved local text'
+    );
+    // Re-register like the urql affected-query handler before the next cycle.
+    await page.evaluate(() => window.cacheLifecycleHarness.watchNavigation());
+  }
+  expect(
+    await page.evaluate(() =>
+      window.cacheLifecycleHarness.hostConstructionCount()
+    )
+  ).toBe(1);
+  await page.evaluate(() => window.cacheLifecycleHarness.dispose());
+});
+
+test('Cache preserves editor state and reconnects after a real back-forward-cache restore', async ({
+  browser,
+  baseURL,
+}, testInfo) => {
+  test.skip(
+    browser.browserType().name() !== 'chromium',
+    'Chromium-specific BFCache launch configuration'
+  );
+  // Playwright disables BFCache by default. A separate browser enables an
+  // actual restore without changing assumptions of the other lifecycle tests.
+  const restoringBrowser = await browser.browserType().launch({
+    ...testInfo.project.use.launchOptions,
+    ignoreDefaultArgs: ['--disable-back-forward-cache'],
+  });
+  try {
+    const page = await restoringBrowser.newPage();
+    const path = new URL(harnessPath(testInfo.project.name), baseURL).href;
+    const scope = `cache-real-restore-${crypto.randomUUID()}`;
+    await page.goto(`${path}?treatment=true&scope=${scope}`);
+    await page.evaluate(async () => {
+      await window.cacheLifecycleHarness.startSingle();
+      await window.cacheLifecycleHarness.write('before-real-navigation');
+      await window.cacheLifecycleHarness.watchNavigation();
+      const editor = document.createElement('textarea');
+      editor.id = 'unsaved-editor';
+      editor.value = 'unsaved text across Back';
+      document.body.append(editor);
+    });
+    const before = await page.evaluate(() =>
+      window.cacheLifecycleHarness.navigationState()
+    );
+    const transactionId = await page.evaluate(() =>
+      window.cacheLifecycleHarness.queueMutationForRestore()
+    );
+    await page.goto(`${path}?treatment=false`);
+    await page.goBack({ waitUntil: 'commit' });
+    expect(await page.locator('#unsaved-editor').inputValue()).toBe(
+      'unsaved text across Back'
+    );
+    const read = await page.evaluate(() => window.cacheLifecycleHarness.read());
+    expect(isHit(read)).toBe(true);
+    expect(JSON.stringify(read)).toContain('before-real-navigation');
+    const restored = await page.evaluate(() =>
+      window.cacheLifecycleHarness.navigationState()
+    );
+    expect(restored.pageRestores).toBe(1);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.cacheLifecycleHarness.navigationState().settledMutations
+        )
+      )
+      .toContain(transactionId);
+    expect(
+      await page.evaluate(
+        () => window.cacheLifecycleHarness.navigationState().mutationReplays
+      )
+    ).toBe(1);
+    expect(restored.clientId).toBe(before.clientId);
+    expect(restored.affectedOperations).toContainEqual([4242]);
+    await page.evaluate(() =>
+      window.cacheLifecycleHarness.write('after-real-restore')
+    );
+    expect(
+      JSON.stringify(
+        await page.evaluate(() => window.cacheLifecycleHarness.read())
+      )
+    ).toContain('after-real-restore');
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.cacheLifecycleHarness.navigationState().cacheChanges
+        )
+      )
+      .toBeGreaterThan(before.cacheChanges);
+  } finally {
+    await restoringBrowser.close();
+  }
+});
+
 test('Cache exact host stays navigation-lazy, preserves offline handoff, resets identity, and wipes abrupt loss', async ({
   context,
   page,

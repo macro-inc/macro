@@ -1,4 +1,4 @@
-import UploadIcon from '@phosphor/upload-simple.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { BotAvatar } from './BotAvatar';
@@ -40,12 +40,12 @@ export function BotProfileFields(props: {
         </div>
         <Button
           type="button"
-          variant="base"
+          variant="secondary"
           size="sm"
           disabled={props.uploadingAvatar}
           onClick={props.onUploadAvatar}
         >
-          <UploadIcon />
+          <UploadIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           {props.uploadingAvatar ? 'Uploading…' : 'Upload'}
         </Button>
       </div>

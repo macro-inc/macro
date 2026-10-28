@@ -1,9 +1,6 @@
 import { filterSoupItemByRequestBody } from '@app/features/next-soup/filters/query-filters';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import {
@@ -16,11 +13,9 @@ import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
 import {
   isDisplayableSoupItem,
-  isInstructionsMdDoc,
   mapApiSoupItemToEntity,
   mapSoupPageToEntityList,
 } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { ApiEntityFilterAst } from '@service-storage/generated/schemas/apiEntityFilterAst';
@@ -30,13 +25,21 @@ import type { PostSoupAstRequestAllOf } from '@service-storage/generated/schemas
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
 import {
   type InfiniteData,
+  infiniteQueryOptions,
+  keepPreviousData,
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import { queryClient } from '../client';
+import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
+import { soupPageTimestamp } from './page-timestamp';
+import {
+  createSoupRequestSignal,
+  SOUP_NETWORK_QUERY_OPTIONS,
+} from './request-timeout';
 
 export type SoupParams = Params;
 
@@ -63,14 +66,24 @@ export type SoupAstItemsQueryArgs = {
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 
 interface SoupItemsQueryOptions {
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   enabled?: boolean;
   staleTime?: StaleTime;
+  /** Channel navigation reads bounded unread evidence, not notification history. */
+  graphqlProjection?: 'channel-list';
+  /** Seed mixed lists from indexed non-email members; keep the full server query. */
+  graphqlLocalReconciliation?: 'without-email';
   meta?: {
     groupBy?: GroupByField;
     groupKey?: string;
     itemFilter?: (item: SoupApiItem) => boolean;
+    /** Gates optimistic cache inserts only — fetched rows never run through it. */
+    insertFilter?: (item: SoupApiItem) => boolean;
   };
   showSupportedForeignEntities?: boolean;
+  /** Resets view-owned GraphQL state before a mutation-driven network refresh. */
+  onBeforeGraphqlRefresh?: () => void;
 }
 
 /**
@@ -92,209 +105,242 @@ export type SoupAstItemsFlatPage = {
   kind: 'flat';
   items: SoupApiItem[];
   nextCursor: string | null;
+  oldestFetchedTimestamp?: number;
 };
 
 export type SoupAstItemsData = {
+  /** Local Mail results cover synchronized metadata, not the entire mailbox. */
+  cachedMail?: boolean;
   entities: EntityData[];
+  /** Descending page coverage, independent of optimistic/local row membership. */
+  oldestFetchedTimestamp?: number;
   groups: GroupMeta[] | undefined;
   /** Raw API item pool. Only present when query is grouped. */
   itemsById?: SoupAstItemsGroupedPage['items'];
 };
 
+// Cached options outlive the view. Keep its accessors and query proxies out.
+function soupItemsQueryOptions(
+  args: SoupItemsQueryArgs,
+  enabled: boolean | undefined,
+  staleTime: StaleTime | undefined,
+  showSupportedForeignEntities: boolean | undefined
+) {
+  const { params, body } = args;
+  return infiniteQueryOptions({
+    queryKey: soupKeys.items(args).queryKey,
+    queryFn: (ctx) =>
+      throwOnErr(() =>
+        storageServiceClient.getSoupItems({
+          params: { cursor: ctx.pageParam },
+          body: { ...body, ...params },
+        })
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.next_cursor,
+    select: (data) =>
+      data.pages.flatMap((page) =>
+        mapSoupPageToEntityList(page, { showSupportedForeignEntities })
+      ),
+    enabled,
+    staleTime,
+    placeholderData: keepPreviousData,
+    meta: {
+      itemFilter: (item: SoupApiItem) =>
+        !body || filterSoupItemByRequestBody(item, body),
+      normalize: true,
+    },
+  });
+}
+
 export const useSoupItemsQuery = (
   args: Accessor<SoupItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  const itemFilter: SoupApiItemFilter = (item: SoupApiItem) => {
-    const body = args().body;
-    if (!body) return true;
-    return filterSoupItemByRequestBody(item, body);
-  };
-
-  return useInfiniteQuery(() => ({
-    queryKey: soupKeys.items(args()).queryKey,
-    queryFn: async (ctx) => {
-      const { params, body } = args();
-
-      return throwOnErr(
-        async () =>
-          await storageServiceClient.getSoupItems({
-            params: { cursor: ctx.pageParam },
-            body: {
-              ...body,
-              ...params,
-            },
-          })
-      );
-    },
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => {
-      return lastPage.next_cursor;
-    },
-    select: (data) => {
-      return data.pages.flatMap((page) => {
-        return mapSoupPageToEntityList(page, {
-          instructionsIdQuery,
-          showSupportedForeignEntities:
-            options?.().showSupportedForeignEntities,
-        });
-      });
-    },
-    enabled: options?.().enabled,
-    staleTime: options?.().staleTime,
-    placeholderData: (p) => p,
-    meta: { itemFilter, normalize: true },
-  }));
+  return useInfiniteQuery(() =>
+    soupItemsQueryOptions(
+      args(),
+      options?.().enabled,
+      options?.().staleTime,
+      options?.().showSupportedForeignEntities
+    )
+  );
 };
+
+type RestSoupAstItemsMeta = SoupItemsQueryOptions['meta'];
+
+async function fetchRestSoupAstItemsPage(
+  { params, body, groupBy }: SoupAstItemsQueryArgs,
+  cursor: string | null,
+  requestSignal: AbortSignal
+): Promise<SoupAstItemsPage> {
+  const signal = createSoupRequestSignal(requestSignal);
+
+  if (groupBy) {
+    const sort_method = groupedSortMethod(params.sort_method);
+
+    const response = await throwOnErr(
+      async () =>
+        await storageServiceClient.getGroupedSoupAstItems({
+          params: {
+            group_by: serializeGroupByField(groupBy),
+            per_group_limit: params.limit,
+            sort_method,
+          },
+          body,
+          signal,
+        })
+    );
+
+    return {
+      kind: 'grouped',
+      items: response.items,
+      groups: response.groups.map(parseGroupMeta),
+      nextCursor: null,
+    };
+  }
+
+  const response = await throwOnErr(
+    async () =>
+      await storageServiceClient.getSoupAstItems({
+        params: { cursor },
+        body: {
+          ...body,
+          ...params,
+        },
+        signal,
+      })
+  );
+
+  return {
+    kind: 'flat',
+    items: response.items,
+    nextCursor: response.next_cursor ?? null,
+    oldestFetchedTimestamp: soupPageTimestamp(
+      response.items.map(mapApiSoupItemToEntity),
+      params.sort_method
+    ),
+  };
+}
+
+function getNextRestSoupAstPageParam(
+  lastPage: SoupAstItemsPage
+): string | null {
+  if (lastPage.kind === 'grouped') return null;
+  return lastPage.nextCursor;
+}
+
+// Cached options outlive the view. Only plain snapshots enter here: no view
+// accessors, option accessors, or query proxies.
+function restSoupAstItemsQueryOptions(
+  args: SoupAstItemsQueryArgs,
+  enabled: boolean | undefined,
+  staleTime: StaleTime | undefined,
+  meta: RestSoupAstItemsMeta,
+  showSupportedForeignEntities: boolean | undefined
+) {
+  const { params, body, groupBy, transport } = args;
+
+  return infiniteQueryOptions({
+    queryKey: soupKeys.astItems({ params, body, groupBy, transport }).queryKey,
+    queryFn: (ctx) =>
+      fetchRestSoupAstItemsPage(args, ctx.pageParam, ctx.signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: getNextRestSoupAstPageParam,
+    select: (data): SoupAstItemsData => {
+      const firstPage = data.pages[0];
+
+      if (firstPage?.kind === 'grouped') {
+        const groups = firstPage.groups
+          .slice()
+          .sort(makeGroupComparator(groupBy));
+
+        const itemsById = firstPage.items;
+        const entities: EntityData[] = [];
+
+        for (const g of groups) {
+          for (const id of g.itemIds) {
+            const item = itemsById[id];
+
+            const displayable =
+              item.tag !== 'foreignEntity' ||
+              (showSupportedForeignEntities === true &&
+                item.data.foreignEntitySource === 'github_pull_request');
+            if (displayable && isDisplayableSoupItem(item)) {
+              const mapped = mapApiSoupItemToEntity(item);
+              entities.push(mapped);
+            }
+          }
+        }
+
+        return { entities, groups, itemsById };
+      }
+
+      const entities = data.pages.flatMap((page) => {
+        if (page.kind !== 'flat') return [];
+
+        return mapSoupPageToEntityList(
+          { items: page.items, next_cursor: null },
+          { showSupportedForeignEntities }
+        );
+      });
+
+      const pageTimestamps = data.pages.flatMap((page) =>
+        page.kind === 'flat' && page.oldestFetchedTimestamp !== undefined
+          ? [page.oldestFetchedTimestamp]
+          : []
+      );
+      return {
+        entities,
+        groups: undefined,
+        oldestFetchedTimestamp:
+          pageTimestamps.length > 0 ? Math.min(...pageTimestamps) : undefined,
+      };
+    },
+    enabled,
+    // Do not spin through background retries while the explicit load-error
+    // state is visible. NWPathMonitor lets TanStack pause an offline query
+    // and resume it automatically when the path becomes available again.
+    ...SOUP_NETWORK_QUERY_OPTIONS,
+    // A timed-out native request should reach the view's load-error state.
+    // Retry remains available explicitly from that state.
+    staleTime,
+    placeholderData: (prev, prevQuery) => {
+      // Keep the previous rows on screen while params/filters change, but
+      // not across a grouping switch — the old groups would render under
+      // the new grouping (e.g. status groups while assignee groups load).
+      const prevGroupBy = (
+        prevQuery?.meta as SoupItemsQueryOptions['meta'] | undefined
+      )?.groupBy;
+
+      if (JSON.stringify(prevGroupBy) !== JSON.stringify(groupBy)) {
+        return undefined;
+      }
+
+      return prev;
+    },
+    meta: {
+      ...meta,
+      groupBy,
+      normalize: true,
+    },
+  });
+}
 
 /** REST implementation kept private behind {@link useSoupAstItemsQuery}. */
 const useRestSoupAstItemsQuery = (
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  return useInfiniteQuery(() => {
-    const { params, body, groupBy, transport } = args();
-
-    return {
-      queryKey: soupKeys.astItems({ params, body, groupBy, transport })
-        .queryKey,
-      queryFn: async (ctx): Promise<SoupAstItemsPage> => {
-        if (groupBy) {
-          const sort_method = groupedSortMethod(params.sort_method);
-
-          const fetchRest = async () => {
-            const response = await throwOnErr(
-              async () =>
-                await storageServiceClient.getGroupedSoupAstItems({
-                  params: {
-                    group_by: serializeGroupByField(groupBy),
-                    per_group_limit: params.limit,
-                    sort_method,
-                  },
-                  body,
-                })
-            );
-
-            return {
-              items: response.items,
-              groups: response.groups.map(parseGroupMeta),
-            };
-          };
-
-          const response = await fetchRest();
-
-          return {
-            kind: 'grouped',
-            items: response.items,
-            groups: response.groups,
-            nextCursor: null,
-          };
-        }
-
-        const fetchRest = () =>
-          throwOnErr(
-            async () =>
-              await storageServiceClient.getSoupAstItems({
-                params: {
-                  cursor: ctx.pageParam,
-                },
-                body: {
-                  ...body,
-                  ...params,
-                },
-              })
-          );
-
-        const response = await fetchRest();
-
-        return {
-          kind: 'flat',
-          items: response.items,
-          nextCursor: response.next_cursor ?? null,
-        };
-      },
-      initialPageParam: null as string | null,
-      getNextPageParam: (lastPage): string | null => {
-        if (lastPage.kind === 'grouped') return null;
-        return lastPage.nextCursor;
-      },
-      select: (data): SoupAstItemsData => {
-        const firstPage = data.pages[0];
-
-        if (firstPage?.kind === 'grouped') {
-          const groups = firstPage.groups
-            .slice()
-            .sort(makeGroupComparator(groupBy));
-
-          const itemsById = firstPage.items;
-          const entities: EntityData[] = [];
-
-          for (const g of groups) {
-            for (const id of g.itemIds) {
-              const item = itemsById[id];
-
-              let displayable = false;
-
-              if (item.tag === 'foreignEntity') {
-                displayable =
-                  options?.().showSupportedForeignEntities === true &&
-                  item.data.foreignEntitySource === 'github_pull_request';
-              } else {
-                displayable =
-                  item && !isInstructionsMdDoc(item, instructionsIdQuery);
-              }
-              if (displayable && isDisplayableSoupItem(item)) {
-                const mapped = mapApiSoupItemToEntity(item);
-                entities.push(mapped);
-              }
-            }
-          }
-
-          return { entities, groups, itemsById };
-        }
-
-        const entities = data.pages.flatMap((page) => {
-          if (page.kind !== 'flat') return [];
-
-          return mapSoupPageToEntityList(
-            { items: page.items, next_cursor: null },
-            {
-              instructionsIdQuery,
-              showSupportedForeignEntities:
-                options?.().showSupportedForeignEntities,
-            }
-          );
-        });
-
-        return { entities, groups: undefined };
-      },
-      enabled: options?.().enabled,
-      staleTime: options?.().staleTime,
-      placeholderData: (prev, prevQuery) => {
-        // Keep the previous rows on screen while params/filters change, but
-        // not across a grouping switch — the old groups would render under
-        // the new grouping (e.g. status groups while assignee groups load).
-        const prevGroupBy = (
-          prevQuery?.meta as SoupItemsQueryOptions['meta'] | undefined
-        )?.groupBy;
-
-        if (JSON.stringify(prevGroupBy) !== JSON.stringify(groupBy)) {
-          return undefined;
-        }
-
-        return prev;
-      },
-      meta: {
-        ...options?.().meta,
-        groupBy,
-        normalize: true,
-      },
-    };
-  });
+  return useInfiniteQuery(() =>
+    restSoupAstItemsQueryOptions(
+      args(),
+      options?.().enabled !== false && !options?.().networkPaused,
+      options?.().staleTime,
+      options?.().meta,
+      options?.().showSupportedForeignEntities
+    )
+  );
 };
 
 /** Transport selected by the Soup AST query facade. */
@@ -302,12 +348,20 @@ export type SoupAstItemsQueryTransport = 'rest' | 'graphql';
 
 /** Stable query surface shared by the REST and urql-solid implementations. */
 export type SoupAstItemsQuery = {
+  readonly groupedPaging?: import('./graphql/create-grouped-soup-live-query').GroupedSoupPaging;
   readonly data: SoupAstItemsData | undefined;
   readonly error: Error | null;
+  /** Includes paused initial requests, whose data resource is not readable yet. */
+  readonly isPending: boolean;
   readonly isLoading: boolean;
   readonly isFetching: boolean;
   readonly isPlaceholderData: boolean;
   readonly isFetchingNextPage: boolean;
+  /**
+   * The current error came from loading a continuation page; the loaded pages
+   * are still current. Any other error means the query itself failed.
+   */
+  readonly isFetchNextPageError: boolean;
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
   readonly transport: SoupAstItemsQueryTransport;
@@ -329,9 +383,7 @@ export function useSoupAstItemsQuery(
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ): SoupAstItemsQuery {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
 
   const queryEnabled = () => options?.().enabled !== false;
   const graphqlRequested = () => {
@@ -346,6 +398,10 @@ export function useSoupAstItemsQuery(
     () => ({
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy === undefined,
+      networkPaused: options?.().networkPaused,
+      keepPreviousData: options?.().keepPreviousData,
+      projection: options?.().graphqlProjection,
+      localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
   );
@@ -358,6 +414,8 @@ export function useSoupAstItemsQuery(
     () => ({
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy !== undefined,
+      networkPaused: options?.().networkPaused,
+      keepPreviousData: options?.().keepPreviousData,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
   );
@@ -375,6 +433,26 @@ export function useSoupAstItemsQuery(
     };
   });
 
+  onCleanup(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () =>
+        usesGraphql() &&
+        activeGraphqlQuery().isEnabled() &&
+        !options?.().networkPaused,
+      // The refresh refetches every loaded page in cursor order and keeps the
+      // old pages on screen until their replacements arrive, so a mutation
+      // never collapses a scrolled list to its first page.
+      refresh: async () => {
+        if (args().groupBy === undefined)
+          options?.().onBeforeGraphqlRefresh?.();
+        await activeGraphqlQuery().refresh();
+      },
+      body: () => args().body,
+      // Grouped lists don't report it yet, so writes still read them again.
+      cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
+    })
+  );
+
   const resetRestToInitialPage = () => {
     const { params, body, groupBy, transport } = args();
     queryClient.setQueryData<InfiniteData<SoupAstItemsPage, string | null>>(
@@ -391,6 +469,9 @@ export function useSoupAstItemsQuery(
   };
 
   return {
+    get groupedPaging() {
+      return usesGraphql() ? activeGraphqlQuery().groupedPaging : undefined;
+    },
     get data() {
       return usesGraphql() ? activeGraphqlQuery().data() : restQuery.data;
     },
@@ -398,6 +479,14 @@ export function useSoupAstItemsQuery(
       return usesGraphql()
         ? (activeGraphqlQuery().error() ?? null)
         : (restQuery.error ?? null);
+    },
+    get isPending() {
+      if (!usesGraphql()) return restQuery.isPending;
+      const query = activeGraphqlQuery();
+      return (
+        query.isLoading() ||
+        (query.isEnabled() && query.data() === undefined && !query.error())
+      );
     },
     get isLoading() {
       return usesGraphql()
@@ -418,6 +507,11 @@ export function useSoupAstItemsQuery(
       return usesGraphql()
         ? activeGraphqlQuery().isFetchingNextPage()
         : restQuery.isFetchingNextPage;
+    },
+    get isFetchNextPageError() {
+      return usesGraphql()
+        ? activeGraphqlQuery().isFetchNextPageError()
+        : restQuery.isFetchNextPageError;
     },
     get isEnabled() {
       return usesGraphql()

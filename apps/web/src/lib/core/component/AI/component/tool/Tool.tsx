@@ -1,10 +1,13 @@
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
+import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import { Button, Layer } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 
 type ToolRowProps = {
+  /** The call is still running: its text shimmers, as an active agent row does. */
+  active?: boolean;
   align?: 'center' | 'start';
+  grouped?: boolean;
   children: JSX.Element;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   trailing?: JSX.Element;
@@ -65,8 +68,10 @@ function Row(props: ToolRowProps) {
 
   return (
     <div
-      class="flex min-h-9 w-full gap-2 px-3 py-2"
+      class="flex w-full gap-2"
       classList={{
+        'min-h-8 py-1 text-sm leading-6': props.grouped,
+        'min-h-9 px-3 py-2': !props.grouped,
         'items-center': !alignStart(),
         'items-start': alignStart(),
       }}
@@ -75,7 +80,12 @@ function Row(props: ToolRowProps) {
         class="size-4 shrink-0 text-ink-extra-muted"
         classList={{ 'mt-0.5': alignStart() }}
       />
-      <div class="min-w-0 flex-1 overflow-hidden">{props.children}</div>
+      <div
+        class="min-w-0 flex-1 overflow-hidden"
+        classList={{ 'magic-chip-shimmer': props.active }}
+      >
+        {props.children}
+      </div>
       <Show when={props.trailing}>
         <div class="shrink-0 whitespace-nowrap">{props.trailing}</div>
       </Show>
@@ -105,7 +115,6 @@ function ResultToggle(props: ToolResultToggleProps) {
         type="button"
         variant="ghost"
         size="sm"
-        noTouchResize
         aria-expanded={props.expanded}
         class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
         onClick={(event) => {
@@ -118,7 +127,8 @@ function ResultToggle(props: ToolResultToggleProps) {
           <span>{props.status}</span>
         </Show>
         <CaretRight
-          class="transition-transform"
+          class="size-3 touch:size-6 shrink-0 pointer-events-none"
+          aria-hidden="true"
           classList={{
             'rotate-90': props.expanded,
           }}

@@ -19,13 +19,17 @@ const macro = bot.requestedAs(bot.users.byId(actAs));
 // `as const` keeps the literal types so `.on()` infers each event's payload;
 // `satisfies` makes a typo in this list a compile error.
 const ALL_EVENTS = [
+  'agent_session.deleted',
+  'agent_session.input_received',
+  'agent_session.opened',
+  'agent_session.renamed',
+  'agent_session.settled',
+  'agent_session.stopped',
+  'agent_session.turn_ended',
+  'agent_session.turn_started',
+  'agent_session.waiting_for_input',
   'channel.created',
   'channel.deleted',
-  'channel.message_attachment_created',
-  'channel.message_attachment_removed',
-  'channel.message_deleted',
-  'channel.message_patched',
-  'channel.message_posted',
   'channel.participant_added',
   'channel.participant_removed',
   'channel.updated',
@@ -33,6 +37,12 @@ const ALL_EVENTS = [
   'document.created',
   'document.deleted',
   'document.updated',
+  'message.attachment_created',
+  'message.attachment_removed',
+  'message.deleted',
+  'message.mentioned',
+  'message.patched',
+  'message.posted',
 ] as const satisfies readonly EventName[];
 
 // Filled in once registration returns the signing secret; until then (i.e.
@@ -89,11 +99,15 @@ events.on('document.created', async (e) => {
   );
 });
 
-events.on('channel.message_posted', async (e) => {
+events.on('message.posted', async (e) => {
   // `sender` is undefined when a bot posted: the wire type is a bare string
   // for both, so only a real user id resolves to a handle.
   const from = e.sender ? ((await e.sender.name()) ?? e.sender.id) : 'a bot';
-  console.log(`  -> ${from} posted in ${await e.channel.name()}`);
+  const where =
+    e.target.type === 'channel'
+      ? `in ${await e.target.channel.name()}`
+      : `on ${await e.target.document.name()}`;
+  console.log(`  -> ${from} posted ${where}`);
 });
 
 receiver = events.webhook();

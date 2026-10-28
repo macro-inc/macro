@@ -1,5 +1,7 @@
 use super::*;
 
+pub(super) mod admission;
+
 fn meta(
     identifier: Option<&str>,
     description: Option<&str>,
@@ -111,186 +113,6 @@ fn notion_import_failure_reason_preserves_the_actual_error() {
         notion_import_failure_reason(&Ok(())),
         "the import job did not finish this item"
     );
-}
-
-#[test]
-fn slack_gather_lists_channels_with_an_explicit_empty_query() {
-    let prompt = prompts::gather_system(ImportSource::Slack);
-
-    assert!(prompt.contains("FIRST call `Search channels`"));
-    assert!(prompt.contains(r#"{"query": ""}"#));
-    assert!(prompt.contains("an empty query lists all channels"));
-    assert!(!prompt.contains("Always pass a non-empty query"));
-    assert!(prompt.contains("Participant details are optional"));
-}
-
-#[test]
-fn slack_channel_search_tool_names_match_by_shape() {
-    assert!(is_slack_channel_search_tool_name(
-        "mcp__Slack__search_channels"
-    ));
-    assert!(is_slack_channel_search_tool_name(
-        "mcp__Slack__slack_search_channels"
-    ));
-    assert!(is_slack_channel_search_tool_name(
-        "mcp__Slack__search-channels"
-    ));
-    assert!(is_slack_channel_search_tool_name(
-        "mcp__Slack__list_channels"
-    ));
-    assert!(is_slack_channel_search_tool_name(
-        "mcp__Slack__conversations_list"
-    ));
-
-    // Other channel-adjacent surfaces must not be mistaken for the listing.
-    assert!(!is_slack_channel_search_tool_name(
-        "mcp__Slack__list_channel_members"
-    ));
-    assert!(!is_slack_channel_search_tool_name(
-        "mcp__Slack__search_messages_and_files"
-    ));
-    assert!(!is_slack_channel_search_tool_name(
-        "mcp__Slack__get_channel_history"
-    ));
-    assert!(!is_slack_channel_search_tool_name(
-        "mcp__Slack__create_channel"
-    ));
-    assert!(!is_slack_channel_search_tool_name(
-        "mcp__Slack__search_users"
-    ));
-    assert!(!is_slack_channel_search_tool_name("search_channels")); // unmangled
-}
-
-#[test]
-fn slack_channel_page_parses_structured_results_with_cursors() {
-    let page = parse_slack_channel_page(serde_json::json!({
-        "channels": [
-            {
-                "id": "C0123456789",
-                "name": "engineering",
-                "purpose": { "value": "Build the thing" },
-                "member_count": 42,
-                "is_archived": false,
-            },
-            {
-                "id": "C0000000001",
-                "name": "#design",
-                "topic": "Make it pretty",
-                "num_members": 7,
-            },
-            { "id": "D0123456789", "name": "dm", "is_im": true },
-            { "id": "C0000000002", "name": "old-stuff", "is_archived": true },
-        ],
-        "response_metadata": { "next_cursor": "cursor-2" },
-    }));
-
-    assert_eq!(page.next_cursor.as_deref(), Some("cursor-2"));
-    assert_eq!(
-        page.channels,
-        vec![
-            SlackChannelCandidate {
-                id: Some("C0123456789".into()),
-                name: "engineering".into(),
-                purpose: Some("Build the thing".into()),
-                member_count: Some(42),
-                archived: false,
-            },
-            SlackChannelCandidate {
-                id: Some("C0000000001".into()),
-                name: "design".into(),
-                purpose: Some("Make it pretty".into()),
-                member_count: Some(7),
-                archived: false,
-            },
-            SlackChannelCandidate {
-                id: Some("C0000000002".into()),
-                name: "old-stuff".into(),
-                purpose: None,
-                member_count: None,
-                archived: true,
-            },
-        ]
-    );
-}
-
-#[test]
-fn slack_channel_page_parses_json_text_and_bare_arrays() {
-    // Results without structured content arrive as JSON re-encoded as text.
-    let page = parse_slack_channel_page(serde_json::Value::String(
-        r#"{"results": [{"id": "C1", "name": "general"}], "next_cursor": "abc"}"#.to_string(),
-    ));
-    assert_eq!(page.channels.len(), 1);
-    assert_eq!(page.channels[0].name, "general");
-    assert_eq!(page.next_cursor.as_deref(), Some("abc"));
-
-    let page = parse_slack_channel_page(serde_json::json!([
-        { "id": "C1", "name": "general" },
-        { "id": "C2", "name": "random" },
-    ]));
-    assert_eq!(page.channels.len(), 2);
-    assert_eq!(page.next_cursor, None);
-
-    // Plain prose is not a channel list.
-    let page = parse_slack_channel_page(serde_json::Value::String("No channels found.".into()));
-    assert_eq!(page, SlackChannelPage::default());
-
-    // An empty cursor string means "no more pages", not a page named "".
-    let page = parse_slack_channel_page(serde_json::json!({
-        "channels": [{ "id": "C1", "name": "general" }],
-        "response_metadata": { "next_cursor": "" },
-    }));
-    assert_eq!(page.next_cursor, None);
-}
-
-#[test]
-fn slack_candidates_rank_by_size_dedupe_and_cap() {
-    let channel = |id: &str, name: &str, members: Option<u64>| SlackChannelCandidate {
-        id: Some(id.to_string()),
-        name: name.to_string(),
-        purpose: None,
-        member_count: members,
-        archived: false,
-    };
-
-    let mut channels = vec![
-        channel("C1", "tiny", Some(2)),
-        channel("C2", "big", Some(50)),
-        channel("C2", "big", Some(50)), // duplicate id collapses
-        channel("C3", "medium", Some(10)),
-        SlackChannelCandidate {
-            archived: true,
-            ..channel("C4", "archived", Some(99))
-        },
-        // No id: deduped by name instead.
-        SlackChannelCandidate {
-            id: None,
-            ..channel("", "no-id", None)
-        },
-        SlackChannelCandidate {
-            id: None,
-            ..channel("", "no-id", None)
-        },
-    ];
-    channels
-        .extend((0..20).map(|i| channel(&format!("C{}", 100 + i), &format!("filler-{i}"), None)));
-
-    let selected = select_slack_candidates(channels, SLACK_GATHER_MAX_CHANNELS);
-    assert_eq!(selected.len(), SLACK_GATHER_MAX_CHANNELS);
-    // Largest first; archived and duplicates gone.
-    assert_eq!(selected[0].name, "big");
-    assert_eq!(selected[1].name, "medium");
-    assert_eq!(selected[2].name, "tiny");
-    assert!(selected.iter().all(|channel| !channel.archived));
-    assert_eq!(
-        selected
-            .iter()
-            .filter(|channel| channel.name == "no-id")
-            .count(),
-        1
-    );
-    // Ties keep listing order.
-    assert_eq!(selected[3].name, "no-id");
-    assert_eq!(selected[4].name, "filler-0");
 }
 
 #[test]
@@ -454,30 +276,13 @@ fn notion_fetch_recognizes_documented_tool_aliases() {
 }
 
 #[test]
-fn notion_page_references_become_external_markdown_links() {
-    let input = r#"<ancestor-path>
-<ancestor-3-page url="https://app.notion.com/p/93fa70f914eb477f89049c38912f9bb1" title=""/>
-<ancestor-4-page url="https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410" title="Parent"/>
-</ancestor-path>
-See <mention-page url="https://notion.so/roadmap">Roadmap</mention-page>.
-<page url="https://notion.so/spec">Product spec</page>
-<page url="https://notion.so/draft">Plan \ [draft]</page>"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "[Notion page](https://app.notion.com/p/93fa70f914eb477f89049c38912f9bb1)\n\
-[Parent](https://app.notion.com/p/dcff3c11ce9847f9b17b4a10eafa4410)\n\
-See [Roadmap](https://notion.so/roadmap).\n\
-[Product spec](https://notion.so/spec)\n\
-[Plan \\\\ \\[draft\\]](https://notion.so/draft)"
-    );
-}
-
-#[test]
 fn notion_prompt_imports_only_source_backed_body_content() {
     let prompt = prompts::NOTION_IMPORT_SYSTEM;
 
     assert!(prompt.contains("canonical Notion `notion-fetch` tool"));
+    assert!(prompt.contains("connector's page retrieval and block-children tools instead"));
+    assert!(prompt.contains("following pagination and recursively reading blocks"));
+    assert!(prompt.contains("Page metadata alone is not body content"));
     assert!(prompt.contains("Never use a search snippet or a generic `view` result"));
     assert!(prompt.contains("ONLY body content that actually appears in the fetched page"));
     assert!(prompt.contains(r#"Here is the result of "view"..."#));
@@ -495,76 +300,9 @@ fn notion_prompt_imports_only_source_backed_body_content() {
 fn notion_tool_result_wrappers_are_rejected_as_content() {
     let view_wrapper = r#"Here is the result of "view" for the Page with URL https://app.notion.com/p/39dd7bb70863806ab8afe6d96ecf9701 as of 2026-07-14T21:50:42.234Z:
 [{"title":""}]"#;
-    assert!(prepare_notion_markdown(view_wrapper).is_err());
-    assert!(prepare_notion_markdown(r#"[{"title":"Content team"}]"#).is_err());
-    assert!(prepare_notion_markdown("# Actual page content").is_ok());
-}
-
-#[test]
-fn notion_toggles_and_databases_are_not_imported_as_markup() {
-    let input = r#"# Useful notes {toggle="true"}
-Keep this text.
-<database url="https://notion.so/database">Content calendar</database>
-<mention-database url="https://notion.so/roadmap">Roadmap</mention-database>
-End."#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "# Useful notes\nKeep this text.\n\n\nEnd."
-    );
-}
-
-#[test]
-fn notion_enhanced_markdown_becomes_macro_markdown() {
-    let input = r#"<details color="Gray">
-<summary>Coming in Q2 (starts <mention-date start="2024-04-01"/>)</summary>
-	### Revamp Java PDF Parser
-	- [ ] Open task
-	- [x] Assigned to <mention-user url="https://notion.so/user">Teo Nys</mention-user>
-	<callout icon="🔢" color="Gray">
-		Numbers are estimates in **weeks**.
-	</callout>
-</details>
-
-<file src="https://notion.so/organizing-polish.docx">Organizing-polish.docx</file>
-<span underline="true">Readable text</span>
-<unknown url="https://notion.so/unsupported" alt="Linked preview"/>
-<empty-block/>"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "Coming in Q2 (starts April 1, 2024)\n\
-### Revamp Java PDF Parser\n\
-- [ ] Open task\n\
-- [x] Assigned to @Teo Nys\n\
-> 🔢 Numbers are estimates in **weeks**.\n\
-\n\
-[Organizing-polish.docx](https://notion.so/organizing-polish.docx)\n\
-Readable text\n\
-[Linked preview](https://notion.so/unsupported)"
-    );
-}
-
-#[test]
-fn notion_escaped_todos_are_repaired_but_code_examples_are_untouched() {
-    let input = r#"\[x\] Completed
-	\[ \] Nested
-
-```text
-\[x\] This is an example
-<page url="https://notion.so/example">also an example</page>
-```"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "- [x] Completed\n\
-\t- [ ] Nested\n\
-\n\
-```text\n\
-\\[x\\] This is an example\n\
-<page url=\"https://notion.so/example\">also an example</page>\n\
-```"
-    );
+    assert!(check_notion_markdown(view_wrapper).is_err());
+    assert!(check_notion_markdown(r#"[{"title":"Content team"}]"#).is_err());
+    assert!(check_notion_markdown("# Actual page content").is_ok());
 }
 
 #[test]
@@ -585,37 +323,4 @@ fn notion_database_heavy_pages_are_detected() {
         "Useful non-database documentation. ".repeat(20)
     );
     assert!(!notion_page_is_mostly_database(&substantive));
-}
-
-#[test]
-fn notion_tables_become_rectangular_macro_pipe_tables() {
-    let input = r#"<table fit-page-width="true" header-row="true">
-<colgroup>
-<col width="379">
-<col width="230">
-</colgroup>
-<tr>
-<td>AI PDF Editors</td>
-<td>Features</td>
-<td>Pricing</td>
-</tr>
-<tr>
-lc
-</tr>
-<tr>
-<td>PDFelement</td>
-<td>• Automatically bookmarks important pages
-• Use Lumi AI to chat with PDFs</td>
-<td>Paid plans start at $79.99 per year.</td>
-</tr>
-<tr><td>Forma | Pro</td><td>Draft with AI</td></tr>
-</table>"#;
-
-    assert_eq!(
-        normalize_notion_markdown(input),
-        "| AI PDF Editors | Features | Pricing |\n\
-| --- | --- | --- |\n\
-| PDFelement | • Automatically bookmarks important pages\\n• Use Lumi AI to chat with PDFs | Paid plans start at $79.99 per year. |\n\
-| Forma &#124; Pro | Draft with AI |  |"
-    );
 }

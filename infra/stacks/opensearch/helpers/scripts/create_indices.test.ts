@@ -6,6 +6,24 @@ import {
   selectIndexSpecs,
 } from './create_indices';
 
+test('channel fallback authors preserve body highlights and sender identities', () => {
+  const spec = INDEX_SPECS.find((spec) => spec.aliasName === 'channels');
+  expect(spec?.body).toMatchObject({
+    mappings: {
+      dynamic: 'false',
+      properties: {
+        imported_author: {
+          type: 'text',
+          analyzer: 'content_text',
+          copy_to: [],
+        },
+        content: { type: 'text', analyzer: 'content_text' },
+        sender_id: { type: 'keyword', index: true },
+      },
+    },
+  });
+});
+
 describe('planCreateIndex', () => {
   test('fresh env — index missing, alias free → create with alias', () => {
     const plan = planCreateIndex({
@@ -225,5 +243,27 @@ describe('selectIndexSpecs', () => {
 
   test('an unknown filter selects nothing so the caller can abort', () => {
     expect(selectIndexSpecs(INDEX_SPECS, 'nope')).toEqual([]);
+  });
+});
+
+test('agent sessions use a parent-child folded-message mapping', () => {
+  const spec = INDEX_SPECS.find(
+    ({ aliasName }) => aliasName === 'agent_sessions'
+  );
+
+  expect(spec?.indexName).toBe('agent_sessions_v1');
+  expect(spec?.body).toMatchObject({
+    mappings: {
+      dynamic: 'false',
+      properties: {
+        agent_session_id: { type: 'keyword' },
+        entity_id: { type: 'alias', path: 'agent_session_id' },
+        content: { type: 'text', analyzer: 'standard' },
+        agent_session_relation: {
+          type: 'join',
+          relations: { agent_session: 'message' },
+        },
+      },
+    },
   });
 });

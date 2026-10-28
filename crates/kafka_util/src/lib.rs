@@ -8,25 +8,124 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Duration;
 
 use either::Either;
 use macro_env::Environment;
-use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, StreamConsumer};
+use opentelemetry::propagation::{Extractor, Injector};
+use rdkafka::consumer::{
+    CommitMode, Consumer, ConsumerContext, DefaultConsumerContext, StreamConsumer,
+};
 use rdkafka::error::{KafkaError, KafkaResult};
-use rdkafka::message::{BorrowedMessage, Message as _};
+use rdkafka::message::{BorrowedMessage, Header, Headers, Message, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::{ClientConfig, Offset, TopicPartitionList};
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use uuid::Uuid;
 
 pub use msk_iam::{MskIamClientContext, configure_sasl_iam};
+pub use statistics::ConsumerStatistics;
+use statistics::StatisticsContext;
 
 mod msk_iam;
+mod statistics;
 
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
 const MESSAGE_TIMEOUT_MS: &str = "5000";
 const SEND_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Default)]
+struct TraceHeaderInjector(HashMap<String, String>);
+
+impl Injector for TraceHeaderInjector {
+    fn set(&mut self, key: &str, value: String) {
+        self.0.insert(key.to_owned(), value);
+    }
+}
+
+struct TraceHeaderExtractor<'a, H: Headers>(&'a H);
+
+impl<H: Headers> Extractor for TraceHeaderExtractor<'_, H> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.iter().find_map(|header| {
+            (header.key == key)
+                .then(|| {
+                    header
+                        .value
+                        .and_then(|value| std::str::from_utf8(value).ok())
+                })
+                .flatten()
+        })
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.iter().map(|header| header.key).collect()
+    }
+}
+
+fn current_trace_headers() -> OwnedHeaders {
+    let context = tracing::Span::current().context();
+    let mut injector = TraceHeaderInjector::default();
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut injector);
+    });
+
+    injector
+        .0
+        .into_iter()
+        .fold(OwnedHeaders::new(), |headers, (key, value)| {
+            headers.insert(Header {
+                key: &key,
+                value: Some(&value),
+            })
+        })
+}
+
+fn remote_trace_context<M: Message>(message: &M) -> opentelemetry::Context {
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        message
+            .headers()
+            .map_or_else(opentelemetry::Context::new, |headers| {
+                propagator.extract(&TraceHeaderExtractor(headers))
+            })
+    })
+}
+
+/// Creates a Kafka processing span parented to the message's propagated W3C context.
+///
+/// The caller should instrument the complete decode, handling, and commit future
+/// with this span so the consumer operation represents all record processing.
+pub fn consumer_span<M: Message>(message: &M, consumer_group: &'static str) -> tracing::Span {
+    let span = tracing::info_span!(
+        "kafka.process",
+        otel.kind = "consumer",
+        messaging.system = "kafka",
+        messaging.operation.name = "process",
+        messaging.operation.type = "process",
+        messaging.consumer.group.name = consumer_group,
+        messaging.destination.name = message.topic(),
+        messaging.destination.partition.id = %message.partition(),
+        messaging.kafka.offset = message.offset(),
+        macro.event.id = tracing::field::Empty,
+        macro.event.type = tracing::field::Empty,
+        agent.session.id = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    );
+    let parent = remote_trace_context(message);
+    // Setting an empty context is intentional: headerless records must not
+    // inherit an unrelated process- or task-lifetime ambient span.
+    let _ = span.set_parent(parent);
+    span
+}
+
+/// Marks a manually-created messaging span as failed.
+pub fn record_span_error(span: &tracing::Span, error: &(impl std::fmt::Display + ?Sized)) {
+    span.record("otel.status_code", "ERROR");
+    span.record("otel.status_description", tracing::field::display(error));
+}
 
 /// Failure to construct an environment-specific Kafka consumer.
 #[derive(Debug, thiserror::Error)]
@@ -51,7 +150,12 @@ pub enum KafkaProducerError {
 }
 
 /// Underlying Kafka consumer transport selected from the runtime environment.
-struct ConsumerTransport(Either<StreamConsumer, StreamConsumer<MskIamClientContext>>);
+struct ConsumerTransport(
+    Either<
+        StreamConsumer<StatisticsContext<DefaultConsumerContext>>,
+        StreamConsumer<StatisticsContext<MskIamClientContext>>,
+    >,
+);
 
 /// Underlying Kafka producer transport selected from the runtime environment.
 #[derive(Clone)]
@@ -64,6 +168,15 @@ struct ProducerTransport(Either<FutureProducer, FutureProducer<MskIamClientConte
 pub trait GroupName {
     /// Stable Kafka consumer group ID used for partition balancing and offsets.
     const GROUP_NAME: &'static str;
+
+    /// Where the group starts on a partition it has no committed offset for.
+    ///
+    /// Partitions the group already committed on resume from that offset either
+    /// way; this only decides the first read of a partition the group has never
+    /// consumed, such as one of a topic newly added to its subscription.
+    /// `Earliest` replays everything the topic still retains there; `Latest`
+    /// starts at the next record published.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Earliest;
 }
 
 /// Marker type for a consumer that does not subscribe or persist offsets.
@@ -73,22 +186,14 @@ pub trait GroupName {
 /// or commit operations and therefore does not create durable group state.
 pub struct Ungrouped;
 
-/// Starting position for manually assigned ungrouped topic partitions.
+/// Starting position for a partition a consumer has no committed offset for:
+/// every partition of an ungrouped consumer, and new partitions of a group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitialOffset {
     /// Consume all currently retained records before continuing with new ones.
     Earliest,
     /// Consume only records published after the partition assignment begins.
     Latest,
-}
-
-impl InitialOffset {
-    fn as_kafka_offset(self) -> Offset {
-        match self {
-            Self::Earliest => Offset::Beginning,
-            Self::Latest => Offset::End,
-        }
-    }
 }
 
 /// Shared Kafka consumer with environment-aware transport and type-safe group behavior.
@@ -127,9 +232,13 @@ fn producer_config(brokers: &str) -> ClientConfig {
 
 fn grouped_config<T: GroupName>(brokers: &str) -> ClientConfig {
     let mut config = consumer_config(brokers);
-    config
-        .set("group.id", T::GROUP_NAME)
-        .set("auto.offset.reset", "earliest");
+    config.set("group.id", T::GROUP_NAME).set(
+        "auto.offset.reset",
+        match T::INITIAL_OFFSET {
+            InitialOffset::Earliest => "earliest",
+            InitialOffset::Latest => "latest",
+        },
+    );
     config
 }
 
@@ -144,14 +253,25 @@ fn ungrouped_config(brokers: &str) -> ClientConfig {
 
 fn create_consumer_from_env<T>(
     config: ClientConfig,
+    observer: Option<ConsumerStatistics>,
 ) -> Result<KafkaEventConsumer<T>, KafkaConsumerError> {
     let consumer = match Environment::new_or_prod() {
-        Environment::Local => Either::Left(config.create().map_err(KafkaConsumerError::Plaintext)?),
+        Environment::Local => Either::Left(
+            config
+                .create_with_context(StatisticsContext {
+                    inner: DefaultConsumerContext,
+                    observer,
+                })
+                .map_err(KafkaConsumerError::Plaintext)?,
+        ),
         Environment::Develop | Environment::Production => {
             let config = configure_sasl_iam(config);
             Either::Right(
                 config
-                    .create_with_context(MskIamClientContext::from_env())
+                    .create_with_context(StatisticsContext {
+                        inner: MskIamClientContext::from_env(),
+                        observer,
+                    })
                     .map_err(KafkaConsumerError::MskIam)?,
             )
         }
@@ -183,10 +303,20 @@ fn create_producer_from_env(
     })
 }
 
+/// Polls the consumer once with a no-op waker so OAUTHBEARER installs its
+/// initial token before a synchronous broker request (metadata, list offsets)
+/// needs a connection.
+fn prime_oauth_token<C: ConsumerContext + 'static>(consumer: &StreamConsumer<C>) {
+    let mut recv = std::pin::pin!(consumer.recv());
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    let _ = std::future::Future::poll(recv.as_mut(), &mut context);
+}
+
 fn build_assignment<C, T>(
     consumer: &T,
     topics: &[&str],
-    initial_offset: InitialOffset,
+    offset: Offset,
     metadata_timeout: Duration,
 ) -> KafkaResult<TopicPartitionList>
 where
@@ -225,11 +355,7 @@ where
             if let Some(error) = partition.error() {
                 return Err(KafkaError::MetadataFetch(error.into()));
             }
-            assignment.add_partition_offset(
-                topic,
-                partition.id(),
-                initial_offset.as_kafka_offset(),
-            )?;
+            assignment.add_partition_offset(topic, partition.id(), offset)?;
         }
     }
 
@@ -246,9 +372,23 @@ impl KafkaEventProducer {
     }
 
     /// Sends a keyed payload to `topic` and waits for delivery confirmation.
-    #[tracing::instrument(err, skip(self, payload), fields(topic, key))]
+    #[tracing::instrument(
+        name = "kafka.publish",
+        err,
+        skip(self, payload),
+        fields(
+            otel.kind = "producer",
+            messaging.system = "kafka",
+            messaging.operation.name = "publish",
+            messaging.operation.type = "send",
+            messaging.destination.name = topic,
+        )
+    )]
     pub async fn send(&self, topic: &str, key: &str, payload: &[u8]) -> KafkaResult<()> {
-        let record = FutureRecord::to(topic).key(key).payload(payload);
+        let record = FutureRecord::to(topic)
+            .key(key)
+            .payload(payload)
+            .headers(current_trace_headers());
         either::for_both!(&self.producer.0, producer => producer.send(record, SEND_TIMEOUT).await)
             .map(|_| ())
             .map_err(|(error, _)| error)
@@ -279,7 +419,7 @@ impl<T: GroupName> KafkaEventConsumer<T> {
     /// Creates a named-group consumer, selecting plaintext or MSK IAM transport
     /// from the runtime environment.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_consumer_from_env(grouped_config::<T>(brokers))
+        create_consumer_from_env(grouped_config::<T>(brokers), None)
     }
 
     /// Subscribes the consumer to exactly the provided topics.
@@ -303,14 +443,25 @@ impl KafkaEventConsumer<Ungrouped> {
     ///
     /// Call [`Self::assign_topics`] before receiving messages.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaConsumerError> {
-        create_consumer_from_env(ungrouped_config(brokers))
+        create_consumer_from_env(ungrouped_config(brokers), None)
+    }
+
+    /// Creates an independent consumer with statistics sampled every ten seconds.
+    /// The observer does not join a group, store offsets, or issue broker calls.
+    pub fn from_env_with_statistics(
+        brokers: &str,
+        observer: ConsumerStatistics,
+    ) -> Result<Self, KafkaConsumerError> {
+        let mut config = ungrouped_config(brokers);
+        config.set("statistics.interval.ms", "10000");
+        create_consumer_from_env(config, Some(observer))
     }
 
     /// Manually assigns every current partition of `topics` at `initial_offset`.
     ///
     /// Manual assignment does not join a consumer group, persist offsets, or
-    /// automatically discover partitions added after this call. Callers that
-    /// support partition-count changes must refresh the assignment themselves.
+    /// automatically discover partitions added after this call. Reconnect to
+    /// discover partition-count changes.
     pub fn assign_topics(
         &self,
         topics: &[&str],
@@ -318,19 +469,12 @@ impl KafkaEventConsumer<Ungrouped> {
         metadata_timeout: Duration,
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => {
-            // OAUTHBEARER requires polling once to install the initial token
-            // before a synchronous metadata request can connect to a broker.
-            let mut recv = std::pin::pin!(consumer.recv());
-            let waker = std::task::Waker::noop();
-            let mut context = std::task::Context::from_waker(waker);
-            let _ = std::future::Future::poll(recv.as_mut(), &mut context);
-
-            let assignment = build_assignment(
-                consumer,
-                topics,
-                initial_offset,
-                metadata_timeout,
-            )?;
+            prime_oauth_token(consumer);
+            let offset = match initial_offset {
+                InitialOffset::Earliest => Offset::Beginning,
+                InitialOffset::Latest => Offset::End,
+            };
+            let assignment = build_assignment(consumer, topics, offset, metadata_timeout)?;
             consumer.assign(&assignment)
         })
     }

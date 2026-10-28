@@ -69,7 +69,7 @@ fn notification() -> RealtimeNotif<serde_json::Value> {
         notification_event_type: "channel_mention".to_string(),
         entity: EntityType::Channel.with_entity_string("channel-id".to_string()),
         sent: true,
-        done: false,
+        state: crate::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

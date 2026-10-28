@@ -1,3 +1,5 @@
+import { useAgentDmRecipients } from '@app/features/agent-dms/agent-dm-recipients';
+import { selectConversationRecipients } from '@app/features/agent-dms/core/personas';
 import {
   applyInlineFormat,
   applyNodeFormat,
@@ -19,8 +21,11 @@ import {
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
@@ -30,25 +35,36 @@ import {
 } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
-
 import {
   chatRuleset,
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
-import InfoIcon from '@phosphor/info.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { useCreateChannelMutation } from '@queries/channel/channels';
-import { Surface } from '@ui';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { ComposerSurface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
 export function ChannelCompose() {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [channelName, setChannelName] = createSignal<string>('');
 
-  const { users: destinationOptions } = useCombinedRecipients();
+  const { users: humanOptions } = useCombinedRecipients();
+  const agentOptions = ENABLE_AGENT_DMS ? useAgentDmRecipients() : () => [];
+  const destinationOptions = () => [...humanOptions(), ...agentOptions()];
   const [selectedRecipients, setSelectedRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
+    WithCustomUserInput<'user' | 'contact' | 'agent'>[]
   >([]);
+
+  const selectRecipients = (
+    next: WithCustomUserInput<'user' | 'contact' | 'agent'>[]
+  ) => {
+    setSelectedRecipients(selectConversationRecipients(next));
+  };
 
   const selectedRecipientCount = createMemo(() => selectedRecipients().length);
 
@@ -70,6 +86,8 @@ export function ChannelCompose() {
   });
 
   const dmUserName = createMemo(() => {
+    const recipient = selectedRecipients()[0];
+    if (recipient?.kind === 'agent') return recipient.data.name;
     const id = dmUserId();
     return id ? getDisplayName(tryMacroId(id)) : undefined;
   });
@@ -87,6 +105,7 @@ export function ChannelCompose() {
       const names = recipients
         .slice(0, 2)
         .map((r) => {
+          if (r.kind === 'agent') return r.data.name;
           if (r.kind === 'user') {
             return getDisplayName(tryMacroId(r.data.id));
           }
@@ -106,6 +125,7 @@ export function ChannelCompose() {
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const createChannelMutation = useCreateChannelMutation();
+  const createDm = useGetOrCreateDirectMessageMutation();
 
   async function handleSend(snapshot: InputSnapshot) {
     setError(undefined);
@@ -122,6 +142,26 @@ export function ChannelCompose() {
     });
 
     try {
+      const persona = recipients.find(
+        (recipient) => recipient.kind === 'agent'
+      );
+      if (persona) {
+        const dm = await createDm.mutateAsync({
+          recipient_id: `bot|${persona.data.id}`,
+        });
+        const sent = await sendToChannel({
+          channelId: dm.channel_id,
+          content,
+          mentions,
+          attachments,
+          navigate: { navigate: true, mergeHistory: true },
+        });
+        if (!sent)
+          throw new Error(
+            'Could not send your message. Your draft has been kept.'
+          );
+        return;
+      }
       if (
         destination.type === 'users' &&
         channelName() &&
@@ -175,10 +215,22 @@ export function ChannelCompose() {
     callbacks: { onSend: handleSend },
   });
 
+  const send = async () => {
+    try {
+      await inputState.commands.send();
+    } catch (sendError) {
+      // `handleSend` shows its own failures in the compose error and rethrows.
+      if (error()) return;
+      setError('Failed to send message');
+      Telemetry.error(sendError, { surface: 'channel-compose' });
+    }
+  };
+
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: 'compose-input-markdown',
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     scrollContainer,
     onMentionCreate: (mention) => mentionsTracker.onMentionCreate(mention),
@@ -186,16 +238,31 @@ export function ChannelCompose() {
     onChange: (markdown) => inputState.setValue(markdown),
     onEnter: () => {
       if (isTouchDevice()) return false;
-      void inputState.commands.send();
+      fireAndForget(send(), 'channel-compose');
       return true;
     },
+    sendMessage: () => fireAndForget(send(), 'channel-compose'),
     onPasteFilesAndDirs: (files, directories) => {
-      void handleFileFolderDrop(files, directories, (entries) =>
-        inputState.commands.attachFiles(entries.map((e) => e.file))
+      fireAndForget(
+        handleFileFolderDrop(files, directories, (entries) =>
+          inputState.commands.attachFiles(entries.map((e) => e.file))
+        ),
+        'channel-compose'
       );
     },
   });
   clearComposer = () => markdownEditor.controls.clear();
+  const { isCompact: oneLineInput } = createComposerLayout(
+    markdownEditor.buildHandle().lexical,
+    {
+      container: layout,
+      mode: () =>
+        inputState.view().showFormatRibbon ||
+        inputState.view().attachments?.length
+          ? 'expanded'
+          : 'auto',
+    }
+  );
 
   const placeholder = createMemo(() => {
     const name = channelName();
@@ -233,11 +300,15 @@ export function ChannelCompose() {
                 }
               }}
             />
-            <RecipientSelector<'user' | 'contact'>
+            <RecipientSelector<'user' | 'contact' | 'agent'>
               options={destinationOptions}
               selectedOptions={selectedRecipients()}
-              setSelectedOptions={setSelectedRecipients}
-              placeholder="To: Macro users or email addresses"
+              setSelectedOptions={selectRecipients}
+              placeholder={
+                ENABLE_AGENT_DMS
+                  ? 'To: People, agents, or email addresses'
+                  : 'To: Macro users or email addresses'
+              }
               triedToSubmit={triedToSubmit}
               focusOnMount
               hideMenuOnEscape
@@ -271,67 +342,61 @@ export function ChannelCompose() {
                 input={inputState.view()}
                 commands={inputState.commands}
               >
-                <Surface
-                  depth={2}
-                  class="rounded-xl touch:rounded-3xl ring ring-edge"
-                  style={{ border: '0' }}
-                >
+                <ComposerSurface>
                   <Input.DropZone
                     onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                     onDragEnd={() => inputState.setIsDraggedOver(false)}
                   >
-                    <Input.Layout>
+                    <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
                       <Input.DropOverlay />
-                      <Input.FormatRibbon>
-                        <FormatButtons
-                          selectionState={() => markdownEditor.selection}
-                          onInlineFormat={(format) =>
-                            applyInlineFormat(markdownEditor.lexical, format)
-                          }
-                          onNodeFormat={(format) =>
-                            applyNodeFormat(markdownEditor.lexical, format)
-                          }
-                        />
-                      </Input.FormatRibbon>
-                      <Input.EditorShell
-                        ref={setScrollContainer}
-                        onClick={(event) => {
-                          if (!isTouchDevice()) {
-                            event.stopPropagation();
-                            markdownEditor.controls.focus();
-                          }
-                        }}
-                      >
-                        <Input.Editor>
-                          <MarkdownShell
-                            config={markdownEditor}
-                            placeholder={placeholder()}
-                            autofocus={false}
-                            class="text-sm"
+                      <Input.Layout.Body>
+                        <Input.FormatRibbon>
+                          <FormatButtons
+                            selectionState={() => markdownEditor.selection}
+                            onInlineFormat={(format) =>
+                              applyInlineFormat(markdownEditor.lexical, format)
+                            }
+                            onNodeFormat={(format) =>
+                              applyNodeFormat(markdownEditor.lexical, format)
+                            }
                           />
-                        </Input.Editor>
-                      </Input.EditorShell>
-                      <Input.Attachments kind="media" />
-                      <Input.Attachments kind="document" />
-                      <Input.Footer>
-                        <Input.Actions>
-                          <Input.Actions.Left>
-                            <Show
-                              when={!isPlatform('ios')}
-                              fallback={<Input.AttachNativeMediaAction />}
-                            >
-                              <Input.AttachFilesAction />
-                            </Show>
-                            <Input.ToggleFormatAction />
-                          </Input.Actions.Left>
-                          <Input.Actions.Right>
-                            <Input.SendAction />
-                          </Input.Actions.Right>
-                        </Input.Actions>
-                      </Input.Footer>
+                        </Input.FormatRibbon>
+                        <Input.Layout.Editor
+                          ref={setScrollContainer}
+                          on:click={(event) => {
+                            if (!isTouchDevice()) {
+                              event.stopPropagation();
+                              markdownEditor.controls.focus();
+                            }
+                          }}
+                        >
+                          <Input.Editor>
+                            <ComposerEditor
+                              config={markdownEditor}
+                              placeholder={placeholder()}
+                              autofocus={false}
+                              class="text-base"
+                            />
+                          </Input.Editor>
+                        </Input.Layout.Editor>
+                        <Input.Attachments kind="media" />
+                        <Input.Attachments kind="document" />
+                      </Input.Layout.Body>
+
+                      <Input.Layout.ActionsLeft>
+                        <Show
+                          when={!isPlatform('ios')}
+                          fallback={<Input.AttachNativeMediaAction />}
+                        >
+                          <Input.AttachFilesAction />
+                        </Show>
+                      </Input.Layout.ActionsLeft>
+                      <Input.Layout.ActionsRight>
+                        <Input.SendAction />
+                      </Input.Layout.ActionsRight>
                     </Input.Layout>
                   </Input.DropZone>
-                </Surface>
+                </ComposerSurface>
               </Input.Root>
             </ChannelInputContainer>
           </div>

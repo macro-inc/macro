@@ -1,7 +1,5 @@
 import { modificationDataReplacer } from '@coparse/document-processing-types';
 import type Term from '../model/Term';
-import type TocItem from '../model/TocItem';
-import type { IBookmark } from '../type/Bookmark';
 import {
   type IModificationData,
   type IModificationDataOnServer,
@@ -11,18 +9,6 @@ import type { IPlaceable } from '../type/placeables';
 import { hashString, hashStringSync } from './hash';
 
 export { modificationDataReplacer };
-
-export function getBookmarks(items: TocItem[]): IBookmark[] {
-  return items.map(
-    ({ section, children }): IBookmark => ({
-      title: section.bookmarkTitle,
-      pageNum: section.page,
-      top: section.y,
-      children: getBookmarks(children),
-      id: section.id,
-    })
-  );
-}
 
 /**
  * Filter for excluding certain placeables from being saved as modification data
@@ -39,16 +25,14 @@ const savePlaceablesFilter = (p: IPlaceable) => {
 
 export function getSaveModificationData({
   pinnedTerms,
-  TOCItems,
   placeables,
 }: {
   placeables: IPlaceable[];
-  TOCItems: TocItem[];
   pinnedTerms: Term[];
 }): { modificationData: IModificationDataOnServer } {
   const pins = pinnedTerms.map((term) => term.name);
   const modificationData: IModificationData = {
-    bookmarks: getBookmarks(TOCItems),
+    bookmarks: [],
     placeables: placeables.filter(savePlaceablesFilter),
     pinnedTermsNames: pins,
   };

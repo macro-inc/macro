@@ -11,10 +11,6 @@ import { Button, type ButtonProps } from './Button';
  * padding, slim-mode `justify-center`, etc. — are passed through via `class`,
  * which is merged last so callers can extend without leaking layout concerns in.
  */
-const NAV_ROW_BASE =
-  'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 px-2 text-ink-extra-muted not-disabled:hover:bg-ink/3';
-const NAV_ROW_ACTIVE = 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink';
-
 export type NavRowProps = ButtonProps & { active?: boolean };
 
 export const NavRow = (props: NavRowProps) => {
@@ -23,7 +19,11 @@ export const NavRow = (props: NavRowProps) => {
     <Button
       variant="ghost"
       {...rest}
-      class={cn(NAV_ROW_BASE, local.active && NAV_ROW_ACTIVE, local.class)}
+      class={cn(
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 px-2 text-ink-extra-muted',
+        local.active ? 'bg-hover text-ink' : '',
+        local.class
+      )}
     />
   );
 };

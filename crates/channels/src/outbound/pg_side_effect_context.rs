@@ -144,6 +144,13 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
 }
 
 async fn get_bot_sender_profile(db: &PgPool, bot_id: BotId) -> Option<BotSenderProfile> {
+    // First-party bots have no row; their profile comes from the registry.
+    if let Some(system) = bot_id::system_bot(bot_id) {
+        return Some(BotSenderProfile {
+            name: system.name.to_owned(),
+            avatar_url: None,
+        });
+    }
     sqlx::query!(
         r#"
         SELECT name, avatar_url
@@ -206,7 +213,7 @@ async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::R
         r#"
         SELECT COUNT(id) AS "count!"
         FROM comms_messages
-        WHERE channel_id = $1
+        WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text
         "#,
         channel_id,
     )
@@ -226,15 +233,18 @@ async fn get_channel_participants_for_thread_id(
             SELECT m.sender_id AS id
             FROM comms_messages m
             JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
-            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
+              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
+            WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
+              AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
             FROM comms_entity_mentions em
             JOIN comms_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
+              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = em.entity_id
             WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
               AND em.source_entity_type = 'message'
               AND em.entity_type = 'user'
               AND cp.left_at IS NULL

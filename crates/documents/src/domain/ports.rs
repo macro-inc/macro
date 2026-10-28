@@ -1,0 +1,662 @@
+//! Port definitions for the documents domain.
+//!
+//! These traits define the contracts that adapters must implement.
+
+#[cfg(feature = "document_create")]
+pub mod create;
+pub mod editing;
+pub mod markdown;
+pub mod mentions;
+pub mod sync;
+
+use std::future::Future;
+
+use entity_access::domain::models::{
+    AccessError, BotAccessScope, EditAccessLevel, EntityAccessReceipt, EntityType, MemberTeamRole,
+    OwnerAccessLevel, ViewAccessLevel,
+};
+use entity_access::domain::ports::EntityAccessService;
+use macro_user_id::user_id::MacroUserIdStr;
+use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
+use model_owner::{CreationPrincipal, Owner};
+use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
+
+use super::content::DocumentContent;
+use super::events::InteractionReason;
+use super::response::{
+    CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
+};
+
+use model::sync_service::SyncServiceVersionID;
+
+use model_entity::Entity;
+
+use super::models::{
+    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
+    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestTasksResponse,
+    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
+    OwnerTeam, TaskBranchName, TaskIdentity, TeamTaskMetadata, TeamTaskNumber,
+};
+
+/// Repository for accessing document data from the database.
+///
+/// All methods perform database operations — SQL queries are written
+/// directly in the outbound adapter implementation.
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait DocumentRepo: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Get full document metadata (including latest version, BOM, project info).
+    fn get_document_metadata(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Get a user's last view location within a document.
+    fn get_user_view_location(
+        &self,
+        user_id: &str,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Get basic document info (used by middleware and access checks).
+    fn get_basic_document(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<DocumentBasic, Self::Err>> + Send;
+
+    /// A user's first and last name by their user id, each `None` when the
+    /// user has not set it.
+    fn get_user_name(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<(Option<String>, Option<String>), Self::Err>> + Send;
+
+    /// Soft-delete a document (remove pins/history, set deletedAt).
+    fn soft_delete_document(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Mark a document's upload/finalization lifecycle as complete.
+    fn mark_document_uploaded(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get persisted content lifecycle metadata for a document.
+    fn get_persisted_document_content(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<DocumentContent>, Self::Err>> + Send;
+
+    /// Set persisted content lifecycle metadata for a document.
+    ///
+    /// Implementations should keep legacy upload state in sync with the new
+    /// lifecycle metadata while legacy consumers still read that column.
+    fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get the latest document version ID (for editable files: js, py).
+    /// Returns (version_id, uploaded).
+    fn get_latest_document_version_id(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(i64, bool), Self::Err>> + Send;
+
+    /// Get the document version ID (for static files: pdf, images).
+    /// Returns (version_id, uploaded).
+    fn get_document_version_id(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(i64, bool), Self::Err>> + Send;
+
+    /// Get document SHAs for a specific document version (BOM parts).
+    fn get_document_shas(
+        &self,
+        document_version_id: i64,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Get document SHAs by document ID (latest BOM).
+    fn get_document_shas_by_document_id(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Get document text by document ID
+    fn get_document_text(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Create a new document with all associated records in a single transaction.
+    ///
+    /// Always inserts a `Document` row. Email-attachment linking and SHA reuse
+    /// belong on [`DocumentRepo::import_email_attachment_document`].
+    ///
+    /// `share_permission` is the pre-resolved initial link permission — the
+    /// repository persists it verbatim and carries no share-policy of its own.
+    /// Canonical team state starts NULL; `args.document.share_with_team`
+    /// initializes explicit task consent from the persisted owner's team inside
+    /// the same transaction and fails with `BadRequest` when that owner has no team.
+    /// The entity row and its owner grants are registered in the same transaction.
+    fn create_document(
+        &self,
+        args: CreateDocumentRepoArgs,
+        share_permission: SharePermissionV2,
+    ) -> impl Future<Output = Result<DocumentMetadata, DocumentError>> + Send;
+
+    /// Import an email attachment: link it to a reusable live email document
+    /// owned by the same user (matching latest-instance sha), or insert a new
+    /// document and link it. Concurrent first-time creates for the same
+    /// `(owner, sha)` are serialized so two imports cannot insert duplicates.
+    /// Imports never initialize team consent.
+    fn import_email_attachment_document(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+        share_permission: SharePermissionV2,
+    ) -> impl Future<Output = Result<EmailImportRepoOutcome, DocumentError>> + Send;
+
+    /// Get the team `owner` resolves to and its link-share preference, or
+    /// `None` when the owner has no team.
+    fn get_owner_team(
+        &self,
+        owner: &Owner,
+    ) -> impl Future<Output = Result<Option<OwnerTeam>, Self::Err>> + Send;
+
+    /// Update an upload job to associate it with a document.
+    fn update_upload_job(
+        &self,
+        document_id: &str,
+        job_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Edit a document's metadata and share permissions in a single transaction.
+    ///
+    /// Updates: Document name, project ID, share permissions, and user item access.
+    fn edit_document(
+        &self,
+        args: EditDocumentRepoArgs,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Update a document's `updatedAt` timestamp.
+    fn update_document_modified(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Update a project's `updatedAt` timestamp.
+    fn update_project_modified(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete a document by ID (used for error cleanup).
+    fn delete_document_by_id(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get all team IDs the user belongs to.
+    fn get_team_ids_for_user(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, Self::Err>> + Send;
+
+    /// Get per-team task metadata for a document, when it is a team task.
+    fn get_team_task_metadata(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
+
+    /// Get a task's team number and team slug, when it is a team task.
+    fn get_team_task_number(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamTaskNumber>, Self::Err>> + Send;
+
+    /// Get the document ID assigned to a task number within a team.
+    fn get_document_id_by_team_task_number(
+        &self,
+        team_id: &uuid::Uuid,
+        task_num: i32,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Get user/team data needed to build a branch name for this user and task.
+    fn get_branch_name_context(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<BranchNameContext, Self::Err>> + Send;
+
+    /// Get stored GitHub PR keys associated with a task short id.
+    fn get_task_github_pull_request_keys(
+        &self,
+        task_short_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Get `(github_key, task_short_id)` links for the pull requests `github_keys`, oldest first.
+    fn get_github_pull_request_task_links(
+        &self,
+        github_keys: &[String],
+    ) -> impl Future<Output = Result<Vec<(String, String)>, Self::Err>> + Send;
+
+    /// Load persisted ownership, membership and explicit sharing facts for policy.
+    ///
+    /// A document whose canonical state is still NULL but whose owner's team holds a
+    /// legacy direct grant is adopted first, so the facts describe that grant.
+    fn get_team_share_facts(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<TeamShareFacts, DocumentError>> + Send;
+
+    /// Get explicit team-share state, never inferred from inherited grants.
+    fn get_team_share(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
+
+    /// Apply an owner-authorized update after rechecking its facts atomically.
+    fn set_team_share(
+        &self,
+        command: AuthorizedTeamShareCommand,
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
+
+    /// Get document metadata at a specific version ID.
+    fn get_document_metadata_at_version(
+        &self,
+        document_id: &str,
+        version_id: i64,
+    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Get the owner of a project by project ID.
+    fn get_project_owner(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<MacroUserIdStr<'static>, Self::Err>> + Send;
+
+    /// Get the name of a project by ID.
+    fn get_project_name(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
+
+    /// Get the top-level children (documents and sub-projects) of a project.
+    fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Self::Err>> + Send;
+
+    /// Copy a document's DB records in a single transaction.
+    ///
+    /// Creates: Document row, version (DocumentBom or DocumentInstance),
+    /// SharePermission, DocumentPermission, the registered entity with its
+    /// owner grants, and access history. The returned metadata carries the
+    /// persisted owner.
+    ///
+    /// `share_permission` is the pre-resolved initial share permission for the
+    /// copy — the repository persists it verbatim.
+    fn copy_document(
+        &self,
+        args: CopyDocumentRepoArgs,
+        share_permission: SharePermissionV2,
+    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Copy PDF-specific data (DocumentText, DocumentProcessResult) for a copied document.
+    fn copy_pdf_parts(
+        &self,
+        new_document_id: &str,
+        original_document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Port for generating S3 presigned upload URLs and direct S3 storage operations.
+pub trait PresignedUploadUrlPort: Send + Sync + 'static {
+    /// Generate a presigned URL for uploading to the document storage bucket.
+    fn put_document_storage_presigned_url(
+        &self,
+        key: &str,
+        sha: &str,
+        content_type: ContentType,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Generate a presigned URL for uploading to the docx upload bucket.
+    fn put_docx_upload_presigned_url(
+        &self,
+        key: &str,
+        sha: &str,
+        content_type: ContentType,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Copy a document object from source key to destination key within the storage bucket.
+    fn copy_object(
+        &self,
+        source_key: &str,
+        destination_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Remove a destination object when a multi-part document copy fails.
+    fn delete_object(&self, key: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
+    fn get_snapshot(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+
+    /// Stores raw snapshot bytes in object storage for the given document.
+    fn upload_snapshot(
+        &self,
+        document_id: &str,
+        bytes: Vec<u8>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Port for attaching task system properties.
+pub trait TaskPropertiesPort: Send + Sync + 'static {
+    /// Attach initial (null-valued) task properties to entities.
+    fn attach_task_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Updates the tasks status
+    fn update_task_status(
+        &self,
+        entity_id: &str,
+        status: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Set a property value on an entity as the principal that created it.
+    fn set_entity_property(
+        &self,
+        principal: &CreationPrincipal,
+        entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        value: Option<models_properties::api::requests::SetPropertyValue>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Copy all task property values from one task to another.
+    fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Mint the edit receipt a [`TaskPropertiesPort`] adapter writes task
+/// properties with.
+///
+/// The receipt carries the same principal as the task's creation, so the
+/// property write publishes the same attribution as the document itself.
+pub async fn task_property_edit_receipt<A: EntityAccessService>(
+    entity_access: &A,
+    principal: &CreationPrincipal,
+    task_id: &str,
+) -> Result<EntityAccessReceipt<EditAccessLevel>, AccessError> {
+    match principal {
+        CreationPrincipal::User(user) => {
+            entity_access
+                .generate_entity_access_receipt(user, None, task_id, EntityType::Document)
+                .await
+        }
+        CreationPrincipal::BotForUser { bot, user } => {
+            entity_access
+                .generate_bot_entity_access_receipt(
+                    *bot,
+                    BotAccessScope::user(user.clone()),
+                    task_id,
+                    EntityType::Document,
+                )
+                .await
+        }
+        CreationPrincipal::TeamBot { bot, team } => {
+            entity_access
+                .generate_bot_entity_access_receipt(
+                    bot.get(),
+                    BotAccessScope::Team { team_id: *team },
+                    task_id,
+                    EntityType::Document,
+                )
+                .await
+        }
+    }
+}
+
+/// Use cases for relaying document content-change events.
+pub trait DocumentContentEventService: Send + Sync + 'static {
+    /// Load the document owner and publish a content-uploaded event.
+    fn publish_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Resolve the stored file type and publish a sync-content event. Sync callers
+    /// supply document identity and editors without interpreting the content.
+    fn publish_sync_content_updated(
+        &self,
+        document_id: &str,
+        editors: Vec<crate::domain::events::DocumentSyncEditor>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+}
+
+/// Service interface for document operations.
+///
+/// Orchestrates business logic using the repository and external services.
+pub trait DocumentService: Send + Sync + 'static {
+    /// Gets the basic document ignoring access checks
+    fn internal_get_basic_document(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<DocumentBasic, DocumentError>> + Send;
+
+    /// The name a user goes by ("First Last"), ignoring access checks;
+    /// `None` when they have not set one.
+    fn internal_get_user_display_name(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, DocumentError>> + Send;
+
+    /// Resolve a team task slug to its document ID.
+    fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Get a document with metadata, access level, and view location.
+    fn get_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<GetDocumentResponseData, DocumentError>> + Send;
+
+    /// Get the location (presigned URL or sync service content) for a document.
+    fn get_document_location(
+        &self,
+        document_context: &DocumentBasic,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        params: LocationQueryParams,
+    ) -> impl Future<Output = Result<LocationResponseV3, DocumentError>> + Send;
+
+    /// Soft-delete a document and update project modified timestamp.
+    fn delete_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project_id: Option<String>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Get the document text for a given document
+    fn get_document_text(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Create a new document owned as `principal` decides, generate an S3
+    /// presigned upload URL, and optionally attach task properties and update
+    /// project modified.
+    fn create_document(
+        &self,
+        principal: &CreationPrincipal,
+        document: NewDocument,
+        job_id: Option<String>,
+    ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
+
+    /// Import an email attachment as a document owned by the mailbox owner.
+    ///
+    /// Reuse returns existing content and no upload URL. A first import
+    /// follows the same post-create lifecycle as [`DocumentService::create_document`].
+    fn import_email_attachment(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+    ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
+
+    /// Get content lifecycle metadata for a document.
+    fn get_document_content(
+        &self,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<DocumentContent, DocumentError>> + Send;
+
+    /// Convert a document's entity_id to a short UUID.
+    fn get_short_id(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Build the branch name for a task document for the authenticated user.
+    fn get_task_branch_name(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_name: String,
+    ) -> impl Future<Output = Result<TaskBranchName, DocumentError>> + Send;
+
+    /// Identify a task document: its title, short id and team number.
+    /// Returns a bad request if the document is not a task.
+    fn get_task_identity(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<TaskIdentity, DocumentError>> + Send;
+
+    /// Get GitHub pull requests associated with a task document.
+    fn get_task_github_pull_requests(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<GithubPullRequestsResponse, DocumentError>> + Send;
+
+    /// Get the tasks linked to each GitHub pull request in `github_keys` that `user_id` can
+    /// see, in request order.
+    fn get_github_pull_request_tasks(
+        &self,
+        user_id: &str,
+        github_keys: Vec<String>,
+    ) -> impl Future<Output = Result<GithubPullRequestTasksResponse, DocumentError>> + Send;
+
+    /// Edit a document's metadata and share permissions.
+    ///
+    /// Validates permissions, updates the document, sends invalidation event,
+    /// and updates project modified timestamp.
+    fn edit_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        document_context: DocumentBasic,
+        args: EditDocumentServiceArgs,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Updates the tasks status to what is provided
+    fn update_task_status(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        status: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Copy an existing document, creating a new document with the same content
+    /// owned as `principal` decides.
+    fn copy_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: DocumentBasic,
+        principal: &CreationPrincipal,
+        document_name: String,
+        query_version_id: Option<i64>,
+        sync_version_id: Option<SyncServiceVersionID>,
+    ) -> impl Future<Output = Result<DocumentResponse, DocumentError>> + Send;
+
+    /// Get the name of a project by ID.
+    fn get_project_name(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
+
+    /// Get the top-level children (documents and sub-projects) of a project.
+    fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, DocumentError>> + Send;
+
+    /// Assigns the task properties to a document as the principal that created it.
+    fn handle_task_properties(
+        &self,
+        principal: &CreationPrincipal,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
+    fn get_snapshot(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+
+    /// Stores raw snapshot bytes in object storage for the given document.
+    fn upload_snapshot(
+        &self,
+        document_id: &str,
+        bytes: Vec<u8>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Publishes a `document.interaction` event: a real edit, a peer joining,
+    /// or the last peer leaving.
+    fn record_interaction(
+        &self,
+        document_id: &str,
+        reason: InteractionReason,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Get the team-share state of a document, resolved against the owner's team.
+    fn get_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
+
+    /// Grant or revoke the document owner's team's access on the document.
+    fn set_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        share: bool,
+    ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
+}
+
+/// Shared editing-session timestamps, independent of document synchronization.
+pub trait EditingActivityStore: Send + Sync {
+    /// Atomically refresh each actor's session for the supplied inactivity window.
+    ///
+    /// Returns one admission flag per activity, in input order. A new session or
+    /// replay of its admitted source event is allowed; subsequent edits refresh
+    /// the inactivity window without producing another activity.
+    fn refresh_editing_sessions(
+        &self,
+        activities: &[activity::Activity],
+        source_event_id: uuid::Uuid,
+        idle: std::time::Duration,
+    ) -> impl Future<Output = Result<Vec<bool>, rootcause::Report>> + Send;
+}

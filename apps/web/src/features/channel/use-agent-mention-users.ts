@@ -1,0 +1,59 @@
+import { useCodexAgentsAccess } from '@core/codex/flag';
+import { isCodexBotId } from '@core/constant/codexAgent';
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
+import type { IUser } from '@core/user/types';
+import { uniqueByKey } from '@core/util/compareUtils';
+import type { Accessor } from 'solid-js';
+import {
+  codexMentionUser,
+  cursorMentionUser,
+  isMacroAiId,
+  isMacroCoderId,
+  isMacroNewId,
+  macroMentionUser,
+} from './macroAi';
+import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
+
+/**
+ * Built-in agent entries shared by every message composer. Account setup does
+ * not hide a mention: the harness answers with a connection prompt in the
+ * thread when setup is needed, so replies link to Settings → Harness rather
+ * than the entry disappearing. The built-in Cursor and Codex entries
+ * follow their rollout flags. Mentions are re-tagged as bot mentions at send
+ * time.
+ *
+ * Macro gets exactly one entry. Both Macro bots are dropped from the incoming
+ * list first, so a stray participant or channel-bot row cannot put a second
+ * "Macro" in the menu; the rollout then decides which id that one entry
+ * carries.
+ */
+export function useAgentMentionUsers(
+  users: Accessor<IUser[]>,
+  enabled: Accessor<boolean> = () => true
+): Accessor<IUser[]> {
+  const canUseCursor = useCursorAgentsAccess();
+  const canUseCodex = useCodexAgentsAccess();
+  const canUseAgents = useChatV3AgentsFlag();
+
+  return () => {
+    // Old participants and saved bot rows must not restore the retired coder.
+    const mentionable = users().filter((user) => !isMacroCoderId(user.id));
+    if (!enabled()) return mentionable;
+    const base = mentionable.filter(
+      (user) =>
+        (canUseCursor() || !isCursorBotId(user.id)) &&
+        (canUseCodex() || !isCodexBotId(user.id)) &&
+        !isMacroAiId(user.id) &&
+        !isMacroNewId(user.id)
+    );
+    if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
+      base.unshift(cursorMentionUser());
+    }
+    if (canUseCodex() && !base.some((user) => isCodexBotId(user.id))) {
+      base.unshift(codexMentionUser());
+    }
+    base.unshift(macroMentionUser(canUseAgents()));
+    return uniqueByKey(base, (user) => user.id);
+  };
+}

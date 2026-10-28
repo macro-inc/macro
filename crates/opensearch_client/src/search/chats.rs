@@ -186,7 +186,9 @@ impl ChatQueryBuilder {
 }
 
 /// Highlight config attached to each `has_child` inner_hits block.
-fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_json::Value {
+pub(super) fn inner_hits_content_highlight(
+    highlight_query: &serde_json::Value,
+) -> serde_json::Value {
     serde_json::json!({
         "require_field_match": true,
         "max_analyzer_offset": super::HIGHLIGHT_MAX_ANALYZER_OFFSET,
@@ -204,7 +206,10 @@ fn inner_hits_content_highlight(highlight_query: &serde_json::Value) -> serde_js
 }
 
 /// Combined OR-of-all-terms query used as the inner_hits highlight_query.
-fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_json::Value {
+pub(super) fn build_all_terms_highlight_query(
+    terms: &[String],
+    match_type: &str,
+) -> serde_json::Value {
     let term_queries: Vec<serde_json::Value> = terms
         .iter()
         .map(|t| build_child_content_query(t, match_type).to_json())
@@ -221,7 +226,7 @@ fn build_all_terms_highlight_query(terms: &[String], match_type: &str) -> serde_
 }
 
 /// Build the per-term query that runs inside `has_child` against `content`.
-fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
+pub(super) fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
     let exact = match_type == "exact"
         || term.chars().any(|c| c.is_whitespace())
         || term.chars().count() < MIN_PREFIX_LEN;

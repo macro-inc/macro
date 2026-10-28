@@ -1,0 +1,134 @@
+import { schema } from '@loro-mirror/core';
+
+// Root maps have stable identities even when two peers first edit an empty
+// cell concurrently. Separate properties also let formatting and value edits
+// merge independently. Calculated values are deliberately never persisted.
+export const SPREADSHEET_LORO_SCHEMA = schema({
+  spreadsheetSheetMetadata: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  // One entry per table, keyed by sheet and table id, so collaborators can
+  // change different tables of a sheet at once.
+  spreadsheetTables: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetSheetNames: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetSheetOrder: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  spreadsheetDeletedSheets: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetSheetRevivals: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetSheetRetentions: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetValues: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBold: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetFontNames: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderTopStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderTopColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderRightStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderRightColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderBottomStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderBottomColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderLeftStyles: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetBorderLeftColors: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetNumberFormats: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetFormats: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetItalic: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetUnderline: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetStrikethrough: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetWrap: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetCheckboxes: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetBorderTop: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetBorderRight: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetBorderBottom: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetBorderLeft: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Boolean>>
+  ),
+  spreadsheetFontFamily: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetTextColor: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetFillColor: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetHorizontalAlign: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetVerticalAlign: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+  spreadsheetIndent: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  spreadsheetFontSize: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  spreadsheetDecimals: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  spreadsheetColumnWidths: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  spreadsheetRowAdditions: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  spreadsheetColumnAdditions: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
+  // Images drawn over sheets, as data URLs keyed by a hash of their content,
+  // so each is stored once and sheet metadata stays small.
+  spreadsheetImages: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.String>>
+  ),
+});

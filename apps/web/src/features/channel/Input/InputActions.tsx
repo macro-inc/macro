@@ -1,13 +1,31 @@
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
-import FormatIcon from '@phosphor/text-aa.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { isPlatform } from '@core/util/platform';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import FormatIcon from '@icon/system/regular/text-aa.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { useInput, useInputCommands } from './context';
 
-export function AttachFilesAction() {
+/**
+ * The paperclip.
+ *
+ * `accept` narrows the picker, defaulting to the channel's own media and
+ * document types. A surface whose upload path takes more than that — the
+ * agent composer, where a source file is usually the point — passes `null`
+ * to accept whatever it would accept on a drop.
+ */
+export function AttachFilesAction(
+  props: {
+    accept?: string | null;
+    disabled?: boolean;
+    children?: JSX.Element;
+    /** Custom actions share the file input; Photos narrows it to images. */
+    trigger?: (openPicker: () => void, openImages: () => void) => JSX.Element;
+  } = {}
+) {
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -17,7 +35,7 @@ export function AttachFilesAction() {
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
     if (files.length === 0) return;
-    void commands.attachFiles(files);
+    fireAndForget(commands.attachFiles(files), 'channel-input');
   };
 
   return (
@@ -29,21 +47,47 @@ export function AttachFilesAction() {
         type="file"
         class="hidden"
         multiple
-        accept={CHANNEL_FILE_PICKER_ACCEPT}
+        accept={
+          props.accept === null
+            ? undefined
+            : (props.accept ?? CHANNEL_FILE_PICKER_ACCEPT)
+        }
         onChange={onAttachFiles}
+        disabled={props.disabled}
         data-input-attach-file-picker
       />
-      <InputActionButton
-        label="Attach files"
-        onClick={() => fileInputRef?.click()}
-      >
-        <PaperclipIcon />
-      </InputActionButton>
+      {props.trigger ? (
+        props.trigger(
+          () => {
+            if (!fileInputRef) return;
+            if (props.accept === null) fileInputRef.removeAttribute('accept');
+            else
+              fileInputRef.accept = props.accept ?? CHANNEL_FILE_PICKER_ACCEPT;
+            fileInputRef.click();
+          },
+          () => {
+            if (!fileInputRef) return;
+            fileInputRef.accept = 'image/*';
+            fileInputRef.click();
+          }
+        )
+      ) : (
+        <InputActionButton
+          label="Attach files"
+          disabled={props.disabled}
+          onClick={() => fileInputRef?.click()}
+        >
+          {props.children ?? <PaperclipIcon />}
+        </InputActionButton>
+      )}
     </>
   );
 }
 
 export function AttachNativeMediaAction() {
+  // Android's WebView picker supports documents and media. Open it directly
+  // inside the click gesture instead of awaiting an unavailable iOS plugin.
+  if (isPlatform('android')) return <AttachFilesAction />;
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -53,7 +97,7 @@ export function AttachNativeMediaAction() {
     const files = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = '';
     if (files.length === 0) return;
-    void commands.attachFiles(files);
+    fireAndForget(commands.attachFiles(files), 'channel-input');
   };
 
   const onAttachMedia = async () => {
@@ -83,7 +127,7 @@ export function AttachNativeMediaAction() {
       />
       <InputActionButton
         label="Attach photos or videos"
-        onClick={() => void onAttachMedia()}
+        onClick={() => fireAndForget(onAttachMedia(), 'channel-input')}
       >
         <PaperclipIcon />
       </InputActionButton>

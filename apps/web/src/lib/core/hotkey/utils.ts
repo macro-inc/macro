@@ -64,6 +64,40 @@ export function removeCommandsFromTokenMap(
   return newMap ?? tokenMap;
 }
 
+/**
+ * The commands that may currently run for a key. An 'override' registration
+ * eclipses every command registered before it on that key, so only the slice
+ * from the newest override onward is effective. Eclipsed commands stay
+ * registered — disposing the commands that eclipse them makes them effective
+ * again (e.g. a block taking over a split-scope key returns it on unmount).
+ */
+export function getEffectiveCommands(
+  commands: HotkeyCommand[] | undefined
+): HotkeyCommand[] {
+  if (!commands || commands.length === 0) return [];
+  for (let i = commands.length - 1; i >= 0; i--) {
+    const command = commands[i];
+    if (command && (command.registrationType ?? 'override') === 'override') {
+      return commands.slice(i);
+    }
+  }
+  return commands;
+}
+
+/**
+ * The commands that may currently run for a key in a scope: the scope's
+ * commands registered for that key, in registration order, with eclipsed
+ * ones removed.
+ */
+export function getCommandsForHotkey(
+  scopeNode: ScopeNode,
+  hotkey: ValidHotkey
+): HotkeyCommand[] {
+  return getEffectiveCommands(
+    scopeNode.commands.filter((c) => c.hotkeys?.includes(hotkey))
+  );
+}
+
 type GetHotkeyCommandOptions = {
   /**
    * The property to sort by. Defaults to 'handlerPriority'.
@@ -105,8 +139,8 @@ function getHotkeyCommands(
 
   if (!scopeNode) return [];
 
-  const commands = scopeNode.hotkeyCommands.get(hotkey);
-  if (!commands || commands.length === 0) return [];
+  const commands = getCommandsForHotkey(scopeNode, hotkey);
+  if (commands.length === 0) return [];
 
   // Sort by the specified property
   return [...commands].sort((a, b) => {
@@ -168,8 +202,7 @@ export function registerScope(args: RegisterScopeArgs) {
     description: description ?? undefined,
     parentScopeId: parentScopeId,
     childScopeIds: [],
-    hotkeyCommands: new Map(),
-    unkeyedCommands: [],
+    commands: [],
     detached: args.detached ?? false,
   };
 
@@ -205,10 +238,7 @@ export function removeScope(scopeId: string) {
   }
 
   // Collect all commands from this scope to remove from the global token map
-  const commandsToRemove = [
-    ...Array.from(scope.hotkeyCommands.values()).flat(),
-    ...scope.unkeyedCommands,
-  ];
+  const commandsToRemove = [...scope.commands];
 
   if (commandsToRemove.length > 0) {
     setHotkeyTokenMap((prev) =>
@@ -216,8 +246,7 @@ export function removeScope(scopeId: string) {
     );
   }
 
-  scope.hotkeyCommands.clear();
-  scope.unkeyedCommands.length = 0;
+  scope.commands.length = 0;
 
   // if scope is in currently active scope branch, we want to "snip just above it", i.e. set active scope to closest DOM scope parent.
   if (scope.type === 'dom') {

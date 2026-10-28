@@ -1,6 +1,6 @@
 use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
 use document_sub_type::DocumentSubType;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
@@ -63,6 +63,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 d."updatedAt"::timestamptz as "updated_at!",
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
+                NULL::text as "model",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
                 uh."updatedAt"::timestamptz as "viewed_at",
@@ -127,6 +128,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 c."updatedAt"::timestamptz as "updated_at!",
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
+                c.model as "model",
                 NULL as "sha",
                 NULL as "sub_type",
                 uh."updatedAt"::timestamptz as "viewed_at",
@@ -164,6 +166,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 p."updatedAt"::timestamptz as "updated_at!",
                 p."parentId" as "project_id",
                 NULL as "is_persistent",
+                NULL::text as "model",
                 NULL as "sha",
                 NULL as "sub_type",
                 uh."updatedAt"::timestamptz as "viewed_at",

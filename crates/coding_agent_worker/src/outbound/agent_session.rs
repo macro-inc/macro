@@ -1,8 +1,8 @@
 //! The daemon's client for the agent-harness service: open sessions, drive
-//! them. Both calls act as the bot, and control calls additionally act for
-//! the user whose mention they forward.
+//! them. Both calls act as the harness, and control calls additionally act
+//! for the user whose mention they forward.
 
-use agent_runtime_protocol::domain::action::AgentAction;
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::inbound::axum_router::{
     ControlRequest, CreateAgentSessionRequest, CreateAgentSessionResponse,
@@ -10,12 +10,12 @@ use agent_session::inbound::axum_router::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::StatusCode;
+use trigger_context::TriggerContext;
 
-use crate::config::MacroApi;
+use crate::config::{HarnessCredentials, MacroApi};
 
-const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
-const BOT_SCOPE_HEADER: &str = "x-macro-bot-scope";
-const BOT_ACTING_USER_HEADER: &str = "x-macro-bot-for-macro-user-id";
+const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
+const HARNESS_ACTING_USER_HEADER: &str = "x-macro-harness-for-macro-user-id";
 
 /// A failure calling the agent-harness service.
 #[derive(Debug, thiserror::Error)]
@@ -23,8 +23,8 @@ pub enum ApiError {
     /// The request could not be sent or the response not read.
     #[error(transparent)]
     Http(#[from] reqwest::Error),
-    /// This bot already has a session for the thread.
-    #[error("this bot already has a session for this thread")]
+    /// A bound agent already has a session for the thread.
+    #[error("this agent already has a session for this thread")]
     ThreadSessionExists {
         /// The existing session, when the service could name it.
         session: Option<AgentSessionId>,
@@ -39,26 +39,30 @@ pub enum ApiError {
     },
 }
 
-/// Client for the agent-harness service, acting as one bot.
+/// Client for the agent-harness service, acting as one harness.
 pub struct HarnessApi {
     http: reqwest::Client,
     base: String,
-    bot_token: String,
-    bot_scope: String,
+    token: String,
 }
 
 impl HarnessApi {
-    /// Build a client from the daemon's config.
-    pub fn new(config: &MacroApi) -> Self {
+    /// Build a client from the daemon's config and paired credentials.
+    pub fn new(config: &MacroApi, credentials: &HarnessCredentials) -> Self {
         Self {
             http: reqwest::Client::new(),
             base: config.api_url.trim_end_matches('/').to_owned(),
-            bot_token: config.bot_token.clone(),
-            bot_scope: config.bot_scope.clone(),
+            token: credentials.token.clone(),
         }
     }
 
-    /// Open an external session for this bot.
+    /// Open an external session for one of this harness's bound agents,
+    /// acting for the user who mentioned the agent.
+    ///
+    /// The acting-user header is what the service verifies the session's owner
+    /// against (owner for a private harness, a team member for a team one), so
+    /// it carries the sender the way the control calls do - the body's `owner`
+    /// is not trusted for a harness caller.
     ///
     /// A thread routes to at most one of a bot's sessions, so a redelivered
     /// mention lands on [`ApiError::ThreadSessionExists`] carrying the
@@ -66,12 +70,41 @@ impl HarnessApi {
     pub async fn create_session(
         &self,
         request: &CreateAgentSessionRequest,
+        acting_user: &MacroUserIdStr<'static>,
+    ) -> Result<CreateAgentSessionResponse, ApiError> {
+        // A trigger stream is not replayed. Creation can commit before reply
+        // reservation fails, so retry the same identity before any prompt.
+        let attempts = if request.id.is_some() && request.thread.is_some() {
+            2
+        } else {
+            0
+        };
+        tokio_retry::RetryIf::start(
+            tokio_retry::strategy::ExponentialBackoff::from_millis(2)
+                .factor(100)
+                .take(attempts),
+            || self.create_session_once(request, acting_user),
+            |error: &ApiError| match error {
+                ApiError::Http(_) => true,
+                ApiError::Refused { status, .. } => {
+                    status.is_server_error() || *status == StatusCode::TOO_MANY_REQUESTS
+                }
+                ApiError::ThreadSessionExists { .. } => false,
+            },
+        )
+        .await
+    }
+
+    async fn create_session_once(
+        &self,
+        request: &CreateAgentSessionRequest,
+        acting_user: &MacroUserIdStr<'static>,
     ) -> Result<CreateAgentSessionResponse, ApiError> {
         let response = self
             .http
             .post(format!("{}/agent-sessions", self.base))
-            .header(BOT_TOKEN_HEADER, &self.bot_token)
-            .header(BOT_SCOPE_HEADER, &self.bot_scope)
+            .header(HARNESS_TOKEN_HEADER, &self.token)
+            .header(HARNESS_ACTING_USER_HEADER, acting_user.as_ref())
             .json(request)
             .send()
             .await?;
@@ -96,29 +129,54 @@ impl HarnessApi {
         session: AgentSessionId,
         actor: &MacroUserIdStr<'static>,
         action: AgentAction,
+        context: Option<TriggerContext>,
+    ) -> Result<(), ApiError> {
+        self.control_with_id(session, actor, action, context, None)
+            .await
+    }
+
+    async fn control_with_id(
+        &self,
+        session: AgentSessionId,
+        actor: &MacroUserIdStr<'static>,
+        action: AgentAction,
+        context: Option<TriggerContext>,
+        action_id: Option<AgentActionId>,
     ) -> Result<(), ApiError> {
         let response = self
             .http
             .post(format!("{}/agent-sessions/{session}/control", self.base))
-            .header(BOT_TOKEN_HEADER, &self.bot_token)
-            .header(BOT_SCOPE_HEADER, &self.bot_scope)
-            .header(BOT_ACTING_USER_HEADER, actor.as_ref())
-            .json(&ControlRequest { action })
+            .header(HARNESS_TOKEN_HEADER, &self.token)
+            .header(HARNESS_ACTING_USER_HEADER, actor.as_ref())
+            .json(&ControlRequest {
+                action_id,
+                context,
+                action,
+            })
             .send()
             .await?;
         refuse_errors(response).await?;
         Ok(())
     }
 
-    /// Deliver a prompt to a session, acting for the user who sent it.
+    /// Deliver a prompt to a session, acting for the user who sent it, with
+    /// why the agent was called as the trigger read it.
     pub async fn prompt(
         &self,
         session: AgentSessionId,
         sender: &MacroUserIdStr<'static>,
         text: &str,
+        message_id: macro_uuid::Uuid,
+        context: Option<TriggerContext>,
     ) -> Result<(), ApiError> {
-        self.control(session, sender, AgentAction::prompt(text))
-            .await
+        self.control_with_id(
+            session,
+            sender,
+            AgentAction::prompt(text),
+            context,
+            Some(AgentActionId::from_uuid(message_id)),
+        )
+        .await
     }
 }
 
@@ -128,5 +186,14 @@ async fn refuse_errors(response: reqwest::Response) -> Result<reqwest::Response,
         return Ok(response);
     }
     let message = response.text().await.unwrap_or_default();
+    if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+        tracing::error!(
+            %status,
+            "the server refused this harness's credentials; press p to re-pair"
+        );
+    }
     Err(ApiError::Refused { status, message })
 }
+
+#[cfg(test)]
+mod test;

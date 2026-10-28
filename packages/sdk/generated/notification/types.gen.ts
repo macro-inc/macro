@@ -4,6 +4,114 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+/**
+ * Someone named the recipient in a prompt to an agent session.
+ */
+export type AgentSessionMentionedMetadata = AgentSessionNotificationRef & {
+    /**
+     * The action carrying the prompt.
+     */
+    actionId: string;
+    /**
+     * Who wrote the prompt, absent when a bot acted on nobody's behalf.
+     */
+    mentionedBy?: string | null;
+};
+
+/**
+ * Flattened into each agent-session kind so the wire keeps these keys at the
+ * top level of the metadata, the way [`CommonChannelMetadata`] does.
+ */
+export type AgentSessionNotificationRef = {
+    /**
+     * The magic-chip message for the turn in question, when one was posted.
+     */
+    announcementMessageId?: string | null;
+    /**
+     * The bot the session runs for. A string on the wire: system bots have
+     * fixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not
+     * RFC 4122 uuids and fail a `format: uuid` check on the client.
+     */
+    botId: string;
+    /**
+     * The bot's display name; agent notifications have no user sender, so
+     * this is who they read as being from.
+     */
+    botName: string;
+    /**
+     * The channel the session was opened from, when it was opened from a
+     * channel thread.
+     */
+    channelId?: string | null;
+    parent?: null | AgentSessionOriginParent;
+    /**
+     * The session; what a click opens.
+     */
+    sessionId: string;
+    /**
+     * The session's name at the time of the event.
+     */
+    sessionName: string;
+    /**
+     * The thread the session was opened from, when it was.
+     */
+    threadId?: string | null;
+};
+
+/**
+ * The session an agent-session notification is about, and where its magic
+ * chip lives when it was opened from a thread.
+ *
+ * The conversation an agent session was opened from: a channel, document,
+ * or initiative. Spelled like the message API's parent for client routing.
+ */
+export type AgentSessionOriginParent = {
+    /**
+     * The parent entity id.
+     */
+    id: string;
+    /**
+     * `channel`, `document`, or `initiative`.
+     */
+    type: string;
+};
+
+/**
+ * An agent finished a turn with nothing queued behind it.
+ */
+export type AgentSessionSettledMetadata = AgentSessionNotificationRef & {
+    /**
+     * Who prompted the turn, absent when a bot acted on nobody's behalf.
+     */
+    actor?: string | null;
+    /**
+     * The agent's last prose in the turn, whole; `None` when it wrote none.
+     */
+    excerpt?: string | null;
+    /**
+     * The ACP stop reason, or `error`.
+     */
+    stopReason: string;
+    /**
+     * The turn that ended.
+     */
+    turn: number;
+};
+
+/**
+ * An agent is blocked on a question only the session's owner can answer.
+ */
+export type AgentSessionWaitingForInputMetadata = AgentSessionNotificationRef & {
+    /**
+     * The question, as the agent phrased it.
+     */
+    question: string;
+    /**
+     * The turn asking.
+     */
+    turn: number;
+};
+
 export type AiResponseMetadata = {
     messageId: string;
     summary: string;
@@ -18,10 +126,6 @@ export type ApiUserNotification = Entity & {
      * When the notification was deleted.
      */
     deleted_at?: string | null;
-    /**
-     * Whether the notification is marked as done.
-     */
-    done: boolean;
     /**
      * The notification ID.
      */
@@ -48,6 +152,10 @@ export type ApiUserNotification = Entity & {
      */
     sent: boolean;
     /**
+     * The authoritative notification lifecycle state.
+     */
+    state: NotificationState;
+    /**
      * When the notification was last updated.
      */
     updated_at: string;
@@ -65,6 +173,26 @@ export type BulkGetByEventItemIdsRequest = {
      * The event item IDs to filter notifications by.
      */
     eventItemIds: Array<string>;
+};
+
+/**
+ * A channel member who sees a calendar event only through a channel share
+ * asked the person who shared it to add them as a guest. Sent to the sharer,
+ * with the requester as sender.
+ */
+export type CalendarEventJoinRequestMetadata = {
+    /**
+     * The shared calendar event entity the request is for.
+     */
+    eventId: string;
+    /**
+     * Stable request identity, answered from the event's details.
+     */
+    requestId: string;
+    /**
+     * Event title when the request was made.
+     */
+    title: string;
 };
 
 /**
@@ -145,6 +273,11 @@ export type ChannelInviteMetadata = {
      */
     invitedBy: string;
     /**
+     * Whether this is a direct message rather than a channel invitation.
+     * Older notification payloads retain channel-invitation wording.
+     */
+    isDirectMessage?: boolean;
+    /**
      * Message content to show in the invite email, when the invite was triggered by a message.
      */
     messageContent?: string | null;
@@ -170,6 +303,32 @@ export type ChannelMentionMetadata = CommonChannelMetadata & {
     senderProfilePictureUrl?: string | null;
     /**
      * the id of the thread
+     */
+    threadId?: string | null;
+};
+
+/**
+ * Metadata for a reaction added to one of the recipient's channel messages.
+ */
+export type ChannelMessageReactionMetadata = CommonChannelMetadata & {
+    /**
+     * The emoji added by the reactor.
+     */
+    emoji: string;
+    /**
+     * The reacted-to message content.
+     */
+    messageContent: string;
+    /**
+     * The reacted-to message id.
+     */
+    messageId: string;
+    /**
+     * Optional reactor profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * The thread root id when the reacted-to message is a reply.
      */
     threadId?: string | null;
 };
@@ -225,13 +384,20 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
 export type ChannelType = 'public' | 'private' | 'directMessage' | 'team';
 
 /**
+ * Identity of a document comment or its thread. Comments written before the
+ * shared message store carry the legacy numeric ids; comments in the shared
+ * store carry the message and root UUIDs.
+ */
+export type CommentRef = number | string;
+
+/**
  * Notification sent when someone comments on a document the user owns.
  */
 export type CommentedOnDocumentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -244,6 +410,10 @@ export type CommentedOnDocumentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -253,7 +423,7 @@ export type CommentedOnDocumentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 /**
@@ -288,6 +458,46 @@ export type CreateNotification = Entity & {
 };
 
 /**
+ * CRM discussion metadata. The notification entity identifies the company or
+ * contact; message and thread UUIDs select the discussion inside it.
+ */
+export type CrmDiscussionMetadata = {
+    /**
+     * Canonical shared message UUID.
+     */
+    messageId: string;
+    /**
+     * Semantic reason selected by the message delivery domain.
+     */
+    reason: CrmDiscussionReason;
+    /**
+     * Company or contact display name.
+     */
+    recordName: string;
+    /**
+     * Public display name for a bot author.
+     */
+    senderDisplayName?: string | null;
+    /**
+     * Optional avatar for push notification attachments.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * Posted Markdown content.
+     */
+    text: string;
+    /**
+     * Canonical discussion root UUID.
+     */
+    threadId: string;
+};
+
+/**
+ * Why a CRM discussion notification was delivered.
+ */
+export type CrmDiscussionReason = 'mention' | 'reply' | 'owner';
+
+/**
  * Request to register or unregister a device for push notifications.
  */
 export type DeviceRequest = {
@@ -295,6 +505,10 @@ export type DeviceRequest = {
      * The device platform type (iOS or Android).
      */
     deviceType: DeviceType;
+    /**
+     * Whether this Android binary supports native Telecom incoming calls.
+     */
+    nativeCallCapable?: boolean;
     /**
      * The device push notification token.
      */
@@ -345,9 +559,61 @@ export type Entity = {
 };
 
 /**
+ * A person granted you access to a shared entity.
+ */
+export type EntityAccessGrantedMetadata = {
+    /**
+     * Requested or granted permission.
+     */
+    accessLevel: RequestedAccessLevel;
+    /**
+     * Shared item's name.
+     */
+    entityName: string;
+    /**
+     * Document file type for routing.
+     */
+    fileType?: string | null;
+    /**
+     * Stable request identity.
+     */
+    requestId: string;
+    /**
+     * Revision that generated this notification.
+     */
+    revision: number;
+};
+
+/**
+ * A person requested access to a shared entity.
+ */
+export type EntityAccessRequestedMetadata = {
+    /**
+     * Requested or granted permission.
+     */
+    accessLevel: RequestedAccessLevel;
+    /**
+     * Shared item's name.
+     */
+    entityName: string;
+    /**
+     * Document file type for routing.
+     */
+    fileType?: string | null;
+    /**
+     * Stable request identity.
+     */
+    requestId: string;
+    /**
+     * Revision that generated this notification.
+     */
+    revision: number;
+};
+
+/**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A plain old json error response for use with axum.
@@ -359,6 +625,29 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * A live message in an independently shared external chat.
+ */
+export type ExternalChatMessageMetadata = {
+    /**
+     * The chat's name.
+     */
+    chatName: string;
+    /**
+     * Stable message id; retries use it as their notification id.
+     */
+    messageId: string;
+    /**
+     * The messaging service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+};
+
+/**
+ * The messaging service an external chat lives in.
+ */
+export type ExternalChatProvider = 'whatsapp';
 
 /**
  * The strongly typed response for listing user notifications.
@@ -621,6 +910,50 @@ export type InboxReauthRequiredMetadata = {
 };
 
 /**
+ * Project discussion metadata. The notification entity identifies the initiative;
+ * message and thread UUIDs select the discussion inside that project.
+ */
+export type InitiativeDiscussionMetadata = {
+    /**
+     * Canonical shared message UUID.
+     */
+    messageId: string;
+    /**
+     * Authenticated project owner.
+     */
+    owner: string;
+    /**
+     * Name displayed in the project header.
+     */
+    projectName: string;
+    /**
+     * Semantic reason selected by the message delivery domain.
+     */
+    reason: InitiativeDiscussionReason;
+    /**
+     * Public display name for a bot author.
+     */
+    senderDisplayName?: string | null;
+    /**
+     * Optional avatar for push notification attachments.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * Posted Markdown content.
+     */
+    text: string;
+    /**
+     * Canonical discussion root UUID.
+     */
+    threadId: string;
+};
+
+/**
+ * Why a project discussion notification was delivered.
+ */
+export type InitiativeDiscussionReason = 'mention' | 'reply' | 'assignee' | 'owner';
+
+/**
  * Metadata for when a user is invited to a team.
  */
 export type InviteToTeamMetadata = {
@@ -628,6 +961,14 @@ export type InviteToTeamMetadata = {
      * The user who sent the invitation
      */
     invitedBy: string;
+    /**
+     * What the invitee gets by joining, as the team stood when the invite was sent.
+     */
+    inviteePlan?: InviteePlan;
+    /**
+     * Whether this email reminds the invitee of an invite they have not answered.
+     */
+    reminder?: boolean;
     /**
      * Role/permission level in the team
      */
@@ -649,6 +990,11 @@ export type InviteToTeamMetadata = {
      */
     teamName: string;
 };
+
+/**
+ * What a team invitee gets by joining.
+ */
+export type InviteePlan = 'free' | 'premium';
 
 /**
  * Metadata for when a item is shared with a user
@@ -686,7 +1032,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -703,6 +1049,10 @@ export type MentionedInDocumentCommentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -712,7 +1062,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 export type NewEmailMetadata = {
@@ -761,6 +1111,30 @@ export type NotifEvent = {
      */
     content: CommentedOnDocumentMetadata;
     tag: 'commented_on_document';
+} | {
+    /**
+     * Someone requested more access to a shared entity.
+     */
+    content: EntityAccessRequestedMetadata;
+    tag: 'entity_access_requested';
+} | {
+    /**
+     * An owner granted requested access.
+     */
+    content: EntityAccessGrantedMetadata;
+    tag: 'entity_access_granted';
+} | {
+    /**
+     * Someone commented, replied, or mentioned the recipient on a project.
+     */
+    content: InitiativeDiscussionMetadata;
+    tag: 'initiative_discussion';
+} | {
+    /**
+     * Someone commented, replied, or mentioned the recipient on a CRM company or contact.
+     */
+    content: CrmDiscussionMetadata;
+    tag: 'crm_discussion';
 } | {
     /**
      * The user was invited to a channel.
@@ -820,6 +1194,12 @@ export type NotifEvent = {
     tag: 'reminder';
 } | {
     /**
+     * A live message in a shared external chat.
+     */
+    content: ExternalChatMessageMetadata;
+    tag: 'external_chat_message';
+} | {
+    /**
      * A calendar event alarm came due.
      */
     content: CalendarEventReminderMetadata;
@@ -869,6 +1249,37 @@ export type NotifEvent = {
      */
     content: GithubPrReview;
     tag: 'github_pr_review';
+} | {
+    /**
+     * An agent finished a turn with nothing queued behind it.
+     */
+    content: AgentSessionSettledMetadata;
+    tag: 'agent_session_settled';
+} | {
+    /**
+     * An agent is blocked on a question for the session's owner.
+     */
+    content: AgentSessionWaitingForInputMetadata;
+    tag: 'agent_session_waiting_for_input';
+} | {
+    /**
+     * The user was named in a prompt to an agent session.
+     */
+    content: AgentSessionMentionedMetadata;
+    tag: 'agent_session_mentioned';
+} | {
+    /**
+     * Someone reacted to one of the user's channel messages.
+     */
+    content: ChannelMessageReactionMetadata;
+    tag: 'channel_message_reaction';
+} | {
+    /**
+     * A channel member asked to be added as a guest of an event the
+     * user shared with the channel.
+     */
+    content: CalendarEventJoinRequestMetadata;
+    tag: 'calendar_event_join_request';
 };
 
 /**
@@ -891,25 +1302,60 @@ export type NotificationDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 export type NotificationServiceApiVersion = 'v1';
+
+/**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
 
 /**
  * newtype wrapper for the the typename of a Notification
  */
 export type NotificationTypeName = string;
 
+/**
+ * the value we send as the payload in the ios notification
+ * This data is accessible to the client
+ */
 export type PushNotificationData = {
+    navigation?: null | PushNotificationNavigation;
     /**
      * The id of the notification record (UserNotification.id)
      */
     notificationId: string;
     /**
+     * Account that owns the receiving device, set during per-recipient delivery.
+     */
+    recipientId?: string | null;
+    /**
      * The sender's profile picture URL, used by the Notification Service Extension
      * to download and attach as a rich notification image.
      */
     senderProfilePictureUrl?: string | null;
+};
+
+/**
+ * Open a channel at a specific message.
+ */
+export type PushNotificationNavigation = {
+    /**
+     * Channel containing the message.
+     */
+    channelId: string;
+    /**
+     * Message to highlight.
+     */
+    messageId: string;
+    /**
+     * Root of the message's thread; null identifies a top-level message.
+     */
+    threadId: string | null;
+    type: 'channel';
 };
 
 /**
@@ -924,10 +1370,6 @@ export type RealtimeNotifTaggedContentValue = Entity & {
      * When the notification was deleted.
      */
     deleted_at?: string | null;
-    /**
-     * Whether the notification is marked as done.
-     */
-    done: boolean;
     /**
      * The notification event type string (e.g. "channel_mention").
      * TODO make this a new type
@@ -949,6 +1391,10 @@ export type RealtimeNotifTaggedContentValue = Entity & {
      * Whether the notification has been sent.
      */
     sent: boolean;
+    /**
+     * The authoritative lifecycle state, independent of viewing timestamps.
+     */
+    state: NotificationState;
     /**
      * When the notification was last updated.
      */
@@ -1001,7 +1447,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -1014,6 +1460,10 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -1023,8 +1473,13 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
+
+/**
+ * Permission level used by an access request, excluding ownership.
+ */
+export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
 
 /**
  * Metadata for when a user is assigned to a task
@@ -1048,7 +1503,7 @@ export type TaskAssignedMetadata = {
 
 export type UnsubscribeItemPathParams = {
     item_id: string;
-    item_type: string;
+    item_type: EntityType;
 };
 
 export type UserUnsubscribe = {
@@ -1060,6 +1515,10 @@ export type UserUnsubscribe = {
      * The item type
      */
     item_type: string;
+    /**
+     * None for permanent mutes; notifications resume automatically at this deadline.
+     */
+    snoozed_until?: string | null;
 };
 
 export type HealthHandlerData = {
@@ -1121,7 +1580,7 @@ export type UnsubscribeEmailResponse = UnsubscribeEmailResponses[keyof Unsubscri
 export type RemoveUnsubscribeItemData = {
     body?: never;
     path: {
-        item_type: string;
+        item_type: EntityType;
         item_id: string;
     };
     query?: never;
@@ -1144,14 +1603,20 @@ export type RemoveUnsubscribeItemResponse = RemoveUnsubscribeItemResponses[keyof
 export type UnsubscribeItemData = {
     body?: never;
     path: {
-        item_type: string;
+        item_type: EntityType;
         item_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * A future resume time. Omit to mute indefinitely.
+         */
+        snoozed_until?: string | null;
+    };
     url: '/unsubscribe/item/{item_type}/{item_id}';
 };
 
 export type UnsubscribeItemErrors = {
+    400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
 };
@@ -1209,6 +1674,10 @@ export type ListTypedNotificationsData = {
     path?: never;
     query?: {
         /**
+         * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
+         */
+        states?: string;
+        /**
          * Size limit per page.
          */
         limit?: number;
@@ -1238,6 +1707,10 @@ export type BulkGetTypedNotificationsByEventItemIdsData = {
     body: BulkGetByEventItemIdsRequest;
     path?: never;
     query?: {
+        /**
+         * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
+         */
+        states?: string;
         /**
          * Size limit per page. Default 20, max 500.
          */
@@ -1273,6 +1746,10 @@ export type GetTypedNotificationsByEventItemIdData = {
         event_item_id: string;
     };
     query?: {
+        /**
+         * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
+         */
+        states?: string;
         /**
          * Size limit per page.
          */

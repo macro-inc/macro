@@ -1,4 +1,7 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from './client';
 import type { ActivityType } from './generated/schemas/activityType';
@@ -20,7 +23,7 @@ export async function recordChannelActivity(args: {
   channelId: string;
   activityType: ActivityType;
 }): Promise<ApiActivity> {
-  if (!ENABLE_GRAPHQL_SOUP()) {
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
     return await throwOnErr(
       async () =>
         await storageServiceClient.postActivity({

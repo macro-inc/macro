@@ -5,8 +5,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Bot, BotChannel, BotChannelListCaller, BotId, BotToken,
-        CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+        AddChannelBotRequest, Agent, Bot, BotChannel, BotChannelListCaller, BotId, BotOwnerProfile,
+        BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateBotTokenResponse, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
 };
@@ -15,8 +16,9 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
 };
+use axum_extra::extract::Query;
 use entity_access::{
     domain::{
         models::{EntityAccessReceipt, MemberParticipantRole},
@@ -30,6 +32,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
+use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -84,6 +87,13 @@ pub struct BotPath {
     pub bot_id: BotId,
 }
 
+/// Agent path.
+#[derive(Debug, serde::Deserialize)]
+pub struct AgentPath {
+    /// Agent bot id.
+    pub agent_id: BotId,
+}
+
 /// Bot token path.
 #[derive(Debug, serde::Deserialize)]
 pub struct BotTokenPath {
@@ -109,6 +119,16 @@ pub struct ChannelBotPath {
     pub bot_id: BotId,
 }
 
+/// Query for `GET /bots/profiles`.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct BotOwnerProfilesQuery {
+    /// Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.
+    #[param(style = Form, explode)]
+    #[serde(default)]
+    pub ids: Vec<BotId>,
+}
+
 /// Bot channel path.
 #[derive(Debug, serde::Deserialize)]
 pub struct BotChannelPath {
@@ -127,9 +147,19 @@ where
     T: Send + Sync,
 {
     Router::new()
+        .route("/agents", get(list_agents_handler::<S, Svc, Auth>))
+        .route("/agents", post(create_agent_handler::<S, Svc, Auth>))
+        .route(
+            "/agents/{agent_id}",
+            put(update_agent_handler::<S, Svc, Auth>),
+        )
         .route("/bots", get(list_bots_handler::<S, Svc, Auth>))
         .route("/bots", post(create_bot_handler::<S, Svc, Auth>))
         .route("/bots/me", get(get_self_bot_handler::<S, Svc, Auth>))
+        .route(
+            "/bots/profiles",
+            get(get_bot_owner_profiles_handler::<S, Svc, Auth>),
+        )
         .route("/bots/{bot_id}", get(get_bot_handler::<S, Svc, Auth>))
         .route("/bots/{bot_id}", patch(patch_bot_handler::<S, Svc, Auth>))
         .route("/bots/{bot_id}", delete(delete_bot_handler::<S, Svc, Auth>))
@@ -166,6 +196,104 @@ where
             delete(remove_channel_bot_handler::<S, Svc, Auth>),
         )
         .with_state(state)
+}
+
+/// Handler for `POST /agents`.
+#[utoipa::path(
+    post,
+    tag = "agents",
+    operation_id = "create_agent",
+    path = "/agents",
+    request_body = CreateAgentRequest,
+    responses(
+        (status = 201, body = Agent),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn create_agent_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<CreateAgentRequest>,
+) -> Result<(StatusCode, Json<Agent>), BotsHandlerErr> {
+    let agent = state
+        .service
+        .create_agent(authorization.authorization.user.macro_user_id, req)
+        .await?;
+    Ok((StatusCode::CREATED, Json(agent)))
+}
+
+/// Handler for `GET /agents`.
+#[utoipa::path(
+    get,
+    tag = "agents",
+    operation_id = "list_agents",
+    path = "/agents",
+    responses(
+        (status = 200, body = Vec<Agent>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_agents_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<Vec<Agent>>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_agents(authorization.authorization.user.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Handler for `PUT /agents/{agent_id}`.
+#[utoipa::path(
+    put,
+    tag = "agents",
+    operation_id = "update_agent",
+    path = "/agents/{agent_id}",
+    params(
+        ("agent_id" = BotId, Path, description = "Agent bot ID")
+    ),
+    request_body = UpdateAgentRequest,
+    responses(
+        (status = 200, body = Agent),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn update_agent_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<AgentPath>,
+    Json(req): Json<UpdateAgentRequest>,
+) -> Result<Json<Agent>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .update_agent(
+                authorization.authorization.user.macro_user_id,
+                path.agent_id,
+                req,
+            )
+            .await?,
+    ))
 }
 
 fn caller_from_receipt(
@@ -237,6 +365,36 @@ pub async fn get_self_bot_handler<
             .get_self(authorization.authorization.bot_id)
             .await?,
     ))
+}
+
+/// Handler for `GET /bots/profiles`.
+///
+/// Returns display fields and the sponsor for each requested bot. Not a
+/// manageability check: any authenticated user or internal caller may look up
+/// ids they already have.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "get_bot_owner_profiles",
+    path = "/bots/profiles",
+    params(BotOwnerProfilesQuery),
+    responses(
+        (status = 200, body = Vec<BotOwnerProfile>),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn get_bot_owner_profiles_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    _authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(query): Query<BotOwnerProfilesQuery>,
+) -> Result<Json<Vec<BotOwnerProfile>>, BotsHandlerErr> {
+    Ok(Json(state.service.get_owner_profiles(&query.ids).await?))
 }
 
 async fn get_bot_handler<
@@ -380,6 +538,9 @@ pub async fn list_bot_channels_handler<
     let caller = match authorization.authorization {
         MacroAuthorization::User(user) => BotChannelListCaller::User(user.macro_user_id),
         MacroAuthorization::Bot(bot) => BotChannelListCaller::Bot(bot.bot_id),
+        MacroAuthorization::Harness(_) => {
+            return Err(BotsHandlerErr::Bot(BotError::Unauthorized));
+        }
         MacroAuthorization::Internal(_) => BotChannelListCaller::Internal,
     };
     Ok(Json(
@@ -445,13 +606,12 @@ async fn add_channel_bot_handler<
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
-    Path(path): Path<ChannelPath>,
+    Path(_path): Path<ChannelPath>,
     Json(req): Json<AddChannelBotRequest>,
 ) -> Result<StatusCode, BotsHandlerErr> {
-    let caller = caller_from_receipt(&access.entity_access_receipt)?;
     state
         .service
-        .add_bot_to_channel(caller, path.channel_id, req.bot_id)
+        .add_bot_to_channel(access.entity_access_receipt, req.bot_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -490,9 +650,13 @@ impl IntoResponse for BotsHandlerErr {
             Self::BadRequest(_) | Self::Bot(BotError::BadRequest(_)) => StatusCode::BAD_REQUEST,
             Self::Bot(BotError::NotFound(_)) => StatusCode::NOT_FOUND,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
+            Self::Bot(BotError::Unavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Bot(BotError::Repo(_)) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
+        if matches!(
+            status,
+            StatusCode::INTERNAL_SERVER_ERROR | StatusCode::SERVICE_UNAVAILABLE
+        ) {
             tracing::error!(error=?self, "bots handler error");
         }
         (

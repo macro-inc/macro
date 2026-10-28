@@ -9,3 +9,6 @@ pub mod ports;
 
 #[cfg(feature = "ports")]
 pub mod service;
+
+#[cfg(feature = "explain_binary")]
+pub mod explain;

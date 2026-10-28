@@ -99,7 +99,11 @@ function renderTool<
         message_id="message-1"
         part_index={0}
         isComplete={false}
-        renderContext={{ isStreaming: false, grouped: false }}
+        renderContext={{
+          isStreaming: false,
+          grouped: false,
+          followedBy: () => false,
+        }}
       />
     </QueryClientProvider>
   ));

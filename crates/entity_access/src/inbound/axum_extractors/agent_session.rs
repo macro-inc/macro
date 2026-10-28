@@ -1,10 +1,8 @@
 //! Agent session access extractor.
 //!
-//! A session's permissions are entirely its own `entity_access` rows: the
-//! owner with owner access, and - when the session was opened by a mention - the
-//! channel that mention was posted in as editor. The dedicated channel a
-//! session owns is deliberately not consulted; who participates in it says
-//! nothing about who may act on the session.
+//! Sessions use their canonical grants, link permissions, and inherited document
+//! access. Public links allow anonymous viewing; control requests still require
+//! authentication. Session channel participation does not itself grant access.
 
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -18,6 +16,7 @@ use macro_authorization::{
     AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
     OptionalMacroAuthorizationExtractor,
 };
+use tracing::Level;
 
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -57,7 +56,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
@@ -119,13 +118,9 @@ where
             });
         }
 
-        let Some(macro_user_id) = macro_user_id else {
-            return Err(ExtractorError::Unauthorized);
-        };
-
         let permission = service
             .get_entity_permission(
-                Some(&macro_user_id),
+                macro_user_id.as_deref(),
                 &session_id,
                 EntityType::AgentSession,
                 None,
@@ -133,7 +128,25 @@ where
             .await
             .map_err(ExtractorError::from)?;
 
+        let permission = if macro_user_id.is_none() {
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            }
+        } else {
+            permission
+        };
+
+        // The other refusal: a grant exists but does not reach what this route
+        // asks for. Logged separately from the no-grant case in the service,
+        // because the fix is different - this one is a sharing level, not a
+        // missing or not-yet-committed row.
         if !permission.satisfies::<T>() {
+            tracing::warn!(
+                entity_id = %session_id,
+                entity_type = "agent_session",
+                viewer = macro_user_id.as_deref().map_or("anonymous", AsRef::as_ref),
+                "agent session access denied: grant does not reach the required permission"
+            );
             return Err(ExtractorError::Unauthorized);
         }
 
@@ -143,7 +156,9 @@ where
                     entity_id: session_id,
                     entity_type: EntityType::AgentSession,
                 },
-                auth: EntityAccessAuth::Authenticated(macro_user_id),
+                auth: macro_user_id
+                    .map(EntityAccessAuth::Authenticated)
+                    .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,
             },
@@ -151,3 +166,6 @@ where
         })
     }
 }
+
+#[cfg(test)]
+mod test;

@@ -27,7 +27,9 @@ futures = { workspace = true }
 http-body-util = { workspace = true }
 lambda_client = { path = "../../crates/lambda_client" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
@@ -58,3 +60,8 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 zip = { workspace = true, features = ["bzip2"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+docx_engine = { path = "../../crates/docx_engine" }
+pptx_engine = { path = "../../crates/pptx_engine" }
+tempfile = { workspace = true }

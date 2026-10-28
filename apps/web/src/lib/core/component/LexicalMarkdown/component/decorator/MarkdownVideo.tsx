@@ -1,15 +1,14 @@
 import { toast } from '@core/component/Toast/Toast';
-import { debouncedDependent } from '@core/util/debounce';
-
+import { fireAndForget } from '@core/util/fireAndForget';
+import VideoIcon from '@icon/system/regular/file-video.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
   $isVideoNode,
   type VideoDecoratorProps,
 } from '@macro-inc/lexical-core';
-import VideoIcon from '@phosphor/file-video.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
@@ -39,6 +38,10 @@ import {
 } from '../../plugins';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
+import {
+  MediaLoadingPlaceholder,
+  mediaFileNameFromUrl,
+} from './MediaLoadingPlaceholder';
 import { ResizeHandle } from './ResizeHandle';
 
 type VideoState = 'loading' | 'ok' | 'error';
@@ -90,39 +93,42 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
       setVideoUrl(props.url);
       return;
     }
-    getMediaUrl({
-      type: props.srcType,
-      id: props.id,
-      url: props.url,
-    }).then((maybeUrl) => {
-      if (maybeUrl.isErr()) {
-        setState('error');
-        if (
-          maybeUrl.isErr() &&
-          maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
-        )
-          setVideoError('UNAUTHORIZED');
-        else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
-          setVideoError('MISSING');
-        else if (
-          maybeUrl.isErr() &&
-          maybeUrl.error.some((error) => error.code === 'GONE')
-        )
-          setVideoError('GONE');
-        else setVideoError('FALLBACK');
-        return;
-      }
-      const url = maybeUrl.value;
-      setVideoUrl(url);
-      if (props.srcType === 'dss') {
-        editor()?.update(
-          () => {
-            $upgradeDSSMediaUrl(props.key, url, 'video');
-          },
-          { discrete: true, tag: 'historic' }
-        );
-      }
-    });
+    fireAndForget(
+      getMediaUrl({
+        type: props.srcType,
+        id: props.id,
+        url: props.url,
+      }).then((maybeUrl) => {
+        if (maybeUrl.isErr()) {
+          setState('error');
+          if (
+            maybeUrl.isErr() &&
+            maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
+          )
+            setVideoError('UNAUTHORIZED');
+          else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
+            setVideoError('MISSING');
+          else if (
+            maybeUrl.isErr() &&
+            maybeUrl.error.some((error) => error.code === 'GONE')
+          )
+            setVideoError('GONE');
+          else setVideoError('FALLBACK');
+          return;
+        }
+        const url = maybeUrl.value;
+        setVideoUrl(url);
+        if (props.srcType === 'dss') {
+          editor()?.update(
+            () => {
+              $upgradeDSSMediaUrl(props.key, url, 'video');
+            },
+            { discrete: true, tag: 'historic' }
+          );
+        }
+      }),
+      'markdown-media'
+    );
   });
 
   const isSelectedAsNode = () => {
@@ -228,17 +234,26 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
     cleanupListners();
   });
 
-  const debouncedScale = debouncedDependent(scale, 60);
-  createEffect(
-    on(debouncedScale, (value) => {
-      editor()?.update(() => {
+  const persistScale = debounce((value: number) => {
+    const currentEditor = editor();
+    if (!interactable() || !currentEditor?.isEditable()) return;
+    currentEditor.update(() => {
+      if (!currentEditor.isEditable()) return;
+      const node = $getNodeByKey(props.key);
+      if (node && $isVideoNode(node)) node.setScale(value, false);
+    });
+  }, 60);
+  createEffect(on(scale, persistScale));
+  createEffect(() => {
+    if (!interactable()) {
+      persistScale.clear();
+      const committedScale = editor()?.read(() => {
         const node = $getNodeByKey(props.key);
-        if (node && $isVideoNode(node)) {
-          node.setScale(value, false);
-        }
+        return node && $isVideoNode(node) ? node.getScale() : props.scale;
       });
-    })
-  );
+      setScale(committedScale ?? props.scale);
+    }
+  });
 
   const debouncedSetHover = debounce((state: boolean) => {
     setVideoHover(state);
@@ -255,7 +270,9 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             'pattern-edge-muted pattern-diagonal-8 min-h-44'
         )}
         style={{
-          'max-height': `${videoDims() ? videoDims()[1] * scale() : 640}px`,
+          'max-height': videoDims()[1]
+            ? `${videoDims()[1] * scale()}px`
+            : undefined,
           'aspect-ratio':
             videoDims()[0] && videoDims()[1]
               ? `${videoDims()[0] / videoDims()[1]}`
@@ -277,17 +294,21 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           setVideoHover(false);
         }}
       >
-        <Show when={state() === 'ok' && editor()?.isEditable()}>
+        <Show when={state() === 'ok' && interactable()}>
           <ResizeHandle
             scale={scale}
-            setScale={setScale}
+            setScale={(value) => {
+              if (interactable() && editor()?.isEditable()) setScale(value);
+            }}
             side="left"
             imageDims={videoDims}
             containerRef={containerRef}
           />
           <ResizeHandle
             scale={scale}
-            setScale={setScale}
+            setScale={(value) => {
+              if (interactable() && editor()?.isEditable()) setScale(value);
+            }}
             side="right"
             imageDims={videoDims}
             containerRef={containerRef}
@@ -297,7 +318,10 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           crossorigin="anonymous"
           class={cn(
             'h-full object-contain',
-            (state() === 'loading' || state() === 'error') && 'invisible'
+            (state() === 'loading' || state() === 'error') && 'invisible',
+            state() === 'loading' &&
+              !videoDims()[0] &&
+              'absolute inset-0 size-0'
           )}
           draggable={true}
           ref={videoRef}
@@ -316,9 +340,19 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
-            <Spinner />
-          </div>
+          <Show
+            when={videoDims()[0] > 0}
+            fallback={
+              <MediaLoadingPlaceholder
+                kind="video"
+                label={mediaFileNameFromUrl(props.url)}
+              />
+            }
+          >
+            <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+              <Spinner />
+            </div>
+          </Show>
         </Show>
 
         <Show when={uploading() && state() !== 'error'}>
@@ -357,7 +391,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             <div class="absolute bg-surface top-2 right-2 flex flex-row z-10">
               <Dialog.CloseButton>
                 <Button variant="ghost" size="icon-md">
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </Dialog.CloseButton>
             </div>

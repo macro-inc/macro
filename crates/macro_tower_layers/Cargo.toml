@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+axum = { workspace = true }
 http = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry-http = { workspace = true }

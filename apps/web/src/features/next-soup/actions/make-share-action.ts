@@ -1,10 +1,10 @@
+import { openGlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import {
   isShareableEntityType,
-  openGlobalShareModal,
   type ShareableEntityData,
-} from '@app/features/sharing/global-share-modal/GlobalShareModal';
+} from '@app/features/sharing/global-share-modal/shareable-entity';
 import type { EntityData } from '@entity';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeShareAction = () => {
   /**
@@ -20,13 +20,16 @@ export const makeShareAction = () => {
       return;
     }
 
-    openGlobalShareModal({
+    await openGlobalShareModal({
       // TODO: use type guard on entity data, not the type
       entity: entity as ShareableEntityData,
     });
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     const entity = entities[0];
     if (!entity) return;
 

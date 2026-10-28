@@ -2,7 +2,7 @@
 from datetime import date
 
 # Cumulative star counts from the GitHub stargazers API (starred_at timestamps),
-# sampled through 2026-08-18 09:02 UTC, where the total was 3608.
+# sampled through 2026-09-14, where the total was 4320.
 SERIES = [
     (date(2025, 11, 18), 0),
     (date(2025, 11, 28), 4),
@@ -50,14 +50,41 @@ SERIES = [
     (date(2026, 8, 15), 3262),
     (date(2026, 8, 16), 3399),
     (date(2026, 8, 17), 3553),
-    (date(2026, 8, 18), 3608),
+    (date(2026, 8, 18), 3645),
+    (date(2026, 8, 19), 3753),
+    (date(2026, 8, 20), 3846),
+    (date(2026, 8, 21), 3921),
+    (date(2026, 8, 22), 3953),
+    (date(2026, 8, 23), 3977),
+    (date(2026, 8, 24), 4003),
+    (date(2026, 8, 25), 4026),
+    (date(2026, 8, 26), 4041),
+    (date(2026, 8, 27), 4056),
+    (date(2026, 8, 28), 4075),
+    (date(2026, 8, 29), 4085),
+    (date(2026, 8, 30), 4105),
+    (date(2026, 8, 31), 4137),
+    (date(2026, 9, 1), 4164),
+    (date(2026, 9, 2), 4172),
+    (date(2026, 9, 3), 4185),
+    (date(2026, 9, 4), 4193),
+    (date(2026, 9, 5), 4204),
+    (date(2026, 9, 6), 4210),
+    (date(2026, 9, 7), 4234),
+    (date(2026, 9, 8), 4242),
+    (date(2026, 9, 9), 4262),
+    (date(2026, 9, 10), 4275),
+    (date(2026, 9, 11), 4288),
+    (date(2026, 9, 12), 4299),
+    (date(2026, 9, 13), 4310),
+    (date(2026, 9, 14), 4320),
 ]
 
 W, H = 1100, 560
 L, R, T, B = 76, 52, 112, 62           # plot padding
 PX0, PX1 = L, W - R
 PY0, PY1 = T, H - B
-YMAX = 4000
+YMAX = 5000
 LATEST = SERIES[-1][1]
 ORANGE = "#f26a1b"
 
@@ -108,7 +135,8 @@ def star(cx, cy, r):
 
 MONTHS = [(date(2025, 12, 1), "Dec"), (date(2026, 1, 1), "Jan"), (date(2026, 2, 1), "Feb"),
           (date(2026, 3, 1), "Mar"), (date(2026, 4, 1), "Apr"), (date(2026, 5, 1), "May"),
-          (date(2026, 6, 1), "Jun"), (date(2026, 7, 1), "Jul"), (date(2026, 8, 1), "Aug")]
+          (date(2026, 6, 1), "Jun"), (date(2026, 7, 1), "Jul"), (date(2026, 8, 1), "Aug"),
+          (date(2026, 9, 1), "Sep")]
 
 FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 

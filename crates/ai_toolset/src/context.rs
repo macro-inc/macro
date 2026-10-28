@@ -40,6 +40,12 @@ pub struct RequestContext {
     /// user has requested stream stop
     /// long-running tools should comsume this
     pub cancel: CancellationToken,
+    /// Whether tool calls in this request record `execute_tool` GenAI
+    /// telemetry (arguments, result, failure) on their span. On by default;
+    /// off when another layer already reports the request's tool calls - the
+    /// agent session actor does, for the in-process runtime - so each call is
+    /// counted once.
+    pub genai_telemetry: bool,
 }
 
 impl RequestContext {
@@ -51,7 +57,15 @@ impl RequestContext {
             searchable_tools: Arc::new(Vec::new()),
             tool_loader: None,
             cancel: CancellationToken::new(),
+            genai_telemetry: true,
         }
+    }
+
+    /// Turn `execute_tool` GenAI telemetry for this request's tool calls on or
+    /// off (see [`Self::genai_telemetry`]).
+    pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
+        self.genai_telemetry = enabled;
+        self
     }
 
     /// Attach the searchable-tool catalog and loader that power `SearchTools`.

@@ -14,6 +14,10 @@ export {
   ListEntityMetadataQueryProvider,
   ListEntityNoopMetadataProvider,
 } from './composed/list-entity/list-entity-metadata-provider';
+export {
+  EntitySelectionToolbar,
+  type EntitySelectionToolbarProps,
+} from './EntitySelectionToolbar';
 export { Entity } from './entity';
 export { EntityIcon as EntityRowIcon } from './extractors/entity-icon';
 export { EntityTitle as EntityRowTitle } from './extractors/entity-title';
@@ -26,6 +30,7 @@ export {
   getSnippetHit,
   isHitSnippetEntity,
 } from './extractors-search/snippet-entity';
+export { OwnerLabel } from './owner/owner-display';
 export { EntityProvider } from './Provider';
 export {
   createBulkCopyDssEntityMutation,
@@ -66,6 +71,8 @@ export {
   COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
   getTaskAssigneeIds,
+  getTaskPriorityOptionId,
+  getTaskReferencedEntityIds,
   getTaskStatusOptionId,
 } from './utils/task-properties';
 export {

@@ -143,12 +143,5 @@ pub struct DocumentSearchRequest {
     pub collapse: Option<bool>,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
-pub struct MarkdownParseResult {
-    pub node_id: String,
-    pub content: String,
-    pub raw_content: String,
-}
-
 #[cfg(test)]
 mod test;

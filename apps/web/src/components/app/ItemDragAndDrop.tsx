@@ -4,10 +4,8 @@ import {
   getEntityIconType,
 } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
-import { UserIcon } from '@core/component/UserIcon';
 import type { EntityDragData } from '@entity';
 import {
-  type CollisionDetector,
   DragDropProvider,
   DragDropSensors,
   DragOverlay,
@@ -24,49 +22,25 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { createPointerCollisionDetector } from './pointer-collision';
 
 type DragOperationContextValue = {
   isAltKey: Accessor<boolean>;
 };
 
-const DragOperationContext = createContext<DragOperationContextValue>();
-
-let pointerPosition: { x: number; y: number } | undefined;
-
-const pointerWithin: CollisionDetector = (_draggable, droppables, context) => {
-  if (!pointerPosition) return null;
-
-  const enabledDroppables = droppables.filter((droppable) => {
-    const isDisabled = droppable.data.isDropTargetDisabled as
-      | (() => boolean)
-      | undefined;
-    return !isDisabled?.();
-  });
-
-  const hits = enabledDroppables.filter((droppable) => {
-    const layout = droppable.layout;
-    return (
-      pointerPosition !== undefined &&
-      pointerPosition.x >= layout.left &&
-      pointerPosition.x <= layout.right &&
-      pointerPosition.y >= layout.top &&
-      pointerPosition.y <= layout.bottom
-    );
-  });
-
-  if (hits.length === 0) return null;
-  if (hits.length === 1) return hits[0];
-
-  return hits.toSorted(
-    (a, b) =>
-      a.layout.width * a.layout.height - b.layout.width * b.layout.height ||
-      Number(b.id === context.activeDroppableId) -
-        Number(a.id === context.activeDroppableId)
-  )[0];
+export type ItemDragOverlayData = {
+  overlayIcon?: () => JSXElement;
 };
 
+const DragOperationContext = createContext<DragOperationContextValue>();
+
+/** Optional for composed entity rows rendered outside the draggable workspace. */
+export function useOptionalDragOperation() {
+  return useContext(DragOperationContext);
+}
+
 export function useDragOperation() {
-  const context = useContext(DragOperationContext);
+  const context = useOptionalDragOperation();
   if (!context) {
     throw new Error('useDragOperation must be used within ItemDndProvider');
   }
@@ -78,24 +52,19 @@ function ItemDragOverlay() {
   const activeDraggable = createMemo(() => {
     return state?.active.draggable;
   });
+  const overlayIcon = () =>
+    (activeDraggable()?.data as ItemDragOverlayData | undefined)?.overlayIcon;
 
   const iconType = createMemo((): EntityIconSelector => {
     const data = activeDraggable()?.data;
     if (!data) return 'default';
-    // Favorite sortables carry a precomputed icon type (see FavoriteDragData
-    // in app-sidebar/favorites-section) instead of an entity shape.
-    if (data.dragType === 'favorite') {
+    // Channel label drags carry a precomputed icon type (see
+    // ChannelLabelDragData) instead of an entity shape.
+    if (data.dragType === 'channel-label') {
       return data.iconType as EntityIconSelector;
     }
+    if (overlayIcon()) return 'default';
     return getEntityIconType(data as EntityDragData);
-  });
-
-  // DM channel favorites show the other participant's avatar instead of the
-  // entity icon, matching their sidebar row (see FavoriteIcon).
-  const dmRecipientId = createMemo((): string | undefined => {
-    const data = activeDraggable()?.data;
-    if (data?.dragType !== 'favorite') return undefined;
-    return data.dmRecipientId as string | undefined;
   });
 
   const centeredOnPointerStyle = createMemo(() => {
@@ -116,17 +85,10 @@ function ItemDragOverlay() {
       >
         <div class="flex flex-row items-center gap-2">
           <Show
-            when={dmRecipientId()}
+            when={overlayIcon()}
             fallback={<EntityIcon size="xs" targetType={iconType()} />}
           >
-            {(recipientId) => (
-              <UserIcon
-                id={recipientId()}
-                size="sm"
-                suppressClick
-                showTooltip={false}
-              />
-            )}
+            {(icon) => icon()()}
           </Show>
           <TruncatedText size="xs">
             {activeDraggable()?.data.name}
@@ -144,6 +106,8 @@ function ItemDragOverlay() {
 }
 
 export function ItemDndProvider(props: { children: JSXElement }) {
+  let pointerPosition: { x: number; y: number } | undefined;
+  const pointerWithin = createPointerCollisionDetector(() => pointerPosition);
   const [isAltPressed, setIsAltPressed] = createSignal(false);
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -205,7 +169,7 @@ export function ItemDndProvider(props: { children: JSXElement }) {
       <DragDropProvider collisionDetector={pointerWithin}>
         <DragDropSensors />
         {props.children}
-        <DragOverlay class="z-drag">
+        <DragOverlay class="z-drag pointer-events-none">
           <ItemDragOverlay />
         </DragOverlay>
       </DragDropProvider>

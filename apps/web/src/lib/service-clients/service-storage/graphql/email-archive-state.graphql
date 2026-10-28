@@ -1,0 +1,18 @@
+mutation SetEmailThreadArchived($input: SetEmailThreadArchivedInput!) {
+	setEmailThreadArchived(input: $input) {
+		__typename
+		id
+		inboxVisible
+	}
+}
+
+mutation SetEmailThreadsArchived($input: SetEmailThreadsArchivedInput!) {
+	setEmailThreadsArchived(input: $input) {
+		threads {
+			__typename
+			id
+			inboxVisible
+		}
+		failedThreadIds
+	}
+}

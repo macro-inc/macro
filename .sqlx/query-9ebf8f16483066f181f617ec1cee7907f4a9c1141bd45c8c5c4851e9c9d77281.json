@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT identity, state AS \"state: Json<EligibilityState>\" FROM ai_billing_usage_eligibility\n            WHERE user_id = $1 AND subscription_id = $2 AND item_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "identity",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "state: Json<EligibilityState>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9ebf8f16483066f181f617ec1cee7907f4a9c1141bd45c8c5c4851e9c9d77281"
+}

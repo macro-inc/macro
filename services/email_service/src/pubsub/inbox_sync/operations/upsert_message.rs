@@ -1,12 +1,15 @@
+use super::pending_labels;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::pubsub::util::{
-    CrmContactRecipient, build_notification_recipients, enqueue_populate_crm_contacts,
+    CrmContactRecipient, build_contact_connections, build_notification_recipients,
+    enqueue_populate_crm_contacts,
 };
 use crate::pubsub::util::{cg_refresh_email, publish_email_event};
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
-use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
-use contacts::domain::models::messages::ContactConnection;
+use crate::util::upload_attachment::{
+    UploadAttachmentContext, UploadAttachmentError, upload_attachment,
+};
 use contacts::domain::ports::ContactsIngress;
 use email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, MessageDraftSyncedMetadata, MessageReceivedMetadata,
@@ -15,14 +18,15 @@ use email::domain::events::{
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
+use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use email_db_client::attachments::provider::upload_filters::{
     attachment_is_document, attachment_is_media,
 };
+use email_db_client::messages::insert::ResyncSnapshot;
 use email_db_client::threads;
-use email_utils::dedupe_emails;
+use email_utils::{dedupe_emails, is_macro_notification_sender};
 use filter_ast::Expr;
 use item_filters::{SharedEmailFilter, ast::email::EmailLiteral};
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
@@ -37,8 +41,9 @@ use models_email::service::attachment::{
 use models_email::service::message::{Message, is_inbound, is_outbound, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::service::thread::Thread;
-use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::models::{SendNotificationRequest, SendNotificationRequestBuilder};
 use notification::domain::service::NotificationIngress;
+use sqlx::PgPool;
 use std::collections::HashSet;
 use std::result;
 use std::sync::Arc;
@@ -78,6 +83,28 @@ fn select_message_sync_event(
     }
 }
 
+/// Fetches the message from Gmail, or `None` when Gmail no longer has it.
+async fn fetch_provider_message(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    payload: &UpsertMessagePayload,
+) -> result::Result<Option<MessageWithCalendarParts>, ProcessingError> {
+    match ctx
+        .email_api
+        .get_message(link.id, &payload.provider_message_id)
+        .await
+    {
+        Ok(fetched) => Ok(fetched),
+        Err(error) => Err(handle_operation_error(
+            ctx,
+            link.id,
+            InboxSyncOperation::UpsertMessage(payload.clone()),
+            error,
+        )
+        .await),
+    }
+}
+
 // upsert a message into the db. could be a new message or an existing one that had changes
 #[tracing::instrument(skip(ctx))]
 pub async fn upsert_message(
@@ -85,26 +112,47 @@ pub async fn upsert_message(
     link: &link::Link,
     payload: &UpsertMessagePayload,
 ) -> result::Result<(), ProcessingError> {
-    let provider_message = ctx
-        .email_api
-        .get_message(link.id, &payload.provider_message_id)
-        .await;
-    let fetched = match provider_message {
-        Ok(Some(fetched)) => fetched,
-        Ok(None) => {
-            tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
-                "Message not found in gmail when attempting to upsert");
-            return Ok(());
-        }
-        Err(error) => {
-            return Err(handle_operation_error(
-                ctx,
-                link.id,
-                InboxSyncOperation::UpsertMessage(payload.clone()),
-                error,
+    // Snapshot the previous draft state before the upsert. Provider drafts are mutable,
+    // and this state distinguishes a draft-to-sent transition from an unchanged message.
+    let existing_message =
+        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
+            &ctx.db,
+            &payload.provider_message_id,
+            &link.id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .context("Failed to fetch existing message before provider upsert".to_string()),
+            })
+        })?;
+    let existing_message_was_draft = existing_message.as_ref().map(|message| message.is_draft);
+    let message_already_exists = existing_message.is_some();
+
+    let (fetched, resync) = match &existing_message {
+        Some(existing) => {
+            let (fetched, snapshot) = pending_labels::resync_around(
+                &ctx.db,
+                existing.db_id,
+                Box::pin(fetch_provider_message(ctx, link, payload)),
             )
-            .await);
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to read the stored message before its re-sync"),
+                })
+            })?;
+            (fetched?, Some(snapshot))
         }
+        None => (fetch_provider_message(ctx, link, payload).await?, None),
+    };
+    let Some(fetched) = fetched else {
+        tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
+            "Message not found in gmail when attempting to upsert");
+        return Ok(());
     };
     let mut message = fetched.message;
 
@@ -191,38 +239,21 @@ pub async fn upsert_message(
         })
     })?;
 
-    // Snapshot the previous draft state before the upsert. Provider drafts are mutable,
-    // and this state distinguishes a draft-to-sent transition from an unchanged message.
-    let existing_message =
-        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
-            &ctx.db,
-            &payload.provider_message_id,
-            &link.id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e
-                    .context("Failed to fetch existing message before provider upsert".to_string()),
-            })
-        })?;
-    let existing_message_was_draft = existing_message.as_ref().map(|message| message.is_draft);
-    let message_already_exists = existing_message.is_some();
-
     let is_new_thread = !thread_provider_to_db_map.contains_key(&provider_thread_id);
 
     // if the message's thread doesn't exist in the database, we need to fetch and insert the whole thread.
     // if it does exist in the database, we just need to insert the already fetched message.
     if let Some(thread_db_id) = thread_provider_to_db_map.get(&provider_thread_id) {
-        process_and_insert_message(ctx, link.id, *thread_db_id, &mut message)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to process and insert message".to_string()),
-                })
-            })?;
+        // Retryable: a concurrent delete can drop the thread after the lookup
+        // above, and the redelivery then takes the whole-thread branch below.
+        process_and_insert_message(
+            &ctx.db,
+            link.id,
+            *thread_db_id,
+            &mut message,
+            resync.as_ref(),
+        )
+        .await?;
     } else {
         // Propagated verbatim: fetch_and_insert_thread already routed provider
         // errors through handle_operation_error (retry queue vs redelivery),
@@ -244,6 +275,20 @@ pub async fn upsert_message(
                 source: e.context("Failed to get new message db id".to_string()),
             })
         })?;
+
+    // Also runs for a message already saved by a whole-thread fetch, which carries no
+    // calendar parts. Saves skip existing components; an attachment-only invitation is
+    // downloaded again on a re-sync.
+    if !message.is_draft {
+        crate::pubsub::invitation_extraction::save_discovered(
+            ctx,
+            link.id,
+            &payload.provider_message_id,
+            message_db_id,
+            &fetched.calendar_parts,
+        )
+        .await;
+    }
 
     // Publish to the macro.email topic immediately after the committed insert.
     // Drafts publish after every sync because their bodies are mutable. Existing
@@ -300,7 +345,7 @@ pub async fn upsert_message(
         publish_email_event(&ctx.macro_event_broker, &event);
     }
 
-    handle_attachment_upload(ctx, link, payload, &message.attachments).await?;
+    let refused_upload = handle_attachment_upload(ctx, link, payload, &message.attachments).await?;
 
     handle_contacts_sync(
         ctx,
@@ -340,24 +385,38 @@ pub async fn upsert_message(
         .await?;
     }
 
+    // Requeued only after the steps above, which are safe to repeat: the retry
+    // finds the message saved, so it doesn't notify again.
+    if let Some(error) = refused_upload {
+        return Err(handle_operation_error(
+            ctx,
+            link.id,
+            InboxSyncOperation::UpsertMessage(payload.clone()),
+            error,
+        )
+        .await);
+    }
+
     Ok(())
 }
 
+/// Uploads the message's new attachments, returning the rate limit that
+/// refused an attachment fetch, if one did.
 #[tracing::instrument(skip(ctx, attachments), err)]
 async fn handle_attachment_upload(
     ctx: &PubSubContext,
     link: &link::Link,
     payload: &UpsertMessagePayload,
     attachments: &[Attachment],
-) -> result::Result<(), ProcessingError> {
+) -> result::Result<Option<EmailApiError>, ProcessingError> {
     if cfg!(not(feature = "attachment_upload")) {
-        return Ok(());
+        return Ok(None);
     }
 
     // Keep this parsed-attachment gate at least as permissive as the database claim filters.
     let eligibility = attachment_upload_eligibility(attachments);
     if !eligibility.documents && !eligibility.media {
-        return Ok(());
+        return Ok(None);
     }
 
     // upload attachments to Macro
@@ -415,6 +474,7 @@ async fn handle_attachment_upload(
                     })
                 })?;
 
+        let mut uploads = Vec::with_capacity(attachments.len());
         for attachment in attachments {
             // get the email addresses of the recipients of the message
             let recipient_emails: Vec<String> = message_recipients
@@ -435,13 +495,15 @@ async fn handle_attachment_upload(
                 AttachmentUploadDestination::Dss
             };
 
-            let attachment_upload_args = AttachmentUploadArgs {
+            uploads.push(AttachmentUploadArgs {
                 recipient_emails,
                 attachment_metadata: attachment,
                 backfill: false,
                 upload_destination,
-            };
+            });
+        }
 
+        return upload_claimed_attachments(&ctx.db, uploads, |args| async move {
             let ctx_upload = UploadAttachmentContext {
                 db: &ctx.db,
                 email_api: &ctx.email_api,
@@ -450,15 +512,56 @@ async fn handle_attachment_upload(
                 system_properties_service: &ctx.system_properties_service,
                 link,
             };
+            upload_attachment(ctx_upload, &args).await
+        })
+        .await;
+    }
 
-            // keep processing if it fails, best effort
-            if let Err(e) = upload_attachment(ctx_upload, &attachment_upload_args).await {
-                tracing::error!("Failed to upload attachment to Macro: {e}");
+    Ok(None)
+}
+
+/// Uploads claimed attachments in order. Other upload failures are logged and
+/// skipped, but a fetch the rate limit refused stops the run: the refused
+/// attachment and the ones not yet tried lose their claims so a retry of the
+/// upsert claims them again, and the refusal is returned.
+async fn upload_claimed_attachments<F, Fut>(
+    db: &PgPool,
+    uploads: Vec<AttachmentUploadArgs>,
+    mut upload: F,
+) -> result::Result<Option<EmailApiError>, ProcessingError>
+where
+    F: FnMut(AttachmentUploadArgs) -> Fut,
+    Fut: Future<Output = result::Result<String, UploadAttachmentError>>,
+{
+    let mut uploads = uploads.into_iter();
+    while let Some(args) = uploads.next() {
+        let attachment_id = args.attachment_metadata.attachment_db_id;
+        match upload(args).await {
+            Ok(_) => {}
+            Err(UploadAttachmentError::RateLimited(error)) => {
+                let unfinished = std::iter::once(attachment_id)
+                    .chain(uploads.map(|args| args.attachment_metadata.attachment_db_id));
+                for attachment_id in unfinished {
+                    email_db_client::attachments::provider::upload::release_upload_claim(
+                        db,
+                        attachment_id,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ProcessingError::Retryable(DetailedError {
+                            reason: FailureReason::DatabaseQueryFailed,
+                            source: e.context("Failed to release attachment upload claim"),
+                        })
+                    })?;
+                }
+                return Ok(Some(error));
             }
+            // keep processing if it fails, best effort
+            Err(e) => tracing::error!("Failed to upload attachment to Macro: {e}"),
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -501,23 +604,11 @@ async fn handle_contacts_sync(
         sender_email.into_iter().collect()
     };
 
-    if connection_emails.is_empty() {
+    let connections = build_contact_connections(&link.macro_id, link.id, connection_emails);
+
+    if connections.is_empty() {
         return Ok(());
     }
-
-    let connections = connection_emails
-        .iter()
-        .map(|email| {
-            MacroUserIdStr::try_from_email(email)
-                .map(|contact| ContactConnection::new(link.macro_id.clone(), contact))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: anyhow::anyhow!(e).context("invalid user email for contacts"),
-            })
-        })?;
 
     ctx.contacts_ingress
         .enqueue_contact_connections(connections)
@@ -544,7 +635,7 @@ async fn fetch_and_insert_thread(
     provider_thread_id: &str,
 ) -> result::Result<(), ProcessingError> {
     let messages = match ctx.email_api.get_thread(link_id, provider_thread_id).await {
-        Ok(messages) => messages,
+        Ok(fetched) => fetched.into_iter().map(|fetched| fetched.message).collect(),
         Err(error) => {
             return Err(handle_operation_error(
                 ctx,
@@ -625,31 +716,31 @@ fn thread_from_normalized_messages(
 }
 
 /// Process and insert message
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(db))]
 async fn process_and_insert_message(
-    ctx: &PubSubContext,
+    db: &PgPool,
     link_id: Uuid,
     thread_db_id: Uuid,
     message: &mut Message,
-) -> anyhow::Result<()> {
+    resync: Option<&ResyncSnapshot>,
+) -> result::Result<(), ProcessingError> {
     process_message_pre_insert(message).await;
 
     email_db_client::messages::insert::insert_message(
-        &ctx.db,
+        db,
         thread_db_id,
         message,
         link_id,
         true,
+        resync,
     )
     .await
     .map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to insert messages".to_string()),
+            source: e.context("Failed to insert message".to_string()),
         })
-    })?;
-
-    Ok(())
+    })
 }
 
 /// Notify downstream services about new message in a user's inbox
@@ -679,9 +770,7 @@ async fn send_notifications(
         return Ok(());
     }
 
-    let notifiable_message = filter_notifiable_message(ctx, link, new_message_provider_id).await?;
-
-    let Some(message) = notifiable_message else {
+    let Some(message) = filter_notifiable_message(ctx, link, new_message_provider_id).await? else {
         return Ok(());
     };
 
@@ -700,6 +789,21 @@ async fn send_notifications(
     let sender_contact = message
         .from_contact_id
         .and_then(|from_id| sender_contacts.get(&from_id));
+
+    // Macro's own digest / system emails describe activity the user already
+    // has in-app notifications for; never raise a new-email notification
+    // (in-app row or push) on top of them.
+    if sender_contact.is_some_and(|contact| is_macro_notification_sender(&contact.email)) {
+        tracing::debug!(
+            thread_id = %message.thread_db_id,
+            "skipping new-email notification for Macro's own notification sender"
+        );
+        return Ok(());
+    }
+
+    let Some(tier) = new_email_tier(ctx, link, message.thread_db_id).await? else {
+        return Ok(());
+    };
 
     let sender = sender_contact.map(|contact| {
         contact
@@ -733,18 +837,43 @@ async fn send_notifications(
     })?;
 
     let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
+    let (staff_recipients, customer_recipients) = partition_email_push_recipients(recipient_ids);
 
-    let request = SendNotificationRequestBuilder {
-        notification_entity: EntityType::EmailThread
-            .with_entity_string(message.thread_db_id.to_string()),
-        secondary_notification_entity: None,
-        notification,
-        sender_id,
-        recipient_ids,
+    let notification_entity =
+        EntityType::EmailThread.with_entity_string(message.thread_db_id.to_string());
+
+    if !staff_recipients.is_empty() {
+        let request = tier.notification_request(SendNotificationRequestBuilder {
+            notification_entity: notification_entity.clone(),
+            secondary_notification_entity: None,
+            notification: notification.clone(),
+            sender_id: sender_id.clone(),
+            recipient_ids: staff_recipients,
+        });
+        match tier {
+            NewEmailTier::Signal => publish_new_email_notification(ctx, request.with_apns()).await,
+            NewEmailTier::StaffInbox => publish_new_email_notification(ctx, request).await,
+        }
     }
-    .into_request()
-    .with_conn_gateway();
 
+    if !customer_recipients.is_empty() {
+        let request = tier.notification_request(SendNotificationRequestBuilder {
+            notification_entity,
+            secondary_notification_entity: None,
+            notification,
+            sender_id,
+            recipient_ids: customer_recipients,
+        });
+        publish_new_email_notification(ctx, request).await;
+    }
+
+    Ok(())
+}
+
+async fn publish_new_email_notification<U: serde::Serialize + Send + Sync + 'static>(
+    ctx: &PubSubContext,
+    request: SendNotificationRequest<'_, NewEmailMetadata, U>,
+) {
     if let Err(e) = ctx
         .notification_ingress_service
         .send_notification(request)
@@ -752,11 +881,98 @@ async fn send_notifications(
     {
         tracing::error!(error=?e, "unable to send notification");
     }
-
-    Ok(())
 }
 
-// filter out messages we don't want to send notifications for
+/// Split recipients so only `@macro.com` users are on the APNS path.
+fn partition_email_push_recipients(
+    recipient_ids: HashSet<MacroUserIdStr<'static>>,
+) -> (
+    HashSet<MacroUserIdStr<'static>>,
+    HashSet<MacroUserIdStr<'static>>,
+) {
+    recipient_ids
+        .into_iter()
+        .partition(|id| id.is_macro_staff())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NewEmailTier {
+    /// Everyone gets the in-app row; staff also get APNS.
+    Signal,
+    /// Staff dogfood: in-app row only.
+    StaffInbox,
+}
+
+impl NewEmailTier {
+    fn notification_request<'a>(
+        self,
+        builder: SendNotificationRequestBuilder<'a, NewEmailMetadata>,
+    ) -> SendNotificationRequest<'a, NewEmailMetadata, ()> {
+        let request = builder.into_request();
+        match self {
+            Self::Signal => request.with_conn_gateway(),
+            // Persist the same row, but do not deliver a new-notification event
+            // over either GraphQL or the legacy gateway (both produce popups).
+            Self::StaffInbox => request,
+        }
+    }
+}
+
+fn signal_filter(thread_id: Uuid) -> Expr<EmailLiteral> {
+    Expr::and(
+        Expr::Literal(EmailLiteral::ThreadId(thread_id)),
+        Expr::and(
+            Expr::Literal(EmailLiteral::Importance(true)),
+            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
+        ),
+    )
+}
+
+async fn thread_in_inbox(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    filter: Expr<EmailLiteral>,
+) -> result::Result<bool, ProcessingError> {
+    let query = PreviewCursorQuery {
+        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_ids: vec![link.id],
+        limit: 1,
+        query: models_pagination::Query::Sort(
+            models_pagination::SimpleSortMethod::UpdatedAt,
+            Some(Arc::new(filter)),
+        ),
+        team_id: None,
+    };
+
+    let previews = EmailPgRepo::new(ctx.db.clone())
+        .previews_for_view_cursor(query, link.macro_id.clone())
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: anyhow::Error::new(e).context("Failed to evaluate inbox membership"),
+            })
+        })?;
+
+    Ok(!previews.is_empty())
+}
+
+async fn new_email_tier(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    thread_id: Uuid,
+) -> result::Result<Option<NewEmailTier>, ProcessingError> {
+    if thread_in_inbox(ctx, link, signal_filter(thread_id)).await? {
+        return Ok(Some(NewEmailTier::Signal));
+    }
+    let staff_inbox = link.macro_id.is_macro_staff()
+        && thread_in_inbox(ctx, link, Expr::Literal(EmailLiteral::ThreadId(thread_id))).await?;
+    Ok(staff_inbox.then_some(NewEmailTier::StaffInbox))
+}
+
+/// Loads the newly upserted message, returning `None` for messages that never
+/// notify (sent or draft). Sender- and tier-based gating happens in
+/// `send_notifications`.
 #[tracing::instrument(skip(ctx, link))]
 async fn filter_notifiable_message(
     ctx: &PubSubContext,
@@ -781,49 +997,9 @@ async fn filter_notifiable_message(
         return Ok(None);
     };
 
-    // 1. filter out sent and draft messages
     if new_message.is_sent || new_message.is_draft {
         return Ok(None);
     }
 
-    // 2. Use the same dynamic email preview path as the Signal tab:
-    //    emailView=inbox AND ef=(Importance(true) AND Shared(exclude)), scoped to this thread.
-    let signal_filter = Expr::and(
-        Expr::Literal(EmailLiteral::ThreadId(new_message.thread_db_id)),
-        Expr::and(
-            Expr::Literal(EmailLiteral::Importance(true)),
-            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
-        ),
-    );
-
-    let macro_id_str = link.macro_id.to_string();
-    let user_id = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::InvalidData,
-            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
-        })
-    })?;
-
-    let query = PreviewCursorQuery {
-        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_ids: vec![link.id],
-        limit: 1,
-        query: models_pagination::Query::Sort(
-            models_pagination::SimpleSortMethod::UpdatedAt,
-            Some(Arc::new(signal_filter)),
-        ),
-        team_id: None,
-    };
-
-    let previews = EmailPgRepo::new(ctx.db.clone())
-        .previews_for_view_cursor(query, user_id.into_owned())
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::new(e).context("Failed to evaluate Signal tab membership"),
-            })
-        })?;
-
-    Ok((!previews.is_empty()).then_some(new_message))
+    Ok(Some(new_message))
 }

@@ -3,7 +3,7 @@ import {
   useHotKeyRoot,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem } from '@service-storage/messages';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, onMount, Show } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -42,8 +42,8 @@ function TestMessageEditor(props: { onSave: () => void }) {
 }
 
 function ChannelEditHarness(props: {
-  onSave: ReturnType<typeof vi.fn>;
-  onReply: ReturnType<typeof vi.fn>;
+  onSave: () => void;
+  onReply: () => void;
 }) {
   useHotKeyRoot();
 
@@ -58,9 +58,9 @@ function ChannelEditHarness(props: {
       selectPrevious: vi.fn(),
       selectNext: vi.fn(),
     },
-    navigation: () => undefined,
+    scrollToMessage: () => false,
     messageById: () =>
-      new Map([[originalMessage.id, originalMessage as ApiChannelMessage]]),
+      new Map([[originalMessage.id, originalMessage as MessageListItem]]),
     getMessageActions: () => ({
       onEdit: () => {
         setIsEditing(true);
@@ -77,6 +77,13 @@ function ChannelEditHarness(props: {
   return (
     <div ref={attachGlobalDOMScope}>
       <div ref={attachMessageListRef} tabIndex={-1} data-testid="message-list">
+        <div data-message data-message-id={originalMessage.id}>
+          <div data-message-content>
+            <div data-message-reply-preview="Resolved bot response">
+              Resolved bot response
+            </div>
+          </div>
+        </div>
         <Show when={isEditing()}>
           <TestMessageEditor
             onSave={() => {
@@ -135,5 +142,22 @@ describe('createChannelHotkeys', () => {
     fireEvent.keyUp(messageList, { key: 'd' });
     fireEvent.keyUp(messageList, { key: 'Enter' });
     expect(onReply).not.toHaveBeenCalled();
+  });
+
+  it('passes resolved decorator text when Enter opens a reply', () => {
+    const onSave = vi.fn();
+    const onReply = vi.fn();
+    render(() => <ChannelEditHarness onSave={onSave} onReply={onReply} />);
+
+    const messageList = screen.getByTestId('message-list');
+    messageList.focus();
+    fireEvent.keyDown(messageList, { key: 'Enter' });
+
+    expect(onReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: originalMessage,
+        renderedText: 'Resolved bot response',
+      })
+    );
   });
 });

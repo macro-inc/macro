@@ -1,0 +1,91 @@
+import { ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
+import { useUserId } from '@core/context/user';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
+import { useTeamQuery, useUserTeamsQuery } from '@queries/team/teams';
+import { pressHandlers } from '@ui';
+import { createSignal, type JSX, Show } from 'solid-js';
+import { CreateTeamDialog, InviteToTeamDialog } from './Team';
+import { canInviteToTeam, isTeamAdminOrOwner } from './teamMemberPermissions';
+
+/**
+ * The settings sidebar's footer action: invite people to your team, or create
+ * a team when you don't have one yet.
+ */
+export function TeamSidebarAction() {
+  const userTeamsQuery = useUserTeamsQuery();
+  // Wait for the teams so the label doesn't flip from Create to Invite.
+  const teams = () =>
+    userTeamsQuery.isSuccess ? userTeamsQuery.data : undefined;
+
+  return (
+    <Show when={teams()}>
+      {(loaded) => (
+        <Show when={loaded()[0]} keyed fallback={<CreateTeamAction />}>
+          {(team) => <InviteToTeamAction teamId={team.id} />}
+        </Show>
+      )}
+    </Show>
+  );
+}
+
+function CreateTeamAction() {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <>
+      <FooterItem
+        icon={<UsersThreeIcon class="size-4" />}
+        label={t('settingsNav.createTeam')}
+        onPress={() => setOpen(true)}
+      />
+      <Show when={open()}>
+        <CreateTeamDialog open onClose={() => setOpen(false)} />
+      </Show>
+    </>
+  );
+}
+
+function InviteToTeamAction(props: { teamId: string }) {
+  const userId = useUserId();
+  const teamQuery = useTeamQuery(() => props.teamId);
+  const [open, setOpen] = createSignal(false);
+  const role = () => {
+    const team = teamQuery.isSuccess ? teamQuery.data : undefined;
+    return team?.members.find((member) => member.user_id === userId())?.role;
+  };
+  const canInvite = () => {
+    const team = teamQuery.isSuccess ? teamQuery.data : undefined;
+    if (!team) return false;
+    return canInviteToTeam(role(), team.team.allow_non_admin_invites);
+  };
+
+  return (
+    <Show when={canInvite()}>
+      <FooterItem
+        icon={<UserPlusIcon class="size-4" />}
+        label={t('settingsNav.inviteTeam')}
+        onPress={() => setOpen(true)}
+      />
+      <InviteToTeamDialog
+        teamId={props.teamId}
+        canManageLink={isTeamAdminOrOwner(role())}
+        open={open()}
+        onClose={() => setOpen(false)}
+      />
+    </Show>
+  );
+}
+
+function FooterItem(props: {
+  icon: JSX.Element;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <ViewSidebar.Item {...pressHandlers(() => props.onPress())}>
+      <ViewSidebar.Icon>{props.icon}</ViewSidebar.Icon>
+      <span class="truncate">{props.label}</span>
+    </ViewSidebar.Item>
+  );
+}

@@ -47,9 +47,12 @@ pub mod outbound;
 // Re-export commonly used types for convenience
 pub use domain::model::PropertyRow;
 pub use domain::model::{
-    EffortOption, EmailAttachmentInput, EmailAttachmentProperty, PriorityOption, SourceEntity,
-    StageOption, StatusOption, SystemPropertyError, SystemPropertyKey,
+    CrmRecordLink, EffortOption, EmailAttachmentInput, EmailAttachmentProperty, PriorityOption,
+    SourceEntity, StageOption, StatusOption, SystemPropertyError, SystemPropertyKey,
 };
 pub use domain::port::SystemPropertiesRepository;
+
+/// Name of a team's CRM stage definition. Written by the CRM crate, read by the property loaders.
+pub const CRM_TEAM_STAGE_DEFINITION_NAME: &str = "Deal Stage";
 pub use domain::service::{SystemPropertiesService, SystemPropertiesServiceImpl};
 pub use outbound::pgpool::PgSystemPropertiesRepository;

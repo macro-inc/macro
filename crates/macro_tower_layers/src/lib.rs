@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+use axum::extract::MatchedPath;
 use http::{HeaderValue, Request, Response};
 use opentelemetry::trace::TraceContextExt;
 use tokio::time::MissedTickBehavior;
@@ -107,19 +108,23 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             .get("x-request-id")
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default();
-
-        tracing::info_span!(
+        let span = tracing::info_span!(
             target: HTTP_REQUEST_SPAN_TARGET,
             "http.request",
             otel.kind = "server",
             "http.request.method" = %request.method(),
+            "http.route" = tracing::field::Empty,
             "url.path" = request.uri().path(),
             "request.id" = request_id,
             "http.response.status_code" = tracing::field::Empty,
             latency_ms = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
-        )
+        );
+        if let Some(route) = request.extensions().get::<MatchedPath>() {
+            span.record("http.route", route.as_str());
+        }
+        span
     }
 }
 

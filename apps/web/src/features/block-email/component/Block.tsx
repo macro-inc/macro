@@ -1,75 +1,102 @@
+import { displaySubject } from '@app/features/email-compose/core/subject-text';
+import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { ContentLoading } from '@components/app/ContentLoading';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { toEntityLoadError } from '@core/component/EntityLoadGate';
+import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
-import { EmailDebouncedReadMarker } from '@notifications';
 import { useThreadQuery } from '@queries/email/thread';
+import { representativeThreadMessage } from '@queries/email/thread-subject';
 import { createMemo, Show, Suspense } from 'solid-js';
-import { blockDataSignal } from '../signal/emailBlockData';
-import { displaySubject } from '../util/subjectText';
-import { EmailView } from './Email';
+import { EmailBlockAdapter } from '../EmailBlockAdapter';
+import { EmailThreadLoadGate } from './EmailThreadLoadGate';
 
 export default function BlockEmail() {
-  const blockData = blockDataSignal.get;
   const blockId = useBlockId();
-
-  // Email threads are absent from quick access, so the entity the block-level
-  // commands act on has to come from here. Built off the block's loaded data
-  // rather than `threadQuery` because command-menu conditions read it outside a
-  // Suspense boundary.
-  const commandEntity = createMemo(() => {
-    const thread = blockData()?.thread;
-    if (!thread) return undefined;
-    return buildEntityData({
-      id: thread.db_id,
-      name: displaySubject(thread.messages[0]?.subject),
-      blockName: 'email',
-      isRead: thread.is_read,
-      done: !thread.inbox_visible,
-    });
-  });
-
-  useBlockEntityCommands(commandEntity);
-  const notificationSource = useGlobalNotificationSource();
-  // A Preview Pair Viewer shows the thread passively — wait longer before
-  // marking it seen so scanning/previewing doesn't clear unread state.
-  const isPreview = !!useSplitPanel()?.handle.isViewerSplit();
 
   const threadId = () => blockId;
 
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  const source = createEmailThreadSource(threadId, threadQuery);
+  const threadData = source.thread;
+
+  // Email threads are absent from quick access, so the entity the block-level
+  // commands act on has to come from here. Gated on isSuccess so the
+  // command-menu conditions, which read this outside a Suspense boundary,
+  // never touch pending query data.
+  const commandEntity = createMemo(() => {
+    if (!threadQuery.isSuccess) return undefined;
+    const thread = threadData();
+    if (!thread) return undefined;
+    return buildEntityData({
+      id: thread.db_id,
+      name: displaySubject(
+        representativeThreadMessage(thread.messages)?.subject
+      ),
+      blockName: 'email',
+      isRead: thread.is_read,
+      done: !thread.inbox_visible,
+    });
+  });
+
+  useBlockEntityCommands({
+    resolveEntity: commandEntity,
+    extraFavoriteHotkey: { hotkey: 's', hotkeyToken: TOKENS.email.star },
+    extraMuteHotkey: { hotkey: 'shift+m', hotkeyToken: TOKENS.email.mute },
+  });
+
+  // The gate owns the load policy: structural errors are authoritative even
+  // over cached data, a transport failure over cached data still renders the
+  // thread, and an offline load with nothing cached gates as the retryable
+  // state. Loader-level errors (e.g. an invalid source) still reach
+  // DocumentBlockContainer through blockErrorSignal.
+  const threadLoadResult = {
+    data: threadData,
+    error: () =>
+      threadQuery.isError ? toEntityLoadError(threadQuery.error) : undefined,
+    isPending: () => threadQuery.isLoading,
+  };
+
+  const notificationSource = useGlobalNotificationSource();
 
   const title = () => {
-    const data = threadQuery.data;
-    if (!data || !data.thread || data.thread.messages.length === 0) return '';
-    return displaySubject(data.thread.messages[0].subject);
+    const data = threadData();
+    if (!data || data.messages.length === 0) return '';
+    return displaySubject(representativeThreadMessage(data.messages)?.subject);
   };
 
   return (
-    <Suspense>
+    <Suspense fallback={<ContentLoading />}>
       <DocumentBlockContainer title={title() ?? 'Email'}>
         <div class="size-full" tabIndex={-1}>
-          <Show when={blockData()}>
+          <EmailThreadLoadGate
+            result={threadLoadResult}
+            notificationSource={notificationSource}
+            threadId={threadId()}
+            isLocalDraft={source.isLocalDraft()}
+            linkId={threadData()?.link_id}
+            debounceTime={100}
+            onRetry={() => fireAndForget(threadQuery.refetch(), 'email-thread')}
+          >
             <Show when={threadId()}>
               {(id) => (
-                <>
-                  <EmailDebouncedReadMarker
-                    notificationSource={notificationSource}
-                    threadId={id()}
-                    linkId={threadQuery.data?.thread?.link_id}
-                    debounceTime={isPreview ? 1_500 : 100}
+                <Suspense fallback={<ContentLoading />}>
+                  <EmailBlockAdapter
+                    title={title()}
+                    threadId={id}
+                    source={source}
+                    threadTransport={() => threadQuery.transport}
                   />
-                  <Suspense>
-                    <EmailView title={title()} threadId={id} />
-                  </Suspense>
-                </>
+                </Suspense>
               )}
             </Show>
-          </Show>
+          </EmailThreadLoadGate>
         </div>
       </DocumentBlockContainer>
     </Suspense>

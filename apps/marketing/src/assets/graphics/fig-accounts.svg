@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="fig-accounts" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1544 1544">
+  <defs>
+    <style>
+      /* Strokes take currentColor; weight = stroke-width (constant on screen). */
+      .line, .hidden, .corner {
+        fill: none;
+        stroke: currentColor;
+        stroke-linejoin: round;
+        stroke-width: 0.9px;
+        vector-effect: non-scaling-stroke;
+      }
+      .hidden { opacity: .5; stroke-linecap: round; } /* occluded / far edges */
+      .corner { opacity: .5; }                         /* rounded corner arcs  */
+      /* Per-face fills (faint neutral, like the old figs): `.face-lit` = the top
+         / light-facing faces, `.face-shade` = the darker side faces. Near-opaque,
+         so a shade face drawn over a lit one reads as its own tone. Tune the %s. */
+      .face-lit, .face-shade { stroke: none; }
+      .face-lit   { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1)) 11%, color-mix(in srgb, var(--b0) 85%, transparent)); }
+      .face-shade { fill: color-mix(in srgb, color-mix(in srgb, currentColor 30%, var(--c1))  4%, color-mix(in srgb, var(--b0) 85%, transparent)); }
+    </style>
+  </defs>
+
+  <!-- Box: the inbox container -->
+  <g id="box">
+    <!-- Faces: top rim (lit), then the two walls (shade) over it -->
+    <path id="box-face-top" class="face-lit" d="M773.2,519.7l-390.1,225v446.9l388.9,224.7,388.3-224.2v-448.8l-387.1-223.7ZM772,931l-344.7-199,344.4-202.6,345,202.6-344.7,199Z"/>
+    <!-- <polygon id="box-face-left" class="face-shade" points="751.6 1404.4 383.7 1192.2 383.7 767.4 751.6 979.8 751.6 1404.4"/> -->
+    <polygon id="box-face-right" class="face-shade" points="792.4 1404.4 1160.3 1192.2 1160.3 767.4 792.4 979.8 792.4 1404.4"/>
+    <!-- Edges -->
+    <path id="box-body" class="line" d="M470.3,693.7c-28.6,16.5-58,33.5-86.6,50v448.4c129.4,74.7,259,149.5,388.3,224.2,129.4-74.7,259-149.5,388.3-224.2v-448.4c-17.1-9.9-35.4-20.4-52.5-30.3"/>
+    <path id="box-inner-hidden" class="hidden" d="M1152.3,772c-84,48.5-160.2,92.5-244.2,141-25.7,14.8-52.3,30.2-77.9,45-12,6.9-25.8,14.9-37.7,21.8-5,0-15,0-20,0-5.4,0-15.5,0-20.9,0-10.8-6.3-23.8-13.7-34.6-20-26.5-15.3-53.9-31.1-80.5-46.5-84.2-48.6-160.6-92.7-244.7-141.3"/>
+    <path id="box-corner-right" class="corner" d="M1139.9,732c6.4,11.1,14,24.3,20.4,35.4"/>
+    <path id="box-rim-hidden" class="hidden" d="M411.6,736.3c122.6,70.8,237.9,137.3,360.4,208.1,122.6-70.8,237.9-137.3,360.4-208.1"/>
+    <path id="box-corner-left" class="corner" d="M383.7,767.4c6.4-11.1,14-24.3,20.4-35.4"/>
+    <path id="box-rim-front" class="line" d="M1107.9,726.9c.2.1,8.6,5,8.8,5.1-114.8,66.3-229.9,132.7-344.7,199-114.8-66.3-229.9-132.7-344.7-199,17.8-10.3,36.8-21.3,54.6-31.5"/>
+  </g>
+
+  <!-- Middle card — fully nestled in the box; only this sliver peeks out -->
+  <g id="middle-card">
+    <polyline id="mid-face" class="face-lit" points="662.4 708.7 549.3 774.7 549.3 800.6 662.4 865.9"/>
+    <path id="mid-front-edge" class="line" d="M662.4,708.7c-37.5,21.7-75.6,43.7-113.1,65.3v28.3"/>
+    <path id="mid-hidden-a" class="hidden" d="M558.3,787.4c22.8,13.1,37.5,21.6,60.2,34.8,9.8,5.7,21.7,12.5,31.5,18.2,1.5-.1,11,0,12.4,0"/>
+    <path id="mid-hidden-b" class="hidden" d="M662.4,825.1l-5.3,3.1c-33.4-19.3-59.1-34.1-92.5-53.4"/>
+    <ellipse id="mid-hole-ring" class="corner" cx="602.5" cy="768.3" rx="23.1" ry="15"/>
+    <path id="mid-hole-rim" class="" fill="currentColor" d="M602.5,783.3c-12.8,0-21.7-7.6-20.6-10.3,3.5-8.3,11.1-12.8,20.7-12.8s17.1,4.6,20.7,12.8-8,10.3-20.8,10.3Z"/>
+    <ellipse id="mid-glow" opacity="0.25" fill="white" cx="602.5" cy="775.3" rx="6" ry="6"/>
+  </g>
+
+  <!-- Back card -->
+  <g id="back-card">
+    <polygon id="back-face-lit" class="face-lit" points="545.7 736.9 881.6 542.8 881.6 151.5 773.8 89.2 436.1 284.2 436.1 673.6 545.7 736.9"/>
+    <polygon id="back-face-shade" class="face-shade" points="551.2 731.2 662.4 667.9 662.4 610.8 881.6 484.2 881.6 160.3 551.2 350.2 551.2 731.2"/>
+    <path id="back-body" class="line" d="M881.6,484.2V151.5c-35.7-20.6-72.1-41.6-107.8-62.3-112.5,64.9-225.2,130-337.6,194.9v389.9c35.7,20.6,72.1,41.6,107.8,62.3,39.3-22.7,79.2-45.7,118.4-68.4"/>
+    <path id="back-top-inner" class="hidden" d="M446.3,298.1c22.8,13.1,36.3,21.1,59.1,34.3,9.8,5.6,21.7,12.5,31.5,18.2,3.3-.3,11.1.2,14.1,0,40.2-23.2,81-46.8,121.2-70,69.7-40.2,132.6-76.5,202.2-116.8"/>
+    <path id="back-top-edge" class="hidden" d="M866.5,152c-110.1,63.6-212.5,122.7-322.6,186.2-33.4-19.3-57.3-33.2-90.7-52.5"/>
+    <ellipse id="back-hole-ring" class="corner" cx="489.1" cy="278.3" rx="23.1" ry="15"/>
+    <path id="back-hole-rim" class="corner" d="M489.1,293.4c-12.8,0-21.7-7.6-20.6-10.3,3.5-8.3,11.1-12.8,20.7-12.8s17.1,4.6,20.7,12.8-8,10.3-20.8,10.3Z"/>
+  </g>
+
+  <!-- Front card -->
+  <g id="front-card">
+    <polygon id="front-face-lit" class="face-lit" points="772 929.2 1107.9 735.1 1107.9 478.1 1000 415.8 662.4 610.8 662.4 865.9 772 929.2"/>
+    <polygon id="front-face-shade" class="face-shade" points="777.5 926.6 1107.9 736.9 1107.9 487.1 777.5 677 777.5 926.6"/>
+    <path id="front-body" class="line" d="M1107.9,737.1v-259c-35.7-20.6-72.1-41.6-107.8-62.3-112.5,64.9-225.2,130-337.6,194.9v256.9-256.9"/>
+    <path id="front-top-inner" class="hidden" d="M672.7,624.8c22.5,13,35.7,20.6,58.1,33.6,10.2,5.8,22.2,12.9,32.4,18.7,3.3-.3,11.1.2,14.1,0,40.2-23.2,81-46.8,121.2-70,69.7-40.2,129.8-74.9,199.4-115.1"/>
+    <path id="front-top-edge" class="hidden" d="M1090.6,479.9c-110.1,63.6-210.2,121.4-320.4,185-33.4-19.3-59.8-34.5-93.2-53.8"/>
+    <ellipse id="front-hole-ring" class="corner" cx="715" cy="605.7" rx="23.1" ry="15"/>
+    <path id="front-hole-rim" class="corner" d="M715,620.7c-12.8,0-21.7-7.6-20.6-10.3,3.5-8.3,11.1-12.8,20.7-12.8s17.1,4.6,20.7,12.8-8,10.3-20.8,10.3Z"/>
+  </g>
+</svg>

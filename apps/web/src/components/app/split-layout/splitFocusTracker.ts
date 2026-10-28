@@ -1,5 +1,6 @@
 import { activeElement } from '@app/signal/focus';
 import { splitContainerSelector } from '@core/dom-selectors';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import {
   SplitEvent,
@@ -91,8 +92,8 @@ export function createSplitFocusTracker(props: {
     }
 
     let splitWithFocus: SplitId | undefined;
-    // Only visible splits may claim activation — the mobile background
-    // split is excluded and can never become active.
+    // Only splits on screen may claim activation; on mobile that is the
+    // front pane, not the one mounted behind it.
     for (const split of props.splitManager.getVisibleSplits()) {
       if (isElementInPanel(split.id, element)) {
         splitWithFocus = split.id;
@@ -115,17 +116,28 @@ export function createSplitFocusTracker(props: {
   };
 
   const focusFromEvent = (event: SplitEventWithType) => {
+    // Navigation can finish after app chrome has focused its search input.
+    // Preserve that editing session; explicit ReturnFocus still takes the pane.
+    const active = document.activeElement;
+    if (
+      isEditableInput(active) &&
+      !Array.from(props.panelRefs.values()).some((panel) =>
+        panel.contains(active)
+      )
+    ) {
+      if (
+        event.type === SplitEvent.Remove &&
+        !props.splits().some((split) => split.id === activeSplitId())
+      ) {
+        const next = findNextSplitToActivate(event.splitIndex);
+        if (next) props.splitManager.activateSplit(next);
+      }
+      return;
+    }
     switch (event.type) {
       case SplitEvent.Insert: {
         if (event.activate === false) break;
-        // A fresh load replays its last Insert event once this tracker
-        // mounts, and the last URL split is often a restored Preview Pair's
-        // Viewer. The Viewer displays content passively while its Controller
-        // owns the keyboard (restorePreviewPair already returned activation
-        // to it), so initial focus follows the Controller too.
-        const splitId =
-          props.splitManager.controllerOf(event.splitId) ?? event.splitId;
-        focusSplitById(splitId);
+        focusSplitById(event.splitId);
         break;
       }
       case SplitEvent.Remove: {
@@ -157,6 +169,7 @@ export function createSplitFocusTracker(props: {
     on(
       () => props.splitManager.events(),
       (newEvent) => {
+        if (!newEvent) return;
         if (focusTimeout) {
           clearTimeout(focusTimeout);
         }

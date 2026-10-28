@@ -1,6 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import { DynamoDBTable } from '../../packages/resources';
 import {
+  BASE_DOMAIN,
   getKafkaClusterPolicy,
   getSearchEventQueue,
   stack,
@@ -10,7 +11,7 @@ import { SearchProcessingService } from './service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'cloud-storage-search',
 };
 
@@ -58,7 +59,6 @@ const searchProcessingService = new SearchProcessingService(
     vpc,
     platform: { family: 'linux', architecture: 'amd64' },
     serviceContainerPort: 8080,
-    isPrivate: false,
     healthCheckPath: '/health',
     containerEnvVars: [
       { name: 'ENVIRONMENT', value: stack },
@@ -76,5 +76,7 @@ const searchProcessingService = new SearchProcessingService(
   }
 );
 
-export const searchProcessingServiceUrl = pulumi.interpolate`${searchProcessingService.domain}`;
+export const searchProcessingServiceUrl = `https://${
+  stack === 'prod' ? '' : `${stack}-`
+}gateway.${BASE_DOMAIN}/search-processing`;
 export const searchProcessingServiceRoleArn = searchProcessingService.role.arn;

@@ -18,9 +18,14 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewData, ProjectPreviewV2,
     WithProjectId,
 };
+use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
+    authorize_team_share,
+};
 use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
@@ -31,8 +36,8 @@ use super::events::{
     ProjectUploadedMetadata,
 };
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, ProjectError, PurgedProjectTree, RevertDeleteResult,
-    SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, ProjectError, ProjectTree, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
@@ -40,6 +45,7 @@ use super::ports::{
 };
 use super::upload::{build_destination_map, build_root_folder};
 
+mod purge_owned;
 #[cfg(test)]
 mod tests;
 
@@ -142,6 +148,37 @@ where
                 );
             });
     }
+
+    async fn authorize_project_team_share(
+        &self,
+        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        request: TeamShareRequest,
+    ) -> Result<Option<AuthorizedTeamShareCommand>, ProjectError> {
+        if request == TeamShareRequest::default() {
+            return Ok(None);
+        }
+        let facts = self
+            .repo
+            .get_team_share_facts(&receipt.entity().entity_id)
+            .await?;
+        authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            request,
+            TeamShareLevel::Edit,
+        )
+        .map_err(|error| match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                ProjectError::Unauthorized
+            }
+            TeamSharePolicyError::InvalidRevision => ProjectError::Conflict(error.to_string()),
+            TeamSharePolicyError::MissingTeam
+            | TeamSharePolicyError::InvalidLevel
+            | TeamSharePolicyError::ContradictoryInputs => {
+                ProjectError::BadRequest(error.to_string())
+            }
+        })
+    }
 }
 
 impl<R, U, D, Sha, Eam, Idx, B> ProjectService for ProjectServiceImpl<R, U, D, Sha, Eam, Idx, B>
@@ -162,6 +199,16 @@ where
             .get_projects_for_user(user_id.as_ref())
             .await
             .map_err(|error| internal_error(error, "unable to list projects"))
+    }
+
+    async fn list_accessible_projects(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Project>, ProjectError> {
+        self.repo
+            .get_accessible_projects_for_user(user_id.as_ref())
+            .await
+            .map_err(|error| internal_error(error, "unable to list accessible projects"))
     }
 
     async fn list_pending_projects(
@@ -263,7 +310,7 @@ where
     ) -> Result<Vec<ItemWithUserAccessLevel>, ProjectError> {
         let project_access_level = receipt_access_level(&receipt)?;
         let actor = match receipt.auth() {
-            EntityAccessAuth::Authenticated(user_id) => Some(user_id.as_ref()),
+            EntityAccessAuth::Authenticated(user_id) => Some(user_id),
             _ => None,
         };
         let internal = matches!(receipt.auth(), EntityAccessAuth::Internal);
@@ -290,6 +337,17 @@ where
             .collect())
     }
 
+    async fn get_project_tree(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        limit: usize,
+    ) -> Result<ProjectTree, ProjectError> {
+        self.repo
+            .get_project_tree(&receipt.entity().entity_id, limit)
+            .await
+            .map_err(|error| internal_error(error, "unable to get project tree"))
+    }
+
     async fn get_project_permissions(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
@@ -309,16 +367,17 @@ where
 
     async fn create_project(
         &self,
-        actor: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
         validate_project_name(&args.name)?;
 
+        let owner = principal.owner();
         // The owner's team default link-share preference decides the initial
         // share permission; without a team, projects default to link sharing off.
         let team_default = self
             .repo
-            .get_team_default_link_share(actor.as_ref())
+            .get_team_default_link_share(&owner)
             .await
             .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
 
@@ -326,7 +385,7 @@ where
         let project = self
             .repo
             .create_project(CreateProjectArgs {
-                user_id: actor.to_string(),
+                owner: owner.clone(),
                 name: args.name,
                 parent_id: parent_id.clone(),
                 share_permission: SharePermissionV2::new_project_share_permission(team_default),
@@ -359,7 +418,7 @@ where
             project.id.clone(),
             ProjectCreatedMetadata {
                 project_id: project.id.clone(),
-                owner: actor,
+                owner,
                 name: project.name.clone(),
                 parent_project_id: project.parent_id.clone(),
                 created_at: project.created_at,
@@ -398,6 +457,19 @@ where
             ));
         }
 
+        let team_share = self
+            .authorize_project_team_share(
+                &receipt,
+                TeamShareRequest {
+                    access_level: args
+                        .share_permission
+                        .as_ref()
+                        .and_then(|p| p.team_share_access_level),
+                    legacy_enabled: None,
+                },
+            )
+            .await?;
+
         let new_parent_id = args
             .project_parent_id
             .as_deref()
@@ -421,6 +493,7 @@ where
             }
         }
 
+        let moving = args.project_parent_id.is_some();
         let project_uuid = parse_internal_uuid(&project.id, "project ID")?;
         let old_parent_uuid = project
             .parent_id
@@ -438,26 +511,31 @@ where
                 update_parent: args.project_parent_id.is_some(),
                 parent_id: new_parent_id.map(str::to_string),
                 share_permission: args.share_permission,
+                team_share,
             })
-            .await
-            .map_err(|error| internal_error(error, "unable to patch project"))?;
+            .await?;
 
         self.bump_project_modified(&project.id).await;
-        let _ = self
-            .entity_access_management_service
-            .move_project(
-                &project_uuid,
-                old_parent_uuid.as_ref(),
-                new_parent_uuid.as_ref(),
-            )
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    project_id = %project.id,
-                    "unable to update entity access for project"
-                );
-            });
+        // Only a move changes inherited access: an edit that leaves the parent
+        // alone (a rename, a share change) must keep what the project and its
+        // contents inherit from the folders above.
+        if moving {
+            let _ = self
+                .entity_access_management_service
+                .move_project(
+                    &project_uuid,
+                    old_parent_uuid.as_ref(),
+                    new_parent_uuid.as_ref(),
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        project_id = %project.id,
+                        "unable to update entity access for project"
+                    );
+                });
+        }
         if let Some(parent_id) = project.parent_id.as_deref() {
             self.bump_project_modified(parent_id).await;
         }
@@ -611,14 +689,14 @@ where
         let event_owner = actor.clone();
         let event_name = args.root_folder_name.clone();
         let event_parent_project_id = args.parent_id.clone();
-        let root_folder = build_root_folder(&args.root_folder_name, args.content)
+        let root_folder = build_root_folder(&args.root_folder_name, args.content, &args.folders)
             .map_err(|error| internal_error(error, "unable to prepare folder upload"))?;
 
         // The uploaded projects and documents all share the owner's team-derived
         // permission; without a team, link sharing defaults to off.
         let team_default = self
             .repo
-            .get_team_default_link_share(actor.as_ref())
+            .get_team_default_link_share(&Owner::User(actor.clone()))
             .await
             .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
 
@@ -673,7 +751,7 @@ where
                         root_project_id.clone(),
                         ProjectUploadedMetadata {
                             root_project_id: root_project_id.clone(),
-                            owner: event_owner,
+                            owner: Owner::User(event_owner),
                             name: event_name,
                             parent_project_id: event_parent_project_id,
                             project_ids: uploaded.project_ids,
@@ -737,7 +815,7 @@ where
                 uploaded_tree.id.clone(),
                 ProjectUploadedMetadata {
                     root_project_id: uploaded_tree.id,
-                    owner: uploaded_tree.user_id,
+                    owner: Owner::User(uploaded_tree.user_id),
                     name: uploaded_tree.name,
                     parent_project_id: uploaded_tree.parent_id,
                     project_ids: uploaded_tree.project_ids.clone(),
@@ -821,11 +899,11 @@ where
     }
 }
 
-fn owns(item: &Item, actor: &str) -> bool {
+fn owns(item: &Item, actor: &MacroUserIdStr<'_>) -> bool {
     match item {
-        Item::Project(project) => project.user_id == actor,
-        Item::Document(document) => document.owner.as_ref() == actor,
-        Item::Chat(chat) => chat.user_id == actor,
+        Item::Project(project) => project.user_id.is_user(actor),
+        Item::Document(document) => document.owner.is_user(actor),
+        Item::Chat(chat) => chat.user_id.is_user(actor),
     }
 }
 

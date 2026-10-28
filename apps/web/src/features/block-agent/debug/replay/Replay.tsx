@@ -10,14 +10,14 @@
  */
 
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { createSignal, onCleanup, Show } from 'solid-js';
+import { AgentSessionProvider } from '../../agent-session-provider';
 import { AgentComposer } from '../../component/AgentComposer';
 import { Transcript } from '../../component/Transcript';
-import {
-  AgentSessionProvider,
-  useAgentSession,
-} from '../../context/AgentSessionContext';
+import { useAgentSession } from '../../context/AgentSessionContext';
+import { sessionStatus } from '../../state/session-status';
 import { SessionStatusPill } from '../../ui';
 import { createReplayDriver, type ReplayDriver } from './driver';
 import { registerReplaySession } from './interceptor';
@@ -42,10 +42,16 @@ function Knob(props: {
 }
 
 function SessionChrome() {
-  const { status, working } = useAgentSession();
+  const { metadata, turn } = useAgentSession();
+  // Same reading as the product composer's `busy()`: a speculated stop
+  // already reads as done.
+  const working = () => {
+    const state = turn();
+    return state !== 'idle' && state !== 'disconnected' && state !== 'stopping';
+  };
   return (
     <div class="flex items-center gap-2 border-b border-edge-muted px-4 py-2">
-      <SessionStatusPill status={status()} />
+      <SessionStatusPill status={sessionStatus(metadata())} />
       <Show when={working()}>
         <span class="text-xs text-ink-extra-muted">working…</span>
       </Show>
@@ -125,7 +131,7 @@ export default function AgentReplay() {
       onDrop={(event) => {
         event.preventDefault();
         const file = event.dataTransfer?.files[0];
-        if (file) void loadFile(file);
+        if (file) fireAndForget(loadFile(file), 'agent-replay');
       }}
     >
       <div class="flex flex-col gap-2 border-b border-edge-muted px-4 py-3">
@@ -136,7 +142,7 @@ export default function AgentReplay() {
             class="text-xs text-ink-muted"
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
-              if (file) void loadFile(file);
+              if (file) fireAndForget(loadFile(file), 'agent-replay');
             }}
           />
           <Show when={recording()}>
@@ -210,7 +216,7 @@ export default function AgentReplay() {
           </Knob>
           <button
             type="button"
-            class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-muted"
+            class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-hover"
             disabled={!recording()}
             onClick={mount}
           >
@@ -223,7 +229,7 @@ export default function AgentReplay() {
             <div class="flex items-center gap-3">
               <button
                 type="button"
-                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-muted"
+                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-hover"
                 onClick={() =>
                   playing() ? session().driver.pause() : session().driver.play()
                 }
@@ -232,7 +238,7 @@ export default function AgentReplay() {
               </button>
               <button
                 type="button"
-                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-muted"
+                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-hover"
                 onClick={() => session().driver.step()}
               >
                 step
@@ -255,12 +261,12 @@ export default function AgentReplay() {
         keyed
       >
         {(session) => (
-          <AgentSessionProvider sessionId={session.id}>
+          <AgentSessionProvider blockId={session.id}>
             <StaticMarkdownContext>
               <div class="flex-1 min-h-0 flex flex-col">
                 <SessionChrome />
                 <Transcript />
-                <div class="shrink-0 w-full max-w-3xl mx-auto px-4 pb-4">
+                <div class="macro-message-width shrink-0 mx-auto px-4 pb-4">
                   <AgentComposer />
                 </div>
               </div>

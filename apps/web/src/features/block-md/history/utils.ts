@@ -1,10 +1,21 @@
 import { isMacroAgentId, MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { macroIdToEmail, tryMacroId } from '@core/user';
+import { getHashedPaletteColor } from '@ui/utils/palette';
 
-export { diffAuthorColor as userColor } from '@macro-inc/lexical-core';
+export function userColor(userId: string): string {
+  const color = getHashedPaletteColor(userId);
+  return `var(--color-${color}, var(--color-pink))`;
+}
+
+/**
+ * Author sync-service records for edits no user made, such as the imported
+ * content a document starts from. Mirrors `SYSTEM_AUTHOR_ID` in sync-service.
+ */
+export const SYSTEM_AUTHOR_ID = 'system';
 
 export function userLabel(userId: string): string {
   if (userId === 'unknown') return 'Unknown';
+  if (userId === SYSTEM_AUTHOR_ID) return MACRO_AGENT_NAME;
   if (isMacroAgentId(userId)) return `${MACRO_AGENT_NAME} (AI)`;
   const id = tryMacroId(userId);
   return id ? macroIdToEmail(id) : userId;

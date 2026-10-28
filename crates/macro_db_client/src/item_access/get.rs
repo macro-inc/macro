@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 /// A record from entity_access representing a user's access to an entity.
@@ -31,7 +32,11 @@ pub async fn get_owner_and_deleted(
                 r#"SELECT owner, "deletedAt" as deleted_at FROM "Document" WHERE id=$1"#,
                 entity_id
             )
-            .map(|r| (r.owner, r.deleted_at.is_some()))
+            .try_map(|r| {
+                let owner = Owner::from_principal_str(&r.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+                Ok((owner.principal_id(), r.deleted_at.is_some()))
+            })
             .fetch_one(db)
             .await?
         }

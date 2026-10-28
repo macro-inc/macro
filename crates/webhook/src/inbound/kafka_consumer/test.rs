@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    events::{WebhookDeletedMetadata, WebhookTopicEvent},
+    events::{WebhookDeletedMetadata, WebhookMacroEvent, WebhookTopicEvent},
     ingestion::WebhookEventIngestionError,
 };
 use channel_sender::ChannelSender;
@@ -39,8 +39,11 @@ fn decode_message(topic: &str, payload: &[u8]) -> Result<DeclaredMacroEvent, Eve
 
 fn document_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: "doc_1".to_string(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     }))
 }
@@ -65,8 +68,10 @@ fn subscribes_to_all_ingestion_topics() {
         [
             "macro.documents",
             "macro.channels",
+            "macro.messages",
             "macro.webhooks",
-            "macro.agent_sessions"
+            "macro.agent_sessions",
+            "macro.agent_session_lifecycle"
         ]
     );
 }
@@ -175,6 +180,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
         Ok(())
     }
 
+    async fn ingest_message_event(
+        &self,
+        _event: Event<messages::outbound::broker::MessageTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        Ok(())
+    }
+
     async fn ingest_webhook_event(
         &self,
         _event: Event<WebhookTopicEvent>,
@@ -185,6 +197,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_agent_trigger_event(
         &self,
         _event: Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest()
+    }
+
+    async fn ingest_agent_session_lifecycle_event(
+        &self,
+        _event: Event<agent_session::domain::events::AgentSessionLifecycleEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest()
     }

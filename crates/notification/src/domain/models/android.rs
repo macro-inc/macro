@@ -1,42 +1,49 @@
-//! Android push notification models (FCM via SNS).
+//! Android push notification content.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::Serialize;
 
-/// FCM push notification message for Android devices.
+/// Content for an Android push. The outbound adapter encodes the FCM transport.
 #[derive(Debug, Serialize)]
 pub struct FCMMessage<T> {
-    pub(crate) android: AndroidData,
-    data: T,
+    /// Intended account, checked by the device before display or navigation.
+    pub recipient_id: MacroUserIdStr<'static>,
+    /// Visible title, absent for a notification-clear command.
+    pub title: Option<String>,
+    /// Visible body, absent for a notification-clear command.
+    pub body: Option<String>,
+    /// Stable identifier used to replace or clear the displayed notification.
+    pub identifier: String,
+    /// Client metadata, including the notification ID used for tap navigation.
+    pub data: T,
 }
 
 impl<T> FCMMessage<T> {
-    /// temporary method since android is currently out of scope for mobile
-    /// this just instantiates a majority blank notif
-    pub fn new_temporary_empty(data: T) -> Self {
-        FCMMessage {
-            android: AndroidData {
-                notification: "Temporary placeholder".to_string(),
-                priority: AndroidNotifPrio::Normal,
-                collapse_key: String::new(),
-            },
+    /// Create a visible Android notification.
+    pub fn notification(
+        title: String,
+        body: String,
+        identifier: String,
+        data: T,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> Self {
+        Self {
+            recipient_id,
+            title: Some(title),
+            body: Some(body),
+            identifier,
             data,
         }
     }
-}
 
-/// Android notification priority level.
-#[derive(Debug, Serialize)]
-pub enum AndroidNotifPrio {
-    /// Normal priority.
-    Normal,
-    /// High priority.
-    High,
-}
-
-/// Android FCM notification data.
-#[derive(Debug, Serialize)]
-pub struct AndroidData {
-    pub(crate) notification: String,
-    pub(crate) priority: AndroidNotifPrio,
-    pub(crate) collapse_key: String,
+    /// Clear a previously displayed notification without displaying an alert.
+    pub fn clear(identifier: String, data: T, recipient_id: MacroUserIdStr<'static>) -> Self {
+        Self {
+            recipient_id,
+            title: None,
+            body: None,
+            identifier,
+            data,
+        }
+    }
 }

@@ -1,10 +1,16 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import { Dropdown, Hotkey, Calendar as MiniCalendar } from '@ui';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import {
+  Button,
+  ButtonGroup,
+  Dropdown,
+  Hotkey,
+  Calendar as MiniCalendar,
+} from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CalendarPeriodView } from '../types';
@@ -34,9 +40,6 @@ const CALENDAR_VIEWS = [
   hotkeyToken: HotkeyToken;
 }>;
 
-const DRAWER_ROW_CLASS =
-  "relative flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink not-last:after:absolute not-last:after:inset-x-2 not-last:after:bottom-0 not-last:after:h-px not-last:after:bg-edge-muted not-last:after:content-['']";
-
 function createCalendarPeriodControls(onSelect?: () => void) {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
@@ -51,12 +54,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
 
-  const activeView = createMemo<CalendarPeriodView>(
-    () =>
-      (calendarPager.activeDateInfo()?.view.type as
-        | CalendarPeriodView
-        | undefined) ?? calendarView.displaySettings.periodView
-  );
+  const activeView = calendarPager.periodView;
 
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
@@ -78,7 +76,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
   const changeView = (view: CalendarPeriodView) => {
     setPickerState('open', false);
     onSelect?.();
-    if (calendarPager.activeDateInfo()?.view.type === view) return;
+    if (calendarPager.periodView() === view) return;
 
     calendarPager.changeView(view);
   };
@@ -138,7 +136,11 @@ function CustomDatePicker(props: { controls: CalendarPeriodControls }) {
 }
 
 /** Desktop calendar period selector and custom-date dropdown. */
-export function PeriodSelector(props: { isNarrow?: boolean }) {
+export function PeriodSelector(props: {
+  isNarrow?: boolean;
+  compact?: boolean;
+  grouped?: boolean;
+}) {
   const controls = createCalendarPeriodControls();
 
   return (
@@ -148,14 +150,15 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
       placement="bottom-end"
     >
       <Dropdown.Trigger
-        depth={2}
+        as={props.grouped ? ButtonGroup.Button : Button}
         aria-label="Choose calendar view"
-        size="sm"
-        class="shrink-0 gap-1 rounded-lg border-edge-muted text-xs font-medium text-ink"
+        variant="ghost"
+        size={props.grouped ? undefined : props.compact ? 'md' : 'lg'}
+        class="shrink-0 border-transparent bg-transparent text-sm"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())
           ?.label ?? 'Week'}
-        <CaretDownIcon class="size-3 text-ink-muted" />
+        <CaretDownIcon class="size-4 text-ink-muted" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-36">
         <Dropdown.Group>
@@ -208,9 +211,7 @@ export function MobilePeriodControls(props: { onSelect: () => void }) {
       <MobileDrawer.Section class="flex shrink-0 flex-col">
         <For each={CALENDAR_VIEWS}>
           {(view) => (
-            <button
-              type="button"
-              class={DRAWER_ROW_CLASS}
+            <MobileDrawer.Item
               aria-pressed={controls.activeView() === view.value}
               onClick={() => controls.changeView(view.value)}
             >
@@ -221,7 +222,7 @@ export function MobilePeriodControls(props: { onSelect: () => void }) {
                   invisible: controls.activeView() !== view.value,
                 }}
               />
-            </button>
+            </MobileDrawer.Item>
           )}
         </For>
       </MobileDrawer.Section>

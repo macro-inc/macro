@@ -7,8 +7,8 @@ import {
   staticFileIdEndpoint,
   staticFileSizedEndpoint,
 } from '@core/constant/servers';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import XIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { cn } from '@ui';
 import {
   children,
@@ -42,7 +42,9 @@ function RemoveButton(props: {
     <button
       type="button"
       class={cn(
-        'hover:bg-hover hover-transition-bg rounded-md p-1 [@media(hover:none)]:p-2 items-center flex',
+        // Hover/press feedback is painted as a scrim over the button's own
+        // background so the media variant's `bg-surface` chip stays opaque.
+        'not-touch:hover:overlay-hover not-touch:active:overlay-active rounded-md p-1 [@media(hover:none)]:p-2 items-center flex',
         props.class
       )}
       onClick={(event) => {

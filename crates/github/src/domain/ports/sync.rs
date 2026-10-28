@@ -5,9 +5,10 @@ use std::future::Future;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser, GithubError,
-    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, GithubSetupAccessToken,
-    GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference,
+    AppJwt, EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
+    GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails,
+    GithubRepository, GithubSetupAccessToken, GithubUserInstallation, MacroTaskId,
+    PullRequestIndexPage, PullRequestIndexRequest, ResolvedTeamTaskReference, TeamTaskReference,
     ValidatedGithubWebhookEvent,
 };
 
@@ -88,6 +89,19 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         installation_id: &str,
     ) -> impl Future<Output = Result<Vec<GithubAppInstallationSource>, Self::Err>> + Send;
 
+    /// Returns the installations whose sources include the given Macro user or
+    /// any of the given teams.
+    ///
+    /// The inverse of [`GithubSyncRepo::get_installation_sources`]: that
+    /// answers "who installed this?", this answers "what did they install?".
+    /// Ids are returned once each even when several of the user's sources
+    /// point at the same installation.
+    fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
     /// Returns all Macro user IDs that belong to the given team.
     fn get_team_member_ids(
         &self,
@@ -160,8 +174,35 @@ pub trait GithubSyncClient: Send + Sync + 'static {
     /// Generates an installation access token for a given GitHub App installation.
     fn generate_installation_access_token(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         installation_id: u64,
+    ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+
+    /// Finds which installation of our App covers a repository, if any.
+    ///
+    /// `None` means the App is not installed on it - which, from a caller
+    /// acting for a user, is indistinguishable from a repository that does not
+    /// exist, and deliberately so.
+    fn get_repository_installation(
+        &self,
+        jwt: &AppJwt,
+        owner: &str,
+        repository: &str,
+    ) -> impl Future<Output = Result<Option<u64>, GithubError>> + Send;
+
+    /// Generates an installation access token cut down to one repository and a
+    /// named set of permissions.
+    ///
+    /// An unscoped installation token reaches every repository in the
+    /// installation with every permission it was granted; this is the narrow
+    /// form, for callers acting on one repository's behalf. `permissions` are
+    /// GitHub's own names and levels, e.g. `("contents", "write")`.
+    fn generate_scoped_installation_access_token(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+        repository: &str,
+        permissions: &[(&str, &str)],
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
 
     /// Posts a comment on a GitHub pull request (via the issues API).
@@ -188,6 +229,16 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         &self,
         access_token: &str,
     ) -> impl Future<Output = Result<Vec<EnrichedGithubPullRequest>, GithubError>> + Send;
+
+    /// Branch names on one repository, as GitHub lists them.
+    ///
+    /// An empty repository has no branches and is an empty list, not an error.
+    fn list_repository_branches(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repository: &str,
+    ) -> impl Future<Output = Result<Vec<String>, GithubError>> + Send;
 }
 
 /// Service interface for github sync operations (webhooks and sync app).
@@ -248,4 +299,47 @@ pub trait GithubSyncService: Send + Sync + 'static {
         &self,
         installation_id: u64,
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+}
+
+/// Publishes persisted PR mappings to users allowed to view their source.
+pub trait GithubSyncRealtime: Send + Sync + 'static {
+    /// Forward a saved entity; recipient selection belongs to the sync service.
+    fn publish_pull_request(
+        &self,
+        recipients: &[MacroUserIdStr<'static>],
+        entity: &foreign_entity::domain::models::ForeignEntity,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
+}
+
+/// Pages through every GitHub App installation Macro has recorded.
+pub trait GithubInstallationLister: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Up to `limit` distinct installation ids that sort after `after`, in ascending order.
+    fn list_installation_ids(
+        &self,
+        after: Option<&str>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+}
+
+/// Writes typed rows for pull requests stored before rows existed, one page of installations at
+/// a time.
+pub trait GithubPullRequestIndex: Send + Sync + 'static {
+    /// Process the next page of installations and report what changed.
+    fn index_pull_requests(
+        &self,
+        request: PullRequestIndexRequest,
+    ) -> impl Future<Output = Result<PullRequestIndexPage, GithubError>> + Send;
+}
+
+/// Lists repository metadata for an installation the caller is authorized to access.
+pub trait GithubRepositoryClient: Send + Sync + 'static {
+    /// Fetch the installation's repositories using metadata-only access.
+    fn repositories_for_installation(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+    ) -> impl Future<Output = Result<Vec<GithubRepository>, GithubError>> + Send;
 }

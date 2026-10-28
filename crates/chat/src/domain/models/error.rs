@@ -16,30 +16,11 @@ pub enum ChatErr {
     /// Bad request
     #[error("bad request: {0}")]
     BadRequest(String),
+    /// The requested change conflicts with the persisted state (for example a
+    /// stale team-share revision); the caller should reload and retry.
+    #[error("conflict: {0}")]
+    Conflict(String),
     /// Access denied.
     #[error(transparent)]
     Access(#[from] AccessError),
-}
-
-#[cfg(feature = "inbound")]
-impl axum::response::IntoResponse for ChatErr {
-    fn into_response(self) -> axum::response::Response {
-        use axum::http::StatusCode;
-
-        let (status, msg) = match &self {
-            ChatErr::NotFound => (StatusCode::NOT_FOUND, "Not found"),
-            ChatErr::BadRequest(_) => (StatusCode::BAD_REQUEST, "Bad request"),
-            ChatErr::Access(
-                AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
-            ) => (StatusCode::FORBIDDEN, "Forbidden"),
-            ChatErr::Access(AccessError::NotFound(_)) => (StatusCode::NOT_FOUND, "Not found"),
-            ChatErr::Access(AccessError::BadRequest(_)) => (StatusCode::BAD_REQUEST, "Bad request"),
-            ChatErr::Unknown(_) | ChatErr::Access(_) => {
-                tracing::error!(error=?self, "chat handler error");
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
-            }
-        };
-
-        (status, msg.to_string()).into_response()
-    }
 }

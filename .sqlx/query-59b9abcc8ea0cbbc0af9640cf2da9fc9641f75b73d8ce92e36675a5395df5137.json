@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO collab_surfaces\n                (id, parent_entity_type, parent_entity_id, state, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "59b9abcc8ea0cbbc0af9640cf2da9fc9641f75b73d8ce92e36675a5395df5137"
+}

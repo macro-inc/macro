@@ -2,28 +2,34 @@
 // Aliases are stable; underlying physical indices behind them can be swapped
 // during a reindex via the OpenSearch _aliases API.
 export const CHANNELS_ALIAS = 'channels';
+export const AGENT_SESSIONS_ALIAS = 'agent_sessions';
 export const CHATS_ALIAS = 'chats';
 export const DOCUMENTS_ALIAS = 'documents';
 export const EMAILS_ALIAS = 'emails';
 export const CALL_RECORDS_ALIAS = 'call_records';
 export const PROJECTS_ALIAS = 'projects';
+export const CALENDAR_EVENTS_ALIAS = 'calendar_events';
 
 // Underlying physical indices (versioned). Bump the suffix to roll a new
 // version, then swap the alias atomically.
 export const CHANNELS_INDEX = 'channels_v2';
+export const AGENT_SESSIONS_INDEX = 'agent_sessions_v1';
 export const CHATS_INDEX = 'chats_v2';
 export const DOCUMENTS_INDEX = 'documents_v2';
 export const EMAILS_INDEX = 'emails_v2';
 export const CALL_RECORDS_INDEX = 'call_records_v2';
 export const PROJECTS_INDEX = 'projects_v1';
+export const CALENDAR_EVENTS_INDEX = 'calendar_events_v1';
 
 export const ALIAS_TO_INDEX: Record<string, string> = {
   [CHANNELS_ALIAS]: CHANNELS_INDEX,
+  [AGENT_SESSIONS_ALIAS]: AGENT_SESSIONS_INDEX,
   [CHATS_ALIAS]: CHATS_INDEX,
   [DOCUMENTS_ALIAS]: DOCUMENTS_INDEX,
   [EMAILS_ALIAS]: EMAILS_INDEX,
   [CALL_RECORDS_ALIAS]: CALL_RECORDS_INDEX,
   [PROJECTS_ALIAS]: PROJECTS_INDEX,
+  [CALENDAR_EVENTS_ALIAS]: CALENDAR_EVENTS_INDEX,
 };
 
 // Backward-compat shorthands used by older migration scripts. They now point

@@ -28,19 +28,44 @@ export type RunCodeToolOptions = {
   onRunCodeResult?: (result: string) => void;
 };
 
-/** Collapse array snippet values to newline-joined text.
+/**
+ * One snippet as the model sends it. Snippets are a LIST of pairs rather than a
+ * `{ KEY: text }` object because Gemini's function declarations are an OpenAPI
+ * subset with no `additionalProperties`, and the AI SDK's Google provider drops
+ * that field when converting the schema — a record reaches Gemini as an object
+ * with no fields, and it sends `{}` while its code references `snippets.KEY`.
+ * Pairs survive the conversion on every provider we use, so there is one shape
+ * for every agent; the sandbox still sees the record the code indexes into.
  *
- *  The sandbox exposes `snippets` as a plain object of strings, and every
- *  editor primitive takes text, so joining is what the coder wanted anyway when
- *  it passed a list. */
-function flattenSnippets(
-  snippets: Record<string, string | string[]> | undefined
+ * `text` also accepts a list of strings: coders routinely send an array when
+ * composing list content, and a strict string schema rejected 45 such calls
+ * across the prod corpus, each costing the coder its whole step.
+ */
+const SnippetPairSchema = z.object({
+  key: z.string().describe('the name referenced as `snippets.KEY` in code'),
+  text: z
+    .union([z.string(), z.array(z.string())])
+    .describe('the exact text, unescaped; a list of strings for list content'),
+});
+export type SnippetPair = z.infer<typeof SnippetPairSchema>;
+
+const SnippetsSchema = z
+  .array(SnippetPairSchema)
+  .optional()
+  .describe(
+    'all text content your code inserts, as a list of { key, text } pairs. reference each as `snippets.KEY` in `code` instead of embedding it as a string literal (avoids escaping errors).'
+  );
+
+/** The record the sandbox exposes as `snippets`; list values join with newlines
+ *  since every editor primitive takes text, which is what the coder meant. */
+export function snippetsToRecord(
+  snippets: SnippetPair[] | undefined
 ): Record<string, string> | undefined {
   if (!snippets) return undefined;
   return Object.fromEntries(
-    Object.entries(snippets).map(([key, value]) => [
+    snippets.map(({ key, text }) => [
       key,
-      Array.isArray(value) ? value.join('\n') : value,
+      Array.isArray(text) ? text.join('\n') : (text ?? ''),
     ])
   );
 }
@@ -54,22 +79,10 @@ export function createRunCodeTool(opts: RunCodeToolOptions) {
       "Run JS statements against `editor` (the ONLY in-scope value besides `snippets`) to edit the document — e.g. `editor.convertToHeading('b3', 2); editor.bold('b5', 'word')`. Returns `ok`, or an error naming a bad id so you can retry.",
     inputSchema: z.object({
       code: z.string(),
-      snippets: z
-        .record(
-          z.string(),
-          // Coders routinely send an array when composing a list. A strict
-          // string-only record rejected those calls, and the coder's only
-          // recourse was to retry the whole step — 45 such retries across the
-          // prod corpus. Accept the shape it actually produces.
-          z.union([z.string(), z.array(z.string())])
-        )
-        .optional()
-        .describe(
-          'all text content your code inserts: key -> exact content. reference each as `snippets.KEY` in `code` instead of embedding it as a string literal (avoids escaping errors). a value may be an array of strings for list content.'
-        ),
+      snippets: SnippetsSchema,
     }),
     execute: async ({ code, snippets }) => {
-      const flattened = flattenSnippets(snippets);
+      const flattened = snippetsToRecord(snippets);
       opts.onRunCode?.(flattened);
       const span = opts.span
         ? opts.span.span('edit.run_code')

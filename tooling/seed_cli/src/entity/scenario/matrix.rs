@@ -183,7 +183,7 @@ pub fn expected_matrix(spec: &ScenarioSpec) -> Vec<ExpectedRow> {
             access_rows.push(apply::AccessRow {
                 source_id: spec.team_id(team).to_string(),
                 source_type: entity_access_db_utils::EntityAccessSourceType::Team,
-                access_level: AccessLevel::Comment,
+                access_level: AccessLevel::Edit,
                 granted_from_project_id: None,
             });
         }

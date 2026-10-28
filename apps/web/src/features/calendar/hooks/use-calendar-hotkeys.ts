@@ -56,10 +56,12 @@ export function useCalendarHotkeys(handlers: CalendarHotkeyHandlers) {
     );
   }
 
+  // 'k'/'j' are vim-style aliases for the same paging, so the keys that step
+  // through soup lists also step through calendar periods.
   group.add(
     registerHotkey({
       scopeId: handlers.scopeId,
-      hotkey: 'p',
+      hotkey: ['p', 'k'],
       hotkeyToken: TOKENS.calendar.period.previous,
       description: 'Previous period',
       keyDownHandler: () => {
@@ -72,7 +74,7 @@ export function useCalendarHotkeys(handlers: CalendarHotkeyHandlers) {
   group.add(
     registerHotkey({
       scopeId: handlers.scopeId,
-      hotkey: 'n',
+      hotkey: ['n', 'j'],
       hotkeyToken: TOKENS.calendar.period.next,
       description: 'Next period',
       keyDownHandler: () => {

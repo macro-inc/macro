@@ -26,6 +26,7 @@ impl From<ChatErr> for EntityMutationErrorCode {
         match error {
             error @ ChatErr::NotFound => Self::not_found(rootcause::report!(error)),
             error @ ChatErr::BadRequest(_) => Self::invalid(rootcause::report!(error)),
+            error @ ChatErr::Conflict(_) => Self::conflict(rootcause::report!(error)),
             ChatErr::Access(error) => access_error(error),
             error @ ChatErr::Unknown(_) => Self::internal(rootcause::report!(error)),
         }
@@ -44,7 +45,7 @@ fn access_error(error: AccessError) -> EntityMutationErrorCode {
         error @ AccessError::BadRequest(_) => {
             EntityMutationErrorCode::invalid(rootcause::report!(error))
         }
-        error @ (AccessError::DatabaseError(_) | AccessError::Internal) => {
+        error @ (AccessError::Unavailable(_) | AccessError::Internal(_)) => {
             EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }

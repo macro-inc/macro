@@ -1,0 +1,141 @@
+import type {
+  EmailThreadHost,
+  EmailThreadSource,
+} from '@app/features/email-thread/context/email-thread-context';
+import { URL_PARAMS } from '@app/features/email-thread/core/location';
+import { emailDetailSearch } from '@app/features/email-view/email-route';
+import { createSearchParams } from '@app/lib/split-router';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
+import { TOKENS } from '@core/hotkey/tokens';
+import { registerScopeSignalHotkey } from '@core/hotkey/utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createMethodRegistration } from '@core/orchestrator';
+import {
+  blockElementSignal,
+  blockHotkeyScopeSignal,
+} from '@core/signal/blockElement';
+import { blockHandleSignal } from '@core/signal/load';
+import { useSearchParams } from '@solidjs/router';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
+import { TopBar } from './component/TopBar';
+import {
+  EmailThreadHostView,
+  type EmailThreadHostViewProps,
+} from './EmailThreadHostView';
+import { useEmailListNavigation } from './use-email-list-navigation';
+import { registerEmailHotkeys } from './util/emailHotkeys';
+
+export function EmailBlockAdapter(props: {
+  title: string;
+  threadId: Accessor<string>;
+  source: EmailThreadSource;
+  threadTransport: EmailThreadHostViewProps['threadTransport'];
+}) {
+  const [params] = useSearchParams();
+  const [routeSearch] = createSearchParams(emailDetailSearch);
+  const rawTarget = params[URL_PARAMS.messageId];
+  const [targetMessageId, setTargetMessageId] = createSignal(
+    routeSearch.messageId ||
+      (Array.isArray(rawTarget) ? rawTarget[0] : rawTarget)
+  );
+  let routeOwnsTarget = Boolean(routeSearch.messageId);
+  const [targetRequest, setTargetRequest] = createSignal<string | undefined>(
+    routeOwnsTarget ? routeSearch.seek : undefined
+  );
+  const split = useSplitPanel();
+  const listNavigation = useEmailListNavigation(props.threadId);
+  const canAutofocus = useCanAutofocusSplitContent();
+  const blockElement = blockElementSignal.get;
+  const hotkeyScope = blockHotkeyScopeSignal.get;
+  const focusContainer = () => blockElement()?.focus({ preventScroll: true });
+  let targetTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(
+    on(
+      () => [routeSearch.messageId, routeSearch.seek],
+      () => {
+        if (!routeSearch.messageId) {
+          if (routeOwnsTarget) {
+            routeOwnsTarget = false;
+            setTargetMessageId(undefined);
+            setTargetRequest(undefined);
+          }
+          return;
+        }
+        clearTimeout(targetTimer);
+        routeOwnsTarget = true;
+        setTargetMessageId(routeSearch.messageId);
+        setTargetRequest(routeSearch.seek);
+      },
+      { defer: true }
+    )
+  );
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: (params: Record<string, unknown>) => {
+      const id = params[URL_PARAMS.messageId];
+      if (typeof id !== 'string' || !id) return;
+      clearTimeout(targetTimer);
+      routeOwnsTarget = false;
+      setTargetMessageId(undefined);
+      setTargetRequest(undefined);
+      targetTimer = setTimeout(() => setTargetMessageId(id), 0);
+    },
+  });
+  onCleanup(() => clearTimeout(targetTimer));
+  let focused = false;
+  createEffect(() => {
+    if (focused || !canAutofocus || isTouchDevice() || !blockElement()) return;
+    focusContainer();
+    focused = true;
+  });
+  const host: EmailThreadHost = {
+    listNavigation,
+    targetMessageId,
+    targetRequest,
+    focusContainer,
+    isActive: () => split?.isPanelActive() !== false,
+    registerKeyboard: (handlers) => {
+      registerEmailHotkeys(hotkeyScope(), handlers);
+      registerScopeSignalHotkey(hotkeyScope, {
+        hotkey: 'enter',
+        description: 'Reply to message',
+        keyDownHandler: handlers.activate,
+        hotkeyToken: TOKENS.block.focus,
+        hide: true,
+      });
+      registerScopeSignalHotkey(hotkeyScope, {
+        hotkey: 'escape',
+        description: 'Collapse or unselect message',
+        keyDownHandler: handlers.cancel,
+        hotkeyToken: TOKENS.email.cancelReply,
+        hide: true,
+      });
+    },
+  };
+
+  return (
+    <EmailThreadHostView
+      title={props.title}
+      threadId={props.threadId}
+      source={props.source}
+      threadTransport={props.threadTransport}
+      host={host}
+      sidePanelHeaderToggle={isTouchDevice()}
+      topBar={({ createTask }) => (
+        <TopBar
+          id={props.threadId()}
+          title={props.title}
+          onCreateTask={createTask}
+        />
+      )}
+    />
+  );
+}

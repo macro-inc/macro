@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT team_id, user_id, created_at, (cancel_requested_at IS NOT NULL) AS \"cancelled!\",\n           (staging_expires_at <= clock_timestamp() + interval '1 day') AS \"expired!\",\n           (status IN ('completed', 'completed_with_errors', 'failed', 'cancelled')) AS \"terminal!\"\n           FROM slack_import_job WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "cancelled!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "expired!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "terminal!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d4607d38e56b4c58e6d25816028eac94d90ad55597f43b9cb09e8d935dddcf70"
+}

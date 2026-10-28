@@ -8,18 +8,27 @@ import type { CalendarAttendee } from './calendarAttendee';
 import type { CalendarEventCalendarId } from './calendarEventCalendarId';
 import type { CalendarEventConferenceProvider } from './calendarEventConferenceProvider';
 import type { CalendarEventConferenceUrl } from './calendarEventConferenceUrl';
+import type { CalendarEventCreatorEmail } from './calendarEventCreatorEmail';
+import type { CalendarEventCreatorName } from './calendarEventCreatorName';
 import type { CalendarEventDescription } from './calendarEventDescription';
 import type { CalendarEventLocation } from './calendarEventLocation';
 import type { CalendarEventOrganizerEmail } from './calendarEventOrganizerEmail';
 import type { CalendarEventOrganizerName } from './calendarEventOrganizerName';
+import type { CalendarEventSourceContent } from './calendarEventSourceContent';
 import type { EventReminders } from './eventReminders';
 import type { EventStatus } from './eventStatus';
 import type { EventTime } from './eventTime';
 import type { EventTransparency } from './eventTransparency';
+import type { EventType } from './eventType';
 import type { EventVisibility } from './eventVisibility';
+import type { GuestPolicy } from './guestPolicy';
+import type { ViewerCapabilities } from './viewerCapabilities';
 
 /**
  * A stable, first-class Macro calendar event entity.
+
+Content fields hold the canonical source's values: the account's primary
+calendar copy when one is synced, else the freshest remaining copy.
  */
 export interface CalendarEvent {
   /** Attendees, keyed by email during persistence. */
@@ -32,14 +41,32 @@ projections stored before calendars were attributed. */
   conferenceUrl?: CalendarEventConferenceUrl;
   /** Entity creation time. */
   createdAt: string;
+  /** Provider-reported creator email. Distinct from the organizer when
+someone writes onto a calendar they do not own. Omitted from stored
+projections when unknown so events ingested before this field still
+compare equal. */
+  creatorEmail?: CalendarEventCreatorEmail;
+  /** Provider-reported creator display name. */
+  creatorName?: CalendarEventCreatorName;
   /** Optional event body. */
   description?: CalendarEventDescription;
+  /** Provider event type. Skipped when it is the regular type so
+projections stored before event types were modeled still compare
+equal. */
+  eventType?: EventType;
+  /** What the organizer lets guests do: the canonical copy's values, or
+Google's defaults for an event synced before the policy was modeled. */
+  guestPolicy: GuestPolicy;
   /** RFC 5545 UID used to reconcile provider and email sources. */
   icalUid: string;
   /** Macro entity identifier. */
   id: string;
-  /** Whether the current user can edit the canonical source. */
+  /** Whether the canonical source's calendar prohibits editing it. */
   isReadOnly: boolean;
+  /** Whether this is a snapshot of a meeting shared with the owner, which
+Macro added to their calendar as a private copy: the meeting's changes
+never reach it, and nothing done to it reaches the meeting. */
+  isSnapshot: boolean;
   /** Optional physical or virtual location label. */
   location?: CalendarEventLocation;
   /** Organizer email. */
@@ -59,6 +86,11 @@ compare equal. */
    * @minimum 0
    */
   sequence: number;
+  /** Content of every active copy of this event, canonical first: the
+primary calendar's copy, then the freshest. A client picks the copy
+whose calendar it is showing and falls back to the first. Populated
+only on the read path, so stored projections omit it. */
+  sources?: CalendarEventSourceContent[];
   /** Event status. */
   status: EventStatus;
   /** Timed or all-day shape. */
@@ -69,6 +101,10 @@ compare equal. */
   transparency: EventTransparency;
   /** Entity update time. */
   updatedAt: string;
+  /** What the viewing requester may do with the event. Resolved only on
+the read path, alongside each attendee's `is_self`; nothing when no
+viewer is known. Source projections never store it. */
+  viewerCan: ViewerCapabilities;
   /** Event visibility. */
   visibility: EventVisibility;
 }

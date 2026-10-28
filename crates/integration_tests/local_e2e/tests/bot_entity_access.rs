@@ -1,3 +1,6 @@
+#[path = "support/http.rs"]
+mod http;
+
 use anyhow::{Context, ensure};
 use local_e2e_test_support::{LocalE2eConfig, LocalE2eServices};
 use reqwest::{Client, StatusCode};
@@ -130,15 +133,17 @@ impl ScopedBotFixture {
         .await
         .context("failed to insert scoped bot")?;
 
+        let hashed = bot_token::HashedBotToken::from_raw(&bot_token);
         sqlx::query(
             r#"
-            INSERT INTO bot_tokens (id, bot_id, token, label)
-            VALUES ($1, $2, $3, 'local E2E scoped access')
+            INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, label)
+            VALUES ($1, $2, $3, $4, 'local E2E scoped access')
             "#,
         )
         .bind(bot_token_id)
         .bind(bot_id)
-        .bind(&bot_token)
+        .bind(&hashed.hash[..])
+        .bind(&hashed.prefix)
         .execute(&mut *transaction)
         .await
         .context("failed to insert scoped bot token")?;
@@ -243,7 +248,7 @@ impl ScopedBotFixture {
         Ok(Self {
             pool,
             services,
-            http: Client::new(),
+            http: http::http_client()?,
             macro_user_uuid,
             acting_user_id,
             fusion_user_id,

@@ -1,17 +1,18 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { match } from 'ts-pattern';
-import type {
-  AutomationEntity,
-  CallEntity,
-  ChannelEntity,
-  ChatEntity,
-  DocumentEntity,
-  EmailEntity,
-  EntityData,
-  ProjectEntity,
-  SkillEntity,
-  SnippetEntity,
-  TaskEntity,
+import {
+  type CallEntity,
+  type ChannelEntity,
+  type ChatEntity,
+  type DocumentEntity,
+  type EmailEntity,
+  type EntityData,
+  type ProjectEntity,
+  type RoutineEntity,
+  routineStatus,
+  type SkillEntity,
+  type SnippetEntity,
+  type TaskEntity,
 } from '../types/entity';
 
 export type BuildEntityDataArgs = {
@@ -23,9 +24,12 @@ export type BuildEntityDataArgs = {
   fileType?: string;
   isCompleted?: boolean;
   channelType?: ChannelEntity['channelType'];
+  isParticipant?: boolean;
   cron?: string;
   enabled?: boolean;
-  channelId?: string;
+  channelId?: string | null;
+  botId?: string;
+  sessionStatus?: string;
   isActive?: boolean;
   status?: CallEntity['status'];
   attended?: boolean;
@@ -103,6 +107,11 @@ export function buildEntityData(
         'code',
         'image',
         'canvas',
+        'spreadsheet',
+        'pptx',
+        'psd',
+        'fig',
+        'ai',
         'video',
         'unknown',
         'csv',
@@ -135,6 +144,9 @@ export function buildEntityData(
           ...base,
           type: 'channel',
           channelType: args.channelType,
+          ...(args.isParticipant === undefined
+            ? {}
+            : { isParticipant: args.isParticipant }),
         };
       })
       .with(
@@ -148,17 +160,19 @@ export function buildEntityData(
           done: args.done ?? false,
         })
       )
-      .with('automation', (): AutomationEntity | undefined => {
+      .with('routine', (): RoutineEntity | undefined => {
         if (!args.cron) return undefined;
         return {
           ...base,
-          type: 'automation',
+          type: 'routine',
           cron: args.cron,
-          enabled: args.enabled ?? false,
+          status: routineStatus({
+            enabled: args.enabled ?? false,
+            isRunning: false,
+          }),
         };
       })
       .with('call', (): CallEntity | undefined => {
-        if (!args.channelId) return undefined;
         const status: CallEntity['status'] =
           args.status ?? (args.attended ? 'ATTENDED' : 'UNATTENDED');
 
@@ -174,12 +188,28 @@ export function buildEntityData(
       })
       // The singleton calendar block has no entity-shaped block id.
       .with('calendar', (): undefined => undefined)
-      // CRM companies/contacts aren't constructed from block args; soup is the source.
-      .with('company', 'contact', (): undefined => undefined)
+      // Databases, forms and pipelines use REST; CRM records and initiatives come from Soup.
+      .with(
+        'database',
+        'form',
+        'pipeline',
+        'company',
+        'contact',
+        'initiative',
+        (): undefined => undefined
+      )
       // PRs are virtual blocks backed by GitHub, not Macro entities.
       .with('pr', (): undefined => undefined)
-      // Agent sessions aren't constructed from block args; not soup-listed yet.
-      .with('agent', (): undefined => undefined)
+      .with('agent', (): EntityData | undefined =>
+        args.botId
+          ? {
+              ...base,
+              type: 'agent_session',
+              botId: args.botId,
+              status: args.sessionStatus ?? 'no_messages',
+            }
+          : undefined
+      )
       .exhaustive()
   );
 }

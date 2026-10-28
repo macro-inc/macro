@@ -4,6 +4,7 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
 import { NotificationRow } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { Button } from '@ui';
 import {
   type Component,
@@ -21,6 +22,7 @@ import {
 import { NOTIFICATION_LABEL_BY_TYPE } from '../notification-preview';
 import {
   DefaultDocumentNameResolver,
+  DefaultUserAvatarResolver,
   DefaultUserNameResolver,
 } from '../notification-resolvers';
 import { createNotificationSource } from '../notification-source';
@@ -108,7 +110,7 @@ function NotificationItem(props: {
   onSelect: () => void;
 }) {
   const hasData = () => hasNotificationMetadata(props.notification);
-  const isUnread = () => !props.notification.viewed_at;
+  const isUnread = () => props.notification.state === 'unseen';
 
   return (
     <button
@@ -150,8 +152,13 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
       toPlatformNotificationData(
         props.notification,
         DefaultUserNameResolver,
-        DefaultDocumentNameResolver
-      ).then(setBrowserNotif);
+        DefaultDocumentNameResolver,
+        DefaultUserAvatarResolver
+      )
+        .then(setBrowserNotif)
+        .catch((error) =>
+          Telemetry.error(error, { surface: 'notifications-playground' })
+        );
     } else {
       setBrowserNotif(null);
     }
@@ -235,7 +242,7 @@ function PermissionButton(props: { platformNotif: any }) {
           when={props.platformNotif.permission() === 'granted'}
           fallback={
             <Button
-              variant="active"
+              variant="primary"
               onClick={() => props.platformNotif.requestPermission()}
             >
               Enable Browser Notifications
@@ -286,7 +293,7 @@ function CustomBuilder(props: {
 
         <div class="pt-4 border-t border-edge-muted">
           <Button
-            variant="active"
+            variant="primary"
             onClick={() => props.onTest(props.customNotification)}
           >
             🔔 Test Browser Notification
@@ -363,7 +370,7 @@ function NotificationDetail(props: {
             </p>
           </div>
           <Button
-            variant="active"
+            variant="primary"
             onClick={() => props.onTest(props.notification)}
           >
             🔔 Test Notification
@@ -542,7 +549,7 @@ function PlaygroundContent() {
         channelName: 'test-channel',
       },
       viewed_at: null,
-      done: false,
+      state: 'unseen',
     } as UnifiedNotification;
   });
 
@@ -589,6 +596,8 @@ function PlaygroundContent() {
           },
         } as PlatformNotificationState,
         layoutManager
+      ).catch((error) =>
+        Telemetry.error(error, { surface: 'notifications-playground' })
       );
     };
 

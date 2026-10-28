@@ -1,27 +1,11 @@
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
-import {
-  commentsStore,
-  commentWidthSignal,
-} from '@block-md/comments/commentStore';
-import { useGoToTempRedirect } from '@block-md/signal/location';
-import { mdStore } from '@block-md/signal/markdownBlockData';
-import { SidePanel } from '@components/app/side-panel';
-import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
-import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
-import { useBlockAliasedName, useBlockId } from '@core/block';
-import {
-  editorFocusSignal,
-  getSaveState,
-} from '@core/component/LexicalMarkdown/utils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
-  ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
-  INLINE_AI_EDITING_FLAG,
-  INLINE_AI_EDITING_OVERRIDE,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -29,44 +13,40 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import {
-  blockElementSignal,
-  blockHotkeyScopeSignal,
-} from '@core/signal/blockElement';
-import { tempRedirectLocation } from '@core/signal/location';
-import { useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+  captureScrollAnchor,
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from '@core/util/scrollAnchor';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import {
+  createComputed,
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
   untrack,
 } from 'solid-js';
-import { useHistory } from '../history/HistoryContext';
-import { HistoryOverlay } from '../history/HistoryOverlay';
-import { DispatchAgentButton } from './DispatchAgentMenu';
-import { DocumentAiEditBar } from './DocumentAiEditBar';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
-import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { useMarkdownName } from './MarkdownNameProvider';
 import {
+  MARKDOWN_OUTLINE_INSET,
   MARKDOWN_OUTLINE_WIDTH,
   MarkdownOutline,
+  outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
-import {
-  registerLexicalStateDebuggerCommand,
-  registerMarkdownCommands,
-} from './useMarkdownCommands';
+import { registerMarkdownCommands } from './useMarkdownCommands';
 
 /**
  * Whether the Lexical state debugger panel is open, persisted across reloads so
@@ -82,9 +62,6 @@ const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
-const OutlineEdgeInset = 16;
-const OutlineMinWidth =
-  NoteTargetWidth + 2 * (MARKDOWN_OUTLINE_WIDTH + OutlineEdgeInset);
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -93,19 +70,14 @@ enum CommentLayoutMode {
   none = 'none',
 }
 
-const BreaksPoints: Record<CommentLayoutMode, number> = {
-  lg: NoteTargetWidth + 2 * CommentTargetWidth + 3 * GapTargetWidth,
-  md: (3 / 4) * NoteTargetWidth + CommentTargetWidth + GapTargetWidth,
-  xs: 0,
-  none: 0,
-};
-
-const widthToMode = (width: number): CommentLayoutMode => {
-  if (width >= BreaksPoints.lg) return CommentLayoutMode.lg;
-  if (width >= BreaksPoints.md) return CommentLayoutMode.md;
-  if (width >= BreaksPoints.xs) return CommentLayoutMode.xs;
-  return CommentLayoutMode.none;
-};
+const CommentBreakpoints = {
+  lg: {
+    min: NoteTargetWidth + 2 * CommentTargetWidth + 3 * GapTargetWidth,
+  },
+  md: {
+    min: (3 / 4) * NoteTargetWidth + CommentTargetWidth + GapTargetWidth,
+  },
+} as const;
 
 function useCanUseLexicalStateDebugger() {
   const isMacroTeam = useIsMacroTeam();
@@ -118,23 +90,15 @@ function useCanUseLexicalStateDebugger() {
 export function Notebook(props: {
   loroManager: LoroManager;
   documentId: string;
+  hotkeyScope: string | undefined;
+  autoFocus: boolean;
 }) {
-  const blockElement = blockElementSignal.get;
-  const blockId = useBlockId();
-  const blockAliasedName = useBlockAliasedName();
-  const setStore = mdStore.set;
-  const setWideEnoughForComments = commentWidthSignal.set;
-  const documentName = useBlockDocumentName();
-  const scopeId = blockHotkeyScopeSignal.get;
-  const md = mdStore.get;
-  const history = useHistory();
-  const { navigatedFromJK } = useNavigatedFromJK();
-  const canAutofocusSplitContent = useCanAutofocusSplitContent();
-  const documentId = props.documentId;
-  const canEdit = useCanEdit();
-  const inlineAiEditing = useFeatureFlag(INLINE_AI_EDITING_FLAG, {
-    enabledOverride: INLINE_AI_EDITING_OVERRIDE,
-  });
+  const { element: blockElement, state } = useMarkdownDocument();
+  const { comments: commentState, params } = state;
+  const { md, setMd } = state.editor;
+  const { displayName: documentName } = useMarkdownName();
+  const scopeId = () => props.hotkeyScope;
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -144,85 +108,101 @@ export function Notebook(props: {
   const outlinePortalMount = () =>
     notebookRef.closest<HTMLElement>('.portal-scope') ?? notebookRef;
 
-  const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
-  const [width, setWidth] = createSignal(0);
+  const [width, setWidth] = createSignal<number>();
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const [contentInset, setContentInset] = createSignal(0);
+  const commentBreakpoints = createSizeBreakpoints(width, CommentBreakpoints);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
   const outline = useMarkdownOutline({
     editor: () => md.editor,
-    enabled: () =>
-      width() >= OutlineMinWidth && !history.isOpen() && !isMobile(),
+    enabled: () => outlineFitsGutter(contentInset()) && !isMobile(),
   });
 
-  const comments = commentsStore.get;
   const hasComment = createMemo(() => {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
-    return Object.keys(comments).length > 0;
+    return Object.keys(commentState.comments).length > 0;
   });
-  const showComments = () => hasComment() && !history.isOpen();
+  // On phones the margin is hidden entirely (no minimized rail); the touch
+  // comment drawer is the only comment surface. CommentMargin stays mounted
+  // inside the hidden wrapper — it hosts the drawer.
+  const showComments = () => hasComment() && !isMobile();
+  const layoutMode = createMemo((): CommentLayoutMode => {
+    if (!showComments() || width() === undefined) {
+      return CommentLayoutMode.none;
+    }
+    if (commentBreakpoints.lg()) return CommentLayoutMode.lg;
+    if (commentBreakpoints.md()) return CommentLayoutMode.md;
+    return CommentLayoutMode.xs;
+  });
 
-  const currentEditorState = () => {
-    const editor = md.editor;
-    return editor ? getSaveState(editor.getEditorState()) : undefined;
-  };
+  // Switching layout mode resizes the text column and reflows the document
+  // under an unchanged scrollTop; the first comment on a document would
+  // otherwise scroll its own anchor text out of view. Browser scroll anchoring
+  // is suppressed because the switch changes the column's padding and margins.
+  // The computed captures the anchor before the new classes are applied, the
+  // effect restores it after.
+  let scrollAnchor: ScrollAnchor | undefined;
+  createComputed(
+    on(
+      layoutMode,
+      () => {
+        const scroller = md.scrollContainer;
+        const editorRoot = md.editor?.getRootElement();
+        scrollAnchor =
+          scroller && editorRoot
+            ? captureScrollAnchor(scroller, editorRoot)
+            : undefined;
+      },
+      { defer: true }
+    )
+  );
+  createEffect(
+    on(
+      layoutMode,
+      () => {
+        const anchor = scrollAnchor;
+        const scroller = md.scrollContainer;
+        scrollAnchor = undefined;
+        if (anchor && scroller) restoreScrollAnchor(scroller, anchor);
+      },
+      { defer: true }
+    )
+  );
 
   // Set the refs on the block store.
   onMount(() => {
-    setStore({
+    setMd({
       notebook: notebookRef,
       commentMargin: commentMarginRef,
       contentRef: contentRef,
     });
     onCleanup(() => {
-      setStore({ notebook: undefined, commentMargin: undefined });
+      setMd({ notebook: undefined, commentMargin: undefined });
     });
 
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      const mode = showComments() ? widthToMode(width) : CommentLayoutMode.none;
-      setLayoutMode(mode);
-      const leftFloat =
-        contentRef.getBoundingClientRect().right - left + GapTargetWidth;
-      setLeftFloatX(leftFloat);
+      const content = contentRef.getBoundingClientRect();
+      setContentInset(content.left - left);
+      setLeftFloatX(content.right - left + GapTargetWidth);
     };
     const { observe } = makeResizeObserver(observeCallback);
     observeCallback();
     observe(notebookRef);
+    // A comment layout change resizes the text column without resizing the
+    // notebook, and it is the column's own geometry the outline is placed
+    // against.
+    observe(contentRef);
   });
 
   createEffect(() => {
-    const goToTempRedirect = useGoToTempRedirect();
-    const recentState = tempRedirectLocation();
-    if (!recentState) return;
-
-    setTimeout(() => {
-      goToTempRedirect(documentId, recentState);
-    }, 0);
-  });
-
-  createEffect(() => {
-    if (!showComments()) {
-      setLayoutMode(CommentLayoutMode.none);
-    } else {
-      setLayoutMode(widthToMode(untrack(width)));
-    }
-  });
-
-  createEffect(() => {
-    if (showComments()) {
-      setWideEnoughForComments(width() >= BreaksPoints.md);
-    } else {
-      setWideEnoughForComments(false);
-    }
-  });
-
-  createEffect(() => {
-    if (!scopeId()) return;
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
     untrack(() =>
       registerHotkey({
         hotkey: 'enter',
-        scopeId: scopeId(),
+        scopeId: currentScopeId,
         hotkeyToken: TOKENS.block.focus,
         description: 'Focus Title or Markdown Editor',
         keyDownHandler: () => {
@@ -244,6 +224,25 @@ export function Notebook(props: {
     );
   });
 
+  // The document shares its split scope with the view hosting it, and views
+  // like Drive bind Tab there to cycle their tabs, which closes the document.
+  // This override eclipses those commands while the document is mounted:
+  // Tab is left to the editors (title to body, list indent) and to native
+  // focus order.
+  createEffect(() => {
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
+    untrack(() =>
+      registerHotkey({
+        hotkey: ['tab', 'shift+tab'],
+        scopeId: currentScopeId,
+        description: 'Move focus within document',
+        keyDownHandler: () => false,
+        hide: true,
+      })
+    );
+  });
+
   // Register markdown formatting commands on the block scope so they appear in
   // Cmd+K, but only when the editor has focus (not just the block container).
   const [editorHasFocus, setEditorHasFocus] = createSignal(false);
@@ -254,12 +253,19 @@ export function Notebook(props: {
     onCleanup(cleanup);
   });
   createEffect(() => {
-    if (!scopeId()) return;
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
     const group = untrack(() =>
-      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus, {
-        canUseStateDebugger: canUseLexicalStateDebugger,
-        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
-      })
+      registerMarkdownCommands(
+        currentScopeId,
+        () => md.editor,
+        editorHasFocus,
+        {
+          canUseStateDebugger: canUseLexicalStateDebugger,
+          toggleStateDebugger: () =>
+            setShowLexicalStateDebugger((prev) => !prev),
+        }
+      )
     );
     onCleanup(() => group.dispose());
   });
@@ -273,7 +279,7 @@ export function Notebook(props: {
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
-    if (!canAutofocusSplitContent) return;
+    if (!props.autoFocus) return;
     if (!blockElement()) return;
     blockElement()?.focus();
     hasRun = true;
@@ -296,7 +302,9 @@ export function Notebook(props: {
 
   const contentDivClasses = createMemo(() => {
     const mode = layoutMode();
-    const shared = 'grow max-w-3xl pt-12 touch:pt-6 min-w-0';
+    // A zero basis keeps WebKit from sizing the column by the max-content width
+    // of its text, which it recomputes slowly for long unbroken runs.
+    const shared = 'grow basis-0 max-w-3xl pt-12 touch:pt-6 min-w-0';
     switch (mode) {
       case CommentLayoutMode.lg:
         return `${shared} mx-auto`;
@@ -342,7 +350,7 @@ export function Notebook(props: {
         <div
           class="pointer-events-none absolute inset-y-0 z-1"
           style={{
-            left: `${OutlineEdgeInset}px`,
+            left: `${MARKDOWN_OUTLINE_INSET}px`,
             width: `${MARKDOWN_OUTLINE_WIDTH}px`,
           }}
         >
@@ -359,66 +367,25 @@ export function Notebook(props: {
         ref={contentRef}
         classList={{ relative: true }}
       >
-        <SidePanel.Section
-          id="document-ai-actions"
-          title="Actions"
-          defaultOpen
-          order={0}
-        >
-          <div class="m-px flex items-center justify-start gap-2">
-            <AskMacroButton
-              entity={{
-                type: 'document',
-                id: blockId,
-                name: documentName(),
-                fileType: 'md',
-              }}
-            />
-            <Show when={blockAliasedName === 'task' && !isMobile()}>
-              <DispatchAgentButton showPrimaryLabel />
-            </Show>
-          </div>
-        </SidePanel.Section>
-        <TitleEditor
-          autoFocusOnMount={canAutofocusSplitContent && !navigatedFromJK()}
-        />
+        <TitleEditor autoFocusOnMount={props.autoFocus} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
           <InlineTaskGithubPullRequests />
           <TaskDuplicateMatchPill />
         </div>
-        <ParamsProvider>
-          {/* Relative wrapper so the history overlay covers only the body region,
-              leaving the title + properties above it untouched and aligned. */}
-          <div class="relative">
-            <MarkdownEditor
-              loroManager={props.loroManager}
-              showLexicalStateDebugger={
-                canUseLexicalStateDebugger() && showLexicalStateDebugger()
-              }
-              onLexicalStateDebuggerClose={() =>
-                setShowLexicalStateDebugger(false)
-              }
-            />
-            <Show when={ENABLE_HISTORY_COMPONENT()}>
-              <HistoryOverlay
-                currentState={currentEditorState}
-                selectedAt={history.selectedAt()}
-                isLive={history.isLive()}
-                visible={history.isOpen()}
-                onExit={history.exit}
-              />
-            </Show>
-          </div>
-          <Show when={!history.isOpen()}>
-            <Show when={inlineAiEditing().enabled && canEdit() && !isMobile()}>
-              <div class="mb-2">
-                <DocumentAiEditBar documentId={props.documentId} />
-              </div>
-            </Show>
-            <DocumentDiscussion />
-          </Show>
+        <ParamsProvider state={params}>
+          <MarkdownEditor
+            resolveAppLink={resolveAppLink}
+            loroManager={props.loroManager}
+            showLexicalStateDebugger={
+              canUseLexicalStateDebugger() && showLexicalStateDebugger()
+            }
+            onLexicalStateDebuggerClose={() =>
+              setShowLexicalStateDebugger(false)
+            }
+          />
+          <DocumentDiscussion editorHasFocus={editorHasFocus()} />
         </ParamsProvider>
       </div>
       <div
@@ -438,64 +405,7 @@ export function Notebook(props: {
           hidden: !showComments(),
         }}
       >
-        <CommentMargin />
-      </div>
-    </div>
-  );
-}
-
-export function InstructionsNotebook(props: { loroManager: LoroManager }) {
-  const setStore = mdStore.set;
-  const scopeId = blockHotkeyScopeSignal.get;
-  const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
-
-  let notebookRef!: HTMLDivElement;
-  let contentRef!: HTMLDivElement;
-
-  // Set the refs on the block store.
-  onMount(() => {
-    setStore({
-      notebook: notebookRef,
-      commentMargin: undefined,
-      contentRef: contentRef,
-    });
-    onCleanup(() => {
-      setStore({
-        notebook: undefined,
-        commentMargin: undefined,
-      });
-    });
-  });
-
-  createEffect(() => {
-    if (!scopeId()) return;
-    const group = untrack(() =>
-      registerLexicalStateDebuggerCommand(scopeId(), {
-        canUseStateDebugger: canUseLexicalStateDebugger,
-        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
-      })
-    );
-    onCleanup(() => group.dispose());
-  });
-  createEffect(() => {
-    if (!canUseLexicalStateDebugger() && showLexicalStateDebugger()) {
-      setShowLexicalStateDebugger(false);
-    }
-  });
-
-  return (
-    <div
-      class="flex relative text-ink min-h-full min-w-0 px-6"
-      ref={notebookRef}
-    >
-      <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsEditor
-          loroManager={props.loroManager}
-          showLexicalStateDebugger={
-            canUseLexicalStateDebugger() && showLexicalStateDebugger()
-          }
-          onLexicalStateDebuggerClose={() => setShowLexicalStateDebugger(false)}
-        />
+        <CommentMargin wideEnough={showComments() && commentBreakpoints.md()} />
       </div>
     </div>
   );

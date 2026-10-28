@@ -1,5 +1,6 @@
 //! Database adapter for device registration operations.
 
+use super::repository::DbDeviceType;
 use crate::domain::models::device::DeviceType;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -29,6 +30,7 @@ pub trait DeviceRegistrationDbOps: Send + Sync + 'static {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Delete all of the user's registrations matching the token and type,
@@ -78,7 +80,7 @@ impl DeviceRegistrationDbOps for PgPool {
             LIMIT 1
             "#,
             device_token,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
         )
         .map(|row| row.device_endpoint)
         .fetch_optional(self)
@@ -93,20 +95,22 @@ impl DeviceRegistrationDbOps for PgPool {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         let id = macro_uuid::generate_uuid_v7();
         let user_id_str = user_id.as_ref();
         sqlx::query!(
             r#"
-            INSERT INTO notification_user_device_registration (id, user_id, device_token, device_endpoint, device_type)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (device_endpoint) DO UPDATE SET user_id = $2, device_token = $3, device_type = $5, updated_at = NOW()
+            INSERT INTO notification_user_device_registration (id, user_id, device_token, device_endpoint, device_type, native_call_capable)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (device_endpoint) DO UPDATE SET user_id = $2, device_token = $3, device_type = $5, native_call_capable = $6, updated_at = NOW()
             "#,
             id,
             user_id_str,
             device_token,
             device_endpoint,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
+            native_call_capable,
         )
         .execute(self)
         .await?;
@@ -129,7 +133,7 @@ impl DeviceRegistrationDbOps for PgPool {
             "#,
             user_id_str,
             device_token,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
         )
         .map(|row| row.device_endpoint)
         .fetch_all(self)
@@ -151,7 +155,7 @@ impl DeviceRegistrationDbOps for PgPool {
             RETURNING device_endpoint
             "#,
             device_token,
-            device_type as _,
+            DbDeviceType::from(device_type) as _,
             active_endpoint,
         )
         .map(|row| row.device_endpoint)

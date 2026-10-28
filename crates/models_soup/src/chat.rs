@@ -1,5 +1,5 @@
 use chrono::Utc;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -14,9 +14,12 @@ pub struct SoupChat<T = ()> {
     /// The name of the chat
     pub name: String,
 
+    /// The last model selected for a sent message (`provider/model` id).
+    pub model: Option<String>,
+
     /// Who the chat belongs to
     #[cfg_attr(feature = "schema", schema(value_type = String))]
-    pub owner_id: MacroUserIdStr<'static>,
+    pub owner_id: Owner,
 
     /// The project id of the chat
     #[serde(skip_serializing_if = "Option::is_none")]

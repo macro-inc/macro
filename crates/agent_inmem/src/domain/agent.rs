@@ -1,0 +1,1413 @@
+//! The agent side of ACP, served over an in-process channel.
+//!
+//! One agent task serves one Macro session ([`RuntimeAttachment::solo`] on
+//! the harness side), so the surface is small: `initialize`, `session/new`
+//! or `session/resume`, `session/prompt`, `session/set_config_option`, and
+//! `session/cancel`. Prompts run through the [`TurnEngine`] and stream back
+//! as `session/update` notifications the existing fold and UI already render.
+//!
+//! [`RuntimeAttachment::solo`]: agent_session::domain::connection::RuntimeAttachment::solo
+
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use crate::domain::model_access::{InMemModelAccess, ModelAccessError, SessionModels};
+use agent::types::{AssistantMessagePart, ChatMessage};
+use agent::{ModelSpeed, ReasoningEffort};
+use agent::{StreamAccumulator, StreamPart, ToolResponse};
+use agent_api_keys::domain::{AgentKeys, ModelProvider, UsableAgentKey};
+use agent_client_protocol::schema::v1::{
+    AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
+    BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
+    CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationPropertySchema,
+    ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
+    InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
+    NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse, RequestId,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+    SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason, StringFormat,
+    StringPropertySchema, ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate,
+    ToolCallUpdateFields, ToolKind, UnstructuredCommandInput,
+};
+use agent_client_protocol::{
+    Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
+};
+use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
+use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
+use agent_session::domain::model::AgentSessionId;
+use ai_billing::domain::AiAdmissionService;
+use ai_tools::user_tool_review::{
+    ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
+};
+use async_trait::async_trait;
+use model_owner::Owner;
+use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
+
+use crate::domain::admission::admit_turn;
+use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnPurpose, TurnRequest};
+use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
+use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
+use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
+use crate::domain::user_input::{
+    SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
+    UserInputRequester,
+};
+use agent_client_protocol::schema::v1::McpServer as AcpMcpServer;
+use mcp_toolset::RemoteMcpToolSet;
+
+#[cfg(test)]
+mod test;
+
+pub(crate) mod compaction;
+
+/// A turn that produces nothing for this long is treated as hung and
+/// cancelled, so it cannot wedge the session's turn lock forever.
+///
+/// Time spent waiting on the user is not idleness: while a question the turn
+/// asked is outstanding ([`AwaitingUser`]), the timeout re-arms instead of
+/// cancelling, however long the user takes. The question ends with an answer,
+/// a stop, or the connection going away.
+const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Whole milliseconds since `started`, saturating; a span field, not a clock.
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+/// What this agent calls itself in the `initialize` response. The fold
+/// recognizes the harness by this name, so it is a contract, not a label.
+pub const AGENT_NAME: &str = "macro-inmem";
+
+/// The `_meta` namespace this agent writes its own keys under, mirroring
+/// Claude Code's `claudeCode` layout so the fold reads both the same way.
+pub const META_NAMESPACE: &str = "macro";
+
+/// The one tool in the Macro toolset that delegates to another agent.
+const SUBAGENT_TOOL: &str = "Subagent";
+
+/// Slash command that asks the user a question through `elicitation/create`
+/// instead of running the model: `/ask <question>` for free text, or
+/// `/ask <question> | option | option` for a single select.
+///
+/// A test rig, deliberately: the fastest way to drive the whole elicitation
+/// path (hold, render, answer, fold) end to end without an external agent or
+/// a model. Only handled when the host enables development commands; the
+/// model-callable `AskUser` tool does not depend on that setting.
+pub const ASK_COMMAND: &str = "/ask";
+
+/// The property the `/ask` form's one field is sent back under.
+const ASK_FIELD: &str = "answer";
+
+/// What one turn reads out of its session's state before running.
+struct TurnInput {
+    /// The conversation so far plus the prompt being answered.
+    messages: Vec<ChatMessage>,
+    /// Model the turn runs on.
+    model: String,
+    /// Reasoning effort the turn runs with.
+    reasoning_effort: ReasoningEffort,
+    speed: ModelSpeed,
+    /// Who this agent is, for the engine's system prompt.
+    identity: Option<AgentIdentity>,
+    /// The session's instructions, for the engine's system prompt.
+    instructions: Option<String>,
+}
+
+/// Everything one agent task serves its session from.
+pub struct AgentState {
+    /// The Macro session this agent runs.
+    pub session_id: AgentSessionId,
+    /// The session's owner; turns run on their behalf.
+    pub owner: Owner,
+    /// Runs the actual turns.
+    pub engine: Arc<dyn TurnEngine>,
+    /// Admission for new provider-backed turns, including direct ACP requests.
+    pub admission: Arc<dyn AiAdmissionService>,
+    /// Current model permissions for the trusted session owner.
+    pub model_access: Arc<dyn InMemModelAccess>,
+    /// Agents' own API keys, which the session's agent's turns run on
+    /// instead of the owner's Macro allowance when it has a usable one.
+    pub agent_keys: Arc<dyn AgentKeys>,
+    /// Conversation state, shared with the manager so it survives reattach.
+    pub store: Arc<SessionStore>,
+    /// Every outstanding turn's cancellation token - the running turn and any
+    /// queued behind it. `session/cancel` stops them all.
+    pub active_cancel: Mutex<Vec<CancellationToken>>,
+    /// Serializes turns: the client may queue prompts, the engine runs one at
+    /// a time.
+    pub turn_lock: tokio::sync::Mutex<()>,
+    /// Dials the MCP servers `session/new` and `session/resume` hand over.
+    pub mcp: Arc<dyn DynMcpToolConnector>,
+    /// The tools of those servers, once dialed; `None` until then or when
+    /// there were none.
+    pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
+    /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
+    /// handshake does not join it; the first turn does, so SearchTools still
+    /// sees the catalog.
+    pub mcp_connect: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// Whether the client advertised `elicitation.form` on `initialize`. The
+    /// protocol forbids asking a mode the client did not advertise.
+    pub client_renders_forms: AtomicBool,
+    /// Whether the host enables manual development commands such as `/ask`.
+    /// When disabled, their text is passed to the model as an ordinary prompt.
+    pub enable_dev_commands: bool,
+}
+
+impl AgentState {
+    /// Dial the servers a session request carried and keep their tools for
+    /// every turn until another `session/resume` hands over a new list.
+    /// Started at `session/new`/`session/resume` so the handshake is not held
+    /// by `tools/list`; the first turn joins the same work so SearchTools
+    /// still has the catalog.
+    async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
+        let servers = dialable_servers(servers);
+        let requested = servers.len();
+        let started = Instant::now();
+        let tools = self.mcp.connect_dyn(servers).await;
+        tracing::info!(
+            servers = requested,
+            tools = tools.as_ref().map_or(0, |tools| tools.len()),
+            elapsed_ms = elapsed_ms(started),
+            "connected the session's MCP servers"
+        );
+        *self
+            .mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned") = tools;
+    }
+
+    /// Start [`Self::connect_mcp`] without joining it. `session/new` and
+    /// `session/resume` call this so create can return while listing runs.
+    fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
+        let state = Arc::clone(self);
+        let handle = tokio::spawn(async move {
+            state.connect_mcp(servers).await;
+        });
+        // A resume that hands over new servers supersedes a connect still in
+        // flight; left running, the older list could land last.
+        if let Some(superseded) = self
+            .mcp_connect
+            .lock()
+            .expect("mcp connect lock should not be poisoned")
+            .replace(handle)
+        {
+            superseded.abort();
+        }
+    }
+
+    /// The tools the next turn should compose, waiting out an in-flight
+    /// connect so the searchable catalog is not empty on turn one.
+    async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
+        let handle = self
+            .mcp_connect
+            .lock()
+            .expect("mcp connect lock should not be poisoned")
+            .take();
+        if let Some(handle) = handle {
+            let _ = handle.await;
+        }
+        self.mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned")
+            .clone()
+    }
+
+    fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
+        let matches = self
+            .store
+            .get(&self.session_id)
+            .is_some_and(|state| state.acp_session_id.as_ref() == Some(requested));
+        if matches {
+            Ok(())
+        } else {
+            Err(AcpError::invalid_params().data(format!("unknown session {requested}")))
+        }
+    }
+
+    /// Bind `acp_id` as this session's ACP session, keeping the recorded
+    /// conversation only when it already belongs to that id.
+    fn bind_acp_session(&self, acp_id: SessionId, keep_history: bool) {
+        if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            if !keep_history || state.acp_session_id.as_ref() != Some(&acp_id) {
+                state.clear_history();
+            }
+            state.acp_session_id = Some(acp_id);
+        }
+    }
+
+    fn set_model(&self, model: String) {
+        if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            if !ReasoningEffort::supported(&model).contains(&state.reasoning_effort) {
+                state.reasoning_effort = ReasoningEffort::default();
+            }
+            if !state.speed.supported(&model) {
+                state.speed = ModelSpeed::Standard;
+            }
+            state.model = model;
+        }
+    }
+
+    fn set_reasoning_effort(&self, reasoning_effort: ReasoningEffort) {
+        if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            state.reasoning_effort = reasoning_effort;
+        }
+    }
+
+    /// ACP model configuration backed by the engine's supported-model source
+    /// and this session's current selection.
+    /// The models the session may run: the owner's plan access, or the
+    /// models of the agent's key's provider when its agent has a usable key.
+    /// A failed key lookup offers the plan's models: turns then check the
+    /// key again before running.
+    async fn session_models(&self) -> Result<SessionModels, AcpError> {
+        let access = self
+            .model_access
+            .access(&self.owner)
+            .await
+            .map_err(model_access_error)?;
+        let (Some(bot), Some(user)) = (self.agent_bot(), self.owner.as_user()) else {
+            return Ok(SessionModels::new(access, None));
+        };
+        let agent_key = self
+            .agent_keys
+            .usable_provider(bot, user)
+            .await
+            .inspect_err(
+                |error| tracing::error!(error = ?error, "could not read the agent's API key"),
+            )
+            .ok()
+            .flatten();
+        Ok(SessionModels::new(access, agent_key))
+    }
+
+    /// The agent's own key this turn runs on, decrypted for it, if the
+    /// session's agent has a usable one. A key for a provider other than
+    /// `model`'s refuses the turn rather than quietly billing Macro.
+    async fn turn_agent_key(&self, model: &str) -> Result<Option<UsableAgentKey>, AcpError> {
+        let (Some(bot), Some(user)) = (self.agent_bot(), self.owner.as_user()) else {
+            return Ok(None);
+        };
+        let key =
+            self.agent_keys
+                .usable_key(bot, user)
+                .await
+                .map_err(|error| {
+                    tracing::error!(error = ?error, "could not read the agent's API key");
+                    AcpError::new(-32603, "The agent's API key could not be read")
+                .data(serde_json::json!({ "code": "agent_api_key_unavailable", "retryable": true }))
+                })?;
+        match key {
+            Some(key) if ModelProvider::of_model(model) != Some(key.key.provider()) => {
+                let provider = key.key.provider().display_name();
+                Err(AcpError::invalid_params().data(format!(
+                    "This agent runs on its {provider} API key. Choose a {provider} model."
+                )))
+            }
+            key => Ok(key),
+        }
+    }
+
+    /// The bot id of the agent this session belongs to, if any.
+    fn agent_bot(&self) -> Option<macro_uuid::Uuid> {
+        self.store.get(&self.session_id).and_then(|session| {
+            session
+                .identity
+                .as_ref()
+                .map(|identity| identity.bot.as_uuid())
+        })
+    }
+
+    fn session_config_options(&self, access: SessionModels) -> Vec<SessionConfigOption> {
+        let Some(session) = self.store.get(&self.session_id) else {
+            return Vec::new();
+        };
+        crate::domain::model_options::session_config_options(
+            &session.model,
+            &access.models(self.engine.supported_models()),
+            session.reasoning_effort,
+            session.speed,
+        )
+    }
+
+    /// Everything from the session's state that a turn answering `prompt`
+    /// runs from.
+    fn turn_input(&self, prompt: &UserPrompt) -> TurnInput {
+        self.store.get(&self.session_id).map_or_else(
+            || TurnInput {
+                messages: messages_for_turn(&[], prompt),
+                model: String::new(),
+                reasoning_effort: ReasoningEffort::default(),
+                speed: ModelSpeed::Standard,
+                identity: None,
+                instructions: None,
+            },
+            |state| TurnInput {
+                messages: messages_for_turn(&state.history, prompt),
+                model: state.model.clone(),
+                reasoning_effort: state.reasoning_effort,
+                speed: state.speed,
+                identity: state.identity.clone(),
+                instructions: state.instructions.clone(),
+            },
+        )
+    }
+
+    /// Record a turn that ran: the prompt, under the id of the request that
+    /// carried it, and what the agent made of it.
+    fn push_turn(
+        &self,
+        request_id: RequestId,
+        prompt: UserPrompt,
+        parts: Vec<AssistantMessagePart>,
+    ) {
+        if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            state
+                .history
+                .push(HistoryEntry::User { prompt, request_id });
+            if !parts.is_empty() {
+                state.history.push(HistoryEntry::Assistant(parts));
+            }
+        }
+    }
+
+    fn begin_turn(&self) -> CancellationToken {
+        let cancel = CancellationToken::new();
+        let mut outstanding = self
+            .active_cancel
+            .lock()
+            .expect("active turn lock should not be poisoned");
+        outstanding.retain(|token| !token.is_cancelled());
+        outstanding.push(cancel.clone());
+        cancel
+    }
+
+    fn cancel_active_turns(&self) {
+        for cancel in self
+            .active_cancel
+            .lock()
+            .expect("active turn lock should not be poisoned")
+            .iter()
+        {
+            cancel.cancel();
+        }
+    }
+}
+
+/// ACP-backed user-input port for one connected session: the one place this
+/// agent sends `elicitation/create`, whether a tool is asking a question
+/// (`AskUser`, [`UserInputRequester`]) or a user tool wants its call reviewed
+/// ([`UserToolReviewer`]).
+struct AcpUserInputRequester {
+    connection: ConnectionTo<Client>,
+    session_id: SessionId,
+    awaiting: Arc<AwaitingUser>,
+}
+
+/// The key under `_meta.macro` naming the user tool an elicitation reviews,
+/// so a Macro client can render the tool's own composer instead of the form.
+const USER_TOOL_META_KEY: &str = "userTool";
+
+/// The custom property type carrying the whole edited draft as a JSON string
+/// (`_`-prefixed, as ACP reserves for implementation-specific extensions).
+const JSON_PROPERTY_TYPE: &str = "_macro/json";
+
+#[async_trait]
+impl UserToolReviewer for AcpUserInputRequester {
+    async fn review(&self, request: ReviewRequest) -> Result<ReviewOutcome, ReviewError> {
+        let _waiting = self.awaiting.begin();
+        let scope = ElicitationSessionScope::new(self.session_id.clone())
+            .tool_call_id(ToolCallId::new(request.tool_call_id.as_str()));
+        // The name lets a Macro client pick the tool's composer; the draft
+        // rides along so the fold has it even when the call the review is
+        // scoped to is not one it opened.
+        let mut ours = serde_json::Map::new();
+        ours.insert(
+            USER_TOOL_META_KEY.to_owned(),
+            serde_json::json!({ "name": request.tool_name, "draft": request.draft }),
+        );
+        let mut meta = Meta::new();
+        meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
+        let elicitation = CreateElicitationRequest::new(
+            ElicitationFormMode::new(scope, review_form_schema(&request.form)),
+            request.message,
+        )
+        .meta(meta);
+
+        let response = self
+            .connection
+            .send_request(elicitation)
+            .block_task()
+            .await
+            .map_err(|error| ReviewError::Unavailable(error.to_string()))?;
+        Ok(match response.action {
+            ElicitationAction::Accept(accept) => ReviewOutcome::Accepted(
+                accept
+                    .content
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|(name, value)| {
+                        serde_json::to_value(value).ok().map(|value| (name, value))
+                    })
+                    .collect(),
+            ),
+            ElicitationAction::Decline => ReviewOutcome::Declined,
+            ElicitationAction::Cancel => ReviewOutcome::Cancelled,
+            _ => {
+                return Err(ReviewError::Failed(
+                    "the client returned an unknown elicitation action".to_owned(),
+                ));
+            }
+        })
+    }
+}
+
+/// A review form as ACP's restricted schema. Fields are the draft's flat
+/// arguments with their current values as defaults; the draft field is the
+/// `_macro/json` extension a Macro client fills from its own composer.
+fn review_form_schema(form: &ReviewForm) -> ElicitationSchema {
+    let mut schema = ElicitationSchema::new().title(form.title.clone());
+    for field in &form.fields {
+        let required = form.required.contains(&field.name);
+        let property: ElicitationPropertySchema = match &field.kind {
+            ReviewFieldKind::Text { default, format } => StringPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(default.clone())
+                .format(format.as_deref().and_then(string_format))
+                .into(),
+            ReviewFieldKind::Boolean { default } => BooleanPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Number { default } => NumberPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Integer { default } => IntegerPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Choice { options, default } => StringPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .enum_values(options.clone())
+                .default_value(default.clone())
+                .into(),
+            ReviewFieldKind::Json => {
+                let mut fields = std::collections::BTreeMap::new();
+                fields.insert(
+                    "title".to_owned(),
+                    serde_json::Value::String(field.name.clone()),
+                );
+                if let Some(description) = &field.description {
+                    fields.insert(
+                        "description".to_owned(),
+                        serde_json::Value::String(description.clone()),
+                    );
+                }
+                ElicitationPropertySchema::Other(OtherElicitationPropertySchema::new(
+                    JSON_PROPERTY_TYPE,
+                    fields,
+                ))
+            }
+        };
+        schema = schema.property(field.name.clone(), property, required);
+    }
+    schema
+}
+
+/// ACP's string format for a JSON Schema `format`, for the ones it names.
+fn string_format(format: &str) -> Option<StringFormat> {
+    match format {
+        "email" => Some(StringFormat::Email),
+        "uri" => Some(StringFormat::Uri),
+        "date" => Some(StringFormat::Date),
+        "date-time" => Some(StringFormat::DateTime),
+        _ => None,
+    }
+}
+
+#[async_trait]
+impl UserInputRequester for AcpUserInputRequester {
+    async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
+        let _waiting = self.awaiting.begin();
+        let options = request.options;
+        let mut field = StringPropertySchema::new().title("Answer");
+        if !options.is_empty() {
+            field = field.one_of(
+                options
+                    .iter()
+                    .map(|option| EnumOption::new(option.clone(), option.clone()))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        let schema = ElicitationSchema::new().property(ASK_FIELD, field, true);
+        let request = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(self.session_id.clone()),
+                schema,
+            ),
+            request.question,
+        );
+
+        let response = self
+            .connection
+            .send_request(request)
+            .block_task()
+            .await
+            .map_err(|error| UserInputError::RequestFailed(error.to_string()))?;
+        match response.action {
+            ElicitationAction::Accept(accept) => {
+                let answer = accept
+                    .content
+                    .as_ref()
+                    .and_then(|content| content.get(ASK_FIELD))
+                    .and_then(|value| serde_json::to_value(value).ok())
+                    .ok_or(UserInputError::MissingAnswer)?;
+                let serde_json::Value::String(answer) = answer else {
+                    return Err(UserInputError::InvalidAnswer(
+                        "the answer was not a string".to_owned(),
+                    ));
+                };
+                if !options.is_empty() && !options.contains(&answer) {
+                    return Err(UserInputError::InvalidAnswer(format!(
+                        "{answer:?} was not one of the offered options"
+                    )));
+                }
+                Ok(UserInputOutcome::Answered(answer))
+            }
+            ElicitationAction::Decline => Ok(UserInputOutcome::Declined),
+            ElicitationAction::Cancel => Ok(UserInputOutcome::Cancelled),
+            _ => Err(UserInputError::RequestFailed(
+                "the client returned an unknown elicitation action".to_owned(),
+            )),
+        }
+    }
+}
+
+/// The turn's way of reaching the user, when the client can show a form.
+/// `None` means no question and no review can be asked this turn: `AskUser`
+/// is not offered, and a user tool's pending answer stays pending.
+fn user_input_requester(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    session_id: SessionId,
+    awaiting: &Arc<AwaitingUser>,
+) -> Option<Arc<AcpUserInputRequester>> {
+    state.client_renders_forms.load(Ordering::Relaxed).then(|| {
+        Arc::new(AcpUserInputRequester {
+            connection: connection.clone(),
+            session_id,
+            awaiting: Arc::clone(awaiting),
+        })
+    })
+}
+
+/// Serve this session's agent on `acp` until the connection closes.
+pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpError> {
+    Agent
+        .builder()
+        .name("macro-inmem")
+        .on_receive_request(
+            {
+                let state = Arc::clone(&state);
+                async move |request: InitializeRequest, responder, _connection| {
+                    let renders_forms = request
+                        .client_capabilities
+                        .elicitation
+                        .as_ref()
+                        .is_some_and(|elicitation| elicitation.form.is_some());
+                    state
+                        .client_renders_forms
+                        .store(renders_forms, Ordering::Relaxed);
+                    responder.respond(
+                        InitializeResponse::new(request.protocol_version)
+                            .agent_capabilities(AgentCapabilities::new().session_capabilities(
+                                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                            ))
+                            .agent_info(Implementation::new(AGENT_NAME, env!("CARGO_PKG_VERSION"))),
+                    )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = Arc::clone(&state);
+                async move |request: NewSessionRequest, responder, connection| {
+                    let state = Arc::clone(&state);
+                    let access = match state.session_models().await {
+                        Ok(access) => access,
+                        Err(error) => return responder.respond_with_error(error),
+                    };
+                    if let Some(model) = state
+                        .store
+                        .get(&state.session_id)
+                        .map(|session| session.model.clone())
+                    {
+                        state.set_model(
+                            access
+                                .default_model(&model, state.engine.supported_models())
+                                .to_owned(),
+                        );
+                    }
+                    let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
+                    state.bind_acp_session(acp_id.clone(), false);
+                    state.start_connect_mcp(request.mcp_servers);
+                    let responded = responder.respond(
+                        NewSessionResponse::new(acp_id.clone())
+                            .config_options(state.session_config_options(access)),
+                    );
+                    advertise_commands(&state, &connection, acp_id);
+                    responded
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = Arc::clone(&state);
+                async move |request: ResumeSessionRequest, responder, connection| {
+                    let state = Arc::clone(&state);
+                    let access = match state.session_models().await {
+                        Ok(access) => access,
+                        Err(error) => return responder.respond_with_error(error),
+                    };
+                    if let Some(model) = state
+                        .store
+                        .get(&state.session_id)
+                        .map(|session| session.model.clone())
+                    {
+                        state.set_model(
+                            access
+                                .default_model(&model, state.engine.supported_models())
+                                .to_owned(),
+                        );
+                    }
+                    // Kept when the state already belongs to this ACP id -
+                    // either this process served the session, or a cold
+                    // attach replayed the frame log back into it (see
+                    // `domain::replay`).
+                    state.bind_acp_session(request.session_id.clone(), true);
+                    state.start_connect_mcp(request.mcp_servers);
+                    let responded = responder.respond(
+                        ResumeSessionResponse::new()
+                            .config_options(state.session_config_options(access)),
+                    );
+                    advertise_commands(&state, &connection, request.session_id);
+                    responded
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = Arc::clone(&state);
+                async move |request: PromptRequest, responder, connection| {
+                    let state = Arc::clone(&state);
+                    if let Err(error) = state.expect_session(&request.session_id) {
+                        return responder.respond_with_error(error);
+                    }
+                    let span = tracing::info_span!(
+                        parent: None,
+                        "agent.acp.prompt",
+                        agent.session.id = %state.session_id,
+                        gen_ai.conversation.id = %state.session_id,
+                        agent.turn.ttft_ms = tracing::field::Empty,
+                        agent.turn.first_text_ms = tracing::field::Empty,
+                        agent.turn.admission_wait_ms = tracing::field::Empty,
+                        agent.turn.agent_key = tracing::field::Empty,
+                        agent.turn.lock_wait_ms = tracing::field::Empty,
+                        agent.turn.stop_reason = tracing::field::Empty,
+                        agent.turn.text_chars = tracing::field::Empty,
+                        agent.turn.tool_calls = tracing::field::Empty,
+                        agent.turn.replied = tracing::field::Empty,
+                    );
+                    genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
+                    let prompt = UserPrompt::from_request(&request);
+                    // The id the log keeps the request under, which the turn
+                    // is known by from here on.
+                    let request_id = responder.id().clone();
+                    if state.enable_dev_commands
+                        && let Some(question) = prompt.text.trim().strip_prefix(ASK_COMMAND)
+                    {
+                        let question = question.trim().to_owned();
+                        let cancel = state.begin_turn();
+                        connection.spawn({
+                            let connection = connection.clone();
+                            async move {
+                                let stop = run_ask(
+                                    &state,
+                                    &connection,
+                                    request.session_id,
+                                    request_id,
+                                    prompt,
+                                    question,
+                                    cancel,
+                                )
+                                .await;
+                                let _ = responder.respond(PromptResponse::new(stop));
+                                Ok(())
+                            }
+                            .instrument(span)
+                        })?;
+                        return Ok(());
+                    }
+
+                    let cancel = state.begin_turn();
+                    connection.spawn({
+                        let connection = connection.clone();
+                        async move {
+                            let result = run_turn(
+                                &state,
+                                &connection,
+                                request.session_id,
+                                request_id,
+                                prompt,
+                                cancel,
+                            )
+                            .await;
+                            // A closed connection is the only way responding fails.
+                            // Admission failure must not tear down resumable state.
+                            let _ = match result {
+                                Ok(stop) => responder.respond(PromptResponse::new(stop)),
+                                Err(error) => responder.respond_with_error(error),
+                            };
+                            Ok(())
+                        }
+                        .instrument(span)
+                    })?;
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let state = Arc::clone(&state);
+                async move |request: SetSessionConfigOptionRequest, responder, _connection| {
+                    let state = Arc::clone(&state);
+                    if let Err(error) = state.expect_session(&request.session_id) {
+                        return responder.respond_with_error(error);
+                    }
+                    let access = match state.session_models().await {
+                        Ok(access) => access,
+                        Err(error) => return responder.respond_with_error(error),
+                    };
+                    let Some(value) = request.value.as_value_id() else {
+                        return responder.respond_with_error(
+                            AcpError::invalid_params().data("the config option takes a value id"),
+                        );
+                    };
+                    match request.config_id.to_string().as_str() {
+                        MODEL_CONFIG_ID => {
+                            if !state
+                                .engine
+                                .supported_models()
+                                .contains(&value.to_string().as_str())
+                            {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params().data("unsupported model"),
+                                );
+                            }
+                            if !access.allows(&value.to_string()) {
+                                return responder.respond_with_error(model_access_error(
+                                    ModelAccessError::Forbidden,
+                                ));
+                            }
+                            state.set_model(value.to_string());
+                        }
+                        "speed" => {
+                            let speed = ModelSpeed::parse(&value.to_string());
+                            let Some(speed) = speed else {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params().data("unknown speed"),
+                                );
+                            };
+                            let mut session = state
+                                .store
+                                .get_mut(&state.session_id)
+                                .expect("active session exists");
+                            if !speed.supported(&session.model) || !access.allows(&session.model) {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data("speed is not available for this model"),
+                                );
+                            }
+                            session.speed = speed;
+                        }
+                        REASONING_EFFORT_CONFIG_ID => {
+                            let Ok(effort) = value.to_string().parse() else {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data(format!("unknown reasoning effort {value}")),
+                                );
+                            };
+                            let supported =
+                                state.store.get(&state.session_id).is_some_and(|session| {
+                                    ReasoningEffort::supported(&session.model).contains(&effort)
+                                });
+                            if !supported {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data("effort is not supported by this model"),
+                                );
+                            }
+                            state.set_reasoning_effort(effort);
+                        }
+                        _ => {
+                            return responder.respond_with_error(
+                                AcpError::invalid_params()
+                                    .data(format!("unknown config option {}", request.config_id)),
+                            );
+                        }
+                    }
+                    responder.respond(SetSessionConfigOptionResponse::new(
+                        state.session_config_options(access),
+                    ))
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_notification(
+            {
+                let state = Arc::clone(&state);
+                async move |notification: CancelNotification, _connection| {
+                    let state = Arc::clone(&state);
+                    if state.expect_session(&notification.session_id).is_ok() {
+                        state.cancel_active_turns();
+                    }
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .connect_to(acp)
+        .await
+}
+
+fn model_access_error(error: ModelAccessError) -> AcpError {
+    let (code, retryable) = match error {
+        ModelAccessError::Forbidden => ("model_access_denied", false),
+        ModelAccessError::Unavailable => ("model_access_unavailable", true),
+    };
+    AcpError::new(-32603, error.to_string())
+        .data(serde_json::json!({ "code": code, "retryable": retryable }))
+}
+
+/// Run one turn to completion, streaming updates as they arrive.
+async fn run_turn(
+    state: &Arc<AgentState>,
+    connection: &ConnectionTo<Client>,
+    acp_session_id: SessionId,
+    request_id: RequestId,
+    prompt: UserPrompt,
+    cancel: CancellationToken,
+) -> Result<StopReason, AcpError> {
+    // Include lock and admission waits in time to first output.
+    let started = Instant::now();
+    // Mark every exit (including denial or a dropped connection) complete so
+    // cancelled/failed requests do not remain outstanding.
+    let _completed = cancel.clone().drop_guard();
+    let _turn = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        turn = state.turn_lock.lock() => turn,
+    };
+    let span = tracing::Span::current();
+    span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
+    let admission_started = Instant::now();
+    let session_model = state
+        .store
+        .get(&state.session_id)
+        .map(|session| session.model.clone())
+        .unwrap_or_default();
+    // An agent with its own usable key runs every turn on it, never on the
+    // owner's allowance; one without runs on Macro usage.
+    let agent_key = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        key = state.turn_agent_key(&session_model) => key?,
+    };
+    span.record("agent.turn.agent_key", agent_key.is_some());
+    // Check at execution time, not enqueue time. Cancellation stays responsive
+    // even if billing is slow, and neither denial nor cancellation adds history.
+    if agent_key.is_none() {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+                AcpError::new(-32603, error.to_string()).data(serde_json::json!({
+                    "code": error.code(), "retryable": error.is_retryable(),
+                }))
+            )?,
+        }
+    }
+    span.record(
+        "agent.turn.admission_wait_ms",
+        elapsed_ms(admission_started),
+    );
+    if compaction::too_long(&prompt, &session_model) {
+        return Err(AcpError::invalid_params().data(
+            "This message is too long. Split it into smaller messages or attach it as a file.",
+        ));
+    }
+    if compaction::before_turn(state, connection, &acp_session_id, &prompt, &cancel)
+        .await
+        .is_err()
+    {
+        return Ok(StopReason::Cancelled);
+    }
+    let mcp_tools = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        tools = state.mcp_tools_for_turn() => tools,
+    };
+    let TurnInput {
+        messages,
+        model,
+        reasoning_effort,
+        speed,
+        identity,
+        instructions,
+    } = state.turn_input(&prompt);
+    // The turn already holds the key, so its provider decides the models
+    // without asking for the key again.
+    let access = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        result = state.model_access.access(&state.owner) => SessionModels::new(
+            result.map_err(model_access_error)?,
+            agent_key.as_ref().map(|key| key.key.provider()),
+        ),
+    };
+    if !access.allows(&model) {
+        return Err(model_access_error(ModelAccessError::Forbidden));
+    }
+    // Check the full history as well: changing models must not send earlier
+    // images to a text-only provider or silently discard what the user attached.
+    if super::models::supports_images(&model) == Some(false)
+        && messages.iter().any(|message| {
+            message
+                .attachments
+                .as_ref()
+                .is_some_and(super::session::contains_images)
+        })
+    {
+        let notice = FailureNotice {
+            kind: FailureNoticeKind::UnsupportedImageInput,
+            title: format!("{} does not support images", super::models::display_name(&model)),
+            body: "Choose a vision model to continue this conversation, or start a conversation without images.".to_owned(),
+            link: None,
+        };
+        return Err(AcpError::new(-32602, notice.title.clone())
+            .data(serde_json::to_value(notice).expect("failure notice is serializable")));
+    }
+    let awaiting = Arc::new(AwaitingUser::default());
+    let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
+    let mut parts = state.engine.run_turn(TurnRequest {
+        purpose: TurnPurpose::Conversation,
+        session_id: state.session_id,
+        awaiting: Arc::clone(&awaiting),
+        owner: state.owner.clone(),
+        model,
+        reasoning_effort,
+        speed,
+        identity,
+        instructions,
+        messages,
+        mcp_tools,
+        cancel: cancel.clone(),
+        user_input: requester
+            .clone()
+            .map(|requester| requester as SharedUserInputRequester),
+        reviewer: requester.map(|requester| requester as Arc<dyn UserToolReviewer>),
+        agent_key,
+    });
+
+    let mut accumulator = StreamAccumulator::new();
+    let mut failure = None;
+    let mut was_cancelled = false;
+    let mut first_part_seen = false;
+    let mut first_text_seen = false;
+    let mut output = TurnOutput::default();
+    loop {
+        match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
+            Ok(Some(Ok(part))) => {
+                let is_output = match &part {
+                    StreamPart::Content(text) | StreamPart::Thinking(text) => {
+                        !text.trim().is_empty()
+                    }
+                    StreamPart::ToolCall(_) => true,
+                    StreamPart::ToolResponse(_) | StreamPart::Usage(_) => false,
+                };
+                if !first_part_seen && is_output {
+                    first_part_seen = true;
+                    let ttft_ms = elapsed_ms(started);
+                    span.record("agent.turn.ttft_ms", ttft_ms);
+                    tracing::info!(ttft_ms, "the turn streamed its first part");
+                }
+                if !first_text_seen
+                    && let StreamPart::Content(text) = &part
+                    && !text.trim().is_empty()
+                {
+                    first_text_seen = true;
+                    span.record("agent.turn.first_text_ms", elapsed_ms(started));
+                }
+                if let Some(update) = update_for_part(&part) {
+                    let notification = SessionNotification::new(acp_session_id.clone(), update);
+                    if connection.send_notification(notification).is_err() {
+                        // Nobody is listening; stop spending tokens.
+                        cancel.cancel();
+                        break;
+                    }
+                }
+                output.observe(&part);
+                accumulator.push(part);
+            }
+            Ok(Some(Err(error))) => {
+                if error.was_cancelled() {
+                    was_cancelled = true;
+                } else {
+                    failure = Some(error.to_string());
+                }
+                break;
+            }
+            Ok(None) => break,
+            // Silence while a question is out is the user thinking, not the
+            // turn hanging; the tool that asked resumes the stream when they
+            // answer.
+            Err(_) if awaiting.is_waiting() => continue,
+            Err(_) => {
+                failure = Some(format!(
+                    "the turn produced nothing for {} seconds and was stopped",
+                    TURN_IDLE_TIMEOUT.as_secs()
+                ));
+                cancel.cancel();
+                break;
+            }
+        }
+    }
+
+    let mut turn_parts = accumulator.into_parts();
+    for (id, _name) in close_dangling_tool_calls(&mut turn_parts) {
+        let _ = connection.send_notification(SessionNotification::new(
+            acp_session_id.clone(),
+            SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                id,
+                ToolCallUpdateFields::new().status(ToolCallStatus::Failed),
+            )),
+        ));
+    }
+    if let Some(failure) = &failure {
+        let _ = connection.send_notification(SessionNotification::new(
+            acp_session_id.clone(),
+            SessionUpdate::AgentMessageChunk(ContentChunk::new(
+                format!("The agent stopped on an error: {failure}").into(),
+            )),
+        ));
+    }
+    state.push_turn(request_id, prompt, turn_parts);
+
+    // A failure first: the idle timeout cancels the stream itself, and a turn
+    // it stopped failed rather than being stopped by the user.
+    let result = if let Some(failure) = failure {
+        Err(AcpError::internal_error().data(failure))
+    } else if was_cancelled || cancel.is_cancelled() {
+        Ok(StopReason::Cancelled)
+    } else {
+        Ok(StopReason::EndTurn)
+    };
+    output.record(&span, &result);
+    result
+}
+
+/// What a turn said, recorded on its `agent.acp.prompt` span so a turn that
+/// ended without answering is found by query, not by reading its log.
+#[derive(Default)]
+struct TurnOutput {
+    text_chars: i64,
+    tool_calls: i64,
+    /// Text after the last tool call: the answer the reader is left with.
+    replied: bool,
+}
+
+impl TurnOutput {
+    fn observe(&mut self, part: &StreamPart) {
+        match part {
+            StreamPart::Content(text) => {
+                self.text_chars += i64::try_from(text.chars().count()).unwrap_or(i64::MAX);
+                self.replied |= !text.trim().is_empty();
+            }
+            StreamPart::ToolCall(_) => {
+                self.tool_calls += 1;
+                self.replied = false;
+            }
+            StreamPart::Thinking(_) | StreamPart::ToolResponse(_) | StreamPart::Usage(_) => {}
+        }
+    }
+
+    // `i64`, not `u64`: a `u64` reaches OpenTelemetry as a string attribute.
+    fn record(&self, span: &tracing::Span, result: &Result<StopReason, AcpError>) {
+        let stop_reason = match result {
+            Ok(StopReason::EndTurn) => "end_turn",
+            Ok(StopReason::Cancelled) => "cancelled",
+            Ok(_) => "other",
+            Err(_) => "error",
+        };
+        span.record("agent.turn.stop_reason", stop_reason);
+        span.record("agent.turn.text_chars", self.text_chars);
+        span.record("agent.turn.tool_calls", self.tool_calls);
+        span.record("agent.turn.replied", self.replied);
+        if stop_reason == "end_turn" && !self.replied {
+            tracing::warn!(
+                tool_calls = self.tool_calls,
+                "the turn ended without a reply after its last tool call"
+            );
+        }
+    }
+}
+
+/// Run an `/ask` turn: send the question as a form elicitation, wait for the
+/// client's answer, and say back what it was.
+///
+/// Runs inside a spawned connection task, outside the dispatch loop, which is
+/// what makes `block_task` safe here - the loop stays free to deliver the
+/// answer (and a `session/cancel`, which the session machine turns into a
+/// `cancel` answer before the notification arrives).
+async fn run_ask(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    acp_session_id: SessionId,
+    request_id: RequestId,
+    prompt: UserPrompt,
+    question: String,
+    cancel: CancellationToken,
+) -> StopReason {
+    let _turn = state.turn_lock.lock().await;
+
+    let say = |text: String| {
+        let _ = connection.send_notification(SessionNotification::new(
+            acp_session_id.clone(),
+            SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::from(text.clone()))),
+        ));
+        text
+    };
+
+    if !state.client_renders_forms.load(Ordering::Relaxed) {
+        let text = say(
+            "This client did not advertise form elicitation, so there is no way to ask.".to_owned(),
+        );
+        state.push_turn(
+            request_id,
+            prompt,
+            vec![AssistantMessagePart::Text { text }],
+        );
+        return StopReason::EndTurn;
+    }
+
+    let (question, options) = parse_ask(&question);
+    let requester = AcpUserInputRequester {
+        connection: connection.clone(),
+        session_id: acp_session_id.clone(),
+        // `/ask` has no idle timeout to hold off: it waits on the answer
+        // directly rather than through the turn loop.
+        awaiting: Arc::new(AwaitingUser::default()),
+    };
+    let text = match requester.ask(UserInputRequest { question, options }).await {
+        Ok(UserInputOutcome::Answered(value)) => format!("You answered: {value}"),
+        Ok(UserInputOutcome::Declined) => "You declined to answer.".to_owned(),
+        Ok(UserInputOutcome::Cancelled) => "The question was cancelled.".to_owned(),
+        Err(error) => error.to_string(),
+    };
+    let text = say(text);
+    state.push_turn(
+        request_id,
+        prompt,
+        vec![AssistantMessagePart::Text { text }],
+    );
+
+    if cancel.is_cancelled() {
+        StopReason::Cancelled
+    } else {
+        StopReason::EndTurn
+    }
+}
+
+/// The slash commands this agent advertises over ACP: bare names, no
+/// leading slash. `/ask` only while the host enables development commands,
+/// since the prompt handler ignores it otherwise.
+fn available_commands(state: &AgentState) -> Vec<AvailableCommand> {
+    let name = |command: &str| command.trim_start_matches('/').to_owned();
+    let mut commands = Vec::new();
+    if state.enable_dev_commands {
+        commands.push(
+            AvailableCommand::new(
+                name(ASK_COMMAND),
+                "Ask the user a question through a form instead of running the model",
+            )
+            .input(AvailableCommandInput::Unstructured(
+                UnstructuredCommandInput::new("<question> | <option> | <option>"),
+            )),
+        );
+    }
+    commands
+}
+
+/// Tell the client which slash commands this session accepts. Sent after
+/// the open/resume response, the way the Claude Code adapter does, so the
+/// fold has the session before the update names it.
+fn advertise_commands(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    acp_session_id: SessionId,
+) {
+    let _ = connection.send_notification(SessionNotification::new(
+        acp_session_id,
+        SessionUpdate::AvailableCommandsUpdate(AvailableCommandsUpdate::new(available_commands(
+            state,
+        ))),
+    ));
+}
+
+/// Split `/ask`'s argument into the question and its options: everything
+/// before the first `|` is the question, each `|`-separated piece after it
+/// an option. No `|` means free text.
+fn parse_ask(question: &str) -> (String, Vec<String>) {
+    let mut pieces = question
+        .split('|')
+        .map(str::trim)
+        .filter(|piece| !piece.is_empty());
+    let message = pieces
+        .next()
+        .map(str::to_owned)
+        .unwrap_or_else(|| "What would you like?".to_owned());
+    let options = pieces.map(str::to_owned).collect();
+    (message, options)
+}
+
+/// The `session/update` a stream part renders as, if any.
+fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
+    match part {
+        StreamPart::Content(text) => Some(SessionUpdate::AgentMessageChunk(ContentChunk::new(
+            ContentBlock::from(text.clone()),
+        ))),
+        StreamPart::Thinking(text) => Some(SessionUpdate::AgentThoughtChunk(ContentChunk::new(
+            ContentBlock::from(text.clone()),
+        ))),
+        StreamPart::ToolCall(call) => {
+            let title = call
+                .mcp
+                .as_ref()
+                .and_then(|mcp| mcp.display_name.clone())
+                .unwrap_or_else(|| call.name.clone());
+            Some(SessionUpdate::ToolCall(
+                AcpToolCall::new(call.id.clone(), title)
+                    .kind(tool_kind(&call.name))
+                    .status(ToolCallStatus::InProgress)
+                    .raw_input(call.json.clone())
+                    .meta(tool_call_meta(call)),
+            ))
+        }
+        StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
+            Some(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                id.clone(),
+                ToolCallUpdateFields::new()
+                    .status(ToolCallStatus::Completed)
+                    .raw_output(json.clone()),
+            )))
+        }
+        StreamPart::ToolResponse(ToolResponse::Err {
+            id, description, ..
+        }) => Some(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            id.clone(),
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Failed)
+                .raw_output(serde_json::json!({ "error": description })),
+        ))),
+        // Recorded by the loop's usage recorder; nothing to render.
+        StreamPart::Usage(_) => None,
+    }
+}
+
+/// The `_meta` this agent stamps on a tool call so the fold can read it by
+/// name rather than guess from the title: `macro.toolName` (an MCP tool as
+/// `mcp__<server>__<tool>`, the convention Claude Code set) and
+/// `macro.subagent` on a delegation.
+fn tool_call_meta(call: &agent::ToolCall) -> Meta {
+    let tool_name = match &call.mcp {
+        Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
+        None => call.name.clone(),
+    };
+    let mut ours = serde_json::Map::new();
+    ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
+    if call.mcp.is_none() && call.name == SUBAGENT_TOOL {
+        ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
+    }
+    let mut meta = Meta::new();
+    meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
+    meta
+}
+
+/// A coarse [`ToolKind`] for a Macro tool name, for client iconography only.
+fn tool_kind(name: &str) -> ToolKind {
+    let name = name.to_ascii_lowercase();
+    if name.contains("search") {
+        ToolKind::Search
+    } else if name.starts_with("read") || name.starts_with("get") || name.starts_with("list") {
+        ToolKind::Read
+    } else if name.starts_with("delete") {
+        ToolKind::Delete
+    } else if name.starts_with("create")
+        || name.starts_with("edit")
+        || name.starts_with("update")
+        || name.starts_with("rename")
+        || name.starts_with("set")
+    {
+        ToolKind::Edit
+    } else {
+        ToolKind::Other
+    }
+}
+
+/// Close tool calls that never got a response - a cancelled or failed turn
+/// leaves them dangling, and an unmatched call would poison the next turn's
+/// provider payload. Returns what was synthesized as `(id, name)`.
+pub(crate) fn close_dangling_tool_calls(
+    parts: &mut Vec<AssistantMessagePart>,
+) -> Vec<(String, String)> {
+    let responded: HashSet<String> = parts
+        .iter()
+        .filter_map(|part| match part {
+            AssistantMessagePart::ToolCallResponseJson { id, .. }
+            | AssistantMessagePart::ToolCallErr { id, .. } => Some(id.clone()),
+            _ => None,
+        })
+        .collect();
+    let dangling: Vec<(String, String)> = parts
+        .iter()
+        .filter_map(|part| match part {
+            AssistantMessagePart::ToolCall { id, name, .. }
+            | AssistantMessagePart::McpToolCall { id, name, .. }
+                if !responded.contains(id) =>
+            {
+                Some((id.clone(), name.clone()))
+            }
+            _ => None,
+        })
+        .collect();
+    for (id, name) in &dangling {
+        parts.push(AssistantMessagePart::ToolCallErr {
+            name: name.clone(),
+            description: "cancelled".to_owned(),
+            id: id.clone(),
+        });
+    }
+    dangling
+}

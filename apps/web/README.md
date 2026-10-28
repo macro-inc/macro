@@ -6,6 +6,18 @@ We use the [bun](https://bun.sh/) as a javascript package manager and runtime fo
 
 The production application is compiled down to a static javascript bundle using a traditional SPA-like architecture.
 
+## Production analytics configuration
+
+`just ios-build` uses an existing `VITE_POSTHOG_API_KEY` environment variable or
+fetches it from Doppler `web-release/prd` and exports it for the build. Install
+the Doppler CLI and authenticate with read access to that config. The build
+fails if the key cannot be fetched or is empty; no env file is created.
+
+For other local production builds, set `VITE_POSTHOG_API_KEY` in the environment
+or the ignored `apps/web/.env.production.local`. Vite loads this file
+automatically. CI continues to inject the GitHub `POSTHOG_API_KEY` secret. Keep
+the value out of tracked env files.
+
 ### Toolchain Management
 
 If you have the [nix](https://nixos.org/learn/) package manager installed on your system then you can drop into a nix shell where everything you need is installed for you.

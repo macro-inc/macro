@@ -1,0 +1,29 @@
+[package]
+name = "wasm"
+version = "0.8.4"
+authors = ["Nicolas Hatcher <nicolas@theuniverse.today>"]
+description = "IronCalc Web bindings"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/ironcalc/IronCalc"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+# MACRO: upstream builds @ironcalc/wasm-xlsx with this feature; its crate is not
+# vendored, so the feature exists only to keep `cfg(feature = "xlsx")` valid.
+xlsx = []
+
+[dependencies]
+# Uses `../ironcalc/base` when used locally, and uses
+# the indicated version from crates.io when published.
+# https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#multiple-locations
+ironcalc_base = { path = "../../base", version = "0.8" }
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = "0.2.100"
+serde-wasm-bindgen = "0.4"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.38"

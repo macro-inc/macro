@@ -24,6 +24,14 @@ export class ForeignEntity extends FavoritableEntity<ForeignEntityDetail> {
     return new ForeignEntity(client, id);
   }
 
+  /** Build a foreign entity from an already-fetched record (pre-seeded, no fetch). */
+  static fromRecord(
+    client: MacroClient,
+    record: ForeignEntityDetail,
+  ): ForeignEntity {
+    return new ForeignEntity(client, record.id, record);
+  }
+
   /** The identifier assigned by the external system. */
   readonly foreignEntityId = this.field('foreignEntityId');
 

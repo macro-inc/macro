@@ -1,16 +1,9 @@
 use crate::outbound::email_api::GmailApi;
-use crate::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use crate::util::redis::RedisClient;
-use calendar_events::{
-    domain::models::GoogleWatchConfig,
-    domain::service::{GoogleCalendarBackfillCoordinator, GoogleCalendarBackfillFailureService},
-    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
-};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
-use crm::domain::company_metadata_resolver::CompanyMetadataResolver;
-use crm::domain::model::DomainMetadata;
+use crm::domain::company_metadata_resolver::{CompanyMetadataResolver, DomainResolution};
 use crm::domain::service::CrmServiceImpl;
 use crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver;
 use crm::outbound::companies_repo::CompaniesRepositoryImpl;
@@ -31,64 +24,6 @@ pub type PubSubEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTr
 /// The concrete notification ingress service type.
 pub type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
-/// Concrete Google Calendar backfill application service.
-pub type GoogleCalendarBackfillService = GoogleCalendarBackfillCoordinator<
-    PgCalendarRepository,
-    GoogleCalendarClient<RedisCalendarRequestGate>,
-    PgCalendarRepository,
->;
-
-/// Concrete pre-lease Google Calendar failure application service.
-pub type GoogleCalendarBackfillFailureHandler =
-    GoogleCalendarBackfillFailureService<PgCalendarRepository>;
-
-/// Calendar application services composed once when a worker starts.
-#[derive(Clone)]
-pub struct CalendarBackfillServices {
-    /// Google provider backfill coordinator.
-    pub google: Arc<GoogleCalendarBackfillService>,
-    /// Applies terminal provider failures that happen before a lease is claimed.
-    pub google_failure: Arc<GoogleCalendarBackfillFailureHandler>,
-}
-
-impl CalendarBackfillServices {
-    /// Compose calendar application services from process-level adapters.
-    pub fn new(db: PgPool, redis_client: RedisClient) -> Self {
-        let repository = PgCalendarRepository::new(db);
-        Self {
-            google: Arc::new(GoogleCalendarBackfillCoordinator::new(
-                repository.clone(),
-                GoogleCalendarClient::with_gate(
-                    reqwest::Client::builder()
-                        .timeout(std::time::Duration::from_secs(30))
-                        .build()
-                        .expect("calendar client configuration is valid"),
-                    RedisCalendarRequestGate::new(redis_client),
-                ),
-                repository.clone(),
-                calendar_watch_config(),
-            )),
-            google_failure: Arc::new(GoogleCalendarBackfillFailureService::new(repository)),
-        }
-    }
-}
-
-/// Push notification channels are opened only when both optional watch
-/// variables are configured; without them the 5-minute poll is the sole
-/// freshness mechanism.
-pub fn calendar_watch_config() -> Option<GoogleWatchConfig> {
-    // A variable set to an empty string must count as unset: a blank token
-    // would verify blank-header webhook requests.
-    let read = |name| {
-        macro_env_var::maybe_read_env(name)
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty())
-    };
-    let address = read("CALENDAR_WATCH_WEBHOOK_URL")?;
-    let token = read("CALENDAR_WATCH_TOKEN")?;
-    Some(GoogleWatchConfig { address, token })
-}
-
 /// The unfurl-backed resolver used when Apollo enrichment is disabled.
 type UnfurlResolver = UnfurlCompanyMetadataResolver<
     unfurl::domain::service::UnfurlServiceImpl<unfurl::outbound::ReqwestUnfurlFetcher>,
@@ -108,7 +43,7 @@ pub enum CrmMetadataResolver {
 }
 
 impl CompanyMetadataResolver for CrmMetadataResolver {
-    async fn resolve(&self, domain: &str) -> DomainMetadata {
+    async fn resolve(&self, domain: &str) -> DomainResolution {
         match self {
             CrmMetadataResolver::Apollo(r) => r.resolve(domain).await,
             CrmMetadataResolver::Unfurl(r) => r.resolve(domain).await,
@@ -118,12 +53,16 @@ impl CompanyMetadataResolver for CrmMetadataResolver {
 
 /// The concrete CRM service type, backed by Postgres and the
 /// flag-selected [`CrmMetadataResolver`]. The resolver is consulted only
-/// on `crm_domain_directory` misses, so it isn't surfaced separately on
-/// [`PubSubContext`].
+/// on `crm_domain_directory` misses and for pending entries, so it isn't
+/// surfaced separately on [`PubSubContext`].
 pub type CrmServiceType = CrmServiceImpl<CompaniesRepositoryImpl, CrmMetadataResolver>;
 
 #[derive(Clone)]
 pub struct PubSubContext {
+    pub gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService<
+        email::outbound::mailbox_pg::PgMailboxSync,
+    >,
+    pub invitation_extractor: crate::pubsub::invitation_extraction::EmailInvitationExtractor,
     pub db: PgPool,
     pub sqs_worker: sqs_worker::SQSWorker,
     pub sqs_client: sqs_client::SQS,
@@ -138,7 +77,5 @@ pub struct PubSubContext {
     pub crm_service: CrmServiceType,
     pub macro_event_broker: PubSubEventBroker,
     pub notifications_enabled: bool,
-    pub calendar_sync_enabled: bool,
     pub retry_worker: bool,
-    pub calendar_backfills: CalendarBackfillServices,
 }

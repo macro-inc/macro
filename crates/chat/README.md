@@ -29,7 +29,11 @@ Optional metadata is serialized as `null`. On `chat.updated`, `name` and
 `project_id` describe the requested PATCH: `null` means the field was omitted,
 and `project_id: ""` means the chat was removed from its project (mirroring
 the `PatchChatArgs` semantics). `previous_project_id` is the project in the
-pre-PATCH chat snapshot when known. On the deleted, permanently-deleted, and
+pre-PATCH chat snapshot when known. `share_permission_updated` is `true` for
+any `sharePermission` patch, including an explicit `teamShareAccessLevel`,
+which only the chat's persisted owner may set (shared with the owner's team
+through the canonical `SharePermission.team_share_*` state and an
+`entity_access` team grant). On the deleted, permanently-deleted, and
 restored events, `actor_user_id` is `null` for unauthenticated or internal
 callers.
 
@@ -61,7 +65,7 @@ and tool events (for example `chat.tool_called` and `chat.tool_rejected`) are
 not yet produced; they can be added later as new enum variants.
 
 The AI auto-rename flow
-(`services/document_cognition_service/src/service/chat_renamer.rs`) patches
+(`services/agent_harness_service/src/cognition/service/chat_renamer.rs`) patches
 via `PgChatRepo` directly and does not emit `chat.updated`.
 
 Only the document cognition service (DCS) HTTP chat router, the DCS

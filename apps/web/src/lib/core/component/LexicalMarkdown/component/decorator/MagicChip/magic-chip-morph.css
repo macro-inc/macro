@@ -1,0 +1,30 @@
+/* Morph motion from https://loading.dev/spinners/morph (loading-dev, MIT).
+   Adapted to the chip's 20px icon slot; inherits its currentColor. */
+.magic-chip-morph {
+  width: 50%;
+  height: 50%;
+  background: currentColor;
+  border-radius: 1.25px;
+  animation: magic-chip-morph 2000ms ease-in-out infinite;
+}
+
+@keyframes magic-chip-morph {
+  0% {
+    border-radius: 1.25px;
+    transform: rotate(0deg);
+  }
+  50% {
+    border-radius: 50%;
+    transform: rotate(45deg);
+  }
+  100% {
+    border-radius: 1.25px;
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magic-chip-morph {
+    animation: none;
+  }
+}

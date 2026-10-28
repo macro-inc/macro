@@ -1,15 +1,16 @@
-import type { JSX } from 'solid-js';
+import { ConfirmDrawer } from '@components/app/mobile/ConfirmDrawer';
+import { isMobile } from '@core/mobile/isMobile';
+import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { cn } from '../utils/classname';
-import { Button } from './Button';
+import { ActionDialogShell } from './ActionDialogShell';
+import { Button, type ButtonVariant } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
 import {
-  type DialogHandle,
   type ManagedDialogProps,
   type OpenDialogOptions,
   openDialog,
   type PropsSource,
 } from './ImperativeDialog';
-import { Surface } from './Surface';
 
 /** Presentation options for the shared confirmation dialog. */
 export type ConfirmDialogDisplayProps = {
@@ -17,85 +18,128 @@ export type ConfirmDialogDisplayProps = {
   /** Dialog copy. `children` is used when `body` is omitted. */
   body?: JSX.Element;
   children?: JSX.Element;
+  /** Phone-only artwork above centered copy and a single full-width action.
+   * Dismiss with the handle, backdrop, or Escape instead of a cancel button.
+   */
+  mobileHero?: JSX.Element;
   confirmLabel?: JSX.Element;
   cancelLabel?: JSX.Element;
-  tone?: 'default' | 'danger';
+  tone?: 'default' | 'danger' | 'success';
+  /** Dialog presentation only; the mobile drawer ignores it. */
   position?: DialogProps['position'];
+  /** Dialog presentation only; the mobile drawer ignores it. */
   class?: string;
+  /** Lets the owning surface restore focus after a programmatic confirmation. */
+  onCloseAutoFocus?: DialogProps['onCloseAutoFocus'];
 };
 
 export type ConfirmDialogProps = ManagedDialogProps &
   ConfirmDialogDisplayProps & {
     onConfirm: () => void;
+    pending?: boolean;
   };
 
-/** Complete dialog used by `confirmDialog`. */
+/** Controlled confirmation UI: a dialog on desktop, a drawer on mobile. */
 export function ConfirmDialog(props: ConfirmDialogProps) {
+  const confirmVariant = (): ButtonVariant => {
+    if (props.tone === 'danger') return 'danger';
+    if (props.tone === 'success') return 'success';
+    return 'primary';
+  };
   return (
-    <Dialog
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-      position={props.position}
-      class={cn('w-[90%] max-w-120', props.class)}
-      visibleScrim
+    <Show
+      when={isMobile()}
+      fallback={
+        <Dialog
+          open={props.open}
+          onOpenChange={(open) => !props.pending && props.onOpenChange(open)}
+          onCloseAutoFocus={props.onCloseAutoFocus}
+          position={props.position ?? 'center'}
+          class={cn('w-110', props.class)}
+          visibleScrim
+        >
+          <ActionDialogShell>
+            <ActionDialogShell.Body>
+              <ActionDialogShell.Header>
+                <ActionDialogShell.Title>{props.title}</ActionDialogShell.Title>
+                <ActionDialogShell.Description as="div">
+                  {props.body ?? props.children}
+                </ActionDialogShell.Description>
+              </ActionDialogShell.Header>
+            </ActionDialogShell.Body>
+            <ActionDialogShell.Footer>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={props.pending}
+                onClick={() => props.onOpenChange(false)}
+              >
+                {props.cancelLabel ?? 'Cancel'}
+              </Button>
+              <Button
+                type="button"
+                variant={confirmVariant()}
+                disabled={props.pending}
+                onClick={props.onConfirm}
+              >
+                {props.confirmLabel ?? 'Confirm'}
+              </Button>
+            </ActionDialogShell.Footer>
+          </ActionDialogShell>
+        </Dialog>
+      }
     >
-      <Surface depth={2} class="rounded-xl text-ink">
-        <div class="flex flex-col gap-1 px-5 py-4">
-          <Dialog.Title class="text-base font-semibold">
-            {props.title}
-          </Dialog.Title>
-          <Dialog.Description as="div" class="text-sm leading-5 text-ink-muted">
-            {props.body ?? props.children}
-          </Dialog.Description>
-        </div>
-        <div class="flex items-center justify-end gap-2 px-5 py-3">
-          <Button
-            type="button"
-            variant="ghost"
-            depth={2}
-            class="rounded-lg"
-            onClick={() => props.onOpenChange(false)}
-          >
-            {props.cancelLabel ?? 'Cancel'}
-          </Button>
-          <Button
-            type="button"
-            variant={props.tone === 'danger' ? 'danger' : 'active'}
-            depth={2}
-            class="rounded-lg"
-            onClick={props.onConfirm}
-          >
-            {props.confirmLabel ?? 'Confirm'}
-          </Button>
-        </div>
-      </Surface>
-    </Dialog>
+      <ConfirmDrawer {...props} />
+    </Show>
   );
 }
 
-function resolveProps<P extends object>(source: PropsSource<P>): P {
-  return typeof source === 'function' ? source() : source;
-}
+/** Slide-out length; keep ≥ MobileDrawer's `duration-200` transition. */
+const CLOSE_MS = 250;
 
-/** Opens the shared confirmation dialog and resolves with the user's choice. */
-export function confirmDialog(
+/**
+ * Opens the shared confirmation UI and resolves with the user's choice —
+ * this dialog on desktop, a bottom drawer (`ConfirmDrawer`) on mobile.
+ */
+export async function confirmDialog(
   props: PropsSource<ConfirmDialogDisplayProps>,
   options?: OpenDialogOptions
 ): Promise<boolean> {
   let confirmed = false;
-  let handle!: DialogHandle;
 
-  handle = openDialog(
-    ConfirmDialog,
-    () => ({
-      ...resolveProps(props),
-      onConfirm: () => {
-        confirmed = true;
-        handle.close();
-      },
-    }),
+  const handle = openDialog(
+    (managedProps: ManagedDialogProps & ConfirmDialogDisplayProps) => {
+      const [open, setOpen] = createSignal(true);
+      let closeTimer: ReturnType<typeof setTimeout> | undefined;
+      onCleanup(() => clearTimeout(closeTimer));
+
+      const close = (choice: boolean) => {
+        if (!open()) return;
+        setOpen(false);
+        const finalize = () => {
+          confirmed = choice;
+          managedProps.onOpenChange(false);
+        };
+
+        // The manager disposes immediately. Let the mobile drawer animate
+        // closed before handing dismissal to it.
+        if (isMobile()) closeTimer = setTimeout(finalize, CLOSE_MS);
+        else finalize();
+      };
+
+      return (
+        <ConfirmDialog
+          {...managedProps}
+          open={managedProps.open && open()}
+          onOpenChange={(open) => !open && close(false)}
+          onConfirm={() => close(true)}
+        />
+      );
+    },
+    props,
     options
   );
 
-  return handle.closed.then(() => confirmed);
+  await handle.closed;
+  return confirmed;
 }

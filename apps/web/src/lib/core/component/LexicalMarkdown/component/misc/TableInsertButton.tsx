@@ -1,5 +1,5 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import {
   $computeTableMapSkipCellCheck,
   $getTableNodeFromLexicalNodeOrThrow,
@@ -9,7 +9,6 @@ import {
   getDOMCellFromTarget,
   getTableElement,
 } from '@lexical/table';
-import PlusIcon from '@phosphor/plus.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
@@ -17,7 +16,14 @@ import {
   $getNodeByKey,
   isHTMLElement,
 } from 'lexical';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  useContext,
+} from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { tableColumnResizeEdge } from './TableCellResizer';
 
 // How close (px) the pointer must be to a row/column border for the button to show.
@@ -36,8 +42,8 @@ type InsertTarget = {
 };
 
 export function TableInsertButton() {
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
 
   const [insertTarget, setInsertTarget] = createSignal<InsertTarget>();
   const [buttonHovered, setButtonHovered] = createSignal(false);

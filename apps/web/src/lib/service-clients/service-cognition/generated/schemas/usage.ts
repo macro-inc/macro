@@ -4,23 +4,36 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { UsageAudioSeconds } from './usageAudioSeconds';
 import type { UsagePrice } from './usagePrice';
 
 /**
- * The token usage and resolved cost of a single completion.
+ * Measured usage for one invocation.
  */
 export interface Usage {
-  /** When the completion was recorded. */
+  /** Audio duration in seconds, absent for token billing. */
+  audio_seconds?: UsageAudioSeconds;
+  /**
+   * Input tokens read from a prompt cache; zero for audio billing.
+   * @minimum 0
+   */
+  cache_read_input_tokens: number;
+  /**
+   * Input tokens written to a prompt cache; zero for audio billing.
+   * @minimum 0
+   */
+  cache_write_input_tokens: number;
+  /** Recording timestamp. */
   created_at: string;
   /**
-   * Tokens consumed by the input.
+   * Uncached input tokens; zero for audio billing.
    * @minimum 0
    */
   input_tokens: number;
-  /** The model api id (e.g. `claude-opus-4-8`). */
+  /** Provider model identifier. */
   model: string;
   /**
-   * Tokens generated in the output.
+   * Output tokens; zero for audio billing.
    * @minimum 0
    */
   output_tokens: number;

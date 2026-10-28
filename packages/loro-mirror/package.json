@@ -51,6 +51,6 @@
         "@biomejs/biome": "2.4.12",
         "loro-crdt": "catalog:",
         "typescript": "^5.9.3",
-        "vitest": "^3.2.4"
+        "vitest": "5.0.1"
     }
 }

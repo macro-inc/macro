@@ -1,18 +1,20 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeCopyEntityIdAction = () => {
-  const canExecute = (_entity: EntityData): boolean => {
-    return true;
-  };
+  // A channel message or thread row's id joins its channel's and its own, so
+  // it names nothing a user can look up.
+  const canExecute = (entity: EntityData): boolean =>
+    entity.type !== 'channel_message' && entity.type !== 'channel_thread';
 
   /** Copying an id needs nothing but the id, so callers that only have one
    *  (e.g. a block, which is keyed by its entity id) can skip resolving the
    *  entity. */
   const executeById = async (id: string) => {
     await navigator.clipboard.writeText(id);
-    toast.success('ID copied to clipboard');
+    toast.success(t('entityActions.toastIdCopied'));
   };
 
   const execute = async (entities: EntityData[]) => {
@@ -22,7 +24,10 @@ export const makeCopyEntityIdAction = () => {
     await executeById(entity.id);
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

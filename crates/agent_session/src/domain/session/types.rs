@@ -1,11 +1,12 @@
 //! The machine's vocabulary: phases, inputs, and effects.
 
-use agent_client_protocol::schema::v1::{RequestId, SessionId};
+use agent_client_protocol::schema::v1::{McpServer, PermissionOptionId, RequestId, SessionId};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::error::Result;
+use crate::domain::model::HistoryBoundary;
 
 /// An action accepted before there was a live ACP session to send it through.
 #[derive(Debug)]
@@ -14,6 +15,29 @@ pub(super) struct PendingAction<Token> {
     pub(super) action: AgentAction,
     pub(super) action_id: AgentActionId,
     pub(super) token: Token,
+}
+
+/// How a connection answers the agent's `session/request_permission`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::IntoStaticStr)]
+#[strum(serialize_all = "camelCase")]
+pub enum PermissionPolicy {
+    /// Approve the broadest allow option the moment the request arrives.
+    /// Right for runtimes in sandboxes this deployment owns, where nothing
+    /// the agent can touch is anyone's real machine.
+    AutoAccept,
+    /// Hold the request open until a user answers it through the control
+    /// endpoint. The turn blocks meanwhile, which is the point.
+    #[default]
+    Prompt,
+}
+
+/// A permission request the agent is waiting on, under
+/// [`PermissionPolicy::Prompt`].
+#[derive(Debug)]
+pub(super) struct OutstandingPermission {
+    /// The choices the agent offered; an answer naming anything else is
+    /// refused rather than forwarded.
+    pub(super) options: Vec<PermissionOptionId>,
 }
 
 pub(super) enum SessionPhase {
@@ -31,10 +55,28 @@ pub(super) enum SessionPhase {
         /// How this connection is establishing its ACP session.
         kind: SessionOpening,
     },
+    /// The ACP session exists, but its configured model must be acknowledged first.
+    ConfiguringModel {
+        request_id: RequestId,
+        session_id: SessionId,
+        model: String,
+    },
     Live {
         session_id: SessionId,
+        /// The one `elicitation/create` this connection is holding for the
+        /// user to answer. Macro allows one at a time; a second is refused
+        /// while this is `Some`.
+        elicitation: Option<PendingElicitation>,
     },
     Dead,
+}
+
+/// An `elicitation/create` the agent is waiting on. Only the id is held:
+/// message, schema and mode are in the log for the fold to render, and the
+/// machine's one job is to know which id it may answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct PendingElicitation {
+    pub(super) request_id: RequestId,
 }
 
 #[derive(Clone)]
@@ -42,14 +84,19 @@ pub(super) enum SessionOpening {
     New,
     Resume(SessionId),
     Load(SessionId),
+    /// A `session/resume` of the session already live on this connection,
+    /// sent only to hand the agent a new MCP server list. Unlike a resume
+    /// that opens the connection, a refusal leaves the session live on the
+    /// servers it already had.
+    Refresh(SessionId),
 }
 
 /// What the agent said it can do about a session it has seen before, distilled
 /// from the `initialize` response.
 ///
 /// Only these two facts decide how a session opens, and one connection's
-/// answer serves every session on it - so this is what gets shared, rather
-/// than the protocol's whole capability set.
+/// answer serves every session on it. The handshake also retains its frames
+/// so each session can establish its own durable initialization context.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionRestoreSupport {
     /// The agent offers `session/resume`.
@@ -68,18 +115,24 @@ pub struct SessionRestoreSupport {
 /// The states are a claim as much as a status: exactly one session may run
 /// the handshake, so moving `Pending` to `InFlight` is how a session takes
 /// that job and how every other session knows not to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum HandshakeStatus {
     /// Nobody has started initializing this connection.
     Pending,
     /// A session is initializing it; the rest wait rather than initialize too.
     InFlight,
-    /// The connection is initialized and sessions may open.
-    Ready(SessionRestoreSupport),
+    /// Durable handshake frames copied into each later session on this transport.
+    ReadyWithContext {
+        /// Negotiated restore support.
+        restore: SessionRestoreSupport,
+        /// Original initialize request and response, retained for this connection.
+        context: std::sync::Arc<InitializationContext>,
+    },
 }
 
 /// Observable phase of a session connection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum RuntimeStatus {
     /// Waiting for the runtime to report its agent ready.
     Booting,
@@ -121,6 +174,8 @@ pub enum CloseReason {
     TransportFailed,
     /// The shell could not put an action on the transport.
     SendFailed,
+    /// The runtime did not finish its ACP handshake before the deadline.
+    HandshakeTimedOut,
     /// The shell could not persist a log entry, and an unlogged session may
     /// not keep running: the log stream is the session's history.
     LogFailed,
@@ -133,6 +188,7 @@ impl std::fmt::Display for CloseReason {
             Self::TransportClosed => "the transport closed",
             Self::TransportFailed => "the transport failed",
             Self::SendFailed => "an action could not be sent",
+            Self::HandshakeTimedOut => "the ACP handshake timed out",
             Self::LogFailed => "a log entry could not be persisted",
         })
     }
@@ -163,6 +219,17 @@ pub enum Input<Token> {
         /// What that handshake learned about restoring sessions.
         restore: SessionRestoreSupport,
     },
+    /// A shared transport supplies the actual initialization frames to persist locally.
+    SharedReady {
+        /// Negotiated capabilities.
+        restore: SessionRestoreSupport,
+        /// Handshake from this transport.
+        context: std::sync::Arc<InitializationContext>,
+    },
+    /// The MCP servers the agent should have from now on. A live session is
+    /// re-resumed with them between turns; one still opening takes them on
+    /// the request it has yet to send, or re-resumes once live.
+    ReplaceMcpServers(Vec<McpServer>),
     /// The connection is over. Idempotent: a dead machine ignores it.
     Closed(CloseReason),
 }
@@ -178,8 +245,15 @@ pub enum Effect<Token> {
     },
     /// Persist an inbound message to the session's log stream.
     Log {
+        /// Successful load history selection, committed with this frame.
+        boundary: Option<HistoryBoundary>,
         /// The envelope to persist.
         message: ToServerMessage,
+    },
+    /// Record a shared handshake in this session before opening it.
+    EstablishInitialization {
+        /// The connection's actual handshake frames.
+        context: std::sync::Arc<InitializationContext>,
     },
     /// Persist the ACP session id before allowing prompts onto the wire.
     PersistAcpSession {
@@ -219,6 +293,8 @@ pub enum StopReason {
     /// The handshake could not even be serialized; the detail is the
     /// serializer's.
     HandshakeNotBuildable(String),
+    /// A load cannot become live without a durable initialization boundary.
+    InitializationNotPersisted,
     /// The agent refused `initialize`.
     InitializationRefused,
     /// The agent answered `initialize` with an invalid response.
@@ -230,6 +306,23 @@ pub enum StopReason {
     /// The agent answered `session/new` with something unintelligible; the
     /// detail is the parser's.
     SessionUnintelligible(String),
+    /// The runtime refused or did not confirm the configured starting model.
+    ModelNotSelected(String),
+}
+
+impl StopReason {
+    /// Whether the runtime can still be reached when the machine stops for
+    /// this reason - true for every death except the transport's own.
+    pub(super) fn transport_is_up(&self) -> bool {
+        !matches!(
+            self,
+            Self::Closed(
+                CloseReason::TransportClosed
+                    | CloseReason::TransportFailed
+                    | CloseReason::SendFailed
+            )
+        )
+    }
 }
 
 impl std::fmt::Display for StopReason {
@@ -238,6 +331,9 @@ impl std::fmt::Display for StopReason {
             Self::Closed(reason) => reason.fmt(formatter),
             Self::HandshakeNotBuildable(detail) => {
                 write!(formatter, "could not build the acp handshake: {detail}")
+            }
+            Self::InitializationNotPersisted => {
+                formatter.write_str("load has no durable initialization context")
             }
             Self::InitializationRefused => formatter.write_str("the agent refused initialize"),
             Self::InitializationUnintelligible(detail) => {
@@ -256,6 +352,21 @@ impl std::fmt::Display for StopReason {
                     "the agent answered session/new unintelligibly: {detail}"
                 )
             }
+            Self::ModelNotSelected(model) => {
+                write!(
+                    formatter,
+                    "the agent did not select the configured model {model}"
+                )
+            }
         }
     }
+}
+
+/// Connection-level handshake that each session records before opening.
+#[derive(Debug, Clone)]
+pub struct InitializationContext {
+    /// Initialize request sent on this transport.
+    pub request: ToRuntimeMessage,
+    /// Its successful response.
+    pub response: ToServerMessage,
 }

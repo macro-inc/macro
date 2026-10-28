@@ -1,6 +1,8 @@
 use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
-use activity::{ActivityFeedPage, ActivityReads, ActivityRecord, EntityType};
+use activity::{
+    ActivityFeedPage, ActivityOverview, ActivityReads, ActivityRecord, ActivityWindow, EntityType,
+};
 use async_graphql::dataloader::{DataLoader, Loader};
 use chrono::{DateTime, Utc};
 use futures::StreamExt;
@@ -75,6 +77,24 @@ pub trait ActivityFeedReader: Send + Sync + 'static {
         cursor: Option<(DateTime<Utc>, Uuid)>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
+
+    /// One page of the activity of the viewer's teammates on entities
+    /// shared with the viewer, paginated like
+    /// [`subject_feed`](Self::subject_feed). A page may come up short, or
+    /// empty, while `next` is set.
+    fn teammate_feed<'a>(
+        &'a self,
+        viewer_id: &'a str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
+
+    /// Aggregate the subject's activity inside one local-date window.
+    fn subject_overview<'a>(
+        &'a self,
+        subject_id: &'a str,
+        window: ActivityWindow,
+    ) -> impl Future<Output = Result<ActivityOverview, ActivityReadFailed>> + Send + 'a;
 }
 
 /// Combined reader capability required by the complete activity surface —
@@ -109,6 +129,26 @@ impl ActivityFeedReader for NoOpActivityReader {
             records: Vec::new(),
             next: None,
         })
+    }
+
+    async fn teammate_feed(
+        &self,
+        _viewer_id: &str,
+        _cursor: Option<(DateTime<Utc>, Uuid)>,
+        _limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
+        Ok(ActivityFeedPage {
+            records: Vec::new(),
+            next: None,
+        })
+    }
+
+    async fn subject_overview(
+        &self,
+        _subject_id: &str,
+        window: ActivityWindow,
+    ) -> Result<ActivityOverview, ActivityReadFailed> {
+        Ok(ActivityOverview::empty(window))
     }
 }
 
@@ -200,6 +240,35 @@ where
                 tracing::error!(?error, "activity feed load failed");
                 ActivityReadFailed
             })
+    }
+
+    async fn teammate_feed(
+        &self,
+        viewer_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
+        self.reads
+            .teammate_feed(viewer_id, cursor, limit)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "team activity feed load failed");
+                ActivityReadFailed
+            })
+    }
+
+    async fn subject_overview(
+        &self,
+        subject_id: &str,
+        window: ActivityWindow,
+    ) -> Result<ActivityOverview, ActivityReadFailed> {
+        self.reads
+            .subject_overview(subject_id, window)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "activity overview load failed");
+            })
+            .map_err(|_| ActivityReadFailed)
     }
 }
 

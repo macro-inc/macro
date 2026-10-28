@@ -1,0 +1,513 @@
+import { afterEach, expect, test } from 'bun:test';
+import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
+import {
+  ChannelUnreadPresenceDocument,
+  type ChannelUnreadPresenceQuery,
+  FavoritesDocument,
+  type FavoritesQuery,
+  ItemPreviewsDocument,
+  type ItemPreviewsQuery,
+  MailAccountsDocument,
+  type MailAccountsQuery,
+  SoupBackfillDocument,
+  SoupDocument,
+  type SoupInput,
+  SoupMailBackfillDocument,
+  type SoupQuery,
+  SoupSharedMailBackfillDocument,
+} from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
+import { EMAIL, fixtureId, USER_ID } from './mail';
+import { startFixtureServer } from './server';
+
+let server: ReturnType<typeof startFixtureServer> | undefined;
+afterEach(async () => {
+  await server?.disconnect();
+});
+
+function transportQuery(document: DocumentNode): string {
+  return print(
+    visit(document, {
+      Directive(node) {
+        return node.name.value === 'cacheOnly' ? null : undefined;
+      },
+    })
+  );
+}
+
+const query = transportQuery(SoupMailBackfillDocument);
+const soupQuery = transportQuery(SoupDocument);
+
+async function requestSoup(
+  input: SoupInput
+): Promise<ExecutionResult<SoupQuery>> {
+  if (!server) throw new Error('Fixture server must be started first');
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: soupQuery,
+      operationName: 'Soup',
+      variables: { input },
+    }),
+  });
+  return await response.json();
+}
+
+test.each([false, true])(
+  'mail accounts satisfy the production document (matrix=%s)',
+  async (filterMatrix) => {
+    server = startFixtureServer(0, filterMatrix);
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(MailAccountsDocument),
+        operationName: 'MailAccounts',
+      }),
+    });
+    const result: ExecutionResult<MailAccountsQuery> = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user.emailLinks).toEqual(
+      (filterMatrix ? [EMAIL, 'other@example.com'] : [EMAIL]).map(
+        (emailAddress, index) => ({
+          id: fixtureId(1000 + index),
+          macroId: USER_ID,
+          emailAddress,
+          photoUrl: null,
+          isPrimary: index === 0,
+          needsReauth: false,
+          draftIsSignal: false,
+          settings: { signature: null, signatureOnRepliesForwards: false },
+        })
+      )
+    );
+  }
+);
+
+const recencyTree = (importance: boolean) => ({
+  and: {
+    left: { literal: { importance } },
+    right: { literal: { updatedAt: { gte: '2026-01-01T00:00:00.000Z' } } },
+  },
+});
+
+async function requestMetadata(input: SoupInput) {
+  if (!server) throw new Error('Fixture server must be started first');
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      operationName: 'SoupMailBackfill',
+      variables: { input },
+    }),
+  });
+  const result: {
+    errors?: { message: string }[];
+    data: {
+      user: {
+        soup: {
+          items: {
+            id: string;
+            cacheProjection: string;
+            mailAllPreview: { subject: string };
+          }[];
+          nextCursor: string | null;
+        };
+      };
+    } | null;
+  } = await response.json();
+  return result;
+}
+
+test('real generated backfill document validates, pages each signal class, and includes projection/preview metadata', async () => {
+  server = startFixtureServer();
+  for (const [importance, expected] of [
+    [true, [6, 9, 12]],
+    [false, [4, 8, 10]],
+  ] as const) {
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 2; page++) {
+      const result = await requestMetadata(
+        cursor
+          ? { continuation: { cursor, emailView: 'ALL' } }
+          : {
+              initial: {
+                limit: 100,
+                emailView: 'ALL',
+                filters: { emailFilter: { tree: recencyTree(importance) } },
+              },
+            }
+      );
+      expect(result.errors).toBeUndefined();
+      const soup = result.data!.user.soup;
+      for (const item of soup.items) {
+        ids.push(item.id);
+        expect(item.cacheProjection).toBeString();
+        expect(item.mailAllPreview.subject).toStartWith('Email ');
+      }
+      cursor = soup.nextCursor;
+      if (page < 1) expect(cursor).toBeString();
+    }
+    expect(cursor).toBeNull();
+    expect(ids).toEqual(expected.map(fixtureId));
+  }
+  expect(server.metadataPagesServed).toBe(4);
+  expect(server.expectedMetadataPages).toBe(4);
+});
+
+test('metadata backfill without a recency-bounded signal class fails', async () => {
+  server = startFixtureServer();
+  const result = await requestMetadata({
+    initial: { limit: 100, emailView: 'ALL' },
+  });
+  expect(result.errors?.map((error) => error.message)).toEqual([
+    'Metadata backfill must bound one signal class by recency',
+  ]);
+});
+
+const signalTree = {
+  and: {
+    left: { literal: { importance: true } },
+    right: { literal: { shared: 'EXCLUDE' } },
+  },
+} as const;
+
+test('accepts the initial Signal INBOX query with both email predicates', async () => {
+  server = startFixtureServer();
+  const result = await requestSoup({
+    initial: {
+      emailView: 'INBOX',
+      filters: { emailFilter: { tree: signalTree } },
+    },
+  });
+  expect(result.errors).toBeUndefined();
+  expect(result.data?.user.soup.items.map((item) => item.id)).toEqual([
+    fixtureId(6),
+    fixtureId(12),
+  ]);
+});
+
+test('sidebar badges only read unread Signal mail and mail-excluding channel Soup', async () => {
+  server = startFixtureServer();
+  const mail = await requestSoup({
+    initial: {
+      emailView: 'INBOX',
+      filters: {
+        emailFilter: {
+          tree: {
+            and: {
+              left: signalTree,
+              right: { literal: { read: false } },
+            },
+          },
+        },
+      },
+    },
+  });
+  expect(mail.errors).toBeUndefined();
+  expect(mail.data?.user.soup.items.map((item) => item.id)).toEqual([
+    fixtureId(6),
+  ]);
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: transportQuery(ChannelUnreadPresenceDocument),
+      operationName: 'ChannelUnreadPresence',
+      variables: {
+        input: {
+          initial: {
+            filters: {
+              emailFilter: { tree: { literal: { threadId: fixtureId(0) } } },
+            },
+          },
+        },
+      },
+    }),
+  });
+  const channels: ExecutionResult<ChannelUnreadPresenceQuery> =
+    await response.json();
+  expect(channels.errors).toBeUndefined();
+  expect(channels.data?.user.soup.items).toEqual([]);
+});
+
+const invalidSignalInputs: Array<[string, SoupInput]> = [
+  [
+    'importance only in the channel branch',
+    {
+      initial: {
+        emailView: 'INBOX',
+        filters: {
+          channelFilter: { literal: { importance: true } },
+          emailFilter: {
+            tree: {
+              and: {
+                left: { literal: { importance: false } },
+                right: { literal: { shared: 'EXCLUDE' } },
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+  [
+    'missing shared exclusion',
+    {
+      initial: {
+        emailView: 'INBOX',
+        filters: { emailFilter: { tree: { literal: { importance: true } } } },
+      },
+    },
+  ],
+  [
+    'shared INCLUDE',
+    {
+      initial: {
+        emailView: 'INBOX',
+        filters: {
+          emailFilter: {
+            tree: {
+              and: {
+                left: { literal: { importance: true } },
+                right: { literal: { shared: 'INCLUDE' } },
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+  [
+    'shared ONLY',
+    {
+      initial: {
+        emailView: 'INBOX',
+        filters: {
+          emailFilter: {
+            tree: {
+              and: {
+                left: { literal: { importance: true } },
+                right: { literal: { shared: 'ONLY' } },
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+  [
+    'negated importance',
+    {
+      initial: {
+        emailView: 'INBOX',
+        filters: {
+          emailFilter: { tree: { not: { literal: { importance: true } } } },
+        },
+      },
+    },
+  ],
+  [
+    'ALL rather than INBOX',
+    {
+      initial: {
+        emailView: 'ALL',
+        filters: { emailFilter: { tree: signalTree } },
+      },
+    },
+  ],
+  [
+    'unread ALL rather than INBOX',
+    {
+      initial: {
+        emailView: 'ALL',
+        filters: {
+          emailFilter: {
+            tree: {
+              and: { left: signalTree, right: { literal: { read: false } } },
+            },
+          },
+        },
+      },
+    },
+  ],
+  [
+    'read rather than unread Signal badge',
+    {
+      initial: {
+        emailView: 'INBOX',
+        filters: {
+          emailFilter: {
+            tree: {
+              and: { left: signalTree, right: { literal: { read: true } } },
+            },
+          },
+        },
+      },
+    },
+  ],
+  ['missing filters', { initial: { emailView: 'INBOX' } }],
+];
+
+for (const [name, input] of invalidSignalInputs) {
+  test(`rejects non-Signal online query: ${name}`, async () => {
+    server = startFixtureServer();
+    const result = await requestSoup(input);
+    expect(result.errors?.map((error) => error.message)).toEqual([
+      'Only the initial Signal view may be fetched online',
+    ]);
+    expect(result.data?.user?.soup?.items ?? []).toEqual([]);
+  });
+}
+
+test('matrix favorites match thread facts and honor collection filters', async () => {
+  server = startFixtureServer(0, true);
+  for (const [filter, ids] of [
+    [{}, [6, 8, 9, 60, 71]],
+    [{ entityTypes: ['EMAIL_THREAD'] }, [6, 8, 9, 60, 71]],
+    [{ entityIds: [fixtureId(6)] }, [6]],
+    [{ entityTypes: ['DOCUMENT'] }, []],
+  ] as const) {
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(FavoritesDocument),
+        operationName: 'Favorites',
+        variables: { filter },
+      }),
+    });
+    const result: ExecutionResult<FavoritesQuery> = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(
+      result.data?.user.favorites.map((favorite) => favorite.entityId)
+    ).toEqual(ids.map(fixtureId));
+  }
+});
+
+test('favorite previews are ID-scoped and cannot seed arbitrary Mail pages', async () => {
+  server = startFixtureServer(0, true);
+  const origin = server.origin;
+  const preview = async (
+    input: SoupInput
+  ): Promise<ExecutionResult<ItemPreviewsQuery>> => {
+    const response = await fetch(`${origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(ItemPreviewsDocument),
+        operationName: 'ItemPreviews',
+        variables: { input },
+      }),
+    });
+    return await response.json();
+  };
+  const selected = await preview({
+    initial: {
+      emailView: 'ALL',
+      filters: {
+        emailFilter: {
+          tree: {
+            or: {
+              left: { literal: { threadId: fixtureId(6) } },
+              right: { literal: { threadId: fixtureId(8) } },
+            },
+          },
+        },
+      },
+    },
+  });
+  expect(selected.errors).toBeUndefined();
+  expect(selected.data?.user.soup.items.map((item) => item.id)).toEqual(
+    [6, 8].map(fixtureId)
+  );
+  expect(
+    (await preview({ initial: { emailView: 'ALL' } })).errors?.[0].message
+  ).toBe('ItemPreviews requires explicit thread IDs');
+  expect(
+    (
+      await preview({
+        initial: {
+          emailView: 'ALL',
+          filters: {
+            emailFilter: { tree: { literal: { threadId: fixtureId(4) } } },
+          },
+        },
+      })
+    ).errors?.[0].message
+  ).toBe('ItemPreviews only serves fixture favorites');
+});
+
+test('matrix fixtures validate against the production backfill selections', async () => {
+  server = startFixtureServer(0, true);
+  for (const [document, operationName, input, count] of [
+    [
+      SoupBackfillDocument,
+      'SoupBackfill',
+      {
+        initial: {
+          limit: 100,
+          emailView: 'ALL',
+          filters: {
+            emailFilter: { tree: { literal: { threadId: fixtureId(0) } } },
+          },
+        },
+      },
+      67,
+    ],
+    [
+      SoupSharedMailBackfillDocument,
+      'SoupSharedMailBackfill',
+      { initial: { limit: 100, emailView: 'ALL' } },
+      3,
+    ],
+  ] as const) {
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(document),
+        operationName,
+        variables: { input },
+      }),
+    });
+    const result = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(result.data.user.soup.items).toHaveLength(count);
+  }
+});
+
+test('unknown endpoints fail closed; disconnect removes the TCP listener', async () => {
+  server = startFixtureServer();
+  expect((await fetch(`${server.origin}/unimplemented`)).status).toBe(501);
+  await server.disconnect();
+  await expect(fetch(`${server.origin}/health`)).rejects.toThrow();
+});
+
+test('disconnect closes live WebSockets and finishes shutdown', async () => {
+  server = startFixtureServer();
+  const socket = new WebSocket(
+    server.origin.replace('http', 'ws') + '/connection-gateway'
+  );
+  await new Promise<void>((resolve, reject) => {
+    socket.onopen = () => resolve();
+    socket.onerror = reject;
+  });
+  expect(server.socketCount).toBe(1);
+  const closed = new Promise<void>((resolve) => {
+    socket.onclose = () => resolve();
+  });
+  await server.disconnect();
+  await closed;
+  expect(server.socketCount).toBe(0);
+}, 3000);
+
+test('invalid cursors fail rather than silently completing the scan', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      operationName: 'SoupMailBackfill',
+      variables: { input: { continuation: { cursor: 'invalid' } } },
+    }),
+  });
+  expect((await response.json()).errors[0].message).toBe(
+    'Unknown metadata cursor'
+  );
+});

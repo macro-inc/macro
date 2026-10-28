@@ -1,6 +1,7 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { AsyncBatcher } from '@tanstack/pacer';
-import { fetchPreviewBatch } from './fetchers';
+import { fetchRestPreviewBatch } from './fetchers';
 import { previewKeys } from './keys';
 import type { ItemEntity, PreviewItem } from './types';
 
@@ -16,7 +17,7 @@ class PreviewDataLoader {
 
   private batcher = new AsyncBatcher<ItemEntity>(
     async (items) => {
-      return await fetchPreviewBatch(items);
+      return await fetchRestPreviewBatch(items);
     },
     {
       wait: 30,
@@ -83,7 +84,7 @@ class PreviewDataLoader {
         existing.push({ item, resolve, reject });
       } else {
         this.pendingRequests.set(key, [{ item, resolve, reject }]);
-        this.batcher.addItem(item);
+        fireAndForget(this.batcher.addItem(item), 'preview-loader');
       }
     });
   }
