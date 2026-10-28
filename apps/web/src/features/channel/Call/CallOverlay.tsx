@@ -1,3 +1,4 @@
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
@@ -347,6 +348,8 @@ export function CallOverlay(props: {
       class="relative flex h-full min-h-0 flex-col @container/call touch:pb-(--mobile-content-inset-bottom)"
       style={{ '--call-footer-height': `${footerSize.height ?? 0}px` }}
     >
+      {/* The call owns its controls instead of the mobile New action. */}
+      <FloatRegion region="accessory" />
       <Show
         when={chatToggleMount()}
         fallback={<div class="absolute right-3 top-3 z-30">{chatToggle}</div>}

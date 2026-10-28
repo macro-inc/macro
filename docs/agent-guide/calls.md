@@ -206,6 +206,8 @@ microphones, speakers (when the browser can choose one), and noise suppression.
 Light blur, Strong blur, a selected custom image, and Upload. Screen share and
 Leave call are separate buttons. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
+The floating mobile **New** action is hidden while the call view is open and
+returns when you leave the call view.
 
 Open live chat with **Open chat** at the bottom-right, level with the media controls.
 On phones, the toggle stays in the right header island.
