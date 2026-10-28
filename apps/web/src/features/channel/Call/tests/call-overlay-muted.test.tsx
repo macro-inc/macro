@@ -5,7 +5,7 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type Setter } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
 
@@ -37,7 +37,8 @@ vi.mock('@core/user', () => ({
     mocks.displayNames.get(identity) ?? identity,
 }));
 
-vi.mock('@ui', () => ({
+vi.mock('@ui', async () => ({
+  Button: (await import('@ui/components/Button')).Button,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),
   InlineCheckbox: () => null,
@@ -150,8 +151,18 @@ function setUpCallState(
   return { setChannelId, setAudioMuted, setParticipants, setTrackVersion };
 }
 
+afterEach(() => vi.unstubAllGlobals());
+
 beforeEach(() => {
   mocks.displayNames.clear();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 
 describe('CallOverlay muted microphone badges', () => {
@@ -331,5 +342,69 @@ describe('CallOverlay muted microphone badges', () => {
     expect(
       screen.queryByRole('status', { name: 'Alex Morgan is muted' })
     ).toBeNull();
+  });
+
+  it('focuses a participant without remounting video and restores the grid when they leave', () => {
+    const first = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('first-camera'),
+        },
+      },
+      'First participant'
+    );
+    const second = createRemoteParticipant('second', {}, 'Second participant');
+    const controls = setUpCallState([first, second]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    const video = screen.getByTestId('track-first-camera');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Focus First participant' })
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'Unfocus First participant' })
+        .getAttribute('aria-pressed')
+    ).toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Focus Second participant' })
+    ).toBeNull();
+    expect(screen.getByTestId('track-first-camera')).toBe(video);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Unfocus First participant' })
+    );
+    expect(
+      screen.getByRole('button', { name: 'Focus Second participant' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('track-first-camera')).toBe(video);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Focus First participant' })
+    );
+    controls.setParticipants(new Map([[second.identity, second]]));
+    expect(
+      screen.getByRole('button', { name: 'Focus Second participant' })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Unfocus First participant' })
+    ).toBeNull();
+  });
+
+  it('focuses the local picture-in-picture without replacing its video', () => {
+    const remote = createRemoteParticipant('remote', {}, 'Remote participant');
+    setUpCallState([remote]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    const video = screen.getByTestId('track-local-camera');
+    fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
+    expect(
+      screen.queryByRole('button', { name: 'Focus Remote participant' })
+    ).toBeNull();
+    expect(screen.getByTestId('track-local-camera')).toBe(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Unfocus yourself' }));
+    expect(
+      screen.getByRole('button', { name: 'Focus Remote participant' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('track-local-camera')).toBe(video);
   });
 });

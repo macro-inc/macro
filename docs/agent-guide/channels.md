@@ -1158,11 +1158,21 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
-The **Open chat** button in its own island at the far right of the bottom toolbar
-opens the chat beside the video. The panel has no header or divider above the
-composer. The media controls stay centered. On narrow screens it overlays the
-video. The same toolbar button, now **Close chat**, or Escape closes the panel
-and returns focus to the chat button; reopening preserves the draft and scroll
+The **Open chat** button at the bottom-right opens chat beside the video.
+**Copy Meeting Url** sits at the bottom-left on desktop and becomes icon-only in narrow panes.
+Active phone calls keep the channel header island and place Copy Meeting Url
+in a matching header island. Media controls and chat sit below the video with
+side insets, not over the participant tiles. Back keeps the call running; tapping
+the call restores bottom controls after four idle seconds without resizing the
+video. Header islands stay visible. Chat and settings keep controls visible.
+Phone calls hide the app's bottom navigation. Tap or click a participant to
+focus them and tap again to return to the grid; speakers have an accent border.
+The panel has a **Call chat** heading and
+spans the full call content height, including the media controls row. The controls
+stay centered under the video on wide panes. In narrow desktop panes, chat overlays
+the video. On phones, chat opens in the shared bottom sheet; drag the handle, tap the backdrop, or press Escape
+to dismiss it. On desktop, **Close chat** or Escape closes the panel. Closing
+returns focus to the chat button, and reopening preserves the draft and scroll
 position. The call continues while chat is open or closed.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat

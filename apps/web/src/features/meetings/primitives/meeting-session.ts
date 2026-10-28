@@ -17,6 +17,7 @@ type IssuedMeetingSession = {
 export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
   const [joining, setJoining] = createSignal(false);
   const [joinedCallId, setJoinedCallId] = createSignal<string>();
+  const [joinedName, setJoinedName] = createSignal<string>();
   const [credentials, setCredentials] = createSignal<MeetingCredentials>();
   const [error, setError] = createSignal<string>();
   const [hasLeft, setHasLeft] = createSignal(false);
@@ -87,6 +88,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     setError(undefined);
     setHasLeft(false);
     setJoinedCallId(undefined);
+    setJoinedName(undefined);
     const previousSession = issuedSession;
     issuedSession = undefined;
     let issued: IssuedMeetingSession | undefined;
@@ -159,6 +161,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
       );
       if (disposed || attempt !== generation) return;
       setJoinedCallId(issued.credentials.callId);
+      setJoinedName(displayName?.trim());
       joinTrace.setAttr('meeting.join.outcome', 'connected');
     } catch (cause) {
       // Provider errors may include credentials or a capability URL.
@@ -213,6 +216,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     if (!disposed) {
       setJoining(false);
       setJoinedCallId(undefined);
+      setJoinedName(undefined);
       setHasLeft(true);
     }
     // Start the keepalive release before awaiting local RTC disconnection:
@@ -246,5 +250,14 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     fireAndForget(leave(), 'meetings');
   });
 
-  return { join, leave, joining, joinedCallId, credentials, error, hasLeft };
+  return {
+    join,
+    leave,
+    joining,
+    joinedCallId,
+    joinedName,
+    credentials,
+    error,
+    hasLeft,
+  };
 }

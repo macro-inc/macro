@@ -1,3 +1,5 @@
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Check from '@icon/system/regular/check.svg';
 import Copy from '@icon/system/regular/copy.svg';
@@ -42,20 +44,27 @@ export function MeetingCopyButton(props: {
 
   return (
     <div class="min-w-0 text-sm text-ink-muted">
-      <Button
-        type="button"
-        variant="ghost"
-        size="lg"
-        disabled={props.disabled || copying()}
-        aria-busy={copying()}
-        class="bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
-        onClick={() => fireAndForget(copy(), 'meetings')}
-      >
-        <Show when={copied()} fallback={<Copy class="size-4" />}>
-          <Check class="size-4" />
-        </Show>
-        Copy Meeting Url
-      </Button>
+      <HeaderIsland class="h-12 px-0">
+        <Button
+          type="button"
+          variant="ghost"
+          size={isMobile() ? 'icon-xl' : 'lg'}
+          aria-label="Copy Meeting Url"
+          tooltip={{ content: 'Copy Meeting Url', placement: 'top' }}
+          disabled={props.disabled || copying()}
+          aria-busy={copying()}
+          class="bg-hover mobile:bg-transparent text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
+          onClick={() => fireAndForget(copy(), 'meetings')}
+        >
+          <Show
+            when={copied()}
+            fallback={<Copy class="size-4 mobile:size-6" />}
+          >
+            <Check class="size-4 mobile:size-6" />
+          </Show>
+          <span class="hidden @3xl/call-stage:inline">Copy Meeting Url</span>
+        </Button>
+      </HeaderIsland>
       <span role="status" class="sr-only">
         {copied() ? 'Meeting URL copied' : ''}
       </span>

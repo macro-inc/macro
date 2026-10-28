@@ -35,6 +35,7 @@ function NewMeetingSetup(props: {
   onLeave: (path: string) => void;
 }) {
   const call = useCallContext();
+  const navigate = useNavigate();
   const lifecycle = useMeetingSessionLifecycle();
   const author = useAuthor();
   const people = useMeetingTeammatesSource(() => props.userId, idToDisplayName);
@@ -88,6 +89,7 @@ function NewMeetingSetup(props: {
     <MeetingPage
       source={source}
       onLeave={props.onLeave}
+      onBack={() => navigate('/app')}
       onCallStateChange={(connected) =>
         props.onCallStateChange(connected, shareToken())
       }
@@ -150,7 +152,7 @@ function NewMeetingSetup(props: {
         },
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name) => (
+      renderCall={(onLeave, name, _credentials, copyButton) => (
         <div class="flex h-full min-h-0 flex-col">
           <Show when={draft.inviteError()}>
             <div
@@ -172,6 +174,7 @@ function NewMeetingSetup(props: {
             <CallOverlay
               onLeave={onLeave}
               localName={name()}
+              footerLeading={copyButton}
               showTeamSharing={false}
             />
           </div>

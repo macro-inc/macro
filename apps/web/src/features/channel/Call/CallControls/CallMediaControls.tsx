@@ -46,6 +46,7 @@ function backgroundChoice(effect: BackgroundEffect): BackgroundChoice {
 export function CallMediaControls(props: {
   media: CallMediaControlsState;
   onLeave: () => void | Promise<void>;
+  onSettingsOpenChange?: (open: boolean) => void;
 }) {
   const call = props.media;
   const [applyingBackground, setApplyingBackground] = createSignal(false);
@@ -99,6 +100,7 @@ export function CallMediaControls(props: {
   return (
     <>
       <CallControlBar
+        onSettingsOpenChange={props.onSettingsOpenChange}
         disabled={call.isConnecting()}
         audioMuted={call.isAudioMuted()}
         videoMuted={call.isVideoMuted()}
