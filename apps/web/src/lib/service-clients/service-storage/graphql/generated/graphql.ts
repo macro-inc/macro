@@ -919,8 +919,10 @@ export type GraphqlDatabaseRowExpr =
 /** GraphQL input for selecting database rows through Soup. */
 export type GraphqlDatabaseRowLiteral =
   {   /** Match one row. */
-  id: string | number; tableId?: never; }
-  |  { id?: never;   /** Match the rows of a table. */
+  id: string | number; include?: never; tableId?: never; }
+  |  { id?: never;   /** Include accessible rows of every table; must be true. */
+  include: boolean; tableId?: never; }
+  |  { id?: never; include?: never;   /** Match the rows of a table. */
   tableId: string | number; };
 
 /** GraphQL input representing the date literal. */

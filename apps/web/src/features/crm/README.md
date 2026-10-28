@@ -75,6 +75,21 @@ links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
 visible company domains/contact addresses in the viewer's own mailbox, without
 team-scope widening or requiring a property link on the email.
 
+Databases is a row-linked activity view, not a direct database-to-CRM relation.
+It opts into database rows with the same server-resolved CRM selector and lists
+each containing database once, intersected with authorized database discovery.
+A company includes rows linked to its visible contacts; a contact does not inherit
+its company's rows. Empty row matches never fall back to all databases. Preserve
+Soup pagination and CRM-link invalidation rather than enumerating CRM IDs or table
+IDs in the browser. Database creation uses the existing app action; a database
+joins the CRM list only after a row has a Companies or Contacts link.
+
+CRM collection and record lists use full-height empty states, horizontally
+centered and raised toward the toolbar, with
+creation guidance, distinct search-empty actions, retryable error states, and
+shared list skeletons. Keep search and available header actions visible in every
+state. A failed continuation retains rows and retries that page.
+
 Activity extends the existing authorized CRM association path rather than
 splitting the feed into independent client queries. This preserves one sorted
 cursor and a complete scope without raising GraphQL's filter safety limits.

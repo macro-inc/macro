@@ -9,7 +9,7 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
-import type { CrmActivityTab } from '../core/navigation';
+import type { CrmSoupActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
@@ -82,7 +82,11 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
-  createActivity(tab: Accessor<CrmActivityTab>): ItemListSource;
+  createActivity(tab: Accessor<CrmSoupActivityTab>): ItemListSource;
+  /** Databases containing CRM-linked rows; undefined selects the workspace scope. */
+  createDatabases(scope: Accessor<CrmRecordScope | undefined>): ItemListSource;
+  openCreateItem(kind: 'notes' | 'calls' | 'databases'): void;
+  openEmailComposer(recipient?: string): void;
   openTaskComposer(): void;
   /** Newest mounted record source wins; cleanup restores the parent record source. */
   registerTaskComposerRecord(

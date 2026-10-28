@@ -77,3 +77,53 @@ async fn matches_companies_and_contacts_once(pool: PgPool) {
         2
     );
 }
+
+#[sqlx::test(
+    fixtures("../database_row/test/database_rows.sql", "test/database_links.sql"),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn database_columns_match_typed_references_and_stop_matching_after_removal(pool: PgPool) {
+    let mut edges = property_edges(&pool, &[COMPANY], &[CONTACT]).await.unwrap();
+    edges.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
+    assert_eq!(
+        edges,
+        vec![
+            CrmPropertyEdge {
+                entity_type: EntityType::DatabaseRow,
+                entity_id: "70000000-0000-0000-0000-000000000001".into(),
+            },
+            CrmPropertyEdge {
+                entity_type: EntityType::DatabaseRow,
+                entity_id: "70000000-0000-0000-0000-000000000002".into(),
+            },
+        ]
+    );
+    assert!(
+        property_edges(&pool, &[OTHER], &[])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        property_edges(&pool, &[COMPANY], &[]).await.unwrap().len(),
+        1
+    );
+    assert_eq!(
+        property_edges(&pool, &[], &[CONTACT]).await.unwrap().len(),
+        2
+    );
+
+    sqlx::query!(
+        "DELETE FROM database_columns WHERE id IN
+         ('c1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000002')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        property_edges(&pool, &[COMPANY], &[CONTACT])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
