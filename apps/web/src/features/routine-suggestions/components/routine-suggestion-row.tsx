@@ -159,7 +159,7 @@ export function SuggestionEnableButton(props: {
     <Switch
       fallback={
         <Button
-          variant="cta"
+          variant="primary"
           size="sm"
           disabled={props.status.kind === 'enabling'}
           aria-label={`Enable ${props.name}`}
