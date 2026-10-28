@@ -810,6 +810,16 @@ export const enableUniversalInput = defineFlag({
   default: DEV_MODE_ENV || import.meta.env.DEV || undefined,
 });
 
+/**
+ * Offers a Universal Input draft beside selected text in messages, email and
+ * documents. Rolls out separately from Command K, which it requires.
+ */
+export const enableSelectionOffer = defineFlag({
+  key: 'enable-selection-offer',
+  env: 'ENABLE_SELECTION_OFFER',
+  default: onInDev,
+});
+
 // Private conversations with agent personas. On in dev; there is no PostHog
 // flag. Override with VITE_ENABLE_AGENT_DMS.
 export const ENABLE_AGENT_DMS = defineFlag({

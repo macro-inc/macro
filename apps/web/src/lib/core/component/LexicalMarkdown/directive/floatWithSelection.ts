@@ -34,6 +34,11 @@ function style(el: HTMLElement, styles: Partial<JSX.CSSProperties>) {
 
 type FloatWithSelectionOptions = {
   selection: Selection | undefined | null;
+  /**
+   * Stay on this range or element instead of following the live selection, for
+   * UI that keeps its place after focus leaves the text it was opened on.
+   */
+  anchor?: Range | Element;
   reactiveOnContainer?: HTMLElement | null;
   useBlockBoundary?: boolean;
   spacing?: number;
@@ -101,26 +106,30 @@ export function floatWithSelection(
     return above > below ? 'top-start' : 'bottom-start';
   }
 
-  async function setInitialFloatingPosition(
+  function anchorFrom(
     selection: Selection | null | undefined
-  ) {
-    if (!selection) return;
-    let anchor: Range | Element | null = null;
-
+  ): Range | Element | null {
+    // A pinned anchor outlives the selection it was opened on.
+    const pinned = accessor()?.anchor;
+    if (pinned) return pinned;
+    if (!selection) return null;
     if (selection.rangeCount >= 1) {
       // Snapshot the caret. getRangeAt() is live, so focusing a picker
       // search field would rewrite this anchor and hide() the menu.
       const range = selection.getRangeAt(0).cloneRange();
-      if (range.collapsed && range.startContainer instanceof Text) {
-        anchor = range;
-      } else if (range.collapsed && range.startContainer instanceof Element) {
-        anchor = range.startContainer;
-      } else {
-        anchor = range;
-      }
-    } else if (selection.anchorNode instanceof Element) {
-      anchor = selection.anchorNode;
+      return range.collapsed && range.startContainer instanceof Element
+        ? range.startContainer
+        : range;
     }
+    return selection.anchorNode instanceof Element
+      ? selection.anchorNode
+      : null;
+  }
+
+  async function setInitialFloatingPosition(
+    selection: Selection | null | undefined
+  ) {
+    const anchor = anchorFrom(selection);
 
     if (anchor) {
       setCurrentAnchor(anchor);

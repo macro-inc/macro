@@ -774,6 +774,29 @@ If email has no connected account or Event has no writable calendar, **Connect
 Google** opens Google's consent flow for Gmail and calendar access together.
 Complete consent in the Google browser page, then reopen Command K to compose.
 
+### Universal Input on selected text
+
+PostHog **enable-selection-offer** adds the same technology to text already on
+screen; it needs **enable-universal-input** as well. Local builds enable both by
+default, and `VITE_ENABLE_SELECTION_OFFER` overrides the first locally.
+Selecting text in a channel message, an email body, or a document classifies it
+and, when the strongest shape is an event, task, or note, floats a chip above the
+selection reading **Create event**, **Create task**, or **Create note**. A
+question, a search, or a passage the classifier is unsure about offers nothing,
+as does a phrase under four words, a passage over 1000 characters, a drag that
+crosses two messages, and any surface that has not opted in. Touch devices keep
+the platform's own selection toolbar and show no chip.
+
+Choosing the chip opens the ordinary Universal Input form beside the text, with
+the type already chosen and the passage quoted above the fields. Field
+extraction, the **Content type** selector, validation, and the submit button
+behave as they do in Command K; the quoted text is fixed, so there is no editor
+to retype it in, and the type-cycling shortcuts need the candidate list only
+Command K builds. The card takes focus when it opens and then holds its place
+on the text, because filling a field moves the caret off the selection.
+**Escape**, the card's **Dismiss** button, and a successful creation all close
+it, and the same passage is not offered again until something else is selected.
+
 ## List-row dragging
 
 GraphQL-backed Soup rows initialize dragging on the first primary-button press;

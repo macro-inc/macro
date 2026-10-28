@@ -38,7 +38,11 @@ function InputContent(props: {
   const session = props.session;
   const chat = useChatInputContext();
   const surface =
-    props.referredFrom === 'search' ? 'mobile-search' : 'command-menu';
+    props.referredFrom === 'search'
+      ? 'mobile-search'
+      : props.referredFrom === 'selection'
+        ? 'selection'
+        : 'command-menu';
   const telemetry = createInputTelemetry(surface);
   onCleanup(telemetry.dispose);
   const [state, setState] = createSignal<UniversalInputController>();
@@ -72,7 +76,12 @@ function InputContent(props: {
   onCleanup(inference.dispose);
   const controller = createUniversalInput({
     ...inference,
-    initialDraft: { ...emptyDraft(), text: session.text },
+    initialDraft: {
+      ...emptyDraft(),
+      text: session.text,
+      intent: session.intent,
+      locked: session.intent !== undefined,
+    },
     ...actions,
     observe: telemetry.observe,
     submit: (input) => telemetry.run(() => actions.submit(input)),
@@ -132,7 +141,7 @@ function InputContent(props: {
             onChange={(text) => {
               if (controller.sending()) return;
               controller.setText(text);
-              session.onTextChange(text);
+              session.onTextChange?.(text);
             }}
             initialSelection={session.selection}
             onSubmit={() =>
@@ -188,4 +197,9 @@ export function CommandUniversalInput(props: InputSession) {
 /** Mobile Search keeps its dock editor mounted while forms load above it. */
 export function MobileUniversalInput(props: InputSession) {
   return <UniversalInputSession session={props} referredFrom="search" />;
+}
+
+/** A card beside selected text, whose shape the reader already accepted. */
+export function SelectionUniversalInput(props: InputSession) {
+  return <UniversalInputSession session={props} referredFrom="selection" />;
 }

@@ -26,6 +26,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     >
       <div
         class="relative min-w-0 w-full"
+        data-selection-offer="email-message"
         classList={{
           isPersonal: props.isPersonal,
           'line-clamp-3': !props.isBodyExpanded(),

@@ -675,6 +675,7 @@ export function MarkdownEditor(props: {
       {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
       <div
         class="relative mt-1.5 text-base"
+        data-selection-offer="document"
         ref={editorContainerRef}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {

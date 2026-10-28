@@ -68,6 +68,8 @@ const [commandSubmissions, setCommandSubmissions] = createSignal<Submission[]>(
   []
 );
 
+export { commandSubmissions };
+
 function FixtureLayout(parts: InputLayoutParts) {
   return (
     <>
@@ -579,7 +581,12 @@ export function UniversalInputFixture(
     },
     onSubmitted: () => (props.command ? props.command.onComplete() : focus?.()),
     initialDraft: props.command
-      ? { ...emptyDraft(), text: props.command.text }
+      ? {
+          ...emptyDraft(),
+          text: props.command.text,
+          intent: props.command.intent,
+          locked: props.command.intent !== undefined,
+        }
       : undefined,
   });
   createEffect(
@@ -686,7 +693,7 @@ export function UniversalInputFixture(
                             onChange={(text) => {
                               if (state.sending()) return;
                               state.setText(text);
-                              props.command?.onTextChange(text);
+                              props.command?.onTextChange?.(text);
                             }}
                             onSubmit={() =>
                               fireAndForget(state.submit(), 'universal-input')

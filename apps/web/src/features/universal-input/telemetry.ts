@@ -1,5 +1,5 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
-import type { InputObservation } from './context/telemetry';
+import type { InputObservation, InputSurface } from './context/telemetry';
 import type { Field, Intent } from './core/input';
 
 type DraftTrace = {
@@ -28,9 +28,7 @@ type DraftTrace = {
 };
 
 /** App wiring for metadata-only draft traces; state primitives receive only observe(). */
-export function createInputTelemetry(
-  surface: 'command-menu' | 'mobile-search'
-) {
+export function createInputTelemetry(surface: InputSurface) {
   const drafts = new Map<string, DraftTrace>();
   let disposed = false;
   let activeId: string | undefined;

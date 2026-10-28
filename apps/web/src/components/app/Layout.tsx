@@ -28,6 +28,7 @@ import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
+import { useSelectionOfferEnabled } from '@app/features/universal-input/use-universal-input';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
@@ -116,6 +117,10 @@ const CreateCompanyModal = lazyNamed(
 const CreateContactModal = lazyNamed(
   () => import('@app/features/crm/crm-create'),
   'CreateContactModal'
+);
+const SelectionOffer = lazyNamed(
+  () => import('@app/features/universal-input/selection-offer'),
+  'SelectionOffer'
 );
 
 /** True from the first time `opened` is, so a dialog loads on first open and can animate closed. */
@@ -258,6 +263,7 @@ export function AppChrome(props: ParentProps) {
   const contactDialogUsed = hasOpened(
     () => contactCreation.target() !== undefined
   );
+  const selectionOfferEnabled = useSelectionOfferEnabled();
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -279,6 +285,10 @@ export function AppChrome(props: ParentProps) {
             <Suspense>
               <FavoritesCommands />
               <CommandMenu />
+              {/* Touch devices keep the platform's own selection toolbar. */}
+              <Show when={selectionOfferEnabled()}>
+                <SelectionOffer />
+              </Show>
             </Suspense>
           </Show>
           <Suspense>

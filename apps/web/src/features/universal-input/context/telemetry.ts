@@ -1,6 +1,8 @@
 import type { InputFailure } from '../core/failure';
 import type { Field, Intent } from '../core/input';
 
+/** Where a draft was composed, recorded on every span the draft produces. */
+export type InputSurface = 'command-menu' | 'mobile-search' | 'selection';
 export type InputPhase = 'classify' | 'extract';
 export type InputOperation = 'submit' | 'save-email-draft';
 export type QueueObservation =

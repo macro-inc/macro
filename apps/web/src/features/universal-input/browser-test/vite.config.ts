@@ -55,6 +55,16 @@ export default defineConfig({
         )
           return `${directory}/search-app-fixture.ts`;
 
+        if (
+          importer?.endsWith('/universal-input/selection-offer.tsx') &&
+          source === './inference'
+        )
+          return `${directory}/selection-inference-fixture.ts`;
+        if (
+          importer?.endsWith('/views/selection-draft.tsx') &&
+          source === '../universal-input'
+        )
+          return `${directory}/selection-input-fixture.tsx`;
         if (source === '@app/lib/analytics/posthog')
           return `${directory}/feature-flags-fixture.ts`;
         if (

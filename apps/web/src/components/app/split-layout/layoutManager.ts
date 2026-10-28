@@ -177,6 +177,7 @@ export type ReferredFrom =
   | 'quick-access'
   | 'file-upload'
   | 'fork'
+  | 'selection'
   | null;
 
 export type ReplaceAllSplitsOptions = {

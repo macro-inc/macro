@@ -248,6 +248,17 @@ the user's newest account for that app from the last fifteen minutes.
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
 - Normalize thread-only conversation URLs in `channelsSearch` before Home, Chat, or touch views derive their message target.
 - Mobile dock search owns transient category/mode state in `features/command/mobile`; reuse the shared entity source and explicit full-text adapter rather than overlaying the dock query on view tabs or saved facets. See `docs/agent-guide/search.md` at the repository root.
+- A surface offers Universal Input on selected text by marking the element that
+  holds its rendered text `data-selection-offer="<surface>"`; the single
+  `SelectionOffer` host in `AppChrome` owns the listener, the classification,
+  and the floating card. Do not add a second selection listener or a per-surface
+  card, and do not mark chrome, inputs, or grids. Hosts reach the draft through
+  `InputSession`, so the card reuses the Command K composer and destinations
+  rather than a parallel form. Its backend-free browser regression is
+  `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts --project=chromium selection.browser.e2e.ts`.
+  Selection text comes from `Selection.toString()`, which the app's default
+  `user-select: none` empties for text outside the selectable exceptions in
+  `index.css`.
 - Include known Macro users in typed All/People name searches without requiring a DM or CRM contact; resolve a matching person to their existing one-to-one DM while preserving name/email matching.
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.

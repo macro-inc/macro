@@ -63,6 +63,7 @@ export function Content(props: ContentProps) {
     <Show when={content()}>
       <div
         data-message-content
+        data-selection-offer="channel-message"
         class={cn(
           'whitespace-pre-wrap wrap-break-word max-w-full',
           bigEmoji() ? 'text-4xl' : 'text-base',
