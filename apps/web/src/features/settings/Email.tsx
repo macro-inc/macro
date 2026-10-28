@@ -22,10 +22,10 @@ import {
 } from '@core/email-link/consent';
 import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
-import GmailIcon from '@icon/mcp-gmail.svg';
+import GmailIcon from '@icon/gmail-color.svg';
+import OutlookIcon from '@icon/outlook-color.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
@@ -271,7 +271,7 @@ export function EmailCard(props: { class?: string } = {}) {
           </SettingsSurface>
           <SettingsSurface>
             <IntegrationRow
-              icon={<EnvelopeIcon />}
+              icon={<OutlookIcon />}
               title="Connect an Outlook account"
               description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
             >
@@ -447,7 +447,7 @@ function ProviderIcon(props: { provider: EmailLink['provider'] }) {
       class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6"
     >
       <Show when={props.provider === 'OUTLOOK'} fallback={<GmailIcon />}>
-        <EnvelopeIcon />
+        <OutlookIcon />
       </Show>
     </span>
   );

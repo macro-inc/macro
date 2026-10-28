@@ -4,8 +4,8 @@ import {
   pendingConnectApp,
 } from '@core/pipedream/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ClaudeIcon from '@icon/claude-color.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
-import ClaudeIcon from '@icon/wide-claude.svg';
 import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import {

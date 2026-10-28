@@ -1,4 +1,4 @@
-import SlackIcon from '@icon/mcp-slack.svg';
+import SlackIcon from '@icon/slack-color.svg';
 import { Button } from '@ui';
 import type { JSX } from 'solid-js';
 import { IntegrationRow, SettingsSurface } from '../../settings/primitives';

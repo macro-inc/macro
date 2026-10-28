@@ -11,7 +11,7 @@ import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { requestConnectApp } from '@core/pipedream/pendingConnect';
 import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
-import SlackIcon from '@icon/mcp-slack.svg';
+import SlackIcon from '@icon/slack-color.svg';
 import {
   invalidateListChannels,
   useListChannelsQuery,

@@ -1,8 +1,8 @@
 import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
+import LinearIcon from '@icon/linear-color.svg';
 import GithubIcon from '@icon/mcp-github.svg';
-import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
-import SlackIcon from '@icon/mcp-slack.svg';
+import SlackIcon from '@icon/slack-color.svg';
 import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ProviderId } from './model';
