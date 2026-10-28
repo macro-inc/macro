@@ -188,10 +188,15 @@ pub(super) async fn forwarded_copy(
             -- Google's own flag, kept in the payload it sent. Every source
             -- must be a Google private copy: an Outlook copy, or a source
             -- stored before Macro kept Google's whole payload, is no evidence.
+            -- A source without the key counts as false, since bool_and skips
+            -- NULLs.
             COALESCE(
                 bool_and(
-                    source.source_kind = 'google'
-                    AND source.raw_payload->>'privateCopy' = 'true'
+                    COALESCE(
+                        source.source_kind = 'google'
+                            AND source.raw_payload->>'privateCopy' = 'true',
+                        false
+                    )
                 ),
                 false
             ) AS "google_private_copy!",

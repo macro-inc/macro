@@ -220,3 +220,76 @@ async fn forwarded_copy_reads_googles_private_copy_flag_and_the_conference(pool:
         None
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_copy_is_private_only_when_every_calendar_holding_it_says_so(pool: PgPool) {
+    let owner_id = "macro|forward-two-calendars@example.com";
+    let link = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_id) = provider_ids(&repo, link).await;
+    let team_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "team".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("writer".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let primary = with_raw_payload(
+        timed_upsert(
+            owner_id,
+            link,
+            (account_id, primary_id),
+            "040000008200E000-two-calendars",
+            "Outside",
+            1,
+        ),
+        serde_json::json!({ "privateCopy": true }),
+    );
+    let event_id = primary.event.id;
+    repo.upsert_event_fixture(primary).await.unwrap();
+    let mut team = with_raw_payload(
+        timed_upsert(
+            owner_id,
+            link,
+            (account_id, team_id),
+            "040000008200E000-two-calendars",
+            "Outside",
+            1,
+        ),
+        serde_json::json!({}),
+    );
+    team.event.id = event_id;
+    if let CalendarEventSource::Google(source) = &mut team.source {
+        source.provider_event_id = "team-copy".to_string();
+    }
+    repo.upsert_event_fixture(team).await.unwrap();
+    let sources = sqlx::query_scalar!(
+        "SELECT count(*) FROM calendar_event_sources WHERE event_id = $1",
+        event_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(sources, Some(2), "both calendars hold the one entity");
+
+    let forwarded = repo
+        .forwarded_copy(owner_id, event_id)
+        .await
+        .unwrap()
+        .expect("the owner holds the copy");
+
+    assert!(
+        !forwarded.google_private_copy,
+        "a calendar whose source lacks the flag is no evidence"
+    );
+}
