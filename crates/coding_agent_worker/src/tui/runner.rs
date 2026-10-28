@@ -11,6 +11,7 @@ use super::platform::open_pending_browser;
 use super::quickstart::{Quickstart, QuickstartAction};
 use super::ui;
 use crate::config::Config;
+use crate::update::{self, Installed, StagedUpdate};
 
 #[cfg(test)]
 mod test;
@@ -18,8 +19,9 @@ mod test;
 /// Spinner cadence and input latency budget.
 const TICK: Duration = Duration::from_millis(120);
 
-/// Run the control panel - and the daemon inside it - until the user quits.
-pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
+/// Run the control panel - and the daemon inside it - until the user quits,
+/// or until a self-update is installed and the caller should relaunch.
+pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<Option<Installed>> {
     let (input_tx, mut input_rx) = tokio::sync::mpsc::unbounded_channel();
     // A dedicated thread owns the blocking crossterm read; the loop below
     // stays async and free to poll the network.
@@ -67,11 +69,11 @@ pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
     };
     if needs_quickstart && !quickstarted {
         ratatui::restore();
-        return Ok(());
+        return Ok(None);
     }
     if !config_path.exists() {
         ratatui::restore();
-        return Ok(());
+        return Ok(None);
     }
     let mut app = match App::load(config_path, logs) {
         Ok(app) => app,
@@ -178,8 +180,10 @@ async fn run_loop(
     app: &mut App,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
-) -> rootcause::Result<()> {
+) -> rootcause::Result<Option<Installed>> {
     let mut tick = tokio::time::interval(TICK);
+    let mut poller = update::start_poller();
+    let mut staged: Option<StagedUpdate> = None;
     // Paired already? Start serving before the first frame.
     if app.paired() {
         app.restart_daemon().await;
@@ -200,7 +204,7 @@ async fn run_loop(
                 match event {
                     Some(TermEvent::Key(key)) => app.on_key(key).await,
                     Some(_) => {}
-                    None => return Ok(()),
+                    None => return Ok(None),
                 }
                 apply_pending_browser(app);
             }
@@ -211,12 +215,40 @@ async fn run_loop(
                 if matches!(app.mode, Mode::Normal) {
                     app.maybe_refresh().await;
                 }
+                if let Some(update) = poller.as_mut().and_then(|poller| poller.staged.try_recv().ok()) {
+                    app.ok(format!("macrod {} is ready; restarting once no turn is running", update.tag()));
+                    poller = None;
+                    staged = Some(update);
+                }
+                if let Some(installed) = install_when_idle(app, &mut staged) {
+                    app.stop_daemon().await;
+                    return Ok(Some(installed));
+                }
             }
         }
 
         if app.quit {
             app.stop_daemon().await;
-            return Ok(());
+            return Ok(None);
+        }
+    }
+}
+
+/// Swap in a staged update once nothing would be cut short: no agent turn
+/// running and no edit, pairing, or install open in the panel.
+fn install_when_idle(app: &mut App, staged: &mut Option<StagedUpdate>) -> Option<Installed> {
+    let idle = matches!(app.mode, Mode::Normal)
+        && app.daemon.as_ref().is_none_or(|daemon| daemon.is_idle());
+    if !idle {
+        return None;
+    }
+    let update = staged.take()?;
+    let tag = update.tag().to_owned();
+    match update.swap() {
+        Ok(installed) => Some(installed),
+        Err(error) => {
+            app.fail(format!("Could not install macrod {tag}: {error}"));
+            None
         }
     }
 }

@@ -29,6 +29,8 @@ mod self_knowledge;
 mod service;
 mod trigger;
 mod tui;
+mod turns;
+mod update;
 
 use clap::Parser;
 use std::process::ExitCode;
@@ -37,7 +39,7 @@ use std::process::ExitCode;
 /// bound agents, live sessions, config editing, pairing, removal, and logs -
 /// one process.
 #[derive(Parser)]
-#[command(name = "macrod", version)]
+#[command(name = "macrod", version = update::VERSION)]
 struct Args {
     /// Internal browser helper, isolated so terminal browsers cannot claim the TUI's stdin.
     #[arg(long, hide = true)]
@@ -234,13 +236,21 @@ async fn main() -> ExitCode {
 
     // The TUI owns the terminal, so its logs go to a ring buffer it renders.
     let logs = tui::LogBuffer::install();
-    match tui::run(config_path, logs).await {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            // The ring buffer dies with the process and the terminal is
-            // restored by now, so the exit error goes straight to stderr.
-            eprintln!("macrod exited with an error: {error:?}");
-            ExitCode::FAILURE
+    loop {
+        match tui::run(config_path, logs.clone()).await {
+            Ok(None) => return ExitCode::SUCCESS,
+            Ok(Some(installed)) => {
+                // Only returns when the new binary could not be started; the
+                // panel comes back up and keeps serving.
+                let error = installed.relaunch();
+                tracing::error!(error = ?error, "could not restart into the updated macrod");
+            }
+            Err(error) => {
+                // The ring buffer dies with the process and the terminal is
+                // restored by now, so the exit error goes straight to stderr.
+                eprintln!("macrod exited with an error: {error:?}");
+                return ExitCode::FAILURE;
+            }
         }
     }
 }
