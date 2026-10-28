@@ -35,7 +35,7 @@ pub(super) async fn get_filtered_entity_notifications(
         .keys()
         .map(|entity| entity.entity_type.as_ref().to_owned())
         .collect();
-    let limit = query.limit.map(i64::from);
+    let limit = i64::from(query.limit);
     let rows = sqlx::query!(
         r#"
         WITH requested AS (
@@ -89,10 +89,14 @@ pub(super) async fn get_filtered_entity_notifications(
                 SELECT n.id FROM notification n
                 WHERE requested.entity_type = 'channel_message'
                   AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = requested.entity_id
-            ) candidates
-            JOIN notification n ON n.id = candidates.id
-            JOIN user_notification un ON un.notification_id = n.id
-            WHERE un.user_id = $1
+            ) entity_notifications
+            -- Preserve this join order: starting from user_notification rescans the
+            -- viewer's full history once per entity before applying the limit.
+            CROSS JOIN user_notification un
+            CROSS JOIN notification n
+            WHERE un.notification_id = entity_notifications.id
+              AND un.user_id = $1
+              AND n.id = un.notification_id
               AND un.deleted_at IS NULL
               AND un.state = ANY($4::notification_state[])
               AND (cardinality($5::text[]) = 0 OR n.notification_event_type = ANY($5))

@@ -3,7 +3,7 @@
 use super::NotificationState;
 
 /// Selection applied independently to each entity before limiting its results.
-/// Defaults preserve the historical active-notification edge.
+/// Defaults return the 20 newest active notifications per entity.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EntityNotificationQuery {
     /// Exact lifecycle states to include; an empty list matches nothing.
@@ -18,8 +18,8 @@ pub struct EntityNotificationQuery {
     /// duplicate sends/replies represented by mentions stay in the feed. Other
     /// entity edges are unchanged. Applied before the per-entity limit.
     pub channel_feed_only: bool,
-    /// Maximum records per entity, newest first. None preserves the full edge.
-    pub limit: Option<u32>,
+    /// Maximum records per entity, newest first.
+    pub limit: u32,
 }
 
 impl Default for EntityNotificationQuery {
@@ -29,7 +29,7 @@ impl Default for EntityNotificationQuery {
             event_types: Vec::new(),
             top_level_messages_only: false,
             channel_feed_only: false,
-            limit: None,
+            limit: 20,
         }
     }
 }
@@ -37,7 +37,7 @@ impl Default for EntityNotificationQuery {
 impl EntityNotificationQuery {
     /// Validate bounded selections before accessing persistence.
     pub fn validate(&self) -> Result<(), rootcause::Report> {
-        if self.limit.is_some_and(|limit| !(1..=500).contains(&limit)) {
+        if !(1..=500).contains(&self.limit) {
             rootcause::bail!("notification edge limit must be between 1 and 500");
         }
         Ok(())

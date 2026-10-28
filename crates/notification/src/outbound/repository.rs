@@ -44,25 +44,6 @@ type UserNotificationListRow = (
     Option<String>,
 );
 
-#[derive(sqlx::FromRow)]
-struct EntityNotificationListRow {
-    owner_id: String,
-    notification_id: Uuid,
-    event_item_id: String,
-    event_item_type: String,
-    secondary_event_item_id: Option<String>,
-    secondary_event_item_type: Option<String>,
-    sent: bool,
-    state: NotificationState,
-    created_at: DateTime<Utc>,
-    viewed_at: Option<DateTime<Utc>>,
-    updated_at: DateTime<Utc>,
-    deleted_at: Option<DateTime<Utc>>,
-    notification_metadata: serde_json::Value,
-    notification_event_type: String,
-    sender_id: Option<String>,
-}
-
 struct UpdatedUserNotificationRow {
     owner_id: String,
     notification_id: Uuid,
@@ -292,46 +273,6 @@ fn push_entities_filter<'a>(
         builder.push(")");
     }
     builder.push(")");
-}
-
-fn message_ref_matches_row(
-    message_id: &str,
-    secondary_event_item_id: Option<&str>,
-    secondary_event_item_type: Option<&str>,
-    metadata: &serde_json::Value,
-) -> bool {
-    let directly_targets_message = metadata
-        .get("messageId")
-        .or_else(|| metadata.get("message_id"))
-        .and_then(|value| value.as_str())
-        .is_some_and(|stored_message_id| stored_message_id == message_id);
-    let targets_message_as_thread = secondary_event_item_type == Some("channel_message")
-        && secondary_event_item_id == Some(message_id);
-
-    directly_targets_message || targets_message_as_thread
-}
-
-fn notification_entity_matches_row(
-    entity: &Entity<'_>,
-    event_item_id: &str,
-    event_item_type: &str,
-    secondary_event_item_id: Option<&str>,
-    secondary_event_item_type: Option<&str>,
-    metadata: &serde_json::Value,
-) -> bool {
-    let directly_targets_entity = event_item_type == entity.entity_type.as_ref()
-        && event_item_id == entity.entity_id.as_ref();
-    let targets_secondary_entity = secondary_event_item_type == Some(entity.entity_type.as_ref())
-        && secondary_event_item_id == Some(entity.entity_id.as_ref());
-    let targets_message = entity.entity_type == EntityType::ChannelMessage
-        && message_ref_matches_row(
-            entity.entity_id.as_ref(),
-            secondary_event_item_id,
-            secondary_event_item_type,
-            metadata,
-        );
-
-    directly_targets_entity || targets_secondary_entity || targets_message
 }
 
 fn push_cursor_filter(
@@ -1285,144 +1226,10 @@ impl NotificationDbOps for PgPool {
         entities: Vec<Entity<'static>>,
         query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>, Report> {
-        if query != Default::default() {
-            return super::entity_notifications::get_filtered_entity_notifications(
-                self, user_id, entities, query,
-            )
-            .await;
-        }
-        let mut seen_entities = HashSet::new();
-        let entities = entities
-            .into_iter()
-            .filter(|entity| seen_entities.insert(entity.clone()))
-            .collect::<Vec<_>>();
-
-        let mut result = entities
-            .iter()
-            .cloned()
-            .map(|entity| (entity, Vec::new()))
-            .collect::<HashMap<_, _>>();
-
-        if entities.is_empty() {
-            return Ok(result);
-        }
-
-        let filters = NotificationListFilters {
-            states: NotificationState::ACTIVE.to_vec(),
-            include_types: Vec::new(),
-            entities: entities.clone(),
-        };
-
-        let mut builder = QueryBuilder::new(
-            r#"
-            SELECT
-                un.user_id as owner_id,
-                un.notification_id,
-                n.event_item_id,
-                n.event_item_type,
-                n.secondary_event_item_id,
-                n.secondary_event_item_type,
-                un.sent,
-                un.state,
-                un.created_at::timestamptz as created_at,
-                un.seen_at::timestamptz as viewed_at,
-                un.created_at::timestamptz as updated_at,
-                un.deleted_at::timestamptz as deleted_at,
-                n.metadata as notification_metadata,
-                n.notification_event_type as notification_event_type,
-                n.sender_id as sender_id
-            FROM user_notification un
-            JOIN notification n ON n.id = un.notification_id
-            WHERE un.user_id = "#,
-        );
-        builder.push_bind(user_id.as_ref());
-        push_notification_status_filters(&mut builder, &filters);
-        push_entities_filter(&mut builder, &entities);
-        builder.push(" ORDER BY un.created_at DESC, un.notification_id DESC");
-
-        let rows = builder
-            .build_query_as::<EntityNotificationListRow>()
-            .fetch_all(self)
-            .await?;
-
-        for row in rows {
-            let EntityNotificationListRow {
-                owner_id,
-                notification_id,
-                event_item_id,
-                event_item_type,
-                secondary_event_item_id,
-                secondary_event_item_type,
-                sent,
-                state,
-                created_at,
-                viewed_at,
-                updated_at,
-                deleted_at,
-                notification_metadata,
-                notification_event_type,
-                sender_id,
-            } = row;
-
-            let entity = match EntityType::from_str(&event_item_type) {
-                Ok(entity_type) => entity_type.with_entity_string(event_item_id.clone()),
-                Err(e) => {
-                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
-                    continue;
-                }
-            };
-            let sender_id = match sender_id
-                .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
-                .transpose()
-            {
-                Ok(sender_id) => sender_id,
-                Err(e) => {
-                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
-                    continue;
-                }
-            };
-            let owner_id = match MacroUserIdStr::parse_from_str(&owner_id).map(CowLike::into_owned)
-            {
-                Ok(owner_id) => owner_id,
-                Err(e) => {
-                    tracing::debug!(?notification_id, error = ?e, "skipping invalid notification");
-                    continue;
-                }
-            };
-
-            let notification = UserNotificationRow {
-                owner_id,
-                notification_id,
-                notification_event_type: notification_event_type.clone(),
-                entity,
-                sent,
-                state,
-                created_at,
-                viewed_at,
-                updated_at,
-                deleted_at,
-                notification_metadata: notification_metadata.clone(),
-                sender_id,
-            };
-
-            for requested_entity in &entities {
-                if notification_entity_matches_row(
-                    requested_entity,
-                    &event_item_id,
-                    &event_item_type,
-                    secondary_event_item_id.as_deref(),
-                    secondary_event_item_type.as_deref(),
-                    &notification_metadata,
-                ) {
-                    result
-                        .entry(requested_entity.clone())
-                        .or_default()
-                        .push(notification.clone());
-                }
-            }
-        }
-
-        Ok(result)
+        super::entity_notifications::get_filtered_entity_notifications(
+            self, user_id, entities, query,
+        )
+        .await
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(

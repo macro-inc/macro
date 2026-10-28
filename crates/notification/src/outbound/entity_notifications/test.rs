@@ -46,7 +46,7 @@ async fn insert<T: Notification + Serialize + Send + Sync>(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn filters_before_limit_per_entity_and_preserves_full_reads(pool: PgPool) {
+async fn filters_before_limit_per_entity_and_bounds_default_reads(pool: PgPool) {
     let viewer = MacroUserIdStr::try_from_email("viewer@test.com").unwrap();
     let other = MacroUserIdStr::try_from_email("other@test.com").unwrap();
     let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
@@ -136,7 +136,7 @@ async fn filters_before_limit_per_entity_and_preserves_full_reads(pool: PgPool) 
     let query = EntityNotificationQuery {
         states: vec![NotificationState::Unseen],
         event_types: vec![Message::TYPE_NAME.into()],
-        limit: Some(1),
+        limit: 1,
         ..Default::default()
     };
     let entities = vec![
@@ -158,15 +158,14 @@ async fn filters_before_limit_per_entity_and_preserves_full_reads(pool: PgPool) 
         result[&thread][0].entity, channel,
         "secondary lookup preserves primary identity"
     );
-    let full = pool
+    for _ in 0..20 {
+        insert(&pool, &viewer, channel.clone(), None, Call).await;
+    }
+    let defaulted = pool
         .get_entity_notifications_batch(viewer.clone(), vec![channel.clone()], Default::default())
         .await
         .unwrap();
-    assert_eq!(
-        full[&channel].len(),
-        4,
-        "two unseen messages, one seen message, one call"
-    );
+    assert_eq!(defaulted[&channel].len(), 20);
     pool.mark_notifications_seen(&viewer, &[newest])
         .await
         .unwrap();
@@ -283,7 +282,7 @@ async fn top_level_filter_finds_older_mentions_before_limiting(pool: PgPool) {
     let query = EntityNotificationQuery {
         states: vec![NotificationState::Unseen],
         top_level_messages_only: true,
-        limit: Some(1),
+        limit: 1,
         ..Default::default()
     };
     let result = get_filtered_entity_notifications(
@@ -409,7 +408,7 @@ async fn channel_feed_scope_excludes_thread_roots_before_the_limit(pool: PgPool)
     let query = EntityNotificationQuery {
         states: vec![NotificationState::Unseen],
         channel_feed_only: true,
-        limit: Some(1),
+        limit: 1,
         ..Default::default()
     };
     let read = || {
@@ -485,7 +484,7 @@ async fn channel_feed_scoping_is_viewer_and_channel_local_and_ignores_deleted_re
         EntityNotificationQuery {
             states: vec![NotificationState::Unseen],
             channel_feed_only: true,
-            limit: Some(1),
+            limit: 1,
             ..Default::default()
         },
     )
@@ -552,7 +551,7 @@ async fn channel_feed_preserves_mention_duplicates_and_does_not_scope_thread_edg
     let query = EntityNotificationQuery {
         states: vec![NotificationState::Unseen],
         channel_feed_only: true,
-        limit: Some(1),
+        limit: 1,
         ..Default::default()
     };
     let rows = get_filtered_entity_notifications(

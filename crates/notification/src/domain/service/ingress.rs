@@ -95,8 +95,8 @@ pub trait NotificationReader: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
 
     /// Get viewer-owned notifications grouped by entity, filtering before each limit.
-    /// Defaults preserve the complete active edge. Metadata is deserialized from
-    /// the event-type-tagged notification representation.
+    /// Defaults return the 20 newest active notifications per entity. Metadata is
+    /// deserialized from the event-type-tagged notification representation.
     fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,

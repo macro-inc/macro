@@ -64,7 +64,7 @@ impl SoupNotificationEdgeReader for NoOpSoupNotificationEdgeReader {
     }
 }
 
-/// An entity plus its complete selection. Limited and full reads must never collide.
+/// An entity plus its complete selection. Distinct filters and limits must never collide.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EntityNotificationsKey {
     /// Canonical entity being read.

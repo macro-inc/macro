@@ -33,10 +33,11 @@ impl GraphqlNotificationFilter {
         query.event_types = self.event_types.unwrap_or_default();
         query.top_level_messages_only = self.top_level_messages_only.unwrap_or_default();
         query.channel_feed_only = self.channel_feed_only.unwrap_or_default();
-        query.limit = limit
-            .map(u32::try_from)
-            .transpose()
-            .map_err(|_| async_graphql::Error::new("notification edge limit must be positive"))?;
+        if let Some(limit) = limit {
+            query.limit = u32::try_from(limit).map_err(|_| {
+                async_graphql::Error::new("notification edge limit must be positive")
+            })?;
+        }
         query
             .validate()
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
