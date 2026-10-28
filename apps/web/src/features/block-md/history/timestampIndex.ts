@@ -1,4 +1,7 @@
-import { serializedEditorStateToMarkdown } from '@macro-inc/lexical-core';
+import {
+  buildWhoMap,
+  serializedEditorStateToMarkdown,
+} from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
 import type { SerializedEditorState } from 'lexical';
@@ -52,12 +55,12 @@ export function buildTimestampIndex(doc: LoroDoc) {
   };
 
   const versionOf = (prefixLength: number) =>
-    doc.frontiersToVV(frontiersOfPrefix(changes, prefixLength)).toJSON();
+    doc.frontiersToVV(frontiersOfPrefix(changes, prefixLength));
 
   // Moves `replay` forward to `prefixLength`, or rebuilds it when the target is
   // behind it. Returns the doc now at that version.
   const advance = (replay: LoroDoc, prefixLength: number) => {
-    const target = versionOf(prefixLength);
+    const target = versionOf(prefixLength).toJSON();
     let current = replay.oplogVersion().toJSON();
     let next = replay;
     for (const [peer, counter] of current) {
@@ -120,13 +123,20 @@ export function buildTimestampIndex(doc: LoroDoc) {
     },
 
     /**
-     * A standalone doc holding exactly the history up to `targetMs`, for
-     * reading op history as of that time.
+     * Maps each block edited after `fromMs` and up to `toMs` to the user who
+     * last edited it in that range.
      */
-    docAt(targetMs: number): LoroDoc | null {
-      const prefixLength = prefixLengthAt(targetMs);
-      if (prefixLength === 0) return null;
-      return advance(new LoroDoc(), prefixLength).doc;
+    blockEditorsBetween(
+      fromMs: number,
+      toMs: number,
+      peerToUser: (peer: string) => string
+    ): Map<string, string> {
+      scrubReplay = advance(scrubReplay, prefixLengthAt(toMs)).doc;
+      return buildWhoMap(
+        scrubReplay,
+        peerToUser,
+        versionOf(prefixLengthAt(fromMs))
+      );
     },
 
     versionIdAt(targetMs: number): HistoryVersionId | null {

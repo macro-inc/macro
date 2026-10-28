@@ -1,4 +1,10 @@
-import type { Change, ContainerID, LoroDoc, LoroMap } from 'loro-crdt';
+import type {
+  Change,
+  ContainerID,
+  LoroDoc,
+  LoroMap,
+  VersionVector,
+} from 'loro-crdt';
 
 // Duck-typed so the editor bundle need not load loro (and its wasm) at boot.
 function isLoroMap(c: unknown): c is LoroMap {
@@ -52,17 +58,23 @@ function blockIdOfContainer(doc: LoroDoc, cid: ContainerID): string | null {
 
 /**
  * Map each node `$.id` to the user who last edited it, by walking the doc's op
- * history (oldest -> newest, last write wins).
+ * history (oldest -> newest, last write wins). With `since`, only ops after
+ * that version are walked, so only nodes edited after it are mapped.
  */
 export function buildWhoMap(
   doc: LoroDoc,
-  peerToUser: (peer: string) => string = (peer) => peer
+  peerToUser: (peer: string) => string = (peer) => peer,
+  since?: VersionVector
 ): Map<string, string> {
   const whoMap = new Map<string, string>();
 
   const flat: Change[] = [];
   for (const changes of doc.getAllChanges().values()) {
-    flat.push(...changes);
+    for (const change of changes) {
+      const counter = Math.max(change.counter, since?.get(change.peer) ?? 0);
+      const length = change.counter + change.length - counter;
+      if (length > 0) flat.push({ ...change, counter, length });
+    }
   }
   // Order by lamport (global causal clock) so "last write wins" is correct across
   // peers — timestamps can tie/skew and counter is per-peer. Tie-break by peer for

@@ -2,11 +2,7 @@ import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { ThrownResultError } from '@core/util/result';
 import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
-import {
-  buildDiffState,
-  buildWhoMap,
-  diffStates,
-} from '@macro-inc/lexical-core';
+import { buildDiffState, diffStates } from '@macro-inc/lexical-core';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
 import { syncServiceClient } from '@service-sync/client';
@@ -226,7 +222,7 @@ export function HistoryProvider(props: {
 
   // Diff a session: the state just before its first edit vs the state at its end,
   // paired by node id. Each changed block is attributed to whoever last edited it
-  // (via buildWhoMap over the loro op history), falling back to the session author.
+  // during the session (via the op history), falling back to the session author.
   const diffPreviewState = createMemo<SerializedEditorState | null>(() => {
     const session = diffSession();
     if (!session) return null;
@@ -240,12 +236,16 @@ export function HistoryProvider(props: {
     if (!before.root.children?.length || !after.root.children?.length)
       return null;
     try {
-      // Attribute each block to its last editor as of the session's end.
-      const doc = historyIndex()?.docAt(session.endMs);
+      // A block that changed in the session was last edited within it.
+      const index = historyIndex();
       const peers = loadedPeers();
       const whoMap =
-        doc && peers
-          ? buildWhoMap(doc, (peer) => resolvePeerUser(peers, peer))
+        index && peers
+          ? index.blockEditorsBetween(
+              session.startMs - 1,
+              session.endMs,
+              (peer) => resolvePeerUser(peers, peer)
+            )
           : new Map<string, string>();
       const diffs = diffStates(
         before,
