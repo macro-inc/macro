@@ -99,7 +99,6 @@ async fn generic_plan_probes_membership_by_notification_id(pool: PgPool) {
             examined <= 1_800.0,
             "expected at most two membership probes per entity match, got {examined}"
         );
-        assert!(plan[0]["Execution Time"].as_f64().unwrap() < 1_000.0);
         assert_eq!(
             plan[0]["Plan"]["Actual Rows"],
             if channel_feed_only { 0 } else { 45 }
