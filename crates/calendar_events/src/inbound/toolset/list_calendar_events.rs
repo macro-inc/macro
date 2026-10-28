@@ -4,16 +4,25 @@ use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
     ToolResult,
 };
+use std::collections::{HashMap, HashSet};
+
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-use super::{CalendarToolContext, ToolEventAttendee, description_preview, time_fields};
+use super::{
+    CalendarLabels, CalendarToolContext, ToolEventAttendee, ToolEventRole, description_preview,
+    time_fields,
+};
 use crate::domain::{
-    models::{CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceRange},
-    ports::{CalendarMutationService, CalendarOccurrenceService},
+    models::{
+        CalendarEvent, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
+        OccurrenceRange, ViewerCapabilities,
+    },
+    ports::{CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider},
     service::CalendarValidationError,
 };
 
@@ -71,8 +80,21 @@ pub struct CalendarEventListItem {
     pub conference_url: Option<String>,
     /// Whether the user's calendar prohibits modifying this event.
     pub is_read_only: bool,
+    /// What the user may do with this event under the organizer's guest
+    /// permissions: change its details, add or remove guests, change those
+    /// permissions, or answer the invitation.
+    pub viewer_can: ViewerCapabilities,
     /// Calendar the event belongs to, when known.
     pub calendar_id: Option<uuid::Uuid>,
+    /// Display name of that calendar, when known.
+    pub calendar_name: Option<String>,
+    /// Connected inbox address holding this copy of the event. A meeting on
+    /// several of the user's inboxes is listed once per inbox, each with its
+    /// own `eventId`.
+    pub inbox: Option<String>,
+    /// Whether the user organizes this event or is a guest on it, through
+    /// `inbox`; absent when they are neither.
+    pub my_role: Option<ToolEventRole>,
     /// Every calendar carrying a copy of this event when there is more than
     /// one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
     /// or DeleteCalendarEvent to address that copy instead of the primary.
@@ -86,6 +108,10 @@ pub struct CalendarEventListItem {
 pub struct CalendarEventCopyItem {
     /// Calendar holding this copy.
     pub calendar_id: uuid::Uuid,
+    /// Display name of that calendar, when known.
+    pub calendar_name: Option<String>,
+    /// Connected inbox address the calendar belongs to, when known.
+    pub inbox: Option<String>,
     /// The copy's own title.
     pub title: String,
     /// Whether that calendar prohibits modifying the copy.
@@ -124,7 +150,32 @@ tomorrow?\"), to find an event the user wants changed or removed, and to check f
 before creating an event. Keep the window as narrow as the request allows — a day or a week \
 — since wide windows truncate at 200 occurrences. The window must be at most 370 days and \
 within one year past to two years future. If `syncStatus` is `syncing`, tell the user \
-results may still be incomplete."
+results may still be incomplete.\n\
+\n\
+Each entry names the calendar (`calendarName`) and connected inbox (`inbox`) holding that \
+copy of the event, and `myRole` says whether the user organizes it or is a guest there. A \
+meeting on several of the user's inboxes appears once per inbox, each with its own \
+`eventId`, and what the user may do can differ between them. When asking which one the user \
+means, describe each by its inbox and role, never by id; when the user names an inbox, act \
+on the entry whose `inbox` matches.\n\
+\n\
+When the user does not name an inbox, choose the copy by what the change does. Reminders \
+belong to one copy only, so set them on one copy without asking and say which inbox you used. \
+Answer an invitation on the copy where the user is a guest; when they are a guest through \
+more than one inbox, ask which inbox answers, since each answers only for itself. Any other \
+change reaches the meeting differently from each copy: the title, time, description, \
+location, recurrence or conference, adding or removing guests, guest permissions, and \
+deleting. UpdateCalendarEvent and DeleteCalendarEvent refuse such a change on a meeting held \
+by several of the user's inboxes until `inbox` names the inbox of the copy being changed, and \
+the refusal lists each copy. If only one copy allows the change (`viewerCan`, or for deleting, \
+`isReadOnly` false), use that copy with its `inbox` and say why (for example, only the copy \
+the user organizes can move the meeting). If more than one can, ask which inbox, saying what \
+the change would do from each, and never choose between the user's inboxes yourself, whatever \
+they look like. Add guests from the copy the user organizes when there is one: \
+it invites them directly, while a guest's copy invites only as far as the organizer allows. \
+Deleting the organizer's copy cancels the meeting for everyone, while deleting a guest's copy \
+takes the meeting off that inbox's calendar and, on Google, also declines the invitation and \
+tells the organizer."
 )]
 pub struct ListCalendarEvents {
     /// Inclusive window start.
@@ -140,17 +191,18 @@ impl ToolAnnotated for ListCalendarEvents {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for ListCalendarEvents
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for ListCalendarEvents
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ListCalendarEventsResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List calendar events");
@@ -184,10 +236,15 @@ where
             let full_page = rows.len() > usize::from(OCCURRENCES_MAX);
             cursor = rows
                 .last()
-                .map(|(_, occurrence)| CalendarOccurrenceCursor::from_occurrence(occurrence));
+                .map(|listing| CalendarOccurrenceCursor::from_occurrence(&listing.occurrence));
             occurrences.extend(
                 rows.into_iter()
-                    .filter(|(_, occurrence)| !occurrence.is_cancelled),
+                    .filter(|listing| !listing.occurrence.is_cancelled)
+                    .map(|listing| {
+                        let link_id = listing.link_id;
+                        let (event, occurrence) = listing.into_occurrence_event();
+                        (event, occurrence, link_id)
+                    }),
             );
             if !full_page {
                 exhausted = true;
@@ -209,9 +266,11 @@ where
                 internal_error: anyhow::Error::from_boxed(error.into_boxed_error()),
             })?;
 
+        let multi_inbox_meetings = multi_inbox_meetings(&occurrences);
+        let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
         let events: Vec<CalendarEventListItem> = occurrences
             .into_iter()
-            .map(|(event, occurrence)| {
+            .map(|(event, occurrence, link_id)| {
                 let (start, end, is_all_day, time_zone) = time_fields(&occurrence.time);
                 let is_recurring = !event.recurrence_lines.is_empty();
                 CalendarEventListItem {
@@ -248,13 +307,19 @@ where
                     organizer_email: event.organizer_email.clone(),
                     conference_url: event.conference_url.clone(),
                     is_read_only: event.is_read_only,
+                    viewer_can: event.viewer_can,
                     calendar_id: event.calendar_id,
+                    calendar_name: labels.calendar_name(event.calendar_id),
+                    inbox: labels.inbox(event.calendar_id, Some(link_id)),
+                    my_role: ToolEventRole::of(&event),
                     copies: if event.sources.len() > 1 {
                         event
                             .sources
                             .iter()
                             .map(|copy| CalendarEventCopyItem {
                                 calendar_id: copy.calendar_id,
+                                calendar_name: labels.calendar_name(Some(copy.calendar_id)),
+                                inbox: labels.inbox(Some(copy.calendar_id), None),
                                 title: copy.title.clone(),
                                 is_read_only: copy.is_read_only,
                             })
@@ -271,7 +336,7 @@ where
             CalendarSyncStatus::Ready => "ready",
         }
         .to_string();
-        let summary = build_summary(events.len(), truncated, &sync_status);
+        let summary = build_summary(events.len(), truncated, &sync_status, multi_inbox_meetings);
 
         Ok(ListCalendarEventsResponse {
             events,
@@ -313,12 +378,42 @@ fn end_date_bound(end: DateTime<Utc>) -> chrono::NaiveDate {
     }
 }
 
-fn build_summary(count: usize, truncated: bool, sync_status: &str) -> String {
+/// How many occurrences in the result are one meeting held by more than one
+/// of the user's inboxes: the same iCalendar UID at the same time under
+/// different event ids.
+fn multi_inbox_meetings(occurrences: &[(CalendarEvent, CalendarOccurrence, Uuid)]) -> usize {
+    let mut copies: HashMap<(&str, &str), HashSet<Uuid>> = HashMap::new();
+    for (event, occurrence, _) in occurrences {
+        copies
+            .entry((event.ical_uid.as_str(), occurrence.occurrence_key.as_str()))
+            .or_default()
+            .insert(event.id);
+    }
+    copies.values().filter(|events| events.len() > 1).count()
+}
+
+fn build_summary(
+    count: usize,
+    truncated: bool,
+    sync_status: &str,
+    multi_inbox_meetings: usize,
+) -> String {
     let mut summary = match count {
         0 => "No calendar events in this window.".to_string(),
         1 => "Found 1 calendar event.".to_string(),
         count => format!("Found {count} calendar events."),
     };
+    match multi_inbox_meetings {
+        0 => {}
+        1 => summary.push_str(
+            " 1 meeting is on more than one of the user's inboxes; tell its entries apart by \
+             `inbox` and `myRole`.",
+        ),
+        meetings => summary.push_str(&format!(
+            " {meetings} meetings are on more than one of the user's inboxes; tell their entries \
+             apart by `inbox` and `myRole`."
+        )),
+    }
     if truncated {
         summary.push_str(" More exist — narrow the window to see the rest.");
     }

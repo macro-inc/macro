@@ -6,17 +6,16 @@ import {
   type CalendarEvent,
   type CalendarPeriodView,
   DEFAULT_CALENDAR_SOURCE,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
 } from '@app/features/calendar/types';
-import {
-  formatLocalDate,
-  parseLocalDate,
-} from '@app/features/calendar/utils/calendar-date';
 import {
   parseRecurrenceConfig,
   parseRecurrenceLines,
   type RecurrenceConfig,
   WEEKDAY_CODES,
 } from '@app/features/calendar/utils/recurrence';
+import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import { TZDateMini } from '@date-fns/tz';
 import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 
@@ -65,6 +64,8 @@ export function buildCalendarToolPreviewEvent(
     isCancelled: false,
     isReadOnly: true,
     attendees: [],
+    guestPolicy: DEFAULT_GUEST_POLICY,
+    viewerCan: NO_VIEWER_CAPABILITIES,
     recurrenceLines: input.recurrenceLines ?? input.values.recurrenceLines,
     calendarId: input.calendar?.id ?? input.values.calendarId,
     eventType: input.values.eventType,

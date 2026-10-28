@@ -1,5 +1,5 @@
 import { invalidateSchedules } from '@app/features/routines/queries/schedules';
-import Clock from '@phosphor-icons/core/regular/clock.svg';
+import Clock from '@icon/system/regular/clock.svg';
 import { createSignal } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -83,6 +83,32 @@ export const updateRoutineHandler = createToolRenderer({
     <RoutineResult
       label={ctx.response ? 'Updated routine' : 'Update routine'}
       summary={ctx.response?.data.name}
+      result={ctx.response?.data}
+      renderContext={ctx.renderContext}
+    />
+  ),
+});
+export const runRoutineHandler = createToolRenderer({
+  name: 'RunRoutine',
+  handleResponse: async () => {
+    await invalidateSchedules();
+  },
+  render: (ctx) => (
+    <RoutineResult
+      label={ctx.response ? 'Started routine' : 'Run routine'}
+      result={ctx.response?.data}
+      renderContext={ctx.renderContext}
+    />
+  ),
+});
+export const deleteRoutineHandler = createToolRenderer({
+  name: 'DeleteRoutine',
+  handleResponse: async () => {
+    await invalidateSchedules();
+  },
+  render: (ctx) => (
+    <RoutineResult
+      label={ctx.response ? 'Deleted routine' : 'Delete routine'}
       result={ctx.response?.data}
       renderContext={ctx.renderContext}
     />

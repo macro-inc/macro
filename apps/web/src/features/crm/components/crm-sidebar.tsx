@@ -1,115 +1,149 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
-import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
-import { TabsInset } from '@core/component/TabsInset';
-import ExportIcon from '@phosphor/download-simple.svg';
-import GearIcon from '@phosphor/gear-six.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
-import StackIcon from '@phosphor/stack.svg';
-import ImportIcon from '@phosphor/upload-simple.svg';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { getIconConfig } from '@core/component/EntityIcon';
+import {
+  enableCrmActivity,
+  enableDatabases,
+} from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import ExportIcon from '@icon/system/regular/download-simple.svg';
+import GearIcon from '@icon/system/regular/gear-six.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import ImportIcon from '@icon/system/regular/upload-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Button, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createSignal, For, Show } from 'solid-js';
-import { CRM_VIEWS } from '../core/navigation';
+import { createSignal, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { CRM_ACTIVITY_TABS, CRM_RECORDS } from '../core/navigation';
 import { COMPANIES_TOUR } from '../tour';
+import { CrmCreateMenu } from './crm-create-menu';
+
+const RECORD_ICONS = {
+  active: BuildingsIcon,
+  people: UsersIcon,
+  tasks: getIconConfig('task').icon,
+  email: getIconConfig('email').icon,
+  notes: getIconConfig('md').icon,
+  calls: getIconConfig('call').icon,
+  databases: getIconConfig('database').icon,
+};
 
 export function CrmSidebar(props: {
+  /** The highlighted record type, list, pipeline, or `settings`. */
   active: string;
-  viewMode: 'board' | 'list';
-  onViewModeChange: (mode: 'board' | 'list') => void;
+  pipelines?: JSX.Element;
+  /** Pinned to the bottom of the scrolling content, above the tools. */
+  promotion?: JSX.Element;
   lists: { id: string; name: string; count: number }[];
-  savedViews: { id: string; name: string }[];
   listsEnabled: boolean;
   listsLoading: boolean;
   listsError: boolean;
   canCreateList: boolean;
   onNavigate: (id: string) => void;
-  onCreate: () => void;
+  onCreateCompany: () => void;
+  onCreateContact: () => void;
+  /** Pipeline creation, omitted while pipelines are unavailable. */
+  pipeline?: { disabled: boolean; onCreate(): void };
   onNewList: () => void;
   onImport: () => void;
   onExport: () => void;
   onSettings: () => void;
-  onCollapse: () => void;
+  /** Omitted in the narrow menu, which already has split navigation. */
+  onCollapse?: () => void;
+  search?: () => JSX.Element;
+  searchLabel?: string;
 }) {
-  const [viewsOpen, setViewsOpen] = createSignal(true);
+  const activityFlag = useFeatureFlag(enableCrmActivity);
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
     <ViewSidebar.Root aria-label="CRM navigation">
-      <SidebarCreateHeader
-        title="Customers"
-        label="New company"
-        onCreate={props.onCreate}
-        actions={
-          <Tooltip label="Collapse CRM sidebar">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              label="Collapse CRM sidebar"
-              onClick={props.onCollapse}
-            >
-              <SidebarIcon class="size-4" />
-            </Button>
-          </Tooltip>
-        }
-      />
-      <ViewSidebar.Content>
-        <div ref={tourTarget(COMPANIES_TOUR.layout)} class="px-1.5">
-          <TabsInset
-            aria-label="Company layout"
-            fullWidth
-            class="h-auto"
-            labelClass="py-1.5"
-            list={[
-              { value: 'board', label: 'Board' },
-              { value: 'list', label: 'List' },
-            ]}
-            value={props.viewMode}
-            onChange={(mode) =>
-              props.onViewModeChange(mode === 'board' ? 'board' : 'list')
+      <header class="flex shrink-0 flex-col">
+        <Show when={!isTouchDevice()}>
+          <ViewSidebar.Header
+            search={props.search}
+            searchLabel={props.searchLabel}
+            collapseControl={
+              <Show when={props.onCollapse}>
+                <Tooltip label="Collapse CRM sidebar">
+                  <Button
+                    aria-label="Collapse CRM sidebar"
+                    tooltip="Collapse CRM sidebar"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={props.onCollapse}
+                  >
+                    <SidebarIcon class="size-4" />
+                  </Button>
+                </Tooltip>
+              </Show>
             }
+          >
+            <div class="flex min-w-0 items-center gap-1">
+              <Show when={props.onCollapse}>
+                <ViewSidebar.CloseButton class="shrink-0" />
+              </Show>
+              <ViewSidebar.Title>Customers</ViewSidebar.Title>
+            </div>
+          </ViewSidebar.Header>
+        </Show>
+        <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
+          <CrmCreateMenu
+            onCreateCompany={props.onCreateCompany}
+            onCreateContact={props.onCreateContact}
+            pipeline={props.pipeline}
           />
-        </div>
-        <CollapsibleSection.Root open={viewsOpen()} onOpenChange={setViewsOpen}>
+        </ViewSidebar.Primary>
+      </header>
+      <ViewSidebar.Content>
+        <CollapsibleSection.Root
+          open={recordsOpen()}
+          onOpenChange={setRecordsOpen}
+        >
           <CollapsibleSection.Trigger>
-            <span>Views</span>
+            <span>Records</span>
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
           <CollapsibleSection.Content>
             <ViewSidebar.Nav
-              aria-label="Company views"
-              ref={tourTarget(COMPANIES_TOUR.views)}
+              aria-label="CRM records"
+              ref={tourTarget(COMPANIES_TOUR.records)}
             >
-              <For each={CRM_VIEWS}>
-                {(view) => (
-                  <Tooltip label={view.description} placement="right">
-                    <ViewSidebar.Item
-                      active={props.active === view.id}
-                      onClick={() => props.onNavigate(view.id)}
-                    >
-                      <ViewSidebar.Icon />
-                      <span class="truncate">{view.label}</span>
-                    </ViewSidebar.Item>
-                  </Tooltip>
-                )}
-              </For>
-              <For each={props.savedViews}>
-                {(view) => (
+              <For
+                each={[
+                  ...CRM_RECORDS,
+                  ...(activityFlag().enabled
+                    ? CRM_ACTIVITY_TABS.filter(
+                        (tab) =>
+                          tab.id !== 'databases' || databasesFlag().enabled
+                      )
+                    : []),
+                ]}
+              >
+                {(record) => (
                   <ViewSidebar.Item
-                    active={props.active === view.id}
-                    title={view.name}
-                    onClick={() => props.onNavigate(view.id)}
+                    active={props.active === record.id}
+                    onClick={() => props.onNavigate(record.id)}
                   >
                     <ViewSidebar.Icon>
-                      <StackIcon class="size-4" />
+                      <Dynamic
+                        component={RECORD_ICONS[record.id]}
+                        class="size-4"
+                      />
                     </ViewSidebar.Icon>
-                    <span class="truncate">{view.name}</span>
+                    <span class="truncate">{record.label}</span>
                   </ViewSidebar.Item>
                 )}
               </For>
             </ViewSidebar.Nav>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
+        {props.pipelines}
         <Show when={props.listsEnabled}>
           <CollapsibleSection.Root
             open={listsOpen()}
@@ -160,6 +194,7 @@ export function CrmSidebar(props: {
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
         </Show>
+        {props.promotion}
       </ViewSidebar.Content>
       <ViewSidebar.Footer>
         <ViewSidebar.Nav aria-label="CRM tools">
@@ -181,7 +216,10 @@ export function CrmSidebar(props: {
             </ViewSidebar.Icon>
             Export
           </ViewSidebar.Item>
-          <ViewSidebar.Item onClick={props.onSettings}>
+          <ViewSidebar.Item
+            active={props.active === 'settings'}
+            onClick={props.onSettings}
+          >
             <ViewSidebar.Icon>
               <GearIcon class="size-4" />
             </ViewSidebar.Icon>

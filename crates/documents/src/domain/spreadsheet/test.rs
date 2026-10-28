@@ -215,6 +215,173 @@ fn worker_json_contract_omits_optional_fields_and_round_trips_response() {
 }
 
 #[test]
+fn dropdown_operations_and_read_validations_match_the_worker_contract() {
+    let operation: SpreadsheetOperation = serde_json::from_value(serde_json::json!({
+        "type": "set_dropdown", "sheetId": "sheet1", "range": "B2:B50",
+        "items": ["Open", "Done"], "rejectInvalid": false
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&operation).unwrap(),
+        serde_json::json!({
+            "type": "set_dropdown", "sheetId": "sheet1", "range": "B2:B50",
+            "items": ["Open", "Done"], "rejectInvalid": false
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(SpreadsheetOperation::ClearValidation {
+            sheet_id: "sheet1".into(),
+            range: "B2".into(),
+        })
+        .unwrap(),
+        serde_json::json!({"type": "clear_validation", "sheetId": "sheet1", "range": "B2"})
+    );
+    let parsed: SpreadsheetResponse = serde_json::from_value(serde_json::json!({
+        "action":"read", "revision":"r", "warnings":[], "sheets":[],
+        "ranges":[{"sheetId":"sheet1","sheetName":"Sheet1","range":"B2","truncated":false,"cells":[],
+            "validations":[{"range":"B2:B50","type":"list","items":["Open","Done"],"dropdown":true,"rejectInvalid":true}]}]
+    }))
+    .unwrap();
+    let SpreadsheetResponse::Read { ranges, .. } = parsed else {
+        panic!("expected a read response");
+    };
+    assert_eq!(ranges[0].validations[0].kind, "list");
+    assert_eq!(
+        ranges[0].validations[0].items.as_deref(),
+        Some(&["Open".to_owned(), "Done".to_owned()][..])
+    );
+    assert!(ranges[0].validations[0].reject_invalid);
+}
+
+#[test]
+fn table_operations_and_summaries_match_the_worker_contract() {
+    let operation: SpreadsheetOperation = serde_json::from_value(serde_json::json!({
+        "type": "create_table", "sheetId": "sheet1", "range": "A1:D20",
+        "name": "Sales", "totalsRow": true,
+        "columnTypes": [{"column": "Status", "type": "dropdown"}, {"column": "Price", "type": "currency"}]
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&operation).unwrap(),
+        serde_json::json!({
+            "type": "create_table", "sheetId": "sheet1", "range": "A1:D20",
+            "name": "Sales", "totalsRow": true,
+            "columnTypes": [{"column": "Status", "type": "dropdown"}, {"column": "Price", "type": "currency"}]
+        })
+    );
+    assert!(
+        serde_json::from_value::<SpreadsheetOperation>(serde_json::json!({
+            "type": "create_table", "sheetId": "sheet1", "range": "A1:D20",
+            "columnTypes": [{"column": "Price", "type": "money"}]
+        }))
+        .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(SpreadsheetOperation::CreateTable {
+            sheet_id: "sheet1".into(),
+            range: "A1:B5".into(),
+            name: None,
+            totals_row: None,
+            column_types: None,
+        })
+        .unwrap(),
+        serde_json::json!({"type": "create_table", "sheetId": "sheet1", "range": "A1:B5"})
+    );
+    let parsed: SpreadsheetResponse = serde_json::from_value(serde_json::json!({
+        "action":"read", "revision":"r", "warnings":[], "ranges":[],
+        "sheets":[
+            {"id":"sheet1","name":"Data","rowCount":200,"columnCount":26,"usedRange":"A1:D21",
+             "populatedCells":84,"formulaCells":21,"errorCells":0,
+             "tables":[{"name":"Sales","range":"A1:D21","columns":["Region","Qty","Price","Amount"],
+                "totalsRow":true,"filteredColumns":["Region"],
+                "columnTypes":[{"column":"Qty","type":"number"}]}]},
+            {"id":"other","name":"Notes","rowCount":200,"columnCount":26,"usedRange":null,
+             "populatedCells":0,"formulaCells":0,"errorCells":0}
+        ]
+    }))
+    .unwrap();
+    let SpreadsheetResponse::Read { sheets, .. } = parsed else {
+        panic!("expected a read response");
+    };
+    assert_eq!(sheets[0].tables[0].name, "Sales");
+    assert_eq!(sheets[0].tables[0].columns.len(), 4);
+    assert!(sheets[0].tables[0].totals_row);
+    assert_eq!(sheets[0].tables[0].filtered_columns, ["Region"]);
+    assert_eq!(
+        sheets[0].tables[0].column_types[0].column_type,
+        SpreadsheetColumnType::Number
+    );
+    assert!(sheets[1].tables.is_empty());
+    assert!(
+        serde_json::to_value(&sheets[1])
+            .unwrap()
+            .get("tables")
+            .is_none()
+    );
+}
+
+#[test]
+fn checkbox_operations_and_read_styles_match_the_worker_contract() {
+    assert_eq!(
+        serde_json::to_value(SpreadsheetOperation::InsertCheckboxes {
+            sheet_id: "sheet1".into(),
+            range: "D2:D50".into(),
+        })
+        .unwrap(),
+        serde_json::json!({"type": "insert_checkboxes", "sheetId": "sheet1", "range": "D2:D50"})
+    );
+    let parsed: SpreadsheetResponse = serde_json::from_value(serde_json::json!({
+        "action":"read", "revision":"r", "warnings":[], "sheets":[],
+        "ranges":[{"sheetId":"sheet1","sheetName":"Sheet1","range":"D2","truncated":false,
+            "cells":[{"address":"D2","source":"TRUE","type":"boolean","value":true,"display":"TRUE","style":{"checkbox":true}}]}]
+    }))
+    .unwrap();
+    let SpreadsheetResponse::Read { ranges, .. } = parsed else {
+        panic!("expected a read response");
+    };
+    assert_eq!(
+        ranges[0].cells[0]
+            .style
+            .as_ref()
+            .and_then(|style| style.checkbox),
+        Some(true)
+    );
+}
+
+#[test]
+fn dropdown_colors_round_trip_through_the_worker_contract() {
+    let json = serde_json::json!({
+        "type": "set_dropdown", "sheetId": "sheet1", "range": "B2:B50",
+        "items": ["Open", "Done"],
+        "colors": [{"item": "Done", "color": "#D9EAD3"}]
+    });
+    let operation: SpreadsheetOperation = serde_json::from_value(json.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&operation).unwrap(), json);
+    assert!(
+        serde_json::from_value::<SpreadsheetOperation>(serde_json::json!({
+            "type": "set_dropdown", "sheetId": "sheet1", "range": "B2",
+            "items": ["Done"], "colors": [{"item": "Done", "color": "#D9EAD3", "text": "#000000"}]
+        }))
+        .is_err()
+    );
+    let parsed: SpreadsheetResponse = serde_json::from_value(serde_json::json!({
+        "action":"read", "revision":"r", "warnings":[], "sheets":[],
+        "ranges":[{"sheetId":"sheet1","sheetName":"Sheet1","range":"B2","truncated":false,"cells":[],
+            "validations":[{"range":"B2:B50","type":"list","items":["Open","Done"],"dropdown":true,"rejectInvalid":true,
+                "colors":[{"item":"Done","color":"#d9ead3"}]}]}]
+    }))
+    .unwrap();
+    let SpreadsheetResponse::Read { ranges, .. } = parsed else {
+        panic!("expected a read response");
+    };
+    let colors = ranges[0].validations[0].colors.as_deref().unwrap();
+    assert_eq!(
+        (colors[0].item.as_str(), colors[0].color.as_str()),
+        ("Done", "#d9ead3")
+    );
+}
+
+#[test]
 fn imported_styles_round_trip_through_the_ai_contract() {
     let json = serde_json::json!({
         "numberFormat": "#,##0.00;[Red](#,##0.00)",
@@ -224,10 +391,47 @@ fn imported_styles_round_trip_through_the_ai_contract() {
     });
     let style: super::models::SpreadsheetStyle = serde_json::from_value(json.clone()).unwrap();
     assert_eq!(serde_json::to_value(style).unwrap(), json);
+    let accounting = serde_json::json!({"format": "accounting", "decimals": 0});
+    let style: super::models::SpreadsheetStyle =
+        serde_json::from_value(accounting.clone()).unwrap();
+    assert!(matches!(
+        style.format,
+        Some(super::models::SpreadsheetNumberFormat::Accounting)
+    ));
+    assert_eq!(serde_json::to_value(style).unwrap(), accounting);
     assert!(
         serde_json::from_value::<super::models::SpreadsheetStyle>(
             serde_json::json!({"borderBottomStyle":"bogus"})
         )
         .is_err()
     );
+}
+
+#[test]
+fn indented_cells_read_back_with_their_level() {
+    let parsed: SpreadsheetResponse = serde_json::from_value(serde_json::json!({
+        "action":"read", "revision":"r", "warnings":[], "sheets":[],
+        "ranges":[{"sheetId":"sheet1","sheetName":"Sheet1","range":"A2","truncated":false,
+            "cells":[{"address":"A2","source":"Product revenue","type":"text","value":"Product revenue",
+                "display":"Product revenue","style":{"indent":2,"horizontalAlign":"left"}}]}]
+    }))
+    .unwrap();
+    let SpreadsheetResponse::Read { ranges, .. } = parsed else {
+        panic!("expected a read response");
+    };
+    assert_eq!(
+        ranges[0].cells[0]
+            .style
+            .as_ref()
+            .and_then(|style| style.indent),
+        Some(2)
+    );
+    let operation: SpreadsheetOperation = serde_json::from_value(serde_json::json!({
+        "type": "format_cells", "sheetId": "sheet1", "range": "A2:A4", "style": {"indent": 1}
+    }))
+    .unwrap();
+    assert!(matches!(
+        operation,
+        SpreadsheetOperation::FormatCells { style, .. } if style.indent == Some(1)
+    ));
 }

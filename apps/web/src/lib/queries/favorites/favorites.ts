@@ -2,6 +2,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { useIsAuthenticated } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { storageServiceClient } from '@service-storage/client';
@@ -10,7 +11,7 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
 import type { ListFavoritesParams } from '@service-storage/generated/schemas/listFavoritesParams';
 import type { ReorderFavoritesResult } from '@service-storage/graphql-favorites';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import { queryClient } from '../client';
@@ -64,6 +65,10 @@ export function favoriteEntityType(
       return 'crm_contact';
     case 'foreign':
       return 'foreign_entity';
+    case 'database':
+      return 'database';
+    case 'form':
+      return 'form';
     default:
       return undefined;
   }
@@ -78,21 +83,34 @@ function favoriteEntityKey(
 
 /** The user's favorites from the transport selected at hook creation. */
 export function useFavoritesQuery(filter?: FavoritesFilter) {
+  const authenticated = useIsAuthenticated();
+  const enabled = () => authenticated() === true;
   if (isFeatureEnabled(enableGraphqlSoup)) {
-    return createGraphqlFavoritesQuery(filter);
+    return createGraphqlFavoritesQuery(filter, enabled);
   }
 
-  return createRestFavoritesQuery(filter);
+  return createRestFavoritesQuery(filter, enabled);
 }
 
-function createRestFavoritesQuery(filter?: FavoritesFilter) {
-  return useQuery(() => ({
+// Cached callbacks outlive the hook; only the plain filter enters this closure.
+function restFavoritesQueryOptions(filter?: FavoritesFilter) {
+  return queryOptions({
     queryKey: favoriteKeys.list(filter).queryKey,
     queryFn: async () =>
       await throwOnErr(() =>
         storageServiceClient.favorites.getFavorites(filter)
       ),
     staleTime: 60_000,
+  });
+}
+
+function createRestFavoritesQuery(
+  filter: FavoritesFilter | undefined,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => ({
+    ...restFavoritesQueryOptions(filter),
+    enabled: enabled(),
   }));
 }
 
@@ -109,12 +127,14 @@ function createRestFavoritesQuery(filter?: FavoritesFilter) {
 export function useFavoritesData(
   filter?: FavoritesFilter
 ): Accessor<FavoritesList | undefined> {
+  const authenticated = useIsAuthenticated();
+  const enabled = () => authenticated() === true;
   if (isFeatureEnabled(enableGraphqlSoup)) {
-    const query = createGraphqlFavoritesQuery(filter);
-    return () => query.data;
+    const query = createGraphqlFavoritesQuery(filter, enabled);
+    return () => (enabled() ? query.data : undefined);
   }
-  const query = createRestFavoritesQuery(filter);
-  return () => (query.isSuccess ? query.data : undefined);
+  const query = createRestFavoritesQuery(filter, enabled);
+  return () => (enabled() && query.isSuccess ? query.data : undefined);
 }
 
 function readLists() {

@@ -74,7 +74,7 @@ export function avatarClasses(options: AvatarClassOptions = {}): string {
 
   return cn(
     avatarVariants({ size, shape }),
-    shape === 'square' && SQUARE_RADIUS[size],
+    shape === 'square' && size != null && SQUARE_RADIUS[size],
     // Only the root draws the edge. `avatar-edge` is an outline, which paints
     // after every descendant and is not clipped by `overflow`, so it lands on
     // top of a covering image without the image needing one of its own.

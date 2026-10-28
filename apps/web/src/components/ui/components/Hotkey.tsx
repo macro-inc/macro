@@ -23,6 +23,7 @@ const symbolMap = {
   ARROWUP: '↑',
   DELETE: '⌦',
   ENTER: '↵',
+  PLUS: '+',
 };
 
 const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {

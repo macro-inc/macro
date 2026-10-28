@@ -10,11 +10,15 @@ import { CalendarInviteCard } from './calendar-invite-card';
 
 vi.mock('@ui', async () => ({
   ...(await vi.importActual('@app/components/ui/components/Avatar')),
+  ...(await vi.importActual('@app/components/ui/components/Tabs')),
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 const resolved: InvitationResolution = {
   kind: 'resolved',
   eventId: 'event',
@@ -55,20 +59,22 @@ describe('native invitation card', () => {
         }}
       />
     ));
-    const yes = screen.getByRole('button', { name: 'Yes' });
-    const maybe = screen.getByRole('button', { name: 'Maybe' });
-    expect(yes.getAttribute('aria-pressed')).toBe('true');
+    const yes = screen.getByRole('radio', { name: 'Yes' }) as HTMLInputElement;
+    const maybe = screen.getByRole('radio', {
+      name: 'Maybe',
+    }) as HTMLInputElement;
+    expect(yes.checked).toBe(true);
     maybe.focus();
     fireEvent.click(maybe);
-    expect(screen.getByRole('button', { name: 'Maybe' })).toBe(maybe);
+    expect(screen.getByRole('radio', { name: 'Maybe' })).toBe(maybe);
     expect(document.activeElement).toBe(maybe);
-    expect(maybe.getAttribute('aria-pressed')).toBe('true');
+    expect(maybe.checked).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('Saving');
     setPending(false);
     setError('Could not save. Please try again.');
     setState(resolved);
     expect(document.activeElement).toBe(maybe);
-    expect(yes.getAttribute('aria-pressed')).toBe('true');
+    expect(yes.checked).toBe(true);
     expect(screen.getByRole('status').textContent).toContain('try again');
   });
   it.each(['cancelled', 'reply', 'counter'] as const)(
@@ -84,7 +90,7 @@ describe('native invitation card', () => {
           }}
         />
       ));
-      expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
+      expect(screen.queryByRole('radio', { name: 'Yes' })).toBeNull();
       expect(screen.queryByRole('button', { name: /Join meeting/ })).toBeNull();
     }
   );
@@ -123,6 +129,60 @@ describe('native invitation card', () => {
     ).toBeNull();
     expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0);
   });
+  it('points at the invitation attachment only from outside it', () => {
+    const noMatch: InvitationResolution = { kind: 'no_match' };
+    render(() => (
+      <>
+        <CalendarInviteCard
+          invitation={invitationFixture}
+          actions={{ resolution: noMatch }}
+        />
+        <CalendarInviteCard
+          invitation={invitationFixture}
+          actions={{ resolution: noMatch }}
+          inCalendarFile
+        />
+      </>
+    ));
+    const [inline, inFile] = screen.getAllByText(/^Saved invitation\./);
+    expect(inline.textContent).toBe(
+      'Saved invitation. Open the original email or invitation attachment for more options.'
+    );
+    expect(inFile.textContent).toBe('Saved invitation.');
+  });
+
+  it('points a saved shared event at its attachment only from outside it', () => {
+    render(() => (
+      <>
+        <CalendarInviteCard invitation={invitationFixtures.shared} />
+        <CalendarInviteCard
+          invitation={invitationFixtures.shared}
+          inCalendarFile
+        />
+      </>
+    ));
+    const [inline, inFile] = screen.getAllByText(/^Shared event\./);
+    expect(inline.textContent).toBe(
+      'Shared event. Open the original email or event attachment to add it to a calendar.'
+    );
+    expect(inFile.textContent).toBe('Shared event.');
+  });
+
+  it('sends a shared event matching several accounts to the calendar to choose', () => {
+    render(() => (
+      <CalendarInviteCard
+        invitation={invitationFixtures.shared}
+        actions={{ resolution: { kind: 'ambiguous' } }}
+      />
+    ));
+    expect(
+      screen.getByText(
+        'This event matches multiple accounts. Open your calendar to choose.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText('On your calendar.')).toBeNull();
+  });
+
   it('expands guest identities and descriptions explicitly', () => {
     render(() => <CalendarInviteCard invitation={invitationFixture} />);
     fireEvent.click(screen.getByRole('button', { name: '+3 more' }));
@@ -155,7 +215,120 @@ describe('native invitation card', () => {
     expect(
       screen.getByRole('heading', { name: 'Product review' })
     ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Yes' })).toBeNull();
     expect(screen.getByText(/Responses are paused/)).toBeTruthy();
+  });
+  it('renders formatted descriptions and keeps lists outside paragraphs', () => {
+    const htmlInvitation = {
+      ...invitationFixture,
+      description:
+        '<p>Meeting details with <strong>bold</strong> and <a href="https://example.com">link</a></p><ul><li>First item</li><li>Second item</li></ul>',
+    };
+    render(() => <CalendarInviteCard invitation={htmlInvitation} />);
+    const description = screen.getByText(/Meeting details/);
+    expect(description.querySelector('strong')?.textContent).toBe('bold');
+    expect(
+      screen.getByRole('link', { name: 'link' }).getAttribute('href')
+    ).toBe('https://example.com/');
+    expect(
+      screen.getByText('First item').closest('ul')?.previousElementSibling
+    ).toBe(description);
+    expect(screen.getByText('Second item').tagName).toBe('LI');
+    expect(description.textContent).not.toContain('<strong>');
+  });
+  it('removes active markup and unsafe URLs from descriptions', () => {
+    const { container } = render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description:
+            '<p onclick="alert(1)">Safe text<script>alert(1)</script><img src="x" onerror="alert(1)"><a href="javascript:alert(1)">unsafe link</a></p>',
+        }}
+      />
+    ));
+    expect(screen.getByText(/Safe text/).textContent).toBe(
+      'Safe textunsafe link'
+    );
+    expect(
+      container.querySelector('script, img, [onclick], [onerror]')
+    ).toBeNull();
+    expect(screen.queryByRole('link', { name: 'unsafe link' })).toBeNull();
+  });
+  it.each([
+    'https://example.com/',
+    'mailto:bob@example.com',
+    'tel:+15555550100',
+  ])('opens description links through the host: %s', (url) => {
+    const openExternal = vi.fn();
+    render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description: `<p><a href="${url}"><strong>Details</strong></a></p>`,
+        }}
+        actions={{ openExternal }}
+      />
+    ));
+    expect(fireEvent.click(screen.getByText('Details'))).toBe(false);
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(url);
+  });
+  it('opens links in a new tab when the card has no host action', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description: '<p><a href="https://example.com">Meeting notes</a></p>',
+        }}
+      />
+    ));
+    expect(
+      fireEvent.click(screen.getByRole('link', { name: 'Meeting notes' }))
+    ).toBe(false);
+    expect(open).toHaveBeenCalledExactlyOnceWith(
+      'https://example.com/',
+      '_blank',
+      'noopener,noreferrer'
+    );
+  });
+  it('escapes angle brackets in plain text descriptions', () => {
+    const plainTextInvitation = {
+      ...invitationFixture,
+      description: 'Email <bob@example.com> for questions\nOwner: <TBD>',
+    };
+    render(() => <CalendarInviteCard invitation={plainTextInvitation} />);
+    const description = screen.getByText(/Email/);
+    expect(description.textContent).toContain('<bob@example.com>');
+    expect(description.textContent).toContain('Owner: <TBD>');
+    expect(description.querySelector('br')).not.toBeNull();
+    expect(description.querySelector('bob, tbd')).toBeNull();
+  });
+  it('updates the sanitized description when the calendar resolves newer details', () => {
+    const [resolution, setResolution] = createSignal<InvitationResolution>({
+      kind: 'loading',
+    });
+    render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description: '<p>Original details</p>',
+        }}
+        actions={{
+          get resolution() {
+            return resolution();
+          },
+        }}
+      />
+    ));
+    expect(screen.getByText('Original details')).toBeTruthy();
+    setResolution({
+      ...resolved,
+      current: {
+        ...invitationFixture,
+        description: '<p><strong>Updated details</strong></p>',
+      },
+    });
+    expect(screen.queryByText('Original details')).toBeNull();
+    expect(screen.getByText('Updated details').tagName).toBe('STRONG');
   });
 });

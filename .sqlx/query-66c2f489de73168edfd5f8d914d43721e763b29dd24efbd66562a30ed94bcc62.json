@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE harness_tokens\n            SET last_used_at = now()\n            WHERE id = (\n                SELECT id FROM harness_tokens\n                WHERE id = $1\n                  AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')\n                FOR UPDATE SKIP LOCKED\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "66c2f489de73168edfd5f8d914d43721e763b29dd24efbd66562a30ed94bcc62"
+}

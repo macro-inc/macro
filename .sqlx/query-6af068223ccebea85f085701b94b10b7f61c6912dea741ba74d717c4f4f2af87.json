@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH expired AS (\n                SELECT id FROM notification\n                WHERE created_at < $1\n                ORDER BY created_at, id\n                LIMIT $2\n                FOR UPDATE SKIP LOCKED\n            )\n            DELETE FROM notification n\n            USING expired e\n            WHERE n.id = e.id\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamp",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6af068223ccebea85f085701b94b10b7f61c6912dea741ba74d717c4f4f2af87"
+}

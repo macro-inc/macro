@@ -27,6 +27,11 @@ const host = vi.hoisted(() => ({
   alert: vi.fn(),
   editorMount: vi.fn(),
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: flag.key === 'enable-routine-conditions',
+  }),
+}));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: host.openWithSplit }),
 }));
@@ -46,6 +51,7 @@ vi.mock('@core/constant/SettingsState', () => ({
 vi.mock('../agents-view/primitives/open-page', () => ({
   openAgentsPage: vi.fn(),
 }));
+vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
@@ -212,7 +218,7 @@ async function addScheduled(name = 'Daily') {
   const add = screen.getByRole('button', { name: 'Add trigger' });
   fireEvent.click(add);
   fireEvent.click(await screen.findByRole('button', { name: 'Scheduled' }));
-  fireEvent.click(await screen.findByRole('button', { name }));
+  fireEvent.click(await screen.findByRole('radio', { name }));
   fireEvent.click(
     within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
       'button',
@@ -240,6 +246,10 @@ function created(body: CreateScheduledAction): ScheduledAction {
   if (!('trigger' in body)) throw new Error('Expected a tagged trigger');
   return {
     ...body,
+    run_visibility:
+      'run_visibility' in body && body.run_visibility
+        ? body.run_visibility
+        : 'unlisted',
     id: 'new-routine',
     owner: 'macro|owner@example.com',
     created_at: '2026-09-28T00:00:00Z',
@@ -263,6 +273,7 @@ describe('routine composer execution selection', () => {
       const expectedTask: Record<string, unknown> = {
         prompt: '',
         user_prompt: 'Summarize updates',
+        mcp_servers: [],
       };
       if (target === 'model') expectedTask.model = 'vendor/custom-model';
       else expectedTask.agent = { bot_id: agentId };
@@ -279,8 +290,31 @@ describe('routine composer execution selection', () => {
         expect(host.created).toHaveBeenCalledWith('new-routine')
       );
       expect(body.enabled).toBe(true);
+      expect(body).toMatchObject({ run_visibility: 'unlisted' });
     }
   );
+
+  it('creates a routine whose runs show in Home and Agents when asked', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    await mount();
+    inputPrompt('Summarize updates');
+    await addScheduled();
+    const visibility = screen.getByRole('button', { name: 'Runs hidden' });
+    visibility.focus();
+    fireEvent.keyDown(visibility, { key: 'Enter' });
+    const show = await screen.findByRole('menuitemradio', {
+      name: 'Show runs',
+    });
+    fireEvent.keyDown(show, { key: 'Enter' });
+    expect(
+      await screen.findByRole('button', { name: 'Runs shown' })
+    ).toBeTruthy();
+    create();
+    await waitFor(() => expect(host.create).toHaveBeenCalledOnce());
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      run_visibility: 'listed',
+    });
+  });
 
   it('restores the latest selection and prompt even when closed before the save timer', async () => {
     await mount();
@@ -487,6 +521,45 @@ describe('routine composer execution selection', () => {
         filters: [
           { events: ['task.created'] },
           { events: ['email.message_received'] },
+        ],
+      },
+    });
+  });
+
+  it('saves an email trigger with an only-run-if condition', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'New email received' })
+    );
+    const condition = screen.getByRole('textbox', { name: 'Only run if' });
+    expect(condition.getAttribute('placeholder')).toBe(
+      'Is this email an invoice or a receipt?'
+    );
+    fireEvent.input(condition, {
+      target: { value: '  Is this email an invoice?  ' },
+    });
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
+        'button',
+        { name: 'Add trigger' }
+      )
+    );
+    expect(
+      screen.getByTitle('New email received · if Is this email an invoice?')
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
+    await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      trigger: {
+        type: 'events',
+        filters: [
+          {
+            events: ['email.message_received'],
+            condition: 'Is this email an invoice?',
+          },
         ],
       },
     });

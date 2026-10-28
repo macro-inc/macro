@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { connect as connectHttp2, constants as http2Constants } from 'node:http2';
 import { get, request } from 'node:https';
 import { createServer, resolveConfig } from 'vite';
 import { expect, it } from 'vitest';
@@ -55,16 +56,17 @@ it('serves HTTPS and HMR with the existing CA and detected hostname', async () =
     });
     await expect(fetchPage(hostname, false)).rejects.toThrow();
 
-    // A real TLS WebSocket upgrade with Vite's browser origin/token checks.
-    const protocol = await new Promise<string | undefined>(
-      (resolve, reject) => {
+    // A real TLS WebSocket upgrade with Vite's browser origin/token checks,
+    // resolving to the negotiated protocol or the rejection status.
+    const upgradeHmr = (host: string) =>
+      new Promise<string | undefined>((resolve, reject) => {
         const req = request({
           ...options,
           servername: hostname,
           path: `/?token=${vite.config.webSocketToken}`,
           headers: {
-            host: `${hostname}:${address.port}`,
-            origin: `https://${hostname}:${address.port}`,
+            host,
+            origin: `https://${host}`,
             connection: 'Upgrade',
             upgrade: 'websocket',
             'sec-websocket-version': '13',
@@ -78,16 +80,22 @@ it('serves HTTPS and HMR with the existing CA and detected hostname', async () =
         req.on('error', reject);
         req.on('response', (res) => {
           res.resume();
-          reject(new Error(`HMR returned ${res.statusCode}`));
+          resolve(`HTTP ${res.statusCode}`);
         });
         req.on('upgrade', (res, socket) => {
           socket.destroy();
           resolve(res.headers['sec-websocket-protocol']);
         });
         req.end();
-      }
-    );
-    expect(protocol).toBe('vite-hmr');
+      });
+    for (const [host, expected] of [
+      [`${hostname}:${address.port}`, 'vite-hmr'],
+      // Tailscale Serve forwards the devbox's MagicDNS name as the Host.
+      ['devbox.example-tailnet.ts.net', 'vite-hmr'],
+      ['unrelated.example', 'HTTP 400'],
+    ]) {
+      expect(await upgradeHmr(host), host).toBe(expected);
+    }
   } finally {
     await vite.close();
   }
@@ -119,3 +127,50 @@ it.each(['build', 'preview'] as const)(
     expect(config.server.https).toBeUndefined();
   }
 );
+
+it('keeps the HTTP/2 session when a reload cancels thousands of module requests', async () => {
+  const vite = await createServer({
+    configFile: false,
+    appType: 'custom',
+    logLevel: 'silent',
+    plugins: [devHttps({})],
+    optimizeDeps: { noDiscovery: true, include: [] },
+    server: { host: '127.0.0.1', port: 0 },
+  });
+  vite.middlewares.use((_req, res) => {
+    setTimeout(() => res.end('module'), 50);
+  });
+  try {
+    await vite.listen();
+    const address = vite.httpServer?.address();
+    if (!address || typeof address === 'string')
+      throw new Error('Vite has no TCP listener');
+    const session = connectHttp2(`https://localhost:${address.port}`, {
+      host: '127.0.0.1',
+      servername: 'localhost',
+      ca,
+    });
+    try {
+      await new Promise((resolve) => session.once('connect', resolve));
+      const abandoned = Array.from({ length: 3000 }, (_, i) =>
+        session.request({ ':path': `/app/module-${i}` })
+      );
+      for (const stream of abandoned) stream.on('error', () => {});
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      for (const stream of abandoned) stream.close(http2Constants.NGHTTP2_CANCEL);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const status = await new Promise((resolve, reject) => {
+        const stream = session.request({ ':path': '/app/' });
+        stream.on('response', (headers) => resolve(headers[':status']));
+        stream.on('error', reject);
+        stream.resume();
+      });
+      expect(status).toBe(200);
+    } finally {
+      session.destroy();
+    }
+  } finally {
+    await vite.close();
+  }
+});

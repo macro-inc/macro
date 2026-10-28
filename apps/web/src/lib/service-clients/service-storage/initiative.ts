@@ -1,4 +1,5 @@
 import { catchToResult, ThrownResultError } from '@core/util/result';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type {
   AnyVariables,
   Client,
@@ -13,6 +14,7 @@ import {
   type GraphqlEntityAccessLevel,
   type InitiativeDetailFieldsFragment,
   InitiativeDocument,
+  type InitiativeIdentityFieldsFragment,
   type InitiativeLinkShare,
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
@@ -57,17 +59,25 @@ const OPERATION_TO_GRAPHQL = {
   replace: 'REPLACE',
 } as const;
 
-export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
-  const sharing = project.sharePermission;
+export function mapInitiativeIdentity(
+  project: InitiativeIdentityFieldsFragment
+) {
   const permission = project.viewerPermission;
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
-    updatedAt: project.metadata.updatedAt ?? '',
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
         : ('view' as const),
+  };
+}
+
+export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
+  const sharing = project.sharePermission;
+  return {
+    ...mapInitiativeIdentity(project),
+    updatedAt: project.metadata.updatedAt ?? '',
     taskCount: project.taskCount,
     completedTaskCount: project.completedTaskCount,
     properties: mapGraphqlProperties(project.properties),
@@ -186,16 +196,21 @@ export function createInitiativeClient(client: () => Client) {
         )
       ),
     update: (id: string, input: InitiativeUpdate) =>
-      catchToResult(async () =>
-        mapInitiativeDetail(
-          (
-            await mutation(UpdateInitiativeDocument, {
-              initiativeId: id,
-              input: initiativeUpdateInput(input),
-            })
-          ).updateInitiative
-        )
-      ),
+      catchToResult(async () => {
+        const result = await client()
+          .mutation(UpdateInitiativeDocument, {
+            initiativeId: id,
+            input: initiativeUpdateInput(input),
+          })
+          .toPromise();
+        const disposition = optimisticMutationDispositionOf(result);
+        if (disposition?.kind === 'queued') return;
+        if (disposition?.kind === 'permanently-failed')
+          operationData({ ...result, error: disposition.error });
+        // Detail consumers subscribe to the normalized record. A queued partial
+        // response is an acknowledgement, never a complete project snapshot.
+        operationData(result);
+      }),
     /** Ensure the description surface, which has the project's id, before connecting. */
     ensureDescriptionSurface: (id: string) =>
       catchToResult(

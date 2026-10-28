@@ -4,6 +4,7 @@ import {
   $createTextNode,
   $getNodeByKey,
   $getSelection,
+  $isElementNode,
   $isRangeSelection,
   $isTextNode,
   type EditorConfig,
@@ -51,6 +52,14 @@ export const SEARCH_NODE_TYPE_VALUES = {
  * happens where formatting splits one word across text nodes.
  */
 function $textBeforeCaret(anchorNode: LexicalNode, offset: number): string {
+  // Element offsets count children, as after inserting a soft line break.
+  if ($isElementNode(anchorNode)) {
+    return anchorNode
+      .getChildren()
+      .slice(0, offset)
+      .map((node) => node.getTextContent())
+      .join('');
+  }
   const text = anchorNode.getTextContent().slice(0, offset);
   if (text !== '' || !$isTextNode(anchorNode)) return text;
   const previous = anchorNode.getPreviousSibling();
@@ -90,9 +99,13 @@ export function validTriggerPosition(
 
     if (after === null) return true;
 
-    const afterText = anchorNode
-      .getTextContent()
-      .slice(selection.anchor.offset);
+    const afterText = $isElementNode(anchorNode)
+      ? anchorNode
+          .getChildren()
+          .slice(selection.anchor.offset)
+          .map((node) => node.getTextContent())
+          .join('')
+      : anchorNode.getTextContent().slice(selection.anchor.offset);
     return isEmptyOrMatches(afterText, after);
   });
 }

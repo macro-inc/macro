@@ -4,19 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ReminderCollectionRow } from './reminderCollectionRow';
+import type { EmailFollowup } from './emailFollowup';
 
 /**
- * One original thread, coalescing all of its current reminder work.
+ * An original thread with its active snooze.
  */
 export interface EmailReminderSummary {
-  /**
-   * Number of eligible reminders attached to this thread.
-   * @minimum 0
-   */
-  count: number;
-  /** Nearest eligible occurrence and its owning editor capability. */
-  nearest: ReminderCollectionRow;
+  /** Active snooze, including the revision required for edits or removal. */
+  followup: EmailFollowup;
   /** Original email identity, never a mirror reminder identity. */
   threadId: string;
 }

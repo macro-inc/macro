@@ -3,8 +3,11 @@
 
 pub mod admission;
 pub mod agent;
+/// Which model an Auto turn runs on.
+pub mod auto_model;
 pub mod engine;
 pub mod mcp;
+pub mod model_access;
 /// ACP session configuration generated from the turn engine catalog.
 pub mod model_options;
 /// Models this runtime advertises, including routed Fireworks and Gemini ids.
@@ -13,4 +16,5 @@ pub mod replay;
 pub mod session;
 /// Whether one of Macro's own tools may run in this turn.
 pub mod tool_gate;
+pub mod tool_mode;
 pub mod user_input;

@@ -113,6 +113,7 @@ fn schema() -> SchemaImage {
         ],
         columns: vec![
             ColumnImage {
+                nullable: true,
                 id: NAME,
                 infer_type: false,
                 table: GUESTS,
@@ -121,8 +122,10 @@ fn schema() -> SchemaImage {
                 definition: NAME_DEFINITION,
                 kind: Some(ColumnKind::Text),
                 options: Vec::new(),
+                formula: None,
             },
             ColumnImage {
+                nullable: true,
                 id: RSVP,
                 infer_type: false,
                 table: GUESTS,
@@ -147,8 +150,10 @@ fn schema() -> SchemaImage {
                         color: None,
                     },
                 ],
+                formula: None,
             },
             ColumnImage {
+                nullable: true,
                 id: PLUS_ONES,
                 infer_type: false,
                 table: GUESTS,
@@ -157,6 +162,7 @@ fn schema() -> SchemaImage {
                 definition: PLUS_ONES_DEFINITION,
                 kind: Some(ColumnKind::Number),
                 options: Vec::new(),
+                formula: None,
             },
         ],
         views: views().to_vec(),
@@ -408,6 +414,8 @@ fn a_column_create_is_undone_by_deleting_the_column() {
     };
     let write = Write::CreateColumn {
         column: Column {
+            protections: vec![],
+            nullable: true,
             id: seats,
             table_id: GUESTS,
             property_definition_id: Uuid::from_u128(0xe9),
@@ -643,6 +651,8 @@ fn a_type_change_is_undone_by_the_old_type_with_the_old_definition_and_cells() {
         }),
         replacement: ColumnReplacement {
             column: Column {
+                protections: vec![],
+                nullable: true,
                 id: PLUS_ONES,
                 table_id: GUESTS,
                 property_definition_id: PLUS_ONES_DEFINITION,
@@ -1218,6 +1228,8 @@ fn what_a_batch_creates_and_removes_again_needs_no_inverse() {
     let writes = [
         Write::CreateColumn {
             column: Column {
+                protections: vec![],
+                nullable: true,
                 id: seats,
                 table_id: GUESTS,
                 property_definition_id: Uuid::from_u128(0xe9),

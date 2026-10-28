@@ -93,6 +93,8 @@ fn world() -> Shared {
                     columns: vec![
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
+                                nullable: true,
                                 id: NAME_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: NAME,
@@ -122,6 +124,8 @@ fn world() -> Shared {
                         },
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
+                                nullable: true,
                                 id: STATUS_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: STATUS,
@@ -170,6 +174,8 @@ fn world() -> Shared {
                         },
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
+                                nullable: true,
                                 id: HALL_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: HALL,
@@ -202,6 +208,8 @@ fn world() -> Shared {
                         },
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
+                                nullable: true,
                                 id: CONTACT_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: CONTACT,
@@ -253,6 +261,8 @@ fn world() -> Shared {
                     sql_name: "\"Halls\"".into(),
                     columns: vec![ColumnDetail {
                         column: Column {
+                            protections: vec![],
+                            nullable: true,
                             id: HALL_NAME_COLUMN,
                             table_id: HALLS,
                             property_definition_id: HALL_NAME,
@@ -303,6 +313,8 @@ fn world() -> Shared {
                     sql_name: "\"Plans\"".into(),
                     columns: vec![ColumnDetail {
                         column: Column {
+                            protections: vec![],
+                            nullable: true,
                             id: PLAN_NAME_COLUMN,
                             table_id: PLANS,
                             property_definition_id: PLAN_NAME,
@@ -610,6 +622,7 @@ async fn a_read_answers_typed_cells_with_what_renders_them() {
     assert_eq!(
         outcome.result.as_ref().unwrap(),
         &ResultSet {
+            source_table: Some(GUESTS),
             columns: vec![
                 ResultColumn {
                     name: "Name".into(),
@@ -1267,3 +1280,10 @@ async fn schema_version_conflicts_keep_the_retry_signal() {
         }
     }
 }
+
+mod scopes;
+
+#[cfg(feature = "inbound")]
+mod http;
+
+mod query_contract;

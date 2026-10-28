@@ -226,7 +226,7 @@ export function LoopsFeatureSection(props: {
         style={{
           color: 'var(--c0)',
           'font-family': 'display',
-          'font-weight': '315',
+          'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
           'letter-spacing': '-0.018em',
           'line-height': 1.1,
           margin: '0',
@@ -298,7 +298,8 @@ export function LoopsFeatureSection(props: {
                 color: 'var(--c0)',
                 'font-family': 'display',
                 'font-size': splitHeadlineSize,
-                'font-weight': '315',
+                'font-weight':
+                  'calc(315 + var(--cream-slab-weight-increase, 0))',
                 'grid-column': '1',
                 'grid-row': '1',
                 'letter-spacing': '-0.018em',
@@ -360,7 +361,8 @@ export function LoopsFeatureSection(props: {
                 color: 'var(--c0)',
                 'font-family': 'display',
                 'font-size': '37.38px',
-                'font-weight': '315',
+                'font-weight':
+                  'calc(315 + var(--cream-slab-weight-increase, 0))',
                 'letter-spacing': '-0.006em',
                 'line-height': 1.25,
                 margin: '0',

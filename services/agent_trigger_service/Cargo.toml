@@ -14,6 +14,7 @@ roles_and_permissions = { path = "../../crates/roles_and_permissions", default-f
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
+call = { path = "../../crates/call", default-features = false, features = ["outbound"] }
 agent_session = { path = "../../crates/agent_session" }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }

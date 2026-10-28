@@ -1,7 +1,13 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { markMessageSent, messageSendMotion } from './message-send-motion';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
+beforeEach(() => vi.mocked(isTouchDevice).mockReturnValue(false));
 
 function Message(props: { id: string | undefined }) {
   return <div ref={(el) => messageSendMotion(el, () => props.id)}>Message</div>;
@@ -38,7 +44,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('local send motion', () => {
+describe.each([false, true])('local send motion (touch: %s)', (touch) => {
+  beforeEach(() => vi.mocked(isTouchDevice).mockReturnValue(touch));
   it('leaves history still and animates a send once, including after a remount', () => {
     const { animate } = setup();
     const history = render(() => <Message id="history" />);
@@ -103,6 +110,7 @@ describe('local send motion', () => {
   });
 
   it('slides without scaling and cancels on unmount', () => {
+    vi.mocked(isTouchDevice).mockReturnValue(false);
     const { animate, cancel } = setup();
     markMessageSent('channel');
     const view = render(() => <Message id="channel" />);

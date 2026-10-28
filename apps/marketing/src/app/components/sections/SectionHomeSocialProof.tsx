@@ -127,7 +127,8 @@ export function SectionHomeSocialProof() {
                 color: 'color-mix(in srgb, var(--c3) 62%, transparent)',
                 'font-family': 'display',
                 'font-size': mobile() ? '18px' : '21px',
-                'font-weight': '315',
+                'font-weight':
+                  'calc(315 + var(--cream-slab-weight-increase, 0))',
                 'letter-spacing': '-0.01em',
                 'line-height': 1,
                 'white-space': 'nowrap',

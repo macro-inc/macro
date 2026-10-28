@@ -6,6 +6,8 @@
 mod test;
 
 pub mod channel_share;
+pub mod direct_share;
+pub mod source_grants;
 pub mod team_share;
 
 pub use channel_share::get_direct_channel_grants;
@@ -17,6 +19,7 @@ pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
+pub use source_grants::delete_source_grants;
 use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 
 /// Inserts a row into the entity access table
@@ -437,12 +440,15 @@ pub async fn update_entity_access_channel_share_permissions(
                 .await?;
             }
             EntityType::Database
+            | EntityType::CrmPipeline
+            | EntityType::Form
             | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 sqlx::query!(
                     r#"
                     DELETE FROM entity_access
@@ -555,12 +561,15 @@ pub async fn update_entity_access_channel_share_permissions(
                 }
             }
             EntityType::Database
+            | EntityType::CrmPipeline
+            | EntityType::Form
             | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::ExternalChat => {
                 let entity_type_str = entity_type.as_ref();
 
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(

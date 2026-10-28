@@ -78,6 +78,53 @@ Apple's associated-domain routing. It intentionally avoids authenticated writes.
 For iPad, dismiss the existing `Optimized for iPhone` notice manually if it
 obscures screenshots; do not interpret it as a scene-lifecycle error.
 
+## Thread reply push notifications
+
+Run a native debug build with automatic bundle updates disabled. For a separate
+Vite server used by the native app, set `MACRO_DEV_PROXY=false` (or run it through
+the Tauri CLI); the browser-only hosted API proxy cannot be fetched through the
+native HTTP plugin from `tauri://localhost`.
+
+Sign in as the notification recipient. Use a real thread reply notification that
+the account can read and record its notification ID, channel ID, parent message
+ID, and reply ID. Choose a reply outside the collapsed thread preview. A made-up
+notification ID can check bridge delivery but cannot verify message navigation.
+
+To inject the push without depending on APNs transport, save this payload to a
+temporary `.apns` file, replacing `<notification-id>` with the real ID:
+
+```json
+{
+  "aps": {
+    "alert": {
+      "title": "Thread reply navigation test",
+      "body": "Open the target reply"
+    },
+    "sound": "default"
+  },
+  "notificationId": "<notification-id>"
+}
+```
+
+Send it with `xcrun simctl push <udid> com.macro.app.prod <payload.apns>`.
+Grant notification permission, background the app, open Notification Center,
+and tap the notification. Verify the correct channel opens, the parent thread
+expands, and the specific reply is visible. Repeat after terminating the app and
+with an in-app foreground banner. Simulator injection tests OS presentation,
+delegate delivery, and app navigation; separately verify real APNs delivery on
+a physical device.
+
+If IDB taps do not activate the Notification Center card, use its swipe-to-open
+action to exercise the same native notification response callback.
+
+Both the common local-notification plugin and the iOS push plugin set
+`UNUserNotificationCenter.delegate`. The push plugin must initialize after the
+local plugin, whose delegate ignores remote notifications. Check native delivery
+as well as frontend routing when investigating a tap that does nothing.
+The frontend listener must also attach before token registration succeeds:
+already-delivered notifications still need to navigate when APNs registration
+is pending or fails, including the simulator's registration timeout.
+
 ## Release checks still required
 
 - iOS 26 and physical iPhone/iPad regressions; iOS 27 simulator coverage alone

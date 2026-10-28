@@ -25,11 +25,16 @@ const emailLocalStateStorage = createUserScopedStorage(
 const emailTabSchema = z.enum(EMAIL_TAB_IDS).catch(DEFAULT_EMAIL_TAB);
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
+const aliasFilterSchema = z
+  .object({ inboxId: z.string().min(1), emailAddress: z.string().email() })
+  .optional()
+  .catch(undefined);
 
 const emailEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: emailTabSchema.default(DEFAULT_EMAIL_TAB),
   search: z.string().default(''),
+  aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
 });
 
@@ -88,6 +93,7 @@ function createEmailEntryStorage(options: {
         ...current,
         tab: restored.tab,
         search: restored.search,
+        aliasFilter: restored.aliasFilter,
         facets: normalizeFacetSelection(restored.facets),
       };
     },
@@ -95,6 +101,7 @@ function createEmailEntryStorage(options: {
       version: 1,
       tab: state.tab,
       search: state.search,
+      aliasFilter: state.aliasFilter,
       facets: normalizeFacetSelection(state.facets),
     }),
   });
@@ -107,6 +114,7 @@ const emailLocalStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: emailTabSchema.default(DEFAULT_EMAIL_TAB),
   inboxIds: inboxIdsEntrySchema,
+  aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
 });
 
@@ -123,6 +131,7 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
     version: 1,
     tab: state.tab,
     inboxIds: normalizeInboxSelection(state.inboxIds),
+    aliasFilter: state.aliasFilter,
     facets: normalizeFacetSelection(state.facets),
   };
 }
@@ -150,7 +159,10 @@ function createEmailLocalStateStorage(options: {
         return {
           ...current,
           tab: restored.tab,
-          inboxIds: restored.inboxIds,
+          inboxIds: restored.aliasFilter
+            ? [restored.aliasFilter.inboxId]
+            : restored.inboxIds,
+          aliasFilter: restored.aliasFilter,
           facets: normalizeFacetSelection(restored.facets),
         };
       } catch {
@@ -189,7 +201,17 @@ function createInboxIdsEntryStorage(options: {
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
-      return { ...current, inboxIds: inboxIdsEntrySchema.parse(stored) };
+      const inboxIds = inboxIdsEntrySchema.parse(stored);
+      return {
+        ...current,
+        inboxIds,
+        aliasFilter:
+          current.aliasFilter &&
+          inboxIds?.length === 1 &&
+          inboxIds[0] === current.aliasFilter.inboxId
+            ? current.aliasFilter
+            : undefined,
+      };
     },
     select: (state): string[] | undefined =>
       state.inboxIds === undefined ? undefined : [...state.inboxIds],

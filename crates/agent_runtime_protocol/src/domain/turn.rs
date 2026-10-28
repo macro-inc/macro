@@ -44,6 +44,11 @@ pub enum FailureNoticeKind {
     /// The person's own account with the provider has no budget left for
     /// this work; the fix is on the provider's billing page.
     ProviderUsageLimit,
+    /// The selected model cannot read image attachments in this conversation.
+    UnsupportedImageInput,
+    /// The provider ended the run in failure; its own page for the run is
+    /// where any detail it kept lives.
+    ProviderRunFailed,
 }
 
 /// An external page where the person can act on a [`FailureNotice`].

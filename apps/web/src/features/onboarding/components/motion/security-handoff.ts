@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+
 /** When the incoming step starts to fade in (the 180ms delay at the 1.5× pace below). */
 const CONTENT_FADE_DELAY_MS = 180 * 1.5;
 
@@ -251,7 +253,7 @@ export function animateSecurityHandoff(
         finish(false);
       }
     };
-    void complete();
+    fireAndForget(complete(), 'onboarding');
   });
 
   return () => finish(false);

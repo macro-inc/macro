@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import { RoutinesList } from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
@@ -8,18 +9,26 @@ export function RoutinesListView(props: {
   source: RoutineListSource;
   userId: Accessor<string | undefined>;
   targetLabel(target: RoutineTarget): string;
-  searchRef(input: HTMLInputElement): void;
+  targetModel(target: RoutineTarget): string | undefined;
+  showTitle?: boolean;
+  registerSearchFocus?: (focus: () => void) => void;
   onCreate(): void;
   onOpen(id: string): void;
 }) {
-  const rows = createRoutineRows(props.source, props.userId, props.targetLabel);
+  const rows = createRoutineRows(
+    props.source,
+    props.userId,
+    props.targetLabel,
+    props.targetModel
+  );
   return (
     <RoutinesList
-      searchRef={props.searchRef}
+      showTitle={props.showTitle}
+      registerSearchFocus={props.registerSearchFocus}
       rows={rows()}
       loading={props.source.loading()}
       error={props.source.error()}
-      onRetry={() => void props.source.refresh()}
+      onRetry={() => fireAndForget(props.source.refresh(), 'routines')}
       onCreate={props.onCreate}
       onOpen={props.onOpen}
       pendingId={props.source.pendingId()}

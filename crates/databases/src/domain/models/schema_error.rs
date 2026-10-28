@@ -8,6 +8,14 @@ use super::PropertyDefinitionId;
 /// A refused schema change. The messages are shown to users and agents.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SchemaError {
+    /// A feature reserves this operation on the column.
+    #[error(
+        "This column is protected against this schema change. Remove the feature using it first."
+    )]
+    ColumnProtected {
+        /// The reserved schema operation.
+        capability: super::ColumnProtection,
+    },
     /// A database, table, column or view name is blank.
     #[error("name must not be empty")]
     EmptyName,
@@ -138,6 +146,24 @@ pub enum SchemaError {
         /// The board's name.
         board: String,
     },
+    /// A timeline spans the column being removed.
+    #[error(
+        "The timeline \"{timeline}\" draws its bars from this column; delete the timeline or \
+         span it over another date-range column before removing it."
+    )]
+    TimelineSpansRemovedColumn {
+        /// The timeline's name.
+        timeline: String,
+    },
+    /// A timeline spans the column being retyped.
+    #[error(
+        "The timeline \"{timeline}\" draws its bars from this column; delete the timeline or \
+         span it over another date-range column before changing its type."
+    )]
+    TimelineSpansRetypedColumn {
+        /// The timeline's name.
+        timeline: String,
+    },
     /// A relation was asked for with a type other than entity.
     #[error("A relation column's type is entity.")]
     RelationNotEntity,
@@ -197,9 +223,15 @@ pub enum SharingError {
     /// Share links are not supported for databases.
     #[error("Databases cannot be shared by link yet.")]
     LinkShare,
-    /// Team shares are not supported for databases.
-    #[error("Databases cannot be shared with a team yet.")]
-    TeamShare,
+    /// The owner is not on a team to share with.
+    #[error("Join a team to share this database with it.")]
+    NoTeam,
+    /// A team share must grant view, comment, or edit access.
+    #[error("Share with your team for view, comment, or edit access.")]
+    InvalidTeamLevel,
+    /// Ownership, team membership, or the team share changed meanwhile.
+    #[error("This database's sharing changed. Refresh and try again.")]
+    Changed,
     /// A request changes more channel grants than any may.
     #[error("Share with at most {max} channels at a time.")]
     TooManyChannels {
@@ -220,6 +252,8 @@ pub enum Misfit {
     NotNumber,
     /// The value is not a date.
     NotDate,
+    /// The value is not a date range.
+    NotDateRange,
     /// The value is not true or false.
     NotCheckbox,
     /// The value is not a complete URL.
@@ -251,6 +285,7 @@ impl Misfit {
             Misfit::NotText => ("can't be written as text", "can't be written as text"),
             Misfit::NotNumber => ("isn't a number", "aren't numbers"),
             Misfit::NotDate => ("isn't a date", "aren't dates"),
+            Misfit::NotDateRange => ("isn't a date range", "aren't date ranges"),
             Misfit::NotCheckbox => ("isn't true or false", "aren't true or false"),
             Misfit::NotUrl => ("isn't a complete URL", "aren't complete URLs"),
             Misfit::NotOption => ("can't be an option", "can't be options"),

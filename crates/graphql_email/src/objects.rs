@@ -4,6 +4,7 @@ use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
 use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMailProjection,
     EmailThreadMetadata, Message, MessageAttachment, ParsedLabel, ParsedMessage,
+    ScheduledSendStatus,
 };
 
 use crate::loaders::{
@@ -14,9 +15,11 @@ use crate::loaders::{
 };
 
 const FULL_MESSAGE_FIELDS: &[&str] = &[
+    "operationStatus",
     "providerId",
     "replyingToId",
     "scheduledSendTime",
+    "scheduledSendStatus",
     "attachments",
     "attachmentsDraft",
     "attachmentsForwarded",
@@ -68,6 +71,30 @@ impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
 /// An adaptively hydrated email content projection for Soup queries.
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
 
+/// The persisted state of a scheduled delivery.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlScheduledSendStatus {
+    /// Waiting for its send time or safely retrying preparation.
+    Pending,
+    /// Provider submission has started.
+    Sending,
+    /// Delivery was definitely rejected; the draft can be restored.
+    Failed,
+    /// Delivery may have succeeded; reconciliation is required.
+    Unconfirmed,
+}
+
+impl From<ScheduledSendStatus> for GraphqlScheduledSendStatus {
+    fn from(status: ScheduledSendStatus) -> Self {
+        match status {
+            ScheduledSendStatus::Pending => Self::Pending,
+            ScheduledSendStatus::Sending => Self::Sending,
+            ScheduledSendStatus::Failed => Self::Failed,
+            ScheduledSendStatus::Unconfirmed => Self::Unconfirmed,
+        }
+    }
+}
+
 impl GraphqlSoupEmailMessage {
     /// Wraps a message produced outside the DataLoader path (e.g. a
     /// mutation payload's draft record).
@@ -89,6 +116,10 @@ impl GraphqlSoupEmailMessage {
 /// An adaptively hydrated email content projection for Soup queries.
 #[Object]
 impl GraphqlSoupEmailMessage {
+    /// Generation required when editing a draft after send/cancellation.
+    async fn draft_generation(&self) -> i32 {
+        self.parsed().draft_generation
+    }
     /// Immutable scheduling snapshots; JSON keeps both transports identical.
     async fn calendar_invitations(
         &self,
@@ -102,6 +133,13 @@ impl GraphqlSoupEmailMessage {
     /// The unique message identifier.
     async fn id(&self) -> ID {
         ID(self.parsed().db_id.to_string())
+    }
+
+    /// Provider-neutral synchronization and delivery progress, including uncertainty.
+    async fn operation_status(
+        &self,
+    ) -> async_graphql::Result<Option<crate::operation::GraphqlMessageOperation>> {
+        Ok(self.full()?.operation_status.clone().map(Into::into))
     }
 
     /// The identifier assigned by the email provider.
@@ -180,6 +218,13 @@ impl GraphqlSoupEmailMessage {
             .full()?
             .scheduled_send_time
             .map(|value| value.to_rfc3339()))
+    }
+
+    /// Whether the scheduled delivery is pending, sending, failed, or unconfirmed.
+    async fn scheduled_send_status(
+        &self,
+    ) -> async_graphql::Result<Option<GraphqlScheduledSendStatus>> {
+        Ok(self.full()?.scheduled_send_status.map(Into::into))
     }
 
     /// The sender of the message.
@@ -300,6 +345,8 @@ impl GraphqlSoupEmailMessage {
 /// A provider-hosted attachment embedded in an email message.
 #[derive(SimpleObject)]
 pub struct GraphqlSoupEmailMessageAttachment {
+    /// Cloud-reference attachments open in the provider and have no binary download.
+    reference_url: Option<String>,
     /// The attachment's canonical database identifier.
     id: ID,
     /// The attachment identifier assigned by the email provider.
@@ -319,6 +366,7 @@ pub struct GraphqlSoupEmailMessageAttachment {
 impl GraphqlSoupEmailMessageAttachment {
     fn new(value: &MessageAttachment) -> Self {
         Self {
+            reference_url: value.reference_url.clone(),
             id: ID(value.db_id.to_string()),
             provider_id: value.provider_id.clone(),
             filename: value.filename.clone(),
@@ -347,6 +395,12 @@ pub struct GraphqlSoupEmailDraftAttachment {
     size: i32,
     /// The storage key containing the uploaded attachment.
     s3_key: String,
+    /// True until upload completion is verified.
+    upload_pending: bool,
+    /// Original inline attachment identity.
+    content_id: Option<String>,
+    /// Whether the attachment belongs in the message body.
+    is_inline: bool,
 }
 
 impl GraphqlSoupEmailDraftAttachment {
@@ -359,6 +413,9 @@ impl GraphqlSoupEmailDraftAttachment {
             sha: value.sha.clone(),
             size: value.size,
             s3_key: value.s3_key.clone(),
+            upload_pending: value.upload_pending,
+            content_id: value.content_id.clone(),
+            is_inline: value.is_inline,
         }
     }
 }
@@ -446,9 +503,9 @@ where
     let loader = ctx.data::<DataLoader<EmailThreadMetadataLoader<R>>>()?;
     match loader.load_one(thread_id).await? {
         Some(EmailThreadMetadataLoad::Found(metadata)) => Ok(metadata),
-        Some(EmailThreadMetadataLoad::Missing | EmailThreadMetadataLoad::Failed) | None => Err(
-            async_graphql::Error::new("email thread metadata is unavailable"),
-        ),
+        Some(EmailThreadMetadataLoad::Unavailable(_)) | None => Err(async_graphql::Error::new(
+            "email thread metadata is unavailable",
+        )),
     }
 }
 
@@ -463,10 +520,9 @@ where
     let loader = ctx.data::<DataLoader<EmailThreadMailProjectionLoader<R>>>()?;
     match loader.load_one(thread_id).await? {
         Some(EmailThreadMailProjectionLoad::Found(projection)) => Ok(projection),
-        Some(EmailThreadMailProjectionLoad::Missing | EmailThreadMailProjectionLoad::Failed)
-        | None => Err(async_graphql::Error::new(
-            "email thread Mail projection is unavailable",
-        )),
+        Some(EmailThreadMailProjectionLoad::Unavailable(_)) | None => Err(
+            async_graphql::Error::new("email thread Mail projection is unavailable"),
+        ),
     }
 }
 
@@ -515,7 +571,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{SoupEmailContentEdgeReader, email_content_loader};
+    use crate::{EmailThreadUnavailable, SoupEmailContentEdgeReader, email_content_loader};
 
     struct ContentQuery;
 
@@ -557,6 +613,9 @@ mod tests {
                             thread_id,
                             link_id: Uuid::from_u128(3),
                             latest_inbound_message_ts: None,
+                            latest_outbound_message_ts: None,
+                            latest_non_spam_message_ts: None,
+                            reminder_returned_at: None,
                         }),
                     )
                 })
@@ -572,7 +631,12 @@ mod tests {
         ) -> HashMap<Uuid, EmailThreadMailProjectionLoad> {
             thread_ids
                 .into_iter()
-                .map(|thread_id| (thread_id, EmailThreadMailProjectionLoad::Missing))
+                .map(|thread_id| {
+                    (
+                        thread_id,
+                        EmailThreadMailProjectionLoad::Unavailable(EmailThreadUnavailable::NoRow),
+                    )
+                })
                 .collect()
         }
     }
@@ -597,6 +661,7 @@ mod tests {
     fn message(thread_id: Uuid) -> ParsedMessage {
         let now = Utc::now();
         ParsedMessage {
+            draft_generation: 0,
             db_id: Uuid::from_u128(1),
             link_id: Uuid::from_u128(3),
             thread_db_id: thread_id,

@@ -1,9 +1,10 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { invalidateCalendarInvitations } from './invitations';
 import { calendarKeys, RSVP_MUTATION_KEY } from './keys';
 import { invalidateCalendarEventPreviews } from './mention-preview';
 import { invalidateCalendarOccurrences } from './occurrences';
-import { invalidateTeamOutOfOffice } from './team-ooo';
+import { refreshTeamCalendarQueries } from './team-cache';
 
 /**
  * Refetches everything the calendar UI reads: every mounted occurrence
@@ -12,10 +13,10 @@ import { invalidateTeamOutOfOffice } from './team-ooo';
  * calendar mention chips.
  */
 export function invalidateCalendarViews(): void {
-  void invalidateCalendarInvitations();
-  invalidateCalendarOccurrences();
+  fireAndForget(refreshTeamCalendarQueries(), 'calendar-sync');
+  fireAndForget(invalidateCalendarInvitations(), 'calendar-sync');
+  fireAndForget(invalidateCalendarOccurrences(), 'calendar-sync');
   invalidateCalendarEventPreviews();
-  invalidateTeamOutOfOffice();
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars.queryKey,
   });
@@ -32,19 +33,38 @@ export function invalidateCalendarViews(): void {
 export function handleRefreshCalendar(payload: unknown): void {
   const event =
     typeof payload === 'object' && payload !== null
-      ? (payload as { event?: unknown; link_id?: unknown })
+      ? (payload as {
+          event?: unknown;
+          link_id?: unknown;
+          team_ooo_changed?: unknown;
+        })
       : undefined;
+  if (event?.event === 'team_sharing_changed') {
+    fireAndForget(
+      refreshTeamCalendarQueries({
+        outOfOfficeChanged: event.team_ooo_changed !== false,
+      }),
+      'calendar-sync'
+    );
+    return;
+  }
   if (event?.event !== 'synced' || typeof event.link_id !== 'string') return;
+  // Old servers and unknown hints retain immediate revocation behavior.
+  fireAndForget(
+    refreshTeamCalendarQueries({
+      outOfOfficeChanged: event.team_ooo_changed !== false,
+    }),
+    'calendar-sync'
+  );
 
   // An in-flight RSVP holds optimistic occurrence state a refetch would
   // clobber; the last RSVP to settle re-invalidates occurrences itself, so
   // only the caches without optimistic writes refresh meanwhile.
   if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) === 0) {
-    void invalidateCalendarInvitations();
-    invalidateCalendarOccurrences();
+    fireAndForget(invalidateCalendarInvitations(), 'calendar-sync');
+    fireAndForget(invalidateCalendarOccurrences(), 'calendar-sync');
   }
   invalidateCalendarEventPreviews();
-  invalidateTeamOutOfOffice();
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars.queryKey,
   });

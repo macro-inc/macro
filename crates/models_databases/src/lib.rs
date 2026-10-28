@@ -3,12 +3,16 @@
 //! position keys, shared by the SQL engine, the HTTP API and the domain.
 
 pub mod cast;
+mod date_range;
+pub mod formula;
 mod ids;
 mod ops;
 pub mod position;
 pub mod property;
 pub mod views;
 
+pub use date_range::DateRange;
+pub use formula::{Formula, FormulaType, Operator};
 pub use ids::{
     ChangeId, ColumnId, DatabaseId, OptionId, PropertyId, QueryId, RowId, TableId, TableVersion,
     ViewId,

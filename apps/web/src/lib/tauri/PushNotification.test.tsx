@@ -1,352 +1,318 @@
-import type { PushRegistrationLifecycle } from '@core/auth/push-registration-lifecycle';
-import type { PlatformNotificationInterface } from '@notifications';
-import { cleanup, render } from '@solidjs/testing-library';
+import {
+  finishNotificationNavigation,
+  pendingNotificationNavigation,
+  pendingNotificationNavigationId,
+  setPendingNotificationNavigationId,
+} from '@notifications/notification-navigation-intent';
+import { endNotificationOpen } from '@notifications/notification-open-trace';
+import { waitFor } from '@solidjs/testing-library';
+import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MaybePushNotificationRegistration } from './PushNotification';
 import type { PushEvent } from './push-api';
 
-const mock = vi.hoisted(() => ({
-  loggedIn: true,
-  lifecycle: undefined as PushRegistrationLifecycle | undefined,
-  watcher: undefined as ((event: PushEvent) => void) | undefined,
-  check: vi.fn(),
-  request: vi.fn(),
-  register: vi.fn(),
-  configure: vi.fn(),
-  unwatch: vi.fn(),
-  watch: vi.fn(),
-  registerDevice: vi.fn(),
-  unregisterDevice: vi.fn(),
-  recipient: vi.fn(),
-  navigate: vi.fn(),
-  acknowledge: vi.fn(),
-  localShow: vi.fn(),
-  notifications: undefined as PlatformNotificationInterface | undefined,
+const registration = vi.hoisted(() => ({
+  os: 'android',
+  version: '16',
+  signedIn: true,
+  sync: undefined as (() => Promise<void>) | undefined,
+  logout: undefined as (() => Promise<void>) | undefined,
+  onEvent: undefined as ((event: PushEvent) => void) | undefined,
+  register: vi.fn(async () => ({ isErr: () => false })),
+  configureRecipient: vi.fn(async (_recipientId: string | null) => {}),
+  acknowledge: vi.fn(async (_deliveryId: string) => {}),
+  clearPending: vi.fn(async () => {}),
+  releaseCover: vi.fn(async () => {}),
+  removeAllActive: vi.fn(async () => {}),
+  receive: undefined as ((event: PushEvent) => void) | undefined,
+  buffered: undefined as PushEvent | undefined,
 }));
-
-vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => mock.loggedIn }));
+vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLKIT: true }));
+vi.mock('@core/util/platform', () => ({
+  isTauri: () => true,
+  isPlatform: (os: string) => registration.os === os,
+}));
+vi.mock('@tauri-apps/plugin-os', () => ({
+  version: () => registration.version,
+}));
+vi.mock('@core/util/cookies', () => ({
+  hasLoginCookie: () => registration.signedIn,
+}));
 vi.mock('@core/auth/push-registration-lifecycle', () => ({
-  registerPushRegistrationLifecycle: (lifecycle: PushRegistrationLifecycle) => {
-    mock.lifecycle = lifecycle;
+  registerPushRegistrationLifecycle: (hooks: {
+    syncRegistration: () => Promise<void>;
+    unregisterForLogout: () => Promise<void>;
+  }) => {
+    registration.sync = hooks.syncRegistration;
+    registration.logout = hooks.unregisterForLogout;
     return () => {};
   },
-  syncPushRegistrations: async () => {
-    await mock.lifecycle?.syncRegistration();
-  },
+  syncPushRegistrations: async () => {},
 }));
 vi.mock('@queries/notification/device-registration', () => ({
-  fetchPushRecipient: mock.recipient,
-  registerPushDevice: mock.registerDevice,
-  unregisterPushDevice: mock.unregisterDevice,
+  fetchPushRecipient: async () => 'macro|test@example.com',
+  registerPushDevice: registration.register,
+  unregisterPushDevice: async () => ({ isErr: () => false }),
 }));
-vi.mock('@notifications', () => ({
-  PlatformNotificationProvider: (props: {
-    children: unknown;
-    overrideDefault: (
-      disabled: () => Promise<void>
-    ) => PlatformNotificationInterface;
-  }) => {
-    mock.notifications = props.overrideDefault(async () => {});
-    return props.children;
-  },
-  triggerNotificationNavigation: mock.navigate,
+vi.mock('@solid-primitives/storage', () => ({
+  makePersisted: (signal: unknown) => signal,
 }));
 vi.mock('@tauri-apps/plugin-notification', () => ({
-  removeAllActive: vi.fn(async () => {}),
+  removeAllActive: registration.removeAllActive,
 }));
-vi.mock('./notification', () => ({
-  createTauriNotificationInterface: () => ({
-    showNotification: mock.localShow,
-    requestPermission: async () => 'granted',
-    getCurrentPermission: async () => 'granted',
-    unregisterNotifications: async () => {},
-  }),
+vi.mock('@notifications', async () => ({
+  PlatformNotificationProvider: () => null,
+  ...(await import('@notifications/notification-navigation-intent')),
 }));
 vi.mock('./TauriProvider', () => ({
-  useExpectTauri: () => ({ os: 'android' }),
+  useExpectTauri: () => ({ os: registration.os }),
+}));
+vi.mock('./notification', () => ({
+  createTauriNotificationInterface: vi.fn(),
 }));
 vi.mock('./push-api', () => ({
   createPushApi: () => ({
-    checkPermissions: mock.check,
-    requestPermissions: mock.request,
-    register: mock.register,
-    configureRecipient: mock.configure,
-    unwatch: mock.unwatch,
-    acknowledge: mock.acknowledge,
+    checkPermissions: async () => ({ status: 'granted' }),
+    register: async () => ({ token: 'test-device-token' }),
+    configureRecipient: registration.configureRecipient,
     watch: async (callback: (event: PushEvent) => void) => {
-      await mock.watch(callback);
+      registration.onEvent = callback;
+      registration.receive = callback;
+      if (registration.buffered) callback(registration.buffered);
     },
+    unwatch: async () => {},
+    acknowledge: registration.acknowledge,
+    clearPending: registration.clearPending,
   }),
+  releaseNotificationCover: registration.releaseCover,
 }));
 
-import { MaybePushNotificationRegistration } from './PushNotification';
-
+let dispose: (() => void) | undefined;
 beforeEach(() => {
-  vi.resetAllMocks();
-  localStorage.clear();
-  mock.loggedIn = true;
-  mock.watcher = undefined;
-  mock.watch.mockImplementation(
-    async (callback: (event: PushEvent) => void) => {
-      mock.watcher = callback;
-    }
-  );
-  mock.notifications = undefined;
-  mock.check.mockResolvedValue({ status: 'denied' });
-  mock.register.mockResolvedValue({ success: true, token: 'test-token' });
-  mock.configure.mockResolvedValue(undefined);
-  mock.unwatch.mockResolvedValue(undefined);
-  mock.recipient.mockResolvedValue('macro|alice@example.com');
-  mock.registerDevice.mockResolvedValue({ isErr: () => false });
-  mock.unregisterDevice.mockResolvedValue({ isErr: () => false });
+  registration.os = 'android';
+  registration.version = '16';
+  registration.signedIn = true;
+  registration.sync = undefined;
+  registration.logout = undefined;
+  registration.onEvent = undefined;
+  vi.clearAllMocks();
+  registration.receive = undefined;
+  registration.buffered = undefined;
+  registration.acknowledge.mockClear();
+  setPendingNotificationNavigationId(undefined);
+  delete window.__MACRO_ANDROID_CALL_KIT__;
 });
 afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
+  dispose?.();
+  dispose = undefined;
+  setPendingNotificationNavigationId(undefined);
+  endNotificationOpen('test_complete');
+  delete window.__MACRO_ANDROID_CALL_KIT__;
 });
 
-async function mount() {
-  render(() => (
-    <MaybePushNotificationRegistration>
-      <div />
-    </MaybePushNotificationRegistration>
-  ));
-  await vi.waitFor(() => expect(mock.watcher).toBeDefined());
-  // Let the launch sync (permission denied -> receiver disarmed) finish
-  // before starting a new action.
-  await vi.waitFor(() => expect(mock.configure).toHaveBeenCalledWith(null));
-  expect(mock.check).toHaveBeenCalledTimes(1);
-  expect(mock.configure).toHaveBeenCalledTimes(1);
-  mock.configure.mockClear();
+describe.each(['ios', 'android'])('%s push notification navigation', (os) => {
+  beforeEach(() => {
+    registration.os = os;
+  });
+
+  it.each(['FOREGROUND_TAP', 'BACKGROUND_TAP'] as const)(
+    'opens the tapped location for %s before device registration completes',
+    (type) => {
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        MaybePushNotificationRegistration({ children: null });
+      });
+      expect(registration.register).not.toHaveBeenCalled();
+      expect(registration.receive).toBeDefined();
+      registration.receive!({
+        type,
+        payload: { notificationId: 'mobile-notification' },
+        deliveryId: 'mobile-delivery',
+      });
+      expect(pendingNotificationNavigationId()).toBe('mobile-notification');
+      expect(registration.acknowledge).not.toHaveBeenCalled();
+      finishNotificationNavigation(pendingNotificationNavigation()!);
+      expect(registration.acknowledge).toHaveBeenCalledExactlyOnceWith(
+        'mobile-delivery'
+      );
+    }
+  );
+
+  it('retains a launch tap replayed when the native listener attaches', () => {
+    registration.buffered = {
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'cold-start-notification' },
+    };
+    createRoot((cleanup) => {
+      dispose = cleanup;
+      MaybePushNotificationRegistration({ children: null });
+    });
+    expect(pendingNotificationNavigationId()).toBe('cold-start-notification');
+    expect(registration.register).not.toHaveBeenCalled();
+  });
+
+  it.each(['FOREGROUND_DELIVERY', 'BACKGROUND_DELIVERY'] as const)(
+    'does not navigate on %s',
+    (type) => {
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        MaybePushNotificationRegistration({ children: null });
+      });
+      registration.receive!({
+        type,
+        payload: { notificationId: 'received-notification' },
+      });
+      expect(pendingNotificationNavigationId()).toBeUndefined();
+    }
+  );
+
+  it.each<PushEvent['payload']>([{}, { notificationId: '' }])(
+    'ignores a tap without a destination (%j)',
+    (payload) => {
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        MaybePushNotificationRegistration({ children: null });
+      });
+      registration.receive!({ type: 'BACKGROUND_TAP', payload });
+      expect(pendingNotificationNavigationId()).toBeUndefined();
+    }
+  );
+
+  it('ignores taps after the mobile registration provider is disposed', () => {
+    createRoot((cleanup) => {
+      dispose = cleanup;
+      MaybePushNotificationRegistration({ children: null });
+    });
+    dispose?.();
+    dispose = undefined;
+    registration.receive!({
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'stale-notification' },
+    });
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+});
+
+function mountRegistration() {
+  createRoot((cleanup) => {
+    dispose = cleanup;
+    MaybePushNotificationRegistration({ children: null });
+  });
 }
 
-describe('Android push lifecycle', () => {
-  it('listens before registration and navigates only on taps', async () => {
-    await mount();
-    expect(mock.registerDevice).not.toHaveBeenCalled();
-    mock.watcher?.({
-      type: 'BACKGROUND_DELIVERY',
-      payload: { notificationId: 'id' },
-    });
-    expect(mock.navigate).not.toHaveBeenCalled();
-    mock.watcher?.({
-      type: 'BACKGROUND_TAP',
-      payload: { notificationId: 'id' },
-      deliveryId: 'delivery-id',
-    });
-    expect(mock.navigate).toHaveBeenCalledWith('id');
-    expect(mock.acknowledge).toHaveBeenCalledWith('delivery-id');
+describe('push registration native-call capability', () => {
+  it.each([
+    { os: 'android', version: '16', binary: true, expected: true },
+    { os: 'android', version: '16', binary: false, expected: false },
+    { os: 'android', version: '7.1.2', binary: true, expected: false },
+    { os: 'ios', version: '18', binary: false, expected: undefined },
+  ])(
+    'registers $os $version with binary capability $binary',
+    async ({ os, version, binary, expected }) => {
+      registration.os = os;
+      registration.version = version;
+      if (binary) window.__MACRO_ANDROID_CALL_KIT__ = true;
+      mountRegistration();
+      expect(registration.sync).toBeDefined();
+      await registration.sync!();
+      expect(registration.register).toHaveBeenCalledExactlyOnceWith({
+        deviceType: os,
+        token: 'test-device-token',
+        ...(expected === undefined ? {} : { nativeCallCapable: expected }),
+      });
+    }
+  );
+});
+
+describe('iOS notification launch integration', () => {
+  const tap: PushEvent = {
+    type: 'BACKGROUND_TAP',
+    deliveryId: 'delivery-1',
+    receivedAtMs: 123,
+    payload: {
+      notificationId: 'notification-1',
+      recipientId: 'macro|test@example.com',
+      navigation: JSON.stringify({
+        type: 'channel',
+        channelId: '11111111-1111-4111-8111-111111111111',
+        messageId: '22222222-2222-4222-8222-222222222222',
+        threadId: null,
+      }),
+    },
+  };
+
+  beforeEach(() => {
+    registration.os = 'ios';
   });
 
-  it('shares an in-flight watcher and retries failure so taps still navigate', async () => {
-    vi.useFakeTimers();
-    let fail!: (error: Error) => void;
-    mock.watch.mockImplementationOnce(
+  it('binds the iOS receiver to the actual registered recipient', async () => {
+    mountRegistration();
+    await registration.sync!();
+    expect(registration.configureRecipient).toHaveBeenCalledExactlyOnceWith(
+      'macro|test@example.com'
+    );
+  });
+
+  it('retains a delivered tap until navigation and native acknowledgment finish', async () => {
+    let completeAcknowledgment!: () => void;
+    registration.acknowledge.mockImplementationOnce(
       () =>
-        new Promise((_, reject) => {
-          fail = reject;
+        new Promise<void>((resolve) => {
+          completeAcknowledgment = resolve;
         })
     );
-    render(() => (
-      <MaybePushNotificationRegistration>
-        <div />
-      </MaybePushNotificationRegistration>
-    ));
-    await vi.advanceTimersByTimeAsync(0);
-    mock.check.mockResolvedValue({ status: 'granted' });
-    let finished = false;
-    async function syncRegistration() {
-      await mock.lifecycle!.syncRegistration();
-      finished = true;
-    }
-    const registration = syncRegistration();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(mock.watch).toHaveBeenCalledOnce();
-    expect(finished).toBe(false);
-    fail(new Error('Transient bridge failure'));
-    await registration;
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(mock.watch).toHaveBeenCalledTimes(2);
-    mock.watcher?.({
-      type: 'BACKGROUND_TAP',
-      payload: { notificationId: 'id' },
-      deliveryId: 'tap',
+    mountRegistration();
+    await waitFor(() => expect(registration.onEvent).toBeDefined());
+    registration.onEvent!(tap);
+    const intent = pendingNotificationNavigation();
+    expect(intent).toMatchObject({
+      notificationId: 'notification-1',
+      deliveryId: 'delivery-1',
+      target: { messageId: '22222222-2222-4222-8222-222222222222' },
     });
-    expect(mock.navigate).toHaveBeenCalledWith('id');
-    expect(mock.acknowledge).toHaveBeenCalledWith('tap');
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(mock.watch).toHaveBeenCalledTimes(2);
-  });
+    expect(registration.acknowledge).not.toHaveBeenCalled();
 
-  it.each([false, true])(
-    'does not retry a failed watcher after disposal (failure pending: %s)',
-    async (pending) => {
-      vi.useFakeTimers();
-      let fail!: (error: Error) => void;
-      mock.watch.mockImplementationOnce(
-        () =>
-          new Promise((_, reject) => {
-            fail = reject;
-          })
-      );
-      const { unmount } = render(() => (
-        <MaybePushNotificationRegistration>
-          <div />
-        </MaybePushNotificationRegistration>
-      ));
-      await vi.advanceTimersByTimeAsync(0);
-      if (pending) unmount();
-      fail(new Error('Transient bridge failure'));
-      await vi.advanceTimersByTimeAsync(0);
-      if (!pending) unmount();
-      await vi.advanceTimersByTimeAsync(5000);
-      expect(mock.watch).toHaveBeenCalledOnce();
-    }
-  );
-
-  it('binds the native receiver only after backend registration succeeds', async () => {
-    await mount();
-    mock.check.mockResolvedValue({ status: 'granted' });
-    await mock.lifecycle?.syncRegistration();
-    expect(mock.registerDevice).toHaveBeenCalledWith({
-      deviceType: 'android',
-      token: 'test-token',
-    });
-    expect(mock.configure).toHaveBeenCalledWith('macro|alice@example.com');
-  });
-
-  it('cannot re-enable the old recipient when registration finishes after logout', async () => {
-    await mount();
-    mock.check.mockResolvedValue({ status: 'granted' });
-    let complete!: (value: { isErr: () => boolean }) => void;
-    mock.registerDevice.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          complete = resolve;
-        })
+    finishNotificationNavigation(intent!);
+    expect(registration.acknowledge).toHaveBeenCalledExactlyOnceWith(
+      'delivery-1'
     );
-    const syncing = expect(mock.lifecycle!.syncRegistration()).rejects.toThrow(
-      'push device registration did not complete'
-    );
-    await vi.waitFor(() => expect(mock.registerDevice).toHaveBeenCalled());
-    const logout = mock.lifecycle!.unregisterForLogout();
-    await vi.waitFor(() => expect(mock.configure).toHaveBeenCalledWith(null));
-    mock.loggedIn = false;
-    complete({ isErr: () => false });
-    await Promise.all([syncing, logout]);
-    expect(mock.configure.mock.calls).toEqual([[null]]);
-    expect(mock.unregisterDevice).toHaveBeenCalledWith({
-      deviceType: 'android',
-      token: 'test-token',
-    });
-    expect(mock.unregisterDevice.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mock.registerDevice.mock.invocationCallOrder[0]
+    expect(pendingNotificationNavigation()).toBe(intent);
+    completeAcknowledgment();
+    await waitFor(() =>
+      expect(pendingNotificationNavigation()).toBeUndefined()
     );
   });
 
-  it.each(['logout', 'opt-out'])(
-    'disarms a native configure that completes during %s',
-    async (action) => {
-      await mount();
-      mock.check.mockResolvedValue({ status: 'granted' });
-      let complete!: () => void;
-      let nativeRecipient: string | null = null;
-      mock.configure.mockImplementation(async (recipient: string | null) => {
-        if (recipient !== null) {
-          await new Promise<void>((resolve) => {
-            complete = resolve;
-          });
-        }
-        nativeRecipient = recipient;
-      });
-      const syncing = expect(
-        mock.lifecycle!.syncRegistration()
-      ).rejects.toThrow('push device registration did not complete');
-      await vi.waitFor(() => expect(complete).toBeDefined());
-      const disabling =
-        action === 'logout'
-          ? mock.lifecycle!.unregisterForLogout()
-          : mock.notifications!.unregisterNotifications();
-      if (action === 'logout') mock.loggedIn = false;
-      complete();
-      await Promise.all([syncing, disabling]);
-      expect(nativeRecipient).toBeNull();
-      expect(mock.configure).toHaveBeenLastCalledWith(null);
-      expect(mock.unregisterDevice).toHaveBeenCalledWith({
-        deviceType: 'android',
-        token: 'test-token',
-      });
-    }
-  );
-
-  it.each(['backend', 'native'])(
-    'keeps the new account registered after stale %s completion',
-    async (pendingStep) => {
-      await mount();
-      mock.check.mockResolvedValue({ status: 'granted' });
-      let complete!: () => void;
-      let nativeRecipient: string | null = null;
-      let backendRegistered = false;
-      const delayed = async () => {
-        await new Promise<void>((resolve) => {
-          complete = resolve;
-        });
-      };
-      mock.registerDevice.mockImplementation(async () => {
-        if (
-          pendingStep === 'backend' &&
-          mock.registerDevice.mock.calls.length === 1
-        )
-          await delayed();
-        backendRegistered = true;
-        return { isErr: () => false };
-      });
-      mock.unregisterDevice.mockImplementation(async () => {
-        backendRegistered = false;
-        return { isErr: () => false };
-      });
-      mock.configure.mockImplementation(async (recipient: string | null) => {
-        if (pendingStep === 'native' && recipient === 'macro|alice@example.com')
-          await delayed();
-        nativeRecipient = recipient;
-      });
-      const oldSync = expect(
-        mock.lifecycle!.syncRegistration()
-      ).rejects.toThrow('push device registration did not complete');
-      await vi.waitFor(() => expect(complete).toBeDefined());
-      const logout = mock.lifecycle!.unregisterForLogout();
-      // Model a new login after logout's network timeout. The token is shared.
-      mock.recipient.mockResolvedValue('macro|bob@example.com');
-      const newSync = mock.lifecycle!.syncRegistration();
-      complete();
-      await Promise.all([oldSync, logout, newSync]);
-      expect(backendRegistered).toBe(true);
-      expect(nativeRecipient).toBe('macro|bob@example.com');
-      expect(mock.configure).toHaveBeenLastCalledWith('macro|bob@example.com');
-      expect(mock.registerDevice).toHaveBeenCalledTimes(2);
-      expect(mock.registerDevice.mock.invocationCallOrder[1]).toBeGreaterThan(
-        Math.max(...mock.unregisterDevice.mock.invocationCallOrder)
-      );
-    }
-  );
-
-  it('disables native display when permission is revoked', async () => {
-    await mount();
-    mock.check.mockResolvedValue({ status: 'granted' });
-    await mock.lifecycle?.syncRegistration();
-    mock.configure.mockClear();
-    mock.check.mockResolvedValue({ status: 'denied' });
-    await mock.lifecycle?.syncRegistration();
-    expect(mock.configure).toHaveBeenCalledWith(null);
+  it('retains a signed-out tap and reveals the sign-in UI', async () => {
+    registration.signedIn = false;
+    mountRegistration();
+    await waitFor(() => expect(registration.onEvent).toBeDefined());
+    registration.onEvent!(tap);
+    await waitFor(() =>
+      expect(registration.releaseCover).toHaveBeenCalledOnce()
+    );
+    expect(pendingNotificationNavigation()).toMatchObject({
+      notificationId: 'notification-1',
+      deliveryId: 'delivery-1',
+    });
+    expect(registration.acknowledge).not.toHaveBeenCalled();
+    expect(registration.clearPending).not.toHaveBeenCalled();
+    expect(registration.configureRecipient).not.toHaveBeenCalled();
   });
 
-  it('suppresses websocket local notifications after remote push registration', async () => {
-    await mount();
-    mock.check.mockResolvedValue({ status: 'granted' });
-    await mock.lifecycle?.syncRegistration();
-    await mock.notifications!.showNotification({
-      title: 'Duplicate message',
-      options: { body: 'Body' },
-    });
-    expect(mock.localShow).not.toHaveBeenCalled();
+  it('clears the pending tap and disarms the receiver on explicit logout', async () => {
+    mountRegistration();
+    await waitFor(() => expect(registration.onEvent).toBeDefined());
+    registration.onEvent!(tap);
+    expect(pendingNotificationNavigation()).toBeDefined();
+    registration.signedIn = false;
+    await registration.logout!();
+    expect(pendingNotificationNavigation()).toBeUndefined();
+    expect(registration.clearPending).toHaveBeenCalledOnce();
+    expect(registration.configureRecipient).toHaveBeenCalledExactlyOnceWith(
+      null
+    );
+    expect(registration.removeAllActive).toHaveBeenCalledOnce();
+    expect(registration.acknowledge).not.toHaveBeenCalled();
   });
 });

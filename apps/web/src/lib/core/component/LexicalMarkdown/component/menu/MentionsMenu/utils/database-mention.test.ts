@@ -75,3 +75,50 @@ describe('mentioning a database', () => {
     });
   });
 });
+
+it('records a CRM contact reference without sharing, inviting, or notifying', async () => {
+  trackMention.mockClear();
+  const dispatchCommand = vi.fn();
+  const onUserMention = vi.fn();
+  const onDocumentMention = vi.fn();
+  const onEmailMention = vi.fn();
+  const handle = createItemHandler({
+    editor: { dispatchCommand } as unknown as LexicalEditor,
+    blockId: 'doc-1',
+    onUserMention,
+    onDocumentMention,
+    onEmailMention,
+  });
+  await handle({
+    kind: 'entity',
+    bucket: 'crm_contact',
+    id: 'contact-1',
+    sortTimestamp: 0,
+    searchText: 'Pat',
+    timestamps: {},
+    data: {
+      type: 'crm_contact',
+      id: 'contact-1',
+      companyId: 'company-1',
+      ownerId: '',
+      name: 'Pat',
+      email: 'pat@example.com',
+      hidden: false,
+    },
+  });
+  expect(dispatchCommand).toHaveBeenLastCalledWith('insert-document', {
+    documentId: 'contact-1',
+    documentName: 'Pat',
+    blockName: 'contact',
+    mentionUuid: 'mention-1',
+  });
+  // Recorded as a reference of the contact, which is not a notification.
+  expect(trackMention).toHaveBeenCalledWith(
+    'doc-1',
+    'crm_contact',
+    'contact-1'
+  );
+  expect(onUserMention).not.toHaveBeenCalled();
+  expect(onDocumentMention).not.toHaveBeenCalled();
+  expect(onEmailMention).not.toHaveBeenCalled();
+});

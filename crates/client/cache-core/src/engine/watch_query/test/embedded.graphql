@@ -1,0 +1,22 @@
+query Properties($input: SoupInput!, $show: Boolean! = true) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        properties {
+          id
+          value @include(if: $show) {
+            kind: __typename
+            ... on GraphqlSelectOptionPropertyValue { selected: optionIds }
+            ... on GraphqlStringPropertyValue { text: value }
+            ... on GraphqlEntityReferencePropertyValue {
+              references { target: entityId entityType }
+            }
+          }
+        }
+      }
+    }
+  }
+}

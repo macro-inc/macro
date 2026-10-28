@@ -53,6 +53,7 @@ async fn session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
             id,
             owner_id: owner,
             bot_id: bot,
@@ -80,6 +81,7 @@ fn action(action: AgentAction) -> DeliverAction {
         action,
         actor: Some(staff_sender()),
         announce: None,
+        context: None,
     }
 }
 
@@ -122,6 +124,7 @@ async fn denied_or_unavailable_trigger_open_has_no_side_effects() {
                     discussion_id: macro_uuid::generate_uuid_v7(),
                     actor: staff_sender(),
                     prompt: "Work on this task".to_owned(),
+                    context: None,
                 }),
             ] {
                 admission.calls.lock().unwrap().clear();
@@ -184,6 +187,8 @@ async fn managed_open_checks_quota_before_provisioning_without_an_initial_prompt
                     bot_id: bot_id::MACRO_CODER_BOT_ID,
                     profile: None,
                 }),
+                source: agent_session::domain::model::SessionSource::User,
+                visibility: agent_session::domain::model::SessionVisibility::Listed,
             })
             .await;
         assert!(matches!(result, Err(AgentSessionError::Admission(error)) if error == failure));
@@ -221,7 +226,7 @@ async fn spending_actions_charge_the_persisted_owner_not_the_actor() {
 
 #[tokio::test]
 async fn externally_funded_runtimes_accept_spending_actions_without_quota_io() {
-    for harness in ["cursor", "codex-cloud", "claude-cloud", "macrod", "custom"] {
+    for harness in ["cursor", "codex-cloud", "macrod", "custom"] {
         let (service, repo, admission) = bench(Some(denied()));
         let id = session(&repo, BotId::TEST_A, harness, Owner::User(staff_sender())).await;
         service.inner.busy.admit(id);
@@ -353,6 +358,9 @@ async fn retries_of_queued_and_in_flight_actions_do_not_recheck_quota() {
             announce: None,
             announcement_message_id: None,
             dispatched_at: chrono::Utc::now(),
+            bot_id: None,
+            speaks_as_chip: false,
+            presented: Vec::new(),
             held_tool_calls: Vec::new(),
         },
     );
@@ -412,6 +420,7 @@ async fn enqueue_waiting(service: &TestHarness, id: AgentSessionId) -> Vec<Agent
 
 fn turn_ended() -> HarnessCommand {
     HarnessCommand::Turn(TurnSignal::TurnEnded {
+        notification_noop: false,
         turn: agent_fold::domain::model::TurnId(0),
         action_id: None,
         stop: agent_fold::domain::model::StopReason::EndTurn,
@@ -615,6 +624,9 @@ async fn denying_a_steering_follow_up_does_not_cancel_the_running_turn() {
         announce: None,
         announcement_message_id: None,
         dispatched_at: chrono::Utc::now(),
+        bot_id: None,
+        speaks_as_chip: false,
+        presented: Vec::new(),
         held_tool_calls: Vec::new(),
     };
     service.inner.busy.mark_turn(id, running.clone());
@@ -713,6 +725,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             announce: command.announce,
             announced: Some(macro_uuid::generate_uuid_v7()),
             created_at: chrono::Utc::now(),
+            context: None,
         };
         let stored = entry.to_stored().unwrap();
         let mut sessions = MockAgentSessionService::new();
@@ -743,6 +756,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
                 })
             });
         let service = AgentHarnessService::new(
+            None,
             sessions,
             MockContainerManager::new(),
             AnnouncerMock::new(),

@@ -33,6 +33,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     },
   }),
 }));
+vi.mock('@components/app/split-layout/view-restoration', () => ({
+  useViewRestoration: () => {},
+}));
 vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   withAuth: (view: unknown) => view,
   usePageViewTracking: () => {},
@@ -42,6 +45,7 @@ vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   },
 }));
 vi.mock('@core/component/LoadingBlock', () => ({ LoadingBlock: () => null }));
+vi.mock('./agents-view-skeleton', () => ({ AgentsViewSkeleton: () => null }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableChatV3Agents: { key: 'enable-chat-v3-agents' },
 }));
@@ -52,7 +56,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 vi.mock('@app/features/routines/queries/entities', () => ({}));
 vi.mock('../next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('./views/AgentsView', () => ({ AgentsView: () => null }));
-vi.mock('../settings/McpConnections', () => ({ McpConnections: () => null }));
+vi.mock('../settings/IntegrationsPage', () => ({
+  IntegrationsPage: () => null,
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -237,6 +237,14 @@ impl MarkdownInitializationPort for OptionalMarkdownInitializer {
             }
         }
     }
+
+    async fn initialize_existing_notion(
+        &self,
+        _document_id: &str,
+        _notion: &documents::domain::notion_markdown::NotionMarkdown,
+    ) -> Result<documents::domain::ports::markdown::MarkdownSnapshot, DocumentError> {
+        unimplemented!("the markdown backfill never imports Notion pages")
+    }
 }
 
 fn print_summary(report: &MarkdownBackfillReport, apply: bool) {

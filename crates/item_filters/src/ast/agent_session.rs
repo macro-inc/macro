@@ -10,7 +10,7 @@ use crate::{AgentSessionFilters, ast::ExpandErr};
 pub enum AgentSessionLiteral {
     /// Opt this query into agent sessions at all.
     ///
-    /// Like reminders, agent sessions are **off by default** — a query that
+    /// Agent sessions are **off by default** — a query that
     /// says nothing about them gets none, so adding them to Soup did not
     /// change what pre-existing Soup views return. Asking for specific ids
     /// or owners also counts as opting in.
@@ -22,6 +22,68 @@ pub enum AgentSessionLiteral {
     /// Filter by the session's owner.
     #[serde(rename = "o")]
     Owner(Owner),
+    /// Filter by who started the session.
+    #[serde(rename = "src")]
+    Source(AgentSessionSource),
+    /// Filter by whether the session is listed.
+    #[serde(rename = "vis")]
+    Visibility(AgentSessionVisibility),
+}
+
+/// Who started an agent session. The string form is the
+/// `agent_session.source` column's.
+#[derive(
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum AgentSessionSource {
+    /// A person, directly or through something they did.
+    #[default]
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+/// Where an agent session is shown. The string form is the
+/// `agent_session.visibility` column's.
+#[derive(
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum AgentSessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    #[default]
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it; a routine's setting decides it for each of its runs.
+    Unlisted,
+    /// Out of every list and search; only a query naming the session's id
+    /// returns it.
+    Hidden,
 }
 
 impl ExpandFrame<AgentSessionLiteral> for AgentSessionFilters {

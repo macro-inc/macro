@@ -7,6 +7,11 @@ use model_user::UserContext;
 use rootcause::Report;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). These tests build their own schema, so they
+/// start from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
+
 #[derive(Clone)]
 struct Identity;
 impl MacroAuthorizationService for Identity {
@@ -20,6 +25,15 @@ impl MacroAuthorizationService for Identity {
             ..Default::default()
         })
     }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
     async fn authorize_internal(
         &self,
         _: &str,
@@ -30,6 +44,9 @@ impl MacroAuthorizationService for Identity {
 }
 struct People;
 impl Directory for People {
+    async fn user_teams(&self, _: &str) -> Result<Vec<Uuid>, Error> {
+        Ok(vec![])
+    }
     async fn members(&self, _: Uuid) -> Result<Vec<TeamMember>, Error> {
         Ok(vec![
             TeamMember {
@@ -73,6 +90,10 @@ impl Calendars for Calendar {
 
 #[sqlx::test(migrations = false)]
 async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sqlx::PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::raw_sql("CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY); INSERT INTO \"User\" VALUES ('macro|host@example.test');").execute(&pool).await.unwrap();
     sqlx::raw_sql(include_str!(
         "../../../../macro_db_client/migrations/20260918164303_calendar_scheduling.sql"

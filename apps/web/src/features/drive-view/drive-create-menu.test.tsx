@@ -1,19 +1,12 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DriveCreateMenu } from './drive-create-menu';
 
 const host = vi.hoisted(() => ({
   runCreateAction: vi.fn(),
-  createProject: vi.fn(),
-  toastSuccess: vi.fn(),
   selectFolder: vi.fn(),
+  openCreated: vi.fn(),
 }));
 
 const [projectId, setProjectId] = createSignal<string | undefined>('child');
@@ -39,12 +32,6 @@ vi.mock('@app/features/command/Launcher', () => ({
   runCreateAction: host.runCreateAction,
   useCreatableEnabled: () => () => true,
 }));
-vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: host.toastSuccess },
-}));
-vi.mock('@queries/storage/projects', () => ({
-  createProject: host.createProject,
-}));
 vi.mock('./context/drive-context', () => ({
   useDriveView: () => ({
     state: { projectId, selectFolder: host.selectFolder },
@@ -54,13 +41,16 @@ vi.mock('./context/drive-context', () => ({
         { id: 'child', name: 'Wireframes', parentId: 'root', userId: 'user' },
       ],
     },
-    actions: { uploadFiles: vi.fn(), uploadFolder: vi.fn() },
+    actions: {
+      uploadFiles: vi.fn(),
+      uploadFolder: vi.fn(),
+      openCreated: host.openCreated,
+    },
   }),
 }));
 
 beforeEach(() => {
   setProjectId('child');
-  host.createProject.mockResolvedValue('new-folder');
 });
 
 afterEach(() => {
@@ -84,7 +74,7 @@ it('names the open folder as the destination', async () => {
   expect(menu.textContent).toContain('Wireframes');
 });
 
-it('creates files inside the open folder', async () => {
+it('creates files inside the open folder and opens them there', async () => {
   await openMenu();
   fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Document' }), {
     key: 'Enter',
@@ -93,57 +83,48 @@ it('creates files inside the open folder', async () => {
   expect(host.runCreateAction).toHaveBeenCalledWith('md', {
     projectId: 'child',
     source: 'drive',
+    destination: 'Wireframes',
+    openCreated: host.openCreated,
   });
 });
 
-it('names a new folder and creates it inside the open folder', async () => {
+it('opens a folder composer inside the current folder', async () => {
   await openMenu();
   fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Folder' }), {
     key: 'Enter',
   });
-
-  const dialog = await screen.findByRole('dialog');
-  expect(dialog.textContent).toContain('Wireframes');
-
-  fireEvent.input(screen.getByLabelText('Name'), {
-    target: { value: '  Sketches ' },
+  expect(host.runCreateAction).toHaveBeenCalledWith('project', {
+    projectId: 'child',
+    source: 'drive',
+    destination: 'Wireframes',
+    openCreated: host.openCreated,
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-
-  await waitFor(() =>
-    expect(host.createProject).toHaveBeenCalledWith({
-      name: 'Sketches',
-      parentId: 'child',
-      source: 'drive',
-    })
-  );
-  expect(host.runCreateAction).not.toHaveBeenCalled();
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  expect(host.toastSuccess).toHaveBeenCalledWith(
-    'Created “Sketches”',
-    expect.objectContaining({ subtext: 'In Wireframes' })
-  );
 });
 
-it('keeps the dialog open when the folder is not created', async () => {
-  host.createProject.mockResolvedValue(undefined);
-  vi.spyOn(console, 'error').mockImplementation(() => {});
-
-  await openMenu();
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Folder' }), {
+it('offers the same menu from the list header toolbar', async () => {
+  render(() => <DriveCreateMenu presentation="toolbar" />);
+  const trigger = screen.getByRole('button', {
+    name: 'New file or folder in Wireframes',
+  });
+  expect(trigger.textContent).toContain('New');
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  const menu = await screen.findByRole('menu');
+  expect(menu.textContent).toContain('Wireframes');
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Document' }), {
     key: 'Enter',
   });
-  await screen.findByRole('dialog');
-  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
-  expect(await screen.findByRole('alert')).toBeTruthy();
-  expect(screen.getByRole('dialog')).toBeTruthy();
+  expect(host.runCreateAction).toHaveBeenCalledWith('md', {
+    projectId: 'child',
+    source: 'drive',
+    destination: 'Wireframes',
+    openCreated: host.openCreated,
+  });
 });
 
-it('creates at the Drive root outside a folder', async () => {
+it('opens a folder composer at the Drive root outside a folder', async () => {
   setProjectId(undefined);
   render(() => <DriveCreateMenu />);
-
   fireEvent.keyDown(
     screen.getByRole('button', { name: 'New file or folder in Drive' }),
     { key: 'Enter' }
@@ -152,14 +133,10 @@ it('creates at the Drive root outside a folder', async () => {
   fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Folder' }), {
     key: 'Enter',
   });
-  await screen.findByRole('dialog');
-  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-
-  await waitFor(() =>
-    expect(host.createProject).toHaveBeenCalledWith({
-      name: 'Untitled folder',
-      parentId: undefined,
-      source: 'drive',
-    })
-  );
+  expect(host.runCreateAction).toHaveBeenCalledWith('project', {
+    projectId: undefined,
+    source: 'drive',
+    destination: 'Drive',
+    openCreated: host.openCreated,
+  });
 });

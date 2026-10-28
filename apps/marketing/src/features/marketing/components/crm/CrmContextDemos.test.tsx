@@ -93,73 +93,80 @@ it('shows the described company and note at once with reduced motion', () => {
   expect(view.container.querySelector('.demo-cursor')).toBeNull();
 });
 
-it('tours The Meadow’s emails and calls, then returns to its Discussion', () => {
+it('tours Parlor Studio’s emails and calls, then returns to its Discussion', () => {
   const view = render(() => <CrmRecordDemo />);
-  expect(view.getByText(/Dana asked about pricing/)).toBeTruthy();
+  expect(view.getByText(/Ava wants to try folder uploads/)).toBeTruthy();
   visible(true);
   vi.advanceTimersByTime(1400);
   expect(section(view)).toBe('Emails');
   const emails = within(view.getByLabelText('Company emails'));
-  expect(emails.getByText('Seats for the studio team')).toBeTruthy();
-  expect(emails.getByText('Intro from Sam')).toBeTruthy();
+  expect(emails.getByText('Thursday demo')).toBeTruthy();
+  expect(emails.getByText('Who is joining on Thursday')).toBeTruthy();
   vi.advanceTimersByTime(2000);
   expect(section(view)).toBe('Calls');
   expect(
-    within(view.getByLabelText('Company calls')).getByText(
-      'Rollout check-in with The Meadow'
-    )
+    within(view.getByLabelText('Company calls')).getByText('Thursday demo prep')
   ).toBeTruthy();
   vi.advanceTimersByTime(2000);
+  expect(section(view)).toBe('Files');
+  expect(view.getByText('Setup guide')).toBeTruthy();
+  vi.advanceTimersByTime(2000);
+  expect(section(view)).toBe('Tasks');
+  expect(view.getByText('Verify folder uploads in production')).toBeTruthy();
+  vi.advanceTimersByTime(2000);
   expect(section(view)).toBe('Overview');
-  expect(view.getByText('Sent. Order form is in Files.')).toBeTruthy();
+  expect(
+    view.getByText(
+      'Ava wants to try folder uploads at Thursday’s demo. Check the release with Teo before confirming. Julia is helping with setup.'
+    )
+  ).toBeTruthy();
   expect(view.container.querySelector('.demo-cursor')).toBeNull();
 });
 
-it('filters the Emails tab by Signal and by your own threads', () => {
+it('keeps the visitor’s Emails tab selected while changing filters', () => {
   const view = render(() => <CrmRecordDemo />);
-  fireEvent.pointerDown(
-    view.getByRole('group', {
-      name: 'The Meadow’s emails, calls, and team discussion in one record',
-    })
+  fireEvent.click(
+    view.getByRole('button', { name: /^Interact with Parlor Studio/ })
   );
   fireEvent.click(view.getByRole('radio', { name: 'Emails' }));
   const list = () => within(view.getByLabelText('Company emails'));
-  expect(list().getByText('Invitation: The Meadow · Demo')).toBeTruthy();
+  expect(list().getByText('Who is joining on Thursday')).toBeTruthy();
   fireEvent.click(view.getByRole('radio', { name: 'Signal' }));
-  expect(list().queryByText('Invitation: The Meadow · Demo')).toBeNull();
-  expect(list().getByText('Seats for the studio team')).toBeTruthy();
+  expect(
+    (view.getByRole('radio', { name: 'Signal' }) as HTMLInputElement).checked
+  ).toBe(true);
+  expect(list().getByText('Thursday demo')).toBeTruthy();
   fireEvent.click(view.getByRole('radio', { name: 'Me' }));
-  expect(list().queryByText('Seats for the studio team')).toBeNull();
-  expect(list().getByText('Recap from today')).toBeTruthy();
+  expect(
+    (view.getByRole('radio', { name: 'Me' }) as HTMLInputElement).checked
+  ).toBe(true);
+  expect(list().getByText('Thursday demo')).toBeTruthy();
   fireEvent.click(view.getByRole('radio', { name: 'All' }));
-  expect(list().getByText('Invitation: The Meadow · Demo')).toBeTruthy();
+  expect(list().getByText('Who is joining on Thursday')).toBeTruthy();
   vi.advanceTimersByTime(20000);
   expect(section(view)).toBe('Emails');
 });
 
 it('lists the record’s team, files, and tasks', () => {
   const view = render(() => <CrmRecordDemo />);
-  fireEvent.pointerDown(
-    view.getByRole('group', {
-      name: 'The Meadow’s emails, calls, and team discussion in one record',
-    })
+  fireEvent.click(
+    view.getByRole('button', { name: /^Interact with Parlor Studio/ })
   );
   fireEvent.click(view.getByRole('radio', { name: 'Team' }));
   const contacts = within(view.getByLabelText('Contacts'));
-  expect(contacts.getByText('alex@meadow.example')).toBeTruthy();
+  expect(contacts.getByText('ava@parlorstudio.example')).toBeTruthy();
   fireEvent.input(view.getByRole('textbox', { name: 'Search contacts' }), {
     target: { value: 'priya' },
   });
-  expect(contacts.queryByText('Dana Whitfield')).toBeNull();
+  expect(view.getByText('No matching contacts.')).toBeTruthy();
+  expect(view.queryByLabelText('Contacts')).toBeNull();
   fireEvent.click(view.getByRole('radio', { name: 'Files' }));
-  expect(
-    view.getByRole('button', { name: 'Team rollout plan 9:30 AM' })
-  ).toBeTruthy();
-  expect(view.getByText('The Meadow order form.pdf')).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Setup guide Today' })).toBeTruthy();
+  expect(view.getByText('Thursday demo agenda')).toBeTruthy();
   fireEvent.click(view.getByRole('radio', { name: 'Tasks' }));
   expect(
     within(view.getByLabelText('Company tasks')).getByText(
-      'Get the order form signed'
+      'Verify folder uploads in production'
     )
   ).toBeTruthy();
 });

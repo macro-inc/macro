@@ -17,6 +17,11 @@ export class Thread {
     readonly rootId: string,
   ) {}
 
+  /** Serialize the thread identity without its authenticated client. */
+  toJSON(): { channelId: string; rootId: string } {
+    return { channelId: this.channelId, rootId: this.rootId };
+  }
+
   /** The channel this thread is in. */
   channel(): Channel {
     return Channel.byId(this.client, this.channelId);

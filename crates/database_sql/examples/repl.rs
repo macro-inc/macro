@@ -57,12 +57,14 @@ fn catalog() -> Catalog {
                     placement: ColumnId::from_uuid(NAME),
                     name: "name".into(),
                     kind: ColumnKind::Text,
+                    formula: None,
                 },
                 Column {
                     id: AMOUNT,
                     placement: ColumnId::from_uuid(AMOUNT),
                     name: "amount".into(),
                     kind: ColumnKind::Number,
+                    formula: None,
                 },
                 Column {
                     id: STAGE,
@@ -85,12 +87,14 @@ fn catalog() -> Catalog {
                             },
                         ],
                     },
+                    formula: None,
                 },
                 Column {
                     id: CLOSED_AT,
                     placement: ColumnId::from_uuid(CLOSED_AT),
                     name: "closed at".into(),
                     kind: ColumnKind::Date,
+                    formula: None,
                 },
                 Column {
                     id: OWNER,
@@ -100,6 +104,7 @@ fn catalog() -> Catalog {
                         multi: false,
                         target: EntityKind::User,
                     },
+                    formula: None,
                 },
                 Column {
                     id: TAGS,
@@ -118,12 +123,14 @@ fn catalog() -> Catalog {
                             },
                         ],
                     },
+                    formula: None,
                 },
                 Column {
                     id: DONE,
                     placement: ColumnId::from_uuid(DONE),
                     name: "done".into(),
                     kind: ColumnKind::Boolean,
+                    formula: None,
                 },
             ],
             source: TableSource::Database,
@@ -326,6 +333,7 @@ impl Memory {
             CellValue::Number(number) => Some(Cell::Number(number)),
             CellValue::Boolean(checked) => Some(Cell::Bool(checked)),
             CellValue::Date(date) => Some(Cell::Date(date)),
+            CellValue::DateRange(range) => Some(Cell::DateRange(range)),
             CellValue::Link(urls) => Some(Cell::Text(urls.join(" "))),
             CellValue::Options(refs) => Some(Cell::Options(
                 refs.into_iter()

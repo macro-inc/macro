@@ -17,7 +17,7 @@ export type TagPillProps = TagPickerSourceProps & {
 export function tagPillClasses(className?: string): string {
   return badgeTriggerClasses({
     variant: 'outline',
-    size: 'sm',
+    size: 'xs',
     class: cn('min-w-0 text-ink-muted transition-colors', className),
   });
 }

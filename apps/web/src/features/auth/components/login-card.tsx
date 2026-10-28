@@ -1,72 +1,62 @@
-import { NoiseBackground } from '@core/component/NoiseBackground';
-import LogoIcon from '@icon/macro-logo.svg';
+import { MacroMarkIcon } from '@app/features/onboarding/components/macro-mark-icon';
+import { OnboardingShell } from '@app/features/onboarding/components/onboarding-shell';
 import { type JSX, Show } from 'solid-js';
 
-/** The centered sign-in card: brand header, the active step, legal footer. */
+/** The centered sign-in card, framed and styled like onboarding's slides. */
 export function LoginCard(props: {
   /** The header yields to the on-screen keyboard on phones. */
   compact: boolean;
   children: JSX.Element;
 }) {
   return (
-    <div class="flex items-center justify-center size-full overflow-hidden relative">
-      <style>{
-        /*css*/ `
-          @keyframes ln-card-in {
-            from { opacity: 0; transform: translateY(14px) scale(0.985); }
-            to   { opacity: 1; transform: translateY(0)    scale(1);     }
-          }
-          .ln-card { animation: ln-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-
-          /* Override browser autofill yellow with our surface/ink palette */
-          .ln-input:-webkit-autofill,
-          .ln-input:-webkit-autofill:hover,
-          .ln-input:-webkit-autofill:focus,
-          .ln-input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
-            -webkit-text-fill-color: var(--color-ink);
-            caret-color: var(--color-ink);
-            transition: background-color 5000s ease-in-out 0s;
-          }
-        `
-      }</style>
-
-      <NoiseBackground />
-
-      <div class="relative z-10 w-full max-w-sm sm:max-w-lg ln-card">
-        <div class="px-4 sm:px-8 flex flex-col gap-12">
-          <div class="flex flex-col gap-8">
-            <Show when={!props.compact}>
-              <div class="flex flex-col gap-1.5">
-                <LogoIcon class="mb-2 size-9 text-accent" />
-                <h1 class="font-semibold tracking-tight text-ink text-2xl">
-                  Welcome to Macro
-                </h1>
-                <p class="text-sm text-ink-muted">The open source workspace</p>
-              </div>
-            </Show>
-            {props.children}
+    <OnboardingShell>
+      <div class="mx-auto flex w-full max-w-sm flex-col items-center text-center">
+        <Show when={!props.compact}>
+          <div
+            aria-hidden="true"
+            class="flex size-16 items-center justify-center rounded-[18px] text-ink"
+            style={{
+              background:
+                'var(--onboarding-intro-background, linear-gradient(145deg, #171717, #090909 65%))',
+              'box-shadow':
+                'var(--onboarding-intro-shadow, inset .5px .5px 1px #ffffff1c, inset -.5px -.5px 1px #0008, 0 1px 1px #131313, 0 4px 10px #0005)',
+            }}
+          >
+            <MacroMarkIcon class="h-[22px] w-8" />
           </div>
-
-          <div class="text-center text-xs text-ink/50 wrap-break-word">
-            By continuing, you agree to our{' '}
-            <a
-              class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
-              href="/terms"
-            >
-              terms
-            </a>{' '}
-            and{' '}
-            <a
-              class="text-link hover:text-link-hover visited:text-link-visited underline underline-offset-2 focus-visible:text-link-hover"
-              href="/privacy"
-            >
-              privacy policy
-            </a>
-            .
-          </div>
+          <h1
+            tabindex="-1"
+            class="mt-8 font-[Roboto_Slab_Variable] text-[30px] font-[315] leading-[1.2] tracking-[-.025em] outline-none [text-wrap:balance] sm:text-[36px]"
+          >
+            Welcome to Macro
+          </h1>
+          <p class="mt-4 font-[Inter_Variable] text-sm leading-6 text-ink-muted sm:text-[15px]">
+            The open source workspace
+          </p>
+        </Show>
+        <div
+          class={props.compact ? 'w-full text-left' : 'mt-9 w-full text-left'}
+        >
+          {props.children}
         </div>
+        <p class="mt-8 text-xs leading-5 text-ink-extra-muted [text-wrap:balance]">
+          By continuing, you agree to our{' '}
+          <a
+            href="/terms"
+            class="underline underline-offset-2 hover:text-ink-muted"
+          >
+            terms
+          </a>{' '}
+          and{' '}
+          <a
+            href="/privacy"
+            class="underline underline-offset-2 hover:text-ink-muted"
+          >
+            privacy policy
+          </a>
+          .
+        </p>
       </div>
-    </div>
+    </OnboardingShell>
   );
 }

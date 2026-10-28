@@ -112,7 +112,17 @@ async fn read_period(
 ) -> FinancialResult<Option<FundingPeriod>> {
     let row = sqlx::query!(
         "SELECT user_id, payer_id, subscription_id, period_start, period_end, policy FROM ai_billing_usage_period
-         WHERE user_id = $1 AND period_start <= $2 AND period_end > $2",
+         WHERE user_id = $1 AND period_start <= $2 AND period_end > $2
+         AND NOT EXISTS (
+             SELECT 1 FROM ai_billing_plan_change AS reset
+             WHERE reset.user_id = ai_billing_usage_period.user_id
+               AND reset.period_start = ai_billing_usage_period.period_start
+               AND (reset.new_plan = 'max' AND reset.changed_at <= $2
+                    OR reset.previous_plan = 'max' AND reset.changed_at > reset.period_start
+                       AND NOT EXISTS (SELECT 1 FROM ai_billing_plan_change AS earlier
+                           WHERE earlier.user_id = reset.user_id AND earlier.period_start = reset.period_start
+                             AND earlier.changed_at < reset.changed_at))
+         )",
         seat, at,
     ).fetch_optional(conn).await?;
     row.map(|r| {

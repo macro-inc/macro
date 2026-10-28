@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(j) AS \"value!\" FROM agent_conversation_turns j WHERE state = 'queued' AND NOT EXISTS (SELECT 1 FROM agent_conversation_turns other WHERE other.session_id = j.session_id AND (other.state IN ('running', 'interrupted') OR (other.state = 'queued' AND (other.created_at, other.source_message_id) < (j.created_at, j.source_message_id)))) ORDER BY created_at, source_message_id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "800e4abb0e3074df79611d0d3f36c0092b1a7174f0bea05b7de4a5f5b65a6033"
+}

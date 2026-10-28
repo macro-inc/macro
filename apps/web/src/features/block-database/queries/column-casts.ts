@@ -8,7 +8,7 @@ import type {
   DatabaseColumnCast,
   DatabaseColumnCasts,
   DatabaseColumnCastsSource,
-} from '../core/column-schema';
+} from '../../database/core/column-schema';
 import { databaseColumnKeys } from './keys';
 
 /** The type menu's dry runs for one table, fetched when a menu opens. */
@@ -70,6 +70,6 @@ function toMenuCast(cast: ServerColumnCast) {
         examples: cast.examples,
       }))
       .with('never', () => ({ verdict: 'never', reason: cast.reason ?? '' }))
-      .exhaustive(),
+      .exhaustive(() => ({ verdict: 'never', reason: cast.reason ?? '' })),
   };
 }

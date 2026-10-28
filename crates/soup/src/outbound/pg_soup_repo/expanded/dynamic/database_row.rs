@@ -1,5 +1,6 @@
 //! Database row clauses for the flat and grouped Soup queries: a row is visible
-//! when its database is untrashed and the viewer holds a grant on it.
+//! when its database is untrashed and the viewer holds a grant on it, or edits
+//! a live form over it.
 
 use filter_ast::Expr;
 use item_filters::ast::database_row::DatabaseRowLiteral;
@@ -17,6 +18,7 @@ pub(in crate::outbound::pg_soup_repo) fn build_database_row_filter(
             Expr::And(a, b) => format!("({} AND {})", fold(a), fold(b)),
             Expr::Or(a, b) => format!("({} OR {})", fold(a), fold(b)),
             Expr::Not(a) => format!("NOT ({})", fold(a)),
+            Expr::Literal(DatabaseRowLiteral::Include) => "TRUE".to_owned(),
             Expr::Literal(DatabaseRowLiteral::TableId(id)) => format!("r.table_id = '{id}'"),
             Expr::Literal(DatabaseRowLiteral::Id(id)) => format!("r.id = '{id}'"),
         }
@@ -25,6 +27,16 @@ pub(in crate::outbound::pg_soup_repo) fn build_database_row_filter(
         .map(|expr| format!(" AND ({})", fold(expr)))
         .unwrap_or_default()
 }
+
+/// Databases the viewer reaches as an editor of a live form over them.
+const FORM_EDITOR_SEMI_JOIN: &str = r#"row_database.database_id IN (
+                    SELECT f.database_id
+                    FROM forms f
+                    JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
+                    JOIN user_source_ids us ON us.source_id = ea.source_id
+                    WHERE f.trashed_at IS NULL
+                    AND ea.access_level IN ('edit', 'owner')
+                )"#;
 
 /// Rows are never viewed on their own: `ViewedAt` sorts them last and `ViewedUpdated`
 /// uses `updated_at`, matching [`models_soup::item::SoupItem`]'s cursor.
@@ -45,7 +57,8 @@ pub(super) fn database_row_top_clause(sort: SimpleSortMethod, grouped: bool) -> 
         FROM database_rows r
         JOIN database_tables row_table ON row_table.id = r.table_id
         JOIN database_entities row_database ON row_database.database_id = row_table.database_id
-        WHERE row_database.trashed_at IS NULL AND {}"#,
-        access_semi_join("row_database.database_id::text", "database")
+        WHERE row_database.trashed_at IS NULL AND ({} OR {})"#,
+        access_semi_join("row_database.database_id::text", "database"),
+        FORM_EDITOR_SEMI_JOIN,
     )
 }

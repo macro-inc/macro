@@ -3,6 +3,7 @@ import type {
   MessageListItem,
   MessageParent,
   MessageThread,
+  PostMessage,
 } from '@service-storage/messages';
 import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
   patchThread: vi.fn(),
   post: vi.fn(),
+  refreshCrmLists: vi.fn(async () => {}),
 }));
 vi.mock('../../client', () => ({
   get queryClient() {
@@ -24,6 +26,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: mocks }));
 vi.mock('../subscription', () => ({ useMessageSubscription: () => {} }));
+vi.mock('@queries/soup/crm-association', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/soup/crm-association')>()),
+  refreshCrmAssociatedSoupQueries: mocks.refreshCrmLists,
+}));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
@@ -42,6 +48,7 @@ import {
   type MessageTimelineData,
   useMessageTimelineQuery,
 } from '../timeline';
+import { timelineMessages } from '../timeline-entries';
 
 const time = '2026-09-09T00:00:00Z';
 function message(
@@ -67,6 +74,7 @@ beforeEach(() => {
   mocks.delete.mockReset();
   mocks.patchThread.mockReset();
   mocks.post.mockReset();
+  mocks.refreshCrmLists.mockClear();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -95,7 +103,13 @@ it('reopens a resolved project discussion through the real mutation and shared t
   const threadKey = getThreadRepliesQueryKey(parent, 'root');
   testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
     pageParams: [null],
-    pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+    pages: [
+      {
+        entries: [{ type: 'message', message: root }],
+        next_cursor: null,
+        previous_cursor: null,
+      },
+    ],
   });
   testQueryClient.setQueryData<MessageThread>(threadKey, {
     root,
@@ -113,7 +127,9 @@ it('reopens a resolved project discussion through the real mutation and shared t
       () => null
     );
     const mutation = usePatchThreadMutation();
-    const resolved = () => timeline.data?.pages[0].items[0].state.resolved;
+    const resolved = () =>
+      timeline.data &&
+      timelineMessages(timeline.data.pages[0])[0].state.resolved;
     return (
       <>
         <span>{resolved() ? 'Resolved' : 'Open'}</span>
@@ -151,8 +167,9 @@ it('reopens a resolved project discussion through the real mutation and shared t
     testQueryClient.getQueryData<MessageThread>(threadKey)?.state.resolved
   ).toBe(false);
   expect(
-    testQueryClient.getQueryData<MessageTimelineData>(timelineKey)?.pages[0]
-      .items[0].state.resolved
+    timelineMessages(
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+    )[0].state.resolved
   ).toBe(false);
 });
 
@@ -187,7 +204,13 @@ describe.each(['channel', 'document', 'call'] as const)(
         const threadKey = getThreadRepliesQueryKey(parent, 'root');
         testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
           pageParams: [null],
-          pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+          pages: [
+            {
+              entries: [{ type: 'message', message: root }],
+              next_cursor: null,
+              previous_cursor: null,
+            },
+          ],
         });
         testQueryClient.setQueryData(selectedKey, [root]);
         testQueryClient.setQueryData<MessageThread>(threadKey, {
@@ -227,8 +250,10 @@ describe.each(['channel', 'document', 'call'] as const)(
         if (echoTiming === 'after response') echo();
 
         expect(
-          testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!
-            .pages[0].items[0].thread.reply_count
+          timelineMessages(
+            testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!
+              .pages[0]
+          )[0].thread.reply_count
         ).toBe(1);
         expect(
           testQueryClient.getQueryData<MessageListItem[]>(selectedKey)![0]
@@ -269,7 +294,13 @@ describe('root deletion', () => {
       getMessageTimelineQueryKey(parent),
       {
         pageParams: [null],
-        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+        pages: [
+          {
+            entries: [{ type: 'message', message: root }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
       }
     );
     if (withThreadCache)
@@ -297,7 +328,7 @@ describe('root deletion', () => {
   const roots = (parent: MessageParent) =>
     testQueryClient
       .getQueryData<MessageTimelineData>(getMessageTimelineQueryKey(parent))!
-      .pages.flatMap((page) => page.items);
+      .pages.flatMap(timelineMessages);
 
   it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
     "takes the whole %s discussion, including another author's replies",
@@ -404,13 +435,16 @@ describe('root deletion', () => {
             pageParams: [null],
             pages: [
               {
-                items: [
+                entries: [
                   {
-                    ...root,
-                    thread: {
-                      reply_count: 0,
-                      preview: [],
-                      latest_reply_at: null,
+                    type: 'message',
+                    message: {
+                      ...root,
+                      thread: {
+                        reply_count: 0,
+                        preview: [],
+                        latest_reply_at: null,
+                      },
                     },
                   },
                 ],
@@ -453,9 +487,9 @@ describe('thread resolution', () => {
   const timelineKey = getMessageTimelineQueryKey(parent);
   const threadKey = getThreadRepliesQueryKey(parent, 'root');
   const cachedResolved = () => ({
-    timeline:
+    timeline: timelineMessages(
       testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items[0].state.resolved,
+    )[0].state.resolved,
     thread:
       testQueryClient.getQueryData<MessageThread>(threadKey)!.state.resolved,
   });
@@ -468,7 +502,13 @@ describe('thread resolution', () => {
     };
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+      pages: [
+        {
+          entries: [{ type: 'message', message: root }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
     });
     testQueryClient.setQueryData<MessageThread>(threadKey, {
       state,
@@ -547,7 +587,7 @@ describe('sending', () => {
       const threadKey = getThreadRepliesQueryKey(parent, parent.id);
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
         pageParams: [null],
-        pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+        pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
       });
       testQueryClient.setQueryData(threadKey, null);
       mocks.post.mockResolvedValue(message(parent, parent.id));
@@ -559,9 +599,9 @@ describe('sending', () => {
         optimisticId: newMessageId(),
       });
 
-      const roots =
+      const roots = timelineMessages(
         testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-          .items;
+      );
       expect(roots.map((root) => [root.id, root.thread_id])).toEqual([
         ['call-id', undefined],
       ]);
@@ -587,11 +627,14 @@ describe('sending', () => {
       pageParams: [null],
       pages: [
         {
-          items: [
+          entries: [
             {
-              ...root,
-              state,
-              thread: { reply_count: 0, preview: [], latest_reply_at: null },
+              type: 'message',
+              message: {
+                ...root,
+                state,
+                thread: { reply_count: 0, preview: [], latest_reply_at: null },
+              },
             },
           ],
           next_cursor: null,
@@ -614,9 +657,9 @@ describe('sending', () => {
       optimisticId: replyId,
     });
 
-    const roots =
+    const roots = timelineMessages(
       testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items;
+    );
     expect(roots.map((item) => item.id)).toEqual([root.id]);
     expect(roots[0].thread.reply_count).toBe(1);
     const thread = testQueryClient.getQueryData<MessageThread>(threadKey)!;
@@ -639,12 +682,13 @@ describe('sending', () => {
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
     const rootIds = () =>
       testQueryClient
         .getQueryData<MessageTimelineData>(timelineKey)!
-        .pages[0].items.map((item) => [item.id, item.state.root_id]);
+        .pages.flatMap(timelineMessages)
+        .map((item) => [item.id, item.state.root_id]);
     let respond!: () => void;
     mocks.post.mockImplementation(
       (_parent, input) =>
@@ -680,17 +724,58 @@ describe('sending', () => {
     await pending;
     expect(rootIds()).toEqual([[id, id]]);
     expect(
-      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items[0].state.anchor
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+      )[0].state.anchor
     ).toEqual(anchor ?? null);
   });
+
+  it.each<[string, Pick<PostMessage, 'mentions' | 'attachments'>, boolean]>([
+    [
+      'a CRM attachment',
+      { attachments: [{ entity_type: 'crm_company', entity_id: 'company' }] },
+      true,
+    ],
+    [
+      'a CRM mention',
+      { mentions: [{ entity_type: 'crm_contact', entity_id: 'contact' }] },
+      true,
+    ],
+    [
+      'a non-CRM attachment',
+      { attachments: [{ entity_type: 'document', entity_id: 'doc-2' }] },
+      false,
+    ],
+  ])(
+    'refreshes CRM record lists only after sending %s',
+    async (_name, references, refreshes) => {
+      const parent: MessageParent = { type: 'document', id: 'doc' };
+      testQueryClient.setQueryData<MessageTimelineData>(
+        getMessageTimelineQueryKey(parent),
+        {
+          pageParams: [null],
+          pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
+        }
+      );
+      mocks.post.mockResolvedValue(message(parent, 'sent'));
+
+      await mountSend().mutateAsync({
+        parent,
+        message: { content: 'Hello', ...references },
+        senderId: 'macro|a@example.com',
+        optimisticId: newMessageId(),
+      });
+
+      expect(mocks.refreshCrmLists).toHaveBeenCalledTimes(refreshes ? 1 : 0);
+    }
+  );
 
   it('adopts the server id when the server ignores the client id', async () => {
     const parent: MessageParent = { type: 'document', id: 'doc' };
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
     mocks.post.mockResolvedValue(message(parent, 'server-id'));
     let mutation!: ReturnType<typeof useSendMessageMutation>;
@@ -715,7 +800,8 @@ describe('sending', () => {
     expect(
       testQueryClient
         .getQueryData<MessageTimelineData>(timelineKey)!
-        .pages[0].items.map((item) => [item.id, item.state])
+        .pages.flatMap(timelineMessages)
+        .map((item) => [item.id, item.state])
     ).toEqual([
       [
         'server-id',

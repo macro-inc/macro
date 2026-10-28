@@ -6,19 +6,17 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{collection::ReminderCollectionRow, models::InvalidCursor};
+use super::{email_followup::EmailFollowup, models::InvalidCursor};
 
-/// One original thread, coalescing all of its current reminder work.
+/// An original thread with its active snooze.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EmailReminderSummary {
     /// Original email identity, never a mirror reminder identity.
     pub thread_id: Uuid,
-    /// Nearest eligible occurrence and its owning editor capability.
-    pub nearest: ReminderCollectionRow,
-    /// Number of eligible reminders attached to this thread.
-    pub count: u32,
+    /// Active snooze, including the revision required for edits or removal.
+    pub followup: EmailFollowup,
 }
 
 /// Stable thread position, independent of the email's activity ordering.
@@ -82,7 +80,7 @@ pub struct EmailReminderViewer {
     pub org_id: Option<i64>,
 }
 
-/// Candidate progress is retained even if every reminder on a thread is malformed.
+/// Candidate progress is retained even if a stored snooze is malformed.
 #[derive(Debug)]
 pub struct EmailReminderCandidate {
     /// Storage position, including unreadable candidates.
@@ -96,7 +94,7 @@ pub struct EmailReminderCandidate {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EmailReminderPage {
-    /// Coalesced rows in nearest-occurrence order.
+    /// Original threads ordered by their snooze return time.
     pub items: Vec<EmailReminderSummary>,
     /// Progress through all examined candidates, absent at exhaustion.
     pub next_cursor: Option<String>,

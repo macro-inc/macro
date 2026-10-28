@@ -4,13 +4,18 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { CalendarEventSearchScope } from './calendarEventSearchScope';
 import type { EntityFilters } from './entityFilters';
 import type { MatchType } from './matchType';
 import type { SearchOn } from './searchOn';
 import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
 
 export interface UnifiedSearchRequest {
+  /** Which calendar events to search. Defaults to `own`: events on the
+caller's own and delegated calendars. `shared_with_you` searches only
+events shared with a channel the caller belongs to that are on none of
+their calendars. */
+  calendar_event_scope?: CalendarEventSearchScope;
   collapse?: UnifiedSearchRequestCollapse;
   /** Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search. */
   filters?: EntityFilters;

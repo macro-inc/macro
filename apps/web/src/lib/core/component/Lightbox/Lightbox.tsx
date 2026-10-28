@@ -1,8 +1,8 @@
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import XIcon from '@phosphor/x.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { Button, cn } from '@ui';
 import {
   type Accessor,
@@ -87,30 +87,41 @@ export function Lightbox(props: LightboxProps) {
       >
         <LightboxToolbar isVisible={true}>
           <Button
+            aria-label="Copy image"
+            tooltip="Copy image"
             variant="ghost"
             size="icon-md"
             onClick={images.copyToClipboard}
             disabled={images.isBusy() || images.isPrefetching()}
-            label="Copy image"
           >
-            {images.isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
+            {images.isCopying() ? (
+              <SpinnerIcon />
+            ) : (
+              <ClipboardIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            )}
           </Button>
           <Button
+            aria-label="Download image"
+            tooltip="Download image"
             variant="ghost"
             size="icon-md"
             onClick={images.downloadImage}
             disabled={images.isBusy() || images.isPrefetching()}
-            label="Download image"
           >
-            {images.isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
+            {images.isDownloading() ? (
+              <SpinnerIcon />
+            ) : (
+              <DownloadIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+            )}
           </Button>
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-md"
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </LightboxToolbar>
 

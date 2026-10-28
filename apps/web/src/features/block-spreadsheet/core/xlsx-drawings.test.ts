@@ -612,6 +612,70 @@ describe('radar, bubble, stock and contour charts', () => {
     );
   });
 
+  it('writes stacked, scatter, line and combo charts as Excel opens them', () => {
+    const part = (chart: SheetChart) => chartPart(chart, () => undefined);
+    const percent = part({
+      plots: [
+        {
+          kind: 'bar',
+          grouping: 'percentStacked',
+          series: columns(['B', 'C']).series,
+        },
+      ],
+      references: columns(['B', 'C']).references,
+    });
+    expect(percent).toContain(
+      '<c:barDir val="bar"/><c:grouping val="percentStacked"/>'
+    );
+    expect(percent).toContain('formatCode="0%"');
+    expect(reread(percent)?.plots[0].grouping).toBe('percentStacked');
+    const stacked = part({
+      plots: [
+        {
+          kind: 'line',
+          grouping: 'stacked',
+          series: columns(['B', 'C']).series,
+        },
+      ],
+      references: columns(['B', 'C']).references,
+    });
+    expect(stacked).toContain('<c:grouping val="stacked"/>');
+    expect(stacked).toContain('<c:marker><c:symbol val="circle"/>');
+    expect(reread(stacked)?.plots[0]).toMatchObject({
+      kind: 'line',
+      grouping: 'stacked',
+    });
+    const points = part({
+      plots: [
+        {
+          kind: 'scatter',
+          series: [{ categories: 0, values: 1, noLine: true }],
+        },
+      ],
+      references: [cells('A'), cells('B')],
+    });
+    expect(points).toContain('<c:scatterStyle val="marker"/>');
+    expect(reread(points)?.plots[0].series[0].noLine).toBe(true);
+    const combo = part({
+      plots: [
+        { kind: 'column', series: [columns(['B']).series[0]] },
+        {
+          kind: 'line',
+          secondary: true,
+          series: [columns(['C']).series[0]],
+        },
+      ],
+      references: [...columns(['B']).references, ...columns(['C']).references],
+    });
+    expect(combo).toContain('<c:barChart>');
+    expect(combo).toContain('<c:lineChart>');
+    expect(combo).toContain('<c:crosses val="max"/>');
+    expect(reread(combo)?.plots).toMatchObject([
+      { kind: 'column' },
+      { kind: 'line', secondary: true },
+    ]);
+  });
+
   it('writes a stock chart Excel cannot open as lines', () => {
     const part = chartPart(
       {

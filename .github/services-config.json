@@ -9,20 +9,12 @@
         "crates/agent_trigger/**",
         "crates/agent_runtime_protocol/**",
         "crates/agent_preview/**",
-        "crates/agent_egress/**"
+        "crates/agent_egress/**",
+        "crates/scheduled_action/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [
         "agent_harness_service"
-      ]
-    },
-    "agent-schedule-service": {
-      "source_paths": [
-        "services/scheduled_action/**"
-      ],
-      "stack_path": "infra/stacks/agent-schedule-service/**",
-      "deploy_binaries": [
-        "service"
       ]
     },
     "authentication-service": {
@@ -107,17 +99,8 @@
       ]
     },
     "document-cognition-service": {
-      "source_paths": [
-        "services/document_cognition_service/**",
-        "services/ai_projections_refresh_handler/**"
-      ],
-      "stack_path": "infra/stacks/document-cognition-service/**",
-      "deploy_binaries": [
-        "document_cognition_service"
-      ],
-      "deploy_lambdas": [
-        "ai_projections_refresh_handler"
-      ]
+      "source_paths": [],
+      "stack_path": "infra/stacks/document-cognition-service/**"
     },
     "document-storage-service": {
       "source_paths": [
@@ -185,11 +168,15 @@
     },
     "notification-service": {
       "source_paths": [
-        "services/notification_service/**"
+        "services/notification_service/**",
+        "services/notification_retention_handler/**"
       ],
       "stack_path": "infra/stacks/notification-service/**",
       "deploy_binaries": [
         "notification_service"
+      ],
+      "deploy_lambdas": [
+        "notification_retention_handler"
       ]
     },
     "organization-retention": {
@@ -306,16 +293,6 @@
         "image_proxy_service"
       ]
     },
-    "mcp-server": {
-      "source_paths": [
-        "services/mcp_service/**",
-        "crates/ai_tools/**"
-      ],
-      "stack_path": "infra/stacks/mcp-server/**",
-      "deploy_binaries": [
-        "mcp_service"
-      ]
-    },
     "kafka-cluster": {
       "source_paths": [
         "crates/macro_event_topics/**"
@@ -323,13 +300,21 @@
       "stack_path": "infra/stacks/kafka-cluster/**"
     },
     "preview-gateway": {
+      "source_paths": [],
+      "stack_path": "infra/stacks/preview-gateway/**"
+    },
+    "whatsapp-session-service": {
       "source_paths": [
-        "services/preview_gateway/**",
-        "crates/agent_preview/**"
+        "services/whatsapp_session_service/**",
+        "crates/whatsapp_linked/**",
+        "crates/whatsapp_store_pg/**",
+        "crates/whatsmeow/**",
+        "crates/whatsmeow_proto/**",
+        "crates/whatsmeow_signal/**"
       ],
-      "stack_path": "infra/stacks/preview-gateway/**",
+      "stack_path": "infra/stacks/whatsapp-session-service/**",
       "deploy_binaries": [
-        "preview_gateway"
+        "whatsapp_session_service"
       ]
     }
   }

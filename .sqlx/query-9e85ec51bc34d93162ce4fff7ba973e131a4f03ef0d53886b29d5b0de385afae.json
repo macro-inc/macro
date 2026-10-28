@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.link_id,l.sync_generation FROM email_provider_subscriptions s JOIN email_links l ON l.id=s.link_id\n            WHERE s.id=$1 AND s.generation=$2 AND s.client_state_hash=$3 AND l.is_sync_active AND l.sync_generation=s.generation\n            AND (s.provider_id IS NULL OR s.provider_id=$4) FOR UPDATE OF l,s",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9e85ec51bc34d93162ce4fff7ba973e131a4f03ef0d53886b29d5b0de385afae"
+}

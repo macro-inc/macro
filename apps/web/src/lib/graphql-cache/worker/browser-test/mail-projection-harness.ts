@@ -54,7 +54,7 @@ const mailOnlyFilters = {
 const previewFields =
   'id subject snippet isDraft senderEmail senderName senderPhotoUrl';
 const previews = `mailAllPreview { ${previewFields} } mailDraftPreview { ${previewFields} } mailSentPreview { ${previewFields} }`;
-const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection isFavorited ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal latestInboundMessageTs  ${previews} updatedAt properties { id } } } } } }`;
+const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection isFavorited ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal latestInboundMessageTs reminderReturnedAt ${previews} updatedAt properties { id } } } } } }`;
 const fragment = `fragment MailRow on GraphqlSoupEmailThread { __typename id emailName:name isRead inboxVisible ${previews} }`;
 const preview = (n: number, subject: string, isDraft: boolean) => ({
   id: id(n),
@@ -137,13 +137,48 @@ async function refresh(append = false) {
   }
 }
 
+const showFailure = (error: unknown): void => {
+  result.dataset.status = 'failed';
+  result.textContent = String(error);
+};
+
 for (const control of document.querySelectorAll('select'))
   control.addEventListener('change', () => {
-    void refresh();
+    refresh().catch(showFailure);
   });
 more.addEventListener('click', () => {
-  void refresh(true);
+  refresh(true).catch(showFailure);
 });
+
+document
+  .querySelector('#deliver-reminders')!
+  .addEventListener('click', async () => {
+    try {
+      await host.writeQuery({
+        query,
+        identity: 'offline-mail-viewer',
+        data: {
+          user: {
+            id: 'offline-mail-viewer',
+            soup: {
+              items: [4, 2].map((n) => ({
+                __typename: 'GraphqlSoupEmailThread',
+                id: id(n),
+                reminderReturnedAt: '2026-10-06T20:19:46Z',
+                inboxVisible: true,
+                isSignal: true,
+                isRead: false,
+              })),
+            },
+          },
+        },
+      });
+      await refresh();
+    } catch (error) {
+      result.dataset.status = 'failed';
+      result.textContent = String(error);
+    }
+  });
 
 const draftStatus =
   document.querySelector<HTMLParagraphElement>('#draft-status')!;
@@ -155,6 +190,8 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
     const now = new Date().toISOString();
     const draft: SaveEmailDraftMutation['saveEmailDraft']['draft'] = {
       __typename: 'GraphqlSoupEmailMessage',
+      draftGeneration: 0,
+      operationStatus: null,
       id: id(8001),
       threadId: id(8002),
       providerId: null,
@@ -170,6 +207,7 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
       isDraft: true,
       hasAttachments: false,
       scheduledSendTime: null,
+      scheduledSendStatus: null,
       from: { email: 'sender@example.com', name: null, photoUrl: null },
       to: [{ email: 'recipient@example.com', name: null, photoUrl: null }],
       cc: [],
@@ -519,6 +557,7 @@ await host.writeQuery({
             isRead: n % 4 === 0,
             inboxVisible: n % 2 === 0,
             isSignal: n % 3 === 0,
+            reminderReturnedAt: null,
             latestInboundMessageTs: n === 2 ? null : '2025-01-02T00:00:00Z',
             updatedAt: '2025-01-04T00:00:00Z',
           };

@@ -8,12 +8,20 @@ export type ActivityAction =
   | { kind: 'messaged' }
   | { kind: 'email-sent' }
   | { kind: 'call-started' }
+  /** Someone answered a form; attributed to the respondent when signed in. */
+  | { kind: 'responded' }
   | { kind: 'property-changed'; property: string; from: unknown; to: unknown }
   | { kind: 'participant-added'; participant: string }
   | { kind: 'participant-removed'; participant: string }
   | { kind: 'task-added'; taskId?: string }
   | { kind: 'task-removed'; taskId?: string }
   | { kind: 'unknown'; tag: string };
+
+/**
+ * Whose activity the Activity screen reads: the viewer's own, or their
+ * teammates' on items shared with the viewer.
+ */
+export type ActivityScope = 'mine' | 'team';
 
 export type ActivityEntityType =
   | 'document'
@@ -24,6 +32,7 @@ export type ActivityEntityType =
   | 'channel'
   | 'user'
   | 'database'
+  | 'form'
   | { kind: 'unsupported'; raw: string };
 
 export type ActivityEvent = {
@@ -60,7 +69,10 @@ export type PropertyEntityType =
   | 'USER';
 
 /** Entity kinds the activity UI can resolve a name, icon, and link for. */
-export type ActivityDisplayEntityType = PropertyEntityType | 'DATABASE';
+export type ActivityDisplayEntityType =
+  | PropertyEntityType
+  | 'DATABASE'
+  | 'FORM';
 
 export function toDisplayEntityType(
   entityType: ActivityEntityType
@@ -75,5 +87,6 @@ export function toDisplayEntityType(
     .with('channel', () => 'CHANNEL' as const)
     .with('user', () => 'USER' as const)
     .with('database', () => 'DATABASE' as const)
+    .with('form', () => 'FORM' as const)
     .exhaustive();
 }

@@ -12,7 +12,7 @@ import type { EmailReminderSummary } from './emailReminderSummary';
  * A page of original-email identities and private reminder metadata.
  */
 export interface EmailReminderPage {
-  /** Coalesced rows in nearest-occurrence order. */
+  /** Original threads ordered by their snooze return time. */
   items: EmailReminderSummary[];
   /** Progress through all examined candidates, absent at exhaustion. */
   nextCursor?: EmailReminderPageNextCursor;

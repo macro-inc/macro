@@ -1,0 +1,4 @@
+lambda_name := file_name(justfile_directory())
+
+build compiler="":
+    SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{lambda_name}} --output-format zip

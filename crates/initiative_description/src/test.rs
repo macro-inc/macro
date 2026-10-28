@@ -34,11 +34,38 @@ impl OwnedSurfaceService for FakeSurfaces {
         })
     }
 
+    async fn ensure_owned_surface_from_snapshot(
+        &self,
+        _parent: Entity<'static>,
+        _id: Uuid,
+        _snapshot: Vec<u8>,
+    ) -> Result<CollabSurface, CollabSurfaceError> {
+        unreachable!("initiative descriptions are seeded from markdown")
+    }
+
     async fn owned_surface_markdown(
         &self,
         _id: Uuid,
     ) -> Result<Option<String>, CollabSurfaceError> {
         Ok(self.markdown.clone())
+    }
+
+    async fn owned_surface_snapshot(
+        &self,
+        _parent: Entity<'static>,
+        _id: Uuid,
+    ) -> Result<collab_surface::domain::models::SurfaceSnapshot, CollabSurfaceError> {
+        unreachable!("initiative descriptions are read as markdown")
+    }
+
+    async fn update_owned_surface(
+        &self,
+        _parent: Entity<'static>,
+        _id: Uuid,
+        _expected_revision: Vec<u8>,
+        _update: Vec<u8>,
+    ) -> Result<collab_surface::domain::models::SurfaceUpdate, CollabSurfaceError> {
+        unreachable!("initiative descriptions are edited through sync-service sessions")
     }
 
     async fn retire_surface(&self, id: Uuid) -> Result<(), CollabSurfaceError> {

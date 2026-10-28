@@ -44,6 +44,8 @@ pub enum MessageReferenceKind {
     Bot,
     /// A document.
     Document,
+    /// A form; access to the form does not grant access to its response table.
+    Form,
     /// A channel.
     Channel,
     /// An email thread (editors serialize this as `thread`).
@@ -70,6 +72,8 @@ pub enum MessageReferenceKind {
     CrmContact,
     /// An automation reference; recognized separately from message authorization support.
     Automation,
+    /// An external chat added to Macro.
+    ExternalChat,
 }
 impl MessageReferenceKind {
     /// Normalize reference aliases from editors and Markdown extractors.
@@ -78,6 +82,7 @@ impl MessageReferenceKind {
             "user" => Self::User,
             "bot" => Self::Bot,
             "document" => Self::Document,
+            "form" => Self::Form,
             "channel" => Self::Channel,
             "thread" | "email_thread" | "email" => Self::EmailThread,
             "call" => Self::Call,
@@ -91,6 +96,7 @@ impl MessageReferenceKind {
             "crm_company" => Self::CrmCompany,
             "crm_contact" => Self::CrmContact,
             "automation" => Self::Automation,
+            "external_chat" => Self::ExternalChat,
             _ => return None,
         })
     }

@@ -193,6 +193,21 @@ fn static_frontend_block_is_opt_in() {
     assert!(!headless_dev.contains("handle /mailpit/*"));
 }
 
+/// Only host-run Vite needs protection from concurrent module connection bursts.
+#[test]
+fn vite_connection_limit_is_scoped_to_frontend() {
+    for mode in [Mode::Local, Mode::Dev] {
+        let attached = caddyfile(mode, false);
+        assert_eq!(attached.matches("max_conns_per_host").count(), 1);
+        let (backend_routes, frontend_route) = attached
+            .split_once("reverse_proxy host.docker.internal:{$VITE_PORT} {")
+            .expect("attached frontend must proxy to Vite");
+        assert!(!backend_routes.contains("max_conns_per_host"));
+        assert!(frontend_route.contains("transport http {\n                max_conns_per_host 16"));
+        assert!(!caddyfile(mode, true).contains("max_conns_per_host"));
+    }
+}
+
 /// Local Caddy speaks HTTPS with a machine certificate and stamps wildcard CORS
 /// on every response. Dev still uses TLS (same proxy) but does not overlay
 /// CORS, because it fans out to the shared-dev gateway.

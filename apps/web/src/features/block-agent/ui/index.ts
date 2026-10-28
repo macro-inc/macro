@@ -6,6 +6,16 @@
  * opencode); see individual file headers.
  */
 
+export {
+  ElicitationForm,
+  type ElicitationFormProps,
+} from '@app/features/agent-interactions/components/ElicitationForm';
+export {
+  type PermissionOptionItem,
+  type PermissionOptionKind,
+  PermissionOptions,
+  type PermissionOptionsProps,
+} from '@app/features/agent-interactions/components/PermissionOptions';
 export { ActionLine, type ActionLineProps } from './ActionLine';
 export {
   AGENT_INPUT_TEXT_AREA_ID,
@@ -22,10 +32,6 @@ export {
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';
 export {
-  ElicitationForm,
-  type ElicitationFormProps,
-} from './ElicitationForm';
-export {
   FailureNoticeCard,
   type FailureNoticeCardProps,
 } from './FailureNoticeCard';
@@ -33,12 +39,6 @@ export { FoldedAnsiText } from './FoldedAnsiText';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';
 export { FoldedTerminal } from './FoldedTerminal';
-export {
-  type PermissionOptionItem,
-  type PermissionOptionKind,
-  PermissionOptions,
-  type PermissionOptionsProps,
-} from './PermissionOptions';
 export { PierreDiff } from './PierreDiff';
 export { QuestionAnswers, type QuestionAnswersProps } from './QuestionAnswers';
 export {

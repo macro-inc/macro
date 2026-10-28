@@ -1,8 +1,14 @@
+import deepEqual from 'fast-deep-equal';
 import type { PaneId } from '../routes/types';
 import { isPromise, type MaybePromise, mapMaybe, settleMaybe } from '../utils';
-import type { LeaveGuard, LeaveGuardContext } from './types';
+import type { LeaveGuard, LeaveGuardContext, LeaveGuardOptions } from './types';
 
-type RegisteredGuard = { pane: PaneId; depth: number; guard: LeaveGuard };
+type RegisteredGuard = {
+  pane: PaneId;
+  depth: number;
+  guard: LeaveGuard;
+  options: LeaveGuardOptions;
+};
 
 /** One guard bound to what it is asked about. */
 export type Check = () => MaybePromise<boolean>;
@@ -20,8 +26,13 @@ export function createLeaveGuards() {
 
   return {
     /** `depth` is the outlet depth of the view that registers the guard. */
-    register(pane: PaneId, depth: number, guard: LeaveGuard): () => void {
-      const item = { pane, depth, guard };
+    register(
+      pane: PaneId,
+      depth: number,
+      guard: LeaveGuard,
+      options: LeaveGuardOptions = {}
+    ): () => void {
+      const item = { pane, depth, guard, options };
       registered.push(item);
 
       return () => {
@@ -36,12 +47,27 @@ export function createLeaveGuards() {
       }
     },
 
-    /** Guards of `pane` at or below `fromDepth`, i.e. those a navigation from there unmounts. */
-    select(pane: PaneId, fromDepth: number): LeaveGuard[] {
-      const unmounted = (item: RegisteredGuard) =>
-        item.pane === pane && item.depth >= fromDepth;
-
-      return registered.filter(unmounted).map((item) => item.guard);
+    /** Select unmount guards and explicitly watched search changes. */
+    select(
+      pane: PaneId,
+      fromDepth: number | undefined,
+      context?: LeaveGuardContext
+    ): LeaveGuard[] {
+      const relevant = (item: RegisteredGuard) => {
+        if (item.pane !== pane) return false;
+        if (fromDepth !== undefined && item.depth >= fromDepth) return true;
+        return (
+          !!context?.to &&
+          !!item.options.search?.some(
+            (namespace) =>
+              !deepEqual(
+                context.from.location.search?.[namespace],
+                context.to?.location.search?.[namespace]
+              )
+          )
+        );
+      };
+      return registered.filter(relevant).map((item) => item.guard);
     },
   };
 }

@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(any(feature = "s3", feature = "sqs"))]
+mod transport;
+
 #[test]
 fn test_transform_path_style_localstack() {
     let input = "http://localstack:4566/doc-storage/macro%7Cteo%40macro.com/doc/1?x-id=PutObject";

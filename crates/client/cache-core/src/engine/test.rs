@@ -283,7 +283,7 @@ fn fragment_reads_keep_hot_and_cold_linked_records_in_the_working_set() {
                     Record::default(),
                 );
             }
-            let selection = RecordSelection::parse(
+            let selection = RecordSelection::parse(crate::meta::bundled_schema_ref(),
             "fragment Thread on GraphqlSoupEmailThread { id messages(offset: 0, limit: 1) { id subject } }",
             "Thread",
         ).unwrap();

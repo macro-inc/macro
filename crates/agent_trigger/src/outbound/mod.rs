@@ -2,16 +2,20 @@
 
 mod bot_repo_agent_lookup;
 mod channel_type_lookup;
+mod discussion_context;
 mod dss_task_assignment_context;
 mod fast_model_judge;
 mod image_caption;
 mod lexical_explicit_reply_extractor;
 mod message_thread_history;
+mod people_directory;
 
 pub use bot_repo_agent_lookup::BotRepoAgentLookup;
 pub use channel_type_lookup::ChannelRepoTypeLookup;
+pub use discussion_context::{MessageDiscussionReader, ParentNameReader};
 pub use dss_task_assignment_context::DssTaskAssignmentContext;
 pub use fast_model_judge::FastModelTriggerJudge;
 pub use image_caption::{ImageCaptioner, VisionImageCaptioner};
 pub use lexical_explicit_reply_extractor::LexicalExplicitReplyExtractor;
 pub use message_thread_history::MessageThreadHistory;
+pub use people_directory::PgPeopleDirectory;

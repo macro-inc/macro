@@ -10,8 +10,8 @@ test: worker-build
 
 # Run tests without the alarm-keep-alive feature
 test-no-alarm: setup worker_build_setup
-    worker-build --profile sync-service-release --no-default-features --features create-default-state,bebop-owned-all
-    npx vitest
+    worker-build --profile sync-service-release --no-default-features --features create-default-state,bebop-owned-all,do-sqlite-snapshot-storage,search-service
+    npx vitest run
 
 setup:
     npm install && cd bebop/ && npx bebopc build

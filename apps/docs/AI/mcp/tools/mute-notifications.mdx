@@ -1,0 +1,19 @@
+---
+title: MuteNotifications
+description: >-
+  Mute, snooze, or unmute notifications about one item for the user only, as
+  Mute and Snooze in the app do.
+---
+
+# MuteNotifications
+
+Mute, snooze, or unmute notifications about one item for the user only, as Mute and Snooze in the app do. Muting never changes anyone else's notifications or the item itself. Use the entity type and id from ListNotifications or other tools.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"agent_session"` \| `"user"` \| `"channel"` \| `"channel_message"` \| `"document"` \| `"project"` \| `"email_thread"` \| `"calendar_event"` \| `"team"` \| `"call"` \| `"foreign_entity"` \| `"static_file"` \| `"crm_company"` \| `"crm_contact"` \| `"reminder"` \| `"skill"` \| `"scheduled_action"` | Yes | Canonical entity types accepted by the notification-listing tool.  This mirrors [`EntityType`] because the shared model intentionally does not depend on `schemars`, while AI tool inputs require [`JsonSchema`]. |
+| `entityId` | string | Yes | The item's id. |
+| `action` | `"mute"` \| `"snooze"` \| `"unmute"` | Yes | What to do with an item's notifications. |
+| `snoozeUntil` | string | No | When notifications resume, as an ISO 8601 timestamp in the future. Required for snooze; omit otherwise. |

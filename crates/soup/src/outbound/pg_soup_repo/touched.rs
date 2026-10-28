@@ -24,7 +24,7 @@ const ID_SQL: &str = "ae.entity_id";
 
 /// Renders [`VIEW_ACTION_TAGS`] as a SQL `IN`-list body, e.g. `'opened'`.
 /// The tags are compile-time constants of this workspace, never user input.
-fn view_tags_sql() -> String {
+pub(super) fn view_tags_sql() -> String {
     VIEW_ACTION_TAGS
         .iter()
         .map(|tag| format!("'{tag}'"))

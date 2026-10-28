@@ -92,7 +92,7 @@ describe('internal transformer fallbacks', () => {
         ? paragraph.getFirstChild()
         : null;
       expect($isUserMentionNode(node)).toBe(true);
-      expect(node?.getTextContent()).toBe('a');
+      expect(node?.getTextContent()).toBe('@a');
     });
   });
 

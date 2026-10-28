@@ -1,0 +1,63 @@
+/* Calls owns its presentation overrides; the shared product pages stay intact. */
+.calls-page .email-page-hero { padding-bottom: 40px; }
+.calls-page .email-page-hero > .email-page-hero-description { max-width: 720px; text-wrap: balance; }
+.calls-scene-picker { display: flex; justify-content: center; gap: 24px; margin-bottom: 22px; }
+.calls-scene-picker button { padding: 8px 0; border-bottom: 1px solid transparent; color: #888; font: 400 14px/1.5 'Inter Variable', Inter, sans-serif; }
+.calls-scene-picker button[aria-pressed=true] { color: #eee; border-color: #eee; }
+.calls-scene-picker button:focus-visible { outline: 2px solid #aaa; outline-offset: 5px; border-radius: 2px; }
+.calls-page .email-desktop-demo { --desktop-stage-width: min(1120px, 92vw); }
+.calls-page .email-desktop-wallpaper { padding: 32px; }
+.calls-page .email-desktop-content { height: 520px; }
+.calls-page .email-desktop-content .product-demo { mask-image: none; -webkit-mask-image: none; }
+.calls-page .email-desktop-content .product-demo-stage::before { display: none; }
+.calls-page .email-desktop-content .call-record-column { padding-top: 24px; }
+.calls-page .email-desktop-content .call-record-column > .flex { gap: 24px; }
+.calls-page .product-prose a { color: #ddd; text-decoration: underline; text-underline-offset: 3px; }
+.calls-page .call-task-pane .call-record-column { padding: 24px 18px; }
+.calls-page .call-task-pane .call-record-column > .flex { gap: 24px; }
+.calls-page .call-agent-log { gap: 20px; }
+.calls-page .call-agent-composer { margin-top: auto; }
+.calls-page .homepage-feature-end { width: min(872px, 100%); margin-inline: auto; }
+@media (max-width: 699px) {
+  .calls-page .email-desktop-demo { --desktop-stage-width: calc(100vw - 24px); }
+  .calls-page .email-desktop-wallpaper { padding: 16px 10px; }
+  .calls-page .email-desktop-content { height: 540px; }
+  .calls-page .call-agent-composer { display: block; }
+  .calls-page .call-task-pane [data-view-shell-top-bar] { display: flex; }
+  .calls-page .call-record-column > .flex { gap: 24px; }
+}
+
+/* The conversation is the starting point; only explicit links open a split. */
+.calls-page .call-split { display: flex; }
+.calls-page .call-agent-pane { flex: 1; overflow: hidden; }
+.calls-page .call-agent-log { width: 100%; max-width: 680px; margin-inline: auto; flex: 1; min-height: 0; flex-shrink: 1; }
+.calls-page .call-agent-composer { width: 100%; max-width: 680px; margin-inline: auto; flex-shrink: 0; }
+.calls-page .call-split[data-opened] > .call-pane { flex: 1; }
+.calls-page .call-linked-content { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.calls-page .call-linked-content > [data-view-shell-top-bar] { display: none; }
+.calls-page .call-close-item { display: grid; place-items: center; margin-left: auto; width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; }
+.calls-page .call-close-item:hover { background: var(--color-hover); }
+.calls-page .call-close-item:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.calls-page .call-split:not([data-opened]) .call-tool-text { overflow: visible; }
+.calls-page .call-split:not([data-opened]) .call-agent-text { max-width: 580px; }
+@media (max-width: 699px) {
+  .calls-page .call-agent-pane { max-height: none; }
+  .calls-page .call-split[data-opened] > .call-agent-pane { display: none; }
+  .calls-page .call-task-pane { border: 0; }
+}
+
+/* Three sections, with balanced navigation at every width. */
+.calls-page .feature-page-jump-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.calls-page .feature-page-jump-links .email-feature-graphic { max-width: 100%; }
+
+.calls-page .agent-mention:focus-visible, .calls-page .call-item-preview:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+
+/* Let the longer hero taper naturally on phones instead of isolating “Turn your”. */
+@media (max-width: 699px) {
+  .calls-page .email-page-hero { padding-inline: 0; }
+  .calls-page .email-page-hero h1 { width: 100%; font-size: clamp(24px, 7.4vw, 50px); text-wrap: wrap; }
+  .calls-page .email-page-hero h1 span { display: inline; }
+  .calls-page .email-page-hero h1 span:first-child::after { content: ' '; }
+  .calls-page .email-page-hero-break { display: block; }
+  .calls-page .email-page-hero > .email-page-hero-description { font-size: clamp(11px, 3.6vw, 14px); text-wrap: nowrap; }
+}

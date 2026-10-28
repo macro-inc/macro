@@ -1,0 +1,151 @@
+use crate::cognition::api::context::ApiContext;
+use axum::Router;
+use axum::extract::DefaultBodyLimit;
+use axum::routing::post;
+use context::GLOBAL_CONTEXT;
+use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use tower::ServiceBuilder;
+use tower_http::limit::RequestBodyLimitLayer;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+// Utilities
+mod citations;
+mod completions;
+pub mod context;
+mod decisions;
+mod health;
+mod id_mapping;
+mod preview;
+pub mod stream;
+pub(crate) mod swagger;
+pub mod utils;
+
+mod attachments;
+mod chats;
+pub mod structured_completion;
+pub(crate) mod tool_selection;
+
+#[cfg(test)]
+mod test;
+
+const GATEWAY_PATH_PREFIX: &str = "/cognition";
+
+/// Build the cognition API on the harness listener, preserving its gateway prefix.
+pub fn build_router(state: ApiContext) -> Router {
+    if GLOBAL_CONTEXT.set(state.clone()).is_err() {
+        panic!("GLOBAL_CONTEXT is set already")
+    }
+    let routes = api_router(state)
+        .merge(health::router())
+        .layer(macro_cors::cors_layer())
+        .layer(DefaultBodyLimit::disable())
+        .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024))
+        .layer(
+            ServiceBuilder::new()
+                .layer(
+                    macro_tower_layers::MacroRequestIdAndTracingLayer::new(
+                        std::time::Duration::from_millis(200),
+                    )
+                    .into_inner(),
+                )
+                .layer(axum::middleware::from_fn_with_state(
+                    ServiceNameState {
+                        service_name: VersionedApiServiceName::DocumentCognitionService,
+                    },
+                    validate_api_version,
+                )),
+        );
+    mount_router(routes)
+}
+
+fn mount_router(routes: Router) -> Router {
+    Router::new().nest(GATEWAY_PATH_PREFIX, routes).merge(
+        SwaggerUi::new("/cognition/docs")
+            .url("/cognition/api-doc/openapi.json", prefixed_openapi()),
+    )
+}
+
+fn prefixed_openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = swagger::ApiDoc::openapi();
+    openapi.servers = Some(vec![utoipa::openapi::Server::new(GATEWAY_PATH_PREFIX)]);
+    openapi
+}
+
+fn api_router(api_context: ApiContext) -> Router {
+    let memory_service = api_context.memory_service.clone();
+    let usage_service = api_context.usage_service.clone();
+    let ai_projections_service = api_context.ai_projections_service.clone();
+    let import_service = api_context.import_service.clone();
+    let onboarding_service = api_context.onboarding_service.clone();
+    let authorization_state = api_context.authorization_state.clone();
+
+    let mcp_state = api_context.mcp_state.clone();
+
+    let internal_router = Router::new()
+        .nest("/chats", chats::router(api_context.clone()))
+        .nest("/stream", stream::router())
+        .route(
+            "/structured-completion",
+            post(structured_completion::structured_completion),
+        )
+        .route("/decisions", decisions::route())
+        .route("/chat/completions", post(completions::handler))
+        .nest("/attachments", attachments::router())
+        .nest("/citations", citations::router())
+        .nest("/preview", preview::router())
+        .nest("/id_mapping", id_mapping::router())
+        .merge(memory::inbound::axum_router::memory_router(
+            memory::inbound::axum_router::MemoryRouterState {
+                service: memory_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(import::inbound::axum_router::import_router(
+            import::inbound::axum_router::ImportRouterState {
+                service: import_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(onboarding::inbound::axum_router::onboarding_router(
+            onboarding::inbound::axum_router::OnboardingRouterState {
+                service: onboarding_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(ai_usage::inbound::ai_usage_router(
+            ai_usage::inbound::AiUsageRouterState {
+                service: usage_service,
+                authorization_state: authorization_state.clone(),
+            },
+        ))
+        .merge(ai_projections::inbound::axum_router::ai_projections_router(
+            ai_projections::inbound::axum_router::AiProjectionRouterState {
+                service: ai_projections_service,
+                authorization_state,
+            },
+        ))
+        .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
+        .merge(pipedream_mcp::inbound::pipedream_mcp_router(
+            api_context.pipedream_state.clone(),
+        ))
+        .with_state(api_context.clone());
+
+    // Pipedream calls this one itself, so it sits outside the authenticated
+    // router and is guarded by the secret baked into the configured
+    // `webhook_uri`. If the secret is unset, the route is not mounted.
+    let app = Router::new()
+        .nest("/{version}", internal_router.clone())
+        .merge(internal_router)
+        .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
+        .merge(granola_sync::inbound::webhook_router(
+            api_context.granola_sync.clone(),
+        ));
+
+    match api_context.config.pipedream_webhook_secret.value() {
+        Some(secret) => app.merge(pipedream_mcp::inbound::pipedream_webhook_router(
+            secret.to_owned(),
+        )),
+        None => app,
+    }
+}

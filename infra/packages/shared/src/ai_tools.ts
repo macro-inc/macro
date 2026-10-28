@@ -68,6 +68,15 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getOutput('gmailOpsQueueArn')
     .apply((v) => v as string);
 
+  // `SendEmail` stages attachments in the email service's bucket; the hosts
+  // read its name from `ATTACHMENT_BUCKET` and need write access to it. The
+  // name is fixed by `stacks/email-service/attachments-bucket.ts`, so the ARN
+  // is derived here rather than read from that stack's outputs, which keeps
+  // these services deployable ahead of an email-service deploy.
+  const emailAttachmentsBucketArn: pulumi.Output<string> = pulumi.output(
+    `arn:aws:s3:::macro-email-attachments-${stack}`
+  );
+
   const notificationIngressQueueArn: pulumi.Output<string> =
     notificationServiceStack
       .getOutput('notificationIngressQueueArn')
@@ -111,7 +120,11 @@ export function getAiToolsInfra(): AiToolsInfra {
       searchEventQueueArn,
       contactsQueueArn,
     ],
-    bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
+    bucketArns: [
+      documentStorageBucketArn,
+      docxUploadBucketArn,
+      emailAttachmentsBucketArn,
+    ],
   };
 }
 
@@ -121,31 +134,12 @@ export function getAiToolsInfra(): AiToolsInfra {
  * group — adding a new tool-hosting service only requires updating this list.
  */
 export function getAiToolsServiceRoleArns(): pulumi.Output<string>[] {
-  const mcpServerStack = new pulumi.StackReference(
-    'ai-tools-mcp-server-stack',
-    { name: `macro-inc/mcp-server/${stack}` }
-  );
-  const documentCognitionStack = new pulumi.StackReference(
-    'ai-tools-document-cognition-stack',
-    { name: `macro-inc/document-cognition/${stack}` }
-  );
-  const agentScheduleServiceStack = new pulumi.StackReference(
-    'ai-tools-agent-schedule-service-stack',
-    { name: `macro-inc/agent-schedule-service/${stack}` }
-  );
   const agentHarnessServiceStack = new pulumi.StackReference(
     'ai-tools-agent-harness-service-stack',
     { name: `macro-inc/agent-harness-service/${stack}` }
   );
 
   return [
-    mcpServerStack.getOutput('mcpServerRoleArn').apply((v) => v as string),
-    documentCognitionStack
-      .getOutput('documentCognitionServiceRoleArn')
-      .apply((v) => v as string),
-    agentScheduleServiceStack
-      .getOutput('agentScheduleServiceRoleArn')
-      .apply((v) => v as string),
     agentHarnessServiceStack
       .getOutput('agentHarnessServiceRoleArn')
       .apply((v) => v as string),

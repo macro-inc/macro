@@ -1,0 +1,18 @@
+---
+title: RemoveFromPipeline
+description: >-
+  Remove deals (entries) from a CRM pipeline, deleting their stage and other
+  pipeline fields.
+---
+
+# RemoveFromPipeline
+
+Remove deals (entries) from a CRM pipeline, deleting their stage and other pipeline fields. The companies and contacts themselves stay in the CRM and in other pipelines. Address entries by entryId, or by the company or contact id they track (which removes every entry of that record in this pipeline). Only when the user asked to remove them.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pipelineId` | string | Yes | The pipeline's id from ListPipelines. |
+| `entryIds` | string[] | No | Entry ids from FindPipelineEntries. |
+| `recordIds` | string[] | No | CRM company or contact ids whose entries to remove. |

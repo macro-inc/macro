@@ -5,7 +5,6 @@ import Microphone from '@phosphor/microphone.svg';
 import MicrophoneSlash from '@phosphor/microphone-slash.svg';
 import PhoneDisconnect from '@phosphor/phone-disconnect.svg';
 import Screencast from '@phosphor/screencast.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
 import { Button } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
@@ -13,14 +12,11 @@ import type { WorkspaceComment } from '../../core/dummy-workspace';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { ChannelComposer } from '../email/frozen/ChannelComposer';
 import { MessageRow } from '../workspace/frozen/MessageRow';
-import { cameraPhoto } from './CallRecord';
 import type { CallPerson } from './call-fixtures';
 
 export type RemoteTile = {
   person: CallPerson;
-  video: boolean;
   muted?: boolean;
-  speaking?: boolean;
 };
 
 /** VideoTag */
@@ -48,9 +44,8 @@ function MutedBadge(props: { label: string }) {
   );
 }
 
-/** ParticipantTileWrapper: the inset accent ring marks who is speaking. */
+/** Camera-off ParticipantTileWrapper; no simulated speaker activity. */
 function Tile(props: {
-  speaking?: boolean;
   connecting?: boolean;
   class?: string;
   children: JSX.Element;
@@ -59,7 +54,6 @@ function Tile(props: {
     <div
       class={`call-tile relative flex min-h-30 items-center justify-center overflow-hidden rounded-lg border border-edge-muted bg-panel ${props.class ?? ''}`}
       classList={{ 'animate-pulse': props.connecting }}
-      data-speaking={props.speaking ? 'true' : undefined}
     >
       {props.children}
     </div>
@@ -67,16 +61,10 @@ function Tile(props: {
 }
 
 /** ParticipantAvatar, shown when a camera is off. */
-function Avatar(props: { person: CallPerson; small?: boolean }) {
+function Avatar(props: { person: CallPerson }) {
   return (
     <div class="flex size-full items-center justify-center p-4">
-      <div
-        class="overflow-hidden rounded-full"
-        classList={{
-          'size-12': props.small,
-          'size-20 sm:size-24': !props.small,
-        }}
-      >
+      <div class="size-20 overflow-hidden rounded-full sm:size-24">
         <img
           class="size-full object-cover"
           src={homepagePeople[props.person].photo}
@@ -87,21 +75,11 @@ function Avatar(props: { person: CallPerson; small?: boolean }) {
   );
 }
 
-function Camera(props: { person: CallPerson; mirror?: boolean }) {
-  return (
-    <img
-      class="call-camera"
-      classList={{ 'call-camera-mirror': props.mirror }}
-      src={cameraPhoto[props.person]}
-      alt=""
-    />
-  );
-}
-
 function ControlButton(props: {
   label: string;
   pressed?: boolean;
   danger?: boolean;
+  disabled?: boolean;
   onClick?: () => void;
   children: JSX.Element;
 }) {
@@ -112,6 +90,7 @@ function ControlButton(props: {
       label={props.label}
       tooltipPlacement="top"
       aria-pressed={props.pressed}
+      disabled={props.disabled}
       onClick={() => props.onClick?.()}
       class={`call-control size-10 @sm:size-12 ${props.danger ? 'call-control-danger' : ''}`}
     >
@@ -125,7 +104,8 @@ function MediaGroup(props: {
   settings: string;
   toggleLabel: string;
   active: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
+  disabled?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -138,6 +118,7 @@ function MediaGroup(props: {
         label={props.toggleLabel}
         pressed={props.active}
         onClick={props.onToggle}
+        disabled={props.disabled}
       >
         {props.children}
       </ControlButton>
@@ -147,6 +128,7 @@ function MediaGroup(props: {
         tooltipDisabled
         aria-label={props.settings}
         aria-expanded={false}
+        disabled
         class="call-control-caret h-10 w-5 @sm:h-12 @sm:w-8"
       >
         <CaretUp class="size-4" />
@@ -156,42 +138,27 @@ function MediaGroup(props: {
 }
 
 /**
- * CallOverlay inside the channel's Call tab: remote tiles in a grid, your
- * picture-in-picture, CallControlBar, the chat toggle, and Share with team.
+ * Marketing call view: all participants, including you, share the same grid.
+ * Keeps the call controls and chat alongside camera-off participant tiles. Camera-off tiles
+ * use the app’s participant avatars; profile photos never stand in for video.
  */
 export function CallOverlayView(props: {
   remote: RemoteTile[];
   you: CallPerson;
   connecting: boolean;
   muted: boolean;
-  cameraOff: boolean;
-  background: boolean;
-  sharing: boolean;
-  sharedWithTeam: boolean;
   chatOpen: boolean;
   chat: WorkspaceComment[];
   onMute: () => void;
-  onCamera: () => void;
-  onBackground: () => void;
-  onShareScreen: () => void;
-  onShareWithTeam: () => void;
   onChat: () => void;
   onSendChat: (body: string) => void;
   onLeave: () => void;
 }) {
-  const columns = () =>
-    props.remote.length <= 1 ? 1 : props.remote.length <= 4 ? 2 : 3;
-  const local = (pip: boolean) => (
-    <Tile
-      class={pip ? 'size-full min-h-0' : 'size-full'}
-      connecting={props.connecting}
-    >
-      <Show
-        when={!props.connecting && !props.cameraOff}
-        fallback={<Avatar person={props.you} small={pip} />}
-      >
-        <Camera person={props.you} mirror />
-      </Show>
+  const count = () => props.remote.length + 1;
+  const columns = () => (count() <= 1 ? 1 : count() <= 4 ? 2 : 3);
+  const local = () => (
+    <Tile connecting={props.connecting}>
+      <Avatar person={props.you} />
       <Show when={props.muted}>
         <MutedBadge label="You are muted" />
       </Show>
@@ -204,55 +171,29 @@ export function CallOverlayView(props: {
     <div class="call-overlay flex h-full min-h-0 flex-col @container/call">
       <div class="relative flex min-h-0 flex-1 overflow-hidden">
         <div class="flex min-w-0 flex-1 flex-col">
-          <Show when={props.sharing}>
-            <div class="min-h-0 flex-1 pt-2">
-              <div class="relative flex h-full items-center justify-center overflow-hidden rounded-lg bg-surface-2">
-                <div class="call-screen-share" aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <VideoTag>Your screen</VideoTag>
-              </div>
+          <div class="call-participant-area relative min-h-0 flex-1 pt-2">
+            <div
+              class="call-grid grid size-full auto-rows-fr gap-2 overflow-hidden"
+              data-count={count()}
+              style={{
+                'grid-template-columns': `repeat(${columns()}, minmax(0, 1fr))`,
+              }}
+            >
+              <For each={props.remote}>
+                {(tile) => (
+                  <Tile>
+                    <Avatar person={tile.person} />
+                    <Show when={tile.muted}>
+                      <MutedBadge
+                        label={`${homepagePeople[tile.person].name} is muted`}
+                      />
+                    </Show>
+                    <VideoTag>{homepagePeople[tile.person].name}</VideoTag>
+                  </Tile>
+                )}
+              </For>
+              {local()}
             </div>
-          </Show>
-          <div
-            class="relative pt-2"
-            classList={{
-              'h-45 shrink-0': props.sharing,
-              'min-h-0 flex-1': !props.sharing,
-            }}
-          >
-            <Show when={props.remote.length > 0} fallback={local(false)}>
-              <div
-                class="call-grid grid size-full auto-rows-fr gap-2 overflow-hidden"
-                style={{
-                  'grid-template-columns': `repeat(${columns()}, minmax(0, 1fr))`,
-                }}
-              >
-                <For each={props.remote}>
-                  {(tile) => (
-                    <Tile speaking={tile.speaking}>
-                      <Show
-                        when={tile.video}
-                        fallback={<Avatar person={tile.person} />}
-                      >
-                        <Camera person={tile.person} />
-                      </Show>
-                      <Show when={tile.muted}>
-                        <MutedBadge
-                          label={`${homepagePeople[tile.person].name} is muted`}
-                        />
-                      </Show>
-                      <VideoTag>{homepagePeople[tile.person].name}</VideoTag>
-                    </Tile>
-                  )}
-                </For>
-              </div>
-              <div class="call-pip absolute right-4 bottom-4 z-10 aspect-video w-40 shadow-lg sm:w-48">
-                {local(true)}
-              </div>
-            </Show>
           </div>
         </div>
         <Show when={props.chatOpen}>
@@ -282,25 +223,6 @@ export function CallOverlayView(props: {
         </Show>
       </div>
       <div class="relative flex shrink-0 flex-col items-center gap-2 py-3">
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={props.sharedWithTeam}
-          title={
-            props.sharedWithTeam
-              ? "The creator's team can view the chat, transcript, and AI summary once the call ends"
-              : "Let the creator's team view the chat, transcript, and AI summary once the call ends"
-          }
-          class="call-team-share order-1"
-          onClick={() => props.onShareWithTeam()}
-        >
-          <span class="call-checkbox" data-checked={props.sharedWithTeam}>
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <path d="m2.5 6.2 2.3 2.3 4.7-5" />
-            </svg>
-          </span>
-          <span class="whitespace-nowrap">Share with team</span>
-        </button>
         <div class="call-controls-row">
           <div class="call-controls-center">
             <div
@@ -324,34 +246,22 @@ export function CallOverlayView(props: {
                 <MediaGroup
                   label="Camera controls"
                   settings="Camera settings"
-                  toggleLabel={
-                    props.cameraOff ? 'Turn on camera' : 'Turn off camera'
-                  }
-                  active={!props.cameraOff}
-                  onToggle={props.onCamera}
+                  toggleLabel="Turn on camera"
+                  active={false}
+                  disabled
                 >
-                  <Show when={props.cameraOff} fallback={<VideoCamera />}>
-                    <VideoCameraSlash />
-                  </Show>
+                  <VideoCameraSlash />
                 </MediaGroup>
                 <MediaGroup
                   label="Background controls"
                   settings="Background settings"
-                  toggleLabel={
-                    props.background
-                      ? 'Turn off background'
-                      : 'Turn on background'
-                  }
-                  active={props.background}
-                  onToggle={props.onBackground}
+                  toggleLabel="Turn on background"
+                  active={false}
+                  disabled
                 >
                   <ImageIcon />
                 </MediaGroup>
-                <ControlButton
-                  label={props.sharing ? 'Stop sharing screen' : 'Share screen'}
-                  pressed={props.sharing}
-                  onClick={props.onShareScreen}
-                >
+                <ControlButton label="Share screen" disabled>
                   <Screencast />
                 </ControlButton>
                 <ControlButton

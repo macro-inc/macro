@@ -29,7 +29,7 @@
   color: var(--crr-text-bright);
   font-family: 'display', Georgia, serif;
   font-size: clamp(28px, 4vw, 38px);
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.02em;
   line-height: 1.12;
   margin: 68px 0 24px;

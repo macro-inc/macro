@@ -1,7 +1,5 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
-import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
@@ -14,7 +12,6 @@ import {
   homeChannelRoute,
   homeDocumentRoute,
   homePreviewRoute,
-  homeReminderRoute,
   homeSplitRoute,
 } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
@@ -24,9 +21,9 @@ import {
   previewBlockTarget,
 } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -34,7 +31,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  mergeProps,
   on,
 } from 'solid-js';
 import {
@@ -74,18 +70,19 @@ export type HomeViewContext = {
   previewNavigationRequest: Accessor<number>;
   /** Whether the route opens the Calendar view inline. */
   calendarOpen: Accessor<boolean>;
-  /** Whether the route opens a reminder inline. */
-  reminderOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
   calendarRefocus: Accessor<number>;
-  openPreview: (entity: PreviewSelection) => boolean;
+  openPreview: (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => boolean;
   closePreview: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
 };
 
-function defaultGroupBy(tab: HomeTab): HomeGroupBy {
-  return tab === 'reminders' ? 'none' : 'date';
+function defaultGroupBy(): HomeGroupBy {
+  return 'date';
 }
 
 export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
@@ -95,9 +92,8 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
   const navigate = useNavigate();
-  const routeParams = useParams<
-    Parameters<typeof homeDetailParamsFromRoute>[0] & { reminderId?: string }
-  >();
+  const routeParams =
+    useParams<Parameters<typeof homeDetailParamsFromRoute>[0]>();
   const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(driveSearch);
   const [tabSearch] = createSearchParams(homeTabSearch);
@@ -108,7 +104,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     createStore<HomeViewState>({
       tab: initialTab,
       search: initial.search ?? '',
-      groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
+      groupBy: initial.groupBy ?? defaultGroupBy(),
       facets: normalizeHomeFacets(initial.facets),
     }),
     createHomeViewPersistence({
@@ -119,15 +115,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     })
   );
 
-  const searchText = useMobileSearchText(
-    () => persistedState.search,
-    panel.handle.isActive
-  );
-  const state = mergeProps(persistedState, {
-    get search() {
-      return searchText();
-    },
-  });
+  const state = persistedState;
 
   createEffect(
     on(
@@ -137,7 +125,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
         setState(
           produce((draft) => {
             draft.tab = tab;
-            draft.groupBy = defaultGroupBy(tab);
+            draft.groupBy = defaultGroupBy();
           })
         );
       }
@@ -162,7 +150,6 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   });
   const { calendarOpen, calendarRefocus, openCalendarEvent } =
     useHomeCalendarPreview(withTab);
-  const reminderOpen = () => typeof routeParams.reminderId === 'string';
   const navigateDetail = (
     { params, search }: HomePreviewNavigation,
     replace = false
@@ -177,35 +164,30 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
               params: { documentType: blockType, documentId: previewId },
             }
           : { route: homePreviewRoute, params };
-    navigate(target, { replace, search: withTab(search) });
+    fireAndForget(
+      navigate(target, { replace, search: withTab(search) }),
+      'home-view'
+    );
   };
   const navigateTarget = (target: PreviewBlockTarget, replace = false) =>
     navigateDetail(homePreviewTargetNavigation(target), replace);
-  const closePreview = () =>
-    navigate(
-      { route: homeSplitRoute, params: {} },
-      { search: withTab(homeDetailSearch()) }
+  const closePreview = () => {
+    fireAndForget(
+      navigate(
+        { route: homeSplitRoute, params: {} },
+        { search: withTab(homeDetailSearch()) }
+      ),
+      'home-view'
     );
+  };
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
-  const openPreview = (entity: PreviewSelection) => {
-    if (entity.type === 'calendar_event') return openCalendarEvent(entity);
-    if (entity.type === 'reminder') {
-      const source = reminderSourceContent(entity);
-      if (!source) {
-        navigate(
-          { route: homeReminderRoute, params: { reminderId: entity.id } },
-          { search: withTab(homeDetailSearch()) }
-        );
-        return true;
-      }
-      return openPreviewTarget({
-        blockType: resolveBlockAlias(source.type),
-        blockId: source.id,
-        aliasContext: isBlockAlias(source.type)
-          ? { alias: source.type, baseType: resolveBlockAlias(source.type) }
-          : undefined,
-      });
+  const openPreview = (
+    entity: PreviewSelection,
+    options?: { activate?: boolean }
+  ) => {
+    if (entity.type === 'calendar_event') {
+      return openCalendarEvent(entity, options);
     }
     return openPreviewTarget(previewBlockTarget(entity));
   };
@@ -231,9 +213,12 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
       if (selectPreview(target)) return;
       if (previous) navigateTarget(previous, true);
       else
-        navigate(
-          { route: homeSplitRoute, params: {} },
-          { replace: true, search: withTab(homeDetailSearch()) }
+        fireAndForget(
+          navigate(
+            { route: homeSplitRoute, params: {} },
+            { replace: true, search: withTab(homeDetailSearch()) }
+          ),
+          'home-view'
         );
     })
   );
@@ -243,7 +228,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     setState(
       produce((draft) => {
         draft.tab = tab;
-        draft.groupBy = defaultGroupBy(tab);
+        draft.groupBy = defaultGroupBy();
       })
     );
     closePreview();
@@ -260,7 +245,6 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     previewNavigationRequest,
     calendarOpen,
     calendarRefocus,
-    reminderOpen,
     openPreview,
     closePreview,
     setTab,

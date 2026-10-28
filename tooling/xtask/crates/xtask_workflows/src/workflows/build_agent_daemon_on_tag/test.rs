@@ -41,7 +41,7 @@ fn publish_runs_when_any_platform_succeeds() {
     assert!(if_line.contains("needs.resolve-ref.result"));
     assert!(if_line.contains(" || "));
     assert!(!if_line.contains(" && needs.build-daemon"));
-    for target in LINUX_TARGETS.iter().chain(MACOS_TARGETS) {
+    for target in all_targets() {
         assert!(if_line.contains(&format!("needs.{}.result == ''success''", job_id(target))));
     }
 }

@@ -52,6 +52,7 @@ impl SearchProfile {
                 "project",
                 "email",
                 "crm_company",
+                "crm_contact",
             ],
         }
     }
@@ -131,7 +132,7 @@ pub enum SearchError {
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 2;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 3;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -142,6 +143,7 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
     "GraphqlSoupEmailThread",
     "GraphqlSoupChannel",
     "GraphqlSoupCrmCompany",
+    "GraphqlSoupCrmContact",
     "GraphqlUser",
     "User",
 ];
@@ -202,10 +204,11 @@ fn quick_access_fields<'a>(
         "GraphqlSoupProject" => ("project", &["projectName", "name"]),
         "GraphqlSoupEmailThread" => (
             "email",
-            &["emailName", "name", "senderName", "senderEmail", "snippet"],
+            &["emailName", "name", "senderName", "senderEmail", "senders"],
         ),
         "GraphqlSoupChannel" => (channel_bucket(record), &["channelName", "name"]),
         "GraphqlSoupCrmCompany" => ("crm_company", &["crmCompanyName", "name", "domains"]),
+        "GraphqlSoupCrmContact" => ("crm_contact", &["crmContactName", "name", "email"]),
         "GraphqlUser" | "User" => ("person", &["name", "email"]),
         _ => return None,
     };
@@ -307,6 +310,12 @@ fn normalize_search_text(value: &str) -> String {
 }
 
 fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
+    if typename == "GraphqlSoupCrmContact" {
+        return ["lastInteraction", "updatedAt", "createdAt"]
+            .into_iter()
+            .find_map(|field| record.fields.get(field).and_then(value_timestamp))
+            .unwrap_or(0);
+    }
     // Match VIEWED_UPDATED and the menu before applying a browse limit. Using
     // max(viewedAt, updatedAt) would let newly updated, long-unopened records
     // displace recently viewed records into later pages.

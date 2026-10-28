@@ -1,141 +1,116 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import type { BackgroundEffect } from '@core/media/background-effect';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CallControlBar } from '../CallControls/CallControlBar';
+import {
+  CallMediaControls,
+  type CallMediaControlsState,
+} from '../CallControls/CallMediaControls';
 
-vi.mock('@ui', async () => ({
-  ...(await import('../../../../components/ui/components/Button')),
-  Tooltip: (props: { children: JSX.Element }) => props.children,
-}));
+afterEach(cleanup);
 
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-});
+const device = (deviceId: string, label: string) =>
+  ({ deviceId, label }) as MediaDeviceInfo;
 
 function setup() {
-  const [menuOpen, setMenuOpen] = createSignal(false);
-  const toggleAudio = vi.fn(),
-    leave = vi.fn(),
-    toggleBackground = vi.fn();
-  const { container } = render(() => (
-    <CallControlBar
-      disabled={false}
-      audioMuted={false}
-      videoMuted={false}
-      screenSharing={false}
-      menuOpen={menuOpen()}
-      onToggleAudio={toggleAudio}
-      onToggleVideo={() => {}}
-      onToggleScreen={() => {}}
-      onLeave={leave}
-      audioSettings={<button type="button">Microphone device</button>}
-      videoSettings={<button type="button">Camera device</button>}
-      backgroundActive={false}
-      backgroundDisabled={false}
-      onToggleBackground={toggleBackground}
-      backgroundSettings={<button type="button">Background picker</button>}
-    />
-  ));
-  const bar = container.querySelector('[data-call-controls]')!;
-  const hover = (element: Element) =>
-    fireEvent(
-      element,
-      Object.assign(new Event('pointerenter', { bubbles: false }), {
-        pointerType: 'mouse',
-      })
-    );
-  return { bar, hover, setMenuOpen, toggleAudio, toggleBackground, leave };
+  const [audioMuted, setAudioMuted] = createSignal(false);
+  const [background, setBackground] = createSignal<BackgroundEffect>({
+    type: 'none',
+  });
+  const media = {
+    isConnecting: () => false,
+    isAudioMuted: audioMuted,
+    isVideoMuted: () => false,
+    isScreenSharing: () => false,
+    toggleAudio: vi.fn(async () => {
+      setAudioMuted(!audioMuted());
+    }),
+    toggleVideo: vi.fn(async () => {}),
+    toggleScreenShare: vi.fn(async () => {}),
+    audioInputDevices: () => [device('mic-1', 'Desk microphone')],
+    audioOutputDevices: () => [],
+    videoInputDevices: () => [device('cam-1', 'Desk camera')],
+    activeAudioInputDeviceId: () => null,
+    activeAudioOutputDeviceId: () => null,
+    activeVideoInputDeviceId: () => 'cam-1',
+    switchAudioInput: vi.fn(async () => {}),
+    switchAudioOutput: vi.fn(async () => {}),
+    switchVideoInput: vi.fn(async () => {}),
+    isNoiseSuppressed: () => true,
+    toggleNoiseSuppression: vi.fn(async () => {}),
+    backgroundEffect: background,
+    setBackgroundEffect: vi.fn(async (effect: BackgroundEffect) => {
+      setBackground(effect);
+    }),
+  } satisfies CallMediaControlsState;
+  const leave = vi.fn();
+  render(() => <CallMediaControls media={media} onLeave={leave} />);
+  return { media, leave };
+}
+
+async function openMenu(name: string) {
+  const trigger = screen.getByRole('button', { name });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  await screen.findByRole('menu');
+  return trigger;
+}
+
+async function choose(role: string, name: string) {
+  const item = await screen.findByRole(role, { name });
+  item.focus();
+  fireEvent.keyDown(item, { key: 'Enter' });
 }
 
 describe('call controls', () => {
-  it('previews settings on hover, keeps them while a device menu is open, and closes after leaving', () => {
-    vi.useFakeTimers();
-    const { bar, hover, setMenuOpen } = setup();
-    hover(screen.getByRole('group', { name: 'Microphone controls' }));
-    expect(screen.queryByRole('region')).toBeNull();
-    vi.advanceTimersByTime(150);
-    expect(screen.getByRole('region', { name: 'Audio settings' })).toBeTruthy();
-    setMenuOpen(true);
-    fireEvent.pointerLeave(bar);
-    vi.advanceTimersByTime(350);
-    expect(screen.getByRole('region')).toBeTruthy();
-    setMenuOpen(false);
-    fireEvent.pointerLeave(bar);
-    vi.advanceTimersByTime(350);
-    expect(screen.queryByRole('region')).toBeNull();
-  });
-
-  it('ignores a quick pass over a control and cancels a close when the pointer returns', () => {
-    vi.useFakeTimers();
-    const { bar, hover } = setup();
-    const group = screen.getByRole('group', { name: 'Microphone controls' });
-    hover(group);
-    vi.advanceTimersByTime(70);
-    fireEvent.pointerLeave(group);
-    vi.advanceTimersByTime(200);
-    expect(screen.queryByRole('region')).toBeNull();
-    hover(group);
-    vi.advanceTimersByTime(150);
-    fireEvent.pointerLeave(bar);
-    vi.advanceTimersByTime(200);
-    hover(bar);
-    vi.advanceTimersByTime(200);
-    expect(screen.getByRole('region')).toBeTruthy();
-  });
-
-  it('pins settings by click and dismisses on an outside pointer', () => {
-    vi.useFakeTimers();
-    const { bar } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
-    fireEvent.pointerLeave(bar);
-    vi.advanceTimersByTime(350);
-    expect(screen.getByRole('region')).toBeTruthy();
-    fireEvent.pointerDown(document.body);
-    expect(screen.queryByRole('region')).toBeNull();
-  });
-
-  it('returns keyboard focus to the disclosure when Escape closes settings', () => {
-    setup();
-    const disclosure = screen.getByRole('button', { name: 'Camera settings' });
-    fireEvent.click(disclosure);
-    const device = screen.getByRole('button', { name: 'Camera device' });
-    expect(document.activeElement).toBe(device);
-    fireEvent.keyDown(device, { key: 'Escape' });
-    expect(screen.queryByRole('region')).toBeNull();
-    expect(document.activeElement).toBe(disclosure);
-  });
-
-  it('previews backgrounds with the shared hover delay and toggles the effect independently', () => {
-    vi.useFakeTimers();
-    const { hover, toggleBackground } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Turn on background' }));
-    expect(toggleBackground).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('region')).toBeNull();
-    hover(screen.getByRole('group', { name: 'Background controls' }));
-    vi.advanceTimersByTime(70);
-    expect(screen.queryByRole('region')).toBeNull();
-    vi.advanceTimersByTime(80);
+  it('toggles the microphone without opening its settings', () => {
+    const { media } = setup();
+    const toggle = screen.getByRole('button', { name: 'Mute microphone' });
+    fireEvent.pointerEnter(toggle);
+    fireEvent.click(toggle);
+    expect(media.toggleAudio).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).toBeNull();
     expect(
-      screen.getByRole('region', { name: 'Background settings' })
-    ).toBeTruthy();
-    const disclosure = screen.getByRole('button', {
-      name: 'Background settings',
-    });
-    fireEvent.click(disclosure);
-    const picker = screen.getByRole('button', { name: 'Background picker' });
-    expect(document.activeElement).toBe(picker);
-    fireEvent.keyDown(picker, { key: 'Escape' });
-    expect(screen.queryByRole('region')).toBeNull();
-    expect(document.activeElement).toBe(disclosure);
+      screen
+        .getByRole('button', { name: 'Unmute microphone' })
+        .getAttribute('aria-pressed')
+    ).toBe('false');
   });
 
-  it('keeps media actions independent from the settings disclosures', () => {
-    const { toggleAudio, leave } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
-    expect(toggleAudio).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('region')).toBeNull();
+  it('opens audio settings from the caret and switches the microphone', async () => {
+    const { media } = setup();
+    const caret = await openMenu('Audio settings');
+    expect(caret.getAttribute('aria-expanded')).toBe('true');
+    await choose('menuitemradio', 'Desk microphone');
+    expect(media.switchAudioInput).toHaveBeenCalledWith('mic-1');
+  });
+
+  it('keeps background effects in the video settings', async () => {
+    const { media } = setup();
+    await openMenu('Video settings');
+    expect(
+      screen
+        .getByRole('menuitemradio', { name: 'Desk camera' })
+        .getAttribute('aria-checked')
+    ).toBe('true');
+    await choose('menuitemradio', 'Strong blur');
+    await waitFor(() =>
+      expect(media.setBackgroundEffect).toHaveBeenCalledWith({
+        type: 'blur',
+        intensity: 'heavy',
+      })
+    );
+  });
+
+  it('leaves the call', () => {
+    const { leave } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Leave call' }));
     expect(leave).toHaveBeenCalledOnce();
   });

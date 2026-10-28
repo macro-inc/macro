@@ -1,7 +1,14 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  deleteCellEdits,
+  insertCheckboxEdits,
+  toggleCheckboxEdits,
+} from '@macro-inc/spreadsheet/checkboxes';
 import {
   type Accessor,
   batch,
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -13,11 +20,12 @@ import {
   rangeCopies,
   readCopiedRange,
 } from '../core/cell-copy';
-import { cellEditValue, normalizeCellInput } from '../core/cell-input';
+import { cellEditValue, cellInputEdit } from '../core/cell-input';
 import {
   type FormulaTextSelection,
   formulaRangeReference,
   formulaReferenceSlot,
+  formulaReferences,
 } from '../core/formula-reference';
 import {
   type CellPosition,
@@ -146,6 +154,37 @@ export function createGridController(source: GridSource) {
   const editingAddress = () => editTarget?.address ?? activeAddress();
   const canPickReference = () =>
     !!editing() && !!formulaReferenceSlot(draft(), textSelection);
+  const draftReferences = createMemo(() =>
+    editing() ? formulaReferences(draft()) : []
+  );
+  /** The draft's references that fall on the sheet being shown. */
+  const referenceHighlights = createMemo(() => {
+    const sheets = source.sheets?.() ?? [];
+    const shown = source.sheetId?.();
+    const shownName = sheets
+      .find((sheet) => sheet.id === shown)
+      ?.name.toUpperCase();
+    const ownSheet = editTarget?.sheetId ?? shown;
+    return draftReferences().flatMap((reference) => {
+      const onShownSheet = reference.sheetName
+        ? reference.sheetName.toUpperCase() === shownName
+        : ownSheet === shown;
+      const { top, left } = reference.bounds;
+      if (!onShownSheet || top >= rowCount() || left >= columnCount())
+        return [];
+      return [
+        {
+          color: reference.color,
+          bounds: {
+            top,
+            left,
+            bottom: Math.min(reference.bounds.bottom, rowCount() - 1),
+            right: Math.min(reference.bounds.right, columnCount() - 1),
+          },
+        },
+      ];
+    });
+  });
 
   // Remote deletion and local tab changes invalidate drafts and async fills.
   // An explicit reference-picking tab switch keeps the origin draft. Remote
@@ -206,16 +245,22 @@ export function createGridController(source: GridSource) {
 
   // A local undo or remote layout operation can remove the selected empty row.
   // End its draft before moving focus so it cannot commit into a different cell.
+  // A tab change bounds the new sheet's selection itself, and may keep a
+  // cross-sheet formula draft that this would otherwise cancel.
   createEffect(
-    on(rowCount, (count, previous) => {
-      // A fill preview can extend past the current selection. Shrinking the
-      // sheet invalidates that pending copy even when selection stays in bounds.
-      if (previous !== undefined && count < previous) cancelPendingCopy();
-      const current = selection();
-      if (current.anchor.row < count && current.focus.row < count) return;
-      cancel();
-      selectRange(current.anchor, current.focus);
-    })
+    on(
+      () => [source.sheetId?.(), rowCount()] as const,
+      ([sheetId, count], previous) => {
+        if (previous && previous[0] !== sheetId) return;
+        // A fill preview can extend past the current selection. Shrinking the
+        // sheet invalidates that pending copy even when selection stays in bounds.
+        if (previous && count < previous[1]) cancelPendingCopy();
+        const current = selection();
+        if (current.anchor.row < count && current.focus.row < count) return;
+        cancel();
+        selectRange(current.anchor, current.focus);
+      }
+    )
   );
 
   function cancelPendingCopy() {
@@ -266,7 +311,7 @@ export function createGridController(source: GridSource) {
         }
       }
       const edits = {
-        [address]: { value: normalizeCellInput(value, originalCell) },
+        [address]: cellInputEdit(value, originalCell, navigator.language),
       };
       if (target && source.setSheetCells)
         source.setSheetCells(target.sheetId, edits);
@@ -309,7 +354,7 @@ export function createGridController(source: GridSource) {
       return;
     }
     originalCell = source.cells()[activeAddress()];
-    originalValue = cellEditValue(originalCell);
+    originalValue = cellEditValue(originalCell, navigator.language);
     editTarget = source.sheetId
       ? { sheetId: source.sheetId(), address: activeAddress() }
       : undefined;
@@ -431,15 +476,44 @@ export function createGridController(source: GridSource) {
     );
   }
 
-  function format(patch: Partial<SpreadsheetCell>) {
+  function deleteCells() {
+    if (!source.canEdit()) return;
+    cancelPendingCopy();
+    source.setCells(deleteCellEdits(source.cells(), selection()));
+  }
+
+  /** Styles `target`, by default the current selection. */
+  function format(
+    patch: Partial<SpreadsheetCell>,
+    target: CellSelection = selection()
+  ) {
     commit();
     if (!source.canEdit()) return;
     cancelPendingCopy();
     source.setCells(
       Object.fromEntries(
-        selectionAddresses(selection()).map((address) => [address, patch])
+        selectionAddresses(target).map((address) => [address, patch])
       )
     );
+  }
+
+  function insertCheckboxes() {
+    commit();
+    if (!source.canEdit()) return;
+    cancelPendingCopy();
+    source.setCells(insertCheckboxEdits(source.cells(), selection()));
+  }
+
+  /** Toggles the selection's checkboxes; false when it has none. */
+  function toggleCheckboxes() {
+    commit();
+    const edits = toggleCheckboxEdits(source.cells(), selection());
+    if (!edits) return false;
+    if (source.canEdit() && Object.keys(edits).length) {
+      cancelPendingCopy();
+      source.setCells(edits);
+    }
+    return true;
   }
 
   function copy(): string {
@@ -532,16 +606,19 @@ export function createGridController(source: GridSource) {
 
   function fillDirection(direction: 'down' | 'right') {
     const { top, bottom, left, right } = selectionBounds(selection());
-    fill(
-      {
-        anchor: { row: top, column: left },
-        focus: {
-          row: direction === 'down' ? top : bottom,
-          column: direction === 'down' ? right : left,
+    fireAndForget(
+      fill(
+        {
+          anchor: { row: top, column: left },
+          focus: {
+            row: direction === 'down' ? top : bottom,
+            column: direction === 'down' ? right : left,
+          },
         },
-      },
-      selection(),
-      'copy'
+        selection(),
+        'copy'
+      ),
+      'spreadsheet-grid'
     );
   }
 
@@ -572,7 +649,10 @@ export function createGridController(source: GridSource) {
             `Pasted ${range.cells.length * range.cells[0].length} cells`
           );
         } else
-          void applyCopies(rangeCopies(range, start), { anchor: start, focus });
+          fireAndForget(
+            applyCopies(rangeCopies(range, start), { anchor: start, focus }),
+            'spreadsheet-grid'
+          );
         return;
       }
       if (text.length > 1_000_000)
@@ -666,7 +746,7 @@ export function createGridController(source: GridSource) {
       beginEdit('cell');
     } else if (event.key === 'Backspace' || event.key === 'Delete') {
       event.preventDefault();
-      clear();
+      deleteCells();
     } else if (event.key === 'Escape') {
       event.preventDefault();
       if (editing()) cancel();
@@ -679,6 +759,7 @@ export function createGridController(source: GridSource) {
       );
     } else if (!command && !event.altKey && event.key.length === 1) {
       event.preventDefault();
+      if (event.key === ' ' && toggleCheckboxes()) return;
       beginEdit('cell', event.key);
     }
   }
@@ -706,6 +787,8 @@ export function createGridController(source: GridSource) {
         ? referenceSelection()
         : undefined,
     pickingReference,
+    draftReferences,
+    referenceHighlights,
     beginReference,
     updateReference,
     endReference,
@@ -718,6 +801,8 @@ export function createGridController(source: GridSource) {
     move,
     clear,
     format,
+    insertCheckboxes,
+    toggleCheckboxes,
     copy,
     paste,
     keyDown,

@@ -8,13 +8,16 @@ pub(crate) mod helpers;
 
 mod create_company;
 mod create_contact;
+mod domain_directory;
 mod get_company_for_team;
 mod get_contact_by_email_for_team;
 mod get_contact_for_team;
 mod link_contact_pairs_with_sources;
 mod list_companies_for_soup;
 mod list_contacts_for_company;
+mod list_contacts_for_soup;
 mod populate_contact;
+mod resolve_association;
 mod search_contacts_for_team;
 mod set_company_hidden;
 mod set_company_name;

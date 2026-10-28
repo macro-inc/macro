@@ -6,6 +6,7 @@
 
 import type { FigEngine } from '@core/fig-engine/client';
 import type { PrototypeInfo } from '@core/fig-engine/prototype-types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createSignal, on, onMount } from 'solid-js';
 import type { PanelTab } from '../components/design-panel';
 import type { FigViewerContext } from '../context/fig-viewer-context';
@@ -68,7 +69,7 @@ export function createFigReview(options: {
   // external system), again after every edit.
   createEffect(
     on([panelTab, viewer.page, viewer.editVersion], ([tab]) => {
-      if (tab === 'prototype') void loadPrototype();
+      if (tab === 'prototype') fireAndForget(loadPrototype(), 'fig-review');
     })
   );
 
@@ -110,7 +111,8 @@ export function createFigReview(options: {
   };
 
   onMount(() => {
-    if (context.presentAt) void presentFrame(context.presentAt);
+    if (context.presentAt)
+      fireAndForget(presentFrame(context.presentAt), 'fig-review');
   });
 
   const copyFrameLink = async (frame: string) => {
@@ -146,7 +148,7 @@ export function createFigReview(options: {
     if (!action || (action === 'comment-tool' && !comments)) return false;
     e.preventDefault();
     e.stopPropagation();
-    if (action === 'present') void present();
+    if (action === 'present') fireAndForget(present(), 'fig-review');
     else toggleComments();
     return true;
   };
@@ -178,7 +180,10 @@ export function createFigReview(options: {
   };
 
   const setFlowStart = (frame: string, name: string | null) =>
-    void editor.apply([{ op: 'setFlowStart', id: frame, name }]);
+    fireAndForget(
+      editor.apply([{ op: 'setFlowStart', id: frame, name }]),
+      'fig-review'
+    );
 
   return {
     comments,

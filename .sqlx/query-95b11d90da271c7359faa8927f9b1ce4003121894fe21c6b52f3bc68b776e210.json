@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET is_draft = true,mailbox_state = COALESCE(mailbox_state,'{}'::jsonb) - 'provider_missing' WHERE id = $1 AND NOT is_sent",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95b11d90da271c7359faa8927f9b1ce4003121894fe21c6b52f3bc68b776e210"
+}

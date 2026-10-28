@@ -47,7 +47,7 @@ fn the_form_shows_a_tools_flat_arguments_prefilled_and_leaves_the_rest_to_the_dr
         "time": {"kind": "timed", "startsAt": "2026-08-20T17:00:00Z", "endsAt": "2026-08-20T17:30:00Z"},
         "location": "Room 4",
         "attendees": [{"email": "alice@example.com"}],
-        "addGoogleMeet": true,
+        "addConference": true,
     });
     let form = project_form(Some("Create calendar event".to_owned()), &schema, &draft);
 
@@ -68,7 +68,7 @@ fn the_form_shows_a_tools_flat_arguments_prefilled_and_leaves_the_rest_to_the_dr
         "an optional string reads through its nullable wrapper"
     );
     assert_eq!(
-        field(&form, "addGoogleMeet").kind,
+        field(&form, "addConference").kind,
         ReviewFieldKind::Boolean {
             default: Some(true)
         }
@@ -113,11 +113,11 @@ fn the_answer_is_applied_over_the_draft_and_a_whole_draft_wins() {
     // Flat fields replace the arguments of the same name; the rest stays.
     let flat = BTreeMap::from([
         ("title".to_owned(), json!("Q3 planning")),
-        ("addGoogleMeet".to_owned(), json!(true)),
+        ("addConference".to_owned(), json!(true)),
     ]);
     assert_eq!(
         apply_review(&draft, &flat),
-        json!({"title": "Q3 planning", "location": "Room 4", "time": {"kind": "allDay"}, "addGoogleMeet": true})
+        json!({"title": "Q3 planning", "location": "Room 4", "time": {"kind": "allDay"}, "addConference": true})
     );
 
     // A whole draft, as the JSON string a composer sends, replaces everything.
@@ -168,7 +168,10 @@ impl ToolAnnotated for Greet {
 
 /// Records every call it runs.
 #[derive(Clone, Default)]
-struct Ran(Arc<Mutex<Vec<Greet>>>);
+struct Ran(
+    Arc<Mutex<Vec<Greet>>>,
+    Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+);
 
 #[async_trait]
 impl AsyncTool<Ran> for Greet {
@@ -177,8 +180,9 @@ impl AsyncTool<Ran> for Greet {
     async fn call(
         &self,
         context: ServiceContext<Ran>,
-        _request: RequestContext,
+        request: RequestContext,
     ) -> ToolResult<Self::Output> {
+        context.0.1.lock().unwrap().push(request.user_id);
         if self.name == "nobody" {
             return Err(ToolCallError {
                 description: "nobody is not a person".to_owned(),
@@ -335,4 +339,47 @@ async fn a_tool_the_toolset_does_not_know_as_a_user_tool_is_left_alone() {
     .await;
     assert_eq!(finished, None);
     assert!(reviewer.asked.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn account_authorization_covers_final_edits_and_refusal_never_executes() {
+    let tools = Arc::new(AsyncToolCollection::<Ran>::new().add_user_tool::<Greet, Ran>());
+    let reviewer = Arc::new(Scripted {
+        asked: Mutex::default(),
+        answer: Ok(ReviewOutcome::Accepted(BTreeMap::from([(
+            "name".into(),
+            json!("Edited"),
+        )]))),
+    });
+    let ran = Ran::default();
+    let requester = MacroUserIdStr::try_from_email("requester@example.com").unwrap();
+    for approved in [false, true] {
+        let requester = requester.clone();
+        let authorize: UserToolAuthorizer = Arc::new(move |name, args| {
+            assert_eq!(name, "Greet");
+            assert_eq!(args["name"], "Edited");
+            let user = requester.clone();
+            Box::pin(async move {
+                if approved {
+                    Ok(user)
+                } else {
+                    Err(ReviewError::Failed("Declined".into()))
+                }
+            })
+        });
+        let finish = authorized_user_tool_finisher(
+            tools.clone(),
+            ran.clone(),
+            reviewer.clone(),
+            CancellationToken::new(),
+            authorize,
+        );
+        let result = finish(pending(json!({"name":"Original","loud":false}))).await;
+        if !approved {
+            assert!(matches!(result, Some(FinishedUserTool::Error(_))));
+            assert!(ran.0.lock().unwrap().is_empty());
+        }
+    }
+    assert_eq!(ran.0.lock().unwrap().len(), 1);
+    assert_eq!(*ran.1.lock().unwrap(), vec![requester]);
 }

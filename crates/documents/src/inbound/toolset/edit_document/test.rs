@@ -226,12 +226,27 @@ impl DocumentService for FakeDocumentService {
         panic!("unexpected get_task_branch_name call")
     }
 
+    async fn get_task_identity(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_context: &DocumentBasic,
+    ) -> Result<crate::domain::models::TaskIdentity, DocumentError> {
+        panic!("unexpected get_task_identity call")
+    }
+
     async fn get_task_github_pull_requests(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         _document_context: &DocumentBasic,
     ) -> Result<GithubPullRequestsResponse, DocumentError> {
         panic!("unexpected get_task_github_pull_requests call")
+    }
+    async fn get_github_pull_request_tasks(
+        &self,
+        _user_id: &str,
+        _github_keys: Vec<String>,
+    ) -> Result<crate::domain::models::GithubPullRequestTasksResponse, DocumentError> {
+        panic!("unexpected get_github_pull_request_tasks call")
     }
 
     async fn edit_document(
@@ -323,6 +338,10 @@ impl DocumentCreationService for FakeDocumentService {
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         panic!("unexpected create_document call")
+    }
+
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected Canvas initialization")
     }
 
     async fn handle_task_properties(
@@ -524,6 +543,15 @@ pub(in crate::inbound::toolset) struct AddedCommentMark {
 }
 
 impl EditingWorkerService for FakeEditingWorker {
+    async fn canvas(
+        &self,
+        _: &str,
+        _: &DocumentPermissionToken,
+        _: &crate::domain::canvas::CanvasRequest,
+    ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
+        panic!("unexpected canvas call")
+    }
+
     async fn spreadsheet(
         &self,
         _document_id: &str,
@@ -624,7 +652,7 @@ impl EditingWorkerService for FakeEditingWorker {
 type TestToolContext =
     DocumentToolContext<FakeDocumentService, FakeEntityAccessService, FakeEditingWorker>;
 
-fn tool_context(
+pub(in crate::inbound::toolset) fn tool_context(
     service: FakeDocumentService,
     editing: FakeEditingWorker,
 ) -> ServiceContext<TestToolContext> {
@@ -645,7 +673,7 @@ fn tool_context(
     ))
 }
 
-fn request_context() -> RequestContext {
+pub(in crate::inbound::toolset) fn request_context() -> RequestContext {
     RequestContext::new(
         MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("test user id should be valid"),
     )

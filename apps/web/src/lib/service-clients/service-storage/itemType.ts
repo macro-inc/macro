@@ -11,12 +11,14 @@ export type ItemType =
   | 'channel_thread'
   | 'call'
   | 'database'
+  | 'form'
   | 'agent_session'
   | 'routine'
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
   | 'crm_contact'
+  | 'crm_pipeline'
   | 'initiative';
 
 /** Item type assumed when a surface has no better information. */
@@ -43,11 +45,14 @@ export function itemTypeToReferenceEntityType(itemType: ItemType): string {
  * Never cast these strings to `ItemType` directly.
  */
 export function stringToItemType(str: string): ItemType | undefined {
+  // Mentions store `foreign`. The pull-request share button stores
+  // `foreign_entity`. Both are the same record.
   return match<string, ItemType | undefined>(str)
     .with('email', 'thread', 'email_thread', () => 'email')
     .with('routine', 'automation', () => 'routine')
     .with(
       'database',
+      'form',
       'agent_session',
       'call',
       'calendar_event',
@@ -56,9 +61,12 @@ export function stringToItemType(str: string): ItemType | undefined {
       'project',
       'channel',
       'crm_company',
+      'crm_contact',
+      'crm_pipeline',
       'initiative',
       (itemType) => itemType
     )
+    .with('foreign', 'foreign_entity', () => 'foreign')
     .otherwise(() => undefined);
 }
 
@@ -74,6 +82,7 @@ export function blockNameToItemType(
       'email',
       'routine',
       'database',
+      'form',
       'initiative',
       (b) => b
     )
@@ -81,6 +90,7 @@ export function blockNameToItemType(
     .with('calendar', () => 'calendar_event')
     .with('company', () => 'crm_company')
     .with('contact', () => 'crm_contact')
+    .with('pipeline', () => 'crm_pipeline')
     .with('pr', () => 'foreign')
     .otherwise(() => DEFAULT_ITEM_TYPE);
 }

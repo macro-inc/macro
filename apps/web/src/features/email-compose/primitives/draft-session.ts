@@ -76,6 +76,7 @@ export type DraftSessionEvent =
   | { type: 'rejected'; epoch: number; code: DraftPersistFailureCode }
   /** An authoritative cancellation makes a schedule-locked draft editable. */
   | { type: 'schedule-cancelled' }
+  | { type: 'retry' }
   /** The draft has no content left; its row was (or is being) deleted. */
   | { type: 'emptied' }
   /** The composer dropped its draft: sent, discarded, or superseded. */
@@ -171,6 +172,10 @@ export function reduceDraftSession(
       }
       return { ...state, policy: { kind: 'latched', code: event.code } };
     })
+    .with({ type: 'retry' }, () => ({
+      ...state,
+      policy: { kind: 'autosaving' as const },
+    }))
     .with({ type: 'schedule-cancelled' }, () => {
       if (state.policy.kind !== 'latched' || state.policy.code !== 'INVALID')
         return state;

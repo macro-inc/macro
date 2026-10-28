@@ -27,7 +27,7 @@ const unselected = (...ids: SavingsToolId[]) =>
 
 describe('savings calculator', () => {
   it('multiplies every selected entry plan by seats and months', () => {
-    const monthly = 1000 + 1000 + 791 + 1099 + 700 + 700 + 2500 + 725 + 2500;
+    const monthly = 1000 + 1000 + 848 + 1099 + 700 + 700 + 2500 + 725 + 2500;
     expect(summarizeSavings(choices(), 5)).toEqual({
       toolsCents: monthly * 12 * 5,
       macroCents: 4000 * 12 * 5,
@@ -52,10 +52,10 @@ describe('savings calculator', () => {
     expect(summary.toolsCents).toBe((2000 + 1000 + 2500) * 12);
   });
 
-  it('charges Macro $40 a seat for the first 5 seats, then $80', () => {
+  it('charges Macro a flat $40 a seat at every team size', () => {
     expect(macroAnnualCost(1)).toBe(4000 * 12);
     expect(macroAnnualCost(5)).toBe(4000 * 12 * 5);
-    expect(macroAnnualCost(8)).toBe((4000 * 5 + 8000 * 3) * 12);
+    expect(macroAnnualCost(8)).toBe(4000 * 12 * 8);
   });
 
   it('keeps seats a whole number between 1 and the maximum', () => {

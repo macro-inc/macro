@@ -9,7 +9,8 @@ import type { RoutineRow } from '../core/types';
 export function createRoutineRows(
   source: RoutineListSource,
   userId: Accessor<string | undefined>,
-  targetLabel: (target: RoutineTarget) => string
+  targetLabel: (target: RoutineTarget) => string,
+  targetModel: (target: RoutineTarget) => string | undefined
 ) {
   return createMemo<RoutineRow[]>(() =>
     source
@@ -28,6 +29,7 @@ export function createRoutineRows(
           creator: 'You',
           createdAt: routine.createdAt,
           target: draft?.target ? targetLabel(draft.target) : 'Agent',
+          targetModel: draft?.target ? targetModel(draft.target) : undefined,
           schedule: draft
             ? describeSchedule(draft, getDefaultTimezone())
             : 'Event triggered',

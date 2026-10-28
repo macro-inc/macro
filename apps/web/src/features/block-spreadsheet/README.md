@@ -2,16 +2,23 @@
 
 A native Macro document with multiple worksheets of up to 100,000 rows and
 16,384 columns (A–XFD), Excel-style formulas, keyboard navigation, rectangular selection, formula-aware copying and
-fill, resizable columns, added rows, rich cell formatting, Excel workbook
-import/export, CSV import/value export, find and replace, range sorting, local
-undo/redo, and live collaboration. Existing uploaded `.xlsx` files are not
+fill, dragging a selection to move it, resizable columns, added rows, rich cell
+formatting, named tables with typed columns, filters, group by views and totals,
+Excel workbook import/export,
+CSV import/value export, find and replace, range sorting, local undo/redo, and
+live collaboration. Existing uploaded `.xlsx` files are not
 automatically converted; open **Import and export** at the bottom right of a native
 spreadsheet, then choose **Import…**.
 
 The document title sits above a compact formatting ribbon. **Paste special** offers
 paste and values-only paste; **View options** toggles gridlines, the formula bar,
-and formula display. **Functions** inserts formulas, while **Format and data**
-contains sorting, whitespace trimming, fill, and clear actions. **Find and replace**
+and formula display. Gridlines are saved with each sheet (`metadata.gridlines`,
+Excel's `showGridLines`), so only editors change them; the formula bar and
+formula display are local. Gridlines are the app's ink at 12% over the cell
+background (Google Sheets' `#e2e3e3` on white), in every theme. A fill hides the
+gridlines around its cell, and a border replaces the gridline it lies on.
+**Functions** inserts formulas, while **Format and data**
+contains sorting, whitespace trimming, Goal Seek, fill, and clear actions. **Find and replace**
 is a direct ribbon button. The footer's **Import and export** button also contains
 Excel and CSV downloads and stays visible beside horizontally scrolling sheet tabs.
 
@@ -56,7 +63,9 @@ implementation. Three document tools expose bounded reads, scratch calculations,
 and revision-guarded edit batches. Source inputs, formulas, typed results, errors,
 and optional styles are explicit in reads. Scratch what-if overrides never write.
 The edit vocabulary includes values/formulas, range styles/clear/fill, append rows,
-column widths, and sheet lifecycle. Whole-workbook creation still uses the normal
+column widths, dropdowns, checkboxes, table creation with column types, and sheet
+lifecycle; reads list each sheet's tables with their columns and column types.
+Whole-workbook creation still uses the normal
 native document creation flow.
 
 Rust tool adapters obtain typed View/Edit receipts, then pass them to the document
@@ -93,7 +102,8 @@ New native documents start from a versioned Loro seed
 by A1 address: `spreadsheetValues`, `spreadsheetBold`, `spreadsheetFormats`, and
 individual maps for each additional style property. Separate property maps allow a value
 edit and a formatting edit to merge independently, including when two peers first
-touch an empty cell. `spreadsheetColumnWidths` stores bounded column widths, and
+touch an empty cell. `spreadsheetTables` holds one entry per table (see Tables).
+`spreadsheetColumnWidths` stores bounded column widths, and
 `spreadsheetRowAdditions` stores independent append operations that merge
 additively. Undo cannot hide rows containing a collaborator's cells. Concurrent
 writes to the same property use Loro's conflict resolution. A cell edit is a whole
@@ -119,8 +129,33 @@ Rows and columns currently have fixed positions. Range sorting copies whole rows
 within a selected rectangle and translates their relative formulas through IronCalc.
 It validates that the sheet, selection, permission, and editing state have not changed
 before committing. Other formulas keep their A1 references; they do not follow moved
-records. Structural insertion/deletion still needs stable identities and formula
-reference transformation across concurrent operations.
+records. Inserting or deleting rows and columns rewrites the moved cells, references
+and layout in one commit, under the same revision check. Saved workbooks allow it
+only while connected, so an offline coordinate shift cannot merge later over
+collaborators' edits. Rows and columns have no stable identities: an edit that a
+collaborator commits to old coordinates after the shift arrives still lands at
+those coordinates.
+
+Dragging the selection's border (`components/SelectionMoveHandle.tsx`, mouse or
+pen only) moves its cells the same way: `moveWorkbookRange` in
+`packages/spreadsheet/src/workbook-structure.ts` runs in the calculation worker,
+and `primitives/create-range-move.ts` commits the result as one revision-checked
+structural change, so it is one undo step, needs a connection in saved
+workbooks, and is cancelled by a collaborator's edit made meanwhile. It follows
+Excel's cut and paste: values, formats, notes, merges, legacy arrays, pivot
+table locations and data validation and conditional formatting ranges go with
+the cells (a rule that only partly moves is split in two), and replace what was
+at the destination after a confirmation when that held values. References to
+the moved cells from every sheet's formulas, names, rules, charts and pivot
+sources follow them; a range follows only when all of it moves, and moving
+whole rows or columns of the sheet also moves references like `1:2` or `A:A`. References
+inside moved formulas keep their cells, and references to replaced cells become
+`#REF!`. Moving part of a merge, array or pivot table is refused. Drawings,
+row heights and column widths stay, and comments stay on their addresses.
+While dragging, the grid scrolls near or past its edges and the cells land at
+the last visible row or column. Each move records a `spreadsheet.move_range`
+span (document, sheet, size, whether it replaced values, and any error) with
+`calculate` (the worker) and `commit` phases.
 
 ### Workbook sheets
 
@@ -133,7 +168,13 @@ the same sheet prefix. `spreadsheetSheetNames`, `spreadsheetSheetOrder`, and
 sheet keeps independent cells, formatting, and layout. Active tabs and remembered
 selections are local; presence includes a sheet ID and shows only on that sheet.
 
-Adding, renaming, duplicating, and deleting sheets participate in local undo.
+Dragging a tab with a mouse or pen moves its sheet; touch presses keep
+scrolling the tab strip, and every tab menu offers **Move left** and **Move
+right**. A move writes only the moved sheet's order, between its new neighbors,
+so collaborators moving other sheets at the same time keep both moves. Sheets
+whose orders tie are renumbered.
+
+Adding, renaming, duplicating, moving, and deleting sheets participate in local undo.
 Duplicate copies raw formulas, styles, and layout at the same coordinates.
 Deletion retains the sheet's CRDT data so undo can recover it and concurrent
 edits. The last visible sheet cannot be deleted locally; simultaneous deletes
@@ -180,6 +221,95 @@ store builds the new sheets' cells from the validated input
 both readings identical. A 50,000-row, 450,000-cell import shows its data about
 12 seconds after confirming in Chromium, and its formulas finish in the worker
 while the grid stays responsive.
+
+## Tables
+
+A table is a named range with a header row, data rows and an optional total
+(footer) row, with Google Sheets' table features and Excel's file format.
+**Format and data → Convert to table**, the cell menu or ⌘/Ctrl+Alt+T converts
+at once, as Google Sheets does: a single cell converts the block of filled cells
+around it (`currentRegion`), an empty cell becomes a blank four-column table,
+and each column takes the type its values suggest. `primitives/create-table-actions.ts`
+holds the editor's table behavior; `views/SpreadsheetTables.tsx` binds it to the
+grid's menus and dialogs. The model the editor, import and AI tools share is in
+`packages/spreadsheet/src`: `sheet-tables.ts` (the table, creating, resizing,
+totals, growth), `table-columns.ts` (column types, new rows, calculated columns),
+`table-filters.ts`, `table-groups.ts`, `table-styles.ts` (colors and looks) and
+`table-edits.ts` (rename, convert, delete, and what a cell edit does to tables).
+
+Each table is stored as its own entry of the `spreadsheetTables` root map, keyed
+by sheet and table id (`table-storage.ts`), and read into the sheet's
+`metadata.tables`, so collaborators can change different tables of a sheet, or
+a table and the sheet's other settings, at once. Two collaborators creating
+tables at the same moment can store overlapping tables or one name twice; every
+reader resolves them the same way, keeping the lowest id of overlapping tables
+and giving a repeated name to the lowest id while the others read as the next
+free `TableN`.
+
+Column names are the header cells' text, so editing a header renames its column
+and rewrites formulas that use the old name, on every sheet; a cleared or
+repeated header is written as Excel names it (`Column3`, `Amount2`). Table names
+follow Excel's rules, are unique in the workbook among defined names too, and
+spaces typed in a name become underscores, as Google Sheets writes them.
+
+The table's name shows above its header row while the active cell or the
+pointer is in it (`components/TableMenu.tsx`); a table in the first row shows
+its icon in the column header bar instead, covering no cells. Its menu
+renames the table, adjusts its range, picks one of ten header colors (Excel's
+accent styles, or the table's own `color` for those Excel lacks), toggles
+alternating colors, banded columns, bold first and last columns and the footer
+row, opens the group by view, clears filters, **converts to range** (the cells
+keep the table's look as their own formatting) or **deletes the table** and its
+cells. Formulas that used a converted or deleted table get its cell ranges.
+
+Each header has a Google-style menu (`components/TableColumnMenu.tsx`): column
+type, sort, filter, group by this column, and inserting or deleting columns.
+Column types are text, number, percent, currency, date, date time, time,
+checkbox, dropdown and people. Choosing one formats the column's data cells;
+checkbox turns blanks into unchecked FALSE checkboxes and dropdown adds a list
+rule offering the column's values as colored chips. A value that does not fit
+its column's type gets a warning corner and a tooltip, as in Google Sheets.
+**Filter…** opens `components/TableFilterPanel.tsx`: a condition (text contains,
+greater than, between and the rest; numeric conditions also compare dates) and
+a searchable list of values, applied with OK. Filters hide data rows through the
+sheet's `hiddenRows` in the same change, so `SUBTOTAL` leaves them out (101–111
+always, 1–11 through IronCalc's `setFilteredRanges`), and they apply when chosen,
+not on later edits. Sorting keeps filter-hidden rows hidden with their values.
+
+The group by view (`components/TableGroupByDialog.tsx`) groups the table's rows
+by one column and summarizes another for each group with Google Sheets'
+aggregations (sum, average, count, filled, empty, unique, min, max and the
+percentages); choosing a group filters the table to it. The footer row's cells
+offer the same kinds of aggregate in the cell dropdown and show its name beside
+the value; Excel's own aggregates are written as `SUBTOTAL`, the others as
+formulas such as `=COUNTBLANK([Amount])`.
+
+Formulas address tables with structured references (`Sales[Amount]`, `[@Qty]`,
+`Sales[[#Totals],[Amount]]`, and a bare `Sales` for its data). The stored formula
+keeps them; `structured-references.ts` resolves them to cell ranges before
+IronCalc sees the formula, and a missing table or column calculates as `#REF!`.
+Typing `Sales[` or a table's name in a formula offers its columns and areas,
+and `[` inside a table offers the same row's columns (`tableCompletion`). Once
+the active table's header row scrolls away, the column headers show its column
+names. Formula copies, fills and row or column moves protect structured
+references while IronCalc moves the other references. Inserting rows or columns
+inside a table grows it and deleting some of its own shrinks it; deleting its
+header row removes it, deleting its total row removes that row, and deleting
+every data row is refused.
+
+Typing one value directly below a table without a total row, or directly to its
+right, extends the table in the same commit as the value. A new row takes the
+row above's formatting and lists and the formula of each calculated column (a
+column whose data cells share one formula), and typing a formula that refers to
+its own row, such as `=[@Qty]*[@Price]`, into an empty column fills the column.
+Duplicating a sheet gives its tables fresh names that the copy's formulas use; a
+sheet whose tables other sheets' formulas use cannot be deleted, and appended
+imports refuse table names the workbook already has.
+
+Limitations: concurrent edits to the same table keep the later change. Table
+colors Excel lacks export as the nearest Excel style, and a column filtered by
+both values and a condition exports its values only, as Excel holds one or the
+other.
 
 ## Calculation
 
@@ -241,20 +371,38 @@ Formula point selection keeps the original cell and textarea focused while a
 pointer drag inserts or replaces an A1 reference at the caret. Only the local
 draft and a single dashed reference overlay update during dragging; the shared
 document and calculation worker receive the formula on commit. Quoted text and
-completed expressions retain normal click-away behavior.
+completed expressions retain normal click-away behavior. Changing tabs while a
+formula awaits a reference keeps its draft, even when the formula's row is past
+the other sheet's last row, and every tab change scrolls to that sheet's own
+selection.
+
+Dragging a range, row or column headers, the fill handle, a selection's move
+border, a formula reference, or a touch selection handle scrolls the grid while the pointer is within 24 pixels
+of an edge of the cells or past it, and extends the drag to the cell under the
+pointer or the nearest one in view. Speed grows with the pointer's depth into
+that edge (20 pixels per second per pixel), and a header drag scrolls only along
+its own axis. `components/drag-auto-scroll.ts` scrolls; the grid maps the
+pointer to a cell and extends whichever drag is in progress. The sticky headers lie outside the cells, so scrolling up or left
+starts at their inner edges and never selects a cell hidden beneath them. The
+grid does not draw imported frozen panes, so the headers are its only fixed area.
+A press scrolls only after it moves 8 pixels, so a click beside an edge does not.
+When the window misses a drag's release (the pointer next moves without its
+button), the drag is cancelled rather than finished, so no fill is applied.
 
 Selection does not recalculate the workbook. A bounded row window mounts visible
 rows and a small buffer, keeping the active editor mounted while scrolling. Shared
 row offsets account for wrapped text, font size, and zoom. Two overlays
 draw the selected range and active cell, while Solid selectors update only
-changed cell selection attributes. Footer aggregates run outside urgent pointer
-updates, and collaborator presence is limited to ten updates per second with a
-trailing update for the final selection.
+changed cell selection attributes. The range's tint has a hole at the active
+cell, and the in-cell editor inherits the cell's fill, font and color, so a
+styled cell looks the same selected, editing and unselected. Footer aggregates
+run outside urgent pointer updates, and collaborator presence is limited to ten
+updates per second with a trailing update for the final selection.
 
 IronCalc handles formula parsing, ranges, relative and absolute references,
 dependency evaluation, functions, circular references, Excel errors, and array
 spills. The model uses fixed English settings and UTC on every client. Number
-formatting uses fixed `en-US` display rules; currency formatting means USD. The
+formatting uses fixed `en-US` display rules; currency and accounting mean USD. The
 binding exposes numbers through formatted strings, so the adapter requests a
 scientific format with sufficient significant digits before applying UI formats.
 Calculations use the engine's numeric values, not rounded UI values.
@@ -290,14 +438,54 @@ compare formula, error, and formatting behavior before replacing it.
 - Array results are shown within the visible grid. There is no grid expansion for
   an array that spills beyond its edges.
 - The ribbon exposes font family/size, bold/italic/underline/strikethrough,
-  text/fill colors, per-edge borders, horizontal/vertical alignment, and wrapping.
-  All cell styles persist, sync independently, copy/fill, and undo. Number formats
-  include general, number, USD currency, percent, scientific, date, time, and plain
-  text, with adjustable decimal places. Date/time displays are deterministic UTC.
+  text/fill colors, per-edge borders, horizontal/vertical alignment, indent, and
+  wrapping. All cell styles persist, sync independently, copy/fill, and undo.
+  Increase and Decrease indent move each selected cell one level from its own,
+  as in Excel. A level is three spaces of the workbook's default font, measured
+  from the right edge of right-aligned cells and the left edge otherwise; an
+  indented cell with automatic alignment aligns left, and indenting centered text
+  makes it left-aligned. Indents round-trip as Excel's alignment `indent`. Number formats
+  include general, number, USD currency, USD accounting, percent, scientific, date,
+  time, and plain text, with adjustable decimal places. Accounting follows Excel:
+  the grid pins `$` to the cell's left edge and the amount to its right, negatives
+  show in parentheses and zero as a dash. It exports as Excel's built-in accounting
+  format, and imported dollar formats with a repeated fill (`*`) open as accounting.
+  Date/time displays are deterministic UTC.
+  **Number format → Date formats** offers date presets (`mmm yyyy`, `mmm dd, yyyy`,
+  `mm/dd/yyyy`, `dd/mm/yyyy`, `yyyy-mm-dd`, `d mmm yyyy`, `dddd, mmmm d, yyyy`) and
+  **Custom date and time…** (`components/DateFormatDialog.tsx`), which takes any
+  Excel date or time code with a live preview. Both store the code as the cell's
+  `numberFormat` with the `date` or `time` format, so they export to Excel as that
+  code and import back unchanged.
+  Typing a date into a cell (`core/cell-dates.ts`) stores its serial number with the
+  `date` format and a code like the typed text: `01/2026` and `Jan 2026` show as
+  `Jan 2026`, `Jan 01 2026` as `Jan 01, 2026`, `2026-01-01` as `2026-01-01`, and
+  `1/1/26` in the default `m/d/yyyy`. All-numeric dates read day and month in the
+  browser locale's order, once at entry, so collaborators in other locales see the
+  same date; month and weekday names are English, and a year is required. A cell
+  that already shows dates keeps its format, Plain text keeps the typed text, and
+  API and import values stay raw. Editing a date cell shows a numeric date in the
+  locale's order that reads back as the same day.
   Cells without an explicit format honor the date/time formats IronCalc infers for
-  typed dates, `DATE()`-style results and arithmetic on date cells (formula results
-  only from the year 2000 on, so day counts stay numbers). A cell holding one
-  `<m-date-mention>` pill calculates as that local calendar date.
+  typed dates, `DATE()`-style results and arithmetic on date cells, including
+  numbers in the `date` format (formula results only from the year 2000 on, so day
+  counts stay numbers). A cell holding one `<m-date-mention>` pill calculates as
+  that local calendar date.
+  Results shown as a calendar date (not a time) carry `date: true`. Editing such a
+  literal cell, or any cell under a date validation rule, without typing
+  (double-click, double-tap, Enter or F2) opens `components/CellDatePicker.tsx`
+  below the editor in the shared `EditorPopup`, so the editor keeps focus. The
+  grid sends it arrows (a day or a week), Page Up/Down (a month, Shift a year),
+  Enter (pick and move down) and Escape (close); typing closes it. A picked day
+  goes through the normal commit and validation, written the way the cell stores
+  dates (`core/cell-date.ts`): a serial keeps its time of day, a date pill stays a
+  pill, ISO text stays ISO, and other text becomes month/day/year.
+  Dates from the cell editor's `@` menu (`@today`, `@tomorrow`, `@friday` and so
+  on) enter as typed date text in the locale's order, not a pill, so a cell
+  holding only that date commits as a date value like any typed date; around
+  other text it stays text. `@date` shows the same calendar in place of the menu
+  (`views/DateMentionMenu.tsx`), starting at today: it takes the calendar's keys
+  before the editor, Enter or a click enters the day, and Escape closes it.
   Plain text treats formula-looking input literally. Wrapped rows grow to 160px at
   100% zoom; larger content remains available in the formula bar/editor.
 - Internal copying preserves formatting and translates relative/mixed references
@@ -305,9 +493,20 @@ compare formula, error, and formatting behavior before replacing it.
   source range in one direction; Cmd/Ctrl+D fills from the top row and Cmd/Ctrl+R
   from the left column. Fill repeats values; it does not infer numeric series.
   Plain-text clipboard data and cut preserve raw formulas verbatim.
+- Checkboxes are a cell format, as in Excel: the `checkbox` style property in
+  its own `spreadsheetCheckboxes` map, so it copies, fills, sorts and clears
+  like other formatting. Insert → Checkbox and the cell menu apply it to the
+  selection and write `FALSE` into blank cells so formulas count them
+  (`packages/spreadsheet/src/checkboxes.ts`, shared with the AI
+  `insert_checkboxes` operation). A checkbox cell showing TRUE, FALSE or
+  nothing draws a box, centered unless the cell is aligned, in its text color
+  and font size; other values show as text. Clicking a box or pressing Space
+  toggles the selection (all checked unless all already are); formulas keep
+  their result. Shift/Ctrl/Cmd clicks on a box select instead. Delete unchecks
+  boxes, then removes them on the next press, as Excel does.
 - The toolbar's Insert menu adds a chart of the selection (from one cell, of
   the block of filled cells around it, read as Excel reads it:
-  `core/chart-builder.ts`) or an image file, as one undoable change. Its More
+  `core/chart-builder.ts`), an image file, or checkboxes, as one undoable change. Its More
   charts submenu holds radar, filled radar, bubble (x values, then pairs of
   values and sizes), stock (three or four series: high, low and close, with
   open first for up-down bars) and contour charts. Drawings
@@ -316,8 +515,11 @@ compare formula, error, and formatting behavior before replacing it.
   dialog changes a chart's type, title, legend and data. Edited charts are
   exported as Macro writes them, without the part Excel saved. Ctrl+Alt+5
   selects a drawing from the grid and Tab moves between them.
-- Filters, editing named ranges, automatic spill expansion, and drag
-  auto-scroll remain future work.
+- **Format and data → Goal Seek…** finds the number that makes a formula cell
+  reach a typed value, then writes it when confirmed. The search runs on a copy
+  of the calculated workbook, so cancel leaves every cell as it was.
+- Filters outside tables, editing named ranges, and automatic spill expansion
+  remain future work.
 - CSV import writes a validated rectangle at the active cell, appending rows when
   needed. It preserves existing cell styles and supports quoted multiline fields.
   CSV exports values and drops formatting. XLSX import/export converts supported
@@ -338,14 +540,24 @@ Import keeps what Excel calculates and shows:
   with `XLDAPR` metadata). Formulas saved without array evaluation get Excel's
   implicit intersection (`=B2:B9` in row 4 reads B4), recorded as `@` like
   current Excel shows it.
-- Structured table references become A1 ranges; 3-D references such as
+- Excel tables (`xl/tables/*.xml`, read by `core/xlsx-tables.ts`) with a header
+  row keep their name, range, total row, style, banding and value filters, and
+  formulas keep their structured references, shown as Excel shows them
+  (`[@Qty]` inside the table). Tables without a header row become cells and
+  references to them become A1 ranges. 3-D references such as
   `SUM('Jan:Dec'!B2)` list each sheet. `_xlfn.` prefixes are removed and restored
   on export. External-workbook formulas and what-if data tables keep their
   cached values with a warning.
 - Theme and indexed colors with tints, built-in and custom number formats, the
   workbook's default font (cells store only differences from it), borders, fills,
-  alignment, column widths, row heights, hidden rows/columns/sheets, merges,
+  alignment and indent, column widths, row heights, hidden rows/columns/sheets, merges,
   frozen panes, gridlines, tab colors and autofilters.
+- Excel's checkbox cell format. `core/xlsx-checkboxes.ts` follows each cell
+  format's `xfComplement` through the feature property bags to a Checkbox bag
+  on import, and export writes checkbox cells as booleans with that format
+  and part. Excel versions without checkboxes, and Google Sheets, show the
+  TRUE/FALSE values; no list validation is added, which Excel would show as a
+  dropdown arrow beside each box.
 - 1904-based dates are converted. Unknown error literals, rich text, phonetic
   runs, and invalid cell or merge references degrade to text or warnings rather
   than failing the import.
@@ -360,7 +572,23 @@ Import keeps what Excel calculates and shows:
   number, date, time and text-length rules that show an error alert: a stop alert
   rejects the entry, warnings and information accept it, and each shows the
   rule's message in the footer. List rules offer their values in a dropdown on the
-  active cell (Alt+Down). Input messages and notes show beside the active cell.
+  active cell (Alt+Down), and every cell they cover shows an arrow that opens it.
+  Date rules open the date calendar on their cells, empty ones included.
+  `components/CellListMenu.tsx` anchors the non-modal list to the cell: below it,
+  or above or beside it when there is no room, never over it. While a list is
+  open, pressing another dropdown cell opens that cell's list instead.
+  `components/DropdownDialog.tsx` (Format and data → Dropdown…, or the cell menu)
+  adds, edits and removes list rules on the selection through
+  `packages/spreadsheet/src/data-validation.ts`, which the AI `set_dropdown` and
+  `clear_validation` operations share: a new rule takes its range out of the rules
+  it overlaps, since a cell has one rule. A list rule's `colors` are Macro's own,
+  keyed by choice text ignoring case: cells showing a colored choice, and the open
+  list, draw it as a chip (`components/ChoiceChip.tsx`). The dialog gives new
+  choices the next unused color of a light palette and lists a range source's
+  current values to color. Excel has no such colors, so export writes each as a
+  `cellIs` equal rule filling the dropdown's range, after the sheet's own
+  conditional formats; import folds fill-only equal rules over exactly a
+  dropdown's range, naming one of its choices, back into its colors. Input messages and notes show beside the active cell.
   Inserting or deleting rows and columns moves rule ranges, rule formulas and
   notes.
 - Images and charts. `core/xlsx-drawings.ts` reads a sheet's drawing part
@@ -452,7 +680,11 @@ do not flash as serial numbers.
 Export writes `fullCalcOnLoad`, cached results for every formula and spilled
 cell, `_xlfn` prefixes, dynamic-array metadata for formulas that need array
 evaluation, `@` as Excel stores it, and the same column default as Macro so that
-Excel → Macro → Excel round trips are stable.
+Excel → Macro → Excel round trips are stable. Each table becomes a table part with
+its column names, total row functions (read from the total row's formulas, or a
+custom formula or label), value filters and style; header cells are written as
+text and structured references in Excel's file form
+(`Table1[[#This Row],[Qty]]`). `core/xlsx-tables.test.ts` round-trips a table.
 
 `core/xlsx-drawings.test.ts`, `core/xlsx-shapes.test.ts`,
 `core/metafile.test.ts` and `core/xlsx-pivots.test.ts` cover drawings and pivot
@@ -463,13 +695,15 @@ group, SmartArt and an EMF, as Excel writes them) and corpus workbooks. Exports 
 which draws the same charts (surface charts aside, which it cannot draw) and
 rebuilds pivot tables from edited data.
 
-`core/xlsx-corpus.test.ts` imports, recalculates, exports and reimports the
-real-world workbooks in `core/xlsx-fixtures/real-world/` (finance models,
-government statistics and open-source test suites; provenance and licenses are in
-its `manifest.json`). Its snapshot records counts, warnings, how many formulas
-recalculate to Excel's cached results, and the first round-trip difference, so a
-change in fidelity shows up in review. Set `XLSX_CORPUS_VERBOSE=1` to print
-mismatch examples.
+`core/xlsx-corpus-1.test.ts` through `core/xlsx-corpus-4.test.ts` import,
+recalculate, export and reimport the real-world workbooks in
+`core/xlsx-fixtures/real-world/` (finance models, government statistics and
+open-source test suites; provenance and licenses are in its `manifest.json`).
+Each file runs one slice of the corpus through `core/xlsx-corpus-suite.ts`, so
+the workbooks run on several Vitest workers. Their snapshots record counts,
+warnings, how many formulas recalculate to Excel's cached results, and the first
+round-trip difference, so a change in fidelity shows up in review. Set
+`XLSX_CORPUS_VERBOSE=1` to print mismatch examples.
 
 ## Verification
 
@@ -490,8 +724,11 @@ production transport.
 
 The [browser fixture](browser-test/README.md) runs the composed editor with real
 calculation and Excel workers. Its Playwright suite covers formula autocomplete
-and range picking, menu/dialog focus, sheet navigation, read-only transitions,
+and range picking, dragging a selection to move it, menu/dialog focus, sheet navigation, read-only transitions,
 Excel round trips, imported conditional formatting, data validation and notes,
+date cell calendars,
+tables (conversion, filters, sorting, totals, growth, rename and conversion back
+to a range),
 imported charts and images (following edits, Delete and undo, and download),
 radar, bubble, stock and contour charts, shapes, SmartArt and EMF images,
 workbook import undo, and formatting without remounts or flashes.

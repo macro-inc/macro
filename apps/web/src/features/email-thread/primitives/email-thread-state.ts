@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -37,6 +38,7 @@ export type EmailThreadState = {
   drafts: {
     getDraftForMessage: (messageDbId: string) => EmailMessage | undefined;
     deleteDraftForMessage: (messageDbId: string) => void;
+    restoreDraftForMessage: (draft: EmailMessage) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
 
@@ -87,6 +89,10 @@ export type EmailThreadState = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** Closes an embedded thread back to its list, when the host has one. */
+  returnToList?: () => void;
+  /** Marks the thread done and opens the next one in the host's list. */
+  archiveThreadAndAdvance: (opts?: ArchiveThreadOptions) => boolean;
   /** True when the thread is archived, i.e. currently marked done. */
   isThreadDone: Accessor<boolean>;
   /** True when the done state can actually be reversed — see
@@ -97,6 +103,9 @@ export type EmailThreadState = {
   /** True when the user marked the open thread unread. Resets to false per
    *  thread — viewing marks it read, so the toggle starts at Mark Unread. */
   isThreadMarkedUnread: Accessor<boolean>;
+  /** True when the user re-marked the open thread read, as opposed to the
+   *  mark-as-read that viewing it queues. Resets to false per thread. */
+  isThreadMarkedRead: Accessor<boolean>;
   /** Marks the open thread unread; the toggle then offers Mark Read. */
   markThreadUnread: () => boolean;
   /** Re-marks the thread read after a mark-unread. */
@@ -125,7 +134,30 @@ export function createEmailThreadState(
   const [hiddenChipFocused, setHiddenChipFocused] = createSignal(false);
   const [hoveredStop, setHoveredStop] = createSignal<HoveredThreadStop>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
-  const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
+  const [bottomReplyTarget, setBottomReplyTarget] = createSignal<{
+    threadId: string;
+    messageId: string;
+  }>();
+  // An open reply belongs to the selected message, even when sending adds
+  // a new last message to the thread.
+  const bottomReplyOpen = () => {
+    const target = bottomReplyTarget();
+    const thread = selected();
+    return (
+      !!target &&
+      target.threadId === thread?.db_id &&
+      target.messageId === thread.filtered.at(-1)?.db_id
+    );
+  };
+  const setBottomReplyOpen = (open: boolean) => {
+    const thread = selected();
+    const messageId = thread?.filtered.at(-1)?.db_id;
+    setBottomReplyTarget(
+      open && thread && messageId
+        ? { threadId: thread.db_id, messageId }
+        : undefined
+    );
+  };
   const [mobileReplyComposerOpen, setMobileReplyComposerOpen] =
     createSignal(false);
   const [mobileReplyComposerMessageId, setMobileReplyComposerMessageId] =
@@ -218,13 +250,40 @@ export function createEmailThreadState(
     );
   };
 
+  const commands = threadContext.createCommands(threadSnapshot);
+  const archiveUnlessCancelled = (opts?: ArchiveThreadOptions) =>
+    !opts?.cancelled?.() && commands.archiveThread(opts);
+  // A send resolves after a round trip; by then the user may have moved on.
+  // The host advances only from this thread; otherwise it is marked done
+  // where it is.
+  const advanceFrom = async (
+    navigation: NonNullable<typeof host.listNavigation>,
+    threadId: string,
+    opts?: ArchiveThreadOptions
+  ) => {
+    const archived = await navigation.markDone(
+      (step) => archiveUnlessCancelled({ ...opts, ...step }),
+      threadId
+    );
+    if (!archived) archiveUnlessCancelled({ ...opts, navigate: false });
+  };
+  const archiveThreadAndAdvance = (opts?: ArchiveThreadOptions) => {
+    const navigation = host.listNavigation;
+    const threadId = threadContext.source.id();
+    if (!navigation || !threadId) return archiveUnlessCancelled(opts);
+    fireAndForget(advanceFrom(navigation, threadId, opts), 'email-thread');
+    return true;
+  };
+
   return {
     registerMessagesList: setMessagesListRef,
     registerMessagesContainer: setMessagesContainerRef,
     thread: selected,
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
-    ...threadContext.createCommands(threadSnapshot),
+    ...commands,
+    returnToList: host.returnToList,
+    archiveThreadAndAdvance,
     messagesContainerRef,
     messagesListRef,
     query: {

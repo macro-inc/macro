@@ -4,6 +4,7 @@ import type { DatabaseDetail } from '@service-storage/generated/schemas/database
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { errAsync, ok, okAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
+import { exportedValue } from '../../database/core/csv';
 import { exportDatabaseTableCsv, importDatabaseTable } from './transfer';
 
 const mocks = vi.hoisted(() => ({
@@ -277,5 +278,36 @@ describe('CSV transfers', () => {
     );
     expect(mocks.import).toHaveBeenLastCalledWith({ id: 'database', request });
     expect(mocks.invalidate).toHaveBeenCalledWith('database');
+  });
+});
+
+describe('exportedValue', () => {
+  it('keeps the full moment of a date and every digit of a number, unlike the grid’s display', () => {
+    expect(
+      exportedValue(
+        {
+          id: 'when',
+          name: 'When',
+          dataType: 'DATE',
+          isMultiSelect: false,
+          writable: true,
+          options: [],
+        },
+        '2026-10-20T09:30:00Z'
+      )
+    ).toBe('2026-10-20T09:30:00Z');
+    expect(
+      exportedValue(
+        {
+          id: 'amount',
+          name: 'Amount',
+          dataType: 'NUMBER',
+          isMultiSelect: false,
+          writable: true,
+          options: [],
+        },
+        1234.56789
+      )
+    ).toBe('1234.56789');
   });
 });

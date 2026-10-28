@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -65,7 +66,9 @@ export function createAutomaticTaskPagination(options: {
       if (!source.hasMore || source.pending || running.has(source.id)) continue;
       const token = {};
       running.set(source.id, token);
-      untrack(() => void load(source, token, generation));
+      untrack(() =>
+        fireAndForget(load(source, token, generation), 'tasks-view')
+      );
     }
   });
 

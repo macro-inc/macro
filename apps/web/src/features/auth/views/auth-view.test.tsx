@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthIntent } from '../context/auth-context';
 import type { FakeAuthWorld } from '../tests/fake-auth-context';
@@ -44,6 +45,37 @@ function setup(
     options.world
   );
   return { fake, verified, signIn };
+}
+
+/** As `setup`, but the session code can arrive after the view has mounted. */
+function setupWithTokenSignal(
+  options: {
+    world?: Partial<FakeAuthWorld>;
+    /** Replaces the fake backend's redemption, e.g. to make it reject. */
+    redeem?: (token: string) => Promise<boolean>;
+  } = {}
+) {
+  const [token, setToken] = createSignal<string | undefined>(undefined);
+  const { fake } = renderWithFakeAuth(
+    () => (
+      <AuthView
+        intent="login"
+        showApple={false}
+        compact={false}
+        token={token()}
+        signedIn={(user) => (
+          <p data-testid="signed-in">
+            {user().email} {user().tutorialComplete ? 'returning' : 'new'}
+          </p>
+        )}
+      />
+    ),
+    options.world
+  );
+  // Safe after render: the effect's first run sees no code and returns early,
+  // so nothing redeems until setToken.
+  if (options.redeem) fake.context.redeemSessionToken = options.redeem;
+  return { fake, setToken };
 }
 
 const click = (name: string | RegExp) =>
@@ -127,6 +159,51 @@ describe('email sign-in', () => {
     await typeCode('000000');
     await screen.findByText('Invalid code.');
     await typeCode('424242');
+    await screen.findByTestId('signed-in');
+  });
+
+  // Every check counts against the auth service's per-address attempt limit.
+  it('checks each entered code once, even when Verify is tapped after a miss', async () => {
+    const { fake } = setup();
+    click('Continue with email');
+    await typeEmail('returning@acme.com');
+    click('Continue');
+    await screen.findByText('returning@acme.com');
+    for (const wrong of ['000000', '111111', '222222']) {
+      await typeCode(wrong);
+      await screen.findByText('Invalid code.');
+      expect(screen.getByLabelText(/code/i)).toHaveProperty('value', '');
+      click(/^Verify/);
+    }
+    await typeCode('424242');
+    await screen.findByTestId('signed-in');
+    expect(fake.calls().filter((call) => call.startsWith('verify:'))).toEqual([
+      'verify:returning@acme.com:000000',
+      'verify:returning@acme.com:111111',
+      'verify:returning@acme.com:222222',
+      'verify:returning@acme.com:424242',
+    ]);
+  });
+
+  it('says to wait when code checks are rate-limited, and keeps the code to retry', async () => {
+    const { fake } = setup({
+      world: { codeAttempts: { 'returning@acme.com': 5 } },
+    });
+    click('Continue with email');
+    await typeEmail('returning@acme.com');
+    click('Continue');
+    await screen.findByText('returning@acme.com');
+    await typeCode('424242');
+    await screen.findByText(
+      'Too many attempts. Wait a minute, then try again.'
+    );
+    expect(screen.queryByText('Invalid code.')).toBeNull();
+    expect(screen.getByLabelText(/code/i)).toHaveProperty('value', '424242');
+
+    fake.update((draft) => {
+      draft.codeAttempts = {};
+    });
+    click(/^Verify/);
     await screen.findByTestId('signed-in');
   });
 
@@ -218,6 +295,56 @@ describe('single sign-on', () => {
     await screen.findByText('sso@acme.com new');
   });
 
+  // The desktop app is already parked on the signed-out route when the
+  // `macro://` auth callback comes back, so the session code arrives as a
+  // query-only navigation that never remounts this view.
+  it('redeems a session code that arrives after mount', async () => {
+    const { setToken } = setupWithTokenSignal({
+      world: { sessionTokens: { 'tok-deep-link': 'sso@acme.com' } },
+    });
+    await screen.findByRole('button', { name: 'Continue with Google' });
+
+    setToken('tok-deep-link');
+
+    await screen.findByText('sso@acme.com new');
+  });
+
+  it('redeems a late session code only once', async () => {
+    const { fake, setToken } = setupWithTokenSignal({
+      world: { sessionTokens: { 'tok-deep-link': 'sso@acme.com' } },
+    });
+    setToken('tok-deep-link');
+    await screen.findByText('sso@acme.com new');
+
+    setToken('tok-deep-link');
+
+    await waitFor(() =>
+      expect(
+        fake.calls().filter((call) => call === 'redeem:tok-deep-link')
+      ).toHaveLength(1)
+    );
+  });
+
+  // Redemption re-primes the session after the network call, so it can reject
+  // rather than answer false — that must still tell the user.
+  it('reports a session code whose redemption throws', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const { fake, setToken } = setupWithTokenSignal({
+      redeem: () => Promise.reject(new Error('network down')),
+    });
+
+    setToken('tok-deep-link');
+
+    await waitFor(() =>
+      expect(fake.notifications()).toEqual([
+        'Sign-in failed. Please try again.',
+      ])
+    );
+    consoleError.mockRestore();
+  });
+
   it('reports a session code that cannot be redeemed', async () => {
     const { fake } = setup({ token: 'expired' });
     await waitFor(() =>
@@ -231,10 +358,17 @@ describe('single sign-on', () => {
   });
 });
 
+let googleSignup: Promise<void> | undefined;
+
 function Journey(props: SignupJourneySlots) {
   return (
     <section>
-      <button type="button" onClick={() => void props.onGoogle()}>
+      <button
+        type="button"
+        onClick={() => {
+          googleSignup = props.onGoogle();
+        }}
+      >
         Connect work email
       </button>
       <button type="button" onClick={props.onSignIn}>
@@ -257,6 +391,7 @@ describe('desktop sign-up', () => {
     click('Connect work email');
     await screen.findByText('new@acme.com new');
     expect(fake.calls()).toContain('sso:google:signup');
+    await googleSignup;
   });
 
   it('shows the email form inside the slides for an emailed sign-up link', () => {

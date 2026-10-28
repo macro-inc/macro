@@ -32,9 +32,12 @@ pub async fn handler(
         }
     };
 
+    // An upgraded legacy Office file is an intermediate: its copy into a
+    // versioned key relays the content upload.
     if document_key.is_temp()
         || document_key.is_bom_part()
         || document_key.is_sync_service_snapshot()
+        || document_key.is_upgraded_office()
     {
         tracing::trace!("skipping non-document key");
         return Ok(());

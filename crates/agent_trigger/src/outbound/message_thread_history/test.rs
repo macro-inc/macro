@@ -48,6 +48,7 @@ fn message(id: Uuid, deleted: bool) -> Message {
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
         content: "history".into(),
         created_at: now,

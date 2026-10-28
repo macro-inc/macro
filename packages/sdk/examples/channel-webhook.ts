@@ -8,7 +8,7 @@
  *
  * usage: MACRO_WEBHOOK_TOKEN=mbot_... bun examples/channel-webhook.ts <channel-id> [mention-user-id]
  */
-import { Env } from '../src/config';
+import type { Env } from '../src/config';
 import { here, Macro, msg } from '../src/macro';
 
 const token = process.env.MACRO_WEBHOOK_TOKEN;

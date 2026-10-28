@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.macro_id FROM email_threads t JOIN email_links l ON l.id = t.link_id WHERE t.id = $1 FOR SHARE OF t, l",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7a4888a1264db004bfc597b3d0449ca298e3cedbbf78d1424267b35410dd4072"
+}

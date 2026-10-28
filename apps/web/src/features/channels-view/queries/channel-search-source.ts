@@ -1,6 +1,6 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { createSearchState } from '@app/features/soup/search/create-search-state';
-import { isChannelEntity } from '@entity';
+import { type ChannelEntity, isChannelEntity } from '@entity';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -14,17 +14,27 @@ export function createChannelSearchSource(options: {
   enabled?: Accessor<boolean>;
   scope: Accessor<ChannelsSourceScope>;
   source: Accessor<ChannelsDataSource>;
+  additionalLocalChannels?: Accessor<readonly ChannelEntity[]>;
 }): ChannelsDataSource {
   const enabled = () => options.enabled?.() ?? true;
   const searching = () => options.text().trim().length > 0;
+  // Loaded rows carry the unread and preview metadata the rail renders, so a
+  // loaded row replaces the additional entity for the same channel.
+  const localChannels = createMemo(() => {
+    const byId = new Map<string, ChannelEntity>();
+    for (const channel of options.additionalLocalChannels?.() ?? []) {
+      byId.set(channel.id, channel);
+    }
+    for (const channel of options.source().items()) {
+      byId.set(channel.id, channel);
+    }
+    return byId;
+  });
   const search = createSearchState({
+    surface: () => 'channels',
     enabled,
     text: options.text,
-    localPool: () =>
-      options
-        .source()
-        .items()
-        .map((data) => ({ data })),
+    localPool: () => [...localChannels().values()].map((data) => ({ data })),
     buildRequest: ({ query, matchType }) => ({
       params: { page_size: 100 },
       body: {
@@ -39,7 +49,7 @@ export function createChannelSearchSource(options: {
               .with('direct_messages', () => ['direct_message'])
               .with('channels', () => ['public', 'private', 'team'])
               .with('recents', 'search', 'threads', () => undefined)
-              .exhaustive(),
+              .exhaustive(() => undefined),
           },
         },
       },
@@ -50,12 +60,7 @@ export function createChannelSearchSource(options: {
     if (!searching()) return [...options.source().items()];
 
     // Search records lack loaded conversation metadata, including message previews.
-    const loadedById = new Map(
-      options
-        .source()
-        .items()
-        .map((channel) => [channel.id, channel])
-    );
+    const loadedById = localChannels();
     const matches = search
       .data()
       .filter(isChannelEntity)

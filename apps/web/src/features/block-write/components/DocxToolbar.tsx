@@ -1,36 +1,35 @@
-import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowsDownUp from '@phosphor/arrows-down-up.svg';
-import AsteriskSimple from '@phosphor/asterisk-simple.svg';
-import ChatCircleText from '@phosphor/chat-circle-text.svg';
-import Check from '@phosphor/check.svg';
-import Checks from '@phosphor/checks.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import GitDiff from '@phosphor/git-diff.svg';
-import Highlighter from '@phosphor/highlighter.svg';
-import ListBullets from '@phosphor/list-bullets.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import RowsPlusBottom from '@phosphor/rows-plus-bottom.svg';
-import Table from '@phosphor/table.svg';
-import TextAUnderline from '@phosphor/text-a-underline.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignJustify from '@phosphor/text-align-justify.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
-import TextB from '@phosphor/text-b.svg';
-import TextIndent from '@phosphor/text-indent.svg';
-import TextItalic from '@phosphor/text-italic.svg';
-import TextOutdent from '@phosphor/text-outdent.svg';
-import TextStrikethrough from '@phosphor/text-strikethrough.svg';
-import TextSubscript from '@phosphor/text-subscript.svg';
-import TextSuperscript from '@phosphor/text-superscript.svg';
-import TextTSlash from '@phosphor/text-t-slash.svg';
-import TextUnderline from '@phosphor/text-underline.svg';
-import X from '@phosphor/x.svg';
-import XCircle from '@phosphor/x-circle.svg';
+import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowsDownUp from '@icon/system/regular/arrows-down-up.svg';
+import AsteriskSimple from '@icon/system/regular/asterisk-simple.svg';
+import ChatCircleText from '@icon/system/regular/chat-circle-text.svg';
+import Check from '@icon/system/regular/check.svg';
+import Checks from '@icon/system/regular/checks.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import GitDiff from '@icon/system/regular/git-diff.svg';
+import Highlighter from '@icon/system/regular/highlighter.svg';
+import ListBullets from '@icon/system/regular/list-bullets.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import RowsPlusBottom from '@icon/system/regular/rows-plus-bottom.svg';
+import Table from '@icon/system/regular/table.svg';
+import TextAUnderline from '@icon/system/regular/text-a-underline.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignJustify from '@icon/system/regular/text-align-justify.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
+import TextB from '@icon/system/regular/text-b.svg';
+import TextIndent from '@icon/system/regular/text-indent.svg';
+import TextItalic from '@icon/system/regular/text-italic.svg';
+import TextOutdent from '@icon/system/regular/text-outdent.svg';
+import TextStrikethrough from '@icon/system/regular/text-strikethrough.svg';
+import TextSubscript from '@icon/system/regular/text-subscript.svg';
+import TextSuperscript from '@icon/system/regular/text-superscript.svg';
+import TextTSlash from '@icon/system/regular/text-t-slash.svg';
+import TextUnderline from '@icon/system/regular/text-underline.svg';
+import X from '@icon/system/regular/x.svg';
+import XCircle from '@icon/system/regular/x-circle.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { Toolbar } from '@ui/components/Toolbar';
 import { For, type JSX, Show } from 'solid-js';
@@ -174,7 +173,6 @@ export type DocxToolbarProps = {
   onComment: () => void;
   /** Open find (and replace). */
   onFind: () => void;
-  onDownload: () => void;
 };
 
 const INLINE: Array<{
@@ -237,9 +235,10 @@ function ToolbarMenu(props: {
   return (
     <Dropdown placement="bottom-start" modal={false}>
       <Dropdown.Trigger
+        aria-label={props.label}
+        tooltip={props.label}
         variant="ghost"
         size="icon-sm"
-        label={props.label}
         data-docx-menu={props.testId}
       >
         {props.icon}
@@ -298,15 +297,15 @@ export function DocxToolbar(props: DocxToolbarProps) {
         <Show when={props.canEdit}>
           <Toolbar.Group>
             <Toolbar.Button
-              label="Undo"
-              shortcut="Mod+Z"
+              aria-label="Undo"
+              tooltip={{ content: 'Undo', shortcut: 'Mod+Z' }}
               onClick={() => props.onUndo()}
             >
               <ArrowCounterClockwise />
             </Toolbar.Button>
             <Toolbar.Button
-              label="Redo"
-              shortcut="Mod+Shift+Z"
+              aria-label="Redo"
+              tooltip={{ content: 'Redo', shortcut: 'Mod+Shift+Z' }}
               onClick={() => props.onRedo()}
             >
               <ArrowClockwise />
@@ -393,8 +392,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
             <For each={INLINE}>
               {(item) => (
                 <Toolbar.Button
-                  label={item.label}
-                  shortcut={item.shortcut}
+                  aria-label={item.label}
+                  tooltip={{ content: item.label, shortcut: item.shortcut }}
                   aria-pressed={!!props.format[item.format]}
                   onClick={() => props.onFormat(item.format)}
                 >
@@ -447,7 +446,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
               </For>
             </ToolbarMenu>
             <Toolbar.Button
-              label="Clear formatting"
+              aria-label="Clear formatting"
+              tooltip="Clear formatting"
               onClick={() => props.onClearFormat()}
             >
               <TextTSlash />
@@ -456,13 +456,15 @@ export function DocxToolbar(props: DocxToolbarProps) {
           <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <Toolbar.Button
-              label="Bulleted list"
+              aria-label="Bulleted list"
+              tooltip="Bulleted list"
               onClick={() => props.onList('bullet')}
             >
               <ListBullets />
             </Toolbar.Button>
             <Toolbar.Button
-              label="Numbered list"
+              aria-label="Numbered list"
+              tooltip="Numbered list"
               onClick={() => props.onList('number')}
             >
               <ListNumbers />
@@ -473,7 +475,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
             <For each={ALIGNMENTS}>
               {(item) => (
                 <Toolbar.Button
-                  label={item.label}
+                  aria-label={item.label}
+                  tooltip={item.label}
                   onClick={() => props.onAlign(item.alignment)}
                 >
                   {item.icon()}
@@ -481,14 +484,15 @@ export function DocxToolbar(props: DocxToolbarProps) {
               )}
             </For>
             <Toolbar.Button
-              label="Decrease indent"
-              shortcut="Shift+Tab"
+              aria-label="Decrease indent"
+              tooltip={{ content: 'Decrease indent', shortcut: 'Shift+Tab' }}
               onClick={() => props.onIndent(false)}
             >
               <TextOutdent />
             </Toolbar.Button>
             <Toolbar.Button
-              label="Increase indent"
+              aria-label="Increase indent"
+              tooltip="Increase indent"
               onClick={() => props.onIndent(true)}
             >
               <TextIndent />
@@ -518,7 +522,8 @@ export function DocxToolbar(props: DocxToolbarProps) {
           </Toolbar.Group>
           <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Button
-            label="Insert table"
+            aria-label="Insert table"
+            tooltip="Insert table"
             onClick={() => props.onInsertTable()}
           >
             <Table />
@@ -557,7 +562,12 @@ export function DocxToolbar(props: DocxToolbarProps) {
           <Toolbar.Divider class="mx-1.5 my-2.5" />
           <Toolbar.Group>
             <Toolbar.Button
-              label={props.tracking ? 'Stop tracking changes' : 'Track changes'}
+              aria-label={
+                props.tracking ? 'Stop tracking changes' : 'Track changes'
+              }
+              tooltip={
+                props.tracking ? 'Stop tracking changes' : 'Track changes'
+              }
               aria-pressed={props.tracking}
               data-docx-track-changes
               onClick={() => props.onToggleTracking()}
@@ -565,7 +575,12 @@ export function DocxToolbar(props: DocxToolbarProps) {
               <GitDiff />
             </Toolbar.Button>
             <Toolbar.Button
-              label={
+              aria-label={
+                props.showMarkup
+                  ? 'Hide tracked changes'
+                  : 'Show tracked changes'
+              }
+              tooltip={
                 props.showMarkup
                   ? 'Hide tracked changes'
                   : 'Show tracked changes'
@@ -579,27 +594,31 @@ export function DocxToolbar(props: DocxToolbarProps) {
             </Toolbar.Button>
             <Show when={props.tracking || props.onRevision}>
               <Toolbar.Button
-                label="Accept change"
+                aria-label="Accept change"
+                tooltip="Accept change"
                 disabled={!props.onRevision}
                 onClick={() => props.onAccept(false)}
               >
                 <Check />
               </Toolbar.Button>
               <Toolbar.Button
-                label="Reject change"
+                aria-label="Reject change"
+                tooltip="Reject change"
                 disabled={!props.onRevision}
                 onClick={() => props.onReject(false)}
               >
                 <X />
               </Toolbar.Button>
               <Toolbar.Button
-                label="Accept all changes"
+                aria-label="Accept all changes"
+                tooltip="Accept all changes"
                 onClick={() => props.onAccept(true)}
               >
                 <Checks />
               </Toolbar.Button>
               <Toolbar.Button
-                label="Reject all changes"
+                aria-label="Reject all changes"
+                tooltip="Reject all changes"
                 onClick={() => props.onReject(true)}
               >
                 <XCircle />
@@ -610,25 +629,19 @@ export function DocxToolbar(props: DocxToolbarProps) {
         </Show>
         <Show when={props.canComment}>
           <Toolbar.Button
-            label="Comment on selection"
-            shortcut="Mod+Alt+M"
+            aria-label="Comment on selection"
+            tooltip={{ content: 'Comment on selection', shortcut: 'Mod+Alt+M' }}
             onClick={() => props.onComment()}
           >
             <ChatCircleText />
           </Toolbar.Button>
         </Show>
         <Toolbar.Button
-          label="Find and replace"
-          shortcut="Mod+F"
+          aria-label="Find and replace"
+          tooltip={{ content: 'Find and replace', shortcut: 'Mod+F' }}
           onClick={() => props.onFind()}
         >
           <MagnifyingGlass />
-        </Toolbar.Button>
-        <Toolbar.Button
-          label="Download .docx"
-          onClick={() => props.onDownload()}
-        >
-          <DownloadSimple />
         </Toolbar.Button>
       </Toolbar>
     </div>

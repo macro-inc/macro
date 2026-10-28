@@ -3,6 +3,7 @@ use models_databases::{DatabaseId, OptionId, RowId};
 use std::collections::HashMap;
 
 mod limits;
+mod projection;
 mod transcripts;
 
 use filter_ast::Expr;

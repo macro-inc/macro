@@ -1,9 +1,10 @@
+import Envelope from '@phosphor/envelope.svg?raw';
 import File from '@phosphor/file.svg?raw';
 import Hash from '@phosphor/hash.svg?raw';
 import ListChecks from '@phosphor/list-checks.svg?raw';
 import Sparkle from '@phosphor/sparkle.svg?raw';
 import Table from '@phosphor/table.svg?raw';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import {
   demoMentions,
   type DemoMention as MentionData,
@@ -12,6 +13,7 @@ import './demo-mentions.css';
 
 const icons = {
   document: File,
+  email: Envelope,
   task: ListChecks,
   agent: Sparkle,
   channel: Hash,
@@ -101,17 +103,27 @@ export function serializeDemoEditor(editor: HTMLElement): string {
   return visit(editor).replaceAll('\u00a0', ' ');
 }
 
-export function DemoMentionText(props: { text: string }) {
+export function DemoMentionText(props: {
+  text: string;
+  renderMention?: (id: string) => JSX.Element;
+}) {
   const parts = () =>
     props.text.split(/(@\[[^\]]*\]\(demo-mention:[\w-]+\))/g).map((text) => {
       const id = /^@\[[^\]]*\]\(demo-mention:([\w-]+)\)$/.exec(text)?.[1];
-      return { text, item: demoMentions.find((item) => item.id === id) };
+      return { text, id, item: demoMentions.find((item) => item.id === id) };
     });
   return (
     <For each={parts()}>
       {(part) => (
-        <Show when={part.item} fallback={part.text}>
-          {(item) => <DemoMention item={item()} />}
+        <Show
+          when={part.id && props.renderMention?.(part.id)}
+          fallback={
+            <Show when={part.item} fallback={part.text}>
+              {(item) => <DemoMention item={item()} />}
+            </Show>
+          }
+        >
+          {(mention) => mention()}
         </Show>
       )}
     </For>

@@ -8,7 +8,7 @@ use models_databases::TakenId;
 use models_databases::position::{key_between, keys_between};
 
 use super::{Planner, refuse, refuse_taken};
-use crate::domain::catalog::TableEntry;
+use crate::domain::catalog::StorageTable;
 use crate::domain::models::{
     ColumnConfig, DatabaseError, SchemaError, Table, TableId, TableVersion, Write,
 };
@@ -29,16 +29,14 @@ impl Planner {
         // lock; this place only orders the batch's later reads.
         let position = key_between(self.entries.last().map(|entry| &entry.table.position), None)
             .map_err(|error| refuse(index, None, None, error.to_string()))?;
-        self.entries.push(Arc::new(TableEntry {
-            database: self.database.clone(),
+        self.entries.push(Arc::new(StorageTable {
             table: Table {
                 id,
-                database_id: self.database.id,
+                database_id: self.database_id,
                 name: name.clone(),
                 position,
                 version: TableVersion(0),
             },
-            grant: self.grant,
             columns: Vec::new(),
             views: Vec::new(),
         }));
@@ -49,7 +47,7 @@ impl Planner {
     pub(super) fn rename_table(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         name: &str,
         previous_name: Option<&str>,
     ) -> Result<Write, DatabaseError> {
@@ -82,7 +80,7 @@ impl Planner {
     pub(super) fn delete_table(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
     ) -> Result<Write, DatabaseError> {
         let table = entry.table.id;
         if self.entries.len() == 1 {

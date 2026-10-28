@@ -1,7 +1,8 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import Hash from '@phosphor-icons/core/regular/hash.svg';
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
-import Users from '@phosphor-icons/core/regular/users.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import ShareNetwork from '@icon/system/regular/share-network.svg';
+import Users from '@icon/system/regular/users.svg';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -196,8 +197,49 @@ const manageChannelParticipantsHandler = createToolRenderer({
   },
 });
 
+const shareWithChannelHandler = createToolRenderer({
+  name: 'ShareWithChannel',
+  render: (ctx) => {
+    const [expanded, setExpanded] = createSignal(false);
+    const response = () => ctx.response?.data;
+
+    return (
+      <BaseTool
+        icon={ShareNetwork}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          expanded() && response() ? (
+            <DetailPanel
+              summary={response()!.summary}
+              details={[
+                { label: 'Type', value: response()!.entityType },
+                { label: 'Item', value: response()!.entityId },
+              ]}
+            />
+          ) : undefined
+        }
+      >
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <span class="min-w-0 truncate">
+            {ctx.response ? 'Shared with' : 'Share with'}{' '}
+            <ChannelPreview channelId={ctx.tool.data.channelId} />
+          </span>
+          <Tool.ResultToggle
+            expanded={expanded()}
+            onToggle={() => setExpanded((value) => !value)}
+            showToggle={!!response()}
+            status={ctx.response ? 'Shared' : undefined}
+          />
+        </div>
+      </BaseTool>
+    );
+  },
+});
+
 export {
   createChannelHandler,
   manageChannelParticipantsHandler,
   renameChannelHandler,
+  shareWithChannelHandler,
 };

@@ -53,6 +53,10 @@ pub fn frontend_path_prefixes() -> Vec<&'static str> {
         .iter()
         .filter_map(|svc| svc.path_prefix)
         .chain([
+            "/preview",
+            "/scheduled-action",
+            "/cognition",
+            "/mcp",
             "/websocket",
             "/sync",
             "/i",
@@ -103,7 +107,7 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
         FRONTEND_VITE.replace("BACKEND_PREFIXES", &frontend_path_prefixes().join(" "))
     };
     let preview_block = if mode.spec().runs_local_infra {
-        "\nhttps://*.preview.localhost:8443 {\n    tls internal\n    reverse_proxy preview_gateway:8111\n}\n"
+        "\nhttps://*.preview.localhost:8443 {\n    tls internal\n    reverse_proxy agent_harness_service:8111\n}\n"
     } else {
         ""
     };
@@ -150,6 +154,14 @@ fn service_routes(mode: Mode) -> String {
             // Local-only: do not start the binary against shared-dev, but keep
             // the single-origin proxy by fanning out to the deployed gateway.
             out.push_str(&dev_gateway_route_block(prefix, svc.is_websocket));
+        }
+    }
+    for prefix in ["/preview", "/scheduled-action", "/cognition", "/mcp"] {
+        if mode == Mode::Local {
+            let matcher = matcher_name(prefix);
+            out.push_str(&format!("    {matcher} path {prefix} {prefix}/*\n    handle {matcher} {{\n        reverse_proxy agent_harness_service:8080\n    }}\n"));
+        } else {
+            out.push_str(&dev_gateway_route_block(prefix, false));
         }
     }
     out
@@ -333,7 +345,14 @@ const FRONTEND_VITE: &str = r#"    handle {
         # Vite, whose backend proxy would send them straight back here.
         @backend_root path BACKEND_PREFIXES
         respond @backend_root 404
-        reverse_proxy host.docker.internal:{$VITE_PORT}
+        reverse_proxy host.docker.internal:{$VITE_PORT} {
+            # Vite loads many modules concurrently. Bound Docker-to-host
+            # connections so the burst cannot exhaust the host listener and
+            # fail module imports with dial timeouts / 502s.
+            transport http {
+                max_conns_per_host 16
+            }
+        }
     }
 "#;
 

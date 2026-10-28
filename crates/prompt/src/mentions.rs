@@ -20,9 +20,9 @@ static TITLE: &str = "Mentioning documents, people, dates, agent sessions, and o
 
 static INSTRUCTIONS: &str = r##"These rules apply everywhere you author Markdown in Macro: your own conversational replies (AI chat and agent session transcripts), `SendChannelMessage` content, `SendEmail` bodies, and `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents. They do NOT apply to non-Markdown documents created via `CreateDocument` (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are raw file bytes, never parsed as Markdown, and must never contain mention tags or Markdown syntax.
 
-When referencing a Macro item, person, date/time, agent session, or other mentionable chip, use XML mention tags with a JSON payload. Those tags render as clickable chips. Do not use plain Markdown links or bare names for these. Empty name/label strings are fine — the frontend resolves them.
+When referencing a Macro item, person, date/time, agent session, or other mentionable chip, use XML mention tags with a JSON payload. They render as clickable chips; never use plain Markdown links or bare names instead. Empty names and labels are fine; the frontend fills them in.
 
-### Documents, channels, chats, and similar items
+### Documents, channels, and similar items
 
 Use `<m-document-mention>` with the right `blockName` (and `blockParams` when needed):
 
@@ -30,7 +30,6 @@ Use `<m-document-mention>` with the right `blockName` (and `blockParams` when ne
 - Image document mention (a generated or uploaded picture): `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"image","blockParams":{}}</m-document-mention>`
 - Channel mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"channel","blockParams":{}}</m-document-mention>`
 - Channel message mention: `<m-document-mention>{"documentId":"{channel_id}","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"{message_id}"}}</m-document-mention>`
-- Chat mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"chat","blockParams":{}}</m-document-mention>`
 - Project mention (a task project, i.e. an initiative): `<m-document-mention>{"documentId":"{initiative_id}","documentName":"","blockName":"initiative","blockParams":{}}</m-document-mention>`
 - Folder mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"project","blockParams":{}}</m-document-mention>`
 - Task mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"task","blockParams":{}}</m-document-mention>`
@@ -40,17 +39,21 @@ Use `<m-document-mention>` with the right `blockName` (and `blockParams` when ne
 - Skill mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"skill","blockParams":{}}</m-document-mention>`
 - Call mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"call","blockParams":{}}</m-document-mention>`
 - Automation mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"automation","blockParams":{}}</m-document-mention>`
+- Routine mention: `<m-document-mention>{"documentId":"{id}","documentName":"{name}","blockName":"routine"}</m-document-mention>`
 - Snippet mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"snippet","blockParams":{}}</m-document-mention>`
 - CRM company mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"company","blockParams":{}}</m-document-mention>`
+- CRM pipeline mention: `<m-document-mention>{"documentId":"{pipeline_id}","documentName":"","blockName":"pipeline","blockParams":{}}</m-document-mention>`
 - Database mention: `<m-document-mention>{"documentId":"{database_id}","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>`
+- Form mention: `<m-document-mention>{"documentId":"{form_id}","documentName":"","blockName":"form","blockParams":{}}</m-document-mention>`
 
-The `blockName` for a Macro database is always exactly `database` — never `md` or `document`; a database id mentioned as a document renders as deleted. `documentId` is the database id a database tool returned.
-The `blockName` for a project is always exactly `initiative`, with the initiative id from an initiative tool result (such as ListInitiatives or ReadInitiative); `project` is a folder.
-The `blockName` for an email thread is always exactly `email` — never `thread` or `email_thread`, which the frontend cannot resolve.
-The `blockName` for a calendar event is always exactly `calendar` — never `calendar_event`, which the frontend cannot resolve. `documentId` is the `eventId` a calendar tool returned. To point at one instance of a recurring event, pass that occurrence's `recurrenceId` from ListCalendarEvents as the `occurrenceKey` block param; otherwise omit it and the mention previews the nearest instance. A calendar event mention resolves only for users who have that event on their own calendar.
-When a tool returns both a channel id and a channel message id, link the specific message using the channel message mention format. Do not link only the channel unless you are referring to the whole channel.
+Exact `blockName`s, since any other value renders a broken or deleted chip:
 
-### People, groups, dates, agent sessions, and pull requests
+- A database is `database` and a form is `form`, never `md` or `document`. A form chip opens the builder; link its `/respond` page as a plain URL when people should submit responses.
+- A project is `initiative`, with the id from ListInitiatives or ReadInitiative; `project` means a folder. A CRM pipeline is `pipeline`.
+- An email thread is `email`, never `thread` or `email_thread`. A calendar event is `calendar`, never `calendar_event`, with the `eventId` as `documentId`; add a recurring event's `recurrenceId` as `occurrenceKey` to target one occurrence. Channel members without the event see a read-only preview. Private and confidential events are never shared.
+- When a tool returns a channel message id, mention that message, not just its channel.
+
+### People, groups, dates, agent sessions, pull requests, and booking links
 
 These use their own tags — never wrap them in `<m-document-mention>`:
 
@@ -59,28 +62,24 @@ These use their own tags — never wrap them in `<m-document-mention>`:
 - Group: `<m-group-mention>{"groupAlias":"{alias}"}</m-group-mention>`
 - Date/time: `<m-date-mention>{"date":"{iso_datetime}","displayFormat":"{label}"}</m-date-mention>`
 - Agent session: `<m-agent-session-mention>{"id":"{session_id}","label":""}</m-agent-session-mention>`
-- Pull request: `<m-pr-mention>{"id":"{id}","label":""}</m-pr-mention>`
+- GitHub pull request: `<m-pr-mention>{"url":"https://github.com/{owner}/{repo}/pull/{number}","label":""}</m-pr-mention>`, or `<m-pr-mention>{"id":"{id}","label":""}</m-pr-mention>` when a tool returned the PR's Macro id
+- Booking link: `<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"https://macro.com/app/book/{profile_id}/{slug}","label":""}</m-booking-link-mention>` (`slug` optional when linking the profile page)
 
-Date/time chips do not need a looked-up id. `date` is an ISO 8601 datetime; `displayFormat` is the chip label the user sees (e.g. "Mon, Dec 1, 2025", "Today", "Tomorrow", "3:00 PM"). Prefer a date chip over typing a date as plain text when you are naming a specific day or time.
+- Dates: prefer a date chip to a typed date. `date` is ISO 8601 and `displayFormat` is the label shown (e.g. "Mon, Dec 1, 2025", "Today", "3:00 PM"); no lookup needed.
+- Pull requests and booking links: always a chip, never a Markdown link or bare URL. Leave `label` empty and do not repeat the number, title, or URL beside it. A PR chip takes any github.com pull request URL; a booking chip takes the shareable URL plus the `profileId` and `slug` from its `/app/book/{profileId}/{slug}` path. A PR chip you receive carries the PR's URL in `url`. Issues, commits, and other GitHub pages stay Markdown links.
+- Agent sessions: only ids a tool returned. Add `"expanded":true` to insert the live card (Magic Chip) instead of the compact title.
+- Connecting apps: when a tool result hands you an `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include it verbatim; it renders a connect button. Never invent one. In agent sessions the button resumes the conversation once connected, so just tell the user to connect; elsewhere, ask them to say when they have.
 
-Agent session chips reference an existing session by id from a tool result. An empty `label` is fine. Set `"expanded":true` to insert the card (Magic Chip) that follows the session's latest turn instead of the compact underlined title. Do not invent session ids.
+Only the tags listed here exist. Never invent a tag or put an id in the wrong one. Anything else, such as a `calendarId` from ListCalendars, is plain text: mention individual events, not calendars.
 
-If a tool result tells you an app is not connected for the person you are working for and hands you a `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include that tag verbatim in your reply: it renders as a button that connects the app. Never invent one; only repeat the tag a tool result gave you. End that reply by asking them to let you know once they have connected the app so you can try again.
-
-Only the tag formats listed here can be mentioned. Never invent a tag name or put an id in the wrong tag. A calendar itself is NOT a mentionable entity: never put a `calendarId` (e.g. from ListCalendars) in a mention tag — the frontend cannot resolve it and renders a broken chip. Refer to a calendar by name in plain text and mention only individual events on it. The same goes for any other id with no mention format listed here: plain text, never an improvised tag.
-
-`EditDocument` does not take mention tags in `instructions`. Include each referenced item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, and so on) so the editing worker can insert the chip itself.
-
-### Example Response
-
-If no inline or node ids are present:
-"See the document for details<m-document-mention>{"documentId":"6a2b138d-dfbe-439a-a78b-282471a1e165","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>."
+`EditDocument` takes no mention tags in `instructions`; pass each item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, booking-link profileId/slug/url) so the editor inserts the chips.
 "##;
 
 static INTENT: &str = "Entities, people, dates, agent sessions, and other chips are referenced \
 with the matching XML mention tag (m-document-mention with the right blockName/blockParams, \
-m-user-mention, m-date-mention, m-agent-session-mention, and the other listed chip tags) \
-across every Markdown surface (AI chat replies, agent session replies, channel messages, \
+m-user-mention, m-date-mention, m-agent-session-mention, m-pr-mention for GitHub pull \
+requests by URL, m-booking-link-mention for Macro booking links by URL, and the other \
+listed chip tags) across every Markdown surface (AI chat replies, agent session replies, channel messages, \
 email bodies, and Markdown documents) — never inside non-Markdown documents, and never for \
 ids outside the listed types (a calendar id from ListCalendars is not mentionable; \
 only individual events are).";

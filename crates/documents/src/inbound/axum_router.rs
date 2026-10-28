@@ -7,6 +7,7 @@
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
+//! - `POST /github_prs/tasks` — get the tasks linked to each of a batch of GitHub pull requests
 //! - `GET /{document_id}/short_id` — get document short ID
 //! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
 //! - `POST /create_markdown` — create and initialize a markdown document
@@ -20,8 +21,9 @@ mod tests;
 
 pub mod content_uploaded;
 pub mod copy_document;
-pub mod create_document;
 #[cfg(feature = "document_create")]
+pub mod create_canvas;
+pub mod create_document;
 pub mod create_markdown;
 #[cfg(feature = "document_create")]
 pub mod create_skill;
@@ -34,9 +36,11 @@ pub mod get_branch_name;
 pub mod get_cached_snapshot_url;
 pub mod get_document;
 pub mod get_document_by_team_slug;
+pub mod get_github_pull_request_tasks;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
+pub mod get_text;
 pub mod put_interaction;
 pub mod put_snapshot;
 pub mod sync_content_updated;
@@ -60,10 +64,13 @@ use lexical_client::LexicalClient;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
+// Existing router composition state; the text handler uses domain services, never SQL.
+// ast-grep-ignore: rust-no-sqlx-in-inbound
 use sqlx::PgPool;
 use task_dedup::PgTaskDedupService;
 
 #[cfg(feature = "document_create")]
+use self::create_canvas::create_canvas_handler;
 use self::create_markdown::create_markdown_handler;
 #[cfg(feature = "document_create")]
 use self::create_skill::create_skill_handler;
@@ -79,6 +86,7 @@ use self::{
     get_cached_snapshot_url::get_cached_snapshot_url_handler,
     get_document::get_document_handler,
     get_document_by_team_slug::get_document_by_team_slug_handler,
+    get_github_pull_request_tasks::get_github_pull_request_tasks_handler,
     get_github_pull_requests::get_github_pull_requests_handler,
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
@@ -242,6 +250,10 @@ where
                 .delete(delete_document_handler::<T, Svc, Auth>),
         )
         .route(
+            "/{document_id}/text-content",
+            axum::routing::get(get_text::get_text_handler::<T, Svc, Auth>),
+        )
+        .route(
             "/{document_id}/location_v3",
             axum::routing::get(get_location_v3_handler::<T, Svc, Auth>),
         )
@@ -307,6 +319,10 @@ where
             axum::routing::post(create_task_handler::<T, Svc, Auth>),
         )
         .route(
+            "/github_prs/tasks",
+            axum::routing::post(get_github_pull_request_tasks_handler::<T, Svc, Auth>),
+        )
+        .route(
             "/similarity_search",
             axum::routing::post(task_similarity_search_handler::<T, Svc, Auth>),
         )
@@ -317,6 +333,10 @@ where
 
     #[cfg(feature = "document_create")]
     let router = router
+        .route(
+            "/create_canvas",
+            axum::routing::post(create_canvas_handler::<T, Svc, Auth>),
+        )
         .route(
             "/create_markdown",
             axum::routing::post(create_markdown_handler::<T, Svc, Auth>),

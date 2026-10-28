@@ -18,6 +18,8 @@ use soup_filter_cache_adapter::{
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EntityFilterRequest {
+    /// Optional engine-owned row projection and delta cursor.
+    pub live_query: Option<soup_filter_cache_adapter::live_query::LiveQueryRequest>,
     /// GraphQL Soup filter AST; policy/validation belongs to the Soup adapter.
     pub filters: Value,
     /// Requested Soup sort method.
@@ -47,10 +49,24 @@ pub struct PredicateBaselineEntry {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum EntityFilterResult {
+    /// Maintained record deltas for a live query subscription.
+    Live(LiveQueryResult),
     /// Canonical cached Mail pagination result.
     Mail(mail::PageResult),
     /// Generic Soup predicate-index result.
     Predicate(PredicateFilterResult),
+}
+
+/// Tagged live-view response shared with the browser host.
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum LiveQueryResult {
+    /// Coherent ordered membership and changed selected records.
+    LiveQuery {
+        /// Core-maintained view delta.
+        #[serde(flatten)]
+        update: cache_core::engine::live_query::LiveQueryUpdate,
+    },
 }
 
 /// Generic Soup results matching the browser shell's tagged wire contract.
@@ -92,9 +108,23 @@ pub enum PredicateFilterResult {
 
 pub(super) async fn filter(
     engine: &mut Engine<TursoStorage>,
+    selections: &mut cache_core::record_selection::cache::RecordSelectionCache,
     generation: &str,
     request: EntityFilterRequest,
 ) -> Result<EntityFilterResult, String> {
+    if let Some(live) = &request.live_query {
+        if live.release {
+            engine.release_live_query(&live.id);
+            return Ok(EntityFilterResult::Predicate(
+                PredicateFilterResult::Unsupported,
+            ));
+        }
+        if request.mail.is_some() || request.baseline.is_none() {
+            return Err(
+                "live queries require a reconciled baseline and do not accept mail cursors".into(),
+            );
+        }
+    }
     if let Some(mail_request) = request.mail {
         return mail::page_current(
             engine,
@@ -133,6 +163,31 @@ pub(super) async fn filter(
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|error| error.to_string())?;
+            if let Some(live) = request.live_query {
+                let selection = selections
+                    .get(engine.schema(), live.document, live.fragment_name)
+                    .map_err(|error| error.to_string())?;
+                let since = live
+                    .since
+                    .map(|revision| revision.parse::<cache_core::revision::CacheRevision>())
+                    .transpose()
+                    .map_err(|error| error.to_string())?;
+                let update = engine
+                    .read_live_query(
+                        &live.id,
+                        cache_core::engine::live_query::LiveQuerySpec {
+                            query,
+                            baseline,
+                            selection,
+                        },
+                        since,
+                    )
+                    .await
+                    .map_err(|error| error.to_string())?;
+                return Ok(EntityFilterResult::Live(LiveQueryResult::LiveQuery {
+                    update,
+                }));
+            }
             let result = engine
                 .reconcile_predicate_index(&query, &baseline)
                 .await
@@ -192,8 +247,9 @@ pub(super) async fn write_projections(
     data: &Value,
     identity: Option<&str>,
 ) -> Result<Vec<ProjectionMutation>, String> {
-    let mut projections = authoritative_projection_mutations(query, operation, data)
-        .map_err(|error| error.to_string())?;
+    let mut projections =
+        authoritative_projection_mutations(engine.schema(), query, operation, data)
+            .map_err(|error| error.to_string())?;
     // Do not compose the new viewer's partial writes with the old viewer's
     // authoritative data. Engine still owns the actual atomic identity reset.
     let reuse_stored_identity = match identity {
@@ -207,13 +263,21 @@ pub(super) async fn write_projections(
     };
     if reuse_stored_identity {
         projections.extend(
-            notification_projection_updates(engine.storage(), query, operation, variables, data)
-                .await
-                .map_err(|error| error.to_string())?,
+            notification_projection_updates(
+                engine.schema(),
+                engine.storage(),
+                query,
+                operation,
+                variables,
+                data,
+            )
+            .await
+            .map_err(|error| error.to_string())?,
         );
     }
     projections.extend(
         mail::projection_updates_for_write(
+            engine.schema(),
             engine.storage(),
             query,
             operation,
@@ -225,6 +289,7 @@ pub(super) async fn write_projections(
         .map_err(|error| error.to_string())?,
     );
     soup_filter_cache_adapter::properties::augment_authoritative(
+        engine.schema(),
         engine.storage(),
         query,
         operation,
@@ -248,23 +313,45 @@ pub(super) async fn optimistic_projections(
     let mut projections = optimistic_projection_mutations(data, created_at_ms);
     projections.extend(
         optimistic_notification_updates(
-            notification_projection_updates(engine.storage(), query, operation, variables, data)
-                .await
-                .map_err(|error| error.to_string())?,
+            notification_projection_updates(
+                engine.schema(),
+                engine.storage(),
+                query,
+                operation,
+                variables,
+                data,
+            )
+            .await
+            .map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?,
     );
     projections.extend(mail::optimistic_updates(
-        mail::projection_updates(engine.storage(), query, operation, variables, data)
-            .await
-            .map_err(|error| error.to_string())?,
+        mail::projection_updates(
+            engine.schema(),
+            engine.storage(),
+            query,
+            operation,
+            variables,
+            data,
+        )
+        .await
+        .map_err(|error| error.to_string())?,
     ));
     projections.extend(
-        mail::draft_optimistic_updates(engine.storage(), query, operation, variables, data)
-            .await
-            .map_err(|error| error.to_string())?,
+        mail::draft_optimistic_updates(
+            engine.schema(),
+            engine.storage(),
+            query,
+            operation,
+            variables,
+            data,
+        )
+        .await
+        .map_err(|error| error.to_string())?,
     );
     soup_filter_cache_adapter::properties::augment_optimistic(
+        engine.schema(),
         engine.storage(),
         query,
         operation,

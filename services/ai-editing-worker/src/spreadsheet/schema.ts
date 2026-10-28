@@ -1,3 +1,4 @@
+import { TABLE_COLUMN_TYPES } from '@macro-inc/spreadsheet/sheet-tables';
 import { z } from 'zod';
 
 const sheetId = z.string().min(1).max(64);
@@ -55,6 +56,7 @@ const style = z
     textColor: color.optional(),
     fillColor: color.optional(),
     horizontalAlign: z.enum(['auto', 'left', 'center', 'right']).optional(),
+    indent: z.number().int().min(0).max(250).optional(),
     verticalAlign: z.enum(['top', 'middle', 'bottom']).optional(),
     wrap: z.boolean().optional(),
     borderTop: z.boolean().optional(),
@@ -67,6 +69,7 @@ const style = z
         'general',
         'number',
         'currency',
+        'accounting',
         'percent',
         'date',
         'time',
@@ -74,6 +77,7 @@ const style = z
         'text',
       ])
       .optional(),
+    checkbox: z.boolean().optional(),
   })
   .strict();
 const name = z.string().min(1).max(31);
@@ -134,6 +138,49 @@ const operation = z.discriminatedUnion('type', [
         )
         .min(1)
         .max(26),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('set_dropdown'),
+      sheetId,
+      range,
+      items: z.array(z.string().min(1).max(255)).min(1).max(1_000).optional(),
+      source: z.string().min(2).max(300).optional(),
+      rejectInvalid: z.boolean().optional(),
+      colors: z
+        .array(
+          z
+            .object({
+              item: z.string().min(1).max(1_024),
+              color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+            })
+            .strict()
+        )
+        .max(1_000)
+        .optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal('clear_validation'), sheetId, range }).strict(),
+  z.object({ type: z.literal('insert_checkboxes'), sheetId, range }).strict(),
+  z
+    .object({
+      type: z.literal('create_table'),
+      sheetId,
+      range,
+      name: z.string().min(1).max(255).optional(),
+      totalsRow: z.boolean().optional(),
+      columnTypes: z
+        .array(
+          z
+            .object({
+              column: z.string().min(1).max(255),
+              type: z.enum(TABLE_COLUMN_TYPES),
+            })
+            .strict()
+        )
+        .max(500)
+        .optional(),
     })
     .strict(),
 ]);

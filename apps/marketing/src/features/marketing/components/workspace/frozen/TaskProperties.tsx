@@ -1,4 +1,3 @@
-import CursorIcon from '@icon/wide-cursor-ide.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import { Dropdown } from '@ui';
 import { badgeTriggerClasses } from '@ui/components/Badge';
@@ -12,6 +11,7 @@ import {
   type HomepagePersonId,
   homepagePeople,
 } from '../../../core/homepage-demo-people';
+import { ModelIcon } from './model-picker/ProviderIcon';
 import { PropertyValueIcon } from './PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from './property-identifiers';
 
@@ -31,7 +31,7 @@ export const PRIORITY_IDS: Record<TaskPriority, string> = {
 export function PersonIcon(props: { person: HomepagePersonId }) {
   return (
     <Show
-      when={props.person === 'cursor'}
+      when={props.person === 'cursor' || props.person === 'claude'}
       fallback={
         <img
           src={homepagePeople[props.person].photo}
@@ -40,7 +40,10 @@ export function PersonIcon(props: { person: HomepagePersonId }) {
         />
       }
     >
-      <CursorIcon class="size-4 shrink-0 text-ink" aria-hidden="true" />
+      <ModelIcon
+        provider={props.person === 'cursor' ? 'cursor' : 'claude'}
+        class="size-4 text-ink"
+      />
     </Show>
   );
 }
@@ -54,9 +57,18 @@ function PropertyMenu<T extends string>(props: {
   icon: (value: T) => JSX.Element;
   inline?: boolean;
   display?: (value: T) => string;
+  playback?: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    automatic?: boolean;
+  };
 }) {
   return (
-    <Dropdown modal={false}>
+    <Dropdown
+      modal={false}
+      open={props.playback?.open}
+      onOpenChange={props.playback?.onOpenChange}
+    >
       <Dropdown.Trigger
         aria-label={`Change ${props.label}`}
         data-slot="property-pill"
@@ -81,12 +93,21 @@ function PropertyMenu<T extends string>(props: {
         depth={3}
         class="max-h-96 overflow-hidden flex flex-col w-56 max-w-70 p-0 text-sm"
         portalScope="local"
+        onOpenAutoFocus={(event) => {
+          if (props.playback?.automatic) event.preventDefault();
+        }}
+        onCloseAutoFocus={(event) => {
+          if (props.playback?.automatic) event.preventDefault();
+        }}
       >
         <Dropdown.Group>
           <Dropdown.GroupLabel>{props.label}</Dropdown.GroupLabel>
           <For each={props.options}>
             {(value) => (
-              <Dropdown.Item onSelect={() => props.onSave(value)}>
+              <Dropdown.Item
+                data-demo-property-value={`${props.label}:${value}`}
+                onSelect={() => props.onSave(value)}
+              >
                 {props.icon(value)}
                 <span>{props.display?.(value) ?? value}</span>
                 <span class="ml-auto text-ink-muted">
@@ -125,6 +146,11 @@ export function TaskPriorityMenu(props: {
   task: WorkspaceTask;
   onSave: (value: TaskPriority) => void;
   inline?: boolean;
+  playback?: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    automatic?: boolean;
+  };
 }) {
   return (
     <PropertyMenu
@@ -133,6 +159,7 @@ export function TaskPriorityMenu(props: {
       options={Object.keys(PRIORITY_IDS) as TaskPriority[]}
       onSave={props.onSave}
       inline={props.inline}
+      playback={props.playback}
       icon={(value) => (
         <PropertyValueIcon
           optionId={PRIORITY_IDS[value]}

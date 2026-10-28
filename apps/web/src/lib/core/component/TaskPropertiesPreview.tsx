@@ -4,7 +4,8 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
-import CircleIcon from '@phosphor/circle.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CircleIcon from '@icon/system/regular/circle.svg';
 import { Property as PropertyUI } from '@property';
 import { Modals } from '@property/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -27,6 +28,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { DocumentPreviewIconSkeleton } from './DocumentPreviewSkeleton';
 
 const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.STATUS,
@@ -74,7 +76,11 @@ export function TaskPropertiesPreviewProvider(props: {
                 properties: () => metadata().properties ?? [],
                 isLoading: () => metadata().properties === undefined,
                 canEdit: () => metadata().canEdit,
-                refetch: () => void metadata().refetch(),
+                refetch: () =>
+                  fireAndForget(
+                    metadata().refetch(),
+                    'task-properties-preview'
+                  ),
               }}
             >
               {props.children}
@@ -189,15 +195,19 @@ function TaskPropertiesPreviewContent(
       when={!props.isLoading && previewProperties().length > 0}
       fallback={
         <Show when={props.mode === 'status'}>
-          <CircleIcon
-            class="size-4 text-ink-muted"
-            role="img"
-            aria-label={
-              props.isLoading
-                ? 'Loading task status'
-                : 'Task status unavailable'
+          <Show
+            when={props.isLoading}
+            fallback={
+              <CircleIcon
+                aria-hidden={false}
+                class="size-4 text-ink-muted"
+                role="img"
+                aria-label="Task status unavailable"
+              />
             }
-          />
+          >
+            <DocumentPreviewIconSkeleton label="Loading task status" />
+          </Show>
         </Show>
       }
     >

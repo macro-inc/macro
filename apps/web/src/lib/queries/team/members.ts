@@ -1,14 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useMutation } from '@tanstack/solid-query';
-
-import { invalidateAiBillingSummary } from '../auth';
+import {
+  invalidateAiBillingSummary,
+  invalidateSubscriptionStatus,
+} from '../auth';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
 import { teamKeys } from './keys';
 import { invalidateTeam } from './teams';
 
@@ -58,7 +60,7 @@ export function useRemoveUserFromTeamMutation(
         },
 
         onSuccess: (_data, { teamId }) => {
-          invalidateTeam(teamId);
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
           toast.success('Member removed');
         },
 
@@ -87,9 +89,8 @@ type SetTeamMemberPlanCallbacks = MutationCallbacks<
 >;
 
 /**
- * Move one member's seat between Premium and Max. Team admins only; the
- * team's subscription is re-billed (prorated) and that seat's AI allowance
- * changes at once, so the billing summary is refreshed too.
+ * Move one member's seat between Pro and Max. Team admins only; the
+ * Max upgrades apply immediately with proration; Pro downgrades start at renewal.
  */
 export function useSetTeamMemberPlanMutation(
   callbacks?: SetTeamMemberPlanCallbacks
@@ -102,10 +103,13 @@ export function useSetTeamMemberPlanMutation(
     ...withCallbacks<void, Error, SetTeamMemberPlanArgs>(
       {
         onSuccess: (_data, { teamId, plan }) => {
-          invalidateTeam(teamId);
-          void invalidateAiBillingSummary();
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
+          fireAndForget(invalidateAiBillingSummary(), 'team-settings');
+          fireAndForget(invalidateSubscriptionStatus(), 'team-settings');
           toast.success(
-            plan === 'max' ? 'Seat moved to Max' : 'Seat moved to Premium'
+            plan === 'max'
+              ? 'Max applies immediately. Any pending downgrade is canceled.'
+              : 'Pro is scheduled for the next renewal. This seat keeps Max until then.'
           );
         },
 

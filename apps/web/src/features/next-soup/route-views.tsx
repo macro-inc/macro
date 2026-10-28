@@ -6,19 +6,32 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazy, Show } from 'solid-js';
 import type { SetPredicatesInput } from './filters/filter-store/predicates-store';
 import type { Query } from './filters/filter-store/types';
 import { getViewPreset } from './sidebar/soup-filter-presets';
-import { callsTour, foldersTour } from './tour';
+import { foldersTour } from './tour';
 import { useRecentViewFlag } from './use-recent-view-flag';
+
+const MobileSearchResults = lazy(async () => ({
+  default: (await import('@app/features/command/mobile/MobileSearchResults'))
+    .MobileSearchResults,
+}));
+
+const CallsView = lazy(async () => ({
+  default: (await import('@app/features/calls-view/views/calls-view'))
+    .CallsView,
+}));
 
 const SoupView = lazy(async () => ({
   default: (await import('./soup-view/soup-view')).SoupView,
 }));
 
 function TrackedRecentView() {
+  useViewRestoration();
   usePageViewTracking('recent');
   const preset = getViewPreset('recent');
   return (
@@ -50,20 +63,13 @@ export const RecentRouteView = withAuth(() => {
 });
 
 export const CallsRouteView = withAuth(() => {
+  useViewRestoration();
   usePageViewTracking('calls');
-  const preset = getViewPreset('calls');
-  return (
-    <SoupView
-      viewName="Calls"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-      tour={<ViewTour tour={callsTour} />}
-    />
-  );
+  return <CallsView />;
 });
 
 export const FoldersRouteView = withAuth(() => {
+  useViewRestoration();
   usePageViewTracking('folders');
   const user = useUserContext();
   const preset = getViewPreset('folders', undefined, {
@@ -88,6 +94,7 @@ type SearchRouteViewParams = {
 };
 
 export const SearchRouteView = withAuth(() => {
+  useViewRestoration();
   const panel = useSplitPanelOrThrow();
   const params = (): SearchRouteViewParams => {
     const content = panel.handle.content();
@@ -98,13 +105,20 @@ export const SearchRouteView = withAuth(() => {
   usePageViewTracking('search');
   const preset = getViewPreset('search');
   return (
-    <SoupView
-      viewName="Search"
-      initialFilters={params().initialFilters ?? preset?.filters}
-      initialClientFilters={
-        params().initialClientFilters ?? preset?.clientFilters
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <SoupView
+          viewName="Search"
+          initialFilters={params().initialFilters ?? preset?.filters}
+          initialClientFilters={
+            params().initialClientFilters ?? preset?.clientFilters
+          }
+          initialSearchText={params().initialQuery}
+        />
       }
-      initialSearchText={params().initialQuery}
-    />
+    >
+      <MobileSearchResults />
+    </Show>
   );
 });

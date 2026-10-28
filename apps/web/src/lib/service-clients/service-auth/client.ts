@@ -12,12 +12,13 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 
 import { makePersisted } from '@solid-primitives/storage';
-import { err, ok } from 'neverthrow';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import type {
   AiPlanCatalog,
   AiUsageSnapshot,
   PaidPlan,
+  SubscriptionStatus,
   TeamMemberPlan,
 } from './ai-billing-types';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
@@ -25,19 +26,30 @@ import type {
   CheckoutSessionV2Response,
   CursorApiKeyStatus,
   CursorModelsResponse,
+  EmailConnectionProviders,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
+  GithubPullRequestMergeabilityRequest,
+  GithubPullRequestMergeabilityResponse,
   GmailLinkStatusResponse,
   InitGithubLinkResponse,
   InitGmailLinkResponse,
+  InitOutlookLinkResponse,
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
   SendMobileWelcomeEmailResponse,
+  SetGithubPullRequestDraftRequest,
+  SetGithubPullRequestDraftResponse,
+  SetGithubPullRequestStateRequest,
+  SetGithubPullRequestStateResponse,
+  TrialEligibility,
   UserQuota,
 } from './generated/schemas';
+import type { AgentApiKey } from './generated/schemas/agentApiKey';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
+import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
@@ -50,6 +62,7 @@ import type { GtmInviteLinkList } from './generated/schemas/gtmInviteLinkList';
 import type { GtmInviteOffer } from './generated/schemas/gtmInviteOffer';
 import type { GtmInviteOfferStatus } from './generated/schemas/gtmInviteOfferStatus';
 import type { InviteToTeamRequest } from './generated/schemas/inviteToTeamRequest';
+import type { JoinTeamByInviteLinkResponse } from './generated/schemas/joinTeamByInviteLinkResponse';
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
 import type { PatchTeamRequest } from './generated/schemas/patchTeamRequest';
@@ -61,10 +74,13 @@ import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLin
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
 import type { Team } from './generated/schemas/team';
+import type { TeamInviteLinkResponse } from './generated/schemas/teamInviteLinkResponse';
+import type { TeamInviteLinkTeam } from './generated/schemas/teamInviteLinkTeam';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
+import type { UserLanguage } from './generated/schemas/userLanguage';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
@@ -214,6 +230,12 @@ const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERR
     };
   };
 
+const agentApiKeyErrorResponseHandler: ErrorResponseHandler<'AGENT_API_KEY_ERROR'> =
+  async function handleAgentApiKeyErrorResponse(response) {
+    const { message } = await cursorApiKeyErrorResponseHandler(response);
+    return { code: 'AGENT_API_KEY_ERROR', message };
+  };
+
 /**
  * Errors a merge can end in beyond the shared GitHub ones: the user has no
  * GitHub account linked, or GitHub declined the merge and said why.
@@ -241,12 +263,15 @@ async function readErrorMessage(
 }
 
 /**
- * Keeps GitHub's own words on a declined merge. GitHub names the failing
- * check, the missing review, or the disallowed method; the status alone
- * ("409") tells the user nothing they can act on.
+ * Keeps GitHub's own words when it declines a change. GitHub names the
+ * failing check, the missing review, or the missing permission; the status
+ * alone ("409") tells the user nothing they can act on.
  */
-const githubMergeErrorResponseHandler: ErrorResponseHandler<GithubMergeErrorCode> =
-  async function handleGithubMergeErrorResponse(response) {
+function githubChangeErrorResponseHandler(copy: {
+  noLink: string;
+  rejected: string;
+}): ErrorResponseHandler<GithubMergeErrorCode> {
+  return async function handleGithubChangeErrorResponse(response) {
     if (response.status === 428) {
       return {
         code: 'REAUTHENTICATION_REQUIRED',
@@ -258,16 +283,22 @@ const githubMergeErrorResponseHandler: ErrorResponseHandler<GithubMergeErrorCode
     }
     const message = await readErrorMessage(response);
     if (response.status === 404 && message === NO_GITHUB_LINK_MESSAGE) {
-      return {
-        code: 'NO_GITHUB_LINK',
-        message: 'Connect GitHub in Settings to merge pull requests',
-      };
+      return { code: 'NO_GITHUB_LINK', message: copy.noLink };
     }
-    return {
-      code: 'MERGE_REJECTED',
-      message: message ?? 'GitHub declined to merge the pull request',
-    };
+    return { code: 'MERGE_REJECTED', message: message ?? copy.rejected };
   };
+}
+
+const githubMergeErrorResponseHandler = githubChangeErrorResponseHandler({
+  noLink: 'Connect GitHub in Settings to merge pull requests',
+  rejected: 'GitHub declined to merge the pull request',
+});
+
+/** Shared by the draft and open/closed state routes, which fail the same ways. */
+const githubUpdateErrorResponseHandler = githubChangeErrorResponseHandler({
+  noLink: 'Connect GitHub in Settings to change pull requests',
+  rejected: 'GitHub declined to change the pull request',
+});
 
 const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
   async function handleGithubErrorResponse(response) {
@@ -298,6 +329,19 @@ const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErr
   };
 
 export const authServiceClient = {
+  /**
+   * Which providers this deployment can connect. Pass `originalUrl` to also
+   * receive the Microsoft tenant-wide admin-consent URL that returns there.
+   */
+  async emailConnectionProviders(originalUrl?: string) {
+    const params = new URLSearchParams();
+    if (originalUrl) params.set('original_url', originalUrl);
+    const query = params.size > 0 ? `?${params}` : '';
+    return fetchWithAuth<EmailConnectionProviders>(
+      `${authHost}/link/email/providers${query}`,
+      { method: 'GET' }
+    );
+  },
   async logout() {
     setAccessTokenData(null);
     return (
@@ -359,12 +403,17 @@ export const authServiceClient = {
     });
   },
   async passwordlessCallback({ code, email }: { code: string; email: string }) {
-    const result = await safeFetch<UserTokensResponse>(
+    const result = await safeFetch<UserTokensResponse, 'RATE_LIMITED'>(
       `${authHost}/oauth/passwordless/${code}?email=${encodeURIComponent(email)}&disable_redirect=true`,
       { cache: 'no-store', credentials: 'include' },
       async (response) => {
-        const message = await response.text();
-        return { code: 'UNAUTHORIZED' as const, message };
+        if (response.status === 401) {
+          return { code: 'UNAUTHORIZED', message: await response.text() };
+        }
+        if (response.status === 429) {
+          return { code: 'RATE_LIMITED', message: 'Rate limit exceeded' };
+        }
+        return statusError(response.status);
       }
     );
     if (result.isOk()) {
@@ -431,6 +480,21 @@ export const authServiceClient = {
     return (
       await fetchWithAuth<UserName>(`${authHost}/user/name?${queryString}`, {
         method: 'PUT',
+      })
+    ).map((result) => result);
+  },
+  async getUserLanguage() {
+    return (
+      await fetchWithAuth<UserLanguage>(`${authHost}/user/language`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+  async putUserLanguage(args: UserLanguage) {
+    return (
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/language`, {
+        method: 'PUT',
+        body: JSON.stringify(args),
       })
     ).map((result) => result);
   },
@@ -514,6 +578,44 @@ export const authServiceClient = {
           errorResponseHandler: githubMergeErrorResponseHandler,
         }
       )
+    ).map((result) => result);
+  },
+  async setGithubPullRequestDraft(args: SetGithubPullRequestDraftRequest) {
+    return (
+      await fetchWithAuth<
+        SetGithubPullRequestDraftResponse,
+        GithubMergeErrorCode
+      >(`${authHost}/github_pull_requests/draft`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubUpdateErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+  async setGithubPullRequestState(args: SetGithubPullRequestStateRequest) {
+    return (
+      await fetchWithAuth<
+        SetGithubPullRequestStateResponse,
+        GithubMergeErrorCode
+      >(`${authHost}/github_pull_requests/state`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubUpdateErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+  async getGithubPullRequestMergeability(
+    args: GithubPullRequestMergeabilityRequest
+  ) {
+    return (
+      await fetchWithAuth<
+        GithubPullRequestMergeabilityResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/github_pull_requests/mergeability`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubErrorResponseHandler,
+      })
     ).map((result) => result);
   },
   async patchUserTutorial(args: PatchUserTutorialRequest) {
@@ -668,6 +770,13 @@ export const authServiceClient = {
   },
 
   // Stripe HTTP methods (replacing RPC calls)
+  async getTrialEligibility() {
+    return await fetchWithAuth<TrialEligibility>(
+      `${authHost}/user/stripe/trial_eligibility`,
+      { method: 'GET' }
+    );
+  },
+
   async createCheckoutSessionV2(args: {
     successUrl: string;
     cancelUrl: string;
@@ -694,13 +803,29 @@ export const authServiceClient = {
           plan: args.plan,
           onboardingTrial: args.onboardingTrial,
         }),
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) {
+            const body: unknown = await response.json().catch(() => null);
+            return {
+              code: 'CONFLICT',
+              message:
+                body &&
+                typeof body === 'object' &&
+                'message' in body &&
+                typeof body.message === 'string'
+                  ? body.message
+                  : 'Your subscription status changed. Please refresh your plans.',
+            };
+          }
+          return statusError(response.status);
+        },
       }
     );
   },
 
   /**
-   * Moves the active subscription to another paid plan. Proration is invoiced
-   * immediately; roles and the AI allowance follow from the Stripe webhook.
+   * Upgrades immediately, schedules downgrades for renewal, or keeps the active
+   * plan by canceling its pending downgrade.
    */
   async changePlan(args: { plan: PaidPlan }) {
     return (
@@ -709,6 +834,13 @@ export const authServiceClient = {
         body: JSON.stringify({ plan: args.plan }),
       })
     ).map((result) => result.plan);
+  },
+
+  async getSubscriptionStatus() {
+    return await fetchWithAuth<SubscriptionStatus>(
+      `${authHost}/user/stripe/plan`,
+      { method: 'GET' }
+    );
   },
 
   // AI billing: allowance, credits, overage.
@@ -733,6 +865,26 @@ export const authServiceClient = {
         body: JSON.stringify({
           enabled: args.enabled,
           limitCents: args.limitCents,
+        }),
+      }
+    );
+  },
+
+  async updateAiAutoReload(args: {
+    enabled: boolean;
+    minimumBalanceCents: number;
+    targetBalanceCents: number;
+    monthlySpendLimitCents: number | null;
+  }) {
+    return await fetchWithAuth<AiUsageSnapshot>(
+      `${authHost}/ai-billing/auto-reload`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          enabled: args.enabled,
+          minimumBalanceCents: args.minimumBalanceCents,
+          targetBalanceCents: args.targetBalanceCents,
+          monthlySpendLimitCents: args.monthlySpendLimitCents,
         }),
       }
     );
@@ -798,10 +950,54 @@ export const authServiceClient = {
   },
 
   /**
+   * The agent's own API key, if it has one, and whether its owner's plan
+   * lets it run on one. Never returns a key or any part of one.
+   */
+  async getAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'GET',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Stores the agent's own API key, for its model's provider, replacing any. */
+  async putAgentApiKey(agentId: string, apiKey: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Forgets the agent's API key. Does not revoke it at the provider. */
+  async deleteAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
    * Stores a Cursor API key for the signed-in user, replacing any existing one.
    *
    * The key is validated on shape alone, so a typo that still starts with
-   * `crsr_` is accepted here and only fails when a session tries to use it.
+   * `grok_` or `crsr_` is accepted here and only fails when a session tries to
+   * use it.
    */
   async putCursorApiKey(apiKey: string) {
     return (
@@ -918,7 +1114,7 @@ export const authServiceClient = {
    */
   async initGmailLink(
     originalUrl?: string,
-    options?: { scopes?: ConsentScopes }
+    options?: { scopes?: ConsentScopes; reconnectLinkId?: string }
   ) {
     const params = new URLSearchParams();
     if (originalUrl) {
@@ -927,6 +1123,8 @@ export const authServiceClient = {
     if (options?.scopes) {
       params.set('scopes', options.scopes);
     }
+    if (options?.reconnectLinkId)
+      params.set('reconnect_link_id', options.reconnectLinkId);
     const query = params.toString();
     const url = query
       ? `${authHost}/link/gmail?${query}`
@@ -960,6 +1158,40 @@ export const authServiceClient = {
     ).map((result) => result);
   },
 
+  /** Connect a personal Outlook.com or Microsoft 365 inbox. */
+  async initOutlookLink(
+    originalUrl: string,
+    options?: { calendar?: boolean; reconnectLinkId?: string }
+  ) {
+    const params = new URLSearchParams({
+      original_url: encodeURIComponent(originalUrl),
+      scopes: options?.calendar ? 'mail_and_calendar' : 'mail',
+    });
+    if (options?.reconnectLinkId)
+      params.set('reconnect_link_id', options.reconnectLinkId);
+    return fetchWithAuth<
+      InitOutlookLinkResponse,
+      'PAYMENT_REQUIRED' | 'TOO_MANY_PENDING_LINKS'
+    >(`${authHost}/link/outlook?${params}`, {
+      method: 'POST',
+      errorResponseHandler: async (response) => {
+        if (response.status === 402) {
+          return { code: 'PAYMENT_REQUIRED', message: 'Payment required' };
+        }
+        if (response.status === 429) {
+          return {
+            code: 'TOO_MANY_PENDING_LINKS',
+            message: 'Too many pending inbox connections',
+          };
+        }
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
+    });
+  },
+
   /**
    * Deletes a github link for a user
    * NOTE: this does not delete the github application from being installed on a teams repository
@@ -973,11 +1205,7 @@ export const authServiceClient = {
   },
 
   async reauthenticateGithub(originalUrl?: string) {
-    const deleteResult = await authServiceClient.deleteGithubLink();
-    if (deleteResult.isErr()) {
-      return err(deleteResult.error);
-    }
-
+    // The OAuth callback refreshes the grant after verifying the GitHub account.
     return authServiceClient.initGithubLink(originalUrl);
   },
 
@@ -1119,7 +1347,7 @@ export const authServiceClient = {
               message:
                 typeof message === 'string'
                   ? message
-                  : 'This domain cannot be used for auto-join',
+                  : "Auto-join isn't available for this domain",
             };
           }
           return {
@@ -1143,6 +1371,69 @@ export const authServiceClient = {
         {
           method: 'POST',
         }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * The caller's team invite link token, or null when the team has none.
+   * Anyone who may invite people to the team may read it.
+   */
+  async getTeamInviteLink() {
+    return (
+      await fetchWithAuth<TeamInviteLinkResponse>(
+        `${authHost}/team/invite-link`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Creates the team's invite link, replacing any existing one so links
+   * already shared stop working. Replacing a link is admin-only.
+   */
+  async createTeamInviteLink() {
+    return (
+      await fetchWithAuth<CreatedTeamInviteLinkResponse>(
+        `${authHost}/team/invite-link`,
+        { method: 'POST' }
+      )
+    ).map((result) => result);
+  },
+
+  /** Turns off the team's invite link. Admin/Owner only. */
+  async deleteTeamInviteLink() {
+    return (
+      await fetchWithAuth<{}>(`${authHost}/team/invite-link`, {
+        method: 'DELETE',
+      })
+    ).map(() => undefined);
+  },
+
+  /** The team an invite link joins, shown before the user joins it. */
+  async getTeamByInviteLink(token: string) {
+    return (
+      await fetchWithAuth<TeamInviteLinkTeam>(
+        `${authHost}/team/invite-link/team`,
+        {
+          method: 'POST',
+          // In the body, not the path, so request telemetry never records it.
+          body: JSON.stringify({ token }),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Joins the team an invite link belongs to. Fails with NOT_FOUND when the
+   * link was reset or turned off, and CONFLICT when the user is on another
+   * team.
+   */
+  async joinTeamByInviteLink(token: string) {
+    return (
+      await fetchWithAuth<JoinTeamByInviteLinkResponse>(
+        `${authHost}/team/invite-link/join`,
+        { method: 'POST', body: JSON.stringify({ token }) }
       )
     ).map((result) => result);
   },

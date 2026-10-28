@@ -37,14 +37,14 @@ use crate::domain::ports::MockProjectRepo;
 
 /// A project lifecycle event recorded by [`TestEventBroker`].
 #[derive(Clone, Debug)]
-struct PublishedEvent {
+pub(super) struct PublishedEvent {
     topic: &'static str,
     key: String,
-    payload: serde_json::Value,
+    pub(super) payload: serde_json::Value,
 }
 
 #[derive(Clone, Default)]
-struct TestEventBroker {
+pub(super) struct TestEventBroker {
     published: Arc<Mutex<Vec<PublishedEvent>>>,
     fail: bool,
 }
@@ -57,7 +57,7 @@ impl TestEventBroker {
         }
     }
 
-    fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
+    pub(super) fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
         Arc::clone(&self.published)
     }
 }
@@ -81,7 +81,7 @@ impl MacroEventBroker for TestEventBroker {
 }
 
 #[derive(Clone, Copy)]
-struct NullPort;
+pub(super) struct NullPort;
 
 impl ProjectUploadUrlPort for NullPort {
     async fn put_upload_zip_staging_presigned_url(
@@ -277,7 +277,7 @@ fn mutation_service_with_event_broker(
 }
 
 #[derive(Clone, Default)]
-struct RecordingBulkUpload {
+pub(super) struct RecordingBulkUpload {
     calls: Arc<Mutex<Vec<String>>>,
 }
 
@@ -322,7 +322,7 @@ fn service<D: BulkUploadRequestPort>(
     service_with_event_broker(repo, bulk_upload_service, TestEventBroker::default())
 }
 
-fn service_with_event_broker<D: BulkUploadRequestPort>(
+pub(super) fn service_with_event_broker<D: BulkUploadRequestPort>(
     repo: MockProjectRepo,
     bulk_upload_service: D,
     event_broker: TestEventBroker,
@@ -442,7 +442,7 @@ fn receipt(
     .unwrap()
 }
 
-fn basic_project(id: Uuid, parent_id: Option<Uuid>, deleted: bool) -> BasicProject {
+pub(super) fn basic_project(id: Uuid, parent_id: Option<Uuid>, deleted: bool) -> BasicProject {
     BasicProject {
         id: id.to_string(),
         user_id: owner("macro|owner@example.com"),
@@ -482,7 +482,7 @@ where
     .unwrap()
 }
 
-fn assert_project_event(event: &PublishedEvent, key: Uuid, event_type: &str) {
+pub(super) fn assert_project_event(event: &PublishedEvent, key: Uuid, event_type: &str) {
     assert_eq!(event.topic, "macro.projects");
     assert_eq!(event.key, key.to_string());
     assert!(Uuid::parse_str(event.payload["event_id"].as_str().unwrap()).is_ok());
@@ -795,6 +795,43 @@ async fn create_project_publishes_repository_metadata_after_success() {
     assert_eq!(metadata["name"], "Repository name");
     assert_eq!(metadata["parent_project_id"], parent_id.to_string());
     assert_eq!(metadata["created_at"], expected_created_at);
+}
+
+#[tokio::test]
+async fn a_project_dated_by_contents_starts_never_edited_and_leaves_its_parent_alone() {
+    let parent_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_create_project()
+        .withf(|args| args.updated_at == Some(chrono::DateTime::UNIX_EPOCH))
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &Uuid::new_v4().to_string(),
+                    "macro|actor@example.com",
+                    Some(&parent_id.to_string()),
+                ))
+            })
+        });
+    repo.expect_update_project_modified().times(0);
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        TestEventBroker::default(),
+    );
+
+    service
+        .create_project_dated_by_contents(
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
+            CreateProjectRequest {
+                name: "Imported".to_string(),
+                project_parent_id: Some(parent_id),
+            },
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -1320,6 +1357,48 @@ async fn owner_edit_propagates_move_and_updates_all_modified_timestamps() {
             old_parent_id.to_string(),
             new_parent_id.to_string(),
         ]
+    );
+}
+
+#[tokio::test]
+async fn sharing_a_nested_project_keeps_what_it_inherits_from_its_parent() {
+    let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), Some(TEAM_ID), 0);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project()
+        .withf(|args| !args.update_parent && args.team_share.is_some())
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    Some(&parent_id.to_string()),
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .times(2)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let eam = RecordingEam::default();
+    let calls = eam.calls.clone();
+    let service = mutation_service(repo, eam, RecordingIndexer::default());
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, Some(parent_id), false),
+            team_share_args(Some(AccessLevel::Edit)),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        Vec::new(),
+        "no move, so no inherited access is dropped"
     );
 }
 
@@ -2181,6 +2260,7 @@ async fn upload_folder_publishes_uploaded_event() {
                 root_folder_name: "Uploaded tree".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: Some("parent-project".to_string()),
+                folders: Vec::new(),
             },
         )
         .await
@@ -2235,6 +2315,7 @@ async fn upload_folder_with_no_project_ids_publishes_no_event() {
                 root_folder_name: "Uploaded tree".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: None,
+                folders: Vec::new(),
             },
         )
         .await
@@ -2294,6 +2375,7 @@ async fn upload_folder_compensates_after_destination_failure() {
                 root_folder_name: "Upload".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: None,
+                folders: Vec::new(),
             },
         )
         .await;

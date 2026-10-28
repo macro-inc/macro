@@ -62,17 +62,17 @@ function setup() {
 }
 describe('mobile dock activation', () => {
   it.each(['touch', 'pen', 'mouse'])(
-    'gives haptic feedback on %s down and activates on click',
+    'stays silent on %s down and activates on click',
     (pointerType) => {
       const { activate, button, press } = setup();
       expect(press(pointerType).defaultPrevented).toBe(false);
-      expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
+      expect(hapticImpact).not.toHaveBeenCalled();
       expect(activate).not.toHaveBeenCalled();
       fireEvent.pointerUp(button);
       expect(activate).not.toHaveBeenCalled();
       fireEvent.click(button, { detail: 1 });
       expect(activate).toHaveBeenCalledTimes(1);
-      expect(hapticImpact).toHaveBeenCalledTimes(1);
+      expect(hapticImpact).not.toHaveBeenCalled();
       press(pointerType);
       expect(activate).toHaveBeenCalledTimes(1);
     }

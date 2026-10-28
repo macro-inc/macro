@@ -96,19 +96,13 @@ describe('availableBotMentionUsers', () => {
       'cursor'
     );
     const codex = agent('codex', 'Codex', 'all', 'codex-cloud');
-    const claude = agent('claude', 'Claude', 'all', 'claude-cloud');
     expect(
       availableBotMentionUsers(
         [bot(CURSOR_BOT_ID, 'Cursor'), installed.bot],
-        [global, installed, codex, claude],
+        [global, installed, codex],
         false
       ).map((user) => user.id)
-    ).toEqual([
-      'bot|installed-cursor',
-      'bot|global-cursor',
-      'bot|codex',
-      'bot|claude',
-    ]);
+    ).toEqual(['bot|installed-cursor', 'bot|global-cursor', 'bot|codex']);
   });
   it('hides the built-in Cursor bot before agent metadata is available', () => {
     expect(
@@ -130,7 +124,7 @@ describe('availableBotMentionUsers', () => {
       dispose();
     });
   });
-  it.each(['cursor', 'codex-cloud', 'claude-cloud'])(
+  it.each(['cursor', 'codex-cloud'])(
     'offers global and installed %s agents before connection',
     (harness) => {
       const global = agent('global', 'Global', 'all', harness);

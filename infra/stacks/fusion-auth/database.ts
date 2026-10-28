@@ -119,7 +119,7 @@ export class Database extends pulumi.ComponentResource {
           parameterGroupName: 'default.postgres16',
           enabledCloudwatchLogsExports: ['postgresql', 'upgrade'],
           password,
-          multiAz: true,
+          multiAz: stack === 'prod',
           tags,
         },
         { parent: this }

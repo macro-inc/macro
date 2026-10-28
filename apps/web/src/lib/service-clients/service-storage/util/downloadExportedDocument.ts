@@ -1,3 +1,4 @@
+import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '../client';
 import { fetchPresigned } from './fetchPresigned';
 
@@ -10,12 +11,10 @@ export async function downloadExportedDocument({
 }: {
   documentId: string;
 }): Promise<Uint8Array> {
-  const exported = await storageServiceClient.exportDocument({ documentId });
-  if (exported.isErr()) throw new Error('Unable to export the document.');
-  const bytes = await fetchPresigned(
-    exported.value.presigned_url,
-    'arrayBuffer'
+  const exported = await throwOnErr(() =>
+    storageServiceClient.exportDocument({ documentId })
   );
+  const bytes = await fetchPresigned(exported.presigned_url, 'arrayBuffer');
   if (bytes.isErr())
     throw new Error(
       `Unable to download the exported document: ${bytes.error[0]?.message}`

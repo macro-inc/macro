@@ -75,6 +75,8 @@ export type Cell =
   | { type: 'bool'; value: boolean }
   /**  A date-time. */
   | { type: 'date'; value: string }
+  /**  A span from one date-time to another. */
+  | { type: 'dateRange'; value: DateRange }
   /**  The selected option ids; one for single-select columns. */
   | { type: 'options'; value: OptionId[] }
   /**  The referenced entity ids; one for single-valued columns. */
@@ -95,6 +97,8 @@ export type CellValue =
   | { type: 'boolean'; value: boolean }
   /**  A date-time. */
   | { type: 'date'; value: string }
+  /**  A span of time; its end may not come before its start. */
+  | { type: 'date_range'; value: DateRange }
   /**  Complete http or https URLs; at most one for a single-valued column. */
   | { type: 'link'; value: string[] }
   /**
@@ -128,8 +132,13 @@ export type Column = {
   placement: ColumnId;
   /**  The column's display name. */
   name: string;
-  /**  What the column holds. */
+  /**
+   *  What the column holds; for a derived column, what its formula
+   *  yields.
+   */
   kind: ColumnKind;
+  /**  For a derived column, how its cells are computed: it stores none. */
+  formula?: Formula | null;
 };
 
 /**  A change to one column. */
@@ -214,6 +223,15 @@ export type ColumnChange =
       color?: string | null;
     }
   /**
+   *  Give a derived column a new formula. Its cells follow at once: it
+   *  stores none.
+   */
+  | {
+      kind: 'set_formula';
+      /**  The formula, over the table's other columns. */
+      formula: Formula;
+    }
+  /**
    *  Remove one option of a select or tag column, and take it out of every
    *  cell holding it: a single-valued cell is emptied, a multi-valued one
    *  keeps its other options. Like [`ColumnChange::UpdateOption`], an
@@ -242,6 +260,8 @@ export type ColumnKind =
   | { kind: 'boolean' }
   /**  A date-time. */
   | { kind: 'date' }
+  /**  A span from one date-time to another. */
+  | { kind: 'dateRange' }
   /**  A URL. */
   | { kind: 'link' }
   /**  One or more of a fixed set of options. */
@@ -283,7 +303,9 @@ export type ColumnResult =
   /**  One of its options was relabelled or recoloured. */
   | { kind: 'option_updated' }
   /**  One of its options was removed. */
-  | { kind: 'option_deleted' };
+  | { kind: 'option_deleted' }
+  /**  Its formula changed. */
+  | { kind: 'formula_set' };
 
 /**  One column placement and the property definition behind it. */
 export type ColumnSchema = {
@@ -297,6 +319,11 @@ export type ColumnSchema = {
   property: PropertyType;
   /**  The definition's options, in any order. */
   options: OptionSchema[];
+  /**
+   *  For a derived column, its formula; its definition says what the
+   *  formula yields.
+   */
+  formula?: Formula | null;
 };
 
 /**  How a group's conditions combine. */
@@ -316,6 +343,8 @@ export type DataType =
   | 'BOOLEAN'
   /**  A date-time. */
   | 'DATE'
+  /**  A span from one date-time to another. */
+  | 'DATE_RANGE'
   /**  A URL. */
   | 'LINK'
   /**  Text options. */
@@ -442,6 +471,35 @@ export type DateOperator =
   | 'onOrAfter';
 
 /**
+ *  A span of time from `start` to `end`, both included. A write whose end
+ *  comes before its start is refused.
+ */
+export type DateRange = {
+  /**  Where it starts. */
+  start: string;
+  /**  Where it ends; never before the start. */
+  end: string;
+};
+
+/**
+ *  How a date-range cell stands to a day: the whole day starting at the
+ *  test's date-time, so a range from 1 PM to 5 PM contains its day.
+ */
+export type DateRangeOperator =
+  /**  The range overlaps the day. */
+  | 'contains'
+  /**  The range does not overlap the day, an empty cell included. */
+  | 'doesNotContain'
+  /**  The range ends before the day starts. */
+  | 'endsBefore'
+  /**  The range ends on the day or after. */
+  | 'endsOnOrAfter'
+  /**  The range starts after the day ends. */
+  | 'startsAfter'
+  /**  The range starts on the day or before. */
+  | 'startsOnOrBefore';
+
+/**
  *  A failure as it crosses the wasm boundary: the typed error, and the words
  *  the engine would give an agent for it.
  */
@@ -561,6 +619,14 @@ export type FilterTest =
       /**  The date-time compared against. */
       value: string;
     }
+  /**  A date-range column. */
+  | {
+      kind: 'dateRange';
+      /**  How the cell's range stands to the day. */
+      operator: DateRangeOperator;
+      /**  The start of the day compared against. */
+      value: string;
+    }
   /**  A checkbox column. An unchecked box and an empty cell are the same. */
   | {
       kind: 'checkbox';
@@ -586,6 +652,69 @@ export type FilterTest =
        */
       entities: string[];
     };
+
+/**  An expression over one row's cells. */
+export type Formula =
+  /**
+   *  The row's cell in another column of the table: a number, date or
+   *  derived column.
+   */
+  | {
+      kind: 'column';
+      /**  The column placement. */
+      column: ColumnId;
+    }
+  /**  A constant. Added to or subtracted from a date, it counts days. */
+  | {
+      kind: 'number';
+      /**  The value; finite. */
+      value: number;
+    }
+  /**  Two expressions combined. */
+  | {
+      kind: 'binary';
+      /**  How. */
+      operator: Operator;
+      /**  The left operand. */
+      left: Formula;
+      /**  The right operand. */
+      right: Formula;
+    }
+  /**  An expression's negation. */
+  | {
+      kind: 'negate';
+      /**  The expression negated; a number. */
+      operand: Formula;
+    };
+
+/**  What a formula typed into a derived column's editor reads as. */
+export type FormulaReading =
+  /**  It parses and its types fit. */
+  | {
+      status: 'valid';
+      /**  The formula, columns by id. */
+      formula: Formula;
+      /**  What its cells hold. */
+      result: FormulaType;
+    }
+  /**  It does not, and why. */
+  | {
+      status: 'invalid';
+      /**  What is wrong, in words for the person typing. */
+      message: string;
+      /**
+       *  The part of the text it is about, in UTF-16 code units as a
+       *  browser counts them, when it is about a part.
+       */
+      span?: Span | null;
+    };
+
+/**  What a formula's cells hold. */
+export type FormulaType =
+  /**  A number. */
+  | 'number'
+  /**  A date-time. */
+  | 'date';
 
 /**  Every GraphQL query a plan can send. */
 export type GqlQuery =
@@ -646,7 +775,9 @@ export type Input =
   /**  What a view's read produced. */
   | 'outcome'
   /**  The stored positions of a board's cards. */
-  | 'positions';
+  | 'positions'
+  /**  A derived column's formula, or the table or column it is for. */
+  | 'formula';
 
 /**  The values a joined relation is matched on. */
 export type KeyHint = {
@@ -702,6 +833,20 @@ export type NewColumn =
        *  text column.
        */
       inferType?: boolean;
+    }
+  /**
+   *  A derived column: its cells are what `formula` computes from the
+   *  row's other cells, and nothing writes them.
+   */
+  | {
+      source: 'derived';
+      /**  The column's name, unique within the table ignoring case. */
+      name: string;
+      /**
+       *  How its cells are computed: arithmetic over the table's number,
+       *  date and other derived columns.
+       */
+      formula: Formula;
     }
   /**
    *  An existing property, a person's, a team's or a system one, bound
@@ -765,6 +910,8 @@ export type OpColumnKind =
   | { type: 'boolean' }
   /**  A date-time. */
   | { type: 'date' }
+  /**  A span from one date-time to another. */
+  | { type: 'date_range' }
   /**  A URL. */
   | { type: 'link' }
   /**  Text options. */
@@ -929,7 +1076,20 @@ export type OpResultKind =
   /**  [`ViewResult::CardMoved`] of an [`OpResult::View`]. */
   | 'cardMoved'
   /**  [`OpResult::ReorderTables`]. */
-  | 'tablesReordered';
+  | 'tablesReordered'
+  /**  [`ColumnResult::FormulaSet`] of an [`OpResult::Column`]. */
+  | 'formulaSet';
+
+/**  An arithmetic operator. */
+export type Operator =
+  /**  `+`: numbers, or days onto a date. */
+  | 'add'
+  /**  `-`: numbers, days off a date, or the days between two dates. */
+  | 'subtract'
+  /**  `*`: numbers. */
+  | 'multiply'
+  /**  `/`: numbers; dividing by zero leaves the cell empty. */
+  | 'divide';
 
 /**  Identifier of an option of a select or tag column. */
 export type OptionId = string;
@@ -1006,6 +1166,8 @@ export type OutcomeKind =
   | 'boolean'
   /**  A date-time. */
   | 'date'
+  /**  A span from one date-time to another. */
+  | 'dateRange'
   /**  Select option ids; the caller labels them from the catalog. */
   | 'select'
   /**  Entity ids; the caller hydrates them. */
@@ -1115,7 +1277,10 @@ export type Request = {
   limit: number;
 };
 
-/**  A layout as an op asks for it: a board may leave its card title out. */
+/**
+ *  A layout as an op asks for it: a board or timeline may leave its title
+ *  out.
+ */
 export type RequestedLayout =
   /**  A grid with a row per row. */
   | {
@@ -1148,6 +1313,26 @@ export type RequestedLayout =
       cardFields: ColumnId[];
       /**  Whether a lane with no cards is hidden. */
       hideEmptyLanes: boolean;
+    }
+  /**  Bars on a calendar, one per row, spanning its date-range cell. */
+  | {
+      kind: 'timeline';
+      /**  The date-range column whose cells are the bars. */
+      range: ColumnId;
+      /**
+       *  The column a bar is labelled by. Left out, a timeline keeps the
+       *  title it has, and a new timeline takes the table's first column.
+       */
+      title?: ColumnId | null;
+      /**
+       *  The single-select or single-person column grouping the bars, if
+       *  any.
+       */
+      groupBy?: ColumnId | null;
+      /**  The columns a bar shows after its title, in order. */
+      barFields?: ColumnId[];
+      /**  The select or tag column whose options color the bars, if any. */
+      colorBy?: ColumnId | null;
     };
 
 /**  Why a statement could not be bound to the catalog. */
@@ -1293,6 +1478,15 @@ export type ResolveError =
   /**  A column named twice in an `INSERT` column list or `UPDATE`. */
   | {
       kind: 'duplicateInsertColumn';
+      /**  The column. */
+      column: string;
+    }
+  /**
+   *  An `INSERT` or `UPDATE` writes a derived column, whose cells its
+   *  formula computes.
+   */
+  | {
+      kind: 'derivedColumn';
       /**  The column. */
       column: string;
     }
@@ -1916,6 +2110,8 @@ export type ValueKind =
   | 'number'
   /**  Date-times. */
   | 'date'
+  /**  Spans of time. */
+  | 'dateRange'
   /**  Checkboxes. */
   | 'checkbox'
   /**  Options of a select or tag column. */
@@ -2034,6 +2230,29 @@ export type ViewLayout =
       cardFields: ColumnId[];
       /**  Whether a lane with no cards is hidden. */
       hideEmptyLanes: boolean;
+    }
+  /**
+   *  Bars on a calendar, one per row, spanning its date-range cell. Rows
+   *  with an empty range are listed apart as undated.
+   */
+  | {
+      kind: 'timeline';
+      /**  The date-range column whose cells are the bars. */
+      range: ColumnId;
+      /**
+       *  The column a bar is labelled by, of any type. Removing it labels
+       *  the bars by the table's first remaining column.
+       */
+      title: ColumnId;
+      /**
+       *  The single-select or single-person column whose values group the
+       *  bars, if any; moving a bar to another group sets this column.
+       */
+      groupBy?: ColumnId | null;
+      /**  The columns a bar shows after its title, in order. */
+      barFields?: ColumnId[];
+      /**  The select or tag column whose options color the bars, if any. */
+      colorBy?: ColumnId | null;
     };
 
 /**  A view's place among its table's views. */
@@ -2107,6 +2326,18 @@ export type ViewProblem =
     }
   /**  A lane is listed twice. */
   | { kind: 'repeatedLane' }
+  /**  A timeline spans a column that is not a date range. */
+  | {
+      kind: 'timelineCannotSpan';
+      /**  The column's name. */
+      column: string;
+    }
+  /**  A timeline is colored by a column whose values have no colors. */
+  | {
+      kind: 'timelineCannotColorBy';
+      /**  The column's name. */
+      column: string;
+    }
   /**  A board was asked of a view laid out as a table. */
   | { kind: 'notABoard' }
   /**

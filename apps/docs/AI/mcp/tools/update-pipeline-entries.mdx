@@ -1,0 +1,19 @@
+---
+title: UpdatePipelineEntries
+description: >-
+  Move deals to another stage or change their fields in a CRM pipeline: "move
+  Acme to Negotiation", "set the revenue on the Globex deal", "assign these
+  deals to Sam".
+---
+
+# UpdatePipelineEntries
+
+Move deals to another stage or change their fields in a CRM pipeline: "move Acme to Negotiation", "set the revenue on the Globex deal", "assign these deals to Sam". Address each entry by entryId (from FindPipelineEntries) or by the company or contact id it tracks, and set fields by name with text values: stages and other options by label, people as "me", an email or a macro| user id, numbers, true/false, or dates. Several entries change in one call, all or nothing. Returns each field before and after. This changes the entry in the pipeline, not the company's own properties.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pipelineId` | string | Yes | The pipeline's id from ListPipelines. |
+| `updates` | ToolEntryUpdate[] | Yes | The entries to change, each with its fields to set. |
+| `baseVersion` | integer | No | Optional: the pipeline version from the FindPipelineEntries read these changes are based on. The update is refused if the pipeline changed since; leave out for a direct change. |

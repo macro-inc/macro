@@ -12,6 +12,7 @@ import type {
   LayoutGridInfo,
 } from '@core/fig-engine/handoff-types';
 import type { NodeInfo } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createSignal, on } from 'solid-js';
 import type { FigViewerContext } from '../context/fig-viewer-context';
 import { defaultSetting } from '../core/export-settings';
@@ -99,7 +100,10 @@ export function createHandoff(options: {
   const setExports = (settings: ExportSetting[]) => {
     const ids = editor.editableIds();
     if (ids.length === 0) return;
-    void editor.apply([{ op: 'setExports', ids, settings }]);
+    fireAndForget(
+      editor.apply([{ op: 'setExports', ids, settings }]),
+      'fig-handoff'
+    );
   };
 
   // A drag (a color, a scrubbed value) is one undo step.
@@ -112,9 +116,12 @@ export function createHandoff(options: {
     if (live && !gridGesture) gridGesture = `layout-grids-${++gestures}`;
     const key = gridGesture;
     if (!live) gridGesture = undefined;
-    void editor.apply(
-      [{ op: 'setLayoutGrids', ids: [id], grids: grids.map(gridSpec) }],
-      key
+    fireAndForget(
+      editor.apply(
+        [{ op: 'setLayoutGrids', ids: [id], grids: grids.map(gridSpec) }],
+        key
+      ),
+      'fig-handoff'
     );
   };
 
@@ -151,7 +158,7 @@ export function createHandoff(options: {
         setAssets([]);
         return;
       }
-      void loadAssets(sel[0].id);
+      fireAndForget(loadAssets(sel[0].id), 'fig-handoff');
     })
   );
 

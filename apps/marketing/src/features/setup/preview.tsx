@@ -2,11 +2,13 @@
 import '../../styles/site-ui.css';
 import '../../styles/dark-theme.css';
 import '../../styles/fonts.css';
+import './cream-preview.css';
 import { lazy } from 'solid-js';
 import { hydrate, render } from 'solid-js/web';
 import { analytics } from '../../app/utils/utilAnalytic';
 import { buildAppUrl } from '../../app/utils/utilBaseUrl';
 import { Homepage } from './Homepage';
+import { applyPalette, onPaletteChange, preferredPalette } from './sitePalette';
 
 // The homepage does not need the account, integration, and team setup screens.
 const PublicOnboarding = lazy(async () => {
@@ -15,7 +17,6 @@ const PublicOnboarding = lazy(async () => {
 });
 
 function Preview() {
-  document.documentElement.dataset.themeLight = 'false';
   if (window.location.pathname !== '/') {
     const loginUrl = new URL(
       import.meta.env.DEV
@@ -45,6 +46,10 @@ function Preview() {
 
   return <Homepage />;
 }
+// Light-mode visitors get the cream palette; see sitePalette.ts.
+applyPalette(preferredPalette());
+onPaletteChange(applyPalette);
+
 const root = document.getElementById('root');
 if (root) {
   if (root.hasAttribute('data-hydrate-homepage')) {

@@ -2,6 +2,7 @@ import {
   initializeNativeNetworkStatus,
   subscribeNativeNetworkStatus,
 } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { onlineManager } from '@tanstack/query-core';
@@ -32,14 +33,14 @@ export const queryClient = new QueryClient({
   },
 });
 
-if (isPlatform('ios')) {
-  // Replace WKWebView's navigator.onLine integration with NWPathMonitor.
+if (isPlatform(['ios', 'android'])) {
+  // Use the native default network path on both mobile platforms.
   onlineManager.setEventListener((setOnline) =>
     subscribeNativeNetworkStatus((status) => {
       if (status !== 'unknown') setOnline(status === 'online');
     })
   );
-  void initializeNativeNetworkStatus();
+  fireAndForget(initializeNativeNetworkStatus(), 'native-network-status');
 }
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';

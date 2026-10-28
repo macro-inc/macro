@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET draft_generation = draft_generation + 1 WHERE id = $1 AND link_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d023b1625ec0e058eaa859db063218126d72694c160006f33cf70f4e8a27942e"
+}

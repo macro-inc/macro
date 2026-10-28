@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
+import UserPlus from '@icon/system/regular/user-plus.svg';
 import { Popover } from '@kobalte/core/popover';
-import UserPlus from '@phosphor/user-plus.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { AvatarGroup, Button, Layer, Tooltip } from '@ui';
 import { type Accessor, createSignal, For, Show, Suspense } from 'solid-js';
@@ -70,7 +70,7 @@ export function MeetingInvite(props: {
       </Tooltip>
       <Popover.Portal>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-edge bg-menu-glass text-ink shadow-lg glass menu-open-animation">
+          <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-2rem)] menu-open-animation">
             <Popover.Title class="sr-only">Invite teammates</Popover.Title>
             <Show when={open()}>
               <Suspense

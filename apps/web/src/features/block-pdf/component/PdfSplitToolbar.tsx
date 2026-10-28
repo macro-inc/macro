@@ -3,7 +3,7 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { ENABLE_PDF_MARKUP } from '@core/constant/featureFlags';
-import Tabs from '@phosphor/tabs.svg';
+import Tabs from '@icon/system/regular/tabs.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
@@ -17,12 +17,13 @@ export function PdfTabsToggle() {
   return (
     <Show when={canEdit()}>
       <Button
+        aria-label={pdf.tabs.isVisible() ? 'Hide Tabs' : 'Show Tabs'}
+        tooltip={pdf.tabs.isVisible() ? 'Hide Tabs' : 'Show Tabs'}
         size="icon-sm"
-        label={pdf.tabs.isVisible() ? 'Hide Tabs' : 'Show Tabs'}
         variant="ghost"
         onClick={pdf.tabs.commands.toggleVisibility}
       >
-        <Tabs />
+        <Tabs class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </Show>
   );

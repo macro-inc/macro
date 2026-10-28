@@ -8,6 +8,7 @@
  */
 
 import type { ShapeOutline } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { HANDLES, type Handle, type Point } from '../core/geometry';
 import {
@@ -129,7 +130,7 @@ export function CropOverlay(props: {
     if (adjusted.owned) owned = adjusted.url;
     setImage(adjusted.url);
   };
-  onMount(() => void loadImage());
+  onMount(() => fireAndForget(loadImage(), 'pptx-editor'));
   onCleanup(() => {
     if (owned) URL.revokeObjectURL(owned);
   });
@@ -177,7 +178,7 @@ export function CropOverlay(props: {
     )
       gesture = { kind: 'pan', start: current, at };
     else {
-      void crop.commit();
+      fireAndForget(crop.commit(), 'pptx-editor');
       return;
     }
     root.setPointerCapture(e.pointerId);
@@ -220,7 +221,7 @@ export function CropOverlay(props: {
       if (e.key === 'Enter' || e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        void crop.commit();
+        fireAndForget(crop.commit(), 'pptx-editor');
         return;
       }
       if (e.key.startsWith('Arrow') && !e.metaKey && !e.ctrlKey) {
@@ -239,7 +240,7 @@ export function CropOverlay(props: {
         return;
       }
       if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key))
-        void crop.commit({ refocus: false });
+        fireAndForget(crop.commit({ refocus: false }), 'pptx-editor');
     };
     const onDocumentPointerDown = (e: PointerEvent) => {
       if (!crop.active()) return;
@@ -247,7 +248,7 @@ export function CropOverlay(props: {
       if (!target || root.contains(target)) return;
       // The Crop button toggles crop mode itself.
       if (target.closest('[data-pptx-crop-toggle]')) return;
-      void crop.commit({ refocus: false });
+      fireAndForget(crop.commit({ refocus: false }), 'pptx-editor');
     };
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('pointerdown', onDocumentPointerDown, true);

@@ -15,7 +15,7 @@
 
 .posts-index-list .posts-index-hero h1 {
   color: var(--post-ink);
-  font: 315 clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif;
+  font: calc(315 + var(--cream-slab-weight-increase, 0)) clamp(40px, 5.4vw, 68px)/1.12 'Roboto Slab Variable', display, serif;
   letter-spacing: -0.035em;
 }
 

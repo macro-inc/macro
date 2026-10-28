@@ -22,6 +22,7 @@ import {
   createEffect,
   createSignal,
   For,
+  type JSX,
   Match,
   on,
   onCleanup,
@@ -40,6 +41,7 @@ import { SyncStatus } from './SyncStatus';
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
 function CalendarPages() {
+  const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const viewportSize = createElementSize(viewport);
@@ -83,7 +85,7 @@ function CalendarPages() {
         />
         <div
           ref={setViewport}
-          class="relative flex min-w-0 min-h-0 flex-1"
+          class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
           role="region"
           aria-label="Calendar periods"
         >
@@ -102,6 +104,17 @@ function CalendarPages() {
               )}
             </For>
           </Pager.Viewport>
+          <Show when={viewport()}>
+            {(boundary) => (
+              <SelectedEventDetails
+                boundary={boundary()}
+                anchor={calendarView.selectedEventAnchor}
+                event={calendarView.selectedEvent}
+                timeFormat={() => calendarView.displaySettings.timeFormat}
+                onClose={calendarView.closeEventDetails}
+              />
+            )}
+          </Show>
           <Show when={isMobile()}>
             <PagerSwipeGestures
               edgeInset={CALENDAR_SWIPE_EDGE_INSET}
@@ -133,30 +146,21 @@ function CalendarPageContent() {
   );
 }
 
-function WorkspaceContent() {
+function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
   const panel = useSplitPanelOrThrow();
-  const calendarView = useCalendarView();
 
   // An inline preview keeps its host's name.
   useSplitDisplayName(() => (panel.isInlinePreview ? undefined : 'Calendar'));
 
-  const eventDetails = () => (
-    <SelectedEventDetails
-      anchor={calendarView.selectedEventAnchor}
-      event={calendarView.selectedEvent}
-      timeFormat={() => calendarView.displaySettings.timeFormat}
-      onClose={calendarView.closeEventDetails}
-    />
-  );
-
   return (
     <Switch>
       <Match when={panel.isInlinePreview}>
-        <Header presentation="preview" />
-        {eventDetails()}
-        <main class="flex size-full min-h-0">
-          <CalendarPageContent />
-        </main>
+        <div class="flex size-full min-h-0 min-w-0 flex-col">
+          <Header presentation="preview" leading={props.headerLeading} />
+          <main class="flex min-h-0 flex-1">
+            <CalendarPageContent />
+          </main>
+        </div>
       </Match>
       <Match when={!panel.isInlinePreview}>
         <SplitPanel.Root>
@@ -180,7 +184,6 @@ function WorkspaceContent() {
                 </ViewShell.Content>
               </ViewShell.Main>
             </ViewShell.Root>
-            {eventDetails()}
           </SplitPanel.Body>
         </SplitPanel.Root>
       </Match>
@@ -188,17 +191,17 @@ function WorkspaceContent() {
   );
 }
 
-function CalendarPagerWorkspace() {
+function CalendarPagerWorkspace(props: { headerLeading?: JSX.Element }) {
   const calendarPager = useCalendarPager();
 
   return (
     <Pager.Root controller={calendarPager.pager}>
-      <WorkspaceContent />
+      <WorkspaceContent headerLeading={props.headerLeading} />
     </Pager.Root>
   );
 }
 
-export function Workspace() {
+export function Workspace(props: { headerLeading?: JSX.Element }) {
   const calendarView = useCalendarView();
 
   return (
@@ -209,7 +212,7 @@ export function Workspace() {
       onNavigate={calendarView.closeEventDetails}
       onViewChange={calendarView.setPeriodView}
     >
-      <CalendarPagerWorkspace />
+      <CalendarPagerWorkspace headerLeading={props.headerLeading} />
     </CalendarPagerContextProvider>
   );
 }

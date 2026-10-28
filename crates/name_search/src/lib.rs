@@ -5,7 +5,7 @@ mod channel;
 mod chat;
 mod highlight;
 
-pub use channel::search_channel_names;
+pub use channel::{ChannelNameSearchScope, search_channel_names};
 pub use chat::search_chat_names;
 pub use highlight::highlight_name;
 pub use models_opensearch::SearchEntityType;
@@ -18,6 +18,18 @@ pub fn escape_regex(term: &str) -> String {
     let mut escaped = String::with_capacity(term.len() * 2);
     for c in term.chars() {
         if special_chars.contains(&c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
+}
+
+/// Escapes `LIKE` wildcards in a search term so it matches literally.
+pub fn escape_like(term: &str) -> String {
+    let mut escaped = String::with_capacity(term.len() * 2);
+    for c in term.chars() {
+        if matches!(c, '\\' | '%' | '_') {
             escaped.push('\\');
         }
         escaped.push(c);

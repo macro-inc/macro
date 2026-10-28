@@ -12,6 +12,7 @@ import { useMutation } from '@tanstack/solid-query';
 
 type UploadDraftAttachmentsParams = {
   draftID: string;
+  draftGeneration?: number;
   attachments: File[];
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -21,7 +22,14 @@ type UploadDraftAttachmentsParams = {
    * the content upload can take a long time, and a debounced draft save that
    * still sees the file without an id would add it to the draft a second time.
    */
-  onAttachmentAdded?: (file: File, attachmentID: string) => void;
+  onAttachmentAdded?: (
+    file: File,
+    attachmentID: string
+  ) => void | Promise<void>;
+  onAttachmentUploaded?: (
+    file: File,
+    attachmentID: string
+  ) => void | Promise<void>;
   /**
    * Called when the content upload fails, once its attachment record has been
    * confirmed removed from the draft, so the file becomes eligible for a
@@ -41,6 +49,47 @@ class UploadDraftAttachmentError extends Error {
   }
 }
 
+// A retried reservation must converge even when its first response was lost.
+const uploadIds = new WeakMap<File, Map<string, string>>();
+function uploadId(file: File, draft: string): string {
+  let drafts = uploadIds.get(file);
+  if (!drafts) {
+    drafts = new Map();
+    uploadIds.set(file, drafts);
+  }
+  let id = drafts.get(draft);
+  if (!id) {
+    id = crypto.randomUUID();
+    drafts.set(draft, id);
+  }
+  return id;
+}
+
+export async function completeDraftAttachment(input: {
+  draftId: string;
+  draftGeneration?: number;
+  attachmentId: string;
+  inboxId?: string;
+}): Promise<void> {
+  try {
+    await throwOnErr(() =>
+      emailClient.completeDraftAttachment(
+        {
+          draftID: input.draftId,
+          attachmentID: input.attachmentId,
+          draftGeneration: input.draftGeneration,
+        },
+        input.inboxId
+      )
+    );
+  } catch (error) {
+    toast.failure(
+      'Attachment upload is unfinished. Retry the upload or remove the file.'
+    );
+    throw error;
+  }
+}
+
 export const useUploadDraftAttachmentsMutation = (
   callbacks?: MutationCallbacks<void, Error, UploadDraftAttachmentsParams>
 ) => {
@@ -54,7 +103,9 @@ export const useUploadDraftAttachmentsMutation = (
             await emailClient.addDraftAttachment(
               {
                 draftID: params.draftID,
+                draftGeneration: params.draftGeneration,
                 attachment: {
+                  upload_id: uploadId(attachment, params.draftID),
                   file_name: attachment.name,
                   size: source.size,
                   sha: source.sha,
@@ -63,8 +114,6 @@ export const useUploadDraftAttachmentsMutation = (
               params.linkId
             )
         );
-
-        params.onAttachmentAdded?.(attachment, result.attachment_id);
 
         // Any content-upload failure must become an UploadDraftAttachmentError
         // so onError removes the record and clears the id -- a plain throw from
@@ -75,6 +124,7 @@ export const useUploadDraftAttachmentsMutation = (
           file: attachment,
         };
         try {
+          await params.onAttachmentAdded?.(attachment, result.attachment_id);
           if (source.kind === 'staged') {
             await uploadNativeStagedFileToPresignedUrl(
               { ...source.staged, mimeType: result.content_type },
@@ -100,6 +150,12 @@ export const useUploadDraftAttachmentsMutation = (
               );
             }
           }
+          await completeDraftAttachment({
+            draftId: params.draftID,
+            draftGeneration: params.draftGeneration,
+            attachmentId: result.attachment_id,
+            inboxId: params.linkId,
+          });
         } catch (cause) {
           if (cause instanceof UploadDraftAttachmentError) throw cause;
           throw new UploadDraftAttachmentError(
@@ -108,6 +164,8 @@ export const useUploadDraftAttachmentsMutation = (
             context
           );
         }
+        // Upload succeeded. A failed local receipt must not delete server data.
+        await params.onAttachmentUploaded?.(attachment, result.attachment_id);
       }
     },
     ...withCallbacks<void, Error, UploadDraftAttachmentsParams>(
@@ -120,11 +178,13 @@ export const useUploadDraftAttachmentsMutation = (
                   await emailClient.removeDraftAttachment(
                     {
                       draftID: variables.draftID,
+                      draftGeneration: variables.draftGeneration,
                       attachmentID: error.context.attachmentID,
                     },
                     variables.linkId
                   )
               );
+              uploadIds.delete(error.context.file);
               variables.onAttachmentUploadFailed?.(error.context.file);
             } catch {
               console.error('Unable to remove draft attachment after failure');
@@ -140,6 +200,7 @@ export const useUploadDraftAttachmentsMutation = (
 
 type RemoveDraftAttachmentParams = {
   draftID: string;
+  draftGeneration?: number;
   attachmentID: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -155,6 +216,7 @@ export const useRemoveDraftAttachmentMutation = (
           await emailClient.removeDraftAttachment(
             {
               draftID: params.draftID,
+              draftGeneration: params.draftGeneration,
               attachmentID: params.attachmentID,
             },
             params.linkId
@@ -174,6 +236,7 @@ export const useRemoveDraftAttachmentMutation = (
 
 type AddForwardedAttachmentsParams = {
   draftID: string;
+  draftGeneration?: number;
   attachments: { attachmentID: string }[];
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -190,6 +253,7 @@ export const useAddForwardedAttachmentsMutation = (
             await emailClient.addForwardedAttachment(
               {
                 draftID: params.draftID,
+                draftGeneration: params.draftGeneration,
                 attachmentID: att.attachmentID,
               },
               params.linkId
@@ -210,6 +274,7 @@ export const useAddForwardedAttachmentsMutation = (
 
 type RemoveForwardedAttachmentParams = {
   draftID: string;
+  draftGeneration?: number;
   attachmentID: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -225,6 +290,7 @@ export const useRemoveForwardedAttachmentMutation = (
           await emailClient.removeForwardedAttachment(
             {
               draftID: params.draftID,
+              draftGeneration: params.draftGeneration,
               attachmentID: params.attachmentID,
             },
             params.linkId
@@ -241,3 +307,13 @@ export const useRemoveForwardedAttachmentMutation = (
     ),
   }));
 };
+
+/** Resolve a fresh authorized URL; provider IDs and storage keys stay server-side. */
+export async function getEmailAttachmentDownloadUrl(
+  id: string
+): Promise<string> {
+  const response = await throwOnErr(() => emailClient.getAttachmentUrl({ id }));
+  const url = response.attachment.data_url;
+  if (!url) throw new Error('Attachment download is unavailable');
+  return url;
+}

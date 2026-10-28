@@ -70,11 +70,24 @@ attachment alone is not a readiness measurement.
 
 The in-memory connector exposes `agent.mcp.initialize` and
 `agent.mcp.list_tools` durations per `server`, alongside the aggregate connector
-`dialed`, `failed`, and `elapsed_ms` fields. Servers initialize in
+`pooled`, `dialed`, `failed`, and `elapsed_ms` fields. Servers initialize in
 parallel: compare the critical path, not the sum of their durations. In-memory
 prompt spans also split `agent.turn.lock_wait_ms`, `agent.turn.admission_wait_ms`,
 and `agent.turn.first_text_ms`; their legacy `ttft_ms` can include reasoning or
 a tool call, but excludes usage and tool-result events.
+
+### A turn that ended without an answer
+
+In-memory prompt spans record what the turn said: `agent.turn.stop_reason`
+(`end_turn`, `cancelled`, `error`), `agent.turn.text_chars`,
+`agent.turn.tool_calls`, and `agent.turn.replied`, which is false when no text
+followed the last tool call. Such a turn also logs `the turn ended without a
+reply after its last tool call`; query `@agent.turn.replied:false` to find them.
+Then read the turn's last `chat_streaming` span: `gen_ai.response.finish_reasons`
+carries the provider's own stop reason (`end_turn`, `refusal`, `max_tokens`,
+`max_output_tokens`, `SAFETY`, ...), which Rig does not record for streamed
+calls. Each `execute_tool` span carries `macro.genai.tool.result_bytes`, whatever
+the content policy, so a result large enough to crowd the context shows there.
 
 ### From the send click to the first painted text
 
@@ -104,7 +117,26 @@ answering spends that time between the first model chunk and the first text:
 `macro.genai.chat.first_chunk_kind` says what each call streamed first.
 
 To investigate a slow first session in Datadog, correlate by `agent.session.id`,
-report sample counts and
+compare cold and pooled connects separately, and report sample counts and
 p50/p95 for initialization and first text by harness/model. Include the fraction
 of turns with no text rather than silently counting them as fast answers. None
 of these new fields supplies historical measurements before its deployment.
+
+Home and Agents can prepare an unprompted session through
+`POST /agent-sessions/warm`. It stays hidden until normal creation claims the
+same id for the same owner, bot, model and instructions. Reusing the session
+also reuses its egress token, which is part of the MCP pool key; creating and
+immediately deleting a throwaway session would release those cached clients.
+The warm response waits for ACP initialization and the shared MCP listing, so
+background initialization is finished before a ready reservation is offered.
+No model invocation or tool execution occurs during warming.
+
+The browser consumes a result once within five minutes. Unclaimed rows expire
+after ten minutes and are deleted through the managing replica. Each replica
+keeps at most 64 outstanding warm reservations, with at most two per user.
+Reservations age out after ten minutes; claims and expiry handled by the
+preparing replica free its capacity sooner.
+The MCP pool holds at most 256 entries, evicts entries idle for ten minutes,
+and limits handshakes to 16 concurrent attempts with a 30-second timeout.
+`agent.session.warm` and `agent.session.warm_hit` on the open span distinguish
+preparation, successful reuse and ordinary creation for latency comparisons.

@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
 import { UserIcon } from '@core/component/UserIcon';
@@ -6,13 +7,16 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
-import GearIcon from '@phosphor/gear.svg';
-import GearFillIcon from '@phosphor-fill/gear-fill.svg';
+import GearFillIcon from '@icon/system/fill/gear-fill.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
 import { createMemo, Show } from 'solid-js';
+import { useAppUpdate } from './app-update';
 import { NavGlyph } from './nav-glyph';
+import { UpdateButton } from './update-button';
 
 /**
  * Sizes the gear and punches a gap around the avatar badge (16px, centred at
@@ -33,8 +37,8 @@ const isSettingsActive = () => {
 
 /**
  * Get the mobile app: opens the Mobile App settings page, which carries the
- * App Store QR code. Hidden wherever that page is unavailable, e.g. inside
- * the native app.
+ * App Store QR code. Hidden inside the native app, where that page shows the
+ * installed app's version instead, and wherever the page is unavailable.
  */
 const MobileAppButton = () => {
   const analytics = useAnalytics();
@@ -51,17 +55,16 @@ const MobileAppButton = () => {
   };
 
   return (
-    <Show when={isTabAvailable('Mobile App')}>
+    <Show when={!isNativeMobilePlatform() && isTabAvailable('Mobile App')}>
       <Button
+        aria-label={t('nav.getMobileApp')}
         variant="ghost"
         size="icon-md"
         class={cn(
           'size-10 cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        label="Get the mobile app"
-        tooltip="Get the mobile app"
-        tooltipPlacement="right"
+        tooltip={{ content: t('nav.getMobileApp'), placement: 'right' }}
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         data-active={isActive() ? '' : undefined}
@@ -75,14 +78,15 @@ const MobileAppButton = () => {
 };
 
 /**
- * The rail's bottom actions: the mobile app link, then Settings, opened like
- * any other rail view. The gear carries the signed-in account's photo as a
- * badge, so people with several accounts can still tell which one they are in.
+ * The rail's bottom actions: a ready app update, the mobile app link, then
+ * Settings, opened like any other rail view. The gear carries the account photo
+ * as a badge, so people with several accounts can tell which one they are in.
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
 }) => {
   const analytics = useAnalytics();
+  const update = useAppUpdate();
   const { openSettings, openSettingsInSplit, settingsOpen, activeTabId } =
     useSettingsState();
   const userId = useUserId();
@@ -110,6 +114,14 @@ export const FooterActions = (props: {
 
   return (
     <div class="flex w-full shrink-0 flex-col items-center gap-1">
+      {/* Keyed by id: a new update remounts the button, so its popover opens again. */}
+      <Show when={update()?.id} keyed>
+        {(_id) => (
+          <Show when={update()}>
+            {(current) => <UpdateButton update={current} />}
+          </Show>
+        )}
+      </Show>
       <MobileAppButton />
       <SidebarOpenInSplitMenu
         content={() => SETTINGS_CONTENT}
@@ -121,19 +133,23 @@ export const FooterActions = (props: {
         triggerClass="size-10"
       >
         <Button
+          aria-label={t('nav.settings')}
           variant="ghost"
           size="icon-md"
           class={cn(
             'size-10 cursor-default rounded-xl',
             isSettingsActive() && 'bg-hover text-ink'
           )}
-          label="Settings"
           aria-description={
-            accountName() ? `Signed in as ${accountName()}` : undefined
+            accountName()
+              ? t('nav.signedInAs', { name: accountName() ?? '' })
+              : undefined
           }
-          tooltip="Settings"
-          tooltipPlacement="right"
-          hotkey={TOKENS.global.toggleSettings}
+          tooltip={{
+            content: t('nav.settings'),
+            placement: 'right',
+            hotkey: TOKENS.global.toggleSettings,
+          }}
           draggable={false}
           aria-current={isSettingsActive() ? 'page' : undefined}
           data-active={isSettingsActive() ? '' : undefined}

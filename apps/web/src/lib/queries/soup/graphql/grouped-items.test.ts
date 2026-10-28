@@ -12,12 +12,15 @@ vi.mock('@app/lib/graphql-cache', () => ({
   normalizedCacheResultMetadata: (result: { metadata: unknown }) =>
     result.metadata,
 }));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: () => ({}),
-}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
+  getGraphqlSoupCacheHost: () => undefined,
   mapGraphqlGroupedSoupPage: vi.fn(),
+}));
+vi.mock('./grouped-projection', () => ({
+  createGraphqlGroupedSoupProjection:
+    (source: () => { data: unknown } | undefined) => () =>
+      source()?.data,
 }));
 vi.mock('./active-queries', () => ({
   registerGraphqlSoupRevalidations: () => () => {},
@@ -59,9 +62,20 @@ function fixture(emailView: 'inbox' | 'drafts' | 'all' = 'drafts') {
     localOptimistic: optimistic,
   });
   mocks.query.mockImplementation(
-    (options: () => { onResult: typeof onResult }) => {
+    (
+      options: () => {
+        onResult: typeof onResult;
+        select: (data: unknown) => unknown;
+      }
+    ) => {
       onResult = options().onResult;
-      return { data: { viewerId: 'viewer', data: network }, error: undefined };
+      return {
+        data: options().select({
+          user: { id: 'viewer', groupSoup: { bins: [] } },
+          data: network,
+        }),
+        error: undefined,
+      };
     }
   );
   const root = createRoot((dispose) => ({
@@ -83,7 +97,7 @@ function fixture(emailView: 'inbox' | 'drafts' | 'all' = 'drafts') {
     setRevision,
     publish(persistence: Promise<string | undefined>) {
       onResult({
-        data: {},
+        data: { user: { id: 'viewer', groupSoup: { bins: [] } } },
         metadata: { source: 'live-network', persistence },
       } as unknown as OperationResult);
     },

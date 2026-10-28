@@ -46,6 +46,22 @@ struct ListingQuery<'a> {
     github_pull_request_jsonpath: Option<&'a str>,
     /// Smallest sort value first, with the cursor paging toward larger values.
     ascending: bool,
+    /// Exact hydration preserves source-scoped IDs instead of deduplicating by GitHub key.
+    entity_ids: Option<&'a [Uuid]>,
+}
+
+/// Only positive ID disjunctions denote an exact hydration request. Broader filters
+/// retain the normal one-row-per-PR listing semantics.
+fn exact_entity_ids(expr: &Expr<ForeignEntityLiteral>) -> Option<Vec<Uuid>> {
+    match expr {
+        Expr::Literal(ForeignEntityLiteral::Id(id)) => Some(vec![*id]),
+        Expr::Or(left, right) => {
+            let mut ids = exact_entity_ids(left)?;
+            ids.extend(exact_entity_ids(right)?);
+            Some(ids)
+        }
+        _ => None,
+    }
 }
 
 fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
@@ -285,6 +301,7 @@ impl PgGithubPullRequestRepo {
             limit,
             github_pull_request_jsonpath,
             ascending,
+            entity_ids,
         } = query;
         let sort_method = sort_method.to_string();
 
@@ -297,7 +314,8 @@ impl PgGithubPullRequestRepo {
                     AS source_rows(stored_for_id, stored_for_auth_entity)
             ),
             deduped AS (
-                SELECT DISTINCT ON (fe.foreign_entity_source, fe.foreign_entity_id)
+                SELECT DISTINCT ON (fe.foreign_entity_source, fe.foreign_entity_id,
+                    CASE WHEN $13::uuid[] IS NOT NULL THEN fe.id END)
                     fe.id,
                     fe.foreign_entity_id,
                     fe.foreign_entity_source,
@@ -313,6 +331,7 @@ impl PgGithubPullRequestRepo {
                 FROM foreign_entity fe
                 LEFT JOIN github_pull_request gpr ON gpr.github_key = fe.foreign_entity_id
                 WHERE fe.foreign_entity_source = $10::text
+                  AND ($13::uuid[] IS NULL OR fe.id = ANY($13))
                   AND EXISTS (
                     SELECT 1
                     FROM source_ids s
@@ -365,6 +384,7 @@ impl PgGithubPullRequestRepo {
                 ORDER BY
                     fe.foreign_entity_source,
                     fe.foreign_entity_id,
+                    CASE WHEN $13::uuid[] IS NOT NULL THEN fe.id END,
                     sort_at DESC,
                     fe.updated_at DESC,
                     fe.id DESC
@@ -401,6 +421,7 @@ impl PgGithubPullRequestRepo {
             GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
             github_pull_request_jsonpath,
             ascending,
+            entity_ids,
         )
         .fetch_all(&self.pool)
         .await
@@ -440,6 +461,7 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
             return Ok(Vec::new());
         }
 
+        let entity_ids = query.filter().as_deref().and_then(exact_entity_ids);
         let HoistedForeignEntityFilters {
             includes_me,
             notification_matches,
@@ -509,7 +531,11 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
             source_ids: &source_ids,
             source_auth_entities: &source_auth_entities,
             sort_method: *query.sort_method(),
-            filter_jsonpath: filter_jsonpath.as_deref(),
+            filter_jsonpath: if entity_ids.is_some() {
+                None
+            } else {
+                filter_jsonpath.as_deref()
+            },
             notification_user_id,
             notification_sets: notification_sets.as_deref(),
             cursor_id: cursor_id.copied(),
@@ -517,6 +543,7 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
             limit: limit as i64,
             github_pull_request_jsonpath: github_pull_request_jsonpath.as_deref(),
             ascending: sort_direction == GithubPullRequestSortDirection::Asc,
+            entity_ids: entity_ids.as_deref(),
         })
         .await
     }

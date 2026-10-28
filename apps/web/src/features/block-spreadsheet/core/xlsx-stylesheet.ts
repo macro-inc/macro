@@ -3,6 +3,7 @@ import { strFromU8 } from 'fflate';
 import { SaxesParser, type SaxesTagNS } from 'saxes';
 import {
   SPREADSHEET_DEFAULT_STYLE,
+  SPREADSHEET_MAX_INDENT,
   type SpreadsheetCellStyle,
 } from './spreadsheet-document';
 import { readNumberFormat } from './xlsx-styles';
@@ -86,6 +87,8 @@ type Xf = {
   fillId: number;
   borderId: number;
   alignment?: Attributes;
+  /** Its feature property bag, such as Excel's checkbox format. */
+  complement?: number;
 };
 
 function attributes(node: SaxesTagNS): Attributes {
@@ -251,7 +254,9 @@ export type XlsxStylesheet = {
 export function readXlsxStylesheet(
   text: string,
   theme: (string | undefined)[],
-  warnings: Set<string>
+  warnings: Set<string>,
+  /** The `xfComplement` indexes that are checkboxes. */
+  checkboxes: ReadonlySet<number>
 ): XlsxStylesheet {
   const formats = new Map<number, string>();
   const fonts: Font[] = [];
@@ -316,6 +321,9 @@ export function readXlsxStylesheet(
         return;
       case 'alignment':
         if (xf && parent === 'xf') xf.alignment = value;
+        return;
+      case 'xfComplement':
+        if (xf) xf.complement = Number(value.i);
         return;
     }
     if (font && parent === 'font') {
@@ -513,6 +521,14 @@ export function readXlsxStylesheet(
         result.horizontalAlign = 'center';
       else if (horizontal === 'justify' || horizontal === 'fill')
         result.horizontalAlign = 'left';
+      // Excel ignores the indent of other alignments.
+      const indent = Number(alignment.indent ?? 0);
+      if (
+        (horizontal === 'left' || horizontal === 'right') &&
+        Number.isInteger(indent) &&
+        indent > 0
+      )
+        result.indent = Math.min(SPREADSHEET_MAX_INDENT, indent);
       const vertical = alignment.vertical;
       if (vertical === 'top' || vertical === 'bottom')
         result.verticalAlign = vertical;
@@ -546,6 +562,11 @@ export function readXlsxStylesheet(
     }
     if (cellBorder?.diagonal?.style && cellBorder.diagonal.style !== 'none')
       warnings.add('Diagonal borders are not imported.');
+    if (
+      definition.complement !== undefined &&
+      checkboxes.has(definition.complement)
+    )
+      result.checkbox = true;
     return Object.fromEntries(
       Object.entries(result).filter(
         ([key, value]) =>

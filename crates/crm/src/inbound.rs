@@ -8,3 +8,7 @@ pub mod axum_router;
 pub mod call_archived;
 #[cfg(feature = "ai_tools")]
 pub mod toolset;
+
+/// Pipeline routes.
+#[cfg(feature = "axum")]
+pub mod pipelines;

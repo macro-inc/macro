@@ -34,5 +34,8 @@ async fn injectable_urls_route_requests_to_the_configured_endpoint() {
     assert_eq!(client.contacts_url, format!("{}/people", server.uri()));
     assert_eq!(client.certs_url, format!("{}/jwks", server.uri()));
     assert_eq!(client.audience, "test-audience");
-    assert_eq!(client.subscription_topic, "projects/test/topics/gmail");
+    assert_eq!(
+        client.subscription_topic.as_deref(),
+        Some("projects/test/topics/gmail")
+    );
 }

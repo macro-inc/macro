@@ -1,4 +1,5 @@
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { createSignal } from 'solid-js';
+import { createDemoPointer } from '../../primitives/createDemoPointer';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
 
 export type Point = { x: number; y: number };
@@ -14,6 +15,7 @@ export function createSceneClock(options: {
   /** Wait before the first frame once the demo is on screen. */
   lead?: number;
   tick?: number;
+  visibilityThreshold?: number;
 }) {
   const tick = options.tick ?? 50;
   const [t, setT] = createSignal(0);
@@ -22,8 +24,14 @@ export function createSceneClock(options: {
   const finish = () => setT(options.end);
   const playback = createProductWalkthrough({
     root: options.root,
+    visibilityThreshold: options.visibilityThreshold,
     steps: Math.ceil(options.end / tick),
-    reset: () => {},
+    loop: { hold: 8000 },
+    reset: () => {
+      setT(0);
+      setLive(true);
+    },
+    onTakeover: () => setLive(false),
     reduced: () => {
       setReduced(true);
       setLive(false);
@@ -38,6 +46,11 @@ export function createSceneClock(options: {
     live,
     reduced,
     done: () => t() >= options.end,
+    /** Stop in place before a visitor edits the current content. */
+    pause: () => {
+      playback.pause();
+      setLive(false);
+    },
     /** The visitor's first interaction settles the scene, then stops it. */
     takeOver: () => {
       if (!live()) return;
@@ -77,33 +90,10 @@ export function createAnchor(options: {
   /** Re-measure whenever this changes, e.g. the scene clock. */
   track?: () => unknown;
 }) {
-  const [point, setPoint] = createSignal<Point>();
-  const measure = () => {
-    options.track?.();
-    const frame = options.frame();
-    const target = options.target();
-    const element = target
-      ? frame?.querySelector<HTMLElement>(target.selector)
-      : undefined;
-    if (!frame || !target || !element) {
-      setPoint(undefined);
-      return;
-    }
-    const bounds = frame.getBoundingClientRect();
-    const place = (target.place ?? caretPoint)(element.getBoundingClientRect());
-    setPoint({ x: place.x - bounds.left, y: place.y - bounds.top });
-  };
-  createEffect(measure);
-  onMount(() => {
-    const frame = options.frame();
-    if (!frame) return;
-    const resize = new ResizeObserver(measure);
-    resize.observe(frame);
-    frame.addEventListener('scroll', measure, true);
-    onCleanup(() => {
-      resize.disconnect();
-      frame.removeEventListener('scroll', measure, true);
-    });
+  return createDemoPointer({
+    frame: options.frame,
+    target: () => options.target()?.selector,
+    track: options.track,
+    place: (rect) => (options.target()?.place ?? caretPoint)(rect),
   });
-  return point;
 }

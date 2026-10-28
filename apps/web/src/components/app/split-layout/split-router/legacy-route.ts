@@ -12,12 +12,7 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
-import {
-  REMINDER_DETAIL_COMPONENT_ID,
-  REMINDER_DETAIL_ROUTE_ID,
-  reminderDetailContent,
-  reminderIdFromDetailContent,
-} from '@app/features/reminders/reminder-navigation';
+import { crmRecordSearch } from '@app/features/crm/crm-route';
 import {
   ROUTINE_CREATE_ROUTE_ID,
   ROUTINE_DETAIL_ROUTE_ID,
@@ -53,6 +48,7 @@ import {
   isBlockAlias,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import type { SplitContent } from '../layoutManager';
 
 type LegacySplitPathContext = {
@@ -81,7 +77,6 @@ export function decodeLegacyPair(
 
   if (type === 'component') {
     // Reminder list/detail surfaces are native routes only.
-    if (id === 'reminders' || id === REMINDER_DETAIL_COMPONENT_ID) return;
     // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
@@ -140,6 +135,22 @@ export function handleLegacySplitPath(
 
   if (segments.length === 1 && ['documents', 'files'].includes(segments[0]!)) {
     return [{ route: paneRoute({ id: 'drive', params: {} }) }];
+  }
+
+  // The retired Getting Started checklist's own path.
+  if (segments.length === 1 && segments[0] === 'getting-started') {
+    return [{ route: paneRoute({ id: 'view-home', params: {} }) }];
+  }
+
+  if (segments.length === 1 && segments[0] === 'calendar') {
+    return [
+      {
+        route: paneRoute({
+          id: CALENDAR_ROUTE_ID,
+          params: { period: getPreferredCalendarPeriodView() },
+        }),
+      },
+    ];
   }
 
   if (
@@ -238,19 +249,6 @@ export function splitLocationFromContent(
         : undefined
     );
   }
-  const reminderId =
-    content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
-      ? reminderIdFromDetailContent(content)
-      : undefined;
-  if (reminderId) {
-    return {
-      route: paneRoute({
-        id: REMINDER_DETAIL_ROUTE_ID,
-        params: { reminderId },
-      }),
-    };
-  }
-
   if (
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
@@ -319,6 +317,31 @@ export function splitLocationFromContent(
   return { route: paneRoute({ id: 'legacy-content', params: { type, id } }) };
 }
 
+/**
+ * A record opened at a Discussion message keeps it when desktop moves the
+ * record into Customers, which has no block to hand the params to.
+ */
+function withCrmCommentTarget(
+  content: SplitContent,
+  search: SplitSearchState | undefined
+): SplitSearchState | undefined {
+  const params: Record<string, unknown> | undefined =
+    (content.type === 'company' || content.type === 'contact') &&
+    isRecord(content.params)
+      ? content.params
+      : undefined;
+  const commentId = params?.[COMMENT_LINK_PARAM];
+  if (typeof commentId !== 'string') return search;
+
+  return {
+    ...search,
+    [crmRecordSearch.namespace]: {
+      commentId: [commentId],
+      seek: [crypto.randomUUID()],
+    },
+  };
+}
+
 /** Resolve legacy/persisted metadata before it reaches router state. */
 export function resolveContentLocation(
   routes: SplitRoutesManifest,
@@ -358,7 +381,7 @@ export function resolveContentLocation(
       : undefined;
   const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
   const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
-  let contentSearch = savedSearch;
+  let contentSearch = withCrmCommentTarget(content, savedSearch);
   if (typeof messageId === 'string') {
     const channelSearch = { ...savedSearch?.[channelsSearch.namespace] };
     // Message and thread identify one target; never combine two saved opens.
@@ -394,14 +417,6 @@ export function splitContentFromLocation(
     if (typeof routineId === 'string' && routineId.length > 0)
       return routineContent(routineId);
     throw new Error('Invalid routine detail split route');
-  }
-
-  if (root.id === REMINDER_DETAIL_ROUTE_ID) {
-    const { reminderId } = routeParams(location.route);
-    if (typeof reminderId === 'string' && reminderId.length > 0) {
-      return reminderDetailContent(reminderId);
-    }
-    throw new Error('Invalid reminder detail split route');
   }
 
   if (root.id.startsWith('view-'))

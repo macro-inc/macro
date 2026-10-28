@@ -1,10 +1,10 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, Checkbox, Layer } from '@ui';
 import {
   batch,
@@ -264,7 +264,7 @@ function TokenPill(props: {
         </Select.Trigger>
         <Select.Portal>
           <Layer depth={3}>
-            <Select.Content class="z-action-menu max-h-64 min-w-40 overflow-auto rounded-md border border-edge-muted bg-surface p-1 shadow-lg">
+            <Select.Content class="menu-surface z-action-menu max-h-64 min-w-40 overflow-auto p-1">
               <Select.Listbox />
             </Select.Content>
           </Layer>

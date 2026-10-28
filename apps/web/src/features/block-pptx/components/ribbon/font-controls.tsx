@@ -3,8 +3,8 @@
  * way PowerPoint's font boxes work.
  */
 
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDown from '@phosphor/caret-down.svg';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 /** Fonts every deck can use; the engine substitutes metric-compatible faces. */
@@ -128,7 +128,7 @@ function Combo(props: {
       <Popover.Portal>
         <Popover.Content
           id={`${props.label}-list`}
-          class="z-action-menu max-h-80 overflow-y-auto rounded-xl border border-edge bg-menu p-1 text-ink shadow-xl outline-none"
+          class="menu-surface z-action-menu max-h-80 overflow-y-auto p-1 outline-none"
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
         >

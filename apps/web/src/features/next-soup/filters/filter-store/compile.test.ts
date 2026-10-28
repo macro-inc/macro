@@ -182,21 +182,22 @@ describe('compileToAst', () => {
     });
   });
 
-  it('compiles the reminder opt-in to a bare Include literal', () => {
-    const ast = compileToAst(
-      queryStateFrom({ include: { includeReminders: true } })
+  it('opts into CRM contacts only through contact filters, excluding every other type', () => {
+    const query = defineQueryFilters(
+      { include: { crmContactHidden: false, crmContactSearch: 'ada' } },
+      { skipTargets: ['crmf'] }
     );
+    const ast = compileToAst(queryStateFrom(query));
 
-    // Reminders are off in Soup unless a view asks; this literal is the ask.
-    expect(ast.remf).toEqual({ l: 'inc' });
-  });
-
-  it('leaves reminders unrequested when a view does not opt in', () => {
-    const ast = compileToAst(
-      queryStateFrom({ include: { documentDone: false } })
+    expect(ast.crmf).toEqual({
+      '&': [{ l: { hidden: false } }, { l: { search: 'ada' } }],
+    });
+    expect(ast.ccf).toEqual({ l: { id: NIL_UUID } });
+    expect(ast.df).toEqual({ l: { id: NIL_UUID } });
+    // Contacts are opt-in, so queries that never mention them carry no crmf.
+    expect(compileToAst(queryStateFrom(defineQueryFilters({}))).crmf).toBe(
+      undefined
     );
-
-    expect(ast.remf).toBeUndefined();
   });
 
   it('compiles channel message thread ids onto regular channel filters', () => {

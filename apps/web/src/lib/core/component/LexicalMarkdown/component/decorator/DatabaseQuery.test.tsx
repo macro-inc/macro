@@ -35,6 +35,7 @@ const control = vi.hoisted(() => ({
   mounts: 0,
   cleanups: 0,
   clicks: 0,
+  deferSaved: false,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableDatabases: { key: 'enable-databases' },
@@ -46,7 +47,10 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: control.enabled() }),
 }));
 vi.mock('./LazyDecorator', () => ({
-  LazyDecorator: (props: { render: () => JSX.Element }) => props.render(),
+  LazyDecorator: (props: {
+    placeholder: JSX.Element;
+    render: () => JSX.Element;
+  }) => (control.deferSaved ? props.placeholder : props.render()),
 }));
 vi.mock('@app/features/database-query/database-query', () => ({
   DatabaseLiveQuestion: (props: { source: { displayMode: string } }) => {
@@ -79,6 +83,41 @@ vi.mock('@app/features/database-query/database-query', () => ({
 }));
 
 describe('database answer rollout', () => {
+  it('opens new drafts without waiting for the saved-answer viewport gate', async () => {
+    control.enabled = () => true;
+    control.deferSaved = true;
+    const draft = render(() => (
+      <DatabaseQuery
+        key="draft"
+        theme={{}}
+        queryId=""
+        prompt=""
+        displayMode="scalar"
+      />
+    ));
+    try {
+      await waitFor(() =>
+        expect(draft.getByText('Interactive answer')).toBeTruthy()
+      );
+      const saved = render(() => (
+        <DatabaseQuery
+          key="saved"
+          theme={{}}
+          queryId="saved"
+          prompt=""
+          displayMode="scalar"
+          title="Saved answer"
+        />
+      ));
+      expect(saved.getByText('Saved answer')).toBeTruthy();
+      expect(saved.queryByText('Interactive answer')).toBeNull();
+      saved.unmount();
+    } finally {
+      draft.unmount();
+      control.deferSaved = false;
+    }
+  });
+
   it('keeps the saved title without mounting live query wiring when disabled', async () => {
     const [enabled, setEnabled] = createSignal(false);
     control.enabled = enabled;

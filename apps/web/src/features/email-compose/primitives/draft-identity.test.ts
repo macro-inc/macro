@@ -19,7 +19,8 @@ function mount(
     draftId: 'local',
     threadId: 'local-thread',
     persistence: 'queued',
-  }
+  },
+  durableRecovery = false
 ) {
   let changed!: (settlement?: Settlement) => void;
   const unsubscribe = vi.fn();
@@ -33,6 +34,7 @@ function mount(
       {
         ...createComposeContext().drafts,
         readDraft,
+        retryDraft: durableRecovery ? vi.fn() : undefined,
         watchDrafts: (callback) => {
           changed = callback;
           return unsubscribe;
@@ -256,6 +258,26 @@ it('offers one explicit recovery and dismisses it when the session resets', asyn
   }
 });
 
+it('leaves durable draft recovery in the toolbar without a duplicate retry toast', async () => {
+  const root = mount(
+    async () => ({
+      draft: message('local'),
+      persistence: 'queued',
+      mutationUuid: 'local',
+    }),
+    undefined,
+    true
+  );
+  try {
+    root.changed({ mutationUuid: 'local', failed: true });
+    await vi.waitFor(() => expect(root.session.autosaveAllowed()).toBe(false));
+    expect(root.notices.feedback.failure).not.toHaveBeenCalled();
+    expect(root.report).toHaveBeenCalledOnce();
+  } finally {
+    root.dispose();
+  }
+});
+
 it('dismisses recovery on disposal and ignores its stale action', async () => {
   const root = mount(async () => ({
     draft: message('local'),
@@ -447,6 +469,58 @@ it('waits for a replacement identity read before correlating an already-sent fai
     await vi.waitFor(() => expect(root.alreadySent).toHaveBeenCalledOnce());
     expect(root.session.draftId()).toBeUndefined();
     expect(root.notices.feedback.failure).not.toHaveBeenCalled();
+  } finally {
+    root.dispose();
+  }
+});
+
+it('retries a failed confirmed attachment handoff once on reconnect', async () => {
+  let changed!: () => void;
+  const upload = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('transport offline'))
+    .mockResolvedValue(undefined);
+  const root = createRoot((dispose) => {
+    const session = createDraftSession({
+      draftId: 'server',
+      threadId: 'server-thread',
+      persistence: 'committed',
+    });
+    observeDraftIdentity(
+      {
+        ...createComposeContext().drafts,
+        readDraft: async () => ({
+          draft: message('server', {
+            thread_db_id: 'server-thread',
+            is_draft: true,
+          }),
+          persistence: 'committed',
+        }),
+        watchDrafts: (callback) => {
+          changed = callback;
+          return () => {};
+        },
+      },
+      session,
+      createComposeContext().notices,
+      vi.fn(),
+      vi.fn(),
+      upload
+    );
+    return { dispose };
+  });
+  try {
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledOnce());
+    changed();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(upload).toHaveBeenCalledOnce();
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    changed();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(upload).toHaveBeenCalledTimes(2);
   } finally {
     root.dispose();
   }

@@ -63,6 +63,11 @@ pub enum HarnessError {
     /// Required context for a channel-originated prompt could not be loaded.
     #[error("failed to load channel prompt context: {0}")]
     PromptContext(rootcause::Report),
+    /// The message a prompt answers is gone, was moved, or is no longer one
+    /// its sender may write beside. Unlike [`Self::PromptContext`], asking
+    /// again cannot succeed.
+    #[error("the message an agent prompt answers is no longer valid: {0}")]
+    InvalidOrigin(rootcause::Report),
     /// A prompt could not be composed for the agent runtime.
     #[error("failed to compose agent prompt: {0}")]
     PromptComposition(rootcause::Report),

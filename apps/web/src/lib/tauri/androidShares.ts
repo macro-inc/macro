@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   addPluginListener,
   convertFileSrc,
@@ -56,7 +57,7 @@ export function useAndroidShares(
           'shares',
           ({ error }) => {
             if (error) toast.failure(error);
-            void refresh();
+            fireAndForget(refresh(), 'android-shares');
           }
         );
         if (disposed) {
@@ -69,10 +70,10 @@ export function useAndroidShares(
         console.error('Unable to listen for Android shares', error);
       }
     };
-    void initialize();
+    fireAndForget(initialize(), 'android-shares');
     onCleanup(() => {
       disposed = true;
-      if (remove) void remove();
+      if (remove) fireAndForget(remove(), 'android-shares');
     });
   });
 }

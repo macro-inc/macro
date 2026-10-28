@@ -162,20 +162,9 @@ pub enum PostpaidAuthorization {
 }
 
 impl PostpaidAuthorization {
-    /// Capture existing enable/cap/suspension semantics without changing settings.
-    pub fn from_settings(settings: &BillingSettings) -> Result<Self, PolicyError> {
-        if !settings.overage_enabled {
-            return Ok(Self::Disabled);
-        }
-        if settings.overage_suspended_at.is_some() {
-            return Ok(Self::Suspended);
-        }
-        if settings.overage_limit_cents <= 0 {
-            return Ok(Self::Disabled);
-        }
-        Ok(Self::Enabled {
-            limit: CustomerMoney::from_cents(settings.overage_limit_cents as u64)?,
-        })
+    /// New admissions never authorize direct charges, including for legacy opt-ins.
+    pub fn from_settings(_settings: &BillingSettings) -> Result<Self, PolicyError> {
+        Ok(Self::Disabled)
     }
 }
 

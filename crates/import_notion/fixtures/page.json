@@ -1,0 +1,58 @@
+{
+  "object": "page",
+  "id": "59833787-2cf9-4fdf-8782-e53db20768a5",
+  "created_time": "2026-03-01T09:30:00.000Z",
+  "last_edited_time": "2026-03-02T10:15:00.000Z",
+  "created_by": {"object": "user", "id": "ee5f0f84-409a-440f-983a-a5315961c6e4"},
+  "last_edited_by": {"object": "user", "id": "ee5f0f84-409a-440f-983a-a5315961c6e4"},
+  "cover": null,
+  "icon": {"type": "emoji", "emoji": "🚀"},
+  "parent": {
+    "type": "data_source_id",
+    "data_source_id": "1a44be12-0953-4631-a1d6-7d4c2b1b4a2f",
+    "database_id": "d9824bdc-8445-4327-be8b-5b47500af6ce"
+  },
+  "archived": false,
+  "in_trash": false,
+  "url": "https://www.notion.so/Launch-plan-598337872cf94fdf8782e53db20768a5",
+  "public_url": null,
+  "properties": {
+    "Name": {"id": "title", "type": "title", "title": [
+      {"type": "text", "text": {"content": "Launch ", "link": null}, "plain_text": "Launch ", "href": null},
+      {"type": "text", "text": {"content": "plan", "link": null}, "plain_text": "plan", "href": null}
+    ]},
+    "Notes": {"id": "%3AUPp", "type": "rich_text", "rich_text": [{"type": "text", "plain_text": "Ship it", "href": null}]},
+    "Empty notes": {"id": "eN", "type": "rich_text", "rich_text": []},
+    "Budget": {"id": "bU", "type": "number", "number": 1250.5},
+    "No budget": {"id": "nB", "type": "number", "number": null},
+    "Priority": {"id": "pR", "type": "select", "select": {"id": "o1", "name": "High", "color": "red"}},
+    "No priority": {"id": "nP", "type": "select", "select": null},
+    "Tags": {"id": "tG", "type": "multi_select", "multi_select": [{"id": "t1", "name": "web", "color": "blue"}, {"id": "t2", "name": "ios", "color": "gray"}]},
+    "Status": {"id": "sT", "type": "status", "status": {"id": "s1", "name": "In progress", "color": "blue"}},
+    "Due": {"id": "dU", "type": "date", "date": {"start": "2026-04-01", "end": "2026-04-03", "time_zone": null}},
+    "Owner": {"id": "oW", "type": "people", "people": [{"object": "user", "id": "ee5f0f84-409a-440f-983a-a5315961c6e4"}]},
+    "Attachments": {"id": "aT", "type": "files", "files": [
+      {"name": "spec.pdf", "type": "file", "file": {"url": "https://prod-files.notion-static.com/spec.pdf", "expiry_time": "2026-03-02T11:15:00.000Z"}},
+      {"name": "mock", "type": "external", "external": {"url": "https://example.com/mock.png"}}
+    ]},
+    "Done": {"id": "dN", "type": "checkbox", "checkbox": true},
+    "Link": {"id": "lK", "type": "url", "url": "https://macro.com"},
+    "Contact": {"id": "cT", "type": "email", "email": "team@example.com"},
+    "Phone": {"id": "pH", "type": "phone_number", "phone_number": null},
+    "Projects": {"id": "pJ", "type": "relation", "relation": [{"id": "a1b2c3d4-0000-4000-8000-000000000001"}], "has_more": false},
+    "Score": {"id": "sC", "type": "formula", "formula": {"type": "number", "number": 42}},
+    "Label": {"id": "lB", "type": "formula", "formula": {"type": "string", "string": "high-42"}},
+    "Total": {"id": "tT", "type": "rollup", "rollup": {"type": "number", "number": 7, "function": "sum"}},
+    "Project names": {"id": "pN", "type": "rollup", "rollup": {"type": "array", "function": "show_original", "array": [
+      {"type": "title", "title": [{"plain_text": "Alpha"}]},
+      {"type": "title", "title": []}
+    ]}},
+    "Created": {"id": "cR", "type": "created_time", "created_time": "2026-03-01T09:30:00.000Z"},
+    "Created by": {"id": "cB", "type": "created_by", "created_by": {"object": "user", "id": "ee5f0f84-409a-440f-983a-a5315961c6e4"}},
+    "Edited": {"id": "eD", "type": "last_edited_time", "last_edited_time": "2026-03-02T10:15:00.000Z"},
+    "Edited by": {"id": "eB", "type": "last_edited_by", "last_edited_by": {"object": "user", "id": "ee5f0f84-409a-440f-983a-a5315961c6e4"}},
+    "Ticket": {"id": "tK", "type": "unique_id", "unique_id": {"number": 42, "prefix": "TASK"}},
+    "Run": {"id": "rN", "type": "button", "button": {}},
+    "Verified": {"id": "vR", "type": "verification", "verification": {"state": "unverified"}}
+  }
+}

@@ -16,6 +16,7 @@ fn stored_prompt(text: &str) -> StoredQueuedAction {
             "messageId": "00000000-0000-0000-0000-0000000000f2"
         })),
         announced_message_id: None,
+        context: None,
     }
 }
 
@@ -107,4 +108,25 @@ async fn a_session_without_a_row_lists_empty(pool: PgPool) {
             .expect("list missing queue")
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_context_entries_never_restore_as_owner_prompts(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let first = stored_prompt("real request");
+    let mut legacy = serde_json::to_value(stored_prompt("")).unwrap();
+    legacy["action"]["privateContext"] = serde_json::json!("legacy review outcome");
+    let entries = serde_json::json!([first, legacy]);
+    sqlx::query!(
+        "INSERT INTO agent_session_queue (agent_session_id, entries) VALUES ($1, $2)",
+        session.id.as_uuid(),
+        entries
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let restored = repo.list_queued_actions(session.id).await.unwrap();
+    assert_eq!(restored, [first]);
 }

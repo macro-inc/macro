@@ -3,7 +3,14 @@ import { homepagePeople } from './homepage-demo-people';
 export type DemoMention = {
   id: string;
   label: string;
-  kind: 'person' | 'document' | 'task' | 'agent' | 'channel' | 'spreadsheet';
+  kind:
+    | 'person'
+    | 'document'
+    | 'task'
+    | 'agent'
+    | 'channel'
+    | 'spreadsheet'
+    | 'email';
   photo?: string;
   shortName?: string;
   detail?: string;
@@ -21,14 +28,14 @@ export const demoMentions: DemoMention[] = [
       shortName: homepagePeople[id].shortName,
     })
   ),
-  { id: 'plan', label: 'Q3 launch plan', kind: 'document' },
+  { id: 'plan', label: 'Website launch plan', kind: 'document' },
   {
     id: 'announcement',
     label: 'Write the launch announcement',
     kind: 'task',
     status: 'In Review',
   },
-  { id: 'cursor', label: 'Cursor', kind: 'agent' },
+  { id: 'cursor', label: 'Cursor', kind: 'person' },
   { id: 'rollout', label: 'Team rollout plan', kind: 'document' },
   {
     id: 'checklist',
@@ -36,7 +43,7 @@ export const demoMentions: DemoMention[] = [
     kind: 'task',
     status: 'Not Started',
   },
-  { id: 'claude', label: 'Claude', kind: 'agent' },
+  { id: 'claude', label: 'Claude', kind: 'person' },
   { id: 'notes', label: 'Demo call notes', kind: 'document' },
   {
     id: 'deploy',

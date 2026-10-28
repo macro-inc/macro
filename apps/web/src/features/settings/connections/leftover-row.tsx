@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
@@ -8,10 +9,12 @@ import {
 import { Button, Dialog, Panel } from '@ui';
 import { createEffect, createSignal, type JSX, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { ConnectAction } from '../integration-ui';
 import {
   readMcpAuthAttempted,
   writeMcpAuthAttempted,
 } from '../mcp-auth-attempt';
+import { IntegrationRow } from '../primitives';
 import {
   type ConnectionMenuItem,
   ConnectionRowActions,
@@ -20,10 +23,8 @@ import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
-import { ConnectAction } from './integration-ui';
 import type { Leftover } from './model';
 import { useNativeMcpActions } from './native-actions';
-import { IntegrationRow, SettingsRow } from './primitives';
 
 function leftoverDisabled(leftover: Leftover): boolean {
   return match(leftover)
@@ -202,7 +203,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           startAuth();
         })
         .with({ kind: 'pipedream' }, () => {
-          void connectPipedream();
+          fireAndForget(connectPipedream(), 'connections-settings');
         })
         .exhaustive();
     },
@@ -285,8 +286,9 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     const muted = leftoverDisabled(leftover);
     return match(leftover)
       .with({ kind: 'native-mcp' }, (item) => (
-        <SettingsRow
-          label={item.title}
+        <IntegrationRow
+          class="gap-3 px-4 py-3"
+          title={item.title}
           description={
             <>
               <span class="block truncate">{item.subtitle}</span>
@@ -298,10 +300,11 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           muted={muted}
         >
           {actions()}
-        </SettingsRow>
+        </IntegrationRow>
       ))
       .with({ kind: 'pipedream' }, (item) => (
         <IntegrationRow
+          class="gap-3 px-4 py-3"
           icon={
             <PipedreamConnectorIcon appSlug={item.appSlug} class="size-8" />
           }
@@ -351,15 +354,13 @@ export function LeftoverRow(props: { leftover: Leftover }) {
               <Button
                 variant="ghost"
                 size="sm"
-                depth={3}
                 onClick={() => setRenaming(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 size="sm"
-                depth={3}
                 disabled={!nameDraft().trim() || native.update.isPending}
                 onClick={saveRename}
               >

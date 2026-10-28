@@ -20,5 +20,6 @@ config:
   fusionauth-instance:github-client-id-secret-key: github-client-id-prod
   fusionauth-instance:github-client-secret-secret-key: github-client-secret-prod
   fusionauth-instance:fusionauth-github-idp-id: 76d915da-0f44-47c1-ac15-423f162b0b55
+  fusionauth-instance:microsoft-idp-secret-key: microsoft-idp-prod
   fusionauth:apiKey:
     secure: AAABANOJD8AOmyME2/j2t2nmudnPjYIszfItHGubEm2ZmKaErrrrqRydP7udMstGDgi0inuUCRj819+S1tXXVZF0E7BP9bL1cTxmhf0+nMbO6CHkdyRycQ==

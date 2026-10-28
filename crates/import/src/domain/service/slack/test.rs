@@ -1,10 +1,10 @@
 use super::*;
 use crate::domain::{
     models::{
-        ImportSource, ImportSourceBinding, ImportStatus, ImportTargetReservation, Initiator,
-        SlackWorkspaceId,
+        ImportKind, ImportSource, ImportSourceBinding, ImportStatus, ImportTargetReservation,
+        Initiator, SlackWorkspaceId,
     },
-    ports::{ImportError, ImportedDocumentProperties, ImportedTaskProperties, Result},
+    ports::{ImportError, ImportedDocumentProperties, ImportedTaskProperties, NotionLinks, Result},
 };
 use std::{collections::HashSet, sync::Mutex};
 
@@ -99,11 +99,12 @@ impl EntityCreator for Harness {
         unreachable!()
     }
 
-    async fn create_markdown_doc(
+    async fn create_notion_document(
         &self,
         _: &MacroUserIdStr<'static>,
         _: &str,
         _: &str,
+        _: &NotionLinks,
         _: &ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
         unreachable!()
@@ -149,13 +150,17 @@ fn fixture() -> (MacroUserIdStr<'static>, ImportEntity, ImportTargetKey) {
         user_id: user.to_string(),
         team_id: None,
         source: ImportSource::Slack,
+        kind: ImportKind::Channel,
         foreign_id: key.foreign_id.as_str().to_string(),
+        parent_id: None,
+        review_id: None,
         status: ImportStatus::Importing,
-        initiator: Initiator::Onboarding,
+        initiator: Initiator::Manual,
         metadata: serde_json::json!({"name": "engineering", "channel_id": key.foreign_id.as_str()}),
         entity_id: None,
         entity_type: None,
         last_error: None,
+        waiting_on: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };

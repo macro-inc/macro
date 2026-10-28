@@ -7,11 +7,13 @@ import {
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingPlansQuery,
   useAiBillingSummaryQuery,
   useCreateAiCreditCheckoutMutation,
   useCreateBillingPortalMutation,
+  useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,
 } from '@queries/auth';
 import { createSignal, Suspense } from 'solid-js';
@@ -32,6 +34,7 @@ export function Usage() {
   const checkout = useCreateAiCreditCheckoutMutation();
   const portal = useCreateBillingPortalMutation();
   const overage = useUpdateAiOverageMutation();
+  const autoReloadMutation = useUpdateAiAutoReloadMutation();
   const usagePreview = useAiUsagePreview();
   const { showUsageLimit, hideUsageLimit } = useAiUsageLimitState();
   const { openSettings } = useSettingsState();
@@ -43,19 +46,30 @@ export function Usage() {
     !usagePreview.beforeLaunch() &&
     isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
   const returnUrl = `${window.location.origin}/app/settings/usage`;
+  const usageSummary = () => {
+    const snapshot = usagePreview.withPreview(
+      summary.isSuccess ? summary.data : undefined,
+      plans.isSuccess ? plans.data.plans : undefined
+    );
+    return snapshot ? toUsageSummary(snapshot) : undefined;
+  };
+  const canChangeAutoReload = () =>
+    available() &&
+    !previewing() &&
+    summary.isSuccess &&
+    !summary.data.unlimited &&
+    summary.data.tier !== 'free' &&
+    summary.data.can_manage_billing;
+  const autoReloadAvailable = () =>
+    canChangeAutoReload() ||
+    (available() && DEV_MODE_ENV && autoReloadPreview());
   const context: UsageContext = {
     available,
-    summary: () => {
-      const snapshot = usagePreview.withPreview(
-        summary.isSuccess ? summary.data : undefined,
-        plans.isSuccess ? plans.data.plans : undefined
-      );
-      return snapshot ? toUsageSummary(snapshot) : undefined;
-    },
+    summary: usageSummary,
     loading: () => summary.isPending,
     failed: () => summary.isError,
     refresh: () => {
-      void summary.refetch();
+      fireAndForget(summary.refetch(), 'usage');
     },
     checkout: {
       pending: () => checkout.isPending,
@@ -81,16 +95,22 @@ export function Usage() {
       },
     },
     autoReload: {
-      settings: () =>
-        autoReloadPreview() ? previewSettings() : DEFAULT_AUTO_RELOAD,
-      available: () => available() && DEV_MODE_ENV && autoReloadPreview(),
-      pending: () => false,
+      budget: () => usageSummary()?.autoReload.budget,
+      settings: () => {
+        if (autoReloadPreview()) return previewSettings();
+        return usageSummary()?.autoReload.settings ?? DEFAULT_AUTO_RELOAD;
+      },
+      available: autoReloadAvailable,
+      pending: () => autoReloadMutation.isPending,
+      suspended: () => usageSummary()?.autoReload.suspended ?? false,
       preview: autoReloadPreview,
       save: async (settings) => {
-        // No auto-reload API exists yet. Only the explicit development preview can save.
-        if (!available() || !DEV_MODE_ENV || !autoReloadPreview())
-          throw new Error('Auto-Reload unavailable');
-        setPreviewSettings(settings);
+        if (!autoReloadAvailable()) throw new Error('Auto-Reload unavailable');
+        if (autoReloadPreview()) {
+          setPreviewSettings(settings);
+          return;
+        }
+        await autoReloadMutation.mutateAsync(settings);
       },
     },
     paymentMethods: {
@@ -133,6 +153,11 @@ export function Usage() {
     },
     developer: DEV_MODE_ENV
       ? {
+          openBillingLab: LOCAL_ONLY
+            ? () => {
+                window.open('/billing-lab.html', '_blank', 'noopener');
+              }
+            : undefined,
           active: usagePreview.active,
           plan: usagePreview.plan,
           beforeLaunch: usagePreview.beforeLaunch,

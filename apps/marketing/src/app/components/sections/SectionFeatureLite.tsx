@@ -675,7 +675,8 @@ export function SectionFeatureLite(props: {
                   'font-size': mobile()
                     ? 'clamp(38px, 11vw, 52px)'
                     : 'clamp(44px, 6vw, 60px)',
-                  'font-weight': '315',
+                  'font-weight':
+                    'calc(315 + var(--cream-slab-weight-increase, 0))',
                   'letter-spacing': 'normal',
                   'line-height': '1.08',
                   margin: mobile() ? '16px 0 0' : '18px 0 0',

@@ -25,6 +25,7 @@ import { Button } from '@ui';
 import {
   createSignal,
   For,
+  type JSX,
   Match,
   onCleanup,
   onMount,
@@ -32,12 +33,18 @@ import {
   Switch,
 } from 'solid-js';
 import type { EmailTagId } from '../../core/demo-email';
-import type { WorkspaceView } from '../../core/dummy-workspace';
+import type { DummyData, WorkspaceView } from '../../core/dummy-workspace';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { sampleAgentSessions } from '../../core/workspace-parity-fixtures';
 import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { AgentFeedbackWorkflow } from '../agents/AgentWorkflowStories';
+import { seedAgentWorkflows } from '../agents/workflowData';
+import { ChannelWorkSurface } from '../channels/ChannelWorkSurface';
 import { NavGlyph } from '../DemoNavGlyph';
 import { EmailSidebar, type MailTab } from '../email/frozen/EmailShell';
+import { createTasksWorkspace } from '../tasks/createTasksWorkspace';
+import { TasksWorkspaceMain } from '../tasks/TasksWorkspace';
+import { TasksWorkspaceSidebar } from '../tasks/TasksWorkspaceSidebar';
 import { CreatePalette } from './frozen/CreatePalette';
 import { type SearchOption, SearchPalette } from './frozen/SearchPalette';
 import { WorkspaceAgents } from './WorkspaceAgents';
@@ -66,14 +73,45 @@ const NAV = [
 
 export default function DummyWorkspace(props: {
   initialView?: WorkspaceView;
+  initialData?: Partial<DummyData>;
+  initialChannelThread?: string;
   initialTask?: string;
   initialCompany?: string;
   initialDocument?: string;
   initialAgent?: string;
+  agentShowcase?: boolean;
+  tasksShowcase?: boolean;
+  chatSplits?: boolean;
   embedded?: boolean;
+  /** Homepage scenes reuse this workspace chrome around their focused content. */
+  demoContent?: JSX.Element;
+  demoIncludesSidebar?: boolean;
+  demoTitle?: string;
 }) {
   let workspaceElement!: HTMLDivElement;
-  const w = createDummyWorkspace(props.initialView ?? 'home');
+  const showcase =
+    props.agentShowcase ||
+    (!props.embedded &&
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('scene') === 'agents');
+  const tasksShowcase =
+    props.tasksShowcase ||
+    (!props.embedded &&
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('scene') === 'tasks');
+  const w = createDummyWorkspace(
+    showcase
+      ? 'messages'
+      : tasksShowcase
+        ? 'tasks'
+        : (props.initialView ?? 'home')
+  );
+  const taskWorkspace = tasksShowcase ? createTasksWorkspace(w) : undefined;
+  if (props.initialData) w.setData(structuredClone(props.initialData));
+  if (showcase) {
+    seedAgentWorkflows(w);
+    w.setChannel('product-feedback');
+  }
   if (!props.embedded && typeof window !== 'undefined') {
     const companyId = window.location.hash.replace(/^#company-/, '');
     const emailId = window.location.hash.replace(/^#email-/, '');
@@ -86,6 +124,8 @@ export default function DummyWorkspace(props: {
   if (props.initialAgent) w.open('agents', props.initialAgent);
   if (props.initialTask) w.open('tasks', props.initialTask);
   if (props.initialCompany) w.open('crm', props.initialCompany);
+  if (props.initialChannelThread)
+    w.setChannelThread(props.initialChannelThread);
   const [filter, setFilter] = createSignal<TaskFilter>('all');
   const [mailTab, setMailTab] = createSignal<MailTab>('important');
   const [account, setAccount] = createSignal('all');
@@ -233,6 +273,8 @@ export default function DummyWorkspace(props: {
       data-theme="dark"
       data-embedded={!!props.embedded}
       data-sidebar-open={mobileOpen()}
+      data-tasks-showcase={tasksShowcase}
+      data-agents-view={w.view() === 'agents'}
     >
       <Show when={searching()}>
         <SearchPalette
@@ -317,6 +359,13 @@ export default function DummyWorkspace(props: {
             size="sm"
             onClick={() => {
               w.reset();
+              taskWorkspace?.reset();
+              if (props.initialData)
+                w.setData(structuredClone(props.initialData));
+              if (showcase) {
+                seedAgentWorkflows(w);
+                w.setChannel('product-feedback');
+              }
               setSearching(false);
               setFilter('all');
               setMailTab('important');
@@ -403,24 +452,45 @@ export default function DummyWorkspace(props: {
           <div class="min-h-0 flex-1" />
           <img
             src={homepagePeople.jacob.photo}
-            alt="Jacob Beckerman"
+            alt="Jacob"
             class="size-8 rounded-full"
           />
         </div>
-        <Show when={sidebar()}>
+        <Show
+          when={
+            sidebar() &&
+            !(props.demoIncludesSidebar && w.view() === props.initialView)
+          }
+        >
           <div class="dummy-sidebar">
             <Show
               when={w.view() === 'email'}
               fallback={
-                <WorkspaceSidebar
-                  workspace={w}
-                  title={title()}
-                  collapse={() => setSidebar(false)}
-                  create={create}
-                  navigate={navigate}
-                  taskFilter={filter()}
-                  setTaskFilter={setFilter}
-                />
+                <Show
+                  when={taskWorkspace && w.view() === 'tasks'}
+                  fallback={
+                    <WorkspaceSidebar
+                      workspace={w}
+                      demoTitle={
+                        w.view() === props.initialView
+                          ? props.demoTitle
+                          : undefined
+                      }
+                      title={title()}
+                      collapse={() => setSidebar(false)}
+                      create={create}
+                      navigate={navigate}
+                      taskFilter={filter()}
+                      setTaskFilter={setFilter}
+                    />
+                  }
+                >
+                  <TasksWorkspaceSidebar
+                    state={taskWorkspace!}
+                    collapse={() => setSidebar(false)}
+                    onNavigate={() => setMobileOpen(false)}
+                  />
+                </Show>
               }
             >
               <EmailSidebar
@@ -474,7 +544,13 @@ export default function DummyWorkspace(props: {
               variant="plain"
               size="icon-sm"
               label="Create item"
-              onClick={() => setCreating(true)}
+              onClick={() =>
+                taskWorkspace && w.view() === 'tasks'
+                  ? taskWorkspace.setComposer(
+                      taskWorkspace.projectList() ? 'project' : 'task'
+                    )
+                  : setCreating(true)
+              }
             >
               <Plus />
             </Button>
@@ -491,43 +567,75 @@ export default function DummyWorkspace(props: {
               </Button>
             </div>
           </Show>
-          <Switch>
-            <Match when={w.contentView() === 'tasks'}>
-              <WorkspaceTasks workspace={w} filter={filter()} />
-            </Match>
-            <Match when={w.contentView() === 'email'}>
-              <WorkspaceEmail
-                workspace={w}
-                tag={mailTag()}
-                onClearTag={() => setMailTag(undefined)}
-                tab={mailTab()}
-                account={account()}
-                navigationOpen={sidebar()}
-                onToggleNavigation={() => setSidebar(!sidebar())}
-              />
-            </Match>
-            <Match when={w.contentView() === 'spreadsheet'}>
-              <WorkspaceSpreadsheet workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'documents'}>
-              <WorkspaceDocuments workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'messages'}>
-              <WorkspaceChannel workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'agents'}>
-              <WorkspaceAgents workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'home'}>
-              <WorkspaceAgents workspace={w} home />
-            </Match>
-            <Match when={w.contentView() === 'calendar'}>
-              <WorkspaceCalendar workspace={w} />
-            </Match>
-            <Match when={w.contentView() === 'crm'}>
-              <WorkspaceCompanies workspace={w} />
-            </Match>
-          </Switch>
+          <Show
+            when={
+              props.demoContent &&
+              w.view() === props.initialView &&
+              !w.selected()
+            }
+            fallback={
+              <Switch>
+                <Match when={w.contentView() === 'tasks'}>
+                  <Show
+                    when={taskWorkspace}
+                    fallback={
+                      <WorkspaceTasks workspace={w} filter={filter()} />
+                    }
+                  >
+                    {(controller) => (
+                      <TasksWorkspaceMain state={controller()} />
+                    )}
+                  </Show>
+                </Match>
+                <Match when={w.contentView() === 'email'}>
+                  <WorkspaceEmail
+                    workspace={w}
+                    tag={mailTag()}
+                    onClearTag={() => setMailTag(undefined)}
+                    tab={mailTab()}
+                    account={account()}
+                    navigationOpen={sidebar()}
+                    onToggleNavigation={() => setSidebar(!sidebar())}
+                  />
+                </Match>
+                <Match when={w.contentView() === 'spreadsheet'}>
+                  <WorkspaceSpreadsheet workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'documents'}>
+                  <WorkspaceDocuments workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'messages'}>
+                  <Show
+                    when={showcase && w.channel() === 'product-feedback'}
+                    fallback={
+                      <Show
+                        when={props.chatSplits}
+                        fallback={<WorkspaceChannel workspace={w} />}
+                      >
+                        <ChannelWorkSurface workspace={w} />
+                      </Show>
+                    }
+                  >
+                    <AgentFeedbackWorkflow workspace={w} />
+                  </Show>
+                </Match>
+                <Match when={w.contentView() === 'agents'}>
+                  <WorkspaceAgents workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'home'}>
+                  <WorkspaceAgents workspace={w} home />
+                </Match>
+                <Match when={w.contentView() === 'calendar'}>
+                  <WorkspaceCalendar workspace={w} />
+                </Match>
+                <Match when={w.contentView() === 'crm'}>
+                  <WorkspaceCompanies workspace={w} />
+                </Match>
+              </Switch>
+            }
+          >
+            {props.demoContent}
+          </Show>
         </div>
       </div>
     </div>

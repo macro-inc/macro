@@ -9,6 +9,6 @@
  * The key the user pasted.
  */
 export interface PutCursorApiKeyRequest {
-  /** A `crsr_…` Cursor API key. */
+  /** A Cursor API key: `grok_…`, or `crsr_…` for older keys. */
   apiKey: string;
 }

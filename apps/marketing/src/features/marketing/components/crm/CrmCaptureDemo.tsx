@@ -1,138 +1,133 @@
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import { demoMentions } from '../../core/demo-mentions';
 import type { WorkspaceComment } from '../../core/dummy-workspace';
 import type { SampleCompany } from '../../core/workspace-fixtures';
-import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { createCrmDemoWorkspace } from '../../primitives/createCrmDemoWorkspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
-import { DemoCursor } from '../DemoCursor';
+import { demoTypingActions } from '../../primitives/demoTypingActions';
+import type { ChannelComposerHandle } from '../email/frozen/ChannelComposer';
 import { ProductDemo } from '../product/ProductPage';
+import { CompanyPipelineEntry } from './CompanyPipelineEntry';
 import { CrmRecordWorkspace } from './CrmRecordWorkspace';
 
 const request: WorkspaceComment = {
   id: 'capture-request',
   person: 'jacob',
-  body: '@[Claude](demo-mention:claude) just got off a call with Dana. They want a demo Thursday at 9 for the studio team. Move The Meadow to Demo, make me the owner, and note that Alex Chen is running the rollout on their side.',
+  body: '@[Claude](demo-mention:claude) just got off a call with Ava. They want a demo Thursday at 9 for the studio team. Move Parlor Studio to Demo, make me the owner, and note that Alex is running the rollout on their side.',
   time: '9:51 AM',
 };
 const reply: WorkspaceComment = {
   id: 'capture-reply',
   person: 'claude',
-  body: 'Done. The Meadow is in Demo and you’re the owner. From the call: demo Thursday at 9 with the studio team, and Alex Chen (alex@meadow.example) is running the rollout on their side.',
+  body: 'Done. Parlor Studio is in Demo and you’re the owner. From the call: demo Thursday at 9 with the studio team, and Alex (alex@parlorstudio.example) is running the rollout on their side.',
   time: '9:52 AM',
   replyTo: 'capture-request',
 };
 
-/**
- * @Claude in a company's Discussion: the agent sets Stage and Owner through
- * the property tools and answers in the thread. Phases: 0 request, 1 Stage,
- * 2 Stage set, 3 Owner, 4 Owner set, 5 thread, 6 reply.
- */
+/** Type and send a request, then show the agent's reply and property updates. */
 export function CrmCaptureDemo() {
   let frame!: HTMLDivElement;
-  const w = createDummyWorkspace('crm');
+  let composer: ChannelComposerHandle | undefined;
+  const w = createCrmDemoWorkspace();
   const meadow = (patch: Partial<SampleCompany>) =>
     w.setData('companies', (company) => company.id === 'meadow', patch);
-  meadow({ stage: 'Lead', owner: '', comments: [request] });
+  meadow({ comments: [] });
+  const [deal, setDeal] = createStore<
+    Pick<SampleCompany, 'stage' | 'owner' | 'revenue'>
+  >({ stage: 'Lead', owner: '', revenue: '18000' });
   w.open('crm', 'meadow');
   const [phase, setPhase] = createSignal(0);
-  const [automatic, setAutomatic] = createSignal(true);
-  const [pointer, setPointer] = createSignal<{ x: number; y: number }>();
+  const claude = demoMentions.find((item) => item.id === 'claude');
+  const typing = demoTypingActions(
+    request.body.replace('@[Claude](demo-mention:claude)', '@Claude'),
+    (text) => composer?.setText(text, claude),
+    1200
+  );
+  const sent = typing.length + 1;
+  const acknowledgment: WorkspaceComment = {
+    id: 'capture-working',
+    person: 'claude',
+    body: 'I’ll update the stage, owner, and rollout notes.',
+    time: '9:51 AM',
+    replyTo: request.id,
+  };
+  const scrollTo = (selector: string) => {
+    queueMicrotask(() => {
+      const scroll = frame.querySelector<HTMLElement>('.sample-company-scroll');
+      const target = frame.querySelector<HTMLElement>(selector);
+      if (scroll && target)
+        scroll.scrollTop +=
+          target.getBoundingClientRect().top -
+          scroll.getBoundingClientRect().top -
+          16;
+    });
+  };
   const finish = () => {
-    meadow({ stage: 'Demo', owner: 'jacob', comments: [request, reply] });
-    setPhase(6);
+    composer?.setText('');
+    setDeal({ stage: 'Demo', owner: 'jacob' });
+    meadow({ comments: [request, acknowledgment, reply] });
+    setPhase(sent + 4);
   };
   const playback = createProductWalkthrough({
     root: () => frame,
-    steps: 6,
-    reset: () => {},
-    reduced: () => {
-      setAutomatic(false);
-      finish();
+    steps: sent + 4,
+    loop: { hold: 8000 },
+    reset: () => {
+      composer?.setText('');
+      setDeal({ stage: 'Lead', owner: '', revenue: '18000' });
+      meadow({ comments: [] });
+      setPhase(0);
+      const scroll = frame.querySelector('.sample-company-scroll');
+      if (scroll) scroll.scrollTop = 0;
     },
-    delay: (step) => [0, 900, 900, 1000, 900, 1000, 900][step] ?? 1000,
+    reduced: finish,
+    delay: (step) =>
+      step < sent ? typing[step - 1].delay : step === sent ? 900 : 1400,
     advance: (step) => {
-      if (step === 2) meadow({ stage: 'Demo' });
-      if (step === 4) meadow({ owner: 'jacob' });
-      if (step === 6) {
+      setPhase(step);
+      if (step < sent) {
+        typing[step - 1].run();
+        if (step === 1) scrollTo('[data-discussion-composer]');
+      } else if (step === sent) {
+        // Use the same send path as the visitor, then attach the scripted thread ID.
+        composer?.send();
+        meadow({ comments: [request] });
+        scrollTo('[data-thread-id="capture-request"]');
+      } else if (step === sent + 1) {
+        meadow({ comments: [request, acknowledgment] });
+      } else if (step === sent + 2) {
+        setDeal({ stage: 'Demo' });
+        scrollTo('.sample-pipeline-entries');
+      } else if (step === sent + 3) {
+        setDeal({ owner: 'jacob' });
+      } else {
         finish();
-        setAutomatic(false);
-        // Like a chat, the record scrolls to the new reply when it lands
-        // below the fold (or under the phone's details sheet).
-        requestAnimationFrame(() => {
-          const scroll = frame.querySelector('.sample-company-scroll');
-          scroll?.scrollTo?.({ top: scroll.scrollHeight, behavior: 'smooth' });
-        });
-      } else setPhase(step);
+        scrollTo('[data-thread-id="capture-request"]');
+      }
     },
   });
-  const pause = () => {
-    setAutomatic(false);
-    playback.pause();
-  };
+  const pause = () => playback.pause();
   const action = () =>
-    phase() === 1 || phase() === 2
-      ? 'stage'
-      : phase() === 3 || phase() === 4
-        ? 'owner'
-        : undefined;
-  onMount(() => {
-    const position = () => {
-      const selector = [
-        undefined,
-        '[data-company-property="stage"]',
-        '[data-company-property="stage"]',
-        '[data-company-property="owner"]',
-        '[data-company-property="owner"]',
-        '[data-thread-id="capture-request"] .sample-message-row',
-      ][phase()];
-      const target = selector
-        ? frame.querySelector<HTMLElement>(selector)
-        : undefined;
-      if (!automatic() || !target) {
-        setPointer(undefined);
-        return;
-      }
-      const bounds = target.getBoundingClientRect();
-      const parent = frame.getBoundingClientRect();
-      const thread = phase() === 5;
-      setPointer({
-        x: bounds.left - parent.left + (thread ? 56 : bounds.width * 0.6),
-        y:
-          bounds.top -
-          parent.top +
-          (thread ? bounds.height + 18 : bounds.height / 2),
-      });
-    };
-    createEffect(() => {
-      phase();
-      automatic();
-      const timer = requestAnimationFrame(position);
-      onCleanup(() => cancelAnimationFrame(timer));
-    });
-    const resize = new ResizeObserver(position);
-    resize.observe(frame);
-    onCleanup(() => resize.disconnect());
-  });
+    phase() === sent + 2 ? 'stage' : phase() === sent + 3 ? 'owner' : undefined;
   return (
     <div ref={frame} class="crm-demo-frame" onFocusIn={pause}>
       <ProductDemo
-        label="Claude updates The Meadow from a comment in its Discussion"
+        label="Claude updates Parlor Studio from a comment in its Discussion"
         onInteract={pause}
         action={action()}
         height={600}
         mobileHeight={700}
       >
-        <CrmRecordWorkspace workspace={w} initialPanelOpen />
+        <CrmRecordWorkspace
+          richComposer
+          workspace={w}
+          onComposerReady={(handle) => {
+            composer = handle;
+          }}
+          pipeline={<CompanyPipelineEntry value={deal} onChange={setDeal} />}
+        />
       </ProductDemo>
-      <Show when={automatic() && pointer()}>
-        {(p) => (
-          <DemoCursor
-            label="Claude"
-            class="crm-demo-pointer"
-            clicking={phase() === 2 || phase() === 4}
-            style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
-          />
-        )}
-      </Show>
     </div>
   );
 }

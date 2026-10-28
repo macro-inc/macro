@@ -23,8 +23,56 @@ import type { IUser } from '@core/user';
 import type { CombinedEntity } from './entityUtils';
 import {
   createEntitySearchConfig,
+  getEntityType,
   sortEntitiesWithSelfFirst,
+  useQuickAccessEntities,
 } from './entityUtils';
+
+describe('getEntityType', () => {
+  it('has no properties-service type for an agent session', () => {
+    const agentSession: CombinedEntity = {
+      kind: 'entity',
+      id: 'session-1',
+      data: {
+        type: 'agent_session',
+        id: 'session-1',
+        name: 'Fix the build',
+        ownerId: 'owner-1',
+        botId: 'bot-1',
+        status: 'running',
+      },
+    };
+
+    expect(getEntityType(agentSession)).toBeUndefined();
+  });
+
+  it('maps a call to its call record', () => {
+    const call: CombinedEntity = {
+      kind: 'entity',
+      id: 'call-1',
+      data: {
+        type: 'call',
+        id: 'call-1',
+        name: 'Standup',
+        ownerId: 'owner-1',
+        isActive: false,
+        status: 'ATTENDED',
+        attended: true,
+        participantIds: [],
+      },
+    };
+
+    expect(getEntityType(call)).toBe('CALL_RECORD');
+  });
+});
+
+describe('useQuickAccessEntities', () => {
+  it('lists nothing for an entity type a newer service added', () => {
+    const fromNewerService = JSON.parse('"AGENT_SESSION"');
+
+    expect(useQuickAccessEntities(() => fromNewerService).items()).toEqual([]);
+  });
+});
 
 describe('createEntitySearchConfig', () => {
   it('should return correct search config with same weights as MentionsMenu', () => {

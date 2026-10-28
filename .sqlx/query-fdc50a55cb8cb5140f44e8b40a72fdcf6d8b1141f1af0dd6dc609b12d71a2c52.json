@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, section_id, column_id, help_text, required, widget\n        FROM form_questions WHERE form_id = $1\n        ORDER BY section_id, position, id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "section_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "help_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "required",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "widget",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "fdc50a55cb8cb5140f44e8b40a72fdcf6d8b1141f1af0dd6dc609b12d71a2c52"
+}

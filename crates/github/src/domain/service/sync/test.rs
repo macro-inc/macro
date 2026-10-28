@@ -165,11 +165,25 @@ impl DocumentService for StubDocumentService {
     ) -> Result<documents::domain::models::TaskBranchName, DocumentError> {
         unimplemented!()
     }
+    async fn get_task_identity(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_context: &DocumentBasic,
+    ) -> Result<documents::domain::models::TaskIdentity, DocumentError> {
+        unimplemented!()
+    }
     async fn get_task_github_pull_requests(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
         _document_context: &DocumentBasic,
     ) -> Result<documents::domain::models::GithubPullRequestsResponse, DocumentError> {
+        unimplemented!()
+    }
+    async fn get_github_pull_request_tasks(
+        &self,
+        _user_id: &str,
+        _github_keys: Vec<String>,
+    ) -> Result<documents::domain::models::GithubPullRequestTasksResponse, DocumentError> {
         unimplemented!()
     }
     async fn get_project_children(

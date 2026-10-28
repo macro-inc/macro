@@ -1,7 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { cn } from '@ui';
@@ -31,6 +32,12 @@ function getRecipientsLabel(data: SendEmail) {
   if (labels.length === 1) return labels[0]!;
   if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
   return `${labels[0]}, ${labels[1]}, +${labels.length - 2} more`;
+}
+
+function getAttachmentsLabel(data: SendEmail) {
+  const count = data.attachments?.length ?? 0;
+  if (count === 0) return undefined;
+  return `${count} ${count === 1 ? 'attachment' : 'attachments'}`;
 }
 
 function getUserAction(response: SendEmailResponse | undefined) {
@@ -138,6 +145,16 @@ export function SentEmailResponse(props: {
                 Email sent to{' '}
                 <span class="text-ink">{getRecipientsLabel(props.args)}</span>
               </span>
+              <Show when={props.args.from?.trim()}>
+                {(from) => (
+                  <span>
+                    from <span class="text-ink">{from()}</span>
+                  </span>
+                )}
+              </Show>
+              <Show when={getAttachmentsLabel(props.args)}>
+                {(label) => <span>with {label()}</span>}
+              </Show>
               <Suspense>
                 <ItemPreview class="ring-0" id={props.threadId} type="email" />
               </Suspense>
@@ -162,6 +179,25 @@ export function SentEmailResponse(props: {
   );
 }
 
+/** A send with no result: still in flight, or failed. */
+export function SendEmailCall(props: {
+  args: SendEmail;
+  renderContext: Parameters<typeof BaseTool>[0]['renderContext'];
+}) {
+  return (
+    <BaseTool
+      icon={PaperPlaneTilt}
+      renderContext={props.renderContext}
+      type="call"
+    >
+      <span class="min-w-0 truncate">
+        Send email to{' '}
+        <span class="text-ink">{getRecipientsLabel(props.args)}</span>
+      </span>
+    </BaseTool>
+  );
+}
+
 export function DraftEmailResponse(props: {
   args: SendEmail;
   draftId: string;
@@ -176,6 +212,9 @@ export function DraftEmailResponse(props: {
             Email saved as draft for{' '}
             <span class="text-ink">{getRecipientsLabel(props.args)}</span>
           </span>
+          <Show when={getAttachmentsLabel(props.args)}>
+            {(label) => <span>with {label()}</span>}
+          </Show>
           <DraftPreviewButton
             draftId={props.draftId}
             subject={props.args.subject}

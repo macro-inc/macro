@@ -1,6 +1,6 @@
 /* block-agent Transcript: macro-message-width columns with px-4 pb-4. */
 .agent-transcript { display: flex; flex-direction: column; padding-top: 16px; }
-.agent-turn { width: 100%; max-width: 920px; margin-inline: auto; padding: 0 16px 16px; min-width: 0; }
+.agent-turn { flex-shrink:0; width: 100%; max-width: 920px; margin-inline: auto; padding: 0 16px 16px; min-width: 0; }
 .agent-tool-enter { animation: agent-tool-enter 260ms ease-out both; }
 @keyframes agent-tool-enter { from { opacity: 0; transform: translateY(3px); } }
 
@@ -44,3 +44,9 @@
 @media (prefers-reduced-motion: reduce) {
   .agent-tool-enter { animation: none; }
 }
+
+/* Opt-in for walkthroughs that settle tool results before revealing an answer. */
+.agent-tool-collapse { display:grid; grid-template-rows:1fr; opacity:1; transition:grid-template-rows 380ms ease, opacity 220ms ease; }
+.agent-tool-collapse[data-open=false] { grid-template-rows:0fr; opacity:0; }
+.agent-tool-collapse-body { min-height:0; overflow:hidden; }
+@media (prefers-reduced-motion: reduce) { .agent-tool-collapse { transition:none; } }

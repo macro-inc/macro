@@ -1,12 +1,7 @@
 use super::*;
-use import::domain::models::ImportState;
-use import::domain::ports::Result as ImportResult;
-use import::domain::service::RunImportOutcome;
+use crate::domain::models::OnboardingStatus;
 use mcp_client::domain::models::{McpServerRecord, StoredCredentials};
-use mcp_client::domain::service::McpToolSet;
-use mcp_select::{ConnectorRef, ConnectorSelect, UserMcpTools};
 use std::sync::Mutex;
-use uuid::Uuid;
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|tester@macro.com".to_string()).expect("valid test user id")
@@ -23,24 +18,16 @@ fn active_row() -> OnboardingRow {
 
 struct MockRepo {
     status: OnboardingStatus,
-    /// Whether a row exists at all (get_row returns None when false).
-    exists: bool,
     completions: Mutex<Vec<bool>>,
+    dismissed: Mutex<Vec<String>>,
 }
 
 impl MockRepo {
     fn new(status: OnboardingStatus) -> Self {
         Self {
             status,
-            exists: true,
             completions: Mutex::new(Vec::new()),
-        }
-    }
-
-    fn missing() -> Self {
-        Self {
-            exists: false,
-            ..Self::new(OnboardingStatus::Active)
+            dismissed: Mutex::new(Vec::new()),
         }
     }
 }
@@ -54,7 +41,7 @@ impl OnboardingRepo for MockRepo {
     }
 
     async fn get_row(&self, _user: &MacroUserIdStr<'static>) -> Result<Option<OnboardingRow>> {
-        Ok(self.exists.then(|| OnboardingRow {
+        Ok(Some(OnboardingRow {
             status: self.status,
             ..active_row()
         }))
@@ -72,6 +59,26 @@ impl OnboardingRepo for MockRepo {
             completed_at: Some(chrono::Utc::now()),
             ..active_row()
         })
+    }
+
+    async fn delete_row(&self, _user: &MacroUserIdStr<'static>) -> Result<()> {
+        Ok(())
+    }
+
+    async fn dismissed_prompts(&self, _user: &MacroUserIdStr<'static>) -> Result<Vec<String>> {
+        Ok(self.dismissed.lock().unwrap().clone())
+    }
+
+    async fn dismiss_prompt(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        prompt: &PromptId,
+    ) -> Result<()> {
+        let mut dismissed = self.dismissed.lock().unwrap();
+        if !dismissed.iter().any(|id| id == prompt.as_ref()) {
+            dismissed.push(prompt.as_ref().to_owned());
+        }
+        Ok(())
     }
 }
 
@@ -110,118 +117,6 @@ impl McpServerStore for MockStore {
     }
 }
 
-#[derive(Default)]
-struct MockImport {
-    gathers: Mutex<Vec<(ImportSource, bool)>>,
-    discards: Mutex<Vec<Initiator>>,
-    deletions: Mutex<Vec<Initiator>>,
-}
-
-impl ImportService for MockImport {
-    async fn state(&self, _user: MacroUserIdStr<'static>) -> ImportResult<ImportState> {
-        Ok(ImportState {
-            runs: Vec::new(),
-            entities: Vec::new(),
-        })
-    }
-
-    async fn start_gather(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        source: ImportSource,
-        auto_import: bool,
-    ) -> ImportResult<bool> {
-        self.gathers.lock().unwrap().push((source, auto_import));
-        Ok(true)
-    }
-
-    async fn start_discovery(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _source: ImportSource,
-    ) -> ImportResult<bool> {
-        Ok(false)
-    }
-
-    async fn retry_gather(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _source: ImportSource,
-    ) -> ImportResult<bool> {
-        Ok(false)
-    }
-
-    async fn dismiss_run(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _source: ImportSource,
-    ) -> ImportResult<()> {
-        Ok(())
-    }
-
-    async fn run_import(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _import_ids: Vec<Uuid>,
-        _discard_ids: Vec<Uuid>,
-    ) -> ImportResult<RunImportOutcome> {
-        Ok(RunImportOutcome {
-            discarded: 0,
-            importing: 0,
-        })
-    }
-
-    async fn discard_staged_by_initiator(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        initiator: Initiator,
-    ) -> ImportResult<u64> {
-        self.discards.lock().unwrap().push(initiator);
-        Ok(1)
-    }
-
-    async fn delete_staged_by_initiator(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        initiator: Initiator,
-    ) -> ImportResult<u64> {
-        self.deletions.lock().unwrap().push(initiator);
-        Ok(1)
-    }
-}
-
-/// Selector mock mirroring the native-only rule: no Pipedream connectors in
-/// these tests, so connectivity is the native `credentials && url` match.
-struct MockSelect {
-    store: Arc<MockStore>,
-}
-
-impl ConnectorSelect for MockSelect {
-    async fn user_toolset(&self, _user: &MacroUserIdStr<'static>) -> UserMcpTools {
-        UserMcpTools::Native(McpToolSet::new(&[], self.store.clone()).await)
-    }
-
-    async fn connector_toolset(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        _connector: ConnectorRef<'_>,
-    ) -> anyhow::Result<Option<UserMcpTools>> {
-        Ok(None)
-    }
-
-    async fn connector_connected(
-        &self,
-        _user: &MacroUserIdStr<'static>,
-        connector: ConnectorRef<'_>,
-    ) -> anyhow::Result<bool> {
-        Ok(self
-            .store
-            .records
-            .iter()
-            .any(|r| r.credentials.is_some() && r.url == connector.native_server_url))
-    }
-}
-
 fn record(url: &str, authenticated: bool) -> McpServerRecord {
     McpServerRecord {
         user_id: user(),
@@ -233,96 +128,33 @@ fn record(url: &str, authenticated: bool) -> McpServerRecord {
     }
 }
 
-fn service(
-    status: OnboardingStatus,
-    records: Vec<McpServerRecord>,
-) -> (
-    OnboardingServiceImpl<MockRepo, MockStore, MockImport, MockSelect>,
-    Arc<MockImport>,
-) {
-    let import = Arc::new(MockImport::default());
-    (
-        OnboardingServiceImpl::new(
-            MockRepo::new(status),
-            Arc::new(MockStore {
-                records: records.clone(),
-            }),
-            import.clone(),
-            Arc::new(MockSelect {
-                store: Arc::new(MockStore { records }),
-            }),
-        ),
-        import,
-    )
-}
-
 #[tokio::test]
-async fn active_flow_starts_gathers_for_authenticated_connectors_only() {
-    let (service, import) = service(
-        OnboardingStatus::Active,
-        vec![
-            record("https://mcp.linear.app/mcp", true),
-            record("https://mcp.notion.com/mcp", false), // not authed yet
-            record("https://unrelated.example/mcp", true), // not an import source
-        ],
+async fn get_state_lists_connected_servers_without_starting_imports() {
+    let service = OnboardingServiceImpl::new(
+        MockRepo::new(OnboardingStatus::Active),
+        Arc::new(MockStore {
+            records: vec![
+                record("https://mcp.linear.app/mcp", true),
+                record("https://mcp.notion.com/mcp", false),
+            ],
+        }),
     );
 
     let state = service.get_state(user()).await.expect("state");
-    assert_eq!(state.connected_servers.len(), 3);
-    assert_eq!(
-        import.gathers.lock().unwrap().as_slice(),
-        &[(ImportSource::Linear, true)]
-    );
+    assert_eq!(state.connected_servers.len(), 2);
+    assert!(state.connected_servers[0].authenticated);
+    assert!(!state.connected_servers[1].authenticated);
 }
 
 #[tokio::test]
-async fn completed_flow_never_starts_gathers() {
-    let (service, import) = service(
-        OnboardingStatus::Completed,
-        vec![record("https://mcp.linear.app/mcp", true)],
-    );
-
-    service.get_state(user()).await.expect("state");
-    service.reconcile(user()).await.expect("reconcile");
-    assert!(import.gathers.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn completing_deletes_leftover_onboarding_staged_rows() {
-    let (service, import) = service(OnboardingStatus::Active, Vec::new());
+async fn completing_records_how_the_flow_ended() {
+    let repo = MockRepo::new(OnboardingStatus::Active);
+    let service = OnboardingServiceImpl::new(repo, Arc::new(MockStore { records: vec![] }));
 
     let row = service.complete(user(), true).await.expect("complete");
     assert_eq!(row.status, OnboardingStatus::Completed);
     assert!(row.skipped);
-    // Deleted, not discarded — never-reviewed candidates must stay
-    // re-stageable by later gathers or chat.
-    assert_eq!(
-        import.deletions.lock().unwrap().as_slice(),
-        &[Initiator::Onboarding]
-    );
-    assert!(import.discards.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn reconcile_ignores_users_who_never_entered_the_flow() {
-    // The MCP post-auth hook reconciles every OAuth completion; a user
-    // connecting a server outside onboarding must not get gathers (or an
-    // onboarding row) out of it.
-    let import = Arc::new(MockImport::default());
-    let records = vec![record("https://mcp.linear.app/mcp", true)];
-    let service = OnboardingServiceImpl::new(
-        MockRepo::missing(),
-        Arc::new(MockStore {
-            records: records.clone(),
-        }),
-        import.clone(),
-        Arc::new(MockSelect {
-            store: Arc::new(MockStore { records }),
-        }),
-    );
-
-    service.reconcile(user()).await.expect("reconcile");
-    assert!(import.gathers.lock().unwrap().is_empty());
+    assert_eq!(service.repo.completions.lock().unwrap().as_slice(), &[true]);
 }
 
 #[test]
@@ -342,12 +174,51 @@ async fn get_state_carries_the_suggested_team_domain() {
     let service = OnboardingServiceImpl::new(
         MockRepo::new(OnboardingStatus::Active),
         Arc::new(MockStore { records: vec![] }),
-        Arc::new(MockImport::default()),
-        Arc::new(MockSelect {
-            store: Arc::new(MockStore { records: vec![] }),
-        }),
     );
 
     let state = service.get_state(user()).await.expect("get_state");
     assert_eq!(state.suggested_team_domain.as_deref(), Some("macro.com"));
+}
+
+#[test]
+fn prompt_ids_accept_card_slugs_and_reject_everything_else() {
+    for valid in [
+        "import:files",
+        "home-setup",
+        "pull-request-repositories",
+        "a1_b",
+    ] {
+        assert!(PromptId::parse(valid).is_some(), "{valid}");
+    }
+    for invalid in [
+        "",
+        "Import:files",
+        ":files",
+        "has space",
+        "slash/id",
+        &"a".repeat(65),
+    ] {
+        assert!(PromptId::parse(invalid).is_none(), "{invalid}");
+    }
+}
+
+#[tokio::test]
+async fn dismissed_prompts_round_trip_without_entering_onboarding() {
+    let service = OnboardingServiceImpl::new(
+        MockRepo::new(OnboardingStatus::Active),
+        Arc::new(MockStore { records: vec![] }),
+    );
+    service
+        .dismiss_prompt(user(), PromptId::parse("import:tasks").unwrap())
+        .await
+        .unwrap();
+    service
+        .dismiss_prompt(user(), PromptId::parse("import:tasks").unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        service.dismissed_prompts(user()).await.unwrap().dismissed,
+        vec!["import:tasks".to_string()]
+    );
 }

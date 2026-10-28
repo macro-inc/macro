@@ -1,5 +1,13 @@
+import type {
+  GoalSeekRequest,
+  GoalSeekResult,
+} from '@macro-inc/spreadsheet/goal-seek';
 import { sheetPivotLayouts } from '@macro-inc/spreadsheet/pivot-layout';
-import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
+import { sheetTableLayouts } from '@macro-inc/spreadsheet/sheet-tables';
+import type {
+  AxisChange,
+  RangeMove,
+} from '@macro-inc/spreadsheet/workbook-structure';
 import {
   type Accessor,
   createEffect,
@@ -28,6 +36,14 @@ import {
   CALCULATION_TIMEOUT_MS,
   createCalculationClient,
 } from './calculation-client';
+
+const GOAL_SEEK_TIMEOUT_MS = 45_000;
+const goalSeekWaiting: GoalSeekResult = {
+  status: 'invalid',
+  message:
+    'Wait for the sheet to finish calculating, then try Goal Seek again.',
+};
+
 import type { SpreadsheetChanges } from './create-spreadsheet-store';
 
 function sameInput(
@@ -133,6 +149,8 @@ export function createCalculation(
       : undefined;
   let generation = 0;
   const incremental = workbookOptions?.incremental;
+  let goalSeek = async (_request: GoalSeekRequest): Promise<GoalSeekResult> =>
+    goalSeekWaiting;
   if (incremental && workbookOptions) {
     // The worker keeps its own copy of the inputs; send only what changed and
     // apply only changed results, so large workbooks stay responsive.
@@ -163,6 +181,8 @@ export function createCalculation(
       let changed = false;
       const patches: CalculationSheetPatch[] = sheets.map((sheet) => {
         const pivots = sheetPivotLayouts(sheet.metadata?.pivotTables);
+        // Column names come from header cells, so a header edit changes them.
+        const tables = sheetTableLayouts(sheet);
         const descriptor = {
           id: sheet.id,
           name: sheet.name,
@@ -177,6 +197,7 @@ export function createCalculation(
           // Where pivot tables show their values, for GETPIVOTDATA; the
           // tables themselves are too large to send with every edit.
           ...(pivots.length && { pivots }),
+          ...(tables.length && { tables }),
         };
         const previous = sent.get(sheet.id);
         if (
@@ -218,12 +239,13 @@ export function createCalculation(
           clockCells.delete(id);
         }
       const layout = JSON.stringify(
-        patches.map(({ id, name, rowCount, metadata, pivots }) => [
+        patches.map(({ id, name, rowCount, metadata, pivots, tables }) => [
           id,
           name,
           rowCount,
           metadata,
           pivots,
+          tables,
         ])
       );
       if (layout !== sentSheets) changed = true;
@@ -316,6 +338,27 @@ export function createCalculation(
           } else setBusy(false);
         });
     };
+    goalSeek = async (request) => {
+      // Share the calculator worker, which already holds the workbook, and
+      // keep recalculation queued until the search finishes.
+      if (running || busy()) return goalSeekWaiting;
+      running = true;
+      setBusy(true);
+      try {
+        const response = await calculator.run(
+          { type: 'goal-seek', request },
+          GOAL_SEEK_TIMEOUT_MS
+        );
+        if (response.type !== 'goal-seek') throw new Error('Goal Seek failed.');
+        return response.result;
+      } finally {
+        running = false;
+        if (queued) {
+          queued = false;
+          run();
+        } else setBusy(false);
+      }
+    };
     createEffect(
       on([workbookOptions.workbook, retryCount], ([, retries], previous) => {
         if (previous && retries !== previous[1]) sent.clear();
@@ -323,7 +366,26 @@ export function createCalculation(
         onCleanup(() => clearTimeout(timer));
       })
     );
-  } else
+  } else {
+    goalSeek = async (request) => {
+      if (busy()) return goalSeekWaiting;
+      const sheets = workbookOptions
+        ? workbookInputs()
+        : [
+            {
+              id: 'sheet1',
+              name: 'Sheet1',
+              cells: inputs(),
+              rowCount: rowCount(),
+            },
+          ];
+      const response = await copier.run(
+        { type: 'goal-seek', request, sheets },
+        GOAL_SEEK_TIMEOUT_MS
+      );
+      if (response.type !== 'goal-seek') throw new Error('Goal Seek failed.');
+      return response.result;
+    };
     createEffect(
       on([sourceInputs, sourceRows, retryCount], () => {
         const current = ++generation;
@@ -362,6 +424,7 @@ export function createCalculation(
         onCleanup(() => clearTimeout(timer));
       })
     );
+  }
   onCleanup(() => {
     generation++;
     calculator.dispose();
@@ -377,6 +440,7 @@ export function createCalculation(
     busy,
     error,
     retry: () => setRetryCount((count) => count + 1),
+    goalSeek,
     async complete(text: string, cursor: number) {
       const result = await helper.run({
         type: 'complete',
@@ -390,6 +454,12 @@ export function createCalculation(
       const result = await copier.run({ type: 'change-axis', sheets, change });
       if (result.type !== 'change-axis')
         throw new Error('Unable to change sheet structure.');
+      return result.sheets;
+    },
+    async moveRange(sheets: SpreadsheetWorkbookSheet[], move: RangeMove) {
+      const result = await copier.run({ type: 'move-range', sheets, move });
+      if (result.type !== 'move-range')
+        throw new Error('Unable to move cells.');
       return result.sheets;
     },
     async copy(copies: CellCopy[]) {

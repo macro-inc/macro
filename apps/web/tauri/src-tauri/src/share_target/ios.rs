@@ -23,9 +23,9 @@ struct ShareFilesReadyPayload {
 /// exchange files between the Share Extension and the main app.
 /// Calls NSFileManager directly via the objc2 runtime — no FFI to main.mm needed.
 fn ios_app_group_container_path() -> Option<String> {
-    use objc2::rc::autoreleasepool;
-    use objc2::runtime::AnyObject;
-    use objc2::{class, msg_send};
+    use objc2_legacy::rc::autoreleasepool;
+    use objc2_legacy::runtime::AnyObject;
+    use objc2_legacy::{class, msg_send};
     use std::ffi::{CStr, CString};
     use std::os::raw::c_char;
 

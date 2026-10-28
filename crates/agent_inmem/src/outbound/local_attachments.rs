@@ -1,6 +1,6 @@
-//! Materialize local static-file images before invoking a remote model.
+//! Normalize Macro static-file images before invoking a remote model.
 //!
-//! Browser-facing local URLs cannot be fetched by model providers. This
+//! Normalized inline images carry a MIME type and work even with private URLs. This
 //! adapter resolves only the configured static-file route through its owning
 //! attachment service; other URLs retain their ordinary provider behavior.
 
@@ -23,22 +23,22 @@ use crate::domain::engine::{TurnEngine, TurnRequest};
 #[cfg(test)]
 mod test;
 
-/// A local deployment's turn engine, with private static-file images inlined.
+/// A turn engine with Macro static-file images normalized and inlined.
 ///
 /// The composition root supplies the browser-facing base URL and an attachment
 /// service that can read the files internally. Resolution covers the whole
 /// conversation, including prompts replayed after a process restart.
-pub struct LocalAttachmentTurnEngine<S> {
+pub struct StaticFileAttachmentTurnEngine<S> {
     inner: Arc<dyn TurnEngine>,
-    resolver: Arc<LocalImageResolver<S>>,
+    resolver: Arc<StaticFileImageResolver<S>>,
 }
 
-impl<S> LocalAttachmentTurnEngine<S> {
+impl<S> StaticFileAttachmentTurnEngine<S> {
     /// Wrap `inner`, resolving images under `{public_base_url}/file/{uuid}`.
     ///
     /// The base must be an HTTP(S) URL without credentials, query or fragment.
-    /// Configure this wrapper only where that origin is private to the local
-    /// stack. Production URLs should continue directly to the model provider.
+    /// Only this configured origin is resolved; arbitrary external URLs are
+    /// never fetched by this adapter.
     pub fn new(
         inner: Arc<dyn TurnEngine>,
         mut public_base_url: Url,
@@ -51,7 +51,7 @@ impl<S> LocalAttachmentTurnEngine<S> {
                 && public_base_url.password().is_none()
                 && public_base_url.query().is_none()
                 && public_base_url.fragment().is_none(),
-            "local static-file base must be an HTTP(S) URL without credentials, query or fragment"
+            "static-file base must be an HTTP(S) URL without credentials, query or fragment"
         );
         public_base_url.set_path(&format!(
             "{}/file/",
@@ -59,7 +59,7 @@ impl<S> LocalAttachmentTurnEngine<S> {
         ));
         Ok(Self {
             inner,
-            resolver: Arc::new(LocalImageResolver {
+            resolver: Arc::new(StaticFileImageResolver {
                 file_base_url: public_base_url,
                 service,
             }),
@@ -67,7 +67,7 @@ impl<S> LocalAttachmentTurnEngine<S> {
     }
 }
 
-impl<S: AttachmentService> TurnEngine for LocalAttachmentTurnEngine<S> {
+impl<S: AttachmentService> TurnEngine for StaticFileAttachmentTurnEngine<S> {
     fn supported_models(&self) -> &[&str] {
         self.inner.supported_models()
     }
@@ -112,12 +112,12 @@ impl<S: AttachmentService> TurnEngine for LocalAttachmentTurnEngine<S> {
     }
 }
 
-struct LocalImageResolver<S> {
+struct StaticFileImageResolver<S> {
     file_base_url: Url,
     service: S,
 }
 
-impl<S> LocalImageResolver<S> {
+impl<S> StaticFileImageResolver<S> {
     /// Accept only canonical file identifiers beneath the configured route.
     /// Comparing the original URL also rejects paths normalized by parsing,
     /// such as literal or encoded traversal and backslash separators.
@@ -138,7 +138,7 @@ impl<S> LocalImageResolver<S> {
     }
 }
 
-impl<S: AttachmentService> LocalImageResolver<S> {
+impl<S: AttachmentService> StaticFileImageResolver<S> {
     async fn resolve_request(&self, request: &mut TurnRequest) -> anyhow::Result<()> {
         for message in &mut request.messages {
             let Some(attachments) = message.attachments.take() else {
@@ -184,7 +184,7 @@ impl<S: AttachmentService> LocalImageResolver<S> {
 
     async fn resolve_image(&self, owner: &Owner, file_id: Uuid) -> anyhow::Result<ImageData> {
         let user = owner.as_user().ok_or_else(|| {
-            anyhow::anyhow!("local image attachments require a user session owner")
+            anyhow::anyhow!("static-file image attachments require a user session owner")
         })?;
         let entity = EntityType::StaticFile.with_entity_string(file_id.to_string());
         let entities = [&entity];
@@ -198,22 +198,25 @@ impl<S: AttachmentService> LocalImageResolver<S> {
         let mut contents = resolved.into_parts().into_inner();
         anyhow::ensure!(
             contents.len() == 1,
-            "local image resolution returned multiple files"
+            "static-file image resolution returned multiple files"
         );
         let content = contents
             .pop()
             .expect("one resolved file")
             .map_err(|error| {
-                anyhow::anyhow!("could not read local image attachment: {}", error.error)
+                anyhow::anyhow!(
+                    "could not read static-file image attachment: {}",
+                    error.error
+                )
             })?;
         let mut parts = content.content.into_inner();
         anyhow::ensure!(
             parts.len() == 1,
-            "local image resolution returned multiple parts"
+            "static-file image resolution returned multiple parts"
         );
         match parts.pop().expect("one resolved part") {
             AttachmentPart::Image(image @ ImageData::Base64(_)) => Ok(image),
-            _ => anyhow::bail!("local image resolution did not return inline image content"),
+            _ => anyhow::bail!("static-file image resolution did not return inline image content"),
         }
     }
 }

@@ -7,6 +7,23 @@ export type ClientOptions = {
 export type AbGroup = 'A' | 'B';
 
 /**
+ * An agent's API key, and whether its turns can run on it.
+ */
+export type AgentApiKey = {
+    key?: null | SavedAgentApiKey;
+    /**
+     * Whether the agent owner's plan includes API keys. A key saved before a
+     * downgrade is still listed, and removable, but unused.
+     */
+    planAllows: boolean;
+};
+
+/**
+ * A provider an agent can bring its own key for.
+ */
+export type AgentApiKeyProvider = 'anthropic' | 'openai';
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -19,6 +36,67 @@ export type AiBillingErrorBody = {
 export type AppleLoginRequest = {
     code: string;
     id_token: string;
+};
+
+/**
+ * The automatic reload thresholds a payer starts from.
+ */
+export type AutoReloadDefaults = {
+    /**
+     * Balance below which a reload fires, cents.
+     */
+    minimum_balance_cents: number;
+    /**
+     * Balance a reload tops up to, cents.
+     */
+    target_balance_cents: number;
+};
+
+/**
+ * Calendar-month commitments that consume the payer's automatic reload cap.
+ */
+export type AutoReloadMonthlyBudget = {
+    /**
+     * Reloads paid, pending, or failed with an invoice that can still collect.
+     * Customer cents; manual credit purchases do not count.
+     */
+    committed_cents: number;
+    /**
+     * Remaining cap cannot fund the minimum automatic reload charge.
+     */
+    limit_reached: boolean;
+    /**
+     * Start of the next UTC calendar month, independently of subscription renewal.
+     */
+    resets_at: string;
+};
+
+/**
+ * The payer's automatic reload settings, as shown in Billing settings.
+ */
+export type AutoReloadSnapshot = {
+    /**
+     * Whether reloads will fire: the payer opted in and reloads are not suspended.
+     */
+    active: boolean;
+    /**
+     * Reload once the effective balance drops below this, in customer cents.
+     */
+    minimum_balance_cents: number;
+    monthly_budget?: null | AutoReloadMonthlyBudget;
+    /**
+     * Most reloaded per UTC calendar month, in customer cents. `null` when
+     * there is no limit.
+     */
+    monthly_spend_limit_cents?: number | null;
+    /**
+     * Whether reloads are paused after a failed reload charge.
+     */
+    suspended: boolean;
+    /**
+     * Reload the balance back up to this, in customer cents.
+     */
+    target_balance_cents: number;
 };
 
 /**
@@ -262,24 +340,13 @@ export type CreateTeamRequest = {
 };
 
 /**
- * The request body to create a new user in fusionauth
- * NOTE: Never derive debug here as we don't want to accidentally log the password
+ * A newly created team invite link.
  */
-export type CreateUserRequest = {
+export type CreatedTeamInviteLinkResponse = {
     /**
-     * The primary email address of the user.
-     * This will be the user's root "profile".
+     * The new link's token. Any previous link stops working.
      */
-    email: string;
-    /**
-     * The password for the user.
-     * TODO: configure password policy and validate password before attempting to create user
-     */
-    password: string;
-    /**
-     * The unique username for the user.
-     */
-    username: string;
+    token: TeamInviteLinkToken;
 };
 
 /**
@@ -377,6 +444,20 @@ export type CursorModelsResponse = {
  * Why a request was refused.
  */
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+
+/**
+ * Actual deployment availability for the provider selector.
+ */
+export type EmailConnectionProviders = {
+    gmail: boolean;
+    outlook: boolean;
+    /**
+     * Where a Microsoft 365 administrator approves Macro for their whole
+     * directory. Present when Outlook is configured and the request named an
+     * `original_url` for the administrator's browser to return to.
+     */
+    outlook_admin_consent_url?: string | null;
+};
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -720,6 +801,72 @@ export type GithubPullRequestLabel = {
 };
 
 /**
+ * Whether GitHub can merge a pull request's head into its base without conflicts.
+ */
+export type GithubPullRequestMergeability = 'mergeable' | 'conflicting' | 'unknown';
+
+/**
+ * One pull request's mergeability.
+ */
+export type GithubPullRequestMergeabilityEntry = {
+    /**
+     * Whether the head merges cleanly into the base.
+     */
+    mergeability: GithubPullRequestMergeability;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Request body for the mergeability of several pull requests.
+ */
+export type GithubPullRequestMergeabilityRequest = {
+    /**
+     * The pull requests to check, at most [`GithubPullRequestMergeabilityRequest::MAX`].
+     */
+    pullRequests: Array<GithubPullRequestNumber>;
+};
+
+/**
+ * Response body for pull request mergeability. Pull requests the user
+ * cannot see are left out.
+ */
+export type GithubPullRequestMergeabilityResponse = {
+    /**
+     * The mergeability of each visible pull request.
+     */
+    pullRequests: Array<GithubPullRequestMergeabilityEntry>;
+};
+
+/**
+ * One pull request, by repository and number.
+ */
+export type GithubPullRequestNumber = {
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
  * A pull request reference that can be enriched with live GitHub data.
  */
 export type GithubPullRequestRef = {
@@ -775,6 +922,13 @@ export type GithubPullRequestReview = {
  * What a reviewer's latest review on a pull request said.
  */
 export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
+ * Whether a pull request is open or closed, as a user sets it. Merging is a
+ * separate action, so unlike `GithubPullRequestStatus` there is no merged
+ * state.
+ */
+export type GithubPullRequestState = 'open' | 'closed';
 
 /**
  * The normalized lifecycle status for a GitHub pull request.
@@ -985,6 +1139,25 @@ export type InviteToTeamRequest = {
 };
 
 /**
+ * The result of opening a team invite link.
+ */
+export type JoinTeamByInviteLinkResponse = {
+    /**
+     * True when the user was already on the team and nothing changed.
+     */
+    already_member: boolean;
+    /**
+     * The team the link joins.
+     */
+    team_id: string;
+};
+
+/**
+ * A language the app's interface is available in, as a BCP 47 tag.
+ */
+export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pt-PT' | 'sv' | 'da' | 'nb' | 'fi' | 'pl' | 'ru' | 'ja' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'hi' | 'id' | 'vi' | 'th';
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
@@ -1119,6 +1292,7 @@ export type PatchTeamMemberPlanRequest = {
  */
 export type PatchTeamRequest = {
     default_link_share?: null | LinkShare;
+    language?: null | Language;
     /**
      * The new name for the team
      */
@@ -1219,6 +1393,14 @@ export type PlanCatalogEntry = {
  */
 export type PlanCatalogResponse = {
     /**
+     * Thresholds automatic reload starts from before the payer sets their own.
+     */
+    auto_reload_defaults: AutoReloadDefaults;
+    /**
+     * Largest allowed automatic reload target, cents.
+     */
+    auto_reload_target_max_cents: number;
+    /**
      * Credit packs a payer may buy, cents.
      */
     credit_packs_cents: Array<number>;
@@ -1273,11 +1455,22 @@ export type PublicGtmInviteLink = {
 };
 
 /**
+ * The key someone pasted.
+ */
+export type PutAgentApiKeyRequest = {
+    /**
+     * An Anthropic (`sk-ant-…`) or OpenAI (`sk-…`) key, for the provider of
+     * the agent's model.
+     */
+    apiKey: string;
+};
+
+/**
  * The key the user pasted.
  */
 export type PutCursorApiKeyRequest = {
     /**
-     * A `crsr_…` Cursor API key.
+     * A Cursor API key: `grok_…`, or `crsr_…` for older keys.
      */
     apiKey: string;
 };
@@ -1322,6 +1515,34 @@ export type ResendFusionauthVerifyUserEmailRequest = {
 };
 
 /**
+ * The agent's saved key. Never includes the key.
+ */
+export type SavedAgentApiKey = {
+    /**
+     * The provider the key is for.
+     */
+    provider: AgentApiKeyProvider;
+    /**
+     * When the key was last replaced.
+     */
+    updatedAt: string;
+};
+
+/**
+ * A seat's future plan in the subscription's currently attached schedule.
+ */
+export type ScheduledSeatPlan = {
+    /**
+     * Provider-confirmed time when the future phase starts.
+     */
+    effectiveAt: string;
+    /**
+     * Plan that takes effect at renewal.
+     */
+    plan: SeatPlan;
+};
+
+/**
  * The paid plan a seat is billed at. Every member of a paying team has one;
  * a team may mix them, and its Stripe subscription carries one seat item per
  * plan in use.
@@ -1352,6 +1573,73 @@ export type SendMobileWelcomeEmailResponse = {
     sent: boolean;
 };
 
+/**
+ * A request to mark one pull request as a draft, or as ready for review, on
+ * the user's behalf.
+ */
+export type SetGithubPullRequestDraftRequest = {
+    /**
+     * `true` converts the pull request to a draft; `false` marks it ready for review.
+     */
+    draft: boolean;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Response body for a pull request whose draft state changed.
+ */
+export type SetGithubPullRequestDraftResponse = {
+    /**
+     * Whether the pull request is now a draft.
+     */
+    draft: boolean;
+    pullRequest?: null | EnrichedGithubPullRequest;
+};
+
+/**
+ * A request to close one pull request, or reopen it, on the user's behalf.
+ */
+export type SetGithubPullRequestStateRequest = {
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+    /**
+     * `closed` closes the pull request; `open` reopens it.
+     */
+    state: GithubPullRequestState;
+};
+
+/**
+ * Response body for a pull request that was closed or reopened.
+ */
+export type SetGithubPullRequestStateResponse = {
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * Whether the pull request is now open or closed.
+     */
+    state: GithubPullRequestState;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
@@ -1367,6 +1655,17 @@ export type StripeSessionResponse = {
      * The URL to redirect the user to
      */
     url: string;
+};
+
+/**
+ * Current renewal and scheduled change; empty for accounts without a subscription.
+ */
+export type SubscriptionStatus = {
+    /**
+     * Provider-confirmed subscription renewal date.
+     */
+    renewalDate?: string | null;
+    scheduledChange?: null | ScheduledSeatPlan;
 };
 
 /**
@@ -1396,6 +1695,7 @@ export type Team = {
      */
     enterprise: boolean;
     id: string;
+    language?: null | Language;
     name: string;
     owner_id: string;
     slug: string;
@@ -1433,6 +1733,47 @@ export type TeamInviteDetails = {
      * The role being invited as
      */
     team_role: TeamRole;
+};
+
+/**
+ * The caller's team invite link.
+ */
+export type TeamInviteLinkResponse = {
+    token?: null | TeamInviteLinkToken;
+};
+
+/**
+ * The team an invite link joins, shown before the user accepts.
+ */
+export type TeamInviteLinkTeam = {
+    /**
+     * Id of the team the link joins.
+     */
+    team_id: string;
+    /**
+     * Name of the team the link joins.
+     */
+    team_name: string;
+};
+
+/**
+ * The secret in a team's shareable invite link.
+ *
+ * Anyone signed in who holds the token can join the team, so it is a random
+ * value rather than a time-ordered id, and an admin resetting the link
+ * replaces it.
+ */
+export type TeamInviteLinkToken = string;
+
+/**
+ * Identifies an invite link. The token travels in the body, not the path, so
+ * request spans and access logs that record the path never see it.
+ */
+export type TeamInviteLinkTokenRequest = {
+    /**
+     * The invite link's token.
+     */
+    token: TeamInviteLinkToken;
 };
 
 /**
@@ -1487,6 +1828,13 @@ export type TeamWithMembers = {
      */
     members: Array<TeamMember>;
     /**
+     * Provider-confirmed pending seat changes, keyed by member user ID.
+     * Empty when no changes apply to this viewer; absent when the lookup fails.
+     */
+    scheduled_seat_plans?: {
+        [key: string]: ScheduledSeatPlan;
+    } | null;
+    /**
      * The team
      */
     team: Team;
@@ -1515,6 +1863,44 @@ export type ToggleNonAdminInvitesResponse = {
 };
 
 /**
+ * Whether the authenticated customer can receive the introductory Pro trial.
+ */
+export type TrialEligibility = {
+    /**
+     * Confirmed against the same subscription history used during checkout.
+     */
+    eligible: boolean;
+    /**
+     * An existing subscription requires management instead of a new checkout.
+     */
+    existingSubscription: boolean;
+};
+
+/**
+ * Request body for [`update_auto_reload_handler`].
+ */
+export type UpdateAutoReloadRequest = {
+    /**
+     * Purchase prepaid credits automatically using the payer's card.
+     */
+    enabled: boolean;
+    /**
+     * Reload once the balance drops below this, cents. Must be positive.
+     */
+    minimumBalanceCents: number;
+    /**
+     * Most to reload per calendar month, cents. Omit or `null` for no limit.
+     * Must be at least the catalog's `overage_limit_min_cents` (legacy name).
+     */
+    monthlySpendLimitCents?: number | null;
+    /**
+     * Reload the balance back up to this, cents. At least $0.50 above the
+     * minimum and no more than the catalog's `auto_reload_target_max_cents`.
+     */
+    targetBalanceCents: number;
+};
+
+/**
  * Request body for [`update_overage_handler`].
  */
 export type UpdateOverageRequest = {
@@ -1533,6 +1919,11 @@ export type UpdateOverageRequest = {
  * by the gate.
  */
 export type UsageSnapshot = {
+    /**
+     * Automatic credit reload settings. `active` means the payer opted in and
+     * reloads are not suspended.
+     */
+    auto_reload: AutoReloadSnapshot;
     blocked_reason?: null | DenyReason;
     /**
      * Whether the requesting user is the payer.
@@ -1547,6 +1938,10 @@ export type UsageSnapshot = {
      */
     credits_consumed_cents: number;
     /**
+     * Whether prepaid credits belong to the team, including a team with one seat.
+     */
+    credits_shared_with_team: boolean;
+    /**
      * Included AI for this user's seat this period, in cents at provider cost.
      */
     included_cents: number;
@@ -1555,7 +1950,7 @@ export type UsageSnapshot = {
      */
     overage_charged_cents: number;
     /**
-     * Whether overage billing is on.
+     * Legacy API name for the automatic reload opt-in. Never authorizes direct charges.
      */
     overage_enabled: boolean;
     /**
@@ -1606,6 +2001,14 @@ export type UsageSnapshot = {
      * AI used by this user this period, in cents at provider cost.
      */
     used_cents: number;
+};
+
+/**
+ * The interface language a user picked for themselves. `None` follows their
+ * team's language, else their browser's.
+ */
+export type UserLanguage = {
+    language?: null | Language;
 };
 
 export type UserLinkResponse = {
@@ -1674,6 +2077,117 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type DeleteAgentApiKeyData = {
+    body?: never;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type DeleteAgentApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type DeleteAgentApiKeyError = DeleteAgentApiKeyErrors[keyof DeleteAgentApiKeyErrors];
+
+export type DeleteAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type DeleteAgentApiKeyResponse = DeleteAgentApiKeyResponses[keyof DeleteAgentApiKeyResponses];
+
+export type GetAgentApiKeyData = {
+    body?: never;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type GetAgentApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type GetAgentApiKeyError = GetAgentApiKeyErrors[keyof GetAgentApiKeyErrors];
+
+export type GetAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type GetAgentApiKeyResponse = GetAgentApiKeyResponses[keyof GetAgentApiKeyResponses];
+
+export type PutAgentApiKeyData = {
+    body: PutAgentApiKeyRequest;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type PutAgentApiKeyErrors = {
+    400: ErrorResponse;
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type PutAgentApiKeyError = PutAgentApiKeyErrors[keyof PutAgentApiKeyErrors];
+
+export type PutAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type PutAgentApiKeyResponse = PutAgentApiKeyResponses[keyof PutAgentApiKeyResponses];
+
+export type UpdateAiBillingAutoReloadData = {
+    body: UpdateAutoReloadRequest;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/auto-reload';
+};
+
+export type UpdateAiBillingAutoReloadErrors = {
+    /**
+     * Invalid thresholds
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Only the payer may change billing
+     */
+    403: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type UpdateAiBillingAutoReloadError = UpdateAiBillingAutoReloadErrors[keyof UpdateAiBillingAutoReloadErrors];
+
+export type UpdateAiBillingAutoReloadResponses = {
+    /**
+     * Updated position
+     */
+    200: UsageSnapshot;
+};
+
+export type UpdateAiBillingAutoReloadResponse = UpdateAiBillingAutoReloadResponses[keyof UpdateAiBillingAutoReloadResponses];
 
 export type CreateAiCreditCheckoutData = {
     body: CreditCheckoutRequestBody;
@@ -2088,6 +2602,39 @@ export type VerifyEmailLinkResponses = {
 
 export type VerifyEmailLinkResponse = VerifyEmailLinkResponses[keyof VerifyEmailLinkResponses];
 
+export type SetGithubPullRequestDraftData = {
+    body: SetGithubPullRequestDraftRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/draft';
+};
+
+export type SetGithubPullRequestDraftErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot change the pull request
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * GitHub declined the change
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetGithubPullRequestDraftError = SetGithubPullRequestDraftErrors[keyof SetGithubPullRequestDraftErrors];
+
+export type SetGithubPullRequestDraftResponses = {
+    200: SetGithubPullRequestDraftResponse;
+};
+
+export type SetGithubPullRequestDraftResponse2 = SetGithubPullRequestDraftResponses[keyof SetGithubPullRequestDraftResponses];
+
 export type EnrichGithubPullRequestsData = {
     body: EnrichGithubPullRequestsProxyRequest;
     path?: never;
@@ -2143,6 +2690,68 @@ export type MergeGithubPullRequestResponses = {
 };
 
 export type MergeGithubPullRequestResponse2 = MergeGithubPullRequestResponses[keyof MergeGithubPullRequestResponses];
+
+export type GetGithubPullRequestMergeabilityData = {
+    body: GithubPullRequestMergeabilityRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/mergeability';
+};
+
+export type GetGithubPullRequestMergeabilityErrors = {
+    401: ErrorResponse;
+    /**
+     * No GitHub link
+     */
+    404: ErrorResponse;
+    /**
+     * Too many pull requests requested
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestMergeabilityError = GetGithubPullRequestMergeabilityErrors[keyof GetGithubPullRequestMergeabilityErrors];
+
+export type GetGithubPullRequestMergeabilityResponses = {
+    200: GithubPullRequestMergeabilityResponse;
+};
+
+export type GetGithubPullRequestMergeabilityResponse = GetGithubPullRequestMergeabilityResponses[keyof GetGithubPullRequestMergeabilityResponses];
+
+export type SetGithubPullRequestStateData = {
+    body: SetGithubPullRequestStateRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/state';
+};
+
+export type SetGithubPullRequestStateErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot change the pull request
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * GitHub declined the change
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
+
+export type SetGithubPullRequestStateResponses = {
+    200: SetGithubPullRequestStateResponse;
+};
+
+export type SetGithubPullRequestStateResponse2 = SetGithubPullRequestStateResponses[keyof SetGithubPullRequestStateResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -2379,6 +2988,30 @@ export type CreateInProgressLinkResponses = {
 
 export type CreateInProgressLinkResponse2 = CreateInProgressLinkResponses[keyof CreateInProgressLinkResponses];
 
+export type EmailConnectionProvidersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * **OPTIONAL**. Where the admin-consent flow returns to; required for `outlook_admin_consent_url`.
+         */
+        original_url?: string;
+    };
+    url: '/link/email/providers';
+};
+
+export type EmailConnectionProvidersErrors = {
+    400: ErrorResponse;
+};
+
+export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];
+
+export type EmailConnectionProvidersResponses = {
+    200: EmailConnectionProviders;
+};
+
+export type EmailConnectionProvidersResponse = EmailConnectionProvidersResponses[keyof EmailConnectionProvidersResponses];
+
 export type DeleteGithubLinkData = {
     body?: never;
     path?: never;
@@ -2458,6 +3091,10 @@ export type InitGmailLinkData = {
          */
         original_url: string;
         /**
+         * Existing accessible Gmail inbox being reconnected; does not consume an additional inbox slot.
+         */
+        reconnect_link_id?: string;
+        /**
          * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
          */
         scopes?: string;
@@ -2511,6 +3148,14 @@ export type InitOutlookLinkData = {
          * **OPTIONAL**. The original URL to redirect to.
          */
         original_url?: string;
+        /**
+         * mail (default) or mail_and_calendar. Calendar requests obey the deployment calendar consent switch.
+         */
+        scopes?: string;
+        /**
+         * Existing accessible inbox being reconnected or granted calendar consent.
+         */
+        reconnect_link_id?: string;
     };
     url: '/link/outlook';
 };
@@ -2518,6 +3163,7 @@ export type InitOutlookLinkData = {
 export type InitOutlookLinkErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    402: ErrorResponse;
     404: ErrorResponse;
     429: ErrorResponse;
     500: ErrorResponse;
@@ -3068,6 +3714,112 @@ export type InviteToTeamResponses = {
     201: unknown;
 };
 
+export type DeleteTeamInviteLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link';
+};
+
+export type DeleteTeamInviteLinkErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteTeamInviteLinkError = DeleteTeamInviteLinkErrors[keyof DeleteTeamInviteLinkErrors];
+
+export type DeleteTeamInviteLinkResponses = {
+    204: void;
+};
+
+export type DeleteTeamInviteLinkResponse = DeleteTeamInviteLinkResponses[keyof DeleteTeamInviteLinkResponses];
+
+export type GetTeamInviteLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link';
+};
+
+export type GetTeamInviteLinkErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamInviteLinkError = GetTeamInviteLinkErrors[keyof GetTeamInviteLinkErrors];
+
+export type GetTeamInviteLinkResponses = {
+    200: TeamInviteLinkResponse;
+};
+
+export type GetTeamInviteLinkResponse = GetTeamInviteLinkResponses[keyof GetTeamInviteLinkResponses];
+
+export type CreateTeamInviteLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link';
+};
+
+export type CreateTeamInviteLinkErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateTeamInviteLinkError = CreateTeamInviteLinkErrors[keyof CreateTeamInviteLinkErrors];
+
+export type CreateTeamInviteLinkResponses = {
+    201: CreatedTeamInviteLinkResponse;
+};
+
+export type CreateTeamInviteLinkResponse = CreateTeamInviteLinkResponses[keyof CreateTeamInviteLinkResponses];
+
+export type JoinTeamByInviteLinkData = {
+    body: TeamInviteLinkTokenRequest;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link/join';
+};
+
+export type JoinTeamByInviteLinkErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type JoinTeamByInviteLinkError = JoinTeamByInviteLinkErrors[keyof JoinTeamByInviteLinkErrors];
+
+export type JoinTeamByInviteLinkResponses = {
+    200: JoinTeamByInviteLinkResponse;
+};
+
+export type JoinTeamByInviteLinkResponse2 = JoinTeamByInviteLinkResponses[keyof JoinTeamByInviteLinkResponses];
+
+export type GetTeamByInviteLinkData = {
+    body: TeamInviteLinkTokenRequest;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link/team';
+};
+
+export type GetTeamByInviteLinkErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamByInviteLinkError = GetTeamByInviteLinkErrors[keyof GetTeamByInviteLinkErrors];
+
+export type GetTeamByInviteLinkResponses = {
+    200: TeamInviteLinkTeam;
+};
+
+export type GetTeamByInviteLinkResponse = GetTeamByInviteLinkResponses[keyof GetTeamByInviteLinkResponses];
+
 export type DeleteTeamInviteHandlerData = {
     body?: never;
     path: {
@@ -3281,27 +4033,6 @@ export type GetUserInvitesResponses = {
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
 
-export type CreateUserData = {
-    body: CreateUserRequest;
-    path?: never;
-    query?: never;
-    url: '/user';
-};
-
-export type CreateUserErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
-
-export type CreateUserResponses = {
-    200: EmptyResponse;
-};
-
-export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
-
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;
     path?: never;
@@ -3363,6 +4094,52 @@ export type PatchUserGroupResponses = {
 };
 
 export type PatchUserGroupResponse = PatchUserGroupResponses[keyof PatchUserGroupResponses];
+
+export type GetUserLanguageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type GetUserLanguageErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetUserLanguageError = GetUserLanguageErrors[keyof GetUserLanguageErrors];
+
+export type GetUserLanguageResponses = {
+    200: UserLanguage;
+};
+
+export type GetUserLanguageResponse = GetUserLanguageResponses[keyof GetUserLanguageResponses];
+
+export type PutUserLanguageData = {
+    body: UserLanguage;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type PutUserLanguageErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutUserLanguageError = PutUserLanguageErrors[keyof PutUserLanguageErrors];
+
+export type PutUserLanguageResponses = {
+    /**
+     * Language updated
+     */
+    204: void;
+};
+
+export type PutUserLanguageResponse = PutUserLanguageResponses[keyof PutUserLanguageResponses];
 
 export type GetLegacyUserPermissionsData = {
     body?: never;
@@ -3633,6 +4410,30 @@ export type CreateCheckoutSessionV2Responses = {
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];
 
+export type GetSubscriptionStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/stripe/plan';
+};
+
+export type GetSubscriptionStatusErrors = {
+    401: ErrorResponse;
+    /**
+     * More than one active subscription
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSubscriptionStatusError = GetSubscriptionStatusErrors[keyof GetSubscriptionStatusErrors];
+
+export type GetSubscriptionStatusResponses = {
+    200: SubscriptionStatus;
+};
+
+export type GetSubscriptionStatusResponse = GetSubscriptionStatusResponses[keyof GetSubscriptionStatusResponses];
+
 export type ChangePlanData = {
     body: ChangePlanRequest;
     path?: never;
@@ -3658,7 +4459,7 @@ export type ChangePlanErrors = {
      */
     404: ErrorResponse;
     /**
-     * Already on this plan, or more than one active subscription
+     * More than one active subscription
      */
     409: ErrorResponse;
     500: ErrorResponse;
@@ -3691,6 +4492,27 @@ export type CreatePortalSessionResponses = {
 };
 
 export type CreatePortalSessionResponse = CreatePortalSessionResponses[keyof CreatePortalSessionResponses];
+
+export type GetTrialEligibilityData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/stripe/trial_eligibility';
+};
+
+export type GetTrialEligibilityErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTrialEligibilityError = GetTrialEligibilityErrors[keyof GetTrialEligibilityErrors];
+
+export type GetTrialEligibilityResponses = {
+    200: TrialEligibility;
+};
+
+export type GetTrialEligibilityResponse = GetTrialEligibilityResponses[keyof GetTrialEligibilityResponses];
 
 export type PatchUserTutorialData = {
     body: PatchUserTutorialRequest;

@@ -14,7 +14,7 @@ anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper-rustls-webpki",
+  "runtime-tokio-hyper",
 ] }
 authentication_service_client = { path = "../authentication_service_client" }
 axum = { workspace = true }
@@ -41,4 +41,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }

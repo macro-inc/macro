@@ -70,20 +70,6 @@ fn rejects_non_bot_storage_string() {
 }
 
 #[test]
-fn claude_is_a_global_system_agent_with_a_distinct_identity() {
-    let claude = system_bot(CLAUDE_BOT_ID).unwrap();
-    assert_eq!(claude.handle, "claude");
-    assert_eq!(claude.name, "Claude");
-    assert!(claude.has_agent);
-    assert_eq!(
-        CLAUDE_BOT_ID.to_string(),
-        "00000000-0000-0000-0000-00000000c1a0"
-    );
-    let ids: std::collections::HashSet<_> = SYSTEM_BOTS.iter().map(|bot| bot.id).collect();
-    assert_eq!(ids.len(), SYSTEM_BOTS.len());
-}
-
-#[test]
 fn non_system_bot_id_rejects_every_system_bot() {
     for bot in SYSTEM_BOTS {
         assert_eq!(NonSystemBotId::new(bot.id), None, "{}", bot.handle);
@@ -126,4 +112,10 @@ fn equality_and_hash_ignore_uuid_case() {
     let set: std::collections::HashSet<BotIdStr<'_>> =
         [lower.clone(), upper.clone()].into_iter().collect();
     assert_eq!(set.len(), 1);
+}
+
+#[test]
+fn macro_agent_session_bot_is_mentioned_as_macro() {
+    assert_eq!(mention_handle(MACRO_NEW_BOT_ID, MACRO_NEW_HANDLE), "macro");
+    assert_eq!(mention_handle(CURSOR_BOT_ID, CURSOR_HANDLE), "cursor");
 }

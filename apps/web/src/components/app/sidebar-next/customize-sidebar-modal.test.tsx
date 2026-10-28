@@ -44,10 +44,12 @@ function Modal() {
       onOpenChange={() => {}}
       gates={{
         showCalendar: true,
+        showScheduling: true,
         showCustomers: true,
-        showReminders: true,
         showCalls: true,
         showReviews: true,
+        showActivity: true,
+        showExternal: true,
         get prefs() {
           return prefs();
         },
@@ -69,20 +71,20 @@ describe('sidebar customization drag sorting', () => {
       </DragDropProvider>
     ));
     const handle = await screen.findByRole('button', {
-      name: 'Reorder Reminders',
+      name: 'Reorder Drive',
     });
     fireEvent.mouseDown(handle, { button: 0, clientX: 115, clientY: 120 });
     fireEvent.mouseMove(document, { clientX: 115, clientY: 200 });
 
-    const drive = screen
-      .getByRole('button', { name: 'Reorder Drive' })
+    const email = screen
+      .getByRole('button', { name: 'Reorder Email' })
       .closest<HTMLElement>('.rounded-lg')!;
-    const targetTransform = drive.style.transform;
+    const targetTransform = email.style.transform;
     expect(targetTransform).not.toBe('');
     // Repeated moves inside one slot must not alternate the sort preview.
     for (let offset = 0; offset < 5; offset++) {
       fireEvent.mouseMove(document, { clientX: 115 + offset, clientY: 200 });
-      expect(drive.style.transform).toBe(targetTransform);
+      expect(email.style.transform).toBe(targetTransform);
     }
     fireEvent.mouseUp(document, { button: 0, clientX: 120, clientY: 200 });
     expect(
@@ -90,7 +92,7 @@ describe('sidebar customization drag sorting', () => {
         .getAllByRole('button', { name: /^Reorder / })
         .slice(0, 3)
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['Reorder Drive', 'Reorder Email', 'Reorder Reminders']);
+    ).toEqual(['Reorder Email', 'Reorder Chat', 'Reorder Drive']);
     expect(screen.queryByRole('button', { name: 'Reorder Home' })).toBeNull();
     expect(appCollision).not.toHaveBeenCalled();
     expect(appDragEnd).not.toHaveBeenCalled();
@@ -104,19 +106,19 @@ describe('sidebar customization drag sorting', () => {
         </SidebarPrefsProvider>
       ));
     mount();
-    const reminders = await screen.findByRole<HTMLInputElement>('checkbox', {
-      name: 'Reminders',
+    const drive = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Drive',
     });
-    expect(reminders.checked).toBe(true);
-    fireEvent.click(reminders);
-    expect(reminders.checked).toBe(false);
+    expect(drive.checked).toBe(true);
+    fireEvent.click(drive);
+    expect(drive.checked).toBe(false);
     cleanup();
 
     mount();
     expect(
       (
         await screen.findByRole<HTMLInputElement>('checkbox', {
-          name: 'Reminders',
+          name: 'Drive',
         })
       ).checked
     ).toBe(false);
@@ -127,9 +129,76 @@ describe('sidebar customization drag sorting', () => {
     expect(
       (
         await screen.findByRole<HTMLInputElement>('checkbox', {
-          name: 'Reminders',
+          name: 'Drive',
         })
       ).checked
     ).toBe(true);
+  });
+
+  it('keeps Scheduling hidden for existing preferences until explicitly enabled', async () => {
+    localStorage.setItem(
+      'macro:sidebar:prefs',
+      JSON.stringify({ hidden: ['reviews'], order: ['tasks', 'mail'] })
+    );
+    const mount = () =>
+      render(() => (
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
+      ));
+    mount();
+    const scheduling = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Scheduling',
+    });
+    expect(scheduling.checked).toBe(false);
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', { name: 'Calls' }).checked
+    ).toBe(true);
+    fireEvent.click(scheduling);
+    expect(scheduling.checked).toBe(true);
+    cleanup();
+    mount();
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('checkbox', {
+          name: 'Scheduling',
+        })
+      ).checked
+    ).toBe(true);
+    const stored = JSON.parse(localStorage.getItem('macro:sidebar:prefs')!);
+    expect(stored.order).toEqual(['tasks', 'mail']);
+    expect(stored.hidden).toEqual(['reviews', 'activity']);
+  });
+
+  it('keeps Activity hidden for version 1 preferences until explicitly enabled', async () => {
+    localStorage.setItem(
+      'macro:sidebar:prefs',
+      JSON.stringify({ version: 1, hidden: ['reviews'], order: [] })
+    );
+    const mount = () =>
+      render(() => (
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
+      ));
+    mount();
+    const activity = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'Activity',
+    });
+    expect(activity.checked).toBe(false);
+    fireEvent.click(activity);
+    expect(activity.checked).toBe(true);
+    cleanup();
+    mount();
+    expect(
+      (
+        await screen.findByRole<HTMLInputElement>('checkbox', {
+          name: 'Activity',
+        })
+      ).checked
+    ).toBe(true);
+    expect(
+      JSON.parse(localStorage.getItem('macro:sidebar:prefs')!).hidden
+    ).toEqual(['reviews']);
   });
 });

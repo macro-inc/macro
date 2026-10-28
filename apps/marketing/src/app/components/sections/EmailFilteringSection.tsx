@@ -56,7 +56,7 @@ export function EmailFilteringSection(props: { mobile: () => boolean }) {
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': mobile() ? '26px' : '42px',
-              'font-weight': '315',
+              'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
               'letter-spacing': '-0.015em',
               'line-height': 1.5,
               margin: 0,

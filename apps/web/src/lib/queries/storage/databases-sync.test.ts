@@ -5,8 +5,25 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   type LocalDatabaseAwareness,
   useDatabaseAwareness,
+  useDatabaseMetadataChanges,
   useDatabaseTableChanges,
 } from './databases-sync';
+
+it('reads metadata pings without exposing a name or accepting malformed payloads', () => {
+  const changed = vi.fn();
+  createRoot((dispose) => {
+    useDatabaseMetadataChanges(changed);
+    mock.event?.({ type: 'database_changed', data: { databaseId: 'db' } });
+    mock.event?.({ type: 'database_changed', data: '{"databaseId":"other"}' });
+    mock.event?.({ type: 'database_changed', data: { name: 'Private name' } });
+    mock.event?.({ type: 'form_changed', data: { databaseId: 'db' } });
+    expect(changed.mock.calls).toEqual([
+      [{ databaseId: 'db' }],
+      [{ databaseId: 'other' }],
+    ]);
+    dispose();
+  });
+});
 
 const mock = vi.hoisted(() => ({
   event: undefined as

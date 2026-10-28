@@ -297,6 +297,9 @@ pub enum ColumnType {
     Boolean,
     /// An ISO-8601 date-time.
     Date,
+    /// A span between two ISO-8601 date-times; SQL writes it as an interval,
+    /// `'2026-09-01/2026-09-05'`.
+    DateRange,
     /// A URL.
     Link,
     /// One of a fixed set of text labels. SQL reads and writes the label.
@@ -316,6 +319,7 @@ impl From<ColumnType> for DataType {
             ColumnType::Number => DataType::Number,
             ColumnType::Boolean => DataType::Boolean,
             ColumnType::Date => DataType::Date,
+            ColumnType::DateRange => DataType::DateRange,
             ColumnType::Link => DataType::Link,
             ColumnType::Select => DataType::SelectString,
             ColumnType::SelectNumber => DataType::SelectNumber,
@@ -332,6 +336,7 @@ impl From<DataType> for ColumnType {
             DataType::Number => ColumnType::Number,
             DataType::Boolean => ColumnType::Boolean,
             DataType::Date => ColumnType::Date,
+            DataType::DateRange => ColumnType::DateRange,
             DataType::Link => ColumnType::Link,
             DataType::SelectString => ColumnType::Select,
             DataType::SelectNumber => ColumnType::SelectNumber,
@@ -417,6 +422,10 @@ pub struct ToolColumn {
     /// A database-row relationship; distinct from a Macro entity reference.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub relation: Option<ToolRelation>,
+    /// A derived column's formula: SQL reads its values, nothing writes
+    /// them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub formula: Option<String>,
     /// Types ALTER COLUMN TYPE converts every value to, spelled as SQL types
     /// (`select[]` is a multi-valued select, `entity(USER)` a person).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -503,7 +512,7 @@ impl From<DatabaseDetail> for ToolDatabaseSchema {
                     version: table.table.version.0,
                     name: table.table.name,
                     writable,
-                    columns: table.columns.into_iter().map(ToolColumn::from).collect(),
+                    columns: tool_columns(table.columns),
                     views: table.views,
                 })
                 .collect(),
@@ -511,9 +520,39 @@ impl From<DatabaseDetail> for ToolDatabaseSchema {
     }
 }
 
+/// A table's columns as the tool shows them, formulas written with the
+/// table's column names.
+fn tool_columns(columns: Vec<ColumnDetail>) -> Vec<ToolColumn> {
+    let names: Vec<(ColumnId, String)> = columns
+        .iter()
+        .map(|column| (column.column.id, column.name().to_string()))
+        .collect();
+    columns
+        .into_iter()
+        .map(|column| {
+            let formula = column.column.formula().map(|formula| {
+                database_sql::formula::render_named(formula, &|id| {
+                    names
+                        .iter()
+                        .find(|(candidate, _)| *candidate == id)
+                        .map(|(_, name)| name.as_str())
+                })
+            });
+            ToolColumn {
+                formula,
+                ..ToolColumn::from(column)
+            }
+        })
+        .collect()
+}
+
 impl From<ColumnDetail> for ToolColumn {
     fn from(column: ColumnDetail) -> Self {
-        let (safe_types, checked_types) = cast_targets(&column.column, &column.definition);
+        // A derived column's type follows its formula.
+        let (safe_types, checked_types) = match column.column.formula() {
+            Some(_) => (Vec::new(), Vec::new()),
+            None => cast_targets(&column.column, &column.definition),
+        };
         Self {
             safe_types: safe_types.into_iter().map(SpelledColumnType).collect(),
             checked_types: checked_types.into_iter().map(SpelledColumnType).collect(),
@@ -522,7 +561,7 @@ impl From<ColumnDetail> for ToolColumn {
             data_type: column.definition.definition.data_type.into(),
             specific_entity_type: column.entity_type(),
             is_multi_select: column.is_multi_valued(),
-            writable: column.writable,
+            writable: column.writable && column.column.formula().is_none(),
             // The catalog's labels, not the raw option text: duplicates are
             // disambiguated there, and a label that does not round-trip is
             // one SQL rejects.
@@ -540,6 +579,7 @@ impl From<ColumnDetail> for ToolColumn {
                 }),
                 _ => None,
             },
+            formula: None,
             sql_name: column.sql_name,
         }
     }

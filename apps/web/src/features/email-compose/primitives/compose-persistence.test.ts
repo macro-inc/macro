@@ -5,7 +5,9 @@ import type {
   EmailDraftStorage,
   PersistedEmailIdentity,
 } from '../context/compose-capabilities';
+import { DraftPersistRejected } from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
+import type { LocalDraft } from '../core/local-draft';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
@@ -95,6 +97,60 @@ it('discard waits for an in-flight first save and deletes its returned draft', a
     expect.objectContaining({ draftId: 'saved-id' })
   );
 });
+it('discards a standalone draft at its server generation', async () => {
+  const composeContext = createComposeContext();
+  // Each send that Undo cancels advances the server's generation twice.
+  const root = mountEmailComposer(composeContext, undefined, {
+    draft: message('restored', {
+      is_draft: true,
+      thread_db_id: 'thread',
+      draft_generation: 4,
+    }),
+  });
+  await root.state.deleteDraftAndReset();
+  root.dispose();
+  expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ draftId: 'restored', draftGeneration: 4 })
+  );
+});
+
+it('discards a reply draft at its server generation', async () => {
+  const composeContext = createComposeContext();
+  const root = mountReplyComposer(composeContext, () => message('parent'), {
+    draft: message('restored', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      thread_db_id: 'thread',
+      draft_generation: 4,
+    }),
+  });
+  await root.deleteDraftAndReset();
+  root.dispose();
+  expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ draftId: 'restored', draftGeneration: 4 })
+  );
+});
+
+it('sends a reloaded reply without appending its quoted thread again', async () => {
+  const composeContext = createComposeContext();
+  // The server keeps the quote's class but strips the editor's markers.
+  const root = mountReplyComposer(composeContext, () => message('parent'), {
+    draft: message('draft', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      thread_db_id: 'thread',
+      body_html_sanitized:
+        '<p>Reply</p><div class="macro_quote gmail_quote"><blockquote>Earlier</blockquote></div>',
+    }),
+  });
+  await root.sendEmail();
+  root.dispose();
+  const sent = vi.mocked(composeContext.delivery.sendMessage).mock.calls[0][0];
+  expect(decodeBase64Utf8(sent.message.body_html ?? '')).not.toContain(
+    'macro_quote'
+  );
+});
+
 it('keeps the draft editable after failed deletion and saves later edits', async () => {
   const composeContext = createComposeContext();
   const goBack = vi.fn();
@@ -230,10 +286,7 @@ it('waits for an existing attachment upload before flushing newer body edits', a
   const root = mountEmailComposer(composeContext);
   root.edit('With attachment');
   root.state.context.onAddAttachments([
-    {
-      type: 'local',
-      file: new File(['notes'], 'notes.txt', { type: 'text/plain' }),
-    },
+    new File(['notes'], 'notes.txt', { type: 'text/plain' }),
   ]);
   await vi.advanceTimersByTimeAsync(600);
   root.edit('Final attachment note');
@@ -306,9 +359,7 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
   );
   const root = mountEmailComposer(composeContext);
   root.edit('With files');
-  root.state.context.onAddAttachments([
-    { type: 'local', file: new File(['notes'], 'notes.txt') },
-  ]);
+  root.state.context.onAddAttachments([new File(['notes'], 'notes.txt')]);
   await vi.advanceTimersByTimeAsync(600);
   root.state.context.onSelectInbox?.('other');
   pending.resolve(response);
@@ -319,7 +370,13 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
   ).toBe('inbox');
   expect(
     vi.mocked(composeContext.drafts.saveDraft).mock.calls[1][0].inboxId
-  ).toBe('other');
+  ).toBe('inbox');
+  expect(composeContext.drafts.transferDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sourceInboxId: 'inbox',
+      destinationInboxId: 'other',
+    })
+  );
   root.dispose();
 });
 
@@ -363,6 +420,7 @@ it('only commits a selected time through the primary action', async () => {
   expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
   expect(composeContext.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
     {
+      draftGeneration: 0,
       draftId: 'draft',
       threadId: 'thread',
       sendTime: firstTime.toISOString(),
@@ -406,6 +464,7 @@ it('only commits a selected time through the primary action', async () => {
   await vi.advanceTimersByTimeAsync(1);
   threadView.dispose();
   expect(composeContext.delivery.unschedule).toHaveBeenCalledExactlyOnceWith({
+    draftGeneration: 0,
     draftId: 'draft',
     threadId: 'thread',
     inboxId: 'inbox',
@@ -889,24 +948,22 @@ it('recovers local and forwarded attachments without retaining remote-only attac
   const root = mountEmailComposer(context);
   const file = new File(['notes'], 'notes.txt');
   root.edit('Saved with files');
-  root.state.context.onAddAttachments([
-    { type: 'local', file },
-    {
-      type: 'remote',
-      attachmentId: 'remote',
-      url: 'https://example.com/file',
-      fileName: 'remote.txt',
-      contentType: 'text/plain',
-      fileSize: 10,
-    },
-    {
-      type: 'forwarded',
-      attachmentId: 'original-file',
-      fileName: 'forward.txt',
-      mimeType: 'text/plain',
-      fileSize: 10,
-    },
-  ]);
+  await root.state.context.onAddAttachments([file]);
+  root.state.form.attachments.add({
+    type: 'remote',
+    attachmentId: 'remote',
+    url: 'https://example.com/file',
+    fileName: 'remote.txt',
+    contentType: 'text/plain',
+    fileSize: 10,
+  });
+  root.state.form.attachments.add({
+    type: 'forwarded',
+    attachmentId: 'original-file',
+    fileName: 'forward.txt',
+    mimeType: 'text/plain',
+    fileSize: 10,
+  });
   await vi.advanceTimersByTimeAsync(600);
   vi.mocked(context.drafts.saveDraft).mockResolvedValue({
     ...response,
@@ -1088,11 +1145,7 @@ it.each(['standalone', 'reply'] as const)(
         code: 'DRAFT_ALREADY_SENT',
       });
       await vi.advanceTimersByTimeAsync(1000);
-      expect(context.notices.feedback.alert).toHaveBeenCalledExactlyOnceWith(
-        surface === 'standalone'
-          ? 'This email was already sent'
-          : 'This reply was already sent'
-      );
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
       expect(context.notices.feedback.failure).not.toHaveBeenCalled();
       expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
@@ -1107,5 +1160,284 @@ it.each(['standalone', 'reply'] as const)(
     }
     await vi.advanceTimersByTimeAsync(1000);
     expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+  }
+);
+
+function localSnapshot(
+  input: Parameters<NonNullable<EmailDraftStorage['saveLocalDraft']>>[0]
+): LocalDraft {
+  const id = input.clientHandles?.draftId ?? input.draft.db_id ?? 'draft';
+  return {
+    key: id,
+    accountId: 'owner',
+    generation: 'generation',
+    revision: 1,
+    acknowledgedRevision: 0,
+    draftId: id,
+    threadId: input.clientHandles?.threadId,
+    content: input.draft,
+    attachments: [],
+    status: 'dirty',
+    updatedAt: Date.now(),
+  };
+}
+
+it.each(['standalone', 'reply'] as const)(
+  'keeps one %s local-save warning until recovery and briefly warns when the write on close fails',
+  async (surface) => {
+    const context = createComposeContext();
+    let diskFailed = true;
+    context.drafts.saveLocalDraft = vi.fn(async (input) => {
+      if (diskFailed) throw new Error('Disk full');
+      return localSnapshot(input);
+    });
+    vi.mocked(context.notices.feedback.failure)
+      .mockReturnValueOnce(7)
+      .mockReturnValueOnce(8);
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      for (const text of ['First edit', 'Second edit', 'Third edit']) {
+        root.edit(text);
+        await vi.advanceTimersByTimeAsync(600);
+      }
+      expect(context.notices.feedback.failure).toHaveBeenCalledExactlyOnceWith(
+        'Draft could not be saved on this device',
+        { subtext: 'Error: Disk full', persistent: true }
+      );
+      expect(context.notices.feedback.dismiss).not.toHaveBeenCalled();
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+
+      diskFailed = false;
+      root.edit('Recovered edit');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.notices.feedback.dismiss).toHaveBeenCalledExactlyOnceWith(
+        7
+      );
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+
+      diskFailed = true;
+      root.edit('Another failure');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.notices.feedback.failure).toHaveBeenCalledTimes(2);
+    } finally {
+      root.dispose();
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Another failure'
+    );
+    expect(context.notices.feedback.dismiss).toHaveBeenLastCalledWith(8);
+    expect(context.notices.feedback.failure).toHaveBeenCalledTimes(3);
+    expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+      'Draft could not be saved on this device',
+      { subtext: 'Error: Disk full', persistent: false }
+    );
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'writes the unsaved %s edit once more on close',
+  async (surface) => {
+    const context = createComposeContext();
+    let diskFailed = true;
+    context.drafts.saveLocalDraft = vi.fn(async (input) => {
+      if (diskFailed) throw new Error('Draft storage transaction aborted');
+      return localSnapshot(input);
+    });
+    vi.mocked(context.notices.feedback.failure).mockReturnValueOnce(7);
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Typed before backgrounding');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    } finally {
+      diskFailed = false;
+      root.dispose();
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Typed before backgrounding'
+    );
+    expect(context.notices.feedback.dismiss).toHaveBeenCalledExactlyOnceWith(7);
+    expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+    expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'keeps the %s editor revision after adopting its server ID',
+  async (surface) => {
+    const context = createComposeContext();
+    let revision = 0;
+    const saveLocalDraft = vi.fn(
+      async (
+        input: Parameters<NonNullable<EmailDraftStorage['saveLocalDraft']>>[0]
+      ) => {
+        if (
+          input.expectedRevision !== undefined &&
+          input.expectedRevision !== revision
+        )
+          throw new Error('Draft changed in another tab');
+        return { ...localSnapshot(input), revision: ++revision };
+      }
+    );
+    context.drafts.saveLocalDraft = saveLocalDraft;
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('First save');
+      await vi.advanceTimersByTimeAsync(600);
+      const editorRevision = revision;
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      revision += 1; // Another tab commits after the server ID is adopted.
+      root.edit('Stale editor edit');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(saveLocalDraft.mock.lastCall?.[0].expectedRevision).toBe(
+        editorRevision
+      );
+      expect(saveLocalDraft.mock.lastCall?.[0].expectedGeneration).toBe(
+        'generation'
+      );
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+        'Draft could not be saved on this device',
+        expect.anything()
+      );
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'waits for the first durable %s snapshot before discarding it',
+  async (surface) => {
+    const context = createComposeContext();
+    const pending = Promise.withResolvers<void>();
+    const saveLocalDraft = vi.fn(
+      async (
+        input: Parameters<NonNullable<EmailDraftStorage['saveLocalDraft']>>[0]
+      ) => {
+        await pending.promise;
+        return localSnapshot(input);
+      }
+    );
+    context.drafts.saveLocalDraft = saveLocalDraft;
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Still copying attachment bytes');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(saveLocalDraft).toHaveBeenCalled();
+      const discard =
+        'state' in root
+          ? root.state.deleteDraftAndReset()
+          : root.deleteDraftAndReset();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.drafts.deleteDraft).not.toHaveBeenCalled();
+      pending.resolve();
+      await discard;
+      expect(context.drafts.deleteDraft).toHaveBeenCalledOnce();
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    } finally {
+      pending.resolve();
+      root.dispose();
+    }
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'persists further %s edits locally after rejection and retries the same handle',
+  async (surface) => {
+    const context = createComposeContext();
+    const saveLocalDraft = vi.fn(
+      async (
+        input: Parameters<NonNullable<EmailDraftStorage['saveLocalDraft']>>[0]
+      ) => localSnapshot(input)
+    );
+    context.drafts.saveLocalDraft = saveLocalDraft;
+    context.drafts.retryDraft = vi.fn(async () => {});
+    vi.mocked(context.drafts.saveDraft).mockRejectedValueOnce(
+      new DraftPersistRejected('INVALID')
+    );
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Rejected text');
+      await vi.advanceTimersByTimeAsync(600);
+      const handle = vi.mocked(context.drafts.saveDraft).mock.calls[0][0]
+        .clientHandles?.draftId;
+      root.edit('New text saved only on this device');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      const latest = saveLocalDraft.mock.lastCall?.[0];
+      expect(decodeBase64Utf8(latest?.draft.body_html ?? '')).toContain(
+        'New text saved only on this device'
+      );
+      await ('state' in root ? root.state.retryDraft() : root.retryDraft());
+      expect(context.drafts.retryDraft).toHaveBeenCalledWith(handle);
+      expect(
+        vi.mocked(context.drafts.saveDraft).mock.lastCall?.[0].clientHandles
+          ?.draftId
+      ).toBe(handle);
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'refuses a stale %s retry without overwriting another tab’s durable edit',
+  async (surface) => {
+    const context = createComposeContext();
+    const saveLocalDraft = vi.fn(
+      async (
+        input: Parameters<NonNullable<EmailDraftStorage['saveLocalDraft']>>[0]
+      ) => localSnapshot(input)
+    );
+    context.drafts.saveLocalDraft = saveLocalDraft;
+    context.drafts.retryDraft = vi.fn(async () => {});
+    vi.mocked(context.drafts.saveDraft).mockRejectedValueOnce(
+      new DraftPersistRejected('INVALID')
+    );
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('This tab’s rejected text');
+      await vi.advanceTimersByTimeAsync(600);
+      const latest = localSnapshot(saveLocalDraft.mock.lastCall![0]);
+      latest.revision += 1;
+      latest.content = { subject: 'Newer edit in another tab' };
+      context.drafts.readDraft = vi.fn(async () => ({
+        local: latest,
+        persistence: 'queued' as const,
+      }));
+      const writes = saveLocalDraft.mock.calls.length;
+      await expect(
+        'state' in root ? root.state.retryDraft() : root.retryDraft()
+      ).rejects.toThrow('changed in another tab');
+      expect(context.drafts.retryDraft).not.toHaveBeenCalled();
+      expect(saveLocalDraft).toHaveBeenCalledTimes(writes);
+      expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(latest.content.subject).toBe('Newer edit in another tab');
+    } finally {
+      root.dispose();
+    }
   }
 );

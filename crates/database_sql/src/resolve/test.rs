@@ -850,6 +850,7 @@ fn exact_case_resolves_a_case_insensitive_collision() {
             placement: ColumnId::from_uuid(Uuid::from_u128(id + 0x100)),
             name: "Name".into(),
             kind: ColumnKind::Text,
+            formula: None,
         }],
     };
     let catalog = Catalog {

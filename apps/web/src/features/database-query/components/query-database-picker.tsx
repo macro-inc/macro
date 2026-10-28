@@ -1,10 +1,10 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import DatabaseIcon from '@icon/system/regular/database.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Combobox } from '@kobalte/core/combobox';
 import { Popover } from '@kobalte/core/popover';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import DatabaseIcon from '@phosphor/database.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
 import { Tooltip } from '@ui/components/Tooltip';
 import { createSignal, Show } from 'solid-js';
 
@@ -68,7 +68,7 @@ export function QueryDatabasePicker(props: {
       </Tooltip>
       <Popover.Portal>
         <Popover.Content
-          class="z-action-menu flex w-72 max-w-[calc(100vw-1rem)] min-h-0 flex-col rounded-lg border border-edge bg-menu text-ink shadow-menu outline-none"
+          class="menu-surface z-action-menu flex w-72 max-w-[calc(100vw-1rem)] min-h-0 flex-col outline-none"
           style={{
             'max-height':
               'min(24rem, var(--kb-popper-content-available-height, calc(100dvh - 1rem)), calc(100dvh - 1rem))',

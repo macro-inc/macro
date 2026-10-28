@@ -1,3 +1,4 @@
+import Calendar from '@phosphor/calendar-blank.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import Envelope from '@phosphor/envelope.svg';
 import EnvelopeOpen from '@phosphor/envelope-open.svg';
@@ -48,6 +49,7 @@ export type SearchHit = {
   sender?: string;
   snippet: string;
   time: string;
+  onOpen?: () => void;
 };
 
 export type AgentToolCall =
@@ -56,10 +58,18 @@ export type AgentToolCall =
   | { kind: 'read-channel'; channel: string; count: number }
   | { kind: 'read-call' }
   | { kind: 'read-document'; title: string }
-  | { kind: 'read-thread' };
+  | { kind: 'read-thread' }
+  | { kind: 'action'; label: string };
 
 export type AgentMention = {
-  kind: 'person' | 'task' | 'email' | 'document' | 'channel' | 'call';
+  kind:
+    | 'person'
+    | 'task'
+    | 'email'
+    | 'document'
+    | 'channel'
+    | 'call'
+    | 'calendar';
   person?: HomepagePersonId;
   /** A call mention shows its start time beside the name. */
   time?: string;
@@ -68,7 +78,7 @@ export type AgentMention = {
     priority: TaskPriority;
     owner: HomepagePersonId;
   };
-  onOpen?: () => void;
+  onOpen?: (trigger?: HTMLButtonElement) => void;
 };
 
 const HIT_ICONS: Record<SearchHit['kind'], Icon> = {
@@ -83,6 +93,7 @@ const MENTION_ICONS: Record<
   Exclude<AgentMention['kind'], 'person' | 'task'>,
   Icon
 > = {
+  calendar: Calendar,
   email: Envelope,
   document: File,
   channel: HashStraight,
@@ -193,6 +204,7 @@ function SearchRow(props: {
                     type="button"
                     class="block w-full text-left hover:bg-hover"
                     data-search-hit={hit.kind}
+                    onClick={() => hit.onOpen?.()}
                   >
                     <div class="flex min-h-8 items-center gap-2 px-3 py-1.5 text-xs leading-4">
                       <div
@@ -270,6 +282,9 @@ function ToolCallRow(props: {
 }) {
   return (
     <Switch>
+      <Match when={props.call.kind === 'action' && props.call}>
+        {(call) => <ToolRow icon={ListChecks}>{call().label}</ToolRow>}
+      </Match>
       <Match when={props.call.kind === 'thought' && props.call}>
         {(call) => <AgentThought text={call().text} />}
       </Match>
@@ -335,6 +350,7 @@ export function AgentToolGroup(props: {
   active?: boolean;
   open?: boolean;
   defaultOpen?: boolean;
+  animateCollapse?: boolean;
   onOpenChange?: (open: boolean) => void;
   searchOpen?: boolean;
   onSearchOpenChange?: (open: boolean) => void;
@@ -363,20 +379,31 @@ export function AgentToolGroup(props: {
           class={`size-4 shrink-0 opacity-0 transition-transform group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none ${open() ? 'rotate-90' : ''}`}
         />
       </button>
-      <Show when={open()}>
-        <div role="region" aria-label="Tool calls">
-          <div class="flex min-w-0 flex-col pl-6">
-            <For each={props.calls}>
-              {(call) => (
-                <div class="min-h-8 shrink-0 agent-tool-enter">
-                  <ToolCallRow
-                    call={call}
-                    searchOpen={props.searchOpen}
-                    onSearchOpenChange={props.onSearchOpenChange}
-                  />
-                </div>
-              )}
-            </For>
+      <Show when={props.animateCollapse || open()}>
+        <div
+          classList={{ 'agent-tool-collapse': !!props.animateCollapse }}
+          data-open={open()}
+          aria-hidden={!open()}
+          inert={!open()}
+        >
+          <div
+            role="region"
+            aria-label="Tool calls"
+            classList={{ 'agent-tool-collapse-body': !!props.animateCollapse }}
+          >
+            <div class="flex min-w-0 flex-col pl-6">
+              <For each={props.calls}>
+                {(call) => (
+                  <div class="min-h-8 shrink-0 agent-tool-enter">
+                    <ToolCallRow
+                      call={call}
+                      searchOpen={props.searchOpen}
+                      onSearchOpenChange={props.onSearchOpenChange}
+                    />
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </div>
       </Show>
@@ -462,7 +489,7 @@ function MentionChip(props: { label: string; mention?: AgentMention }) {
           type="button"
           class={`demo-inline-mention agent-mention mention-${mention()?.kind}`}
           data-agent-mention={mention()?.kind}
-          onClick={() => open()()}
+          onClick={(event) => open()(event.currentTarget)}
         >
           {content()}
         </button>

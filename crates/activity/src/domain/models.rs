@@ -177,9 +177,11 @@ pub struct InitiativeTaskChange {
 #[strum(serialize_all = "snake_case")]
 #[strum_discriminants(
     name(ActionTag),
-    vis(pub(crate)),
-    derive(strum::EnumString),
-    strum(serialize_all = "snake_case")
+    vis(pub),
+    derive(Hash, strum::EnumString, strum::IntoStaticStr),
+    strum(serialize_all = "snake_case"),
+    doc = "An [`Action`] without its payload: the stored `action` tag, for",
+    doc = "selecting which actions a read returns."
 )]
 pub enum Action {
     /// The entity was created.
@@ -194,6 +196,8 @@ pub enum Action {
     Messaged,
     /// An email message was sent on the thread.
     Sent,
+    /// Someone submitted a response to the entity (form).
+    Responded,
     /// A property value changed on the entity (see
     /// [`CommonAction::PropertyChanged`]).
     PropertyChanged(PropertyChange),
@@ -203,10 +207,34 @@ pub enum Action {
     ParticipantRemoved(ParticipantChange),
     /// A call was started in the entity (channel).
     CallStarted(CallStart),
+    /// The entity was renamed.
+    Renamed(NameChange),
+    /// The entity's profile picture was set or removed.
+    PictureChanged,
+    /// A call finished in the entity.
+    CallEnded(CallEnd),
     /// A task was added to an initiative.
     TaskAdded(InitiativeTaskChange),
     /// A task was removed from an initiative.
     TaskRemoved(InitiativeTaskChange),
+}
+
+/// The names captured when an entity is renamed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NameChange {
+    /// Previous display name.
+    pub from: Option<String>,
+    /// New display name.
+    pub to: Option<String>,
+}
+
+/// Completed call facts, independent of recording availability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CallEnd {
+    /// Call identifier.
+    pub call_id: String,
+    /// Duration in milliseconds.
+    pub duration_ms: i64,
 }
 
 impl From<CommonAction> for Action {
@@ -253,12 +281,16 @@ impl Action {
             | Action::Opened
             | Action::Deleted
             | Action::Messaged
-            | Action::Sent => None,
+            | Action::Sent
+            | Action::PictureChanged
+            | Action::Responded => None,
             Action::PropertyChanged(change) => payload(change),
             Action::ParticipantAdded(change) | Action::ParticipantRemoved(change) => {
                 payload(change)
             }
             Action::CallStarted(start) => payload(start),
+            Action::Renamed(change) => payload(change),
+            Action::CallEnded(end) => payload(end),
             Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
         };
         (tag, payload)
@@ -270,8 +302,8 @@ impl Action {
     /// A payload on a payload-free tag is ignored — a newer writer may have
     /// started attaching one, and old readers must keep decoding the tag they
     /// know. The tag vocabulary is the same strum derivation `to_columns`
-    /// writes with (the crate-private `ActionTag` discriminant enum, derived
-    /// from the variant names), and the match below is exhaustive on it — a
+    /// writes with (the [`ActionTag`] discriminant enum, derived from the
+    /// variant names), and the match below is exhaustive on it — a
     /// new variant fails compilation here until its decode is written.
     pub fn from_columns(tag: &str, payload: Option<&Value>) -> Result<Self, ActionDecodeError> {
         // Deserializing from `&Value` borrows; no payload clone on the read
@@ -293,10 +325,14 @@ impl Action {
             ActionTag::Deleted => Ok(Action::Deleted),
             ActionTag::Messaged => Ok(Action::Messaged),
             ActionTag::Sent => Ok(Action::Sent),
+            ActionTag::Responded => Ok(Action::Responded),
             ActionTag::PropertyChanged => Ok(Action::PropertyChanged(parsed(payload)?)),
             ActionTag::ParticipantAdded => Ok(Action::ParticipantAdded(parsed(payload)?)),
             ActionTag::ParticipantRemoved => Ok(Action::ParticipantRemoved(parsed(payload)?)),
             ActionTag::CallStarted => Ok(Action::CallStarted(parsed(payload)?)),
+            ActionTag::Renamed => Ok(Action::Renamed(parsed(payload)?)),
+            ActionTag::PictureChanged => Ok(Action::PictureChanged),
+            ActionTag::CallEnded => Ok(Action::CallEnded(parsed(payload)?)),
             ActionTag::TaskAdded => Ok(Action::TaskAdded(parsed(payload)?)),
             ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
         }

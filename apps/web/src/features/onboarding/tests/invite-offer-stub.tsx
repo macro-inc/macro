@@ -14,7 +14,7 @@ export const renderInviteOfferStub: InviteOfferSlot = (offer, actions) => (
       Claim your free months
     </button>
     <button type="button" onClick={actions.onContinueFree}>
-      Continue as Guest instead
+      Continue with Free instead
     </button>
   </section>
 );

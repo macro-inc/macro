@@ -29,6 +29,8 @@ const params = Object.fromEntries(new URLSearchParams(location.search));
 const page = params.page ?? 'login';
 /** `?latency=ms`: both backends load like a cold page instead of instantly. */
 const latencyMs = Number(params.latency ?? 0);
+/** `?verifyLatency=ms`: code checks take a network round trip. */
+const verifyLatencyMs = Number(params.verifyLatency ?? 0);
 const read = <T,>(key: string): T | undefined => {
   const raw = sessionStorage.getItem(key);
   return raw ? (JSON.parse(raw) as T) : undefined;
@@ -71,6 +73,7 @@ const auth = createFakeAuth(
       await new Promise(() => {});
     },
     sessionLatencyMs: latencyMs,
+    verifyLatencyMs,
   }
 );
 write(FIXTURE_KEYS.auth, structuredClone(unwrap(auth.world)));

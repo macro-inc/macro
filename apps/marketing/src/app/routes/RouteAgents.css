@@ -9,7 +9,7 @@
 .agents-page *, .agents-page *::before, .agents-page *::after { box-sizing: border-box; }
 .agents-wrap { width: 100%; max-width: 1160px; margin-inline: auto; padding-inline: 14px; }
 .agents-page h1, .agents-page h2, .agents-page h3, .agents-page p, .agents-page figure { margin: 0; }
-.agents-page h1, .agents-page h2 { font-family: 'display'; font-weight: 315; letter-spacing: -.025em; line-height: 1.1; text-wrap: balance; }
+.agents-page h1, .agents-page h2 { font-family: 'display'; font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); letter-spacing: -.025em; line-height: 1.1; text-wrap: balance; }
 .agents-page h1 { font-size: clamp(48px, 4.6vw, 60px); }
 .agents-page h1 em { font-weight: inherit; }
 .agents-page h2 { font-size: clamp(36px, 3.8vw, 46px); }

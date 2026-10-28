@@ -125,5 +125,6 @@ fn column_schema(column: &ColumnDetail) -> ColumnSchema {
                 order: option.display_order,
             })
             .collect(),
+        formula: column.column.formula().cloned(),
     }
 }

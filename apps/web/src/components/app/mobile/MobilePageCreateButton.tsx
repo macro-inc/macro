@@ -4,18 +4,17 @@ import {
   setCreateMenuOpen,
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
-import { openCreateCompanyModal } from '@app/features/crm/crm-create';
-import { hapticImpact } from '@core/mobile/haptics';
+import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
+import { type TranslationKey, t } from '@app/lib/i18n';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import BellIcon from '@phosphor/bell.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import MessageIcon from '@phosphor/chat-circle.svg';
-import MoreIcon from '@phosphor/dots-three.svg';
-import EmailIcon from '@phosphor/envelope-simple.svg';
-import DocumentIcon from '@phosphor/file-text.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import CreateIcon from '@phosphor/plus.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import MessageIcon from '@icon/system/regular/chat-circle.svg';
+import MoreIcon from '@icon/system/regular/dots-three.svg';
+import EmailIcon from '@icon/system/regular/envelope-simple.svg';
+import DocumentIcon from '@icon/system/regular/file-text.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import CreateIcon from '@icon/system/regular/plus.svg';
 import { Show } from 'solid-js';
 import {
   MobileCreateMenu,
@@ -34,7 +33,22 @@ const QUICK_CREATE_VIEWS = [
   { view: 'tasks', icon: TaskIcon },
 ] as const;
 
-/** The current view's New action, alongside the mobile AI composer. */
+/**
+ * Accessible names for each view's New button, keyed by view rather than built
+ * from the visible label, so translations control their own word order.
+ */
+const NEW_ITEM_LABELS: Partial<Record<MobileNavViewId, TranslationKey>> = {
+  home: 'mobile.newMessage',
+  mail: 'mobile.newEmail',
+  channels: 'mobile.newMessage',
+  documents: 'mobile.newDocument',
+  tasks: 'mobile.newTask',
+  companies: 'mobile.newCompany',
+};
+
+type PageCreateAction = Pick<MobileCreateMenuItem, 'label' | 'onSelect'>;
+
+/** The current non-AI view's New action above the navigation dock. */
 export function MobilePageCreateButton() {
   const foregroundView = useForegroundMobileView();
   const createBlocks = useCreateMenuBlocks();
@@ -44,13 +58,13 @@ export function MobilePageCreateButton() {
 
   const actionForView = (
     view: MobileNavViewId | undefined
-  ): Pick<MobileCreateMenuItem, 'label' | 'onSelect'> | undefined => {
+  ): PageCreateAction | undefined => {
     if (view === 'companies') {
-      return { label: 'Company', onSelect: openCreateCompanyModal };
+      return { label: t('mobile.company'), onSelect: openCreateCompanyModal };
     }
     if (view === 'calendar') {
       return calendarEnabled()
-        ? { label: 'Event', onSelect: () => openEventComposer() }
+        ? { label: t('mobile.event'), onSelect: () => openEventComposer() }
         : undefined;
     }
     const block = mobilePageCreateBlock(view, createBlocks());
@@ -62,43 +76,38 @@ export function MobilePageCreateButton() {
       const action = actionForView(view);
       return action ? [{ ...action, icon }] : [];
     }),
-    { label: 'More', icon: MoreIcon, onSelect: openCreateMenu },
+    { label: t('mobile.more'), icon: MoreIcon, onSelect: openCreateMenu },
   ];
   const calendarActions = (): MobileCreateMenuItem[] => {
     const blocks = createBlocks();
     const call = blocks.find((block) => block.blockName === 'call');
-    const reminder = blocks.find((block) => block.blockName === 'reminder');
     return [
       {
-        label: 'Event',
+        label: t('mobile.event'),
         icon: CalendarIcon,
         onSelect: () => openEventComposer(),
       },
       ...(call
         ? [
             {
-              label: 'Call',
+              label: t('mobile.call'),
               icon: PhoneIcon,
-              onSelect: () => void call.keyDownHandler(),
-            },
-          ]
-        : []),
-      ...(reminder
-        ? [
-            {
-              label: 'Reminder',
-              icon: BellIcon,
-              onSelect: () => void reminder.keyDownHandler(),
+              onSelect: () => {
+                call.keyDownHandler();
+              },
             },
           ]
         : []),
     ];
   };
-  const action = () =>
-    actionForView(foregroundView()) ?? {
-      label: 'New',
-      onSelect: openCreateMenu,
-    };
+  const viewAction = () => actionForView(foregroundView());
+  const action = (): PageCreateAction =>
+    viewAction() ?? { label: t('mobile.new'), onSelect: openCreateMenu };
+  const actionAriaLabel = () => {
+    const view = foregroundView();
+    const key = view ? NEW_ITEM_LABELS[view] : undefined;
+    return viewAction() && key ? t(key) : t('mobile.new');
+  };
 
   return (
     <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
@@ -111,12 +120,7 @@ export function MobilePageCreateButton() {
               <MobileDockIsland class="shrink-0">
                 <button
                   type="button"
-                  aria-label={
-                    action().label === 'New'
-                      ? 'New'
-                      : `New ${action().label.toLowerCase()}`
-                  }
-                  onPointerDown={() => hapticImpact('light')}
+                  aria-label={actionAriaLabel()}
                   onClick={() => action().onSelect()}
                   class="relative flex h-(--mobile-chrome-button-size) shrink-0 items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
                 >

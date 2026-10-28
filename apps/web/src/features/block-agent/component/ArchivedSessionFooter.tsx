@@ -23,7 +23,7 @@ export function ArchivedSessionFooter(props: { sessionId: string }) {
         </p>
       </div>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         disabled={pending()}
         onClick={unarchive}

@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { Telemetry } from '@macro-inc/observability';
 import { batch, createEffect, on } from 'solid-js';
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
 import {
@@ -24,6 +25,7 @@ import {
   userThemes,
 } from '../signals/themeSignals';
 import type { ThemeColorTokens, ThemeV3 } from '../types/themeTypes';
+import { buttonAccentVars } from './buttonTheme';
 import { formatOklch } from './colorUtil';
 import { resolveThemeColors } from './resolvedThemeColors';
 import {
@@ -34,13 +36,20 @@ import {
 import { convertThemev2v3 } from './themeMigrations';
 import { isThemeV2, isThemeV3 } from './themeValidation';
 
-export function exportTheme(themeId?: string) {
+export async function exportTheme(themeId?: string): Promise<void> {
   const id = themeId ?? currentThemeId();
   const theme = JSON.stringify(themes().find((t) => t.id === id));
-  navigator.clipboard.writeText(theme);
+  try {
+    await navigator.clipboard.writeText(theme);
+    toast.success('Theme copied to clipboard');
+  } catch (error) {
+    Telemetry.error(error, { surface: 'theme-export' });
+    toast.failure('Failed to copy theme to clipboard');
+  }
 }
 
-async function _importTheme(): Promise<void> {
+/** Imports a theme from the clipboard JSON and applies it. */
+export async function importThemeFromClipboard(): Promise<void> {
   try {
     const text = await navigator.clipboard.readText();
     const parsed: unknown = JSON.parse(text);
@@ -66,6 +75,7 @@ async function _importTheme(): Promise<void> {
     };
     setUserThemes([...userThemes(), newTheme]);
     applyTheme(id);
+    toast.success(`Imported theme "${imported.name}"`);
   } catch (e) {
     console.error('Failed to import theme:', e);
     toast.alert('Failed to import theme from clipboard.');
@@ -90,7 +100,20 @@ function renderThemeColorToken(token: string, value: string): void {
 
 /** Applies a color token for an editor drag without updating persisted state. */
 export function previewLiveThemeColorToken(token: string, value: string): void {
+  const tokens = { ...themeColorTokens(), [token]: value };
+  const colors = resolveThemeColors(tokens, liveThemeMode());
+  const accentVars = buttonAccentVars(colors);
   renderThemeColorToken(token, value);
+  document.documentElement.dataset.themeLight = String(
+    colors['surface-0'].l > colors['content-0'].l
+  );
+  renderButtonAccentVars(accentVars);
+}
+
+function renderButtonAccentVars(vars: Record<string, string>): void {
+  for (const [name, value] of Object.entries(vars)) {
+    document.documentElement.style.setProperty(name, value);
+  }
 }
 
 /** Writes all VNext authored tokens to the root and updates editor state. */
@@ -125,6 +148,7 @@ export function setLiveThemeColorTokens(tokens: ThemeColorTokens): void {
     '--theme-comment-ink-lightness',
     String(colors['content-1'].l)
   );
+  renderButtonAccentVars(buttonAccentVars(colors));
   setThemeColorTokens(normalizedTokens);
 }
 
@@ -235,7 +259,14 @@ export function systemThemeEffect(): void {
 /** Only committed colors affect browser/notification icons and first paint. */
 function syncCommittedColors(): void {
   const colors = resolvedThemeColors();
-  setHtmlColor({ color: formatOklch(colors['surface-0']) });
+  // index.html reads these before any JS loads to paint the boot shell.
+  setHtmlColor({
+    color: formatOklch(colors.page),
+    panel: formatOklch(colors.panel),
+    ink: formatOklch(colors.ink),
+    muted: formatOklch(colors['ink-muted']),
+    input: formatOklch(colors.input),
+  });
   setCommittedThemeAccent(formatOklch(colors.accent));
 }
 

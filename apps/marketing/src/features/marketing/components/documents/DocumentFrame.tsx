@@ -5,7 +5,13 @@ import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { ViewShell } from '../DemoWorkspaceChrome';
 import { DemoTags } from '../workspace/frozen/DemoTags';
-import { DetailLayout, PanelToggle } from '../workspace/frozen/DetailPanel';
+import {
+  DetailLayout,
+  PanelGrid,
+  PanelRow,
+  PanelSection,
+  PanelToggle,
+} from '../workspace/frozen/DetailPanel';
 import { DocumentShareSheet, LAUNCH_MEMBERS } from './DocumentShareSheet';
 import '../workspace/dummy-workspace.css';
 import '../demo-markdown.css';
@@ -19,6 +25,7 @@ import './document-stories.css';
 export function DocumentFrame(props: {
   title: string;
   tags?: readonly string[];
+  tagsContent?: JSX.Element;
   /** Header island before Share, e.g. the offline indicator. */
   status?: JSX.Element;
   panel?: JSX.Element;
@@ -31,10 +38,12 @@ export function DocumentFrame(props: {
   /** Cursors and menus, positioned over the window. */
   overlay?: JSX.Element;
   children: JSX.Element;
+  footer?: JSX.Element;
 }) {
   const [tags, setTags] = createSignal<string[]>([...(props.tags ?? [])]);
   const [panel, setPanel] = createSignal<boolean>();
   const [sharing, setSharing] = createSignal(false);
+  let shareTrigger: HTMLButtonElement | undefined;
   // A visitor's toggle wins over the walkthrough's panel state.
   const open = () => panel() ?? props.panelOpen ?? false;
   return (
@@ -59,7 +68,11 @@ export function DocumentFrame(props: {
           <Button
             size="sm"
             data-doc-share
-            onClick={() => (props.onShare ? props.onShare() : setSharing(true))}
+            onClick={(event) => {
+              shareTrigger = event.currentTarget;
+              if (props.onShare) props.onShare();
+              else setSharing(true);
+            }}
           >
             <Share />
             Share
@@ -73,7 +86,24 @@ export function DocumentFrame(props: {
           />
         </div>
       </ViewShell.TopBar>
-      <DetailLayout open={open()} panel={props.panel}>
+      <DetailLayout
+        open={open()}
+        panel={
+          props.panel ?? (
+            <>
+              <PanelSection title="Details" open>
+                <PanelGrid>
+                  <PanelRow label="Owner">Jacob</PanelRow>
+                  <PanelRow label="Last updated">Today</PanelRow>
+                </PanelGrid>
+              </PanelSection>
+              <PanelSection title="Tags" open>
+                <DemoTags tags={tags()} onChange={setTags} />
+              </PanelSection>
+            </>
+          )
+        }
+      >
         <div class="dummy-scroll px-6 doc-story-scroll">
           <div class="doc-story-page">
             <div
@@ -86,7 +116,9 @@ export function DocumentFrame(props: {
             </div>
             <Show when={props.tags}>
               <div class="doc-story-tags">
-                <DemoTags tags={tags()} onChange={setTags} />
+                {props.tagsContent ?? (
+                  <DemoTags tags={tags()} onChange={setTags} />
+                )}
               </div>
             </Show>
             <div
@@ -98,15 +130,20 @@ export function DocumentFrame(props: {
             >
               {props.children}
             </div>
+            {props.footer}
           </div>
         </div>
       </DetailLayout>
       <Show when={!props.onShare}>
         <DocumentShareSheet
           open={sharing()}
+          autoFocus
           title={props.title}
           channel={{ members: LAUNCH_MEMBERS, level: 'view' }}
-          onClose={() => setSharing(false)}
+          onClose={() => {
+            setSharing(false);
+            shareTrigger?.focus({ preventScroll: true });
+          }}
         />
       </Show>
       {props.overlay}

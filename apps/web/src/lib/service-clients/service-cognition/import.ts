@@ -17,6 +17,9 @@ import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
+import type { NotionImportReport } from './generated/schemas';
+
+export type { NotionImportReport } from './generated/schemas';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -37,7 +40,9 @@ function importFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 
-export type ImportSource = 'linear' | 'notion' | 'slack';
+import type { ImportKind, ImportSource } from './generated/schemas';
+
+export type { ImportKind, ImportSource } from './generated/schemas';
 
 export type ImportEntityStatus =
   | 'staged'
@@ -97,7 +102,12 @@ export type ImportEntity = {
   user_id: string;
   team_id?: string | null;
   source: ImportSource;
+  kind: ImportKind;
   foreign_id: string;
+  /** The row this item was imported under, when it was part of a tree. */
+  parent_id?: string | null;
+  /** The agent session review that approved importing it, if any. */
+  review_id?: string | null;
   status: ImportEntityStatus;
   initiator: ImportInitiator;
   /** Per-source metadata; shape keyed by `source` (see the Meta types). */
@@ -109,11 +119,10 @@ export type ImportEntity = {
   updated_at: string;
 };
 
-/** Gather-run state for one source. */
+/** Discovery-run state for one source. */
 export type ImportRun = {
   source: ImportSource;
   status: ImportRunStatus;
-  auto_import: boolean;
   error?: string | null;
   updated_at: string;
 };
@@ -129,7 +138,21 @@ export type RunImportOutcome = {
 };
 
 export const importClient = {
-  /** Gather runs plus visible ledger rows for the authenticated user. */
+  /** Report on the selected reviewed workspace source. */
+  async getWorkspaceReport(source: 'notion' | 'linear' | 'jira') {
+    return await importFetch<NotionImportReport>(
+      `/import/workspaces/${source}`,
+      { method: 'GET' }
+    );
+  },
+  /** Stop this source only, preserving completed entities. */
+  async cancelWorkspace(source: 'notion' | 'linear' | 'jira') {
+    return await importFetch<NotionImportReport>(
+      `/import/workspaces/${source}/cancel`,
+      { method: 'POST' }
+    );
+  },
+  /** Discovery runs plus visible ledger rows for the authenticated user. */
   async getState() {
     return await importFetch<ImportState>('/import/state', { method: 'GET' });
   },
@@ -153,20 +176,16 @@ export const importClient = {
     });
   },
 
-  /** Restart a failed gather run for one source. */
-  async retryGather(source: ImportSource) {
-    return await fetchWithToken<{}, typeof AI_USAGE_LIMIT_ERROR>(
-      `${dcsHost}/import/runs/${source}/retry`,
-      {
-        method: 'POST',
-        errorResponseHandler: aiUsageErrorResponseHandler,
-      }
-    );
+  /** Where the Notion workspace import stands. */
+  async getNotionReport() {
+    return await importFetch<NotionImportReport>('/import/notion', {
+      method: 'GET',
+    });
   },
 
-  /** Dismiss one source's import section. */
-  async dismissRun(source: ImportSource) {
-    return await importFetch(`/import/runs/${source}/dismiss`, {
+  /** Stop planning or writing the Notion workspace import. */
+  async cancelNotion() {
+    return await importFetch<NotionImportReport>('/import/notion/cancel', {
       method: 'POST',
     });
   },

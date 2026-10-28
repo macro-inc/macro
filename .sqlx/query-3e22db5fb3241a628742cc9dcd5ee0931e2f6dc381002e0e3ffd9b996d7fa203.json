@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET position = NULL,initial_complete = false,scan_id = $2,next_run_at = now(),lease_id = NULL,lease_until = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3e22db5fb3241a628742cc9dcd5ee0931e2f6dc381002e0e3ffd9b996d7fa203"
+}

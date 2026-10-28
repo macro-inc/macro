@@ -1,5 +1,7 @@
-import { useUserId } from '@core/context/user';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateCalendarViews } from '@queries/calendar/sync';
 import { queryClient } from '@queries/client';
@@ -11,6 +13,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
+import { refreshMailAccounts } from './mail-accounts';
 
 const LINK_STALE_TIME = 5 * 60 * 1000;
 
@@ -27,23 +30,32 @@ const queryEnabled = () => true;
  * prompt — nothing renders from this query.
  */
 export function useInboxHealthProbeQuery() {
+  const authenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: emailKeys.linksHealthProbe.queryKey,
-    queryFn: async () => {
-      await emailClient.healthCheckLinks();
-      return null;
-    },
+    queryFn: probeInboxHealth,
+    enabled: authenticated() === true,
     staleTime: HEALTH_PROBE_STALE_TIME,
     refetchOnWindowFocus: true,
     retry: false,
   }));
 }
 
+async function probeInboxHealth() {
+  await emailClient.healthCheckLinks();
+  return null;
+}
+
+function fetchEmailLinks() {
+  return throwOnErr(() => emailClient.getLinks());
+}
+
 export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
+  const authenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: emailKeys.links.queryKey,
-    queryFn: async () => throwOnErr(async () => await emailClient.getLinks()),
-    enabled: enabled(),
+    queryFn: fetchEmailLinks,
+    enabled: authenticated() === true && enabled(),
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always',
   }));
@@ -71,6 +83,34 @@ export function usePrimaryEmailLinkId() {
     if (!queryReadyGate(linksQuery)) return undefined;
     return findPrimaryEmailLinkId(linksQuery.data.links ?? [], userId());
   });
+}
+
+async function fetchMessageLinkId(messageId: string) {
+  const message = await throwOnErr(() =>
+    emailClient.getMessage({ message_id: messageId })
+  );
+  return message.link_id;
+}
+
+function messageInboxQueryOptions(messageId: string | undefined) {
+  return {
+    queryKey: emailKeys.messageInbox(messageId).queryKey,
+    queryFn: () => (messageId ? fetchMessageLinkId(messageId) : null),
+    enabled: messageId !== undefined,
+    staleTime: LINK_STALE_TIME,
+    retry: false,
+  };
+}
+
+/**
+ * The inbox a message belongs to. For a surface that holds a message id but
+ * not the account that received it — an AI-drafted reply, whose tool
+ * arguments name the message it answers — this is how it can show the sender
+ * the reply will actually go out as. Exposes loading, failure and retry so
+ * composers can require a known sender before sending.
+ */
+export function useMessageInboxQuery(messageId: Accessor<string | undefined>) {
+  return useQuery(() => messageInboxQueryOptions(messageId()));
 }
 
 /** The `X-Email-Link-Id` value for a target inbox; see useNonPrimaryEmailLinkIdHeader. */
@@ -114,7 +154,18 @@ export function useNonPrimaryEmailLinkIdHeader() {
     nonPrimaryEmailLinkIdHeader(linkId, primaryLinkId());
 }
 
+async function refreshSenderCatalog(): Promise<void> {
+  try {
+    await refreshMailAccounts();
+  } catch (error) {
+    Telemetry.error(error);
+  }
+}
+
 export function invalidateEmailLinks() {
+  // Connection, reauthorization and link-removal events must refresh the
+  // GraphQL catalog consumed by both From and the sidebar, not only legacy reads.
+  fireAndForget(refreshSenderCatalog(), 'email-links');
   queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.invalidateQueries({
     queryKey: emailKeys.links.queryKey,

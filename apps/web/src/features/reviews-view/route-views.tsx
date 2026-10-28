@@ -5,9 +5,10 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { LoadingBlock } from '@core/component/LoadingBlock';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { enableTasksReviews } from '@core/constant/featureFlags';
 import { lazy, onMount, Show } from 'solid-js';
+import { ReviewsViewSkeleton } from './reviews-view-skeleton';
 
 const ReviewsView = lazy(async () => ({
   default: (await import('./reviews-view')).ReviewsView,
@@ -27,6 +28,7 @@ function DisabledReviewsRoute() {
 }
 
 function TrackedReviewsView() {
+  useViewRestoration();
   usePageViewTracking('reviews');
   return <ReviewsView />;
 }
@@ -38,7 +40,7 @@ export const ReviewsRouteView = withAuth(() => {
     <Show
       when={params.foreignEntityId || flag().enabled}
       fallback={
-        <Show when={!flag().loading} fallback={<LoadingBlock />}>
+        <Show when={!flag().loading} fallback={<ReviewsViewSkeleton />}>
           <DisabledReviewsRoute />
         </Show>
       }
@@ -46,4 +48,4 @@ export const ReviewsRouteView = withAuth(() => {
       <TrackedReviewsView />
     </Show>
   );
-});
+}, ReviewsViewSkeleton);

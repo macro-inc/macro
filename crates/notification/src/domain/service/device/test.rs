@@ -18,7 +18,7 @@ fn test_user_id() -> MacroUserIdStr<'static> {
 /// Mock NotificationRepository that only implements device-related methods.
 struct MockNotifRepo {
     existing_endpoint: Mutex<Option<String>>,
-    upserted: Mutex<Vec<(String, String, String, String)>>,
+    upserted: Mutex<Vec<(String, String, String, String, bool)>>,
     deleted_token_result: Mutex<Result<Vec<String>, &'static str>>,
     deleted_token_calls: Mutex<Vec<(String, String)>>,
     stale_endpoints: Mutex<Vec<String>>,
@@ -60,6 +60,20 @@ impl MockNotifRepo {
 }
 
 impl NotificationRepository for MockNotifRepo {
+    async fn notification_is_withdrawn(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<bool, Report> {
+        unreachable!("this service does not deliver queued workflow notifications")
+    }
+
+    async fn complete_notification_publication(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<(), Report> {
+        unreachable!("this service does not publish notifications")
+    }
+
     async fn get_device_endpoint(
         &self,
         _device_token: &str,
@@ -74,12 +88,14 @@ impl NotificationRepository for MockNotifRepo {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         self.upserted.lock().unwrap().push((
             user_id.to_string(),
             device_token.to_string(),
             device_endpoint.to_string(),
             format!("{device_type:?}"),
+            native_call_capable,
         ));
         Ok(())
     }
@@ -422,6 +438,7 @@ async fn register_existing_token_valid_endpoint() {
             MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap(),
             "device-token",
             &DeviceType::Ios,
+            false,
         )
         .await
         .unwrap();
@@ -438,7 +455,7 @@ async fn register_missing_token_creates_endpoint() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios, false)
         .await
         .unwrap();
 
@@ -454,7 +471,7 @@ async fn register_get_attributes_fails_creates_new_endpoint() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios, false)
         .await
         .unwrap();
 
@@ -472,7 +489,7 @@ async fn register_disabled_endpoint_re_enables() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios, false)
         .await
         .unwrap();
 
@@ -492,7 +509,7 @@ async fn register_token_mismatch_updates() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "new-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "new-token", &DeviceType::Ios, false)
         .await
         .unwrap();
 
@@ -508,7 +525,7 @@ async fn register_ios_uses_apns_arn() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "token", &DeviceType::Ios)
+        .register_device(test_user_id(), "token", &DeviceType::Ios, false)
         .await
         .unwrap();
 }
@@ -520,7 +537,7 @@ async fn register_android_uses_fcm_arn() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "token", &DeviceType::Android)
+        .register_device(test_user_id(), "token", &DeviceType::Android, false)
         .await
         .unwrap();
 }
@@ -533,7 +550,7 @@ async fn register_prunes_stale_registrations_for_token() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios, false)
         .await
         .unwrap();
 
@@ -555,7 +572,7 @@ async fn register_succeeds_when_stale_sns_delete_fails() {
     let service = make_service(db, sns);
 
     service
-        .register_device(test_user_id(), "device-token", &DeviceType::Ios)
+        .register_device(test_user_id(), "device-token", &DeviceType::Ios, false)
         .await
         .unwrap();
 
@@ -645,4 +662,32 @@ async fn unregister_db_error_propagates() {
     // SNS delete should not have been called
     let deleted = service.sns_endpoint.deleted.lock().unwrap();
     assert!(deleted.is_empty());
+}
+
+#[tokio::test]
+async fn native_call_capability_is_honored_only_for_android_and_can_be_revoked() {
+    for device_type in [DeviceType::Android, DeviceType::Ios, DeviceType::IosVoip] {
+        let service = make_service(MockNotifRepo::empty(), MockSnsManager::new());
+        service
+            .register_device(test_user_id(), "device-token", &device_type, true)
+            .await
+            .unwrap();
+        service
+            .register_device(test_user_id(), "device-token", &device_type, false)
+            .await
+            .unwrap();
+        let upserted = service.repository.upserted.lock().unwrap();
+        assert_eq!(upserted[0].4, matches!(device_type, DeviceType::Android));
+        assert!(!upserted[1].4);
+    }
+}
+
+#[test]
+fn existing_device_registration_payloads_default_to_no_native_call_capability() {
+    let request: crate::domain::models::device::DeviceRequest =
+        serde_json::from_value(serde_json::json!({
+            "deviceType": "android", "token": "device-token"
+        }))
+        .unwrap();
+    assert!(!request.native_call_capable);
 }

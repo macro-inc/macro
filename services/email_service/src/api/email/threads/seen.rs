@@ -1,49 +1,37 @@
 use crate::api::context::{ApiContext, AuthorizationService};
-use anyhow::Context;
-use axum::Json;
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadReadMetadata};
-use email_service::pubsub::publish_email_event;
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use email::domain::{models::EmailErr, ports::EmailService};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
-use models_email::service::label::system_labels;
-use models_email::service::message::Message;
-use sqlx::types::Uuid;
-use strum_macros::AsRefStr;
-use thiserror::Error;
+use uuid::Uuid;
 
-#[derive(Debug, Error, AsRefStr)]
-pub enum SeenThreadError {
-    #[error("Thread not found")]
-    ThreadNotFound,
-
-    #[error("Database query error")]
-    QueryError(#[from] anyhow::Error),
-
-    #[error("Transaction error")]
-    TransactionError(#[from] sqlx::Error),
-}
-
+#[derive(Debug)]
+pub struct SeenThreadError(EmailErr);
 impl IntoResponse for SeenThreadError {
     fn into_response(self) -> Response {
-        let status_code = match &self {
-            SeenThreadError::ThreadNotFound => StatusCode::NOT_FOUND,
-            SeenThreadError::QueryError(_) | SeenThreadError::TransactionError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+        let status = match &self.0 {
+            EmailErr::ThreadNotFound | EmailErr::ThreadEmpty => StatusCode::NOT_FOUND,
+            EmailErr::Unauthorized => StatusCode::FORBIDDEN,
+            EmailErr::ThreadHasNoInboundMessages => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
-
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "SeenThreadError",
-                variant = self.as_ref(),
-                "Internal server error");
+        if status.is_server_error() {
+            tracing::error!(error=?self.0,"email thread action failed");
         }
-
-        (status_code, self.to_string()).into_response()
+        (
+            status,
+            if status.is_server_error() {
+                "Email action failed".to_owned()
+            } else {
+                self.0.to_string()
+            },
+        )
+            .into_response()
     }
 }
 
@@ -51,7 +39,6 @@ impl IntoResponse for SeenThreadError {
 pub struct PathParams {
     pub id: Uuid,
 }
-
 /// Called by FE when the user has seen a thread.
 #[utoipa::path(
     post,
@@ -68,148 +55,19 @@ pub struct PathParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), err)]
+#[tracing::instrument(skip(ctx, authorization), err(Debug))]
 pub async fn seen_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
 ) -> Result<Response, SeenThreadError> {
-    // Resolve the inbox from the thread itself, scoped to the caller's own and
-    // delegated inboxes.
-    let link = email_db_client::links::get::fetch_owned_link_for_thread(
-        &ctx.db,
-        &authorization.authorization.user.user_context.user_id,
-        thread_id,
-    )
-    .await
-    .context("Failed to resolve inbox for thread")?
-    .ok_or(SeenThreadError::ThreadNotFound)?;
-
-    // update viewed_at value in user_history table for thread
-    email_db_client::user_history::upsert_user_history(&ctx.db, link.id, thread_id)
-        .await
-        .context("Failed to upsert user history")?;
-
-    let messages =
-        email_db_client::messages::get::fetch_messages_with_labels(&ctx.db, thread_id, link.id)
-            .await?;
-
-    if messages.is_empty() {
-        return Err(SeenThreadError::ThreadNotFound);
-    }
-
-    // Filter for messages that have the UNREAD label
-    let unread_messages: Vec<&Message> = messages
-        .iter()
-        .filter(|m| {
-            m.labels
-                .iter()
-                .any(|l| l.provider_label_id == system_labels::UNREAD)
-        })
-        .collect();
-
-    let message_db_ids: Vec<Uuid> = unread_messages.iter().map(|m| m.db_id).collect();
-
-    let mut tx = ctx.db.begin().await?;
-
-    let transaction_result = async {
-        // Write the denormalized thread flag even when no message carries the UNREAD
-        // label. Soup reads this flag, so a thread whose labels were already stripped
-        // while the flag stayed false would otherwise never recover: it reads unread
-        // forever and every later call to this endpoint short-circuits.
-        email_db_client::threads::update::update_thread_read_status(
-            &mut *tx, thread_id, link.id, true,
+    ctx.email_service
+        .service()
+        .mark_thread_seen(
+            authorization.authorization.user.macro_user_id.clone(),
+            thread_id,
         )
         .await
-        .context("Failed to update thread read status")?;
-
-        if !message_db_ids.is_empty() {
-            // Update messages read status
-            email_db_client::messages::update::update_message_read_status_batch(
-                &mut *tx,
-                message_db_ids.clone(),
-                link.id,
-                true,
-            )
-            .await
-            .context("Failed to update message read status")?;
-
-            // Remove UNREAD label from messages in DB
-            email_db_client::labels::delete::delete_message_labels_batch(
-                &mut *tx,
-                &message_db_ids,
-                system_labels::UNREAD,
-                link.id,
-            )
-            .await
-            .context("Failed to remove 'UNREAD' label from messages")?;
-        }
-
-        anyhow::Ok(())
-    }
-    .await;
-
-    match transaction_result {
-        Ok(_) => {
-            tx.commit().await?;
-        }
-        Err(e) => {
-            tracing::error!(error = ?e, "Transaction failed for thread {}, rolling back.", thread_id);
-            if let Err(rollback_err) = tx.rollback().await {
-                tracing::error!(error = ?rollback_err, "Failed to rollback transaction");
-            }
-            return Err(SeenThreadError::QueryError(e));
-        }
-    }
-
-    if unread_messages.is_empty() {
-        // No message changed state, so there is nothing to announce or sync upstream.
-        return Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response());
-    }
-
-    publish_email_event(
-        ctx.macro_event_broker.as_ref(),
-        &EmailMacroEvent::thread_read(ThreadReadMetadata {
-            link_id: link.id,
-            owner: link.macro_id.clone(),
-            actor: Some(link.macro_id.clone()),
-            thread_id,
-            is_read: true,
-            origin: EmailEventOrigin::UserAction,
-        }),
-    );
-
-    // Enqueue gmail ops messages in batch
-    let gmail_ops_messages: Vec<_> = unread_messages
-        .iter()
-        .filter_map(|msg| {
-            msg.provider_id
-                .as_ref()
-                .filter(|pid| !pid.is_empty())
-                .map(
-                    |pid| models_email::gmail::gmail_ops::GmailOpsPubsubMessage {
-                        link_id: link.id,
-                        operation:
-                            models_email::gmail::gmail_ops::GmailOpsOperation::ModifyMessageLabels(
-                                models_email::gmail::gmail_ops::ModifyMessageLabelsPayload {
-                                    db_message_id: msg.db_id,
-                                    provider_message_id: pid.clone(),
-                                    labels_to_add: Vec::new(),
-                                    labels_to_remove: vec![system_labels::UNREAD.to_string()],
-                                },
-                            ),
-                    },
-                )
-        })
-        .collect();
-
-    ctx.sqs_client
-        .enqueue_gmail_ops_notifications_batch(gmail_ops_messages)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "Failed to enqueue gmail ops notifications batch for seen");
-        })
-        .ok();
-
+        .map_err(SeenThreadError)?;
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }

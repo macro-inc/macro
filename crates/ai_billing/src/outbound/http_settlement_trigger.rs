@@ -14,9 +14,11 @@ const RETRY_BACKOFF: [Duration; 2] = [Duration::from_secs(1), Duration::from_sec
 
 /// [`SettlementTrigger`] over the internal auth-service API. Runs on a
 /// background task with a short bounded retry. Settlement is idempotent and
-/// is requested again by the payer's next completion and by every Billing
-/// page view (the summary endpoint settles first), so a request that still
-/// fails after the retries is picked up there rather than queued durably.
+/// is requested again by the payer's next completion, by every Billing page
+/// view (the summary endpoint settles first), and by the authentication
+/// service's own reconciliation sweep, which settles everyone with recent
+/// counted usage on a schedule; a request that still fails after the retries
+/// is picked up there rather than queued durably.
 #[derive(Clone)]
 pub struct HttpSettlementTrigger {
     client: Arc<AuthServiceClient>,
@@ -47,7 +49,7 @@ impl SettlementTrigger for HttpSettlementTrigger {
                         tracing::error!(
                             error = ?e,
                             attempts = RETRY_BACKOFF.len() + 1,
-                            "ai billing settlement request failed; the next completion or billing page view retries"
+                            "ai billing settlement request failed; the next completion, billing page view, or reconciliation sweep retries"
                         );
                         return;
                     }

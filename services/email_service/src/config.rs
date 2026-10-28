@@ -22,6 +22,21 @@ env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Admit new Outlook mailboxes; reconnects remain available while paused.
+    #[macro_config_default(false)]
+    pub outlook_connections_enabled: bool,
+    /// Pause Outlook discovery, incremental import, contacts and subscriptions.
+    #[macro_config_default(false)]
+    pub outlook_sync_enabled: bool,
+    /// Pause new provider writes; send outcome reconciliation always continues.
+    #[macro_config_default(false)]
+    pub outlook_writes_enabled: bool,
+    /// Send Gmail label writes as `ModifyMessageLabelsBatch` queue messages.
+    /// Enable only after every email-service pubsub worker runs a release that
+    /// decodes them; older workers delete the batch form. Off, each message is
+    /// its own `ModifyMessageLabels`.
+    #[macro_config_default(false)]
+    pub gmail_label_write_batches_enabled: bool,
     /// The connection URL for the macrodb instance this application should use.
     /// For deployed applications, this is a secret stored in AWS Secrets Manager.
     pub macro_db_url: MacroDbUrl,
@@ -116,16 +131,7 @@ pub struct Config {
     #[macro_config_default(3)]
     pub sfs_uploader_workers: i32,
 
-    /// The number of requests we allow per window for backfilling. Less than redis_rate_limit_reqs
-    /// so we have room for normal gmail operations while backfilling is occurring
-    #[macro_config_default(13000)]
-    pub redis_rate_limit_reqs_backfill: u32,
-
-    /// The number of requests we allow per window.
-    #[macro_config_default(14000)]
-    pub redis_rate_limit_reqs: u32,
-
-    /// The size of the sliding window we use for rate limit.
+    /// The size of the sliding window for the Google Calendar rate limit.
     #[macro_config_default(60)]
     pub redis_rate_limit_window_secs: u32,
 

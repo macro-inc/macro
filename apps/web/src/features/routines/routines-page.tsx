@@ -1,13 +1,12 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { modelLabel } from '@core/component/AI/constant/model-label';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
-import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
 import { getErrorMessage } from './core/routine-draft';
 import { createRoutineListSource } from './queries/routine-sources';
+import { createRoutineTargetDisplay } from './queries/routine-target-display';
 import { RoutineDetail } from './routine-detail';
 import { routineContent, routineIdFromContent } from './routine-navigation';
 import { RoutinesListView } from './views/routines-list';
@@ -23,20 +22,19 @@ function RoutinesContent() {
       activate: true,
       search: {},
     });
-  let searchInput: HTMLInputElement | undefined;
+  let focusSearch: (() => void) | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: () => panel.isPanelActive() && !selectedId(),
     search: {
       description: 'Search routines',
       run: () => {
-        searchInput?.focus();
-        searchInput?.select();
+        focusSearch?.();
         return true;
       },
     },
   });
-  const roster = createAgentRosterSource();
+  const display = createRoutineTargetDisplay();
   const source = createRoutineListSource((error) =>
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
@@ -57,13 +55,9 @@ function RoutinesContent() {
         <RoutinesListView
           source={source}
           userId={userId}
-          targetLabel={(target) =>
-            target.kind === 'agent'
-              ? (roster.roster().find((agent) => agent.botId === target.agentId)
-                  ?.name ?? 'Agent')
-              : modelLabel(target.model)
-          }
-          searchRef={(input) => (searchInput = input)}
+          targetLabel={display.targetLabel}
+          targetModel={display.targetModel}
+          registerSearchFocus={(focus) => (focusSearch = focus)}
           onCreate={create}
           onOpen={(id) => open(id)}
         />

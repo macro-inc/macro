@@ -55,13 +55,35 @@ where
 
     pub(super) async fn admit_session(&self, session: &AgentSession) -> Result<()> {
         let kind = AgentKind::for_session(session.bot_id, &session.harness);
-        if macro_funded(kind) {
-            // Never use the actor or a system fallback for a missing user owner.
-            self.admission
-                .admit(session.owner_user()?, AiFeature::AgentSession)
-                .await?;
+        if !macro_funded(kind) || self.runs_on_agent_key(kind, session).await {
+            return Ok(());
         }
+        // Never use the actor or a system fallback for a missing user owner.
+        self.admission
+            .admit(session.owner_user()?, AiFeature::AgentSession)
+            .await?;
         Ok(())
+    }
+
+    /// Whether an in-memory session's agent runs on its own usable key, so
+    /// its turns never spend the owner's allowance. A failed lookup leaves the
+    /// allowance gate in place.
+    async fn runs_on_agent_key(&self, kind: AgentKind, session: &AgentSession) -> bool {
+        if kind != AgentKind::InMemory {
+            return false;
+        }
+        let Ok(owner) = session.owner_user() else {
+            return false;
+        };
+        self.agent_keys
+            .usable_provider(session.bot_id.as_uuid(), owner)
+            .await
+            .inspect_err(
+                |error| tracing::error!(error = ?error, "could not read the agent's API key"),
+            )
+            .ok()
+            .flatten()
+            .is_some()
     }
 
     pub(super) async fn admit_session_id(&self, session_id: AgentSessionId) -> Result<()> {
@@ -107,14 +129,38 @@ where
         // Persist first: never report a terminal rejection while the durable
         // queue still says that the command will run after a restart.
         for entry in waiting {
-            self.resolve_announced_reply(
-                session_id,
-                entry.announced,
-                entry.announce.as_ref(),
-                entry.actor.as_ref(),
-                ReplyOutcome::Failed,
-            )
-            .await;
+            let conversation_store = self.conversation_turns.as_ref().filter(|_| {
+                entry.announce.as_ref().is_some_and(|origin| {
+                    origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+                })
+            });
+            if let Some(store) = conversation_store {
+                store
+                    .finish(
+                        entry.action_id,
+                        crate::domain::conversation_turns::ConversationTurnState::Failed,
+                        ReplyOutcome::Failed,
+                    )
+                    .await?;
+            }
+            let resolved = self
+                .resolve_announced_reply(
+                    session_id,
+                    entry.announced,
+                    entry.announce.as_ref(),
+                    entry.actor.as_ref(),
+                    ReplyOutcome::Failed,
+                    // A refused entry never opened a turn: there is nothing
+                    // it said or did to show, only that it was refused.
+                    agent_fold::domain::model::TurnId(0),
+                    Vec::new(),
+                )
+                .await;
+            if resolved && let Some(store) = conversation_store {
+                store
+                    .finalize_reply(entry.action_id, &ReplyOutcome::Failed)
+                    .await?;
+            }
             self.publish_command_rejected(
                 session_id,
                 entry.action_id,
@@ -165,9 +211,6 @@ fn macro_funded(kind: AgentKind) -> bool {
         AgentKind::InMemory | AgentKind::SandboxedCoder => true,
         // Independently billed tools/helpers have their own admission; runtime
         // execution itself uses the owner's subscription or external provider.
-        AgentKind::Cursor
-        | AgentKind::CodexCloud
-        | AgentKind::ClaudeCloud
-        | AgentKind::External => false,
+        AgentKind::Cursor | AgentKind::CodexCloud | AgentKind::External => false,
     }
 }

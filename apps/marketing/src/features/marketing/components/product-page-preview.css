@@ -1,0 +1,7 @@
+/* Only the existing product page opened inside a homepage drawer. */
+body:has(.feature-page[data-product-preview='true']) .site-header,
+body:has(.feature-page[data-product-preview='true']) .site-page-vignette,
+.feature-page[data-product-preview='true'] .homepage-feature-end,
+.feature-page[data-product-preview='true'] .feature-page-cta { display: none; }
+.feature-page[data-product-preview='true'] .feature-page-hero { padding-top: 64px; padding-bottom: 32px; }
+.feature-page[data-product-preview='true'] .feature-page-section { scroll-margin-top: 16px; }

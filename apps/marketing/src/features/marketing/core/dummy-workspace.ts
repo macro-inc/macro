@@ -39,6 +39,7 @@ export type WorkspaceComment = {
   documentId?: string;
   replyTo?: string;
   reactions?: string[];
+  emojiReactions?: { emoji: string; users: string[] }[];
 };
 export type WorkspaceTask = {
   id: string;
@@ -50,6 +51,7 @@ export type WorkspaceTask = {
   creator: HomepagePersonId;
   tags: string[];
   channel: string;
+  relatedDocumentIds?: string[];
   steps: { id: string; text: string; done: boolean }[];
   comments: WorkspaceComment[];
 };
@@ -121,11 +123,11 @@ export function dummyData(): DummyData {
     ],
     [
       'follow-up',
-      'Send Dana the rollout plan',
+      'Send Valentina the rollout plan',
       'Not Started',
       'Medium',
       'jacob',
-      'Share the rollout plan with Dana and confirm the follow-up meeting.',
+      'Share the rollout plan with Valentina and confirm the follow-up meeting.',
     ],
     [
       'deploy',
@@ -177,11 +179,11 @@ export function dummyData(): DummyData {
     ],
     [
       'design',
-      'Review the mobile navigation',
+      'Fix mobile demo scrolling',
       'In Progress',
       'High',
       'valentina',
-      'Review touch targets and the task detail on smaller screens.',
+      'Keep page scrolling natural around the interactive homepage demo. Check touch targets and the transition at phone widths.',
     ],
     [
       'metrics',
@@ -236,7 +238,7 @@ export function dummyData(): DummyData {
         ...demoEmails,
         {
           id: 'feedback',
-          sender: 'Maya Chen',
+          sender: 'Maya',
           subject: 'Feedback from the pilot team',
           snippet:
             'The shared inbox is already saving us a few hours every week.',
@@ -246,7 +248,7 @@ export function dummyData(): DummyData {
         },
         {
           id: 'assets',
-          sender: 'Julia Westphal',
+          sender: 'Julia',
           subject: 'Final launch assets',
           snippet: 'The new screenshots and product walkthrough are ready.',
           time: '8:10 AM',
@@ -255,7 +257,7 @@ export function dummyData(): DummyData {
         },
         {
           id: 'research',
-          sender: 'Alex Rivera',
+          sender: 'Alex',
           subject: 'Notes from our customer interviews',
           snippet:
             'I pulled together the themes we heard across the five sessions.',
@@ -266,7 +268,7 @@ export function dummyData(): DummyData {
         },
         {
           id: 'coffee',
-          sender: 'Sam Parker',
+          sender: 'Sam',
           subject: 'Coffee next week?',
           snippet:
             'Would love to hear how the launch went. Tuesday works for me.',
@@ -285,7 +287,7 @@ export function dummyData(): DummyData {
       {
         id: 'plan',
         tags: ['Launch', 'Product'],
-        title: 'Q3 launch plan',
+        title: 'Website launch plan',
         body: 'One shared workspace. One great launch.\n\n## Launch checklist\n\n- [x] Finalize the product story\n- [x] Review the launch announcement\n- [ ] Send the customer email\n- [ ] Publish the changelog\n\n## Owners\n\n**Julia** — announcement and customer email\n**Teo** — deploy and release checks\n**Jacob** — customer conversations',
         comments: [],
       },
@@ -300,7 +302,7 @@ export function dummyData(): DummyData {
         id: 'notes',
         tags: ['Customers', 'Follow up'],
         title: 'Demo call notes',
-        body: '## The Meadow\n\nDana’s team wants email, tasks, and documents in one workspace.\n\n## Follow-up\n\nShare the rollout plan. Julia will help with setup. Thursday at 9 works for the follow-up.',
+        body: '## The Meadow\n\nValentina’s team wants email, tasks, and documents in one workspace.\n\n## Follow-up\n\nShare the rollout plan. Julia will help with setup. Thursday at 9 works for the follow-up.',
         comments: [],
       },
       ...extraWorkspaceDocuments(),
