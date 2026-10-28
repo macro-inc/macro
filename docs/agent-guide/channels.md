@@ -1149,7 +1149,7 @@ away and return while connected to check that the call and its controls remain
 usable.
 
 The **Open chat** button at the bottom-right, level with the media controls,
-opens chat beside the video. On phones, the toggle stays in the right header island.
+opens chat beside the video. The toggle stays in this bottom controls row on phones.
 **Copy Meeting Url** sits at the bottom-left, level with the controls, and becomes
 an icon-only button in narrow panes. The panel has a **Call chat** heading and
 spans the full call content height, including the media controls row. The controls

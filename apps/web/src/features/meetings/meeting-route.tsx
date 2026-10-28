@@ -128,11 +128,10 @@ export function MeetingRouteContent(props: {
           }),
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name, credentials, chatButtonMount, copyButton) => (
+      renderCall={(onLeave, name, credentials, copyButton) => (
         <CallOverlay
           onLeave={onLeave}
           localName={name()}
-          chatButtonMount={chatButtonMount()}
           footerLeading={copyButton}
           showChat={
             authenticated() === true ||

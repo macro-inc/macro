@@ -1,7 +1,5 @@
 import { getCallExitPath } from '@channel/Call/call-exit';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { BackgroundEffect } from '@core/media/background-effect';
-import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import Phone from '@icon/system/regular/phone-call.svg';
@@ -62,14 +60,12 @@ export function MeetingPage(props: {
     onLeave: () => void,
     name: Accessor<string>,
     credentials: Accessor<MeetingCredentials | undefined>,
-    chatButtonMount: Accessor<HTMLDivElement | undefined>,
     copyButton: JSX.Element
   ) => JSX.Element;
 }) {
   const session = createMeetingSession(props.session);
   const [name, setName] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
-  const [chatButtonMount, setChatButtonMount] = createSignal<HTMLDivElement>();
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -194,13 +190,6 @@ export function MeetingPage(props: {
             title={ready()?.title || 'Call'}
             onRename={props.onRename}
           />
-          <Show when={isMobile()}>
-            <div class="ml-auto">
-              <HeaderIsland class="px-1">
-                <div ref={setChatButtonMount} />
-              </HeaderIsland>
-            </div>
-          </Show>
         </Show>
       </header>
       <Switch>
@@ -218,7 +207,6 @@ export function MeetingPage(props: {
               () => fireAndForget(leave(), 'meetings'),
               displayName,
               session.credentials,
-              chatButtonMount,
               <Show when={props.url}>
                 {(url) => (
                   <MeetingCopyButton url={url()} onCopy={props.onCopy} />
