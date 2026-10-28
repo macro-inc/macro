@@ -21,7 +21,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { chatRuleset, uploadFile } from '@core/util/upload';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   blockNameToItemType,
   itemTypeToReferenceEntityType,
@@ -359,14 +359,26 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   async function sendForward(
     target: NonNullable<ReturnType<typeof destination>>,
-    accessLevel: AccessLevel | null
+    accessLevel: AccessLevel | null,
+    deliverySpan: Span
   ) {
     const prepare = props.prepareChannel;
     const composed = composer.message();
     const message = {
       ...composed,
       attachments: [asAttachment(), ...(composed.attachments ?? [])],
-      beforeSend: prepare && ((id: string) => prepare(id, accessLevel)),
+      beforeSend:
+        prepare &&
+        ((id: string) =>
+          deliverySpan.span('share.update_permissions', async (span) => {
+            span.setAttr('channel.id', id);
+            try {
+              await prepare(id, accessLevel);
+            } catch (error) {
+              span.error('Share permission update failed');
+              throw error;
+            }
+          })),
     };
     const deliveryKey = JSON.stringify([
       message,
@@ -375,15 +387,23 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         : { type: target.type, users: [...target.users].sort() },
     ]);
     let delivery = deliveries.get(deliveryKey);
+    deliverySpan.setAttr('delivery.reused', delivery !== undefined);
     if (!delivery) {
+      const sendSpan = deliverySpan.span('share.send_message');
       let result;
       try {
-        result =
+        result = await sendSpan.run(() =>
           target.type === 'channel'
-            ? await sendToChannel({ ...message, channelId: target.id })
-            : await sendToUsers({ ...message, users: target.users });
+            ? sendToChannel({ ...message, channelId: target.id })
+            : sendToUsers({ ...message, users: target.users })
+        );
+        if (result) sendSpan.setAttr('channel.id', result.channelId);
+        else sendSpan.error('Share message send failed');
       } catch (error) {
+        sendSpan.error('Share message send failed');
         console.error('Failed to forward message', error);
+      } finally {
+        sendSpan.end();
       }
       if (!result) {
         toast.failure('Message failed to send');
@@ -396,18 +416,22 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
       }
     }
+    deliverySpan.setAttr('channel.id', delivery.result.channelId);
 
     // Sending an attachment can automatically grant access. Apply the selected
     // level afterward so that auto-grant cannot overwrite the user's choice.
     if (delivery.accessLevel !== accessLevel) {
-      if (
-        !(await submitChannelPermissions(
-          delivery.result.channelId,
-          accessLevel
-        ))
-      ) {
-        return;
-      }
+      const channelId = delivery.result.channelId;
+      const granted = await deliverySpan.span(
+        'share.update_permissions',
+        async (span) => {
+          span.setAttr('channel.id', channelId);
+          const result = await submitChannelPermissions(channelId, accessLevel);
+          if (!result) span.error('Share permission update failed');
+          return result;
+        }
+      );
+      if (!granted) return;
       if (delivery.accessLevel === undefined) {
         trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
       }
@@ -453,14 +477,16 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 // User IDs can contain email addresses; only record the count.
                 deliverySpan.setAttr('recipient.count', target.users.length);
               }
-              const delivery = await sendForward(target, accessLevel);
+              const delivery = await sendForward(
+                target,
+                accessLevel,
+                deliverySpan
+              );
               deliverySpan.setAttr(
                 'delivery.outcome',
                 delivery ? 'success' : 'failure'
               );
-              if (delivery) {
-                deliverySpan.setAttr('channel.id', delivery.channelId);
-              } else {
+              if (!delivery) {
                 deliverySpan.error('Share delivery failed');
               }
               return delivery;

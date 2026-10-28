@@ -1,4 +1,5 @@
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   cleanup,
   fireEvent,
@@ -112,9 +113,55 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+class RecordedSpan implements Span {
+  readonly children: RecordedSpan[] = [];
+  readonly attributes: Record<string, unknown> = {};
+  readonly errors: unknown[] = [];
+  ends = 0;
+
+  constructor(readonly name: string) {}
+  span<T>(name: string, operation: (span: Span) => Promise<T>): Promise<T>;
+  span(name: string): Span;
+  span<T>(
+    name: string,
+    operation?: (span: Span) => Promise<T>
+  ): Span | Promise<T> {
+    const child = new RecordedSpan(name);
+    this.children.push(child);
+    if (!operation) return child;
+    return child.run(async () => {
+      try {
+        return await operation(child);
+      } finally {
+        child.end();
+      }
+    });
+  }
+  run<T>(operation: () => T): T {
+    return operation();
+  }
+  setAttr(name: string, value: unknown) {
+    this.attributes[name] = value;
+  }
+  event() {}
+  error(error: unknown) {
+    this.errors.push(error);
+  }
+  traceparent() {
+    return undefined;
+  }
+  injectTraceHeaders() {}
+  end() {
+    this.ends += 1;
+  }
+}
+
+let trace: RecordedSpan;
+
 function mountForward(
   setChannelPermissions = vi.fn().mockResolvedValue(true),
-  blockName: ComponentProps<typeof ForwardToChannel>['blockName'] = 'agent'
+  blockName: ComponentProps<typeof ForwardToChannel>['blockName'] = 'agent',
+  prepareChannel?: ComponentProps<typeof ForwardToChannel>['prepareChannel']
 ) {
   const onSubmit = vi.fn();
   const refetch = vi.fn();
@@ -128,6 +175,7 @@ function mountForward(
       blockId="session-1"
       onSubmit={onSubmit}
       refetch={refetch}
+      prepareChannel={prepareChannel}
       ref={(value) => {
         controls = value;
       }}
@@ -150,11 +198,16 @@ function mountForward(
 
 beforeEach(() => {
   vi.resetAllMocks();
+  trace = new RecordedSpan('test');
+  vi.spyOn(Telemetry, 'span').mockImplementation(trace.span.bind(trace));
   mocks.uploading = () => false;
   mocks.attachments = [];
   mocks.recipients = [{ kind: 'channel', id: 'channel-1' }];
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('forwarding with selected access', () => {
   it('limits the desktop form invitation to responding or editing', () => {
@@ -293,6 +346,21 @@ describe('forwarding with selected access', () => {
 
       await submit();
       expect(onSubmit).not.toHaveBeenCalled();
+      const firstDelivery = trace.children[0].children[0];
+      expect(firstDelivery.attributes).toMatchObject({
+        'delivery.reused': false,
+        'channel.id': 'channel-1',
+        'delivery.outcome': 'failure',
+      });
+      expect(firstDelivery.children.map((span) => span.name)).toEqual([
+        'share.send_message',
+        'share.update_permissions',
+      ]);
+      expect(firstDelivery.children[0].errors).toEqual([]);
+      expect(firstDelivery.children[1].errors).toEqual([
+        'Share permission update failed',
+      ]);
+      expect(firstDelivery.children.map((span) => span.ends)).toEqual([1, 1]);
       setAccessLevel('edit');
       // Reordering a group's recipients still addresses the same group.
       mocks.recipients = [...mocks.recipients].reverse();
@@ -305,6 +373,16 @@ describe('forwarding with selected access', () => {
       expect(grant).toHaveBeenNthCalledWith(1, 'channel-1', 'view');
       expect(grant).toHaveBeenNthCalledWith(2, 'channel-1', 'edit');
       expect(onSubmit).toHaveBeenCalledOnce();
+      const retryDelivery = trace.children[1].children[0];
+      expect(retryDelivery.attributes).toMatchObject({
+        'delivery.reused': true,
+        'delivery.outcome': 'success',
+      });
+      expect(retryDelivery.children.map((span) => span.name)).toEqual([
+        'share.update_permissions',
+      ]);
+      expect(retryDelivery.children[0].errors).toEqual([]);
+      expect(retryDelivery.children[0].ends).toBe(1);
     }
   );
 
@@ -366,18 +444,55 @@ describe('forwarding with selected access', () => {
       'Failed to set channel permissions',
       error
     );
+    const permissions = trace.children[0].children[0].children[1];
+    expect(permissions.errors).toEqual(['Share permission update failed']);
+    expect(permissions.ends).toBe(1);
     logError.mockRestore();
   });
 
-  it('does not grant access or close when the message fails', async () => {
-    mocks.sendToChannel.mockResolvedValue(undefined);
-    const { submit, onSubmit, setChannelPermissions } = mountForward();
+  it.each(['empty result', 'rejection'])(
+    'records a failed send without granting access for an %s',
+    async (failure) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      if (failure === 'empty result')
+        mocks.sendToChannel.mockResolvedValue(undefined);
+      else mocks.sendToChannel.mockRejectedValue(new Error('Send failed'));
+      const { submit, onSubmit, setChannelPermissions } = mountForward();
+
+      await submit();
+
+      expect(setChannelPermissions).not.toHaveBeenCalled();
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(mocks.failure).toHaveBeenCalledWith('Message failed to send');
+      const delivery = trace.children[0].children[0];
+      expect(delivery.children.map((span) => span.name)).toEqual([
+        'share.send_message',
+      ]);
+      expect(delivery.children[0].errors).toEqual([
+        'Share message send failed',
+      ]);
+      expect(delivery.children[0].ends).toBe(1);
+    }
+  );
+
+  it('records a failed permission preparation before sending', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const prepare = vi.fn().mockRejectedValue(new Error('Preparation failed'));
+    mocks.sendToChannel.mockImplementation(async ({ beforeSend }) => {
+      await beforeSend('channel-1');
+      return { channelId: 'channel-1', navigateToChannel: vi.fn() };
+    });
+    const { submit, onSubmit } = mountForward(undefined, 'agent', prepare);
 
     await submit();
 
-    expect(setChannelPermissions).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(mocks.failure).toHaveBeenCalledWith('Message failed to send');
+    const permissions = trace.children[0].children[0].children.find(
+      (span) => span.name === 'share.update_permissions'
+    );
+    expect(permissions?.attributes['channel.id']).toBe('channel-1');
+    expect(permissions?.errors).toEqual(['Share permission update failed']);
+    expect(permissions?.ends).toBe(1);
   });
 
   it('waits for every recipient and reports partial failures', async () => {
