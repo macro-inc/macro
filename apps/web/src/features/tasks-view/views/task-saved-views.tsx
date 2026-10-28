@@ -321,7 +321,7 @@ export function TaskSavedViewsList() {
     isSidebarSectionOpen,
     setSidebarSectionOpen,
   } = useTasksView();
-  const list = useTaskSavedViewListState();
+  const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
   const create = () => {
     setSidebarSectionOpen('saved-views', true);
     startSavedView();
@@ -333,11 +333,8 @@ export function TaskSavedViewsList() {
         onOpenChange={(open) => setSidebarSectionOpen('saved-views', open)}
       >
         <SavedViewList.Header
-          onCreate={
-            !isSidebarSectionOpen('saved-views') || !list.empty()
-              ? create
-              : undefined
-          }
+          onCreate={create}
+          createButtonRef={attachCreateHotkeys}
         />
         <SavedViewList.Content>
           <TaskSavedViewRows />
@@ -411,12 +408,12 @@ function TaskSavedViewRows(props: {
               </div>
               <Button
                 ref={attachCreateHotkeys}
-                size="icon-sm"
-                label={t('viewMenus.createSavedView')}
+                size="sm"
                 variant="outline"
                 onClick={() => run(startSavedView)}
               >
                 <PlusIcon class="size-3.5" />
+                {t('viewMenus.createSavedView')}
               </Button>
             </div>
           </Show>
