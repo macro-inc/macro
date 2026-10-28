@@ -106,9 +106,7 @@ test('the GoAlert health check does not page through GoAlert', () => {
 });
 
 test('anomaly rules recover at zero and carry their alert window', () => {
-  const anomaly = monitors().find(
-    (r) => r.name === 'apm-server-error-anomaly'
-  );
+  const anomaly = monitors().find((r) => r.name === 'apm-server-error-anomaly');
   expect(anomaly?.inputs.monitorThresholds).toEqual({
     critical: '1',
     criticalRecovery: '0',
