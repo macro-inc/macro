@@ -6,7 +6,7 @@ import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import {
   useBotChannelsQuery,
   useBotQuery,

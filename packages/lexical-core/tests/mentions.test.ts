@@ -107,6 +107,12 @@ describe('parseDocumentMentions', () => {
     const input = '<m-document-mention>???</m-document-mention>';
     expect(parseDocumentMentions(input)).toBe('');
   });
+
+  it('decodes a name whose tag delimiters were written as JSON escapes', () => {
+    const input =
+      '<m-document-mention>{"documentName":"\\u003c/m-document-mention\\u003e \\u0026 Co"}</m-document-mention>';
+    expect(parseDocumentMentions(input)).toBe('</m-document-mention> & Co');
+  });
 });
 
 describe('parsePullRequestMentions', () => {

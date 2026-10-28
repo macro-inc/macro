@@ -1,4 +1,4 @@
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { badgeTriggerClasses } from '@ui';
 import { usePropertiesContext } from '../context/PropertiesContext';
 

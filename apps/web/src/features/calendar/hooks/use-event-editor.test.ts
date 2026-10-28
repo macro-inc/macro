@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarEventFormController } from '../components/composer/create-calendar-event-form-controller';
 import {
@@ -1065,15 +1065,19 @@ describe('guests of an event the viewer was invited to', () => {
   function editorFor(
     event: CalendarEvent,
     invitesEnabled: boolean,
-    onDetailEditsRefused?: () => void
+    onDetailsLocked?: () => void,
+    syncedEvent?: () => CalendarEvent | undefined,
+    forwardEnabled = invitesEnabled
   ) {
     return createRoot((dispose) => ({
       editor: useEventEditor({
         event: () => event,
+        syncedEvent,
         onSaved: vi.fn(),
         macroCallsEnabled: () => false,
         guestInvitesEnabled: () => invitesEnabled,
-        onDetailEditsRefused,
+        invitationForwardEnabled: () => forwardEnabled,
+        onDetailsLocked,
       }),
       dispose,
     }));
@@ -1181,10 +1185,21 @@ describe('guests of an event the viewer was invited to', () => {
     }
   });
 
-  it('explains why a guest the organizer does not let invite cannot add guests', () => {
+  it('explains why a guest the organizer does not let invite cannot add guests, and offers the forward', () => {
     const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), true);
     try {
       expect(editor.disabledFields()?.guests).toBe(true);
+      expect(editor.guestsReadOnlyReason()).toBe(
+        "Only the organizer can invite guests. You can forward the invitation instead. The people you send it to can add the event to their calendar but won't be on the guest list."
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('explains without offering the forward while forwarding is off', () => {
+    const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), false);
+    try {
       expect(editor.guestsReadOnlyReason()).toBe(
         'Only the organizer can invite guests.'
       );
@@ -1287,18 +1302,19 @@ describe('guests of an event the viewer was invited to', () => {
 
   it('locks the details when the server refuses a guest’s change', async () => {
     mocks.updateEvent.mockRejectedValueOnce({ code: 'guests_cannot_modify' });
-    const detailEditsRefused = vi.fn();
+    const detailsLocked = vi.fn();
     const { editor, dispose } = editorFor(
       invitedEvent(mayModify),
       true,
-      detailEditsRefused
+      detailsLocked
     );
     try {
       await editor.save({ ...unchanged, title: 'Planning review' });
       expect(mocks.failure).toHaveBeenCalledWith(
         'Only the organizer can change this event.'
       );
-      expect(detailEditsRefused).toHaveBeenCalledOnce();
+      expect(mocks.alert).not.toHaveBeenCalled();
+      expect(detailsLocked).toHaveBeenCalledOnce();
       expect(editor.disabledFields()?.title).toBe(true);
       expect(editor.detailsReadOnlyReason()).toBe(
         'Only the organizer can change this event.'
@@ -1312,6 +1328,78 @@ describe('guests of an event the viewer was invited to', () => {
       expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual({
         reminders: thirtyMinutes,
       });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('locks the open editor once the synced event stops letting the guest modify it', async () => {
+    const opened = invitedEvent(mayModify);
+    const [synced, setSynced] = createSignal<CalendarEvent | undefined>();
+    const detailsLocked = vi.fn();
+    const { editor, dispose } = editorFor(opened, true, detailsLocked, synced);
+    try {
+      // The day loads with the copy the editor opened with.
+      setSynced(opened);
+      expect(editor.disabledFields()?.title).toBeUndefined();
+      expect(detailsLocked).not.toHaveBeenCalled();
+
+      // The organizer turns Modify event off and the guest's copy syncs.
+      setSynced(invitedEvent(mayInvite));
+      expect(editor.disabledFields()?.title).toBe(true);
+      expect(editor.detailsReadOnlyReason()).toBe(
+        'Only the organizer can change this event.'
+      );
+      expect(detailsLocked).toHaveBeenCalledOnce();
+      expect(mocks.alert).toHaveBeenCalledWith(
+        'Only the organizer can change this event.'
+      );
+
+      await editor.save({
+        ...unchanged,
+        title: 'Planning review',
+        reminders: thirtyMinutes,
+      });
+      expect(mocks.updateEvent).toHaveBeenCalledOnce();
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual({
+        reminders: thirtyMinutes,
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps the viewer on a meeting their secondary calendar organizes', async () => {
+    // Google names the secondary calendar as the organizer and lists the
+    // viewer's own address as a plain guest.
+    const organized = invitedEvent(
+      { ...mayModify, setGuestPolicy: true, organize: true },
+      {
+        organizerEmail: 'c_0123abcd@group.calendar.google.com',
+        attendees: [
+          {
+            email: 'me@example.com',
+            isOrganizer: false,
+            isOptional: false,
+            isSelf: true,
+            responseStatus: 'accepted',
+          },
+        ],
+      }
+    );
+    const { editor, dispose } = editorFor(organized, true);
+    try {
+      expect(editor.initialValues()?.guests).toBe('me@example.com');
+
+      await editor.save({
+        ...unchanged,
+        guestEmails: ['me@example.com', 'dana@example.com'],
+      });
+
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.attendees).toEqual([
+        { email: 'me@example.com' },
+        { email: 'dana@example.com' },
+      ]);
     } finally {
       dispose();
     }

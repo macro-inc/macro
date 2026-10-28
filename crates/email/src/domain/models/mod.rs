@@ -32,8 +32,8 @@ pub use draft::{
 pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
 pub use error::EmailErr;
 pub use label::{
-    Label, LabelListVisibility, LabelType, LinkLabel, MessageLabel, MessageListVisibility,
-    UpdateThreadLabelsResult,
+    Label, LabelListVisibility, LabelType, LinkLabel, MAX_BULK_ARCHIVE_THREADS, MessageLabel,
+    MessageListVisibility, SetThreadsArchivedResult, UpdateThreadLabelsResult,
 };
 pub use link::{
     EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, ResolvedSendingInbox,

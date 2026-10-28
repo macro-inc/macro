@@ -1,11 +1,11 @@
 import { DocumentOutline } from '@app/components/DocumentOutline';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Database from '@phosphor/database.svg';
-import Plus from '@phosphor/plus.svg';
-import ShieldCheck from '@phosphor/shield-check.svg';
-import Warning from '@phosphor/warning.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Database from '@icon/system/regular/database.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import ShieldCheck from '@icon/system/regular/shield-check.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {

@@ -57,7 +57,40 @@ touch uses the global search overlay and creation uses the dock's New button.
 The **Folders** pill opens the folder overview and stays highlighted inside
 any folder; tapping it from inside a folder returns to the overview, and
 selecting another pill leaves the folder tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
-`Shared with me`, collapsible Favorites, and a searchable folder hierarchy. Filter
+`Shared with me`, collapsible Favorites, a collapsible Databases section
+listing every database the viewer owns or has been shared, by name (past ten,
+it scrolls within its own height; hidden when there are none or databases are
+disabled), and a searchable folder hierarchy.
+The Drive sidebar's import card (**Import files**, see
+[setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its
+**Import** (or a successful **Connect**) opens a new agent chat beside Drive
+that sends "Import my Notion workspace into Macro." (the agent plans with ImportFromNotion, or shows the
+Notion connect chip first; a user on a team is first asked whether to share
+the import with the team, keep it personal, or let AI decide per page, and a
+user without a team gets a personal import without being asked). The plan
+call returns within seconds and the agent presents the review card at once:
+while planning it shows `Reading Notion: 40 pages, 12 databases`, then every
+row with a **Deciding…** badge and `Deciding what to import: 40 of 84
+decided` as the decisions fill in, with **Import** disabled until the plan is
+ready. The card shows totals (Documents, Databases with rows, Task lists with
+tasks, Skipped, Already in Macro), a **Team** / **Only you** badge on every
+written row (the owner clicks it to flip it, and a folder flips what is below
+it; databases stay **Only you**, and the card says "Databases can't be shared
+with the team yet, so they stay with you."), a sharing summary line (without
+a team: `N only you — you're not on a team, so nothing is shared`), and a
+collapsed **Already in Macro** section linking to copies teammates already
+imported and shared, which are not imported again. A database or task-list
+row's caret (**Show rows of …**) shows its row count with a few sample row
+titles and, for a task list, which Notion columns become status, priority,
+due date and assignee. **Open full review** shows the whole plan in a dialog
+(a full-height sheet on phones). **Import …** approves straight from the
+card, with no confirmation step. The agent ends that
+message with "Should I kick it off?"; when the owner answers yes in chat, it
+approves the review itself (a `DecideReview` submit, the card's own approve with the
+card's choices), and the card's run state adds **Started by the agent at your
+request** ("at the owner's request" for other viewers). A message from anyone
+but the owner never approves, and a plan still being made cannot be approved
+yet. Filter
 by tag from the **Filter** menu's Tags submenu; navigating to another tab or folder
 clears tag filters. A folder with no files matching the active tag
 shows the list's no-match state rather than `This folder is empty`.
@@ -94,8 +127,14 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Move to folder, Copy Link,
-and owner-only Rename and Delete.
+unchanged. Folder menus also offer Favorite/Unfavorite, Snooze notifications…,
+Mute/Unmute notifications, Duplicate, Copy Link, Copy ID, Share, and
+owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
+**Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
+beside it (or at the top level without edit access to its parent), copying its
+subfolders, documents, tasks, and chats; email threads filed in it stay with the
+original. Folders with more than 100 subfolders, documents, and chats can't be
+duplicated, and a failed copy leaves nothing behind.
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
@@ -105,10 +144,11 @@ attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 The desktop Filter trigger shows the number of active filters, matching the
-mobile drawer; clearing all filters removes the badge. Hold Shift while selecting
-or deselecting Type options to keep the submenu open and combine several file
-types without reopening it. A normal selection closes the menu. Verify the badge
-tracks consecutive selections (1 → 2 → 1), including when filter groups refresh
+mobile drawer; clearing all filters removes the badge. Use the left checkboxes
+(or Space) to combine Type options without closing. Row activation adds and
+closes; Shift-click or **Only** selects just one type and stays open, following
+[shared multiselect behavior](ui-conventions.md#multiselect-dropdowns). Verify the badge
+tracks consecutive checkbox toggles (1 → 2 → 1), including when filter groups refresh
 while the menu is open. Desktop filter submenus allow a
 250 ms grace period when the mouse crosses the parent menu's padding; entering
 the submenu cancels the pending close. While the mouse heads toward an open
@@ -156,3 +196,41 @@ switch via the header pills; on narrow desktop layouts the header keeps a plain
 title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
+
+## Downloading files
+
+Open a video, image, code file, canvas, or other uploaded file in Drive. Its
+header exposes **Download** on desktop, phone, and tablet. The file menu uses
+the same action. Video routes also expose it in their header; channel videos
+expose it over the player on hover or keyboard focus (always visible on touch)
+and in the expanded viewer. Linked video cards also offer Download in their
+preview header without opening the file.
+
+- Click Download once. The control shows preparation progress when the server
+  provides a length, disables repeat clicks, and offers Cancel. Browser users
+  proceed directly to browser downloads. Android and iOS binaries with the
+  file-export bridge proceed directly to the system save picker.
+- **Download started** means the browser accepted the file; check its downloads
+  UI for the location and final completion. **File saved** is reserved for a
+  completed native save. Retry download remains available after a fetch failure.
+- On phones and tablets that support system sharing, **Download** opens a menu
+  with **Download** and **Share**. Share opens the system share sheet; desktop
+  headers keep only Macro's existing Share control for access and links. If a browser's
+  user gesture expires during loading, a ready notice asks for another tap on
+  Share in the open menu; that tap uses the prepared bytes without another network request.
+  No Macro download dialog appears. Cancelling a chooser keeps the file ready
+  for another attempt and does not report success.
+- Installed iOS binaries without the optional file-export bridge use the system
+  share sheet for saving too. After a slow preparation, tap **Save file** to open
+  it, then choose Save to Files or another available system action. The dedicated
+  save picker becomes available when the new native binary ships.
+- Change files or close the viewer during preparation: the old request must stop
+  and must not save a late response. Close the expanded viewer with Escape and
+  confirm focus returns to its opener.
+
+Verification: use an existing video in a channel and Drive. Check both message
+and expanded-viewer download actions; compare downloaded bytes, filename, and
+extension with the original. Repeat at 390px with touch enabled and at tablet
+width. Exercise a failed request, retry, cancellation, and changing selection.
+Native save/share dialogs require physical iOS/Android verification in addition
+to browser emulation.

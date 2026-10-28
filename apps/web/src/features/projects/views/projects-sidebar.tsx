@@ -1,8 +1,8 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
-import PlusIcon from '@phosphor/plus.svg';
-import StackIcon from '@phosphor/stack.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { ProjectsSidebarSkeleton } from '../components/project-skeletons';
 import { useProjectsContext } from '../context/projects-context';
@@ -56,6 +56,7 @@ export function ProjectsSidebar(props: ProjectsSidebarProps) {
     <CollapsibleSection.Root
       open={props.open}
       onOpenChange={props.onOpenChange}
+      class="flex min-h-40 flex-col data-expanded:flex-1"
     >
       <CollapsibleSection.Header>
         <CollapsibleSection.Trigger class="flex-1">
@@ -66,11 +67,11 @@ export function ProjectsSidebar(props: ProjectsSidebarProps) {
           <PlusIcon class="size-3.5" />
         </CollapsibleSection.Action>
       </CollapsibleSection.Header>
-      <CollapsibleSection.Content>
+      <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col">
         <Suspense fallback={<ProjectsSidebarSkeleton />}>
           <ViewSidebar.Nav
             aria-label="My projects"
-            class="max-h-52 overflow-y-auto overscroll-contain"
+            class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
           >
             <For each={source.rows()}>
               {({ project }) => (

@@ -41,7 +41,7 @@ export function DocumentPreviewSheet(
                 previewInfo={props.previewInfo}
                 snapshotInfo={props.snapshotInfo}
                 useFallbackData={props.useFallbackData}
-                onAddedToCalendar={() => props.onOpenChange(false)}
+                onOpened={() => props.onOpenChange(false)}
               />
             </Suspense>
           </MobileDrawer.ScrollBody>

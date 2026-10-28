@@ -2,7 +2,7 @@ import type {
   GroupOption,
   GroupOptionId,
 } from '@app/features/next-soup/soup-view/group-options';
-import StackSimpleIcon from '@phosphor/stack-simple.svg';
+import StackSimpleIcon from '@icon/system/regular/stack-simple.svg';
 import { type ButtonVariant, Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 

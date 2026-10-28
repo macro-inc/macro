@@ -98,6 +98,7 @@ fn reduced_definitions_keep_user_input_and_user_tool_review() {
 
 #[derive(Deserialize, JsonSchema)]
 #[schemars(title = "ReadTurnContext", description = "Read this call's context.")]
+#[serde(deny_unknown_fields)]
 struct ReadTurnContext {}
 
 impl ToolAnnotated for ReadTurnContext {
@@ -163,13 +164,14 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
             gate: gate.clone(),
             session,
             awaiting: Arc::default(),
+            reviewed_tools: Vec::new(),
         };
         let result = tools
             .dispatch_tool_call(
                 label.to_owned(),
                 RequestContext::new(MacroUserIdStr::try_from(user.to_owned()).unwrap()),
                 "ReadTurnContext",
-                &serde_json::json!({}),
+                &serde_json::json!({"acting_as":"owner"}),
             )
             .await
             .unwrap();
@@ -394,5 +396,47 @@ fn opening_transcript_leaves_out_the_hidden_agent_context() {
     assert_eq!(
         opener::transcript(&messages),
         "User: what is going on in my workspace"
+    );
+}
+
+struct SelectedActor(MacroUserIdStr<'static>);
+impl NativeToolGate for SelectedActor {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+        _: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async { NativeToolVerdict::RunAs(self.0.clone()) })
+    }
+}
+
+#[tokio::test]
+async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments() {
+    let requester = MacroUserIdStr::try_from_email("requester@example.com").unwrap();
+    let tools = GatedToolSet {
+        tools: Arc::new(AsyncToolCollection::<String>::new().add_tool::<ReadTurnContext, String>()),
+        gate: Arc::new(SelectedActor(requester.clone())),
+        session: AgentSessionId::new(),
+        awaiting: Arc::default(),
+        reviewed_tools: Vec::new(),
+    };
+    let result = tools
+        .dispatch_tool_call(
+            "context".into(),
+            RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap()),
+            "ReadTurnContext",
+            &serde_json::json!({"acting_as":"requester"}),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result["user"], requester.to_string());
+    let schema = tools.request_schemas().unwrap().remove(0).schema;
+    assert!(
+        schema.as_value()["required"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("acting_as"))
     );
 }

@@ -73,7 +73,10 @@ fn attempt_from_row(row: AttemptRow) -> SendAttempt {
             SendAttemptStatus::Sent
         } else if row.delivery_unconfirmed
             || row.error_code.as_deref() == Some("send_unknown")
-            || row.mailbox_stage.as_deref() == Some("confirming")
+            // Outlook may have delivered a submission whose worker stopped
+            // before it confirmed; while the worker still polls, it is sending.
+            || (row.mailbox_stage.as_deref() == Some("confirming")
+                && !matches!(row.mailbox_state.as_deref(), Some("pending" | "running")))
             || row.delivery_status.as_deref() == Some("unconfirmed")
             || (row.delivery_started_at.is_some() && !row.processing)
         {

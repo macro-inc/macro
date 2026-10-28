@@ -9,6 +9,11 @@ use utoipa::OpenApi;
 #[openapi(
     paths(
         crate::health::health_handler,
+        calendar_events::inbound::notes_router::event_notes,
+        calendar_events::inbound::notes_router::note_documents,
+        calendar_events::inbound::notes_router::document_note_links,
+        calendar_events::inbound::notes_router::link_event_note,
+        calendar_events::inbound::notes_router::unlink_event_note,
         calendar_events::inbound::replacement_router::prepare_calendar_replacement,
         calendar_events::inbound::replacement_router::confirm_calendar_replacement,
         calendar_events::inbound::replacement_router::calendar_replacement_status,

@@ -14,7 +14,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { GithubPullRequestEntity } from '@entity';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { useSlashMenuPullRequests } from '@queries/soup/slash-menu-pull-requests';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import type { SystemSkillSummary } from '@service-storage/generated/schemas/systemSkillSummary';
@@ -329,23 +329,28 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     number | undefined
   >(undefined);
 
+  const preferredHeight = () => (props.agentCommands ? 384 : 256);
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
-    const preferredHeight = props.agentCommands ? 384 : 256;
-    if (h === undefined) return preferredHeight;
-    return Math.min(preferredHeight, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    if (h === undefined) return preferredHeight();
+    return Math.min(
+      preferredHeight(),
+      Math.max(0, h - PANEL_DECORATION_HEIGHT)
+    );
   };
 
   return (
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
+            fullHeight: preferredHeight() + PANEL_DECORATION_HEIGHT,
           }}
           use:clickOutside={() => {
             closeMenu();

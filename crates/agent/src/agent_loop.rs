@@ -2,11 +2,14 @@
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, RegisterFn, ToolLoads, ToolRouter, UserToolFinisher};
 use crate::model::metering::MeteringContext;
+use crate::model::metering_http::MeteredHttpClient;
 use crate::model::router::{ModelRouter, ProviderAgent};
+use crate::model::types::Model;
 use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
@@ -108,6 +111,7 @@ pub struct AgentLoop {
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
+    result_limit: Option<ToolResultLimit>,
     /// The conversation (session) sessions belong to, for telemetry.
     conversation_id: Option<String>,
     /// The agent name spans carry; defaults to the usage context's feature.
@@ -115,6 +119,9 @@ pub struct AgentLoop {
     /// Whether this loop enriches the runtime's GenAI spans (see
     /// [`Self::with_genai_telemetry`]).
     genai_telemetry: bool,
+    /// The router this loop's model calls use instead of the shared one, when
+    /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
+    router: Option<ModelRouter<MeteredHttpClient>>,
 }
 
 impl AgentLoop {
@@ -135,10 +142,28 @@ impl AgentLoop {
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
             user_tool_finisher: None,
+            result_limit: None,
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
+            router: None,
         }
+    }
+
+    /// Run the model's calls on `api_key` instead of the deployment's key for
+    /// its provider. Call after [`Self::with_model`]: the key is for the
+    /// selected model's provider, which must be native Anthropic or OpenAI.
+    ///
+    /// Fails rather than falling back when the model does not route, since a
+    /// fallback would run on the deployment's key while the usage is recorded
+    /// as the caller's. Only the loop's own model calls use the key; tools
+    /// that call models themselves still use the deployment's keys.
+    pub fn with_provider_api_key(mut self, api_key: &str) -> Result<Self, AgentError> {
+        let provider = Model::try_from(self.model.as_str())?.provider().to_owned();
+        let router = ModelRouter::shared()?.with_provider_api_key(&provider, api_key)?;
+        router.route(&self.model)?;
+        self.router = Some(router);
+        Ok(self)
     }
 
     /// Select a supported inference speed without changing the model or effort.
@@ -163,6 +188,14 @@ impl AgentLoop {
     /// mid-turn wants.
     pub fn with_user_tool_finisher(mut self, finisher: UserToolFinisher) -> Self {
         self.user_tool_finisher = Some(finisher);
+        self
+    }
+
+    /// Cut tool results too long for the model to read whole, keeping them in
+    /// `limit`. The host must offer [`crate::ReadToolResult`] over the same
+    /// `limit`, which the note on a cut result tells the model to call.
+    pub fn with_tool_result_limit(mut self, limit: ToolResultLimit) -> Self {
+        self.result_limit = Some(limit);
         self
     }
 
@@ -255,9 +288,11 @@ impl AgentLoop {
             system_prompt,
             usage_ctx,
             |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
-                let routed = ModelRouter::shared()
-                    .expect("failed to initialize model router")
-                    .route_or_default(&self.model);
+                let router = match &self.router {
+                    Some(router) => router,
+                    None => ModelRouter::shared().expect("failed to initialize model router"),
+                };
+                let routed = router.route_or_default(&self.model);
                 telemetry.set_model(routed.provider(), routed.model_name());
                 routed.into_agent(
                     self.reasoning_effort,
@@ -443,6 +478,7 @@ impl AgentLoop {
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,

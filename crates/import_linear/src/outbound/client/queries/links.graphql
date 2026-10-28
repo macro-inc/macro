@@ -1,0 +1,6 @@
+query ImportInitiativeProjects($after: String) {
+  initiativeToProjects(first: 50, after: $after, includeArchived: true) {
+    nodes { initiative { id } project { id } }
+    pageInfo { hasNextPage endCursor }
+  }
+}

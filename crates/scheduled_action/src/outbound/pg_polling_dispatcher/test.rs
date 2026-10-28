@@ -16,7 +16,8 @@ use super::{PgPollingDispatcher, PgPollingDispatcherLifecycle};
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, InProgressExecution, Schedule, ScheduledAction,
+    ActionExecutionRecord, ActionKind, InProgressExecution, RunVisibility, Schedule,
+    ScheduledAction,
 };
 use crate::domain::ports::{
     ScheduledActionDispatcher, ScheduledActionExecutor, ScheduledActionRepo,
@@ -191,6 +192,7 @@ fn due_action() -> ScheduledAction {
         claimed: None,
         next_run_at: Some(now - ChronoDuration::seconds(1)),
         enabled: true,
+        run_visibility: RunVisibility::Unlisted,
     }
 }
 

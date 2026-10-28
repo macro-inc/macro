@@ -8,6 +8,7 @@ fn empty_service() -> AuthenticatedToolService<()> {
         (),
         "https://macro.com".to_owned(),
         url::Url::parse("https://static-file-service.macro.com").unwrap(),
+        McpAnalytics::disabled(),
     )
 }
 
@@ -217,4 +218,288 @@ fn authenticated_user_id_requires_user_extension_inside_request_parts() {
 
     assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
     assert_eq!(error.message, "missing user identity — is auth configured?");
+}
+
+mod code_mode {
+    use super::*;
+    use agent_code_mode::domain::{
+        CodeModeError, ExecutionStatus, UserCodeMode, UserExecutionReceipt,
+    };
+    use agent_inmem::domain::tool_mode::{ToolMode, ToolModeSelector};
+    use axum::{
+        body::{Body, to_bytes},
+        http::Request,
+    };
+    use code_execution::domain::ExecuteRequest;
+    use rmcp::transport::streamable_http_server::{
+        StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+    };
+    use std::{future::Future, pin::Pin, sync::Mutex};
+    use tokio_util::sync::CancellationToken;
+    use tower::ServiceExt;
+
+    const FLAGGED: &str = "flagged@example.com";
+    const UNFLAGGED: &str = "unflagged@example.com";
+
+    /// Code mode only for [`FLAGGED`].
+    struct Flag;
+    impl ToolModeSelector for Flag {
+        fn select<'a>(
+            &'a self,
+            owner: &'a MacroUserIdStr<'_>,
+        ) -> Pin<Box<dyn Future<Output = ToolMode> + Send + 'a>> {
+            let mode = if owner.as_ref() == format!("macro|{FLAGGED}") {
+                ToolMode::Code
+            } else {
+                ToolMode::Standard
+            };
+            Box::pin(async move { mode })
+        }
+    }
+
+    /// Records who ran what and returns the source length as data.
+    #[derive(Default)]
+    struct Runs(Mutex<Vec<(String, String)>>);
+    #[async_trait::async_trait]
+    impl UserCodeMode for Runs {
+        async fn execute(
+            &self,
+            user: &MacroUserIdStr<'static>,
+            request: ExecuteRequest,
+            _: CancellationToken,
+        ) -> Result<UserExecutionReceipt, CodeModeError> {
+            self.0
+                .lock()
+                .unwrap()
+                .push((user.to_string(), request.source.clone()));
+            Ok(UserExecutionReceipt {
+                status: ExecutionStatus::Succeeded,
+                activity: vec![],
+                activity_truncated: false,
+                result: Some(serde_json::json!({"data": request.source.len()})),
+                error: None,
+            })
+        }
+    }
+
+    fn app(runs: Arc<dyn UserCodeMode>) -> axum::Router {
+        let surface = Arc::new(CodeModeSurface {
+            native: Arc::new(AsyncToolCollection::new()),
+            tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
+            context: agent_code_mode::inbound::toolset::UserCodeModeToolContext {
+                service: runs,
+                cognition: None,
+            },
+            selector: Arc::new(Flag),
+        });
+        let mut config =
+            StreamableHttpServerConfig::default().with_allowed_hosts(["localhost".to_owned()]);
+        config.stateful_mode = false;
+        config.json_response = true;
+        let service = StreamableHttpService::new(
+            move || Ok(empty_service().with_code_mode(surface.clone())),
+            Arc::new(LocalSessionManager::default()),
+            config,
+        );
+        // Stands in for the OAuth bearer middleware, which inserts the user id.
+        axum::Router::new()
+            .nest_service("/mcp", service)
+            .layer(axum::middleware::from_fn(
+                |mut request: axum::extract::Request, next: axum::middleware::Next| async move {
+                    let user = request.headers()["x-user"].to_str().unwrap().to_owned();
+                    request
+                        .extensions_mut()
+                        .insert(MacroUserIdStr::try_from_email(&user).unwrap());
+                    next.run(request).await
+                },
+            ))
+    }
+
+    async fn rpc(
+        app: axum::Router,
+        user: &str,
+        method: &str,
+        params: serde_json::Value,
+    ) -> serde_json::Value {
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp")
+                    .header("host", "localhost")
+                    .header("x-user", user)
+                    .header("content-type", "application/json")
+                    .header("accept", "application/json, text/event-stream")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "jsonrpc": "2.0", "id": 1, "method": method, "params": params,
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    fn tool_names(response: &serde_json::Value) -> Vec<String> {
+        let mut names: Vec<String> = response["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap().to_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn only_flagged_users_see_code_mode_tools_and_instructions() {
+        let app = app(Arc::new(Runs::default()));
+
+        let flagged = rpc(app.clone(), FLAGGED, "tools/list", serde_json::json!({})).await;
+        assert_eq!(
+            tool_names(&flagged),
+            ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
+        );
+        let unflagged = rpc(app.clone(), UNFLAGGED, "tools/list", serde_json::json!({})).await;
+        assert!(tool_names(&unflagged).is_empty());
+
+        let initialize = serde_json::json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        });
+        let flagged = rpc(app.clone(), FLAGGED, "initialize", initialize.clone()).await;
+        assert!(
+            flagged["result"]["instructions"]
+                .as_str()
+                .unwrap()
+                .contains("Code mode is on")
+        );
+        let unflagged = rpc(app, UNFLAGGED, "initialize", initialize).await;
+        assert!(
+            !unflagged["result"]["instructions"]
+                .as_str()
+                .unwrap()
+                .contains("Code mode is on")
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_code_runs_as_the_caller_only_when_flagged() {
+        let runs = Arc::new(Runs::default());
+        let app = app(runs.clone());
+        let call = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {"source": "export async function main() { return {data: 1}; }"},
+        });
+
+        let unflagged = rpc(app.clone(), UNFLAGGED, "tools/call", call.clone()).await;
+        assert!(unflagged.get("error").is_some());
+        assert!(runs.0.lock().unwrap().is_empty());
+
+        let flagged = rpc(app, FLAGGED, "tools/call", call).await;
+        assert_eq!(
+            flagged["result"]["structuredContent"]["status"],
+            "succeeded"
+        );
+        assert_eq!(
+            *runs.0.lock().unwrap(),
+            [(
+                format!("macro|{FLAGGED}"),
+                "export async function main() { return {data: 1}; }".to_owned()
+            )]
+        );
+    }
+
+    #[test]
+    fn code_mode_tools_meet_directory_requirements() {
+        for (name, tool) in agent_code_mode::inbound::toolset::user_toolset()
+            .tools
+            .iter()
+        {
+            let annotations = mcp_annotations(&tool.annotations);
+            assert!(annotations.title.is_some(), "{name} has no display title");
+            assert!(annotations.read_only_hint.is_some(), "{name}");
+            assert!(annotations.destructive_hint.is_some(), "{name}");
+        }
+    }
+
+    struct NoCredentials;
+    #[async_trait::async_trait]
+    impl agent_code_mode::domain::UserExecutionCredentials for NoCredentials {
+        async fn issue(
+            &self,
+            _: &MacroUserIdStr<'static>,
+        ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
+            Ok(code_execution::domain::RunEnvironment::default())
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn flagged_user_runs_real_javascript_over_mcp() {
+        let scratch = tempfile::tempdir().unwrap();
+        let path = tokio::process::Command::new("which")
+            .arg("deno")
+            .output()
+            .await
+            .unwrap();
+        assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
+        let deno = code_execution::outbound::deno::DenoRunner::new(
+            String::from_utf8(path.stdout).unwrap().trim().into(),
+            scratch.path().to_owned(),
+            128,
+        )
+        .await
+        .unwrap();
+        let runner = code_execution::domain::ExecutionService::new(
+            Arc::new(deno),
+            code_execution::domain::Limits::default(),
+        )
+        .unwrap();
+        let app = app(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+            Arc::new(runner),
+            Arc::new(NoCredentials),
+        )));
+
+        let succeeded = rpc(
+            app.clone(),
+            FLAGGED,
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {"source": "export async function main({macro, session}) { return {data: {sdk: typeof macro.documents, session: session ?? null, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
+            }),
+        )
+        .await;
+        let receipt = &succeeded["result"]["structuredContent"];
+        assert_eq!(receipt["status"], "succeeded", "{succeeded}");
+        assert_eq!(
+            receipt["result"],
+            serde_json::json!({"data": {"sdk": "object", "session": null, "sum": 6}})
+        );
+
+        let failed = rpc(
+            app,
+            FLAGGED,
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {"source": "export async function main({macro}) { return {data: await macro.noSuchEntity.list()}; }"},
+            }),
+        )
+        .await;
+        let receipt = &failed["result"]["structuredContent"];
+        assert_eq!(receipt["status"], "failed", "{failed}");
+        assert!(
+            receipt["error"].as_str().unwrap().contains("TypeError"),
+            "{failed}"
+        );
+    }
 }

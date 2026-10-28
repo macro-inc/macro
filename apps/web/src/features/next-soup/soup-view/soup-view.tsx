@@ -48,8 +48,8 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
-  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -96,12 +96,12 @@ import {
   type SearchLocation,
 } from '@entity';
 import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import InfoIcon from '@phosphor/info.svg';
-import Spinner from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
@@ -823,7 +823,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    markCalendarNotificationSeenOnOpen(entity, notificationSource);
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {

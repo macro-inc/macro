@@ -7,10 +7,10 @@
 import type { DecisionVia } from './decisionVia';
 
 /**
- * Facts about the most recent owner decision.
+ * Facts about the most recent account-holder decision.
  */
 export interface ReviewDecisionContext {
-  /** Authenticated owner. */
+  /** Authenticated account holder. */
   by: string;
   /** Items selected by this decision. */
   items: string[];

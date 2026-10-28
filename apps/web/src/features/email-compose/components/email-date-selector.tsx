@@ -3,7 +3,7 @@ import {
   scheduleTimeLocked,
 } from '@app/features/email-compose/primitives/email-send-schedule';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ClockIcon from '@phosphor/clock.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import { buttonClasses, cn, Tooltip } from '@ui';
 import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';

@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { formatDate } from '@core/util/date';
-import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import GitFork from '@icon/system/regular/git-fork.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { Button } from '@ui';
 import { useMarkdownName } from '../component/MarkdownNameProvider';
 import { useMarkdownDocument } from '../context/markdown-document-context';

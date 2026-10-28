@@ -5,7 +5,7 @@ use super::condition::{ConditionError, ConditionVerdict, EventConditionCheck};
 use super::*;
 use crate::domain::{
     event_trigger::{ActionTrigger, EventPayload},
-    models::{ActionKind, ScheduledAction},
+    models::{ActionKind, RunVisibility, ScheduledAction},
 };
 use entity_access::domain::models::{AccessLevel, Entity, EntityPermission};
 use serde_json::json;
@@ -308,6 +308,7 @@ impl EventRunRepository for Repo {
                 event_activated_at: Some(config.activated_at),
                 next_run_at: None,
                 claimed: Some(started_at),
+                run_visibility: RunVisibility::Unlisted,
             },
         }))
     }

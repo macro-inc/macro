@@ -44,7 +44,9 @@ it('links the created session instead of showing its raw response', () => {
 
 it('does not present an uncertain prompt as completed work', () => {
   const view = render(() => (
-    <ToolErrorContext.Provider value={() => 'delivery unknown'}>
+    <ToolErrorContext.Provider
+      value={() => ({ kind: 'failed', reason: 'delivery unknown' })}
+    >
       <manageAgentSessionHandler.render
         {...context}
         tool={{

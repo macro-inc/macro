@@ -1,17 +1,31 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
+import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import {
   getCurrentQueryString,
   SessionExpiredRedirect,
 } from '@components/app/SessionExpiredRedirect';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { releaseNotificationCover } from '@macro/tauri/push-api';
+import {
+  notificationLaunchPath,
+  pendingNotificationNavigation,
+} from '@notifications/notification-navigation-intent';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import { Button } from '@ui';
-import { createEffect, createSignal, Match, on, Switch } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  Match,
+  on,
+  onMount,
+  Switch,
+} from 'solid-js';
 
 function shouldShowNativeSessionVerificationFallback(
   userInfoQuery: ReturnType<typeof useUserInfoQuery>
@@ -28,6 +42,9 @@ function shouldShowNativeSessionVerificationFallback(
 function SessionVerificationFallback(props: {
   onRetry: () => Promise<unknown>;
 }) {
+  onMount(() =>
+    fireAndForget(releaseNotificationCover(), 'notification-launch')
+  );
   const [retrying, setRetrying] = createSignal(false);
 
   const handleRetry = async () => {
@@ -54,9 +71,23 @@ function SessionVerificationFallback(props: {
   );
 }
 
-function AuthenticatedDestination(props: { fallback: string }) {
+function AuthenticatedDestination(props: {
+  fallback: string;
+  recipientId: string;
+}) {
   const pending = isNativeMobilePlatform() ? consumePostLoginRedirect() : null;
-  return <Navigate href={pending ?? props.fallback} />;
+  const notificationPath = notificationLaunchPath(props.recipientId);
+  const target = pendingNotificationNavigation()?.target;
+  if (notificationPath && target) {
+    fireAndForget(
+      prefetchChannelTarget(target.channelId, {
+        messageId: target.messageId,
+        threadId: target.threadId ?? target.messageId,
+      }),
+      'notification-navigation'
+    );
+  }
+  return <Navigate href={notificationPath ?? pending ?? props.fallback} />;
 }
 
 export function BasePathComponent() {
@@ -105,7 +136,10 @@ export function BasePathComponent() {
         <SessionExpiredRedirect />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
-        <AuthenticatedDestination fallback={redirectPath()} />
+        <AuthenticatedDestination
+          fallback={redirectPath()}
+          recipientId={userInfoQuery.data!.userId}
+        />
       </Match>
       {/* A failed remote check does not make an authenticated cached session
           unusable: the data branch above enters the local app first. Block only

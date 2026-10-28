@@ -66,6 +66,10 @@ keep deserialization compatible with existing flat rows. Exact `<noop/>` is buff
 turns without tool activity; lifecycle still reports the turn ending. User turns
 and tool-bearing turns preserve the literal text.
 
+Server-added invocation context is marked by the protocol’s block metadata.
+Omit those blocks from user messages, including replay; preserve unmarked text
+even when it contains agent-context tags.
+
 ## Checks
 
 - `cargo test -p agent_fold`.

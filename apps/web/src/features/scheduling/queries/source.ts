@@ -3,7 +3,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { SchedulingSource } from '../context/scheduling-context';
 import {
@@ -14,14 +14,83 @@ import {
 } from '../core/types';
 import { schedulingKeys } from './keys';
 
-export function useSchedulingProfileQuery(scope: Accessor<SchedulingScope>) {
-  return useQuery(() => ({
-    queryKey: schedulingKeys.settings(scope().id).queryKey,
-    queryFn: async () =>
-      (await throwOnErr(() => schedulingClient.settings(scope().teamId)))
-        .profile,
+function schedulingProfileQueryOptions(
+  scopeId: string,
+  teamId: string | undefined,
+  userId?: string
+) {
+  return queryOptions({
+    queryKey: schedulingKeys.settings(scopeId).queryKey,
+    queryFn: async () => {
+      const { profile } = await throwOnErr(() =>
+        schedulingClient.settings(teamId)
+      );
+      if (!teamId && userId) {
+        const updated = await createDefaultBookingLinkIfNeeded(profile, userId);
+        if (updated) return updated;
+      }
+      return profile;
+    },
     retry: false,
-  }));
+  });
+}
+
+function schedulingBookingsQueryOptions(
+  scopeId: string,
+  teamId: string | undefined,
+  from: string,
+  to: string
+) {
+  return queryOptions({
+    queryKey: schedulingKeys.bookings(scopeId, from, to).queryKey,
+    queryFn: async () =>
+      (await throwOnErr(() => schedulingClient.bookings(teamId, { from, to })))
+        .bookings,
+    retry: false,
+  });
+}
+
+function schedulingInsightsQueryOptions(
+  scopeId: string,
+  teamId: string | undefined,
+  from: string,
+  to: string
+) {
+  return queryOptions({
+    queryKey: schedulingKeys.insights(scopeId, from, to).queryKey,
+    queryFn: async () =>
+      (await throwOnErr(() => schedulingClient.bookings(teamId, { from, to })))
+        .bookings,
+    retry: false,
+    staleTime: 0,
+  });
+}
+
+const saveSchedulingProfileOptions = {
+  mutationFn: async ({
+    next,
+    owner,
+  }: {
+    next: SchedulingProfile;
+    owner: SchedulingScope;
+  }) =>
+    (await throwOnErr(() => schedulingClient.save(next, owner.teamId))).profile,
+  onSuccess: (
+    data: SchedulingProfile,
+    { owner }: { owner: SchedulingScope }
+  ) => {
+    queryClient.setQueryData(schedulingKeys.settings(owner.id).queryKey, data);
+  },
+};
+
+const manageBookingOptions = {
+  mutationFn: (id: string) => throwOnErr(() => schedulingClient.manage(id)),
+};
+
+export function useSchedulingProfileQuery(scope: Accessor<SchedulingScope>) {
+  return useQuery(() =>
+    schedulingProfileQueryOptions(scope().id, scope().teamId)
+  );
 }
 
 export function createSchedulingSource(
@@ -31,34 +100,15 @@ export function createSchedulingSource(
 ): SchedulingSource {
   const profile = useSchedulingProfileQuery(scope);
   const bookings = useQuery(() => ({
-    queryKey: schedulingKeys.bookings(scope().id, range().from, range().to)
-      .queryKey,
-    queryFn: async () =>
-      (
-        await throwOnErr(() =>
-          schedulingClient.bookings(scope().teamId, range())
-        )
-      ).bookings,
+    ...schedulingBookingsQueryOptions(
+      scope().id,
+      scope().teamId,
+      range().from,
+      range().to
+    ),
     enabled: loadBookings(),
-    retry: false,
   }));
-  const save = useMutation(() => ({
-    mutationFn: async ({
-      next,
-      owner,
-    }: {
-      next: SchedulingProfile;
-      owner: SchedulingScope;
-    }) =>
-      (await throwOnErr(() => schedulingClient.save(next, owner.teamId)))
-        .profile,
-    onSuccess: (data, { owner }) => {
-      queryClient.setQueryData(
-        schedulingKeys.settings(owner.id).queryKey,
-        data
-      );
-    },
-  }));
+  const save = useMutation(() => saveSchedulingProfileOptions);
   const reload = () => {
     fireAndForget(profile.refetch(), 'scheduling');
     if (loadBookings()) fireAndForget(bookings.refetch(), 'scheduling');
@@ -87,17 +137,9 @@ export function createSchedulingSource(
     },
     loadInsights: (from, to) => {
       const owner = scope();
-      return queryClient.fetchQuery({
-        queryKey: schedulingKeys.insights(owner.id, from, to).queryKey,
-        queryFn: async () =>
-          (
-            await throwOnErr(() =>
-              schedulingClient.bookings(owner.teamId, { from, to })
-            )
-          ).bookings,
-        staleTime: 0,
-        retry: false,
-      });
+      return queryClient.fetchQuery(
+        schedulingInsightsQueryOptions(owner.id, owner.teamId, from, to)
+      );
     },
     setAttendance: async (id, attendance) => {
       await throwOnErr(() => schedulingClient.setAttendance(id, attendance));
@@ -111,9 +153,7 @@ export function createSchedulingSource(
 }
 
 export function useManageBookingMutation() {
-  return useMutation(() => ({
-    mutationFn: (id: string) => throwOnErr(() => schedulingClient.manage(id)),
-  }));
+  return useMutation(() => manageBookingOptions);
 }
 
 async function createDefaultBookingLinkIfNeeded(
@@ -150,26 +190,7 @@ export function useSchedulingProfileWithAutoSetupQuery(
   scope: Accessor<SchedulingScope>,
   userId: Accessor<string>
 ) {
-  return useQuery(() => ({
-    queryKey: schedulingKeys.settings(scope().id).queryKey,
-    queryFn: async () => {
-      const result = await throwOnErr(() =>
-        schedulingClient.settings(scope().teamId)
-      );
-      const profile = result.profile;
-
-      if (!scope().teamId && userId()) {
-        const updated = await createDefaultBookingLinkIfNeeded(
-          profile,
-          userId()
-        );
-        if (updated) {
-          return updated;
-        }
-      }
-
-      return profile;
-    },
-    retry: false,
-  }));
+  return useQuery(() =>
+    schedulingProfileQueryOptions(scope().id, scope().teamId, userId())
+  );
 }

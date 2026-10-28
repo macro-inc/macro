@@ -17,12 +17,12 @@ import {
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
-import ClockCounterClockwise from '@phosphor/clock-counter-clockwise.svg';
-import Copy from '@phosphor/copy.svg';
-import Download from '@phosphor/download.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import IconLink from '@phosphor/link.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Download from '@icon/system/regular/download.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import IconLink from '@icon/system/regular/link.svg';
+import TerminalWindowIcon from '@icon/system/regular/terminal-window.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';

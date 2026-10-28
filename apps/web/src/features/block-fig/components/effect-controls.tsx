@@ -1,11 +1,11 @@
 /** Effects stay compact in the inspector; their settings open beside it. */
 import type { EffectInfo } from '@core/fig-engine/types';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import Square from '@icon/system/regular/square.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import Minus from '@phosphor/minus.svg';
-import Square from '@phosphor/square.svg';
-import X from '@phosphor/x.svg';
 import { For, Show } from 'solid-js';
 import { cssHex, normalizeHex } from '../core/color';
 import type { EffectSpec } from '../primitives/create-fig-editor';

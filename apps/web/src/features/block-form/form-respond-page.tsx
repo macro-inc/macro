@@ -8,7 +8,7 @@
  */
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Eye from '@phosphor/eye.svg';
+import Eye from '@icon/system/regular/eye.svg';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Layer } from '@ui';
 import { Show } from 'solid-js';

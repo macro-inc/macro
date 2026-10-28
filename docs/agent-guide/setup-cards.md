@@ -20,19 +20,30 @@ opens in a new tab, and the row flips to connected when the app regains focus.
 Every other app opens Pipedream's Connect UI inside the dialog. A connected row
 (native MCP or Pipedream) shows a check and **Import** (`Import from <App>`).
 
-- Every **Import** closes the dialog and opens an agent chat in a split beside
-  the current view, with an unsent prompt such as "Import my most recent
-  issues and tasks from Jira into Macro tasks.". Private instructions tell the
-  agent to list candidates and ask before creating anything, and never to
-  write to the source. Notion pages import through `ImportNotionPage`; Linear
-  and Slack items are checked against and recorded in the import ledger
-  (`ListImportEntities`, `CreateImportEntity`) so nothing imports twice.
+- Every **Import** closes the dialog and opens an agent chat beside the current
+  view with an unsent prompt. Notion, Linear and Jira open workspace importers
+  (`ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`) with “Import my
+  <Provider> workspace into Macro.” They read only, ask who should see the import
+  when needed, and present a review before creating anything. Other connectors
+  list candidates and ask which ones to create. No importer writes to its source.
+- The shared review identifies its source, shows task/project totals for issue
+  trackers, and lets the owner exclude objects and change sharing. On phones,
+  **Open full review** uses the existing full-height sheet. Approve on the card,
+  or say yes and let the agent submit it with `DecideReview`; planning must be ready.
+  Stop affects the selected source only, and completed copies stay in Macro.
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.
 
 `src/features/connector-import/browser-test/` exercises the connect and
 handoff paths without a backend.
+
+The connector browser fixture uses in-memory connection responses. Desktop
+and 390-pixel viewport captures show the connected Linear/Jira actions:
+
+![Task import dialog with Linear and Jira connected on desktop](media/imports/linear-jira-desktop.png)
+
+![Task import dialog with Linear and Jira connected at phone width](media/imports/linear-jira-phone.png)
 
 ## Sidebar setup cards
 

@@ -31,6 +31,10 @@ impl CalendarInvitationRepository for PgCalendarRepository {
             .iter()
             .map(|item| item.occurrence_key.clone())
             .collect::<Vec<_>>();
+        let preferred_links = items
+            .iter()
+            .map(|item| item.preferred_link_id)
+            .collect::<Vec<_>>();
         let matches = sqlx::query!(r#"
             SELECT requested.ord AS "ord!", candidate.id, candidate.source_link_id, candidate.email_address, candidate.sequence, candidate.status, candidate.updated_at,
                 (SELECT o.occurrence_key FROM calendar_event_occurrences o
@@ -41,18 +45,20 @@ impl CalendarInvitationRepository for PgCalendarRepository {
                  ORDER BY o.is_cancelled, (span.ends > now()) DESC,
                     CASE WHEN span.ends > now() THEN span.starts END, span.starts DESC, o.occurrence_key
                  LIMIT 1) AS occurrence_key
-            FROM unnest($2::text[], $3::text[]) WITH ORDINALITY requested(uid, occurrence_key, ord)
+            FROM unnest($2::text[], $3::text[], $4::uuid[]) WITH ORDINALITY requested(uid, occurrence_key, preferred_link_id, ord)
             CROSS JOIN LATERAL (
                 SELECT e.id, e.source_link_id, l.email_address, e.sequence, e.status, e.updated_at
                 FROM calendar_events e JOIN email_links l ON l.id = e.source_link_id
-                WHERE e.ical_uid = requested.uid
+                WHERE calendar_meeting_uid(e.ical_uid) = calendar_meeting_uid(requested.uid)
                   AND ((e.owner_id = $1 AND l.macro_id = $1)
                     OR EXISTS (SELECT 1 FROM macro_user_links delegation
                         WHERE delegation.primary_macro_id = $1 AND delegation.link_id = e.source_link_id))
                   AND EXISTS (SELECT 1 FROM calendar_event_sources s JOIN calendar_accounts a ON a.id = s.account_id JOIN calendars c ON c.id = s.calendar_id WHERE s.event_id = e.id AND s.source_kind IN ('google', 'outlook') AND NOT c.is_deleted AND a.sync_status NOT IN ('disabled', 'reauth_required'))
-                ORDER BY e.id LIMIT 16
+                  AND EXISTS (SELECT 1 FROM calendar_event_occurrences o WHERE o.event_id = e.id AND (requested.occurrence_key IS NULL OR o.occurrence_key = requested.occurrence_key OR o.recurrence_id = requested.occurrence_key))
+                -- The receiving inbox's copy stays inside the limit however many copies there are.
+                ORDER BY e.source_link_id = requested.preferred_link_id DESC, e.id LIMIT 16
             ) candidate
-        "#, viewer, &uids, &requested_keys as &[Option<String>]).fetch_all(&self.pool).await.map_err(report)?;
+        "#, viewer, &uids, &requested_keys as &[Option<String>], &preferred_links).fetch_all(&self.pool).await.map_err(report)?;
         let ids = matches.iter().map(|r| r.id).collect::<Vec<_>>();
         let keys = matches
             .iter()

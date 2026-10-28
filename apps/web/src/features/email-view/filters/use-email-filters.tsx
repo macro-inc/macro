@@ -1,8 +1,9 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
+import type { FacetSelection } from '@app/features/soup';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import type { EmailFilterGroupId } from '../types';
 import { EMAIL_FILTER_GROUPS } from './email-facets';
@@ -24,24 +25,32 @@ const STATIC_FILTER_GROUPS: EmailFilterGroup[] = EMAIL_FILTER_GROUPS.map(
 /** Shared selection semantics for the desktop menu and mobile drawer. */
 export function useEmailFilters() {
   const { state, setFacets } = useEmailView();
+  return createEmailFilters(() => state.facets, setFacets);
+}
+
+/** Shared Email filters without coupling an embedded list to the Email host. */
+export function createEmailFilters(
+  facets: Accessor<FacetSelection>,
+  setFacets: (facets: FacetSelection) => void
+) {
   const tagGroup = useTagFilterGroup();
   // Tags come last: the static groups are short, the tag list grows with use.
   const groups = createMemo((): EmailFilterGroup[] => [
     ...STATIC_FILTER_GROUPS,
     ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
   ]);
-  const groupFor = (groupId: EmailFilterGroupId) =>
+  const groupFor = (groupId: string) =>
     groups().find((group) => group.id === groupId);
   const activeFilterCount = createMemo(() =>
-    Object.values(state.facets).reduce(
+    Object.values(facets()).reduce(
       (count, optionIds) => count + optionIds.length,
       0
     )
   );
 
   // Single-select groups carry an "All" option that stands for no selection.
-  const isSelected = (groupId: EmailFilterGroupId, optionId: string) => {
-    const selected = state.facets[groupId] ?? [];
+  const isSelected = (groupId: string, optionId: string) => {
+    const selected = facets()[groupId] ?? [];
     const group = groupFor(groupId);
     if (
       group?.selectionMode === 'single' &&
@@ -54,7 +63,7 @@ export function useEmailFilters() {
   };
 
   const setSelected = (
-    groupId: EmailFilterGroupId,
+    groupId: string,
     optionId: string,
     selected: boolean
   ) => {
@@ -63,19 +72,19 @@ export function useEmailFilters() {
       if (!selected) return;
 
       setFacets({
-        ...state.facets,
+        ...facets(),
         [groupId]: optionId === group.defaultOptionId ? [] : [optionId],
       });
       return;
     }
 
-    // Persisted facets preserve unknown IDs; menu actions only accept known IDs.
+    // Preserve unknown IDs during toggles; Only explicitly removes other IDs.
     const update = selected
       ? addUnique<string>(optionId)
       : removeValue<string>(optionId);
     setFacets({
-      ...state.facets,
-      [groupId]: update(state.facets[groupId]),
+      ...facets(),
+      [groupId]: update(facets()[groupId]),
     });
   };
 
@@ -83,6 +92,7 @@ export function useEmailFilters() {
     groups,
     activeCount: activeFilterCount,
     isSelected,
+    selectedIds: (groupId: string) => facets()[groupId] ?? [],
     setSelected,
     clear: () => setFacets({}),
   };

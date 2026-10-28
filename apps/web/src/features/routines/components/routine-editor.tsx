@@ -2,10 +2,11 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ClockIcon from '@phosphor/clock.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import { cn, EntityComposer, Layer, TabSelector } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
-import type { ScheduleDraft } from '../core/draft';
+import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
+import { RoutineRunVisibility } from './routine-run-visibility';
 
 /** A project-style overview and full-width run list, inside the current pane. */
 export function RoutineEditor(props: {
@@ -19,9 +20,11 @@ export function RoutineEditor(props: {
   runActions?: JSX.Element;
   instructions: JSX.Element;
   executionPicker: JSX.Element;
+  apps?: JSX.Element;
   triggerContent?: JSX.Element;
   nextRun: string;
   history: JSX.Element;
+  showHistory?: boolean;
   actions?: JSX.Element;
   feedback?: JSX.Element;
 }) {
@@ -81,10 +84,14 @@ export function RoutineEditor(props: {
             <TabSelector class="w-fit">
               <TabSelector.List aria-label="Routine details">
                 <For
-                  each={[
-                    { value: 'settings', label: 'Overview' },
-                    { value: 'history', label: 'Run History' },
-                  ]}
+                  each={
+                    props.showHistory === false
+                      ? [{ value: 'settings', label: 'Overview' }]
+                      : [
+                          { value: 'settings', label: 'Overview' },
+                          { value: 'history', label: 'Run History' },
+                        ]
+                  }
                 >
                   {(tab) => (
                     <TabSelector.Tab value={tab.value}>
@@ -135,6 +142,13 @@ export function RoutineEditor(props: {
             >
               <EntityComposer.Properties aria-label="Routine properties">
                 {props.executionPicker}
+                <RoutineRunVisibility
+                  value={props.draft.runVisibility ?? DEFAULT_RUN_VISIBILITY}
+                  onChange={(runVisibility) =>
+                    props.onChange((draft) => ({ ...draft, runVisibility }))
+                  }
+                />
+                {props.apps}
               </EntityComposer.Properties>
             </fieldset>
             <Layer depth={1}>

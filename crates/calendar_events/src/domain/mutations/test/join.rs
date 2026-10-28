@@ -6,7 +6,8 @@ use crate::domain::join_requests::{
     annotate_join_state,
 };
 use crate::domain::models::{
-    CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem, CalendarProvider,
+    CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
+    CalendarMentionViewerCopy, CalendarProvider,
 };
 use crate::domain::ports::{
     CalendarJoinRequestError, CalendarJoinRequestNotifier, CalendarJoinRequestService,
@@ -109,7 +110,7 @@ fn pending_request(repo: &FakeRepo, status: CalendarJoinRequestStatus) -> Calend
 }
 
 #[tokio::test]
-async fn a_channel_member_asks_the_sharer_once_until_declined() {
+async fn a_channel_member_asks_the_sharer_only_once() {
     let repo = sharer_organizes();
     let requests = repo.join_requests.clone();
     let (service, notifier) = asking(repo);
@@ -124,16 +125,21 @@ async fn a_channel_member_asks_the_sharer_once_until_declined() {
     assert_eq!(again.id, first.id);
     assert_eq!(notifier.notified.lock().unwrap().len(), 1);
 
+    // A declined request stands: asking again is refused and the sharer is
+    // not asked a second time.
     requests.lock().unwrap()[0].status = CalendarJoinRequestStatus::Declined;
-    let reopened = service.request_to_join(MEMBER, event_id).await.unwrap();
-    assert_eq!(reopened.id, first.id);
-    assert_eq!(reopened.status, CalendarJoinRequestStatus::Pending);
+    let error = service.request_to_join(MEMBER, event_id).await.unwrap_err();
+    assert!(
+        matches!(error, CalendarJoinRequestError::Declined),
+        "{error:?}"
+    );
+    assert_eq!(
+        requests.lock().unwrap()[0].status,
+        CalendarJoinRequestStatus::Declined
+    );
     assert_eq!(
         notifier.notified.lock().unwrap().as_slice(),
-        [
-            (SHARER.to_string(), first.id, "Offsite".to_string()),
-            (SHARER.to_string(), first.id, "Offsite".to_string()),
-        ]
+        [(SHARER.to_string(), first.id, "Offsite".to_string())]
     );
 }
 
@@ -216,6 +222,7 @@ fn on_outlook(mut repo: FakeRepo) -> FakeRepo {
         link_id: SELF_LINK,
         email: "self@example.com".to_string(),
         provider: CalendarProvider::Outlook,
+        writable_calendar_ids: Vec::new(),
     }]);
     repo
 }
@@ -284,7 +291,7 @@ async fn only_someone_who_can_change_the_event_lists_its_requests() {
             .list_join_requests(SHARER, request.event_id)
             .await
             .unwrap(),
-        [request.clone()]
+        std::slice::from_ref(&request)
     );
 
     for (mutation_target, case) in [
@@ -442,6 +449,7 @@ async fn a_read_only_copy_cannot_answer() {
 
 fn preview(viewer_event_id: Option<Uuid>) -> CalendarMentionPreview {
     CalendarMentionPreview::Accessible(Box::new(CalendarMentionEvent {
+        viewer_copy: viewer_event_id.map(|_| CalendarMentionViewerCopy::Event),
         viewer_event_id,
         title: "Offsite".to_string(),
         description: None,
@@ -492,4 +500,28 @@ async fn channel_shared_previews_carry_the_ask_to_join_state() {
     };
     assert!(!own.can_request_to_join);
     assert_eq!(own.join_request_status, None);
+}
+
+#[tokio::test]
+async fn a_declined_requester_may_not_ask_again() {
+    let repo = sharer_organizes();
+    let request = pending_request(&repo, CalendarJoinRequestStatus::Declined);
+    let items = [CalendarMentionRequestItem {
+        event_id: request.event_id,
+        occurrence_key: None,
+    }];
+    let mut previews = vec![preview(None)];
+
+    annotate_join_state(&repo, MEMBER, &items, &mut previews)
+        .await
+        .unwrap();
+
+    let CalendarMentionPreview::Accessible(shared) = &previews[0] else {
+        panic!("the shared preview stays accessible");
+    };
+    assert!(!shared.can_request_to_join);
+    assert_eq!(
+        shared.join_request_status,
+        Some(CalendarJoinRequestStatus::Declined)
+    );
 }

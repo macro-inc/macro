@@ -1,5 +1,5 @@
-import Plus from '@phosphor/plus.svg';
-import X from '@phosphor/x.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Checkbox, Input, TextField } from '@ui';
 import { createSignal, createUniqueId, Index, Show } from 'solid-js';
 

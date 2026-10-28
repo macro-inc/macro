@@ -1,5 +1,4 @@
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
@@ -10,7 +9,6 @@ import {
 } from '@queries/auth/cursor-api-key';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { SettingsSelect } from './settings-select';
 
 /**
  * The model new Cursor sessions start on. Saves on change; renders loading,
@@ -73,13 +71,17 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
     <Show
       when={!cursorModels.isPending}
       fallback={
-        <SettingsSelect
-          label="Default model"
+        <ModelCatalogPicker
+          value={null}
           options={[]}
           placeholder="Loading models…"
-          triggerClass={props.triggerClass}
-          onChange={(id) => fireAndForget(changeModel(id), 'cursor-connect')}
-          disabled
+          onSelect={(id) => fireAndForget(changeModel(id), 'cursor-connect')}
+          ariaLabel="Default model"
+          triggerClass={
+            props.triggerClass ??
+            'h-9 w-full justify-between text-base [&>span]:flex-1'
+          }
+          pending
         />
       }
     >
@@ -109,36 +111,18 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
             </p>
           }
         >
-          <Show
-            when={isLargeModelCatalog(catalogOptions())}
-            fallback={
-              <SettingsSelect
-                label="Default model"
-                options={modelOptions()}
-                value={selectedModelId()}
-                triggerClass={props.triggerClass}
-                disabled={setDefaultModel.isPending}
-                onChange={(id) =>
-                  fireAndForget(changeModel(id), 'cursor-connect')
-                }
-              />
+          <ModelCatalogPicker
+            value={selectedModelId()}
+            options={catalogOptions()}
+            onSelect={(id) => fireAndForget(changeModel(id), 'cursor-connect')}
+            disabled={setDefaultModel.isPending}
+            ariaLabel="Default model"
+            triggerClass={
+              props.triggerClass ??
+              'h-9 w-full justify-between text-base [&>span]:flex-1'
             }
-          >
-            <ModelCatalogPicker
-              value={selectedModelId()}
-              options={catalogOptions()}
-              onSelect={(id) =>
-                fireAndForget(changeModel(id), 'cursor-connect')
-              }
-              disabled={setDefaultModel.isPending}
-              ariaLabel="Default model"
-              triggerClass={
-                props.triggerClass ??
-                'h-9 w-full justify-between text-base [&>span]:flex-1'
-              }
-              placement="bottom-start"
-            />
-          </Show>
+            placement="bottom-start"
+          />
         </Show>
       </Show>
     </Show>

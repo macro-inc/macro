@@ -7,7 +7,7 @@
 import type { CopyCalendarEventRequestCalendarId } from './copyCalendarEventRequestCalendarId';
 
 /**
- * Request body adding a channel-shared event to the requester's calendar.
+ * Request body adding a shared event to the requester's calendar.
  */
 export interface CopyCalendarEventRequest {
   /** Google calendar to add the copy to; defaults to the requester's

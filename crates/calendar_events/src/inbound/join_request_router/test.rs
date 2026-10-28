@@ -22,6 +22,11 @@ fn domain_failures_map_to_their_statuses_and_codes() {
             CalendarJoinRequestErrorCode::SharerCannotInvite,
         ),
         (
+            CalendarJoinRequestError::Declined,
+            StatusCode::CONFLICT,
+            CalendarJoinRequestErrorCode::RequestDeclined,
+        ),
+        (
             CalendarJoinRequestError::Internal(rootcause::report!("db down")),
             StatusCode::INTERNAL_SERVER_ERROR,
             CalendarJoinRequestErrorCode::Internal,

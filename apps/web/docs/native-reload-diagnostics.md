@@ -21,11 +21,15 @@ not proof a document was later restored. This checkpoint cannot identify why
 WebKit terminated; correlate it with the native counters and device diagnostics.
 
 When investigating a repeat, compare the native launch ID, termination counter,
-reload request/dispatch markers, and the recovered heartbeat/lifecycle events.
-The same native launch with a larger termination counter confirms WebContent
+reload request/dispatch markers, and the recovered heartbeat/lifecycle events. On new binaries,
+`previous_document_last_*` names the route and entity type the document was
+navigating to. The same native launch with a larger termination counter confirms WebContent
 recovery. A memory warning supports pressure but does not identify the kill reason.
-For the OS reason, obtain the incident's iPhone Analytics Data report: a matching
-WebKit WebContent crash report or JetsamEvent, including its process and timestamp.
+For the OS reason, obtain the incident's iPhone Analytics Data report (Settings →
+Privacy & Security → Analytics & Improvements → Analytics Data): a matching
+`com.apple.WebKit.WebContent-…` crash report, or a `JetsamEvent-…` listing
+`com.apple.WebKit.WebContent` as killed, near the termination timestamp. On
+macOS, use Console → Crash Reports.
 Do not use the host app's memory footprint as the renderer's memory footprint;
 WebContent runs in a separate process. A change in native launch ID alone cannot
 distinguish a crash, OS termination, or the user relaunching the app.

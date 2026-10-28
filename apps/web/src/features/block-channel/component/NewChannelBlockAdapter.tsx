@@ -21,6 +21,7 @@ import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import type { MessageTimelineStateSnapshot } from '@channel/Channel/Channel';
+import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import {
   ChannelMessages,
   ChannelSurface,
@@ -78,9 +79,9 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, canEditChannelIdentity } from '@entity';
-import PictureIcon from '@phosphor/image.svg';
-import RenameIcon from '@phosphor/pencil-line.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import PictureIcon from '@icon/system/regular/image.svg';
+import RenameIcon from '@icon/system/regular/pencil-line.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
@@ -562,9 +563,11 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
           <div class="flex min-h-0 flex-1 flex-col" data-channel-tab-content>
             <Switch>
               <Match when={activeTab() === 'messages'}>
-                <ChannelMessages
-                  autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                />
+                <Suspense fallback={<ChannelLoading />}>
+                  <ChannelMessages
+                    autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                  />
+                </Suspense>
               </Match>
               <Match when={activeTab() === 'attachments'}>
                 <ChannelAttachmentsTab channelId={channelId} />

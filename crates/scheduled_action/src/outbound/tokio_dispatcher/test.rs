@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
-use crate::domain::models::{ActionKind, Schedule};
+use crate::domain::models::{ActionKind, RunVisibility, Schedule};
 use model_owner::Owner;
 use serde_json::json;
 
@@ -26,6 +26,7 @@ fn only_enabled_cron_actions_get_a_timer() {
         claimed: None,
         next_run_at: Some(now),
         enabled: true,
+        run_visibility: RunVisibility::Unlisted,
     };
     assert!(action_sleep(id, &action, 0).is_some());
     action.trigger = serde_json::from_value(json!({"type":"multiple", "triggers":[

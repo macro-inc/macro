@@ -11,6 +11,8 @@ MCP app, a custom server, or a GitHub installation token) on each request.
 
 - `src/lib.rs` doc comment: the full request flow (session token → grant →
   credential port → forward).
+- `src/domain/service/actor.rs`: per-call requester/owner selection and cross-account approval policy.
+- `src/outbound/actor_mcp.rs`: independent authenticated MCP sessions for tool listing/calls; credentials never share upstream session state.
 - `src/domain/service.rs`: `EgressServiceImpl` — steps 2 and 3 (token → grant,
   grant → credential).
 - `src/domain/ports.rs`: `SessionAuthority`, `McpCredentials`, `GithubTokens`,
@@ -38,14 +40,23 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `src/outbound/` (adapter) → `src/domain/service.rs` (dispatch) →
   `src/domain/approval.rs` if it needs owner approval.
 
+Require `acting_as: requester | owner` on account-using session MCP calls;
+resolve it before credentials, strip it before upstream dispatch, and ask for
+approval only when the selected account differs from the verified requester.
 Check turn authority through `TurnPrompter::acting_user()`: System turns never
-inherit owner access, including malformed records that still contain a user ID.
+inherit requester access, including malformed records retaining a user ID.
+Keep discovery on the session owner's configured catalog. Requester-only
+integrations are not advertised by this version. A missing selected connection
+returns an actionable tool error; never fall back to another account.
+Actor selection covers executable tool calls; initialization and other non-tool
+MCP methods retain their existing owner proxy behavior. Git and preview egress
+retain their existing session/repository identities.
 
 ## Checks
 
 - `cargo test -p agent_egress` (`SQLX_OFFLINE` unset).
 
-Code-mode minting attaches the session agent to a short-lived owner token;
+Code-mode minting attaches the session agent to a short-lived selected-user token;
 ordinary MCP owner tokens omit agent attribution.
 
 ## Gotchas

@@ -90,7 +90,10 @@ reappear in its request nor be retried by Redo. Partial feedback keeps an Undo
 action. A reply with no matching notification IDs must release that target's
 optimistic hide and notification overrides immediately, even if Undo was never
 clicked and mounted readers remain stale. Do not wait for acknowledgement or a
-timer when there is no receipt. Accepted siblings keep their own display intent;
+timer when there is no receipt. The exception is an entity-wide Done with the
+normalized cache: the rows it left out were already done on the server, so they
+are written as done into the cache and the hide stays until readers acknowledge
+it; that target has nothing to undo. Accepted siblings keep their own display intent;
 a no-op target cannot borrow their IDs to restore its row. Mixed accepted/no-op
 results replace the optimistic full-count toast with the actual completed count
 and retain Undo for accepted writes. An empty notification receipt alone must not
@@ -129,11 +132,11 @@ editing: only moved or removed rows should be added or removed. Rename a row and
 then drag it: its drag label/payload must use the new fields without another
 registration/layout measurement.
 
-Desktop multi-select filter menus in Home, Tasks, Drive, Email, Reviews, Search,
-CRM, Calendar, and database option-value filters close after an ordinary click or
-Enter. Hold Shift while clicking or pressing Enter to toggle individual options
-and keep the menu open for further selections. Shift does not select a range.
-Single-select controls and mobile filter drawers retain their existing behavior.
+Shared list-filter menus in Home, Tasks, Drive, Email, Reviews, and CRM, plus
+searchable filter dropdowns, use the [multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
+checkbox toggles stay open, row activation adds and closes, and Shift/Only
+replaces the current group's selection without closing. Single-select controls,
+independent settings, and mobile filter drawers retain their existing behavior.
 
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped

@@ -1324,6 +1324,48 @@ async fn owner_edit_propagates_move_and_updates_all_modified_timestamps() {
 }
 
 #[tokio::test]
+async fn sharing_a_nested_project_keeps_what_it_inherits_from_its_parent() {
+    let project_id = Uuid::new_v4();
+    let parent_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), Some(TEAM_ID), 0);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project()
+        .withf(|args| !args.update_parent && args.team_share.is_some())
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    Some(&parent_id.to_string()),
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .times(2)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let eam = RecordingEam::default();
+    let calls = eam.calls.clone();
+    let service = mutation_service(repo, eam, RecordingIndexer::default());
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, Some(parent_id), false),
+            team_share_args(Some(AccessLevel::Edit)),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        Vec::new(),
+        "no move, so no inherited access is dropped"
+    );
+}
+
+#[tokio::test]
 async fn empty_parent_clears_persistence_and_eam_parent_argument() {
     let project_id = Uuid::new_v4();
     let old_parent_id = Uuid::new_v4();

@@ -6,7 +6,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@phosphor/stack.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -45,6 +45,8 @@ type PropertyEntityDisplayResult = {
   icon: Accessor<JSX.Element>;
   /** Whether preview data is still loading */
   isLoading: Accessor<boolean>;
+  /** Whether the current preview confirms access to the referenced entity. */
+  hasPreviewAccess: Accessor<boolean>;
   /** Block or file type for linking (null if not linkable) */
   blockOrFileType: Accessor<string | null>;
   /** URL params for navigation (e.g., message ID for threads) */
@@ -103,6 +105,10 @@ export function usePropertyEntityDisplay(
   // Keep subscription ownership separate from its value: a live result must
   // not dispose and reacquire the preview that produced it.
   const preview = () => previewSource()?.();
+  const hasPreviewAccess = () => {
+    const item = preview();
+    return !!item && isAccessiblePreviewItem(item);
+  };
 
   const channelNameSource = createMemo(() => {
     const eType = entityType();
@@ -217,6 +223,7 @@ export function usePropertyEntityDisplay(
     name,
     icon,
     isLoading,
+    hasPreviewAccess,
     blockOrFileType,
     nativeProjectId,
     linkParams,

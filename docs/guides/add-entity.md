@@ -88,8 +88,8 @@ migrations, the SQLx cache, and tests.
 - **Grant cleanup trigger:** `entity_access`, `entity_properties`, `favorite`, and
   collab surfaces have no foreign key to your table. Add an `AFTER DELETE` trigger
   that deletes the kind's `entity_access` rows, as `database_entities`,
-  `crm_pipeline_entities`, and `forms` do. Initiatives lack one, so deleting an
-  owner's account can orphan their grants.
+  `crm_pipeline_entities`, `calendar_events`, and `forms` do. Initiatives lack
+  one, so deleting an owner's account can orphan their grants.
 - **Enum values get their own migration.** `ALTER TYPE ... ADD VALUE` cannot be
   used in the transaction that adds it, and SQLx runs each file in one
   transaction. Add the value in one migration and backfill in the next (see
@@ -183,8 +183,11 @@ Postgres repo.
   databases, and pipelines are not there yet, so their trash is never emptied.
 - **Favorites (optional):** `crates/favorites/src/domain/mutation_service.rs`
   `validate_favoritable` is exhaustive; recent kinds return unsupported. If you
-  enable favorites, also update `crates/graphql_favorite` and clean up `favorite`
-  rows on delete, since nothing else does.
+  enable favorites, join your table in `list_favorites`
+  (`crates/favorites/src/outbound/pg_favorites_repo.rs`) so a favorite of a
+  deleted entity stops listing, as documents, projects, and agent sessions do.
+  Nothing reaps the `favorite` rows themselves; a delete-time cleanup is still
+  worth adding when the kind is deleted in bulk.
 
 ## 6. Properties (optional)
 

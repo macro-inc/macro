@@ -35,11 +35,13 @@ export function CalendarCreateMenu(props: {
             as={ViewCreateButton}
             presentation={presentation()}
             menu
-            aria-label="New event or call"
+            aria-label="New event, call, or booking link"
           />
         )}
       </Show>
-      <Dropdown.Content class={props.contentClass ?? 'min-w-40'}>
+      <Dropdown.Content
+        class={props.contentClass ?? 'w-80 max-w-[calc(100vw-2rem)]'}
+      >
         <Dropdown.Group>{props.children}</Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>

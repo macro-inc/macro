@@ -1,7 +1,8 @@
+import { analytics } from '@app/lib/analytics';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneIcon from '@phosphor/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
@@ -39,6 +40,11 @@ export function ActiveCallMessage(props: { channelId: string }) {
   );
 
   async function handleJoin() {
+    analytics.track('call_action', {
+      action: 'join_clicked',
+      channelId: props.channelId,
+      isExistingCall: true,
+    });
     try {
       await call.joinCall();
     } catch (error) {

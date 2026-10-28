@@ -48,6 +48,7 @@ vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  recordGraphqlMutationQueueCleared: vi.fn(async () => {}),
   setGraphqlSoupSessionActive: vi.fn(),
 }));
 vi.mock('@queries/auth/user-info', () => ({

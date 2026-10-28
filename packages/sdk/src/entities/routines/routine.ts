@@ -5,6 +5,7 @@ import type {
   EventFilter,
   RoutineModelId,
   RoutineTrigger,
+  RunVisibility,
   ScheduledActionResponse,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
@@ -74,6 +75,11 @@ export interface RoutineOptions {
   agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;
+  /**
+   * Whether runs appear in Home and the Agents list. Defaults to `unlisted` on
+   * creation; an update that omits it keeps the stored value.
+   */
+  runVisibility?: RunVisibility;
 }
 
 /** A scheduled or event-triggered agent task. */
@@ -105,6 +111,9 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
 
   /** Whether the routine is enabled. */
   readonly enabled = this.field('enabled');
+
+  /** Whether the routine's runs appear in Home and the Agents list. */
+  readonly runVisibility = this.field('run_visibility');
 
   /** Next scheduled execution. */
   readonly nextRunAt = this.field('next_run_at');
@@ -205,6 +214,7 @@ export function routineBody(options: RoutineOptions) {
     kind: 'Agent' as const,
     name: options.name,
     enabled: options.enabled,
+    run_visibility: options.runVisibility,
     trigger: triggerBody(options.trigger),
     task: { ...task },
   };

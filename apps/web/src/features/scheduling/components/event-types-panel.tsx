@@ -8,18 +8,18 @@ import {
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import External from '@icon/system/regular/arrow-square-out.svg';
+import ArrowsClockwise from '@icon/system/regular/arrows-clockwise.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Dots from '@icon/system/regular/dots-three.svg';
+import Link from '@icon/system/regular/link.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Timer from '@icon/system/regular/timer.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import User from '@icon/system/regular/user.svg';
+import Users from '@icon/system/regular/users.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import External from '@phosphor/arrow-square-out.svg';
-import ArrowsClockwise from '@phosphor/arrows-clockwise.svg';
-import Copy from '@phosphor/copy.svg';
-import Dots from '@phosphor/dots-three.svg';
 import Globe from '@phosphor/globe-simple.svg';
-import Link from '@phosphor/link.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Timer from '@phosphor/timer.svg';
-import Trash from '@phosphor/trash.svg';
-import User from '@phosphor/user.svg';
-import Users from '@phosphor/users.svg';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { Badge, Button, cn, Dropdown, ToggleSwitch } from '@ui';
 import { batch, createSignal, For, type JSX, Show } from 'solid-js';
@@ -238,8 +238,7 @@ export function EventTypesPanel(props: {
                     contextEvent.stopPropagation();
                     openDrawer(event, rowButton);
                   }}
-                  class="min-h-10 min-w-0 rounded-xl px-2 py-1 transition-opacity hover:bg-list-hover focus-within:bg-list-hover"
-                  classList={{ 'opacity-50': !event.enabled }}
+                  class="min-h-10 min-w-0 rounded-xl px-2 py-1 hover:bg-list-hover focus-within:bg-list-hover"
                 >
                   <div class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 not-touch:@min-[36rem]/booking-links:grid-cols-[auto_minmax(0,1fr)_auto]">
                     <ToggleSwitch
@@ -286,7 +285,8 @@ export function EventTypesPanel(props: {
                       onClick={(click) =>
                         props.onView(event, click.currentTarget)
                       }
-                      class="flex min-w-0 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      class="flex min-w-0 items-center gap-2 rounded-sm text-left outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-accent"
+                      classList={{ 'opacity-50': !event.enabled }}
                     >
                       <Link
                         aria-hidden="true"
@@ -301,7 +301,10 @@ export function EventTypesPanel(props: {
                         </p>
                       </Show>
                     </button>
-                    <div class="col-start-2 flex min-w-0 flex-wrap items-center justify-end gap-2 touch:justify-start touch:pl-6 not-touch:@min-[36rem]/booking-links:col-start-auto">
+                    <div
+                      class="col-start-2 flex min-w-0 flex-wrap items-center justify-end gap-2 transition-opacity touch:justify-start touch:pl-6 not-touch:@min-[36rem]/booking-links:col-start-auto"
+                      classList={{ 'opacity-50': !event.enabled }}
+                    >
                       <Dropdown>
                         <Dropdown.Trigger
                           as="button"

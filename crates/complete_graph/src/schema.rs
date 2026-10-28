@@ -5,6 +5,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::edges::GraphqlAgentSessionLogEntry;
 use crate::realtime::AgentSessionLogSubscriptions;
+use crate::saved_view::{GraphqlSavedView, GraphqlSavedViewPage, SavedViewMutationRoot};
 use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
 use axum::extract::FromRef;
@@ -105,6 +106,7 @@ pub struct CompleteMutationRoot<
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
+    SavedViewMutationRoot,
 );
 
 impl<
@@ -131,6 +133,7 @@ impl<
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
+            SavedViewMutationRoot,
         )
     }
 }
@@ -698,6 +701,26 @@ where
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
+    /// Visible personal and effectively shared definitions, bounded after visibility checks.
+    async fn saved_views(
+        &self,
+        ctx: &Context<'_>,
+        kind: Option<String>,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> async_graphql::Result<GraphqlSavedViewPage> {
+        crate::saved_view::list(ctx, self.user_id.as_ref(), kind, first, after).await
+    }
+
+    /// An authorized definition or null when not found or not visible.
+    async fn saved_view(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSavedView>> {
+        crate::saved_view::get(ctx, self.user_id.as_ref(), id).await
+    }
+
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
@@ -762,7 +785,7 @@ where
         ctx: &Context<'_>,
         filter: Option<FavoritesFilterInput>,
     ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
-        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()).await
+        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()?).await
     }
 
     /// Non-deleted projects the authenticated user can access, as a flat list.
@@ -776,8 +799,9 @@ where
         resolve_folders(ctx, &self.user_id).await
     }
 
-    /// A page of the authenticated user's own activity, newest first.
-    /// Delegated actions performed on the user's behalf are included.
+    /// A page of activity, newest first: by default the authenticated
+    /// user's own, delegated actions included; in the `TEAM` scope, their
+    /// teammates' activity on entities shared with the user.
     async fn activity(
         &self,
         ctx: &Context<'_>,

@@ -4,8 +4,8 @@
  * with the conversion that makes them editable. Presentational.
  */
 
-import WarningCircle from '@phosphor/warning-circle.svg';
-import X from '@phosphor/x.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, Show } from 'solid-js';
 

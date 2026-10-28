@@ -1,8 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Input } from '@ui/components/Input';

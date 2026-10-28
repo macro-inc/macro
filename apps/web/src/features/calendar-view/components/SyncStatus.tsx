@@ -1,4 +1,4 @@
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Show } from 'solid-js';
 
 /** Keep backfill progress visible while events arrive and the grid is usable. */

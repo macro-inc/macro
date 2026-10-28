@@ -20,9 +20,9 @@ import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -40,6 +40,7 @@ import {
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
 import { CALENDAR_TOUR } from '../tour';
 import {
+  CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
   CalendarCreateEventItem,
 } from './CalendarCreateItems';
@@ -330,7 +331,6 @@ export function CalendarSidebar() {
           presentation={isTouchDevice() ? undefined : 'sidebar'}
           size="md"
           class="h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11"
-          contentClass="w-[var(--kb-popper-anchor-width)] min-w-40"
           trigger={
             <>
               <ViewSidebar.Icon>
@@ -343,6 +343,7 @@ export function CalendarSidebar() {
         >
           <CalendarCreateEventItem onSelect={closeOverlay} />
           <CalendarCreateCallItem onSelect={closeOverlay} />
+          <CalendarCreateBookingLinkItem onSelect={closeOverlay} />
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">

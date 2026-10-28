@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import { ActionDialogShell, Button, Tabs, TextField, Tooltip } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { match } from 'ts-pattern';

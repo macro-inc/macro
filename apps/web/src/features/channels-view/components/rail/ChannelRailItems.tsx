@@ -12,11 +12,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
-import AtIcon from '@phosphor/at.svg';
-import XIcon from '@phosphor/x.svg';
-import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
-import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
+import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
+import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import AtIcon from '@icon/system/regular/at.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
@@ -41,6 +41,8 @@ export type ChannelRailItemProps = {
   selected: boolean;
   focused: boolean;
   onActivate: (event: MouseEvent) => void;
+  /** The press before activation, for warming what the row opens. */
+  onPress?: (event: PointerEvent) => void;
 };
 
 /**
@@ -286,6 +288,7 @@ export function ConversationCard(props: ConversationCardProps) {
         props.class
       )}
       aria-current={props.selected ? 'page' : undefined}
+      onPointerDown={(event) => props.onPress?.(event)}
       onMouseDown={(event) => {
         if (isPrimaryMouseDown(event)) props.onActivate(event);
       }}

@@ -17,9 +17,6 @@ vi.mock('@macro-inc/observability', () => ({
 vi.mock('@app/lib/graphql-cache', () => ({
   normalizedCacheResultMetadata: () => undefined,
 }));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: () => ({}),
-}));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };

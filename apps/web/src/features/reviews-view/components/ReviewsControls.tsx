@@ -16,9 +16,9 @@ import { PR_ORIGIN_LABELS, PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import BoardIcon from '@icon/system/regular/kanban.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import BoardIcon from '@phosphor/kanban.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
 import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { UNKNOWN_ORIGIN } from '../reviews-filter';
@@ -198,6 +198,7 @@ export function ReviewsControls(
           onOpenChange={handleMenuOpenChange('filters')}
           triggerRef={(element) => (filterTrigger = element)}
           isSelected={(group, id) => isSelected(props, group, id)}
+          selectedIds={(group) => props.selected[group]}
           onSelectionChange={props.onFilterChange}
           onClear={props.onClearFilters}
         />

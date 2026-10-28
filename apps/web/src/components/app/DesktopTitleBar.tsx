@@ -1,10 +1,11 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { splitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import { DesktopTabStrip } from '@components/app/tab-layout/DesktopTabStrip';
 import { TOKENS } from '@core/hotkey/tokens';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ColumnsPlusIcon from '@phosphor/columns-plus-right.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ColumnsPlusIcon from '@icon/system/regular/columns-plus-right.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 
@@ -40,6 +41,12 @@ export function DesktopTitleBar() {
         >
           <CaretRightIcon class="size-4" />
         </Button>
+      </div>
+      <div
+        data-tauri-drag-region
+        class="flex h-full min-w-0 flex-1 items-center"
+      >
+        <DesktopTabStrip />
       </div>
       <Show when={globalSplitManager()}>
         {(manager) => (

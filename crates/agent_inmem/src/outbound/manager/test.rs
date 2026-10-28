@@ -116,6 +116,34 @@ async fn attach_retrying(
     }
 }
 
+/// Compare the original prose while retaining the actual invocation envelope in
+/// ScriptedEngine's capture. Protocol tests assert its current action ID.
+fn without_invocation_context(message: &str) -> &str {
+    let Some((prose, suffix)) = message.rsplit_once("<m-agent-context>") else {
+        return message;
+    };
+    let Some(json) = suffix.strip_suffix("</m-agent-context>") else {
+        return message;
+    };
+    let Ok(context) = serde_json::from_str::<serde_json::Value>(json) else {
+        return message;
+    };
+    let Some(invocation) = context["text"]
+        .as_str()
+        .and_then(|text| text.strip_prefix("<invocation turn_id=\""))
+    else {
+        return message;
+    };
+    let Some((turn, _)) = invocation.split_once('"') else {
+        return message;
+    };
+    if context["version"] == 1 && turn.parse::<macro_uuid::Uuid>().is_ok() {
+        prose
+    } else {
+        message
+    }
+}
+
 /// Block until the engine has been asked to run the turn answering `prompt`.
 ///
 /// The prompt returns as soon as the session machine has written the frame,
@@ -124,10 +152,11 @@ async fn attach_retrying(
 async fn await_turns(engine: &ScriptedEngine, prompt: &str) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let seen = engine
-            .requests()
-            .iter()
-            .any(|turn| turn.messages.iter().any(|message| message == prompt));
+        let seen = engine.requests().iter().any(|turn| {
+            turn.messages
+                .iter()
+                .any(|message| without_invocation_context(message) == prompt)
+        });
         if seen {
             return;
         }
@@ -439,7 +468,14 @@ async fn manager_admission_rejects_turns_without_wedging_the_session() {
         .await
         .unwrap();
     await_turns(&engine, "retry").await;
-    assert_eq!(engine.requests()[0].messages, ["retry"]);
+    assert_eq!(
+        engine.requests()[0]
+            .messages
+            .iter()
+            .map(|text| without_invocation_context(text).to_owned())
+            .collect::<Vec<_>>(),
+        ["retry"]
+    );
 }
 
 /// A "restart": the second manager shares nothing with the first but the
@@ -580,7 +616,11 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     // The rebuilt context: the first turn's prompt and reply, then the new
     // prompt - not just the new prompt.
     assert_eq!(
-        engine.requests()[0].messages,
+        engine.requests()[0]
+            .messages
+            .iter()
+            .map(|text| without_invocation_context(text).to_owned())
+            .collect::<Vec<_>>(),
         vec![
             "hello agent".to_owned(),
             "streamed reply".to_owned(),

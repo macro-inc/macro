@@ -23,7 +23,7 @@ vi.mock('@queries/call/call', () => ({
   }),
 }));
 
-vi.mock('@phosphor/phone-call.svg', () => ({
+vi.mock('@icon/system/regular/phone-call.svg', () => ({
   default: () => <span aria-hidden="true" />,
 }));
 

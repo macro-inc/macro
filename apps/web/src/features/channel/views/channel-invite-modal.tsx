@@ -1,7 +1,7 @@
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel, RadioGroup } from '@ui';
 import { type ComponentProps, createSignal, Show } from 'solid-js';
 import { createChannelInvites } from '../primitives/create-channel-invites';

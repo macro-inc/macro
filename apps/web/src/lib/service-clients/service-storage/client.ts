@@ -61,6 +61,8 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
+import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
+import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
 import type { CreateChannelLabelRequest } from './generated/schemas/createChannelLabelRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
@@ -73,7 +75,6 @@ import type { CreateDocumentRequest } from './generated/schemas/createDocumentRe
 import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
 import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
 import type { CreateEntityMentionResponse } from './generated/schemas/createEntityMentionResponse';
-import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
@@ -112,7 +113,6 @@ import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/g
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
 import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentSearchResponse';
-import type { GetInstructionsDocumentResponse } from './generated/schemas/getInstructionsDocumentResponse';
 import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
 import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
@@ -1488,8 +1488,16 @@ export const storageServiceClient = {
   },
 
   /**
-   * Creates a markdown document and initializes its sync-service content on the backend.
+   * Creates a native Canvas with durable shared content ready before returning.
    */
+  async createCanvasDocument(request: CreateCanvasDocumentRequest) {
+    return dssFetch<CreateCanvasDocumentResponse>('/documents/create_canvas', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  /** Creates a markdown document and initializes its sync-service content on the backend. */
   async createMarkdownDocument(request: CreateMarkdownDocumentRequest) {
     const result = await dssFetch<CreateMarkdownHandler200>(
       `/documents/create_markdown`,
@@ -2570,20 +2578,6 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result.data);
-  },
-
-  instructions: {
-    async create() {
-      return await dssFetch<CreateInstructionsDocumentResponse>(
-        '/instructions',
-        {
-          method: 'POST',
-        }
-      );
-    },
-    get: async () => {
-      return await dssFetch<GetInstructionsDocumentResponse>('/instructions');
-    },
   },
 
   views: {

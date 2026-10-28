@@ -18,12 +18,12 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ListIcon from '@phosphor/list.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ListIcon from '@icon/system/regular/list.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -38,6 +38,7 @@ import {
 } from 'solid-js';
 import { CALENDAR_TOUR } from '../tour';
 import {
+  CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
   CalendarCreateEventItem,
 } from './CalendarCreateItems';
@@ -163,6 +164,7 @@ export function Header(props: {
     <>
       <CalendarCreateEventItem />
       <CalendarCreateCallItem />
+      <CalendarCreateBookingLinkItem />
     </>
   );
   const headerCreateMenu = () => (

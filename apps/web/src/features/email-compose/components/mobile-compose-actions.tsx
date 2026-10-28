@@ -1,5 +1,5 @@
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import Paperclip from '@phosphor/paperclip.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
 import { Button, SendButton } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

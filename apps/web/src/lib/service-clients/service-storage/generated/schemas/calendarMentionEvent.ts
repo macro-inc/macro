@@ -10,6 +10,7 @@ import type { CalendarMentionEventLocation } from './calendarMentionEventLocatio
 import type { CalendarMentionEventOccurrenceKey } from './calendarMentionEventOccurrenceKey';
 import type { CalendarMentionEventOrganizerEmail } from './calendarMentionEventOrganizerEmail';
 import type { CalendarMentionEventOrganizerName } from './calendarMentionEventOrganizerName';
+import type { CalendarMentionEventViewerCopy } from './calendarMentionEventViewerCopy';
 import type { CalendarMentionEventViewerEventId } from './calendarMentionEventViewerEventId';
 import type { EventTime } from './eventTime';
 
@@ -51,6 +52,7 @@ series start. */
   title: string;
   /** Entity update time of the previewed copy. */
   updatedAt: string;
+  viewerCopy?: CalendarMentionEventViewerCopy;
   /** The requester's own event entity for the mentioned meeting. Differs
 from the mentioned id when the mention came from another attendee.
 Absent when the meeting is on none of the requester's calendars and

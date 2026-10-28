@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity AS entity\n            SET metadata = decided.metadata, updated_at = NOW()\n            FROM UNNEST($3::text[], $4::jsonb[]) AS decided(foreign_id, metadata)\n            WHERE entity.user_id = $1 AND entity.source = $2\n              AND entity.foreign_id = decided.foreign_id\n              AND entity.status = 'staged' AND entity.metadata->'plan' IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba22ddfde9ce9dd4cbbe6fded2652d7ca1665d2919c07a1d7f37624fe3d2584d"
+}

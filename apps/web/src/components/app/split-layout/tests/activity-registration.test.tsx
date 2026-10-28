@@ -41,6 +41,7 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useSplitRouter: () => ({ entry: () => undefined }),
+  createSearchParams: () => [{ scope: 'mine' }, vi.fn()],
 }));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),

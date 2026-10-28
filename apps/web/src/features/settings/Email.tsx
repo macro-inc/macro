@@ -3,7 +3,6 @@ import {
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -22,11 +21,11 @@ import {
   reconnectScopes,
 } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
-import GearIcon from '@phosphor/gear.svg';
-import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
-import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
-import EnvelopeIcon from '@phosphor-icons/core/regular/envelope.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
+import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg?component-solid';
+import GearIcon from '@icon/system/regular/gear.svg';
+import PlusIcon from '@icon/system/regular/plus.svg?component-solid';
 import {
   type BackfillProgress,
   estimateEtaSeconds,
@@ -36,13 +35,13 @@ import {
 import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type BackfillJob,
-  BackfillJobStatus,
   type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
 import { Dialog, Panel, Tooltip, Button as UiButton } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { isInitialSyncComplete } from './core/initial-sync';
 import { InboxSettingsOperations } from './InboxSettingsOperations';
 import { ConnectAction, StatusDot } from './integration-ui';
 import {
@@ -88,8 +87,8 @@ export function EmailCard(
     }
     return latest;
   });
-  const hasCompletedBackfill = (linkId: string): boolean =>
-    latestBackfillByLinkId().get(linkId)?.status === BackfillJobStatus.Complete;
+  const initialSyncComplete = (link: EmailLink): boolean =>
+    isInitialSyncComplete(link, latestBackfillByLinkId().get(link.id));
 
   const removeInboxMutation = useRemoveInboxMutation({
     onSuccess: (_data, linkId) => {
@@ -108,7 +107,9 @@ export function EmailCard(
   const [resyncingIds, setResyncingIds] = createSignal<ReadonlySet<string>>(
     new Set()
   );
-  const [isEmailActionPending, setIsEmailActionPending] = createSignal(false);
+  // Not a disabled state: disabling the opener drops focus to <body>, which
+  // is where closing the provider chooser would then return it.
+  let addingInbox = false;
 
   // The primary inbox is the user's own is_primary link; it sorts to the top
   // and is labelled. Everything else (other own inboxes + delegated/shared) follows.
@@ -122,14 +123,17 @@ export function EmailCard(
     return { primary, others };
   });
 
-  const onConnectEmail = async () => {
-    if (isEmailActionPending()) return;
-    setIsEmailActionPending(true);
+  const connectEmail = async () => {
     try {
-      openAddInboxDialog();
+      await startAddInbox();
     } finally {
-      setIsEmailActionPending(false);
+      addingInbox = false;
     }
+  };
+  const onConnectEmail = () => {
+    if (addingInbox) return;
+    addingInbox = true;
+    fireAndForget(connectEmail(), 'add-inbox');
   };
 
   const handleResyncInbox = async (linkId: string) => {
@@ -171,11 +175,7 @@ export function EmailCard(
           }
         >
           <Show when={!emailActive()}>
-            <ConnectAction
-              label="Connect"
-              onClick={onConnectEmail}
-              disabled={isEmailActionPending()}
-            />
+            <ConnectAction label="Connect" onClick={onConnectEmail} />
           </Show>
           <Show when={props.onOpenSettings}>
             <UiButton
@@ -197,7 +197,7 @@ export function EmailCard(
                 link={primary()}
                 isPrimary
                 isOwn={primary().macro_id === userId()}
-                hasCompletedBackfill={hasCompletedBackfill(primary().id)}
+                initialSyncComplete={initialSyncComplete(primary())}
                 resyncing={resyncingIds().has(primary().id)}
                 onResync={() => handleResyncInbox(primary().id)}
                 onReconnect={() =>
@@ -250,7 +250,7 @@ export function EmailCard(
                 link={link}
                 isPrimary={false}
                 isOwn={link.macro_id === userId()}
-                hasCompletedBackfill={hasCompletedBackfill(link.id)}
+                initialSyncComplete={initialSyncComplete(link)}
                 resyncing={resyncingIds().has(link.id)}
                 onResync={() => handleResyncInbox(link.id)}
                 onReconnect={() =>
@@ -302,7 +302,7 @@ export function EmailCard(
                   size="md"
                   depth={3}
                   aria-label="Add inbox"
-                  onClick={openAddInboxDialog}
+                  onClick={onConnectEmail}
                 >
                   <PlusIcon class="size-3.5" />
                   Add account
@@ -462,7 +462,7 @@ function InboxRow(props: {
   link: EmailLink;
   isPrimary: boolean;
   isOwn: boolean;
-  hasCompletedBackfill: boolean;
+  initialSyncComplete: boolean;
   resyncing: boolean;
   onResync: () => void;
   onReconnect: () => void;
@@ -519,13 +519,7 @@ function InboxRow(props: {
               <Match when={getBackfillProgress(props.link.id)}>
                 {(progress) => <BackfillProgressBar progress={progress()} />}
               </Match>
-              {/* Settled inbox with a completed backfill from the BE list. */}
-              <Match
-                when={
-                  props.link.sync_status === SyncStatus.UP_TO_DATE &&
-                  props.hasCompletedBackfill
-                }
-              >
+              <Match when={props.initialSyncComplete}>
                 <span class="text-xs text-ink-muted">
                   Initial sync complete
                 </span>

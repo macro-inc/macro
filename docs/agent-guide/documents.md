@@ -1,8 +1,50 @@
 # Documents
 
+For DSS sync rollout checks, use PostHog flag `sync-via-gateway` (dev and
+production) and recreate document sessions after the client receives the updated
+flag. A reload can initially read PostHog's cached value; open sessions do not
+change transport when the remote value changes. Off or unknown flag values use a
+direct sync-service WebSocket per document; on multiplexes document frames over
+a dedicated DSS `/sync/ws` socket. Confirm all DSS replicas have the sync
+endpoint before enabling; notification traffic still uses connection gateway.
+Verify two clients converge after concurrent edits, a large update, and a forced
+sync disconnect with pending edits. The historical flag name is unchanged. Local stacks can override with `VITE_SYNC_VIA_GATEWAY=true` or `false`.
+
 The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
+
+With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
+panel also lists **Meeting links** (under the **Link** tab on mobile).
+Each shows its occurrence and optional team view grant. Toggle **Also share with
+<team>** here to update that link’s team access; changes save immediately.
+Calendar notes’ **Options → Share** opens this same dialog.
+Use **Unlink** and confirm to remove that grant without deleting the document.
+This remains available when the meeting is cancelled or no longer shared with
+you; unavailable meeting details are hidden. See [Calendar meeting notes](calendar.md#meeting-notes).
+Turning the flag off does not revoke saved grants. If meeting access cannot be
+checked, the share status uses **Restricted** instead of claiming **Just me**;
+known public, team, or shared access still appears.
+This status follows the current document and account when navigating with Share open.
+
+When meeting notes are enabled, the document side panel’s **References** section
+also lists linked calendar events, including when there are no document or message
+references. Each row uses the same single-line style, with the meeting title and
+date inline. Open a row to jump to
+your calendar copy; meetings shared through a channel or team without a personal
+copy use a read-only event preview. The preview also works when the Calendar
+view is disabled. Readers see only
+meetings they can view in detail. Owners retain safe
+unavailable-meeting entries, which can be removed through Share. Linking or
+unlinking updates the References count.
+
+Verify a note linked to two meetings, a note with both message and calendar
+references, a rescheduled one-time event, and a recurring occurrence. A cancelled
+instance must never open a later instance. Check full-detail team sharing, a
+reader who can see both entities, a reader with document-only access, and the
+feature flag off. On phone, open References from the document side panel and
+follow a meeting without leaving a sheet over the calendar. Closing a read-only
+meeting preview must return to the document details sheet.
 
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
@@ -76,9 +118,27 @@ property selector for that document.
 Adding or reselecting a property from the title row pins it there. Adding from
 the side panel leaves it unpinned. The side panel shows all assigned properties,
 including unpinned ones.
-Hover or focus an inline property pill to find **Unpin** (keeps its saved
-value) and **Delete from item** (removes the document's assignment, without
-deleting the shared property definition). Pins are saved with the document.
+In document, task, snippet, and skill side panels, hover or focus a property row
+to find
+**Pin below title** beside **Remove from entity**. These controls stay visible
+on touch devices. A pinned row shows **Unpin from title**; unpinning keeps both
+the saved value and the side-panel row.
+Pinning is unavailable for read-only documents, metadata, and properties still
+being assigned, except the task's default Project placeholder. Long values truncate
+or wrap within the value column without
+covering the pin or remove controls.
+Escape cancels an inline text or number draft without saving it.
+Hover or focus an inline property pill to find a filled, icon-only **Unpin**
+button separated by a gap (keeps its saved value). In a single-row hover card,
+it sits to the right of the value. In a column hover card, it sits to the right
+of the key, above a full-width divider; values keep the full width below.
+Long keys wrap without displacing the Unpin button.
+**Delete from item** stays below, where removal is allowed (removes the
+assignment without deleting the shared property definition). Task builtins cannot
+be deleted from these pills. Pins are saved with the document, including an
+explicitly empty pin list. Tasks initially show Status, Priority, Assignees, and
+Project when enabled; changing pins keeps the other defaults unless they are
+explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;
@@ -98,6 +158,23 @@ current selection, or all content when nothing is selected. The zoom menu keeps
 **Zoom to fit** for all content and adds **Zoom to fit selection**, disabled with
 no selection. Verify one item and multiple selected items, then deselect and
 check that **.** fits everything again.
+Canvas **Ask Macro**, including the Drive detail header, attaches the open canvas to the existing agent composer on
+desktop and mobile. Ask it to create or edit a diagram: `ReadCanvas` reads the
+current live scene and `EditCanvas` applies bounded commands through the same
+collaborative room. Expand the tool result to inspect its outcome; edits appear
+in the canvas while the agent works. A viewer can read but cannot edit. New
+media/document references and removal of embedded assets remain UI actions.
+If an edit is cancelled or loses its acknowledgement, inspect the canvas before
+repeating the request because earlier snippets may already have applied.
+
+To verify AI editing, open the same canvas as an owner, a second editor and a
+viewer. Use **Ask Macro** to create two labeled boxes and a bound arrow. Confirm
+all three see the changes, the viewer's edit request is refused, and a second
+editor's unrelated shape/style edits survive. Move an endpoint shape and check
+the connector follows it. Reload both editing sessions and inspect the tool's
+expandable result. At phone width, tap the document title to open its file menu for Ask Macro; the floating zoom/inspector sits below that header. Use the responsive action
+and verify the composer attachment and result disclosure remain usable.
+
 All canvases open in Canvas Next, including drive details and Markdown embeds;
 there is no rollout flag or legacy editor. Unversioned/version 1 files migrate
 in memory. Opening a file alone does not save the migration; the first edit saves
@@ -192,6 +269,23 @@ and the composer reopens with the title, body, and tags for retry.
 tags, opens it in an adjacent split, and inserts its mention in the source editor.
 An empty title uses **New Note** when expanding.
 **Create → Document** continues to open a document directly.
+
+## Create a task from a Markdown selection
+
+Select text in a Markdown document and choose **Task** in the selection toolbar
+(desktop) or touch toolbar. The task composer opens with the selected text as
+the title (truncated to 70 characters) and a **Snippet** mention of the
+selection as the body; opening that mention scrolls to and highlights the
+range. Editors also see a **Link in document** toggle beside **Create More**;
+it is remembered and starts off. While on, creating the task inserts its
+mention right after the selected text, inside the same checklist item when the
+selection is in one; a selection ending between list items links after the
+preceding item's text and never adds list items. Verify both toggle states and
+that other text edited while the composer was open is preserved.
+
+When an editor's selection spans two or more checklist items, the button reads
+**N tasks** and creates one task per item without opening the composer; each
+item is replaced by its task mention and a **Created N tasks** toast appears.
 
 ## Markdown outline
 
@@ -653,7 +747,8 @@ import note, and **Download as Excel** writes a macro-free `.xlsx`; an uploaded
 is rejected here with a hint to upload it instead; uploads convert it (see
 [Legacy Office uploads](#legacy-office-uploads)).
 
-**Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
+**Import and export → Download as Excel (.xlsx)** (also the header's "…" file
+menu **Download** submenu, beside **Download as CSV**) exports every sheet with formulas,
 current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, shapes, text boxes, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas and rich text are not fully supported; review import notes before conversion.
 CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
@@ -2311,6 +2406,9 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+Imported Markdown recognizes bare URLs with the same shared matcher as messages;
+code and escaped URLs remain literal. Remove link persists through Markdown and
+editor-state saves. See [message links](channels.md#message-links) for verification.
 
 Every top-level checklist shows a completed count and progress meter on a thin
 line above its items, left-aligned with the checkboxes. Checklists containing
@@ -2327,6 +2425,8 @@ AI text-writing operations require a paragraph/list-item or text-run ID. A
 table, row, cell, or list-container ID is rejected with guidance to choose a
 content block or use `setCell`. Existing stray inline content directly inside
 table cells is preserved in paragraphs when the editor opens the document.
+Bullet, numbered, and check lists stay in table cells; converting a cell
+paragraph to a list keeps the text.
 
 `@` opens the mention menu wherever the caret starts a word, including directly
 in front of existing text — the menu opens empty there instead of searching for
@@ -2478,9 +2578,11 @@ inline reference showing the shared agent icon and an underlined session title.
 Chips omit persona avatars and status. Click it (or select the node and press
 Enter) to open `/app/agent/<id>`.
 It references an existing session; it does not invoke the persona, attach its
-transcript to AI context, or grant access. Private/deleted sessions show an
-unavailable label. Mounted references refresh every 30 seconds while the tab is
-active to update titles and check access. Expanded session references are block-level
+transcript to AI context, or grant access. Private and deleted sessions read
+`Private agent session` and `Deleted agent session`; clicking one (a tap on a
+touch device) opens a card that says why, as other unavailable references do.
+Mounted references refresh every 30 seconds while the tab is active to update
+titles and check access. Expanded session references are block-level
 Magic Chips with the same filled background as document cards. Click the card body
 to select its editor node (border and selection ring); use **Open session** to navigate.
 The collapse action returns the card to an inline session mention. Text before and
@@ -2494,6 +2596,20 @@ stays open while this menu is active, and moving over other reference chips must
 not open their previews. Click outside or press Escape to dismiss the menu;
 other references can then be hovered again. Images use an inset frame and task chips
 appear below the header. Long titles wrap in place without a full-name tooltip.
+
+A reference to something deleted reads `Deleted`, and one the viewer can't open
+reads `No Access`. Clicking either keeps its card open instead of doing nothing,
+and on a touch device a tap opens the same card as a bottom sheet. The card names
+the item: `This document was deleted or doesn't exist.`, `This channel was deleted
+or doesn't exist.`, `You don't have access to this event`, and so on (a calendar
+event's reads `This event was deleted or cancelled.`). Skill, task and snippet
+references name their kind rather than "document". Database, form and routine
+references keep their own chip while the item opens, and switch to this `Deleted`
+or `No Access` chip and card once it doesn't; a database or form chip that
+loaded keeps its chip through a failed refresh unless the item is gone. Their
+detail reads answer non-owners 401/403 for a missing item too, so a deleted
+database or form reads `No Access` to anyone but its owner. A reference made in
+the last minute whose item hasn't reached the preview yet still opens it.
 
 With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.
@@ -2776,7 +2892,9 @@ updates live and shows each collaborator's caret with their name
   menu (`[data-docx-menu="notes"]`, in the body), `Track changes`, `Hide tracked
   changes` / `Show tracked changes`, `Comment on selection`, `Find and
   replace` and `Download .docx` (viewers get `Find and replace` and
-  `Download .docx`).
+  `Download .docx`). The header's "…" file menu also has **Download**, which
+  saves the same live `.docx`, or the server's export before the editor has
+  loaded.
   While tracking is on (or the caret is on a tracked change) it also shows
   `Accept change`, `Reject change`, `Accept all changes` and `Reject all
   changes`.
@@ -2858,9 +2976,10 @@ updates live and shows each collaborator's caret with their name
   open editors patch agent edits in as they land. `ReadWordDocument` lists
   every paragraph, table cell and content control with its id. `EditWordDocument`
   applies an atomic batch of `replaceText`, `setText`, `formatText`,
-  `insertParagraph`, `setStyle` and `delete` operations to those ids. Both
-  refuse a DOCX nobody has opened in the editor yet: it has no live copy.
-  `EditDocument` still rejects DOCX.
+  `insertParagraph`, `setStyle` and `delete` operations to those ids. A DOCX
+  nobody has opened yet (an upload or a duplicate) gets its live copy from the
+  first tool call, seeded exactly as the editor seeds it, so nobody has to open
+  it first. `EditDocument` still rejects DOCX.
 
 ## Document history
 
@@ -2942,3 +3061,15 @@ types do not show these tabs.
 In a disposable Markdown document, change several paragraphs in one edit, then
 undo and redo. Verify the text, paragraph count, and a second peer agree after
 each operation; wait for saving to finish and reload to check persistence.
+
+### Task mention status
+
+Task @mention pills and @mention menu rows display the same circular
+completion/status icon as task rows; pills do not repeat it after the title.
+The icon updates in place as preview data changes; unknown status uses
+an empty circle, and subtype-only previews use their completion flag. See
+[tasks](tasks.md#task-status-icons) for states and the browser regression.
+
+Sharing labels describe their audience: Only people with access, Anyone with the link, and Team members with the link. Permission choices say Can view, Can comment, and Can edit. Copying a restricted link still does not grant access. The existing immediately opening dialog and its deferred loading remain unchanged.
+
+Drive's existing New controls open a wide menu with icons and short descriptions for creation and uploads, while preserving the current destination and feature gates.

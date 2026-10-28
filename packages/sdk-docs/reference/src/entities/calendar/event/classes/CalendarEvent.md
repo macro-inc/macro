@@ -44,7 +44,10 @@ synced snapshot. The snapshot keeps the meeting's iCalendar UID and
 organizer, lists only the requester as a guest, and carries no join link;
 nobody is notified, and answers or guests on it never reach the meeting.
 Refused with `already_on_calendar` when the meeting is already on one of
-their calendars, and with `copy_refused` when Google will not import it.
+their calendars, whichever calendar is named, so it cannot be added to
+another of their calendars either; with `join_request_open` while their
+request to join it is pending or accepted (the meeting then arrives as an
+invitation); and with `copy_refused` when Google will not import it.
 
 #### Parameters
 
@@ -64,6 +67,21 @@ their calendars, and with `copy_refused` when Google will not import it.
 > **delete**(`options?`): `Promise`\<`void`\>
 
 Delete the event (or a scoped part of a recurring series) at its provider.
+
+A meeting on more than one of the user's inboxes is one event per inbox.
+Before deleting any of them, ask the user which inbox's copy to delete,
+then pass that copy's `inbox`. Never choose between the user's inboxes
+yourself, whatever they look like: a test, secondary or unfamiliar address
+is still the user's own inbox. Skip the question only when the user
+already named the inbox, or when only one copy can be deleted; then delete
+that copy and say why. Without `inbox` the call is refused with
+`copy_choice_required`, listing each copy and the question to ask.
+
+Deleting the copy the user organizes cancels the meeting for every guest.
+Deleting a copy where they are a guest takes the meeting off that inbox's
+calendar: on Google it also declines the invitation and tells the
+organizer, while on Outlook the organizer is not told and still sees the
+invitation unanswered.
 
 #### Parameters
 
@@ -97,9 +115,19 @@ they belong to.
 > **inviteGuests**(`options`): `Promise`\<`CalendarEvent`\>
 
 Add guests without touching anyone already invited, and return a handle
-to the synced record. The organizer may, and so may a guest the organizer
-lets invite others (see [CalendarEvent.viewerCan](#property-viewercan)); Google emails
-the new guests.
+to the synced record.
+
+When the meeting is on more than one of the user's inboxes, add from the
+copy the user organizes when there is one (it invites directly, while a
+guest's copy invites only as far as the organizer allows) and say why;
+otherwise ask the user which inbox's copy to add them from. Never choose
+between the user's inboxes any other way, whatever they look like. Pass
+that copy's `inbox`; without it the call is refused with
+`copy_choice_required`, listing each copy and the question to ask.
+
+The organizer may add guests, and so may a guest the organizer lets
+invite others (see [CalendarEvent.viewerCan](#property-viewercan)); Google emails the
+new guests.
 
 #### Parameters
 
@@ -110,6 +138,46 @@ the new guests.
 #### Returns
 
 `Promise`\<`CalendarEvent`\>
+
+***
+
+### linkNote()
+
+> **linkNote**(`document`, `occurrence`, `options?`): `Promise`\<[`CalendarNote`](../../note/classes/CalendarNote.md)\>
+
+Link a markdown document you own. Meeting-detail viewers gain read access;
+an optional team gains read access too. Editing and other sharing are preserved.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `document` | [`Document`](../../../documents/document/classes/Document.md) |
+| `occurrence` | [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md) |
+| `options?` | \{ `team?`: [`Team`](../../../teams/team/classes/Team.md); \} |
+| `options.team?` | [`Team`](../../../teams/team/classes/Team.md) |
+
+#### Returns
+
+`Promise`\<[`CalendarNote`](../../note/classes/CalendarNote.md)\>
+
+***
+
+### notes()
+
+> **notes**(`occurrence`): `Promise`\<[`CalendarNote`](../../note/classes/CalendarNote.md)[]\>
+
+Notes linked to a specific occurrence returned by `calendar.occurrences()`.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `occurrence` | [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md) |
+
+#### Returns
+
+`Promise`\<[`CalendarNote`](../../note/classes/CalendarNote.md)[]\>
 
 ***
 
@@ -210,6 +278,19 @@ Record the requester's RSVP and return a handle to the synced record.
 > **update**(`options`): `Promise`\<`CalendarEvent`\>
 
 Update the event and return a handle to its synced record.
+
+A meeting on more than one of the user's inboxes is one event per inbox,
+each with its own id (see the occurrence listing's `inbox` and `role`).
+Before changing its details, guests or guest permissions, ask the user
+which inbox's copy to change, then pass that copy's `inbox`. Never choose
+between the user's inboxes yourself, whatever they look like: a test,
+secondary or unfamiliar address is still the user's own inbox. Skip the
+question only when the user already named the inbox, when only one copy's
+`viewerCan` allows the change (use it and say why), or when adding guests
+to a meeting the user organizes from one of the inboxes (add them from
+that copy and say why). Reminders belong to one copy, so set them on one
+copy and say which inbox you used. Without `inbox` the call is refused
+with `copy_choice_required`, listing each copy and the question to ask.
 
 #### Parameters
 

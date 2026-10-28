@@ -1,5 +1,5 @@
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Input, type InputProps } from '@ui';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
@@ -296,7 +296,10 @@ function TestValue(props: {
 }) {
   const text = () => (props.test.kind === 'text' ? props.test : undefined);
   const number = () => (props.test.kind === 'number' ? props.test : undefined);
-  const date = () => (props.test.kind === 'date' ? props.test : undefined);
+  const date = () =>
+    props.test.kind === 'date' || props.test.kind === 'dateRange'
+      ? props.test
+      : undefined;
   const options = () =>
     props.test.kind === 'options' ? props.test : undefined;
   return (

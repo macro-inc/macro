@@ -269,6 +269,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         self.query_association(scope, record).await
     }
 
+    async fn resolve_activity(
+        &self,
+        scope: crate::domain::contact_listing::CrmContactListScope<'_>,
+    ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
+        self.query_activity(scope).await
+    }
+
     #[tracing::instrument(skip(self), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(

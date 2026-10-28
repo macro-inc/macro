@@ -16,6 +16,7 @@ A scheduled or event-triggered agent task.
 | <a id="property-nextrunat"></a> `nextRunAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Next scheduled execution. | - |
 | <a id="property-owner"></a> `owner` | `readonly` | () => `Promise`\<[`User`](../../../users/user/classes/User.md)\> | Routine owner. | - |
 | <a id="property-revision"></a> `revision` | `readonly` | () => `Promise`\<`number`\> | Configuration revision. | - |
+| <a id="property-runvisibility"></a> `runVisibility` | `readonly` | () => `Promise`\<[`RunVisibility`](../../../../../generated/scheduled-action/types.gen/type-aliases/RunVisibility.md)\> | Whether the routine's runs appear in Home and the Agents list. | - |
 | <a id="property-trigger"></a> `trigger` | `readonly` | () => `Promise`\<[`ActionTrigger`](../../../../../generated/scheduled-action/types.gen/type-aliases/ActionTrigger.md)\> | Configured triggers. | - |
 
 ## Methods

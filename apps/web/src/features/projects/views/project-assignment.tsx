@@ -1,7 +1,7 @@
 import { SearchBar } from '@app/components/view-shell';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import StackIcon from '@phosphor/stack.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';

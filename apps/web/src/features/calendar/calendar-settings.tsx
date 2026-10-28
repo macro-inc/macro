@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
+import { calendarConsentScopes } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { createSignal, Suspense } from 'solid-js';
@@ -31,13 +32,15 @@ function CalendarSettingsContent() {
   const [connecting, setConnecting] = createSignal(false);
   const [disconnect, setDisconnect] =
     createSignal<TurnOffCalendarTarget | null>(null);
+  const ownedLinks = () =>
+    (links.isSuccess ? (links.data?.links ?? []) : []).filter(
+      (l) => l.macro_id === userId()
+    );
   const accounts = (): ConnectedCalendarAccount[] => {
     const groups = groupCalendarSourcesByAccount(
       sources().filter((s) => s.emailLinkId)
     );
-    const owned = (links.isSuccess ? (links.data?.links ?? []) : []).filter(
-      (l) => l.macro_id === userId()
-    );
+    const owned = ownedLinks();
     return [
       ...owned.map((link) => ({
         id: link.id,
@@ -62,16 +65,29 @@ function CalendarSettingsContent() {
         })),
     ];
   };
-  const connect = async (scopes: 'calendar' | 'gmail_and_calendar') => {
+  const connect = async (options: Parameters<typeof startAddInbox>[0]) => {
     if (connecting()) return;
     setConnecting(true);
     try {
-      await startAddInbox({ scopes });
+      await startAddInbox(options);
     } catch {
       toast.failure('Could not connect your calendar. Please try again.');
     } finally {
       setConnecting(false);
     }
+  };
+  const enableCalendar = (account: ConnectedCalendarAccount) => {
+    const link = ownedLinks().find((l) => l.id === account.id);
+    if (!link) return;
+    fireAndForget(
+      connect({
+        scopes: calendarConsentScopes(link),
+        provider: link.provider,
+        reconnectLinkId: link.id,
+        emailAddress: link.email_address,
+      }),
+      'calendar-settings'
+    );
   };
   return (
     <>
@@ -89,9 +105,12 @@ function CalendarSettingsContent() {
           fireAndForget(calendarsQuery.refetch(), 'calendar-settings');
         }}
         onConnect={() =>
-          fireAndForget(connect('gmail_and_calendar'), 'calendar-settings')
+          fireAndForget(
+            connect({ scopes: 'gmail_and_calendar' }),
+            'calendar-settings'
+          )
         }
-        onEnable={() => fireAndForget(connect('calendar'), 'calendar-settings')}
+        onEnable={enableCalendar}
         onDisconnect={(account) =>
           setDisconnect({ linkId: account.id, emailAddress: account.email })
         }

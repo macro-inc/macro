@@ -66,6 +66,14 @@ export function useAgentsQuery(enabled: Accessor<boolean> = () => true) {
   }));
 }
 
+/** The saved agents, from the cache when fresh, for imperative callers. */
+export async function fetchAgentsList(): Promise<AgentWithHarnessId[]> {
+  return await queryClient.fetchQuery({
+    queryKey: agentKeys.list.queryKey,
+    queryFn: fetchAgents,
+  });
+}
+
 export function invalidateAgents() {
   return queryClient.invalidateQueries({ queryKey: agentKeys.list.queryKey });
 }

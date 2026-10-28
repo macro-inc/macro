@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { OwnerLabel } from '@entity/owner/owner-display';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import {
   type CalendarJoinRequest,
   useCalendarJoinRequestsQuery,

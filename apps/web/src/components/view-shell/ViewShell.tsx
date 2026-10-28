@@ -10,7 +10,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';

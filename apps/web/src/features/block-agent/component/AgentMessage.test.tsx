@@ -25,8 +25,8 @@ vi.mock('../context/AgentSessionContext', () => ({
 // is a marker. The per-part components have their own tests.
 const openedOrigins = vi.hoisted(() => [] as unknown[]);
 vi.mock('../open-prompt-origin', () => ({
-  useOpenPromptOrigin: () => (destination: unknown) => {
-    openedOrigins.push(destination);
+  useOpenPromptOrigin: () => (destination: unknown, options: unknown) => {
+    openedOrigins.push({ destination, options });
   },
 }));
 
@@ -822,7 +822,19 @@ describe('Message prompt footer', () => {
       name: 'via task Fix calendar popover scroll from Julia',
     });
     line.click();
-    expect(openedOrigins).toEqual([{ kind: 'task', taskId: 'task-1' }]);
+    line.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, shiftKey: true })
+    );
+    expect(openedOrigins).toEqual([
+      {
+        destination: { kind: 'task', taskId: 'task-1' },
+        options: { newSplit: false },
+      },
+      {
+        destination: { kind: 'task', taskId: 'task-1' },
+        options: { newSplit: true },
+      },
+    ]);
   });
 
   it('shows only when a prompt typed in the session was posted', () => {

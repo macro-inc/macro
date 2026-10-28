@@ -47,7 +47,6 @@ import type {
 } from '@service-search/generated/models';
 import type {
   GithubPullRequest,
-  SoupApiItem,
   SoupAttachment,
   SoupCalendarEventTime,
   SoupPage,
@@ -55,7 +54,6 @@ import type {
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { formatDocumentName } from '@service-storage/util/filename';
-import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
 import { mapAgentSessionSearchResult } from './agent-session-search';
@@ -1073,27 +1071,9 @@ const toCalendarEventTime = (
     ? { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt }
     : { kind: 'allDay', startDate: time.startDate, endDate: time.endDate };
 
-export const isInstructionsMdDoc = (
-  item: SoupApiItem,
-  instructionsIdQuery: Pick<
-    UseQueryResult<string | null | undefined, Error>,
-    'data' | 'isSuccess'
-  >
-) => {
-  if (item.tag !== 'document') return false;
-
-  if (!instructionsIdQuery.isSuccess) return false;
-
-  return item.data.id === instructionsIdQuery.data;
-};
-
 export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
-    instructionsIdQuery: Pick<
-      UseQueryResult<string | null | undefined, Error>,
-      'data' | 'isSuccess'
-    >;
     showSupportedForeignEntities?: boolean;
   }
 ) => SoupEntity[] = (data, options) => {
@@ -1101,16 +1081,10 @@ export const mapSoupPageToEntityList: (
     .filter((item): item is DisplayableSoupItem => {
       if (!isDisplayableSoupItem(item)) return false;
 
-      if (item.tag === 'foreignEntity') {
-        return (
-          options.showSupportedForeignEntities === true &&
-          item.data.foreignEntitySource === 'github_pull_request'
-        );
-      }
-
       return (
-        item.tag !== 'document' ||
-        !isInstructionsMdDoc(item, options.instructionsIdQuery)
+        item.tag !== 'foreignEntity' ||
+        (options.showSupportedForeignEntities === true &&
+          item.data.foreignEntitySource === 'github_pull_request')
       );
     })
     .map(mapApiSoupItemToEntity);

@@ -287,7 +287,7 @@ impl EventRunRepository for PgEventRunRepo {
         }
         let action = sqlx::query!(
             r#"
-            SELECT id, owner, name, kind, task, created_at, updated_at, enabled,
+            SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
             WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2
@@ -344,6 +344,12 @@ impl EventRunRepository for PgEventRunRepo {
             created_at: action.created_at,
             updated_at: action.updated_at,
             enabled: action.enabled,
+            run_visibility: action.run_visibility.parse().map_err(|_| {
+                rootcause::report!(
+                    "unknown scheduled_action run_visibility {:?}",
+                    action.run_visibility
+                )
+            })?,
             configuration_revision: pending.revision,
             event_activated_at: Some(action.event_activated_at),
             next_run_at: None,

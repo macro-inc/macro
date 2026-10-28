@@ -35,7 +35,6 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
-import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
@@ -47,10 +46,7 @@ import {
 } from './MarkdownOutline';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
-import {
-  registerLexicalStateDebuggerCommand,
-  registerMarkdownCommands,
-} from './useMarkdownCommands';
+import { registerMarkdownCommands } from './useMarkdownCommands';
 
 /**
  * Whether the Lexical state debugger panel is open, persisted across reloads so
@@ -410,70 +406,6 @@ export function Notebook(props: {
         }}
       >
         <CommentMargin wideEnough={showComments() && commentBreakpoints.md()} />
-      </div>
-    </div>
-  );
-}
-
-export function InstructionsNotebook(props: {
-  loroManager: LoroManager;
-  hotkeyScope: string | undefined;
-}) {
-  const { state } = useMarkdownDocument();
-  const setMd = state.editor.setMd;
-  const scopeId = () => props.hotkeyScope;
-  const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
-  const resolveAppLink = useMacroMentionLinkResolver();
-
-  let notebookRef!: HTMLDivElement;
-  let contentRef!: HTMLDivElement;
-
-  // Set the refs on the block store.
-  onMount(() => {
-    setMd({
-      notebook: notebookRef,
-      commentMargin: undefined,
-      contentRef: contentRef,
-    });
-    onCleanup(() => {
-      setMd({
-        notebook: undefined,
-        commentMargin: undefined,
-      });
-    });
-  });
-
-  createEffect(() => {
-    const currentScopeId = scopeId();
-    if (!currentScopeId) return;
-    const group = untrack(() =>
-      registerLexicalStateDebuggerCommand(currentScopeId, {
-        canUseStateDebugger: canUseLexicalStateDebugger,
-        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
-      })
-    );
-    onCleanup(() => group.dispose());
-  });
-  createEffect(() => {
-    if (!canUseLexicalStateDebugger() && showLexicalStateDebugger()) {
-      setShowLexicalStateDebugger(false);
-    }
-  });
-
-  return (
-    <div
-      class="flex relative text-ink min-h-full min-w-0 px-6"
-      ref={notebookRef}
-    >
-      <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsEditor
-          resolveAppLink={resolveAppLink}
-          loroManager={props.loroManager}
-          showLexicalStateDebugger={
-            canUseLexicalStateDebugger() && showLexicalStateDebugger()
-          }
-          onLexicalStateDebuggerClose={() => setShowLexicalStateDebugger(false)}
-        />
       </div>
     </div>
   );

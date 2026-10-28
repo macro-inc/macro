@@ -20,7 +20,7 @@ use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{
         CrmScope, EmailFilterAst, EntityFilterAst,
-        agent_session::AgentSessionLiteral,
+        agent_session::{AgentSessionLiteral, AgentSessionSource, AgentSessionVisibility},
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
@@ -364,7 +364,8 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 pub struct GraphqlEntityFilterAst {
     /// Restrict results to the authenticated viewer's favorites when true.
     favorites_only: Option<bool>,
-    /// Restrict every entity type to items associated with this CRM record.
+    /// Restrict every entity type to items associated with this CRM record,
+    /// or to activity across visible CRM-enabled teams.
     /// Requires an expanded, timestamp-sorted query.
     crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
@@ -718,6 +719,8 @@ enum GraphqlCrmAssociation {
     Company(ID),
     /// Items associated with the contact.
     Contact(ID),
+    /// Activity across visible CRM-enabled teams; only true is valid.
+    Activity(bool),
 }
 
 impl GraphqlCrmAssociation {
@@ -726,6 +729,8 @@ impl GraphqlCrmAssociation {
         Ok(match self {
             Self::Company(id) => CrmAssociation::Company(parse_id(id, "company")?),
             Self::Contact(id) => CrmAssociation::Contact(parse_id(id, "contact")?),
+            Self::Activity(true) => CrmAssociation::Activity,
+            Self::Activity(false) => return Err(InputError::new("activity must be true")),
         })
     }
 }
@@ -1206,6 +1211,82 @@ enum GraphqlAgentSessionLiteral {
     /// The owner principal option — a user (`macro|<email>`), a bot
     /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
+    /// Who started the session. Narrows the sessions a query asks for; it
+    /// does not opt the query in.
+    Source(GraphqlAgentSessionSource),
+    /// Whether the session is listed. Narrows the sessions a query asks for;
+    /// it does not opt the query in.
+    Visibility(GraphqlAgentSessionVisibility),
+}
+
+/// Who started an agent session: filter input, and the field Soup returns.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GraphqlAgentSessionSource {
+    /// A person, directly or through something they did.
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+impl GraphqlAgentSessionSource {
+    /// Convert this GraphQL source into the filter model.
+    fn into_model(self) -> AgentSessionSource {
+        match self {
+            Self::User => AgentSessionSource::User,
+            Self::Agent => AgentSessionSource::Agent,
+            Self::Routine => AgentSessionSource::Routine,
+        }
+    }
+}
+
+impl From<AgentSessionSource> for GraphqlAgentSessionSource {
+    fn from(source: AgentSessionSource) -> Self {
+        match source {
+            AgentSessionSource::User => Self::User,
+            AgentSessionSource::Agent => Self::Agent,
+            AgentSessionSource::Routine => Self::Routine,
+        }
+    }
+}
+
+/// Where an agent session is shown: filter input, and the field Soup returns.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GraphqlAgentSessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it; a routine's setting decides it for each of its runs.
+    Unlisted,
+    /// Out of every list and search; only a query naming the session's id
+    /// returns it.
+    Hidden,
+}
+
+impl GraphqlAgentSessionVisibility {
+    /// Convert this GraphQL visibility into the filter model.
+    fn into_model(self) -> AgentSessionVisibility {
+        match self {
+            Self::Listed => AgentSessionVisibility::Listed,
+            Self::Unlisted => AgentSessionVisibility::Unlisted,
+            Self::Hidden => AgentSessionVisibility::Hidden,
+        }
+    }
+}
+
+impl From<AgentSessionVisibility> for GraphqlAgentSessionVisibility {
+    fn from(visibility: AgentSessionVisibility) -> Self {
+        match visibility {
+            AgentSessionVisibility::Listed => Self::Listed,
+            AgentSessionVisibility::Unlisted => Self::Unlisted,
+            AgentSessionVisibility::Hidden => Self::Hidden,
+        }
+    }
 }
 
 impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
@@ -1222,6 +1303,10 @@ impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
             Self::Include(true) => AgentSessionLiteral::Include,
             Self::Id(id) => AgentSessionLiteral::Id(parse_id(id, "id")?),
             Self::Owner(owner) => AgentSessionLiteral::Owner(parse_owner(owner, "owner")?),
+            Self::Source(source) => AgentSessionLiteral::Source(source.into_model()),
+            Self::Visibility(visibility) => {
+                AgentSessionLiteral::Visibility(visibility.into_model())
+            }
         };
         Ok(Expr::val(literal))
     }

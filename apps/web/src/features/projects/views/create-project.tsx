@@ -1,6 +1,6 @@
 import type { EditorControls } from '@core/component/LexicalMarkdown/builder/types';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { Button, Checkbox, EntityComposer } from '@ui';
 import { $getRoot } from 'lexical';

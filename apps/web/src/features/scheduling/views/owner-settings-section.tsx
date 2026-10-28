@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
 import {
   createSignal,

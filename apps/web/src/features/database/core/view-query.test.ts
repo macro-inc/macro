@@ -155,6 +155,64 @@ describe('filter conditions', () => {
   });
 });
 
+describe('date-range filters', () => {
+  const trip: DatabaseViewColumn = {
+    id: 'trip',
+    name: 'Trip',
+    dataType: 'DATE_RANGE',
+    isMultiSelect: false,
+    options: [],
+    writable: true,
+  };
+
+  it('offers the six tests of a range against a date, and emptiness', () => {
+    expect(filterOperators(trip).map((choice) => choice.label)).toEqual([
+      'contains',
+      'does not contain',
+      'starts after',
+      'starts on or before',
+      'ends before',
+      'ends on or after',
+      'is empty',
+      'is not empty',
+    ]);
+    expect(defaultCondition(trip)).toEqual({
+      kind: 'condition',
+      column: 'trip',
+      test: { kind: 'dateRange', operator: 'contains', value: '' },
+    });
+  });
+
+  it('keeps the date a test compared against across date and range tests', () => {
+    expect(
+      withOperator(
+        {
+          kind: 'dateRange',
+          operator: 'contains',
+          value: '2026-03-03T00:00:00Z',
+        },
+        { kind: 'dateRange', operator: 'endsBefore' }
+      )
+    ).toEqual({
+      kind: 'dateRange',
+      operator: 'endsBefore',
+      value: '2026-03-03T00:00:00Z',
+    });
+    expect(
+      completeFilter({
+        conjunction: 'and',
+        conditions: [
+          {
+            kind: 'condition',
+            column: 'trip',
+            test: { kind: 'dateRange', operator: 'contains', value: '' },
+          },
+        ],
+      })
+    ).toBeNull();
+  });
+});
+
 describe('filter groups', () => {
   it('adds conditions and nested groups where the path points', () => {
     const root = addCondition({ conjunction: 'and', conditions: [] }, [], name);

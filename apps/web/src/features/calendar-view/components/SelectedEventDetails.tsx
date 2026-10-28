@@ -1,7 +1,11 @@
 import { hasEveryoneElseDeclined } from '@app/features/calendar/components/EventContent';
 import { EventDetails } from '@app/features/calendar/components/EventDetails';
 import { createGuestInviteController } from '@app/features/calendar/hooks/create-guest-invite-controller';
-import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import {
+  useCalendarGuestInvitesFlag,
+  useCalendarInvitationForwardFlag,
+  useCalendarMeetingNotesFlag,
+} from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import {
   type CalendarEvent,
   type CalendarTimeFormat,
@@ -11,7 +15,9 @@ import {
   canDeleteCalendarEvent,
   canEditCalendarEvent,
 } from '@app/features/calendar/utils/event-interaction';
+import { eventEmailRecipients } from '@app/features/calendar/utils/guest-emails';
 import { handleOpenEventOutsidePress } from '@app/features/calendar/utils/open-event-outside-press';
+import { CalendarMeetingNotes } from '@app/features/calendar-notes/calendar-meeting-notes';
 import { TeamEventDetails } from '@app/features/calendar-team/components/team-event-details';
 import { EventGuests } from '@app/features/calendar-view/components/EventGuests';
 import { EventJoinRequests } from '@app/features/calendar-view/components/EventJoinRequests';
@@ -21,17 +27,18 @@ import { useOpenEventComposer } from '@app/features/calendar-view/components/use
 import { copyCalendarEventMention } from '@app/features/calendar-view/copy-event-mention';
 import { downloadCalendarEventIcs } from '@app/features/calendar-view/download-event-ics';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
+import ArrowBendUpRightIcon from '@icon/system/regular/arrow-bend-up-right.svg';
+import DownloadSimpleIcon from '@icon/system/regular/download-simple.svg';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowBendUpRightIcon from '@phosphor/arrow-bend-up-right.svg';
-import DownloadSimpleIcon from '@phosphor/download-simple.svg';
-import ExclamationIcon from '@phosphor/exclamation-mark.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import CloseIcon from '@phosphor/x.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
@@ -176,6 +183,10 @@ function EveryoneElseDeclinedNotice(props: {
 }
 
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
+  const meetingNotesEnabled = useCalendarMeetingNotesFlag();
+  const [notesOpen, setNotesOpen] = createSignal(false);
+  let content: HTMLDivElement | undefined;
+  const { openWithSplit } = useSplitLayout();
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
@@ -183,7 +194,8 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
@@ -203,15 +215,28 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
       side="bottom"
       open
       onOpenChange={(open) => {
-        if (!open && (deleteDialog.isOpen() || invites.editorOpen())) return;
+        if (
+          !open &&
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
+        )
+          return;
         props.onOpenChange(open);
       }}
       preventScroll={false}
       preventScrollbarShift={false}
+      trapFocus={!notesOpen()}
+      onInitialFocus={(event) => {
+        if (notesOpen() || content?.contains(document.activeElement))
+          event.preventDefault();
+      }}
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
         <MobileDrawer.Content
+          ref={content}
           aria-label={props.event.title}
           class="overflow-hidden"
         >
@@ -315,6 +340,23 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 />
               </Show>
             </div>
+            <Show
+              when={
+                meetingNotesEnabled() &&
+                props.event.teamProjection?.kind !== 'busy' &&
+                !props.event.isCancelled &&
+                !props.event.isSnapshot
+              }
+            >
+              <CalendarMeetingNotes
+                event={props.event}
+                onDialogChange={setNotesOpen}
+                onOpenDocument={(id) => {
+                  openWithSplit({ type: 'md', id }, { preferNewSplit: false });
+                  props.onOpenChange(false);
+                }}
+              />
+            </Show>
             <Show when={!props.event.teamProjection}>
               <EventGuests
                 event={props.event}
@@ -401,10 +443,15 @@ function DeleteEventDialog(
   };
 
   const title = () => props.event.title || 'Untitled event';
-  const prompt = () =>
-    props.event.isSnapshot
-      ? `Delete your copy of “${title()}”? The shared event stays as it is.`
-      : `${isRecurring() ? 'Remove' : 'Delete'} “${title()}”? Guests will be notified.`;
+  const prompt = () => {
+    if (props.event.isSnapshot) {
+      return `Delete your copy of “${title()}”? The shared event stays as it is.`;
+    }
+    const question = `${isRecurring() ? 'Remove' : 'Delete'} “${title()}”?`;
+    return eventEmailRecipients(props.event).length > 0
+      ? `${question} Guests will be notified.`
+      : question;
+  };
 
   return (
     <DeleteDialog
@@ -444,6 +491,10 @@ function DeleteEventDialog(
  * scroll within 32rem or the available height; the RSVP row stays pinned.
  */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
+  const meetingNotesEnabled = useCalendarMeetingNotesFlag();
+  const [notesOpen, setNotesOpen] = createSignal(false);
+  let openingDocument = false;
+  const { openWithSplit } = useSplitLayout();
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
     event: () => props.event,
@@ -451,7 +502,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   });
   const invites = createGuestInviteController(
     () => props.event,
-    useCalendarGuestInvitesFlag()
+    useCalendarGuestInvitesFlag(),
+    useCalendarInvitationForwardFlag()
   );
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
@@ -474,12 +526,23 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
       onOpenChange={(open) => {
         // Keep the popover mounted while its delete dialog or guest editor
         // is open.
-        if (!open && (deleteDialog.isOpen() || invites.editorOpen())) return;
+        if (
+          !open &&
+          (deleteDialog.isOpen() ||
+            invites.editorOpen() ||
+            invites.forwardEditorOpen() ||
+            notesOpen())
+        )
+          return;
         props.onOpenChange(open);
       }}
       placement="right-start"
       gutter={8}
-      flip
+      // Flip only to the other side, never to an end alignment: sections
+      // that arrive after opening (join requests, meeting notes) change the
+      // height, and an end fallback would re-place the popover from below
+      // the event to above it. Slide keeps a tall popover in view instead.
+      flip="left-start"
       slide
       overlap
       fitViewport
@@ -506,7 +569,8 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
               event.preventDefault();
             }}
             onCloseAutoFocus={(event) => {
-              const shouldRestoreFocus = !event.defaultPrevented;
+              const shouldRestoreFocus =
+                !openingDocument && !event.defaultPrevented;
               event.preventDefault();
               if (shouldRestoreFocus && props.anchor.isConnected) {
                 props.anchor.focus();
@@ -616,6 +680,27 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     />
                   </Show>
                 </div>
+                <Show
+                  when={
+                    meetingNotesEnabled() &&
+                    props.event.teamProjection?.kind !== 'busy' &&
+                    !props.event.isCancelled &&
+                    !props.event.isSnapshot
+                  }
+                >
+                  <CalendarMeetingNotes
+                    event={props.event}
+                    onDialogChange={setNotesOpen}
+                    onOpenDocument={(id) => {
+                      openingDocument = true;
+                      openWithSplit(
+                        { type: 'md', id },
+                        { preferNewSplit: true }
+                      );
+                      props.onOpenChange(false);
+                    }}
+                  />
+                </Show>
                 <Show when={!props.event.teamProjection}>
                   <EventGuests
                     event={props.event}

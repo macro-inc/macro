@@ -6576,7 +6576,7 @@ async fn insert_notification(
     done: bool,
     seen: bool,
 ) -> anyhow::Result<()> {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO notification (
             id,
@@ -6589,10 +6589,10 @@ async fn insert_notification(
         )
         VALUES ($1::uuid, 'test', $2, $3, 'test', NOW(), '{}')
         "#,
+        Uuid::parse_str(notification_id)?,
+        item_id,
+        item_type,
     )
-    .bind(notification_id)
-    .bind(item_id)
-    .bind(item_type)
     .execute(db)
     .await?;
 
@@ -6919,7 +6919,7 @@ const DOC_D: &str = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 /// from other@globex.com, and point doc D's Companies property at `company`.
 async fn seed_crm_document_associations(db: &PgPool, company: Uuid) -> anyhow::Result<()> {
     let mut tx = db.begin().await?;
-    sqlx::query("SET LOCAL session_replication_role = 'replica'")
+    sqlx::raw_sql("SET LOCAL session_replication_role = 'replica'")
         .execute(&mut *tx)
         .await?;
     let link = Uuid::now_v7();
@@ -6929,50 +6929,52 @@ async fn seed_crm_document_associations(db: &PgPool, company: Uuid) -> anyhow::R
         (vendor, "Vendor@Acme.com"),
         (other, "other@globex.com"),
     ] {
-        sqlx::query("INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)")
-            .bind(id)
-            .bind(link)
-            .bind(address)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query!(
+            "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)",
+            id,
+            link,
+            address,
+        )
+        .execute(&mut *tx)
+        .await?;
     }
     let to_acme = Uuid::parse_str("ea000001-0000-0000-0000-000000000099")?;
     let from_globex = Uuid::now_v7();
     for (message, sender) in [(to_acme, me), (from_globex, other)] {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO email_messages (id, thread_id, link_id, from_contact_id) VALUES ($1, $2, $3, $4)",
+            message,
+            Uuid::now_v7(),
+            link,
+            sender,
         )
-        .bind(message)
-        .bind(Uuid::now_v7())
-        .bind(link)
-        .bind(sender)
         .execute(&mut *tx)
         .await?;
     }
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')",
+        to_acme,
+        vendor,
     )
-    .bind(to_acme)
-    .bind(vendor)
     .execute(&mut *tx)
     .await?;
-    sqlx::query(
+    sqlx::query!(
         "UPDATE email_attachments SET message_id = $1 WHERE id = 'ea000001-0000-0000-0000-000000000002'",
+        from_globex,
     )
-    .bind(from_globex)
     .execute(&mut *tx)
     .await?;
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
            VALUES ($1, $2, 'DOCUMENT', $3, $4)"#,
+        Uuid::now_v7(),
+        DOC_D,
+        SystemPropertyKey::COMPANIES_UUID,
+        serde_json::json!({
+            "type": "EntityReference",
+            "value": [{ "entity_type": "COMPANY", "entity_id": company.to_string() }]
+        }),
     )
-    .bind(Uuid::now_v7())
-    .bind(DOC_D)
-    .bind(SystemPropertyKey::COMPANIES_UUID)
-    .bind(serde_json::json!({
-        "type": "EntityReference",
-        "value": [{ "entity_type": "COMPANY", "entity_id": company.to_string() }]
-    }))
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;

@@ -59,9 +59,13 @@ function signalClause(
       clause.eq('channelDone', false),
       clause.eq('channelIsParticipant', true)
     ),
+    // Participant only accepts `macro|` user ids, so an unknown viewer
+    // matches no threads instead of sending a placeholder id.
     cthf: clause.and(
       clause.eq('channelThreadDone', false),
-      clause.eq('channelThreadParticipantId', userId ?? NIL_UUID)
+      userId
+        ? clause.eq('channelThreadParticipantId', userId)
+        : clause.eq('channelThreadId', NIL_UUID)
     ),
     cf: clause.and(
       clause.eq('chatDone', false),

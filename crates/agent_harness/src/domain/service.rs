@@ -134,6 +134,7 @@ struct AgentHarnessInner<
 > {
     sessions: Sessions,
     admission: Arc<dyn ai_billing::AiAdmissionService>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -366,6 +367,7 @@ where
             inner: Arc::new(AgentHarnessInner {
                 sessions,
                 admission: Arc::new(ai_billing::DisabledAiAdmissionService),
+                agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
                 containers,
                 announcer,
                 runtimes,
@@ -627,6 +629,19 @@ where
         Arc::get_mut(&mut self.inner)
             .expect("configure admission before sharing the harness")
             .admission = admission;
+        self
+    }
+
+    /// Let in-memory sessions of agents with their own usable API key past
+    /// the allowance gate: their turns never run on Macro usage. Configure
+    /// before sharing the harness.
+    pub fn with_agent_keys(
+        mut self,
+        agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure agent keys before sharing the harness")
+            .agent_keys = agent_keys;
         self
     }
 

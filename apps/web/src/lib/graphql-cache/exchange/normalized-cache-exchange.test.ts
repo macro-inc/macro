@@ -55,6 +55,7 @@ import {
   type WriteResult,
 } from '../protocol';
 import { entityFromArgument } from './entity-resolvers';
+import { NOOP_MUTATION_QUEUE_TELEMETRY } from './mutation-queue-telemetry';
 import {
   HYDRATE_ONLY_CONTEXT_KEY,
   type NormalizedCacheExchangeOptions,
@@ -763,6 +764,172 @@ describe('normalizedCacheExchange', () => {
       }
     }
   );
+
+  it('keeps mounted live data when a refresh of the same query fails with partial data', async () => {
+    type Page = {
+      user: { soup: { items: { __typename: string; id: string }[] } | null };
+    };
+    const soup = gql<Page>`query Soup { user { soup { items { __typename id } } } }`;
+    const responses: Pick<OperationResult, 'data' | 'error'>[] = [
+      { data: { user: { soup: { items: [{ __typename: 'Doc', id: '1' }] } } } },
+      {
+        data: { user: { soup: null } },
+        error: new CombinedError({
+          graphQLErrors: [
+            { message: 'pool timed out while waiting for an open connection' },
+          ],
+        }),
+      },
+    ];
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [
+        normalizedCacheExchange(host),
+        () => (source) =>
+          pipe(
+            source,
+            map((operation) => ({
+              operation,
+              stale: false,
+              hasNext: false,
+              ...responses.shift(),
+            }))
+          ),
+      ],
+    });
+    const { mounted, dispose } = createRoot((dispose) => ({
+      mounted: createUrqlQuery(() => ({
+        client,
+        query: soup,
+        variables: {},
+        requestPolicy: 'network-only' as const,
+      })),
+      dispose,
+    }));
+    try {
+      await vi.waitFor(() => expect(mounted.isSuccess).toBe(true));
+      const page = mounted.data!;
+
+      const refresh = await client
+        .query(soup, {}, { requestPolicy: 'network-only' })
+        .toPromise();
+
+      expect(refresh.error?.message).toContain('pool timed out');
+      expect(page.user.soup?.items.map((item) => item.id)).toEqual(['1']);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps the mounted live view through a refresh that fails without data', async () => {
+    type Page = { rows: { __typename: string; id: string }[] };
+    const rows = gql<Page>`query Rows { rows { __typename id } }`;
+    const responses: Pick<OperationResult, 'data' | 'error'>[] = [
+      { data: { rows: [{ __typename: 'Thread', id: '1' }] } },
+      {
+        data: undefined,
+        error: new CombinedError({ networkError: new Error('offline') }),
+      },
+      { data: { rows: [{ __typename: 'Thread', id: '2' }] } },
+    ];
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [
+        normalizedCacheExchange(host),
+        () => (source) =>
+          pipe(
+            source,
+            map((operation) => ({
+              operation,
+              stale: false,
+              hasNext: false,
+              ...responses.shift(),
+            }))
+          ),
+      ],
+    });
+    const { mounted, dispose } = createRoot((dispose) => ({
+      mounted: createUrqlQuery(() => ({
+        client,
+        query: rows,
+        variables: {},
+        requestPolicy: 'network-only' as const,
+      })),
+      dispose,
+    }));
+    try {
+      await vi.waitFor(() => expect(mounted.isSuccess).toBe(true));
+      const page = mounted.data!;
+      const refresh = () =>
+        client.query(rows, {}, { requestPolicy: 'network-only' }).toPromise();
+
+      expect((await refresh()).error?.networkError?.message).toBe('offline');
+      expect(page.rows.map((row) => row.id)).toEqual(['1']);
+
+      await refresh();
+      expect(page.rows.map((row) => row.id)).toEqual(['2']);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('applies a cache hit that carries an earlier network failure', async () => {
+    type Page = { rows: { __typename: string; id: string }[] };
+    const rows = gql<Page>`query Rows { rows { __typename id } }`;
+    const failure = () => ({
+      data: { rows: [] },
+      error: new CombinedError({
+        graphQLErrors: [{ message: 'database unavailable' }],
+      }),
+    });
+    host.scriptRead({
+      kind: 'hit',
+      data: { rows: [{ __typename: 'Thread', id: '1' }] },
+    });
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [
+        normalizedCacheExchange(host),
+        () => (source) =>
+          pipe(
+            source,
+            map((operation) => ({
+              operation,
+              stale: false,
+              hasNext: false,
+              ...failure(),
+            }))
+          ),
+      ],
+    });
+    const { mounted, dispose } = createRoot((dispose) => ({
+      mounted: createUrqlQuery(() => ({
+        client,
+        query: rows,
+        variables: {},
+        requestPolicy: 'cache-and-network' as const,
+      })),
+      dispose,
+    }));
+    try {
+      await vi.waitFor(() => expect(mounted.error).toBeTruthy());
+      expect(mounted.data?.rows.map((row) => row.id)).toEqual(['1']);
+
+      host.scriptRead({
+        kind: 'hit',
+        data: { rows: [{ __typename: 'Thread', id: '2' }] },
+      });
+      await client
+        .query(rows, {}, { requestPolicy: 'cache-and-network' })
+        .toPromise();
+
+      await vi.waitFor(() =>
+        expect(mounted.data?.rows.map((row) => row.id)).toEqual(['2'])
+      );
+    } finally {
+      dispose();
+    }
+  });
 
   it('keeps live objects reactive through full reads on older cache hosts', async () => {
     type Rows = { rows: { __typename: string; id: string; isRead: boolean }[] };
@@ -1573,26 +1740,22 @@ describe('normalizedCacheExchange', () => {
     }
   );
 
-  it.each(['teardown', 'generation change'] as const)(
-    'does not report a cache read cancelled by %s',
-    async (cancel) => {
-      const read = deferred<ReadResult>();
-      host.readQuery = vi.fn(() => read.promise);
-      const onCacheError = vi.fn();
-      const { ops, results } = harness(host, undefined, { onCacheError });
-      const op = makeOp(1);
-      ops.next(op);
-      await tick();
+  it('does not report a cache read cancelled by teardown', async () => {
+    const read = deferred<ReadResult>();
+    host.readQuery = vi.fn(() => read.promise);
+    const onCacheError = vi.fn();
+    const { ops, results } = harness(host, undefined, { onCacheError });
+    const op = makeOp(1);
+    ops.next(op);
+    await tick();
 
-      if (cancel === 'teardown') ops.next(teardownOf(op));
-      else host.pushGeneration({ storage: 'preserved' });
-      read.resolve({ kind: 'hit', data: { from: 'cache' } });
-      await tick();
+    ops.next(teardownOf(op));
+    read.resolve({ kind: 'hit', data: { from: 'cache' } });
+    await tick();
 
-      expect(onCacheError).not.toHaveBeenCalled();
-      expect(results.filter((r) => r.operation.kind === 'query')).toEqual([]);
-    }
-  );
+    expect(onCacheError).not.toHaveBeenCalled();
+    expect(results.filter((r) => r.operation.kind === 'query')).toEqual([]);
+  });
 
   it('does not report a watched reread cancelled by teardown', async () => {
     const reread = deferred<QueryUpdate>();
@@ -3107,7 +3270,7 @@ describe('normalizedCacheExchange', () => {
       'replays unrelated mutations when recovery initialization %s',
       async (failure) => {
         vi.useFakeTimers();
-        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const skipped = vi.fn();
         try {
           host.seedQueued({
             uuid: 'unrelated',
@@ -3122,29 +3285,41 @@ describe('normalizedCacheExchange', () => {
                 throw new Error('IndexedDB unavailable');
               await new Promise<void>(() => {});
             },
+            mutationQueueTelemetry: {
+              ...NOOP_MUTATION_QUEUE_TELEMETRY,
+              skipped,
+            },
           });
           await vi.advanceTimersByTimeAsync(4_010);
           expect(forwarded).toHaveLength(1);
           expect(host.commits).toMatchObject([{ transactionId: '1' }]);
-          expect(warning).toHaveBeenCalled();
+          expect(skipped).toHaveBeenCalledWith(
+            failure === 'rejects' ? 'recovery-failed' : 'recovery-timeout'
+          );
         } finally {
-          warning.mockRestore();
           vi.useRealTimers();
         }
       }
     );
 
-    it('warns once per recovery failure while the queue keeps polling', async () => {
+    it('reports each recovery failure while the queue keeps polling', async () => {
       vi.useFakeTimers();
       const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const skipped = vi.fn();
       try {
         const prepareMutationQueue = vi.fn(async () => {
           throw new Error('Queue inspection is unavailable');
         });
-        harness(host, undefined, { prepareMutationQueue });
+        harness(host, undefined, {
+          prepareMutationQueue,
+          mutationQueueTelemetry: { ...NOOP_MUTATION_QUEUE_TELEMETRY, skipped },
+        });
         await vi.advanceTimersByTimeAsync(90_010);
         expect(prepareMutationQueue).toHaveBeenCalledTimes(4);
-        expect(warning).toHaveBeenCalledOnce();
+        expect(skipped.mock.calls).toEqual(
+          Array(4).fill(['recovery-inspection-unavailable'])
+        );
+        expect(warning).not.toHaveBeenCalled();
       } finally {
         warning.mockRestore();
         vi.useRealTimers();

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, CreateSessionReviewData, CreateSessionReviewErrors, CreateSessionReviewResponses, DecideSessionReviewData, DecideSessionReviewErrors, DecideSessionReviewResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentCodingPreferencesData, GetAgentCodingPreferencesErrors, GetAgentCodingPreferencesResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionFoldedLogData, GetAgentSessionFoldedLogErrors, GetAgentSessionFoldedLogResponses, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetCodeExecutionData, GetCodeExecutionErrors, GetCodeExecutionResponses, GetSessionReviewData, GetSessionReviewErrors, GetSessionReviewResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentConversationsData, ListAgentConversationsErrors, ListAgentConversationsResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, ListExecutionReviewsData, ListExecutionReviewsErrors, ListExecutionReviewsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentCodingPreferencesData, PutAgentCodingPreferencesErrors, PutAgentCodingPreferencesResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, RetryAgentConversationTurnData, RetryAgentConversationTurnErrors, RetryAgentConversationTurnResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartFreshAgentConversationData, StartFreshAgentConversationErrors, StartFreshAgentConversationResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
+import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, ChooseAgentModeData, ChooseAgentModeErrors, ChooseAgentModeResponses, ClassifyData, ClassifyErrors, ClassifyResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, CreateSessionReviewData, CreateSessionReviewErrors, CreateSessionReviewResponses, DecideSessionReviewData, DecideSessionReviewErrors, DecideSessionReviewResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, ExtractData, ExtractErrors, ExtractResponses, GetAgentCodingPreferencesData, GetAgentCodingPreferencesErrors, GetAgentCodingPreferencesResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionFoldedLogData, GetAgentSessionFoldedLogErrors, GetAgentSessionFoldedLogResponses, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetCodeExecutionData, GetCodeExecutionErrors, GetCodeExecutionResponses, GetSessionReviewData, GetSessionReviewErrors, GetSessionReviewResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentConversationsData, ListAgentConversationsErrors, ListAgentConversationsResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, ListExecutionReviewsData, ListExecutionReviewsErrors, ListExecutionReviewsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentCodingPreferencesData, PutAgentCodingPreferencesErrors, PutAgentCodingPreferencesResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, ReportAgentSessionAppConnectedData, ReportAgentSessionAppConnectedErrors, ReportAgentSessionAppConnectedResponses, RetryAgentConversationTurnData, RetryAgentConversationTurnErrors, RetryAgentConversationTurnResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartFreshAgentConversationData, StartFreshAgentConversationErrors, StartFreshAgentConversationResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -127,6 +127,21 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).post<RetryAgentConversationTurnResponses, RetryAgentConversationTurnErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent-conversations/{channel_id}/{bot_id}/turns/{source}/retry',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Choose whether a composer prompt goes to a chat or a coding agent.
+     */
+    public chooseAgentMode<ThrowOnError extends boolean = false>(options: Options<ChooseAgentModeData, ThrowOnError>): RequestResult<ChooseAgentModeResponses, ChooseAgentModeErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ChooseAgentModeResponses, ChooseAgentModeErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/agent-mode-choice',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -292,6 +307,23 @@ export class Sdk extends HeyApiClient {
      */
     public getAgentSession<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionData, ThrowOnError>): RequestResult<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });
+    }
+    
+    /**
+     * Continue the session now that its owner connected an app it asked for.
+     *
+     * The harness produces an `app.connected` system event, which the transcript
+     * shows as no prompt; it starts a turn once the session is idle.
+     */
+    public reportAgentSessionAppConnected<ThrowOnError extends boolean = false>(options: Options<ReportAgentSessionAppConnectedData, ThrowOnError>): RequestResult<ReportAgentSessionAppConnectedResponses, ReportAgentSessionAppConnectedErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ReportAgentSessionAppConnectedResponses, ReportAgentSessionAppConnectedErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/app-connections',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -549,6 +581,34 @@ export class Sdk extends HeyApiClient {
     public answerAgentSessionToolApproval<ThrowOnError extends boolean = false>(options: Options<AnswerAgentSessionToolApprovalData, ThrowOnError>): RequestResult<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/tool-approvals/{approval_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Classify a draft for the authenticated user.
+     */
+    public classify<ThrowOnError extends boolean = false>(options: Options<ClassifyData, ThrowOnError>): RequestResult<ClassifyResponses, ClassifyErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ClassifyResponses, ClassifyErrors, ThrowOnError>({
+            url: '/universal_input/classify',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Extract editable fields for the authenticated user.
+     */
+    public extract<ThrowOnError extends boolean = false>(options: Options<ExtractData, ThrowOnError>): RequestResult<ExtractResponses, ExtractErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ExtractResponses, ExtractErrors, ThrowOnError>({
+            url: '/universal_input/extract',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

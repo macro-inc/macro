@@ -1,6 +1,6 @@
-import Clock from '@phosphor/clock.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button } from '@ui';
 import { Index, type JSX, Show } from 'solid-js';
 import {

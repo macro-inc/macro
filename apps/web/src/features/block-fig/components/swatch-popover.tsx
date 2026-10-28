@@ -4,8 +4,8 @@
  * Delete or Escape do not reach the canvas), except ⌘/Ctrl shortcuts.
  */
 
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import X from '@phosphor/x.svg';
 import { Layer } from '@ui';
 import type { JSX } from 'solid-js';
 

@@ -6,13 +6,14 @@ use chrono::{DateTime, Utc};
 use rootcause::Report;
 use uuid::Uuid;
 
-use super::ics::{CalendarEventExport, CalendarEventIcs};
+use super::copies::{CopyChange, CopyRefusal};
+use super::ics::{CalendarEventExport, CalendarEventForward, CalendarEventIcs, EventSnapshot};
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
 use super::meeting_links::{
     CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
 };
 use super::models::{
-    ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
+    ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
     CalendarAttendeeInput, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
     CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent,
     CalendarEventDraft, CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert,
@@ -21,9 +22,9 @@ use super::models::{
     CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
     CalendarSyncStatus, DisconnectedCalendar, DueCalendarReminder, EventDetails,
     GoogleCalendarSyncSnapshot, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan,
-    GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, OccurrenceListing, OccurrenceRange,
-    OwnedInbox, ProviderCalendar, ProviderCalendarTarget, StoredGoogleCalendar, TeamOutOfOffice,
-    VisibleCalendar,
+    GoogleWatchChannel, GoogleWatchConfig, GuestPolicy, MeetingCopy, OccurrenceListing,
+    OccurrenceRange, OwnedInbox, ProviderCalendar, ProviderCalendarTarget, StoredGoogleCalendar,
+    TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -183,6 +184,16 @@ pub trait CalendarMutationProvider: Send + Sync + 'static {
         patch: &CalendarEventPatch,
     ) -> impl Future<Output = Result<ProviderInstanceUpdateOutcome, CalendarProviderError>> + Send;
 
+    /// Read an event's series back from the target calendar, as after a
+    /// write through another of its copies. Returns `None` when the copy no
+    /// longer exists or was cancelled at the provider.
+    fn refresh_event(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> impl Future<Output = Result<Option<CalendarEventUpsert>, CalendarProviderError>> + Send;
+
     /// Delete an event. An event already gone at the provider is success.
     fn delete_event(
         &self,
@@ -269,7 +280,7 @@ pub trait CalendarMutationProvider: Send + Sync + 'static {
         &self,
         access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &CalendarEventExport,
+        source: &EventSnapshot,
     ) -> impl Future<Output = Result<ProviderImportOutcome, CalendarProviderError>> + Send;
 
     /// Close a push notification channel. A channel Google no longer knows
@@ -406,6 +417,22 @@ pub enum ProviderImportOutcome {
     Refused(CalendarProviderError),
 }
 
+/// Confirms which copy of a meeting a caller changes when the meeting is on
+/// several of the requester's own inboxes, for callers that must name it.
+pub trait CalendarCopyConfirmation: Send + Sync + 'static {
+    /// `Some` refusal, listing each copy, when `event_id` is one of several
+    /// inboxes' copies of its meeting and `inbox` does not name the inbox
+    /// holding it (see [`crate::domain::copies::check_copy`]); `None` to go
+    /// ahead.
+    fn confirm_copy(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        inbox: Option<&str>,
+        change: CopyChange,
+    ) -> impl Future<Output = Result<Option<CopyRefusal>, CalendarMutationError>> + Send;
+}
+
 /// Inbound service port for querying calendar occurrence projections.
 pub trait CalendarOccurrenceService: Send + Sync + 'static {
     /// Return occurrences visible to a requester in a bounded viewport.
@@ -455,6 +482,15 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
         requester_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 
+    /// Every copy of `event_id`'s meeting the requester holds through one of
+    /// their own inboxes, so a caller can tell when one meeting sits on
+    /// several of them.
+    fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MeetingCopy>, Report>> + Send;
+
     /// Render an event the requester can see — their own, or one shared with
     /// a channel they belong to — as an iCalendar document, with its title.
     /// `None` when the event does not exist or is not visible to them.
@@ -492,6 +528,10 @@ pub struct CalendarEventWriteOutcome {
     pub change: CalendarEventChange,
     /// A changed source was or is OOO; it may revoke a teammate's status/title.
     pub team_ooo_changed: bool,
+    /// Guest copies of the same meeting, in any inbox Macro holds, whose
+    /// guest policy changed to follow this copy's organizer. Their viewers
+    /// need a refresh too.
+    pub aligned_copies: Vec<AlignedGuestCopy>,
 }
 
 /// One event's fate after its sources were retired.
@@ -569,6 +609,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<CalendarMentionPreview>, Report>> + Send;
 
+    /// Every copy of `event_id`'s meeting (same iCalendar UID) the requester
+    /// holds through an inbox they own or have linked, ordered by inbox.
+    /// Cancelled copies are left out, and an event they hold no copy of
+    /// yields none.
+    fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MeetingCopy>, Report>> + Send;
+
     /// Series content of an event the requester can see, for export or
     /// copying, with how they see it: the requester's own projection of the
     /// meeting (same iCalendar UID) on one of their own or linked calendars,
@@ -582,8 +632,9 @@ pub trait CalendarRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<CalendarEventExport>, Report>> + Send;
 
     /// Record a pending request from the requester to join `event_id`,
-    /// reopening a declined one. Returns the request and whether it became
-    /// pending just now, so a repeated ask does not notify the sharer twice.
+    /// leaving an existing one, whatever its status, as it is. Returns the
+    /// request and whether this call created it, so a repeated ask does not
+    /// notify the sharer twice.
     fn open_join_request(
         &self,
         event_id: Uuid,
@@ -843,6 +894,9 @@ pub enum CalendarJoinRequestError {
     /// accept.
     #[error("the person who shared this event cannot add guests to it")]
     SharerCannotInvite,
+    /// The sharer declined the requester's earlier request, which stands.
+    #[error("the person who shared this event declined the request to join")]
+    Declined,
     /// Persistence failed.
     #[error("calendar join request failed: {0}")]
     Internal(Report),
@@ -854,7 +908,8 @@ pub trait CalendarJoinRequestService: Send + Sync + 'static {
     /// Ask the person who shared an event with one of the requester's
     /// channels to add them as a guest, notifying them when the request
     /// becomes pending. Asking again while pending changes nothing; asking
-    /// after a decline reopens the request.
+    /// after a decline is refused with `Declined`, so the sharer is asked
+    /// only once.
     fn request_to_join(
         &self,
         requester_id: &str,
@@ -998,6 +1053,37 @@ pub trait CalendarMutationService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 }
 
+/// Inbound service port adding an event the requester holds as an
+/// iCalendar file, such as one forwarded to them by email, to one of their
+/// Google calendars.
+pub trait CalendarSnapshotImporter: Send + Sync + 'static {
+    /// Import `snapshot` into the selected calendar, or the requester's
+    /// primary inbox's primary calendar, the way
+    /// [`CalendarMutationService::copy_shared_event`] adds a channel share:
+    /// under the meeting's iCalendar UID, with the calendar as its only guest,
+    /// notifying no one. The caller has already authorized the file.
+    fn import_snapshot(
+        &self,
+        requester_id: &str,
+        snapshot: EventSnapshot,
+        calendar_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+}
+
+/// Inbound service port reading what forwarding one of the requester's
+/// events by email sends, for the host that sends the email.
+pub trait CalendarEventForwardSource: Send + Sync + 'static {
+    /// The requester's own copy of `event_id` as an iCalendar document,
+    /// with the inbox holding that copy, which sends it. `None` when the
+    /// event is cancelled, unknown, or not held through one of their own
+    /// inboxes.
+    fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send;
+}
+
 /// Inbound service port creating events that carry a Macro call.
 ///
 /// The meeting is minted before the calendar write, so the one invitation
@@ -1101,6 +1187,11 @@ pub enum CalendarMutationError {
     /// The meeting is already on one of the requester's calendars.
     #[error("the event is already on one of the requester's calendars")]
     AlreadyOnCalendar,
+    /// The requester asked to join the shared event and the request is
+    /// pending or accepted, so the meeting reaches their calendar as an
+    /// invitation; a snapshot added meanwhile would take that invitation in.
+    #[error("the requester has asked to join this event")]
+    JoinRequestOpen,
     /// The provider refused to add a copy of the event to the calendar.
     #[error("the calendar provider refused to add a copy of the event: {0}")]
     CopyRefused(String),

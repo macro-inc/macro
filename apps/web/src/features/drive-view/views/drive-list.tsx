@@ -23,8 +23,8 @@ import {
   ListEntity,
   ListLayoutProvider,
 } from '@entity';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
 import {
@@ -93,6 +93,11 @@ export function DriveList() {
   const selected = createMemo(() =>
     list.selection.items().map((row) => row.entity)
   );
+
+  const viewedFolderId = () => {
+    const { location } = state.value();
+    return location.kind === 'folder' ? (location.id ?? undefined) : undefined;
+  };
 
   const actionContext = () =>
     resolveEntityActionViewContext({
@@ -307,6 +312,7 @@ export function DriveList() {
                   class="grid min-h-0 flex-1 place-items-center text-ink-muted"
                 >
                   <SpinnerIcon
+                    aria-hidden={false}
                     aria-label="Loading files"
                     class="size-5 animate-spin"
                   />
@@ -411,6 +417,7 @@ export function DriveList() {
                                 list={actionState}
                                 selectedEntities={selected}
                                 viewContext={actionContext()}
+                                viewedProjectId={viewedFolderId()}
                                 onOpenChange={(open) => {
                                   if (!open) return;
 

@@ -78,6 +78,7 @@ vi.mock('./CalendarSearch', () => ({
 vi.mock('./CalendarCreateItems', () => ({
   CalendarCreateEventItem: () => null,
   CalendarCreateCallItem: () => null,
+  CalendarCreateBookingLinkItem: () => null,
 }));
 vi.mock('./CalendarCreateMenu', () => ({
   CalendarCreateMenu: () => <button>New event or call</button>,

@@ -1,6 +1,6 @@
+import Minus from '@icon/system/regular/minus.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { NumberField as KobalteNumberField } from '@kobalte/core/number-field';
-import Minus from '@phosphor/minus.svg';
-import Plus from '@phosphor/plus.svg';
 import {
   type Accessor,
   type ComponentProps,

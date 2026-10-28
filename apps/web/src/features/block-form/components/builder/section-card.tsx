@@ -1,9 +1,9 @@
-import ArrowBendDownRight from '@phosphor/arrow-bend-down-right.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import ShieldCheck from '@phosphor/shield-check.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowBendDownRight from '@icon/system/regular/arrow-bend-down-right.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import ShieldCheck from '@icon/system/regular/shield-check.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { LiveTextarea, LiveTextInput } from './live-text-input';

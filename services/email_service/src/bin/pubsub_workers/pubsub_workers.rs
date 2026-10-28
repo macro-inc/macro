@@ -4,7 +4,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::GmailApiClientRepository;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
-    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
@@ -30,15 +30,15 @@ fn compose_email_api(
     db: PgPool,
     subscription_topic: String,
     auth_service_client: authentication_service_client::AuthServiceClient,
-    redis_client: RedisClient,
     redis_conn: redis::aio::MultiplexedConnection,
+    gate_conn: redis::aio::ConnectionManager,
     sqs_client: sqs_client::SQS,
     rate_budget: RateBudget,
 ) -> GmailApi {
     GmailApi::new(
         GmailApiClientRepository::from_subscription_topic(subscription_topic),
         EmailServiceTokenSource::new(db, redis_conn, auth_service_client, sqs_client),
-        RedisProviderRateLimiter::new(redis_client, rate_budget),
+        RedisGmailRequestGate::new(gate_conn, rate_budget),
     )
 }
 
@@ -268,12 +268,7 @@ async fn main() -> anyhow::Result<()> {
         queue: ingress_queue,
     });
 
-    let redis_client = RedisClient::new(
-        redis_inner_client,
-        config.redis_rate_limit_reqs,
-        config.redis_rate_limit_reqs_backfill,
-        config.redis_rate_limit_window_secs,
-    );
+    let redis_client = RedisClient::new(redis_inner_client, config.redis_rate_limit_window_secs);
 
     // One long-lived multiplexed connection shared by both token sources;
     // cloning it is an Arc bump, not a new TCP dial per provider call.
@@ -282,13 +277,18 @@ async fn main() -> anyhow::Result<()> {
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection for token sources")?;
+    let gate_conn = redis_client
+        .inner
+        .get_connection_manager()
+        .await
+        .context("failed to get reconnecting redis connection for the gmail request gates")?;
 
     let email_api_live = compose_email_api(
         db.clone(),
         config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
-        redis_client.clone(),
         redis_conn.clone(),
+        gate_conn.clone(),
         sqs_client.clone(),
         RateBudget::Live,
     );
@@ -321,8 +321,8 @@ async fn main() -> anyhow::Result<()> {
         db_backfill.clone(),
         config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
-        redis_client.clone(),
         redis_conn,
+        gate_conn,
         sqs_client.clone(),
         RateBudget::Backfill,
     );

@@ -247,14 +247,26 @@ pub async fn run() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
+    let (readonly_min_connections, readonly_max_connections) = match config.environment {
+        // Once all tasks use this cap, three dev tasks allow 60 replica sessions,
+        // or 120 during a full rolling overlap.
+        // Keep excess reads queued in the service instead of exhausting replica memory.
+        Environment::Develop => (2, 20),
+        Environment::Production | Environment::Local => (min_connections, max_connections),
+    };
+
     let readonly_db = match PgPoolOptions::new()
-        .min_connections(min_connections)
-        .max_connections(max_connections)
+        .min_connections(readonly_min_connections)
+        .max_connections(readonly_max_connections)
         .connect(&config.database_url_readonly)
         .await
     {
         Ok(pool) => {
-            tracing::trace!("initialized readonly db connection");
+            tracing::trace!(
+                min_connections = readonly_min_connections,
+                max_connections = readonly_max_connections,
+                "initialized readonly db connection"
+            );
             pool
         }
         Err(e) => {
@@ -287,6 +299,7 @@ pub async fn run() -> anyhow::Result<()> {
         .search_event_queue(&search_event_queue)
         .document_delete_queue(&document_delete_queue)
         .gmail_ops_queue(&gmail_ops_queue)
+        .gmail_label_write_batches(config.gmail_label_write_batches_enabled)
         .email_scheduled_queue(&email_scheduled_queue);
     let webhook_event_queue = webhook::outbound::SqsWebhookQueue::new(
         Arc::new(sqs_client.clone()),
@@ -342,6 +355,7 @@ pub async fn run() -> anyhow::Result<()> {
     let consumer_cancellation_token = CancellationToken::new();
     let consumer_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
+    let import_jobs = ai_tools::ImportJobs::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -1369,6 +1383,7 @@ pub async fn run() -> anyhow::Result<()> {
     let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(
         db.clone(),
         event_broker_tracker.clone(),
+        import_jobs.clone(),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
@@ -1382,7 +1397,9 @@ pub async fn run() -> anyhow::Result<()> {
     macro_agent_tool_context.channel_tool_context =
         ai_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
-            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(
+                channel_side_effects.clone(),
+            )),
             message_service.clone(),
         );
     let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
@@ -1463,6 +1480,20 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         authorization_state: authorization_state.clone(),
     };
+    let external_chat_state = crate::external_chat::build(crate::external_chat::Dependencies {
+        redis: redis_client.clone(),
+        static_files: static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
+        pool: db.clone(),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+        notifications: notification_ingress_service.clone(),
+        connection_gateway: conn_gateway_client.clone(),
+        tracker: consumer_tracker.clone(),
+        cancellation: consumer_cancellation_token.clone(),
+    });
 
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
@@ -1883,20 +1914,24 @@ pub async fn run() -> anyhow::Result<()> {
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
         db.clone(),
     )));
+    // The GraphQL own-calendar feed reads the primary, like the REST calendar
+    // routes: a `refresh_calendar` poke goes out as the write commits, and the
+    // delta it triggers would find nothing on a lagging replica, leaving the
+    // change unseen until some later poke. Range reads share the pool so a
+    // page cannot overwrite what a delta already applied with older rows.
     let calendar_read_service = Arc::new(calendar_events::domain::service::CalendarService::new(
-        calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+        calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
     ));
     let graphql_calendar_context = graphql_calendar::CalendarGraphqlContext::new(
         calendar_read_service.clone(),
         Arc::new(
             calendar_events::domain::changes::CalendarChangeService::new(
-                calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+                calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
             ),
         ),
     );
     // Team policy reads use the primary so a sharing downgrade cannot be
-    // served from a lagging replica. The GraphQL own-calendar feed retains
-    // its existing readonly-pool routing.
+    // served from a lagging replica.
     let calendar_state = CalendarRouterState::new(
         Arc::new(
             calendar_events::domain::service::CalendarService::new(
@@ -2086,7 +2121,10 @@ pub async fn run() -> anyhow::Result<()> {
         complete_graph::EntityAccessWorkFeedViewers(entity_access_service.clone()),
     );
 
+    let sync_sessions =
+        sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
     let api_context = ApiContext {
+        sync_sessions,
         dictation_state,
         graphql_work_feed_context,
         contacts_ingress: contacts_ingress.clone(),
@@ -2118,6 +2156,7 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         slack_state,
+        external_chat_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),
@@ -2350,6 +2389,9 @@ pub async fn run() -> anyhow::Result<()> {
     consumer_tracker.close();
     consumer_tracker.wait().await;
     tracing::info!("event consumers stopped");
+
+    // Running imports stop at their next checkpoint and hand their runs over.
+    import_jobs.hand_over().await;
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

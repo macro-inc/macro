@@ -343,6 +343,9 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         destination_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// Remove a destination object when a multi-part document copy fails.
+    fn delete_object(&self, key: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
     /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
     fn get_snapshot(
         &self,

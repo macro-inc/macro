@@ -209,6 +209,17 @@ export type AgentSessionEntity = EntityBase & {
   turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
+  /**
+   * Who started the session: a person, another agent that dispatched it, or a
+   * routine. Absent from older cached rows.
+   */
+  source?: 'user' | 'agent' | 'routine';
+  /**
+   * Where the session is shown: unlisted sessions (routine runs, unless the
+   * routine lists them) are left out of Home and the default Agents list, and
+   * hidden ones are returned only by id. Absent from older cached rows.
+   */
+  visibility?: 'listed' | 'unlisted' | 'hidden';
   status: string;
   properties?: SoupProperty[];
 };

@@ -5,7 +5,7 @@ import {
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { ProjectTaskSearch } from '../components/project-task-search';

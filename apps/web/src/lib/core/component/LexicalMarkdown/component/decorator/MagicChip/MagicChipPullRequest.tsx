@@ -7,8 +7,8 @@ import {
 } from '@app/features/block-pr/util/prKey';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import { Button, buttonClasses } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';

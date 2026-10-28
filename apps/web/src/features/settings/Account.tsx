@@ -26,19 +26,19 @@ import {
 import { createStaticFile } from '@core/util/create';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openFilePicker } from '@core/util/upload';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import SignOutIcon from '@icon/system/regular/sign-out.svg?component-solid';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import IconUpload from '@icon/system/regular/upload-simple.svg?component-solid';
+import WarningIcon from '@icon/system/regular/warning.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import {
   type BundleUpdateStatus,
   nativeUpdateDescription,
   useTauri,
 } from '@macro/tauri';
-import CheckIcon from '@phosphor/check.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import WarningIcon from '@phosphor/warning.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
-import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import {
   invalidateOwnUserName,
@@ -66,6 +66,7 @@ import {
   buildAccountDeletionFeedbackPayload,
   performAccountDeletion,
 } from './account-deletion-feedback';
+import { getBundleDebugInfo } from './app-build';
 import { CurrentPlanCard } from './components/current-plan-card';
 import { resolvePlanTier } from './core/billing-state';
 import {
@@ -850,20 +851,9 @@ function bundleUpdateAction(
   }
 }
 
-type BundleDebugInfo = {
-  bundleBuild: number;
-  source: 'embedded' | 'ota';
-  nativeBuild: number;
-};
-
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
-  const [bundleDebugInfo] = createResource(() =>
-    invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
-      console.error('[bundle-update] get_bundle_debug_info failed', error);
-      return null;
-    })
-  );
+  const [bundleDebugInfo] = createResource(getBundleDebugInfo);
 
   return (
     <Show when={bundleDebugInfo()}>

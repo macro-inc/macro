@@ -6,6 +6,8 @@
  */
 import type {
   AgentConversationsDto,
+  AgentModeChoiceRequest,
+  AgentModeChoiceResponse,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -17,6 +19,9 @@ import type {
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
+  AppConnectedRequest,
+  ClassifyInputRequest,
+  ClassifyInputResponse,
   CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
@@ -27,6 +32,8 @@ import type {
   DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
   ExecutionRecord,
+  ExtractInputRequest,
+  ExtractInputResponse,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -449,6 +456,81 @@ export const retryAgentConversationTurn = async (
     status: res.status,
     headers: res.headers,
   } as retryAgentConversationTurnResponse;
+};
+
+/**
+ * @summary Choose whether a composer prompt goes to a chat or a coding agent.
+ */
+export type chooseAgentModeResponse200 = {
+  data: AgentModeChoiceResponse;
+  status: 200;
+};
+
+export type chooseAgentModeResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type chooseAgentModeResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type chooseAgentModeResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type chooseAgentModeResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type chooseAgentModeResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type chooseAgentModeResponseSuccess = chooseAgentModeResponse200 & {
+  headers: Headers;
+};
+export type chooseAgentModeResponseError = (
+  | chooseAgentModeResponse400
+  | chooseAgentModeResponse401
+  | chooseAgentModeResponse402
+  | chooseAgentModeResponse403
+  | chooseAgentModeResponse503
+) & {
+  headers: Headers;
+};
+
+export type chooseAgentModeResponse =
+  | chooseAgentModeResponseSuccess
+  | chooseAgentModeResponseError;
+
+export const getChooseAgentModeUrl = () => {
+  return `/agent-mode-choice`;
+};
+
+export const chooseAgentMode = async (
+  agentModeChoiceRequest: AgentModeChoiceRequest,
+  options?: RequestInit
+): Promise<chooseAgentModeResponse> => {
+  const res = await fetch(getChooseAgentModeUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentModeChoiceRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: chooseAgentModeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as chooseAgentModeResponse;
 };
 
 /**
@@ -1263,6 +1345,87 @@ export const deleteAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as deleteAgentSessionResponse;
+};
+
+/**
+ * The harness produces an `app.connected` system event, which the transcript
+shows as no prompt; it starts a turn once the session is idle.
+ * @summary Continue the session now that its owner connected an app it asked for.
+ */
+export type reportAgentSessionAppConnectedResponse202 = {
+  data: void;
+  status: 202;
+};
+
+export type reportAgentSessionAppConnectedResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reportAgentSessionAppConnectedResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reportAgentSessionAppConnectedResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type reportAgentSessionAppConnectedResponse422 = {
+  data: string;
+  status: 422;
+};
+
+export type reportAgentSessionAppConnectedResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reportAgentSessionAppConnectedResponseSuccess =
+  reportAgentSessionAppConnectedResponse202 & {
+    headers: Headers;
+  };
+export type reportAgentSessionAppConnectedResponseError = (
+  | reportAgentSessionAppConnectedResponse401
+  | reportAgentSessionAppConnectedResponse403
+  | reportAgentSessionAppConnectedResponse409
+  | reportAgentSessionAppConnectedResponse422
+  | reportAgentSessionAppConnectedResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportAgentSessionAppConnectedResponse =
+  | reportAgentSessionAppConnectedResponseSuccess
+  | reportAgentSessionAppConnectedResponseError;
+
+export const getReportAgentSessionAppConnectedUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/app-connections`;
+};
+
+export const reportAgentSessionAppConnected = async (
+  sessionId: string,
+  appConnectedRequest: AppConnectedRequest,
+  options?: RequestInit
+): Promise<reportAgentSessionAppConnectedResponse> => {
+  const res = await fetch(getReportAgentSessionAppConnectedUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(appConnectedRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportAgentSessionAppConnectedResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportAgentSessionAppConnectedResponse;
 };
 
 /**
@@ -2958,4 +3121,130 @@ export const answerAgentSessionToolApproval = async (
     status: res.status,
     headers: res.headers,
   } as answerAgentSessionToolApprovalResponse;
+};
+
+/**
+ * @summary Classify a draft for the authenticated user.
+ */
+export type classifyResponse200 = {
+  data: ClassifyInputResponse;
+  status: 200;
+};
+
+export type classifyResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type classifyResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type classifyResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type classifyResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type classifyResponseSuccess = classifyResponse200 & {
+  headers: Headers;
+};
+export type classifyResponseError = (
+  | classifyResponse400
+  | classifyResponse401
+  | classifyResponse402
+  | classifyResponse503
+) & {
+  headers: Headers;
+};
+
+export type classifyResponse = classifyResponseSuccess | classifyResponseError;
+
+export const getClassifyUrl = () => {
+  return `/universal_input/classify`;
+};
+
+export const classify = async (
+  classifyInputRequest: ClassifyInputRequest,
+  options?: RequestInit
+): Promise<classifyResponse> => {
+  const res = await fetch(getClassifyUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(classifyInputRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: classifyResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as classifyResponse;
+};
+
+/**
+ * @summary Extract editable fields for the authenticated user.
+ */
+export type extractResponse200 = {
+  data: ExtractInputResponse;
+  status: 200;
+};
+
+export type extractResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type extractResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type extractResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type extractResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type extractResponseSuccess = extractResponse200 & {
+  headers: Headers;
+};
+export type extractResponseError = (
+  | extractResponse400
+  | extractResponse401
+  | extractResponse402
+  | extractResponse503
+) & {
+  headers: Headers;
+};
+
+export type extractResponse = extractResponseSuccess | extractResponseError;
+
+export const getExtractUrl = () => {
+  return `/universal_input/extract`;
+};
+
+export const extract = async (
+  extractInputRequest: ExtractInputRequest,
+  options?: RequestInit
+): Promise<extractResponse> => {
+  const res = await fetch(getExtractUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(extractInputRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: extractResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as extractResponse;
 };

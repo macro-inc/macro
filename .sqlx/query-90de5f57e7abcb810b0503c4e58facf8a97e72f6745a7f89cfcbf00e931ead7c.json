@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM whatsapp_app_state_mutation_mac\n            WHERE account_id = $1 AND name = $2 AND index_mac = ANY($3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "ByteaArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "90de5f57e7abcb810b0503c4e58facf8a97e72f6745a7f89cfcbf00e931ead7c"
+}

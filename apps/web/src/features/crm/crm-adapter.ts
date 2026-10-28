@@ -15,6 +15,8 @@ import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { emailToMacroId, getInitialsFromName } from '@core/user';
 import { idToEmail } from '@core/user/util';
+import type { EntityData } from '@entity';
+import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { queryReadyGate } from '@queries/gate';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -33,6 +35,9 @@ import { storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { useQueryClient } from '@tanstack/solid-query';
 import { createMemo, lazy } from 'solid-js';
+import { createTagFacetContext } from '../soup';
+import { createCrmActivityFilters } from './activity-filters-adapter';
+import { createCrmActivityState } from './activity-state-adapter';
 import type { CrmContext } from './context/crm-context';
 import type { CrmQuery, ItemListSource } from './context/crm-sources';
 import {
@@ -51,6 +56,7 @@ import { PipelineDatabaseEditor, PipelineShare } from './pipeline-adapter';
 import { createCrmPipelineEntries } from './pipeline-entries-adapter';
 import { createCrmPermissions } from './primitives/team-config';
 import { useCrmActivityQuery } from './queries/activity';
+import { crmActivityItemMatches } from './queries/activity-options';
 import {
   createCompanyImporter,
   useCompanyQuery,
@@ -93,19 +99,28 @@ const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
 }));
 
+const CrmActivityTasks = lazy(async () => ({
+  default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
+}));
+
 /**
  * Soup rows carry raw notification arrays; `ListEntity` reads them through
  * an accessor bound to the app's notification source, as other lists do.
  */
-function withRowNotifications(source: SoupAstItemsQuery): ItemListSource {
+function withRowNotifications(
+  source: SoupAstItemsQuery,
+  matches?: (entity: EntityData) => boolean
+): ItemListSource {
   const notificationSource = useGlobalNotificationSource();
   // Reading `data` before the first page resolves would suspend the tab.
   const data = createMemo(() =>
     queryReadyGate(source)
       ? {
-          entities: source.data.entities.map((entity) =>
-            withEntityNotifications(entity, notificationSource)
-          ),
+          entities: source.data.entities
+            .filter((entity) => !matches || matches(entity))
+            .map((entity) =>
+              withEntityNotifications(entity, notificationSource)
+            ),
         }
       : undefined
   );
@@ -219,18 +234,39 @@ export function createAppCrmContext(): CrmContext {
       withRowNotifications(
         useContactEmailsQuery(useSoupAstItemsQuery, ...args)
       ),
-    createActivity: (tab) =>
-      withRowNotifications(
-        useCrmActivityQuery(deps, useSoupAstItemsQuery, tab, userId)
-      ),
-    openTaskComposer: () =>
+    createActivity: (tab, options) => {
+      const tags = useTagSets();
+      const tagsReady = useTagSetsReady();
+      const facetContext = createMemo(() => createTagFacetContext(tags()));
+      return withRowNotifications(
+        useCrmActivityQuery(
+          useSoupAstItemsQuery,
+          tab,
+          userId,
+          options,
+          facetContext,
+          tagsReady
+        ),
+        options
+          ? (entity) =>
+              crmActivityItemMatches(entity, tab(), options(), facetContext())
+          : undefined
+      );
+    },
+    createActivityState: createCrmActivityState,
+    createActivityFilters: createCrmActivityFilters,
+    ActivityTasks: CrmActivityTasks,
+    openTaskComposer: (options) =>
       layout.popoverSplit({
         type: 'component',
         id: 'task-compose',
         params: {
-          composerContext: panel
-            ? createContext.snapshot('task', panel.handle.id)
-            : undefined,
+          initialDueDate: options?.dueDate,
+          composerContext:
+            options?.composerContext ??
+            (panel
+              ? createContext.snapshot('task', panel.handle.id)
+              : undefined),
         },
       }),
     createRecordFiles: (scope) =>

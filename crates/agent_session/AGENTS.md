@@ -81,6 +81,13 @@ persisted prompter, never from an old wire actor or a newer user turn.
 
 ## Gotchas
 
+- Where a session is shown is `agent_session.visibility` (`listed`,
+  `unlisted`, `hidden`); `hidden` replaces `list_hidden`. Never read or write
+  `list_hidden`: until a later migration drops it, the
+  `agent_session_hidden_sync` trigger keeps it in step for replicas on older
+  code, and it must keep sorting before `agent_session_legacy_warm_write`
+  (triggers fire in name order).
+
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.

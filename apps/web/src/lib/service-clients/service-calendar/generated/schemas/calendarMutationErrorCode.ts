@@ -23,6 +23,7 @@ export const CalendarMutationErrorCode = {
   guest_list_hidden: 'guest_list_hidden',
   guests_cannot_modify: 'guests_cannot_modify',
   already_on_calendar: 'already_on_calendar',
+  join_request_open: 'join_request_open',
   copy_refused: 'copy_refused',
   snapshot: 'snapshot',
   invalid_input: 'invalid_input',
@@ -31,4 +32,5 @@ export const CalendarMutationErrorCode = {
   retryable: 'retryable',
   persist_failed: 'persist_failed',
   macro_call_failed: 'macro_call_failed',
+  copy_choice_required: 'copy_choice_required',
 } as const;

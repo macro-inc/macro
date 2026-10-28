@@ -1,6 +1,7 @@
 import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
+  ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -27,13 +28,14 @@ export type EmailHeaderProps = {
 };
 
 export function EmailViewBreadcrumbItem() {
-  const { state } = useEmailView();
+  const { state, tagViewTitle } = useEmailView();
   const inboxSelected = () =>
     !isTouchDevice() && (state.tab === 'important' || state.tab === 'noise');
   const tabTitle = () =>
-    inboxSelected()
+    tagViewTitle() ??
+    (inboxSelected()
       ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email');
+      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
 
   return (
     <ViewBreadcrumbs.Item
@@ -41,20 +43,33 @@ export function EmailViewBreadcrumbItem() {
       metadata={{ type: 'email-view' }}
       order={0}
     >
-      {(item) => (
-        <ViewBreadcrumbs.Button
-          class="shrink-0 rounded-md hover:bg-hover"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-        >
-          <span class="truncate @max-[720px]/view-shell:hidden">
-            {tabTitle()}
-          </span>
-          <span class="hidden @max-[720px]/view-shell:inline">
-            {inboxSelected() ? 'Inbox' : 'Email'}
-          </span>
-        </ViewBreadcrumbs.Button>
-      )}
+      {(item) => {
+        const label = () => (
+          <>
+            <span class="truncate @max-[720px]/view-shell:hidden">
+              {tabTitle()}
+            </span>
+            <span class="hidden @max-[720px]/view-shell:inline">
+              {inboxSelected() ? 'Inbox' : 'Email'}
+            </span>
+          </>
+        );
+        const button = () => (
+          <ViewBreadcrumbs.Button
+            class="shrink-0 rounded-md hover:bg-hover"
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+          >
+            {label()}
+          </ViewBreadcrumbs.Button>
+        );
+        // At the list itself the name switches views; deeper, it returns here.
+        return (
+          <Show when={item.isActive()} fallback={button()}>
+            <ViewSwitchTrigger fallback={button()}>{label()}</ViewSwitchTrigger>
+          </Show>
+        );
+      }}
     </ViewBreadcrumbs.Item>
   );
 }
@@ -62,16 +77,17 @@ export function EmailViewBreadcrumbItem() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab } = useEmailView();
+  const { state, setState, setTab, tagViewTitle } = useEmailView();
   const [filterOpen, setFilterOpen] = createSignal(false);
   let focusSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const inboxSelected = () =>
     state.tab === 'important' || state.tab === 'noise';
   const selectedTabLabel = () =>
-    inboxSelected()
+    tagViewTitle() ??
+    (inboxSelected()
       ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email');
+      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
 
   const runSearch = () => {
     focusSearch?.();

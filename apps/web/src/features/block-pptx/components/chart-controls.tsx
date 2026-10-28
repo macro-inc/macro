@@ -11,10 +11,10 @@ import type {
   ShapeOutline,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Plus from '@phosphor/plus.svg';
-import TableIcon from '@phosphor/table.svg';
-import Trash from '@phosphor/trash.svg';
-import X from '@phosphor/x.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import TableIcon from '@icon/system/regular/table.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { createSignal, For, Index, type JSX, Show } from 'solid-js';

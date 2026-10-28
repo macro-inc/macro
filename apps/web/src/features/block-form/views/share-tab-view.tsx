@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import UsersThree from '@phosphor/users-three.svg';
+import UsersThree from '@icon/system/regular/users-three.svg';
 import { Button, Input, ToggleSwitch } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';

@@ -1,4 +1,4 @@
-import UploadIcon from '@phosphor/upload-simple.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { BotAvatar } from './BotAvatar';

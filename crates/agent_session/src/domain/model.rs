@@ -178,13 +178,14 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The servers
+/// plus any apps a routine requires, snapshotted onto the session at creation
+/// like `instructions`. The servers
 /// it resolves to are re-listed before each prompt, so an app the owner
 /// connects mid-session reaches a live agent that can `session/resume`;
 /// editing the agent's selection applies to its next session.
 pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 
-/// Why a session is created, independently of whether it appears in broad lists.
+/// Why a session is created, which decides where it is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionPurpose {
     /// A regular session opened directly or from a thread mention.
@@ -193,6 +194,15 @@ pub enum SessionPurpose {
     Warm,
     /// Context backing an agent DM; accessed through its conversation.
     AgentDm,
+    /// A session another agent dispatched on its owner's behalf. Listed, and
+    /// it notifies like the owner's own sessions.
+    Dispatched,
+    /// A routine's unattended run. Its successful turns notify nobody, and
+    /// the routine's setting decides whether it is listed.
+    Routine {
+        /// Listed or unlisted, from the routine's setting.
+        visibility: SessionVisibility,
+    },
 }
 
 impl SessionPurpose {
@@ -209,14 +219,95 @@ impl SessionPurpose {
         Ok(if conversation { Self::AgentDm } else { self })
     }
 
-    /// Whether creation should omit the session from broad Agents/Home lists.
-    pub fn list_hidden(self, bot_id: BotId, thread_id: Option<Uuid>, hide_agent_dms: bool) -> bool {
-        match self {
+    /// Where a session created for this purpose is shown. Speculative,
+    /// DM-backing and inline @macro thread sessions are reached through what
+    /// they back, so they are hidden; a routine's run follows its routine.
+    pub fn visibility(
+        self,
+        bot_id: BotId,
+        thread_id: Option<Uuid>,
+        hide_agent_dms: bool,
+    ) -> SessionVisibility {
+        let hidden = match self {
             Self::Warm => true,
             Self::AgentDm => hide_agent_dms,
             Self::Standalone => bot_id == bot_id::MACRO_NEW_BOT_ID && thread_id.is_some(),
+            Self::Dispatched => false,
+            Self::Routine { visibility } => return visibility,
+        };
+        if hidden {
+            SessionVisibility::Hidden
+        } else {
+            SessionVisibility::Listed
         }
     }
+
+    /// Who starts a session created for this purpose.
+    pub fn source(self) -> SessionSource {
+        match self {
+            Self::Dispatched => SessionSource::Agent,
+            Self::Routine { .. } => SessionSource::Routine,
+            Self::Standalone | Self::Warm | Self::AgentDm => SessionSource::User,
+        }
+    }
+}
+
+/// Who started a session. Stored on the session and carried by its lifecycle
+/// events, so lists and notifications can treat unattended runs differently.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionSource {
+    /// A person, directly or through something they did: a prompt, a
+    /// mention, or an assignment.
+    #[default]
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+/// Where a session is shown. Stored as `agent_session.visibility`, which
+/// replaces `list_hidden` (`Hidden`); a trigger keeps that column in step until
+/// it is dropped.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    #[default]
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it: a routine's run, unless the routine lists its runs.
+    Unlisted,
+    /// Out of every list and search; reachable only by id, through what it
+    /// backs (a thread, a DM) or once a warm claim lists it.
+    Hidden,
 }
 
 /// Caller-provided values required to create an agent session.
@@ -297,6 +388,10 @@ pub struct AgentSession {
     pub pull_request_url: Option<String>,
     /// The Macro task the session was explicitly linked to.
     pub task_id: Option<String>,
+    /// Who started the session.
+    pub source: SessionSource,
+    /// Where the session is shown.
+    pub visibility: SessionVisibility,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,

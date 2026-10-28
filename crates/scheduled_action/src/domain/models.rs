@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bot_id::BotId;
+use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
@@ -10,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str::FromStr;
 use utoipa::ToSchema;
+
+use agent_session::domain::model::SessionVisibility;
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -62,6 +65,42 @@ pub enum ActionKind {
     Agent,
 }
 
+/// Whether a routine's runs are listed in Home and the Agents list. Routines
+/// that run often would bury the owner's own work, so runs start unlisted;
+/// either way they stay in the routine's history. The string form is the
+/// `scheduled_action.run_visibility` column's.
+#[derive(
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    ToSchema,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunVisibility {
+    /// Runs show up wherever the owner's sessions do.
+    Listed,
+    /// Runs stay out of Home and the default Agents list.
+    #[default]
+    Unlisted,
+}
+
+impl From<RunVisibility> for SessionVisibility {
+    fn from(visibility: RunVisibility) -> Self {
+        match visibility {
+            RunVisibility::Listed => Self::Listed,
+            RunVisibility::Unlisted => Self::Unlisted,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct AgentTask {
     /// Required for model targets; overrides the persona default for agent targets.
@@ -70,6 +109,10 @@ pub struct AgentTask {
     /// Absent when using Macro's agent-session runtime with a selected model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentTaskAgent>,
+    /// Apps the routine requires on top of the agent's own. The owner must
+    /// have each one connected to save the routine and for it to run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<AgentMcpServer>,
     pub prompt: String,
     pub user_prompt: String,
 }
@@ -159,6 +202,9 @@ pub struct ActionConfiguration {
     #[schema(value_type = Object)]
     pub task: Value,
     pub enabled: bool,
+    /// Omitted by clients that predate the setting; runs then start unlisted.
+    #[serde(default)]
+    pub run_visibility: RunVisibility,
 }
 
 /// Deprecated cron-only input, accepted during the compatibility rollout.
@@ -186,6 +232,7 @@ impl From<LegacyActionConfiguration> for ActionConfiguration {
             kind: input.kind,
             task: input.task,
             enabled: input.enabled,
+            run_visibility: RunVisibility::default(),
         }
     }
 }
@@ -199,7 +246,8 @@ pub enum CreateScheduledAction {
 }
 
 /// Canonical configuration replacement. Activation has its own endpoint, so
-/// omitting `enabled` keeps the stored value.
+/// omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
+/// it too, so clients that predate the setting do not reset it.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfigurationUpdate {
@@ -212,6 +260,8 @@ pub struct ActionConfigurationUpdate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(deprecated)]
     pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_visibility: Option<RunVisibility>,
 }
 
 /// Full replacement of client configuration, not of server-owned action state.
@@ -223,16 +273,22 @@ pub enum UpdateScheduledAction {
 }
 
 impl UpdateScheduledAction {
-    pub fn into_configuration(self, stored_enabled: bool) -> ActionConfiguration {
+    /// The replacement configuration, keeping the stored values of fields
+    /// the input omits.
+    pub fn into_configuration(self, stored: &ScheduledAction) -> ActionConfiguration {
         match self {
             Self::Canonical(input) => ActionConfiguration {
                 name: input.name,
                 trigger: input.trigger,
                 kind: input.kind,
                 task: input.task,
-                enabled: input.enabled.unwrap_or(stored_enabled),
+                enabled: input.enabled.unwrap_or(stored.enabled),
+                run_visibility: input.run_visibility.unwrap_or(stored.run_visibility),
             },
-            Self::Legacy(input) => input.into(),
+            Self::Legacy(input) => ActionConfiguration {
+                run_visibility: stored.run_visibility,
+                ..input.into()
+            },
         }
     }
 }
@@ -289,6 +345,8 @@ pub struct ScheduledAction {
     /// When false, automatic dispatch skips this action. `run_now` remains
     /// available regardless.
     pub enabled: bool,
+    /// Whether the action's runs are listed in Home and the Agents list.
+    pub run_visibility: RunVisibility,
 }
 
 impl ScheduledAction {

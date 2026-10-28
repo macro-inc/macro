@@ -60,6 +60,28 @@ where
             "provider",
             tracing::field::debug(target.token_identity.provider),
         );
+        match target.organizer_copy_calendar_id {
+            Some(organizer_calendar_id) => {
+                self.invite_through_organizer_copy(
+                    requester_id,
+                    target,
+                    organizer_calendar_id,
+                    guests,
+                    scope,
+                )
+                .await
+            }
+            None => self.add_guests_to(&target, guests, scope).await,
+        }
+    }
+
+    /// Add guests to the copy `target` addresses.
+    pub(super) async fn add_guests_to(
+        &self,
+        target: &CalendarEventMutationTarget,
+        guests: Vec<CalendarAttendeeInput>,
+        scope: CalendarUpdateScope,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
@@ -76,8 +98,8 @@ where
         else {
             return Err(CalendarMutationError::NotAttendee);
         };
-        let stored = self.stored_attendees(event_id, &scope).await?;
-        let capabilities = copy_capabilities(&target, &stored);
+        let stored = self.stored_attendees(target.event_id, &scope).await?;
+        let capabilities = copy_capabilities(target, &stored);
         if !capabilities.invite_guests {
             return Err(invite_refusal(
                 capabilities,
@@ -124,15 +146,15 @@ where
             }
             ProviderInviteOutcome::NotAttendee => Err(CalendarMutationError::NotAttendee),
             ProviderInviteOutcome::Forbidden(policy) => {
-                self.record_guest_policy(&target, policy).await;
+                self.record_guest_policy(target, policy).await;
                 Err(CalendarMutationError::GuestsCannotInvite)
             }
             ProviderInviteOutcome::GuestListHidden(policy) => {
-                self.record_guest_policy(&target, policy).await;
+                self.record_guest_policy(target, policy).await;
                 Err(CalendarMutationError::GuestListHidden)
             }
             ProviderInviteOutcome::Gone => {
-                self.retire_gone_source(&target).await;
+                self.retire_gone_source(target).await;
                 Err(CalendarMutationError::NotFound)
             }
         }

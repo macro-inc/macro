@@ -1,7 +1,7 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { For, Show } from 'solid-js';
 import { Button, type ButtonVariant } from './Button';
 import { ButtonGroup } from './ButtonGroup';

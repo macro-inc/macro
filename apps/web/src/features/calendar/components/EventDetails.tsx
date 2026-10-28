@@ -11,22 +11,22 @@ import {
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import BellSimpleIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import MapPinIcon from '@icon/system/regular/map-pin.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import QuestionMarkIcon from '@icon/system/regular/question-mark.svg';
+import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
+import PersonIcon from '@icon/system/regular/user.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Collapsible } from '@kobalte/core/collapsible';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import MapPinIcon from '@phosphor/map-pin.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import QuestionMarkIcon from '@phosphor/question-mark.svg';
-import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
-import PersonIcon from '@phosphor/user.svg';
-import UsersIcon from '@phosphor/users.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
-import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
@@ -636,11 +636,14 @@ export function EventDetails(props: {
  * email-guests pair Google Calendar puts there — rendered beside the
  * disclosure trigger rather than inside it, since a button cannot nest one.
  * `notice` is a muted line above the list, such as why it cannot grow.
+ * `guestListHidden` replaces the count, which would only count the guests
+ * the organizer lets the viewer see.
  */
 export function EventAttendeesSection(props: {
   attendees: CalendarAttendee[];
   actions?: JSX.Element;
   notice?: string;
+  guestListHidden?: boolean;
 }) {
   return (
     <Show when={props.attendees.length > 0}>
@@ -652,8 +655,9 @@ export function EventAttendeesSection(props: {
           <Collapsible.Trigger class="group flex min-w-0 flex-1 items-center gap-4 py-4 pl-4 pr-2 text-left hover:bg-hover hover:text-ink sm:gap-3">
             <UsersIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
             <span>
-              {props.attendees.length}{' '}
-              {plural('attendee', props.attendees.length)}
+              {props.guestListHidden
+                ? 'Guest list hidden'
+                : `${props.attendees.length} ${plural('attendee', props.attendees.length)}`}
             </span>
             <CaretDownIcon
               aria-hidden="true"

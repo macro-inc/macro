@@ -58,6 +58,7 @@ fn settled() -> AgentSessionLifecycleEvent {
             owner_id: owner(),
             origin: None,
             audience: vec![owner()],
+            source: agent_session::domain::model::SessionSource::User,
         },
         last_turn: Some(TurnSummary {
             turn: TurnId(0),

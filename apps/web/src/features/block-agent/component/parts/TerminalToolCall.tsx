@@ -1,6 +1,6 @@
 /** A shell command: `$ cmd` in the row, ANSI-colored output in the body. */
 
-import TerminalIcon from '@phosphor/terminal.svg';
+import TerminalIcon from '@icon/system/regular/terminal.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { FoldedTerminal, ToolCard } from '../../ui';

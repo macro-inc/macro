@@ -1,6 +1,6 @@
 //! Importing a snapshot of another calendar's event under its iCalendar UID.
 use super::*;
-use crate::domain::ics::CalendarEventExport;
+use crate::domain::ics::EventSnapshot;
 
 /// Private extended property marking an event as Macro's snapshot of a
 /// shared meeting. Private properties stay on the calendar copy they were
@@ -12,7 +12,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         &self,
         access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &CalendarEventExport,
+        source: &EventSnapshot,
     ) -> Result<ProviderImportOutcome, CalendarProviderError> {
         if self
             .holds_ical_uid(access_token, target, &source.ical_uid)
@@ -89,10 +89,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 /// calendar, already accepted, lets the import through while leaving out the
 /// meeting's guests and conference, so importing it invites no one and
 /// exposes no guest list or join link the share did not.
-pub(super) fn import_body(
-    source: &CalendarEventExport,
-    provider_calendar_id: &str,
-) -> serde_json::Value {
+pub(super) fn import_body(source: &EventSnapshot, provider_calendar_id: &str) -> serde_json::Value {
     let (start, end) = google_time_body(&source.time);
     let mut body = serde_json::json!({
         "iCalUID": source.ical_uid,
@@ -126,11 +123,34 @@ pub(super) fn import_body(
     body
 }
 
-/// Whether the event carries Macro's snapshot marker.
-pub(super) fn is_snapshot(event: &GoogleEvent) -> bool {
-    event
+/// Whether the event is still Macro's snapshot: it carries the marker and
+/// holds only what the import wrote, the calendar as its only guest with an
+/// answer.
+///
+/// The snapshot shares the meeting's iCalendar UID, so an invitation to the
+/// meeting that later reaches this calendar lands on the same event, private
+/// marker included. Google then lists the meeting's guests (a Google meeting
+/// with any guest also lists its organizer) and asks the calendar to answer
+/// again, and from then on the copy is the owner's seat at the meeting.
+pub(super) fn is_snapshot(event: &GoogleEvent, provider_calendar_id: &str) -> bool {
+    let marked = event
         .extended_properties
         .as_ref()
         .and_then(|properties| properties.private.get(SNAPSHOT_PROPERTY))
-        .is_some_and(|value| value == "true")
+        .is_some_and(|value| value == "true");
+    marked
+        && event.attendees.iter().flatten().all(|attendee| {
+            let is_calendar = attendee.is_self
+                || attendee
+                    .email
+                    .as_deref()
+                    .is_some_and(|email| email.eq_ignore_ascii_case(provider_calendar_id));
+            // Only an explicit answer, as the import wrote one: sync reads a
+            // missing one as awaiting a reply, like `needsAction`.
+            is_calendar
+                && matches!(
+                    attendee.response_status.as_deref(),
+                    Some("accepted" | "declined" | "tentative")
+                )
+        })
 }

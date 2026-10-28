@@ -1,4 +1,4 @@
-import Spinner from '@phosphor/spinner.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { Badge, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { DraftInput } from './draft-input';
@@ -94,6 +94,7 @@ export function QuestionRow(props: {
             {props.editors}
             <Show when={props.busy}>
               <Spinner
+                aria-hidden={false}
                 class="size-3.5 animate-spin text-ink-muted"
                 aria-label="Saving"
               />

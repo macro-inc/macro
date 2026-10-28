@@ -604,3 +604,47 @@ it('admits only optimistic CRM tasks that name the record', () => {
     }
   });
 });
+
+it('keeps activity membership in list and grouped paging and excludes optimistic rows', () => {
+  fixture.calls = [];
+  fixture.query = {
+    isLoading: false,
+    isPending: false,
+    isPlaceholderData: false,
+    data: { entities: [] },
+  };
+  createRoot((dispose) => {
+    try {
+      useTasksDataSource(
+        {
+          tab: 'team-tasks',
+          search: '',
+          facets: {},
+          groupBy: 'date',
+          sort: [],
+        },
+        {
+          userId: () => 'viewer',
+          tagSets: () => [],
+          tagSetsReady: () => true,
+          isGroupExpanded: () => true,
+          crm: () => ({ type: 'activity' }),
+          board: () => true,
+        }
+      );
+      const call = fixture.calls[0];
+      expect(
+        (call?.args() as { body: { crma: unknown } } | undefined)?.body.crma
+      ).toBe('activity');
+      expect(fixture.groupArgs?.soupBody().crma).toBe('activity');
+      const meta = call?.options?.() as {
+        meta: { insertFilter: (item: unknown) => boolean };
+      };
+      fixture.mapItem.mockReturnValueOnce(crmTask('linked', ['acme']));
+      expect(meta.meta.insertFilter({})).toBe(false);
+      expect(fixture.searchState).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+});

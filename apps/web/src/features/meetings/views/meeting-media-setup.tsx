@@ -2,13 +2,13 @@ import { MediaBackgroundPicker } from '@core/component/media/media-background-pi
 import { MediaDevicePicker } from '@core/component/media/media-device-picker';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Image from '@phosphor/image.svg';
-import Microphone from '@phosphor/microphone.svg';
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import Speaker from '@phosphor/speaker-high.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import Warning from '@phosphor/warning-circle.svg';
+import Image from '@icon/system/regular/image.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
+import Speaker from '@icon/system/regular/speaker-high.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
+import Warning from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui';
 import {
   children,

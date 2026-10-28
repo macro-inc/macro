@@ -1,6 +1,7 @@
+import { t } from '@app/lib/i18n';
+import CheckIcon from '@icon/system/regular/check.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn, Dropdown, Layer } from '@ui';
 import {
   type Accessor,
@@ -244,9 +245,11 @@ const SearchableValueSegment = (props: {
     props.filter.onSearchableChange?.(ids);
   };
 
-  const placeholder =
+  const placeholder = () =>
     props.filter.searchPlaceholder ??
-    `Search ${props.filter.categoryLabel.toLowerCase()}...`;
+    t('viewMenus.searchCategory', {
+      category: props.filter.categoryLabel.toLowerCase(),
+    });
 
   const isPeopleFilter = () => PEOPLE_FILTER_KEYS.has(props.filter.key);
 
@@ -255,7 +258,7 @@ const SearchableValueSegment = (props: {
       options={options}
       activeIds={activeIds}
       onChange={handleChange}
-      placeholder={placeholder}
+      placeholder={placeholder()}
       placement="bottom-start"
       open={props.filter.isPopupOpen}
       onOpenChange={(v) => props.filter.setPopupOpen?.(v)}

@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import CopyIcon from '@phosphor/copy.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { databaseWebhookUrl } from '@service-storage/databases';
 import type { DatabaseWebhookResponse } from '@service-storage/generated/schemas/databaseWebhookResponse';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';

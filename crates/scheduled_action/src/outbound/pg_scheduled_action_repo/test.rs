@@ -13,7 +13,9 @@ use sqlx::PgPool;
 use super::*;
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
-use crate::domain::models::{ActionKind, AlreadyRunningError, Schedule, ScheduledAction};
+use crate::domain::models::{
+    ActionKind, AlreadyRunningError, RunVisibility, Schedule, ScheduledAction,
+};
 use crate::domain::ports::ScheduledActionRepo;
 
 const USER_A: &str = "macro|sched-a@macro.com";
@@ -113,6 +115,7 @@ fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         claimed: None,
         next_run_at: Some(next_run_at),
         enabled: true,
+        run_visibility: RunVisibility::Unlisted,
     }
 }
 

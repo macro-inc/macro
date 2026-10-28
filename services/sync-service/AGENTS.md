@@ -41,6 +41,9 @@ updates over WebSocket.
   `src/domain/` (surface-specific logic) → migration in
   `src/durable_object/surface_migration.rs` if it changes stored shape.
 
+Active-peer queries with `include_ai=false` exclude signed agent actors and the
+legacy reserved AI peer range; Canvas workers use random full-width peer IDs.
+
 ## Checks
 
 - `just test` (runs `worker-build`, then `npx vitest run` and `cargo test`)
@@ -68,3 +71,8 @@ updates over WebSocket.
 ## Related
 
 - Docs: this directory's `README.md`
+
+- Room `/exists` checks the durable snapshot, not the document ID set by a
+  connection. To regress connect-before-initialize, build without
+  `create-default-state` and run `SYNC_TEST_UNINITIALIZED_ROOMS=true npx vitest run
+  tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
