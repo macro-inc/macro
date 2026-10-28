@@ -119,7 +119,12 @@ fn sql_error(error: SqlError) -> ToolCallError {
              establish that the user's table is missing."
             )
         }
-        SqlError::Run(RunError::NoSuchRow { .. } | RunError::TooManyRows { .. }) => {
+        SqlError::Run(
+            RunError::NoSuchRow { .. }
+            | RunError::TooManyRows { .. }
+            | RunError::MismatchedValue { .. }
+            | RunError::Internal { .. },
+        ) => {
             format!("SQL error: {error}")
         }
         SqlError::Run(
@@ -131,7 +136,10 @@ fn sql_error(error: SqlError) -> ToolCallError {
             | RunError::NothingOutstanding { .. }
             | RunError::Unreadable { .. }
             | RunError::Unwritable { .. }
-            | RunError::AlreadyStarted,
+            | RunError::AlreadyStarted
+            | RunError::TableNotInCatalog { .. }
+            | RunError::ColumnNotInTable { .. }
+            | RunError::UnboundColumn { .. },
         )
         | SqlError::WrittenTableNotInCatalog { .. }
         | SqlError::AlteredColumnNotInCatalog { .. }
