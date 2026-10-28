@@ -43,9 +43,9 @@ async function fixture(page: Page, multipleTables = false) {
     errors.push(error.message);
     console.error(error);
   });
-  await page.routeWebSocket('**', (socket) => {
+  await page.routeWebSocket('**', async (socket) => {
     if (!socket.url().includes('connection-gateway')) {
-      socket.close();
+      await socket.close();
       return;
     }
     gateway = socket;

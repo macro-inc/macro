@@ -3,7 +3,7 @@ import { render } from 'solid-js/web';
 import './index.css';
 
 import { preserveHeroEntrance } from '../utils/utilHeroEntrance';
-import { App } from './App';
+import { App, preloadProductRoute } from './App';
 
 const root = document.getElementById('root');
 
@@ -12,6 +12,9 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
     'Root element not found. Did you forget to add it to your index.html? Or maybe the id attribute got misspelled?'
   );
 }
+
+// Keep the existing first paint until the requested page and its styles exist.
+await preloadProductRoute(window.location.pathname);
 
 // Prerendered builds ship static HTML inside #root for crawlers and first
 // paint; Solid's render() appends rather than hydrates, so drop it first.

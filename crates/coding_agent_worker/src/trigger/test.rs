@@ -124,6 +124,7 @@ fn document_triggers_become_work_on_the_document() {
     assert_eq!(
         trigger_to_work(followed).expect("a document follow-up is work"),
         TriggerWork::PromptExisting {
+            message_id: Uuid::from_u128(2),
             session: test_session(),
             sender: sender(),
             content: "and this".to_owned(),
@@ -183,6 +184,7 @@ fn a_follow_up_becomes_prompt_existing() {
     assert_eq!(
         work,
         TriggerWork::PromptExisting {
+            message_id: Uuid::from_u128(2),
             session: test_session(),
             sender: sender(),
             content: "keep going".to_owned(),

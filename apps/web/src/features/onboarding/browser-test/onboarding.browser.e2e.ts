@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fixtureConnectorIcon } from '../tests/connector-icons';
 import {
   accentSwatch,
   expectLanded,
@@ -89,12 +90,62 @@ test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
   await expectLanded(page, 'Entered Macro at /channel/launch');
 });
 
+test('an email link opens the dropped step and a new session keeps later progress', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow&step=plan', {
+    emailAccounts: [
+      {
+        address: 'ada@acme.com',
+        isPrimary: true,
+        ownerId: 'macro|ada@acme.com',
+      },
+    ],
+  });
+  await expect(heading(page, 'Free Claude & GPT for 30 days.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Start 30 day trial' })
+  ).toBeVisible();
+  expect(await fakeEvents(page)).toContainEqual({
+    event: 'onboarding_v4_started',
+    data: { signup_method: 'google', entry_step: 'plan' },
+  });
+
+  await page.getByRole('button', { name: 'Back to previous step' }).click();
+  await expect(heading(page, 'Built for teams.')).toBeVisible();
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto('/?view=flow');
+  await expect(heading(page, 'Built for teams.')).toBeVisible();
+});
+
+test('a work-email link shows the inbox that is already connected', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow&step=work', {
+    emailAccounts: [
+      {
+        address: 'ada@acme.com',
+        isPrimary: true,
+        ownerId: 'macro|ada@acme.com',
+      },
+    ],
+  });
+  await expect(heading(page, /Connect your work/)).toBeVisible();
+  await expect(page.getByText('Work email connected')).toBeVisible();
+  await expect(page.getByText('ada@acme.com')).toBeVisible();
+});
+
+test('an unknown step link starts at welcome', async ({ page }) => {
+  await openFixture(page, '/?view=flow&step=not-a-step');
+  await expect(heading(page, 'Create your workspace')).toBeVisible();
+});
+
 test('Free, Pro, and Max appear below the unchanged trial offer', async ({
   page,
 }) => {
   await openFixture(page, '/?view=flow&next=/md/notes');
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -143,7 +194,7 @@ test('Max checkout returns with a licensed account and no trial', async ({
 }) => {
   await openFixture(page, '/?view=flow');
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -166,7 +217,7 @@ test('cancelling checkout returns to a retryable trial offer', async ({
 }) => {
   await openFixture(page, '/?view=flow', { checkoutOutcome: 'cancel' });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -188,7 +239,7 @@ test('an ineligible trial explains itself instead of charging', async ({
     'The 30-day trial is only available for your first Premium subscription';
   await openFixture(page, '/?view=flow', { failures: { checkout: message } });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -218,7 +269,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
     },
   });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -235,7 +286,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
 test('an existing team member just confirms and moves on', async ({ page }) => {
   await openFixture(page, '/?view=flow', { teams: [{ name: 'Acme' }] });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'team' })
     );
@@ -356,7 +407,7 @@ for (const width of [1440, 390]) {
         'plan',
       ]) {
         await page.evaluate((step) => {
-          sessionStorage.setItem(
+          localStorage.setItem(
             'onboarding-flow-step',
             JSON.stringify({ user: 'macro|ada@acme.com', step })
           );
@@ -379,7 +430,7 @@ for (const width of [1440, 390]) {
       }
       // The explicit palette also survives a simulated Google redirect that drops query params.
       await page.evaluate(() =>
-        sessionStorage.setItem(
+        localStorage.setItem(
           'onboarding-flow-step',
           JSON.stringify({ user: 'macro|ada@acme.com', step: 'work' })
         )
@@ -419,4 +470,336 @@ test('system theme changes keep the current onboarding step and selected accent'
     'background-color',
     'rgb(0, 0, 0)'
   );
+});
+
+test('tools keep Drive and Sheets, hide excluded Google apps and preserve native connections', async ({
+  page,
+}, testInfo) => {
+  await openFixture(page, '/?view=flow&theme=cream', {
+    catalog: [
+      ['gmail', 'Gmail'],
+      ['google_sheets', 'Google Sheets'],
+      ['google_drive', 'Google Drive'],
+      ['google_calendar', 'Google Calendar'],
+      ['linear', 'Linear'],
+      ['notion', 'Notion'],
+      ['mysql', 'MySQL'],
+      ['supabase', 'Supabase'],
+      ['quickbooks', 'QuickBooks'],
+      ['stripe', 'Stripe'],
+      ['posthog', 'PostHog'],
+      ['github', 'GitHub'],
+      ['figma', 'Figma'],
+      ['intercom', 'Intercom'],
+      ['hubspot', 'HubSpot'],
+      ['airtable_oauth', 'Airtable'],
+      ['xero_accounting_api', 'Xero'],
+      ['shopify', 'Shopify'],
+      ['mailchimp', 'Mailchimp'],
+      ['zendesk', 'Zendesk'],
+      ['calendly_v2', 'Calendly'],
+      ['asana', 'Asana'],
+      ['trello', 'Trello'],
+      ['slack', 'Slack'],
+      ['slack_v2', 'Slack'],
+      ['linear', 'Linear'],
+    ].map(([slug, name]) => ({
+      slug,
+      name,
+      iconUrl: fixtureConnectorIcon(slug),
+    })),
+    nativeTools: [
+      {
+        url: 'https://mcp.linear.app/mcp/',
+        server_name: 'My issues',
+        authenticated: true,
+        enabled: true,
+      },
+    ],
+  });
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'onboarding-flow-step',
+      JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
+    )
+  );
+  await page.reload();
+  await expect(heading(page, 'Connect your tools.')).toBeVisible();
+  for (const name of ['Gmail', 'Google Calendar']) {
+    await expect(
+      page.getByRole('button', { name: `Connect ${name}`, exact: true })
+    ).toHaveCount(0);
+  }
+  await expect(
+    page.getByRole('button', { name: 'Connected to Linear' })
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Connect Notion' })
+  ).toBeEnabled();
+  const cards = page
+    .getByRole('region', { name: 'Available integrations' })
+    .getByRole('button');
+  await expect(cards).toHaveCount(22);
+  expect(
+    await cards.evaluateAll((buttons) =>
+      buttons.map((button) => button.getAttribute('aria-label'))
+    )
+  ).toEqual([
+    'Connected to Linear',
+    'Connect Notion',
+    'Connect Slack',
+    'Connect PostHog',
+    'Connect Stripe',
+    'Connect GitHub',
+    'Connect Figma',
+    'Connect Intercom',
+    'Connect HubSpot',
+    'Connect Airtable',
+    'Connect QuickBooks',
+    'Connect Xero',
+    'Connect Shopify',
+    'Connect Mailchimp',
+    'Connect Zendesk',
+    'Connect Calendly',
+    'Connect Asana',
+    'Connect Trello',
+    'Connect Google Sheets',
+    'Connect Google Drive',
+    'Connect MySQL',
+    'Connect Supabase',
+  ]);
+  // Exercise directory logos, including apps without a bundled native icon.
+  await expect(cards.locator('img')).toHaveCount(21);
+  await expect(
+    page
+      .getByRole('button', { name: 'Connect Notion', exact: true })
+      .locator('img')
+  ).toHaveCSS('filter', /invert\(0\)/);
+  const stripeIcon = page
+    .getByRole('button', { name: 'Connect Stripe', exact: true })
+    .locator('img');
+  await expect
+    .poll(() =>
+      stripeIcon.evaluate((image: HTMLImageElement) => image.naturalWidth)
+    )
+    .toBeGreaterThan(0);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(
+      Array.from(document.images)
+        .filter(
+          (image) => image.getBoundingClientRect().top < window.innerHeight
+        )
+        .map((image) => image.decode())
+    );
+  });
+  await page.screenshot({
+    animations: 'disabled',
+    path: testInfo.outputPath('onboarding-connectors-fixed.png'),
+  });
+  await page.getByRole('searchbox').fill('MySQL');
+  await expect(
+    page.getByRole('button', { name: 'Connect MySQL', exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect Slack', exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('searchbox').fill('Google');
+  await expect(
+    page.getByRole('button', { name: /Connect Google/ })
+  ).toHaveCount(2);
+  await expect(
+    page.getByRole('button', { name: 'Connect Google Drive', exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect Google Sheets', exact: true })
+  ).toBeVisible();
+  await page.screenshot({
+    animations: 'disabled',
+    path: testInfo.outputPath('onboarding-google-search.png'),
+  });
+  await page.getByRole('searchbox').fill('Notion');
+  await page.getByRole('button', { name: 'Connect Notion' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Connected to Notion' })
+  ).toBeDisabled();
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Connected to Linear' })
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Connected to Notion' })
+  ).toBeDisabled();
+});
+
+for (const githubLinkStatus of [
+  'unlinked',
+  'reauthentication_required',
+] as const) {
+  test(`GitHub uses native account linking from ${githubLinkStatus} and returns to tools`, async ({
+    page,
+  }) => {
+    await openFixture(page, '/?view=flow', {
+      githubLinkStatus,
+      connectedTools: ['github'],
+      nativeTools: [
+        {
+          url: 'https://api.githubcopilot.com/mcp',
+          authenticated: true,
+          enabled: true,
+          server_name: 'GitHub MCP',
+        },
+      ],
+    });
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'onboarding-flow-step',
+        JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
+      )
+    );
+    await page.reload();
+    await expect(heading(page, 'Connect your tools.')).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Connect GitHub', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', {
+        name: 'Account linked to GitHub',
+        exact: true,
+      })
+    ).toBeDisabled();
+    await expect(heading(page, 'Connect your tools.')).toBeVisible();
+    expect((await fakeWorld(page)).githubLinkStatus).toBe('linked');
+    await page.reload();
+    await expect(
+      page.getByRole('button', {
+        name: 'Account linked to GitHub',
+        exact: true,
+      })
+    ).toBeDisabled();
+  });
+}
+
+test('connection status failure leaves native GitHub available', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow', { connectionFailures: ['pipedream'] });
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'onboarding-flow-step',
+      JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
+    )
+  );
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Connect GitHub', exact: true })
+  ).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Connect Notion', exact: true })
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Retry connection status' })
+  ).toBeVisible();
+});
+
+test('enables an existing native tool without reconnecting', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow', {
+    nativeTools: [
+      {
+        url: 'https://mcp.linear.app/mcp',
+        server_name: 'Linear',
+        authenticated: true,
+        enabled: false,
+      },
+    ],
+  });
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'onboarding-flow-step',
+      JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
+    )
+  );
+  await page.reload();
+  await page
+    .getByRole('button', { name: 'Enable Linear', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Connected to Linear', exact: true })
+  ).toBeDisabled();
+  expect((await fakeWorld(page)).connectedTools).toEqual([]);
+  expect((await fakeWorld(page)).nativeTools[0].enabled).toBe(true);
+});
+
+for (const width of [1280, 390]) {
+  test(`returning customer buys Pro without a trial at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page, '/?view=flow', { trialEligible: false });
+    await page.evaluate(() => {
+      localStorage.setItem(
+        'onboarding-flow-step',
+        JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
+      );
+    });
+    await page.reload();
+    await expect(heading(page, 'Get more with Pro.')).toBeVisible();
+    await expect(page.getByText('Free Claude & GPT for 30 days.')).toHaveCount(
+      0
+    );
+    await expect(
+      page.getByRole('button', { name: 'Start 30 day trial' })
+    ).toHaveCount(0);
+    await expect(
+      page.getByText('30 days free, then', { exact: false })
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Get Pro', exact: true }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+  });
+}
+
+test.describe('subscription recovery', () => {
+  test.use({ hasTouch: true });
+  for (const width of [1280, 390]) {
+    test(`existing subscription opens management without replacement at ${width}px${width === 390 ? ' after eligibility fails' : ''}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page, '/?view=flow', {
+        trialEligible: false,
+        existingSubscription: true,
+        failures: width === 390 ? { trialEligibility: 'offline' } : {},
+      });
+      await page.evaluate(() =>
+        localStorage.setItem(
+          'onboarding-flow-step',
+          JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
+        )
+      );
+      await page.reload();
+      await expect(heading(page, 'Manage your subscription.')).toBeVisible();
+      await expect(
+        page.getByText('30 days free, then', { exact: false })
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Continue with Pro', exact: true })
+      ).toBeDisabled();
+      await expect(
+        page.getByRole('button', { name: 'Continue with Max', exact: true })
+      ).toBeDisabled();
+      await page
+        .getByRole('button', { name: 'Manage subscription', exact: true })
+        .tap();
+      const calls = await page.evaluate(() => window.onboardingFixture.calls());
+      expect(calls).toContain('manageSubscription');
+      expect(calls.some((call) => call.startsWith('checkout:'))).toBe(false);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth
+        )
+      ).toBe(true);
+    });
+  }
 });

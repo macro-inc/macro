@@ -18,6 +18,7 @@ in
     ./dashboards.nix
     ./ci-dashboard.nix
     ./database-dashboard.nix
+    ./database-queries-dashboard.nix
     ./alerting.nix
   ];
   services.grafana = {

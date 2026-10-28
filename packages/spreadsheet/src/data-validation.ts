@@ -1,10 +1,26 @@
 import {
+  boundsSqref,
   type DataValidation,
+  type DropdownColor,
   MAX_SHEET_RULES,
   sqrefBounds,
+  subtractBounds,
   validDataValidation,
 } from './sheet-rules';
-import { formatCellAddress, parseCellAddress } from './spreadsheet-document';
+import { parseCellAddress } from './spreadsheet-document';
+
+// Document colors, light enough for dark chip text. New choices take them in turn.
+export const DROPDOWN_CHOICE_COLORS = [
+  { value: '#bfdbfe', name: 'Blue' },
+  { value: '#bbf7d0', name: 'Green' },
+  { value: '#fef08a', name: 'Yellow' },
+  { value: '#fecaca', name: 'Red' },
+  { value: '#e9d5ff', name: 'Purple' },
+  { value: '#fed7aa', name: 'Orange' },
+  { value: '#99f6e4', name: 'Teal' },
+  { value: '#fbcfe8', name: 'Pink' },
+  { value: '#e5e7eb', name: 'Gray' },
+] as const;
 
 /** Excel rejects a literal list longer than this, quotes included. */
 export const MAX_LIST_FORMULA_LENGTH = 255;
@@ -16,6 +32,8 @@ export type DropdownSource = { items: string[] } | { range: string };
 export type DropdownOptions = DropdownSource & {
   /** Reject entries that are not one of the choices; defaults to true. */
   rejectInvalid?: boolean;
+  /** Cells showing one of these choices draw it as a chip of its color. */
+  colors?: DropdownColor[];
 };
 
 const reference =
@@ -82,11 +100,39 @@ function rangeFormula(range: string) {
   return `'${target.sheet.replaceAll("'", "''")}'!${absolute}`;
 }
 
+/** Choice colors, each naming one of `items` when the choices are typed. */
+function choiceColors(colors: DropdownColor[], items?: string[]) {
+  if (colors.length > MAX_LIST_ITEMS)
+    throw new Error(`A dropdown can color at most ${MAX_LIST_ITEMS} choices.`);
+  const choices =
+    items && new Set(items.map((item) => item.trim().toLowerCase()));
+  const colored = new Set<string>();
+  return colors.map(({ item, color }) => {
+    const name = item.trim();
+    const key = name.toLowerCase();
+    if (!name) throw new Error('A dropdown color needs the choice it colors.');
+    if (!/^#[0-9a-f]{6}$/i.test(color))
+      throw new Error(`Invalid color “${color}” for “${name}”. Use #RRGGBB.`);
+    if (choices && !choices.has(key))
+      throw new Error(`“${name}” is not one of the dropdown's choices.`);
+    if (colored.has(key))
+      throw new Error(`“${name}” is given more than one color.`);
+    colored.add(key);
+    return { item: name, color: color.toLowerCase() };
+  });
+}
+
 /** A list rule offering a dropdown, as Excel stores it. */
 export function dropdownRule(
   options: DropdownOptions
 ): Omit<DataValidation, 'range'> {
   const strict = options.rejectInvalid ?? true;
+  const colors = options.colors?.length
+    ? choiceColors(
+        options.colors,
+        'items' in options ? options.items : undefined
+      )
+    : undefined;
   return {
     type: 'list',
     formulas: [
@@ -96,10 +142,9 @@ export function dropdownRule(
     ],
     allowBlank: true,
     ...(strict && { showError: true, errorStyle: 'stop' as const }),
+    ...(colors && { colors }),
   };
 }
-
-type Bounds = { top: number; left: number; bottom: number; right: number };
 
 /** The rules covering any cell of `range`. */
 export function overlappingValidations(
@@ -120,37 +165,6 @@ export function overlappingValidations(
   );
 }
 
-/** The parts of `area` outside `hole`. */
-function subtract(area: Bounds, hole: Bounds): Bounds[] {
-  if (
-    hole.top > area.bottom ||
-    hole.bottom < area.top ||
-    hole.left > area.right ||
-    hole.right < area.left
-  )
-    return [area];
-  const pieces: Bounds[] = [];
-  const top = Math.max(area.top, hole.top);
-  const bottom = Math.min(area.bottom, hole.bottom);
-  if (area.top < hole.top) pieces.push({ ...area, bottom: hole.top - 1 });
-  if (area.bottom > hole.bottom) pieces.push({ ...area, top: hole.bottom + 1 });
-  if (area.left < hole.left)
-    pieces.push({ top, bottom, left: area.left, right: hole.left - 1 });
-  if (area.right > hole.right)
-    pieces.push({ top, bottom, left: hole.right + 1, right: area.right });
-  return pieces;
-}
-
-function sqrefOf(bounds: Bounds[]) {
-  return bounds
-    .map((area) => {
-      const first = formatCellAddress(area.top, area.left);
-      const last = formatCellAddress(area.bottom, area.right);
-      return first === last ? first : `${first}:${last}`;
-    })
-    .join(' ');
-}
-
 /**
  * Validations with `range` taken out of every rule, then `rule` applied to
  * it. A cell has one rule, so a new rule replaces those it overlaps; without
@@ -167,10 +181,10 @@ export function replaceValidations(
   for (const existing of validations ?? []) {
     let areas = sqrefBounds(existing.range);
     for (const hole of holes)
-      areas = areas.flatMap((area) => subtract(area, hole));
-    if (areas.length) next.push({ ...existing, range: sqrefOf(areas) });
+      areas = areas.flatMap((area) => subtractBounds(area, hole));
+    if (areas.length) next.push({ ...existing, range: boundsSqref(areas) });
   }
-  if (rule) next.push({ ...rule, range: sqrefOf(holes) });
+  if (rule) next.push({ ...rule, range: boundsSqref(holes) });
   if (next.length > MAX_SHEET_RULES)
     throw new Error(
       `A sheet can have at most ${MAX_SHEET_RULES} data validation rules.`

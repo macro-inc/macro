@@ -57,6 +57,8 @@ describe('CRM ownership boundaries', () => {
           /^(?:@queries\/|@service-|@core\/context\/|@app\/lib\/analytics)/.test(
             path
           );
+        // UI rollout gates read flags directly rather than threading boolean props.
+        const uiFlagReader = path === '@app/lib/analytics/posthog';
         const rootAdapter =
           target && !target.includes('/') && /adapter|^crm(?:-|$)/.test(target);
         const otherLayer = target?.split('/')[0];
@@ -71,9 +73,11 @@ describe('CRM ownership boundaries', () => {
                 rootAdapter ||
                 ['queries', 'views', 'components'].includes(otherLayer ?? '')
               : layer === 'views'
-                ? concrete || rootAdapter || otherLayer === 'queries'
+                ? (concrete && !uiFlagReader) ||
+                  rootAdapter ||
+                  otherLayer === 'queries'
                 : layer === 'components'
-                  ? concrete ||
+                  ? (concrete && !uiFlagReader) ||
                     rootAdapter ||
                     ['queries', 'views', 'primitives'].includes(
                       otherLayer ?? ''

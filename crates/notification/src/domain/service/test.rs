@@ -1,6 +1,8 @@
 //! Unit tests for the notification services.
 
+mod access_request_delivery;
 mod android;
+mod ios_navigation;
 mod status_updates;
 
 use crate::domain::models::apple::APNSPushNotification;
@@ -106,6 +108,7 @@ fn test_user_id(email: &str) -> MacroUserIdStr<'static> {
 
 /// Mock repository that tracks calls.
 struct MockRepository {
+    withdrawn_notifications: HashSet<Uuid>,
     muted_users: HashSet<MacroUserIdStr<'static>>,
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
     type_disabled_users: HashSet<MacroUserIdStr<'static>>,
@@ -128,6 +131,7 @@ struct MockRepository {
 impl MockRepository {
     fn new() -> Self {
         Self {
+            withdrawn_notifications: HashSet::new(),
             muted_users: HashSet::new(),
             unsubscribed_users: HashSet::new(),
             type_disabled_users: HashSet::new(),
@@ -276,6 +280,9 @@ impl NotificationRepository for MockRepository {
         _service_sender: &str,
         apns_collapse_key: Option<&str>,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
+        if request.recipient_ids.is_empty() {
+            return Ok(None);
+        }
         self.created_notifications
             .lock()
             .unwrap()
@@ -306,6 +313,17 @@ impl NotificationRepository for MockRepository {
             })
             .collect();
         Ok(Some(rows))
+    }
+
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        Ok(self.withdrawn_notifications.contains(&notification_id))
+    }
+
+    async fn complete_notification_publication(
+        &self,
+        _notification_id: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
     }
 
     async fn update_sent_status<'a>(
@@ -501,6 +519,7 @@ impl NotificationRepository for MockRepository {
         _device_token: &str,
         _device_endpoint: &str,
         _device_type: &DeviceType,
+        _native_call_capable: bool,
     ) -> Result<(), Report> {
         Ok(())
     }
@@ -588,6 +607,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         (**self)
             .create_notification(request, notification_id, service_sender, apns_collapse_key)
+            .await
+    }
+
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        (**self).notification_is_withdrawn(notification_id).await
+    }
+
+    async fn complete_notification_publication(&self, notification_id: Uuid) -> Result<(), Report> {
+        (**self)
+            .complete_notification_publication(notification_id)
             .await
     }
 
@@ -750,9 +779,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         (**self)
-            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                device_endpoint,
+                device_type,
+                native_call_capable,
+            )
             .await
     }
 
@@ -3133,4 +3169,56 @@ async fn test_poll_email_digests_publishes_when_user_has_not_disabled_type() {
         "Message should be published when user has not disabled the type"
     );
     assert!(published[0]["content"]["Email"].is_object());
+}
+
+#[tokio::test]
+async fn connected_email_destination_keeps_the_macro_owner_as_notification_recipient() {
+    let queue = std::sync::Arc::new(MockQueue::new());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), MockStateMachine);
+    let owner = test_user_id("personal@example.com");
+    let destination = test_user_id("work-calendar@example.com");
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::CalendarEvent.with_entity_str("event"),
+        secondary_notification_entity: None,
+        notification: TestNotification {
+            message: "Work meeting".into(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([owner.clone()]),
+    }
+    .into_request()
+    .with_email_destination(&owner, destination.clone())
+    .unwrap();
+    let result = service.send_notification(request).await.unwrap();
+    assert!(result.unwrap().notified_recipients.contains(&owner));
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0]["content"]["Email"]["to"], destination.as_ref());
+}
+
+#[test]
+fn email_destination_cannot_redirect_multiple_or_unrelated_recipients() {
+    let owner = test_user_id("owner@example.com");
+    let other = test_user_id("other@example.com");
+    for recipients in [
+        HashSet::from([owner.clone(), other.clone()]),
+        HashSet::from([other]),
+    ] {
+        let request = SendNotificationRequestBuilder {
+            notification_entity: EntityType::CalendarEvent.with_entity_str("event"),
+            secondary_notification_entity: None,
+            notification: TestNotification {
+                message: "Meeting".into(),
+            },
+            sender_id: None,
+            recipient_ids: recipients,
+        }
+        .into_request();
+        assert!(
+            request
+                .with_email_destination(&owner, test_user_id("calendar@example.com"))
+                .is_err()
+        );
+    }
 }

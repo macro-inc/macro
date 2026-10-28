@@ -3,6 +3,7 @@ import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';
 
 export const EMAIL_TOUR = defineTourTargets('email', [
+  'inbox',
   'signalNoise',
   'tags',
   'list',
@@ -17,8 +18,8 @@ export const emailTour = defineViewTour({
   steps: [
     {
       target: EMAIL_TOUR.signalNoise,
-      entry: VIEW_SHELL_TOUR.sidebarToggle,
-      entryLabel: 'Show the email sidebar to continue',
+      entry: EMAIL_TOUR.inbox,
+      entryLabel: 'Open Inbox to continue',
       title: 'Find the signal in your inbox',
       description:
         'Signal keeps important conversations in focus. Noise gives lower-priority mail its own space, so you can catch up when it suits you.',

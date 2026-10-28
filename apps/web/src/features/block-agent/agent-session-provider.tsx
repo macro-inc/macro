@@ -28,8 +28,7 @@ import {
   type QueueController,
 } from './context/create-queue-controller';
 import { resolveSessionId } from './context/resolve-session-id';
-import { createSendNext } from './context/send-next';
-import { createSteer } from './context/steer';
+import { createSteering } from './context/steer';
 import { createToolApprovalController } from './primitives/create-tool-approval-controller';
 import type { QuoteInsert } from './ui';
 
@@ -83,6 +82,7 @@ export function AgentSessionProvider(
         pending: true,
         segments: [],
         phase: null,
+        postedAt: null,
       },
     ];
   };
@@ -96,7 +96,7 @@ export function AgentSessionProvider(
     sessionId: () => (userId() ? sessionId() : undefined),
     messages: live.messages,
   });
-  // A row the user removes may be one `sendNext` already showed as sent;
+  // A row the user removes may be one a force-send already showed as sent;
   // the fold has to forget it too, or it stays a bubble the log never fills.
   const queue: QueueController = {
     ...served,
@@ -105,16 +105,9 @@ export function AgentSessionProvider(
       return served.remove(actionId);
     },
   };
-  const sendNext = createSendNext({
-    currentTurn: live.currentTurn,
+  const steering = createSteering({
     entries: queue.entries,
-    issue: live.issue,
-    expect: live.expect,
-    retract: live.retract,
-  });
-  const steer = createSteer({
-    currentTurn: live.currentTurn,
-    entries: queue.entries,
+    waiting: queue.waiting,
     steer: queue.steer,
     expect: live.expect,
     retract: live.retract,
@@ -188,8 +181,9 @@ export function AgentSessionProvider(
           turn,
           issue: live.issue,
           selectModel: live.selectModel,
-          sendNext,
-          steer,
+          sendNext: steering.sendNext,
+          steer: steering.steer,
+          steerFailed: steering.failed,
           interactions,
           toolApprovals,
           queue,
@@ -219,9 +213,7 @@ function CloudExternalUrlPoll(props: {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) ||
-      isCodexBotId(session.botId) ||
-      session.harness === 'claude-cloud'
+    return isCursorBotId(session.botId) || isCodexBotId(session.botId)
       ? id
       : undefined;
   });

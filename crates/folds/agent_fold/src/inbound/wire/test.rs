@@ -24,6 +24,7 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
         }),
         stop: None,
         pending: false,
+        posted_at: None,
     };
     let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
 
@@ -61,7 +62,8 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                     "status": "running"
                 }]
             }],
-            "phase": "working"
+            "phase": "working",
+            "postedAt": null
         })
     );
 
@@ -125,5 +127,26 @@ fn empty_replacement_is_an_explicit_browser_event() {
     assert_eq!(
         serde_json::to_value(FoldedStreamEvent::new(session, event)).unwrap(),
         json!({"kind":"replace", "messages":[]})
+    );
+}
+
+#[test]
+fn a_prompt_carries_when_it_was_posted() {
+    let message = ModelFoldedMessage {
+        id: TurnId(0),
+        author: Author::User { user_id: None },
+        request_id: None,
+        parts: NonEmpty::one(MessagePart::Text {
+            text: "tighten the fold".to_owned(),
+        }),
+        stop: None,
+        pending: false,
+        posted_at: Some("2026-10-15T14:02:00Z".parse().unwrap()),
+    };
+    let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
+
+    assert_eq!(
+        serde_json::to_value(FoldedMessage::new(session, message)).unwrap()["postedAt"],
+        json!("2026-10-15T14:02:00+00:00")
     );
 }

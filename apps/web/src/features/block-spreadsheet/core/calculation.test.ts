@@ -280,23 +280,107 @@ describe('spreadsheet calculation with IronCalc', () => {
       A13: { value: '=YEAR(A1)' },
       A14: { value: '=A1+7', numberFormat: '0.0' },
     });
-    expect(result.A1).toEqual({ display: '9/28/2026', number: 46293 });
-    expect(result.A2).toEqual({ display: '9/28/2026', number: 46293 });
-    expect(result.A3).toEqual({ display: '10/5/2026', number: 46300 });
-    expect(result.A4).toEqual({ display: '1/1/2026', number: 46023 });
+    expect(result.A1).toEqual({
+      display: '9/28/2026',
+      number: 46293,
+      date: true,
+    });
+    expect(result.A2).toEqual({
+      display: '9/28/2026',
+      number: 46293,
+      date: true,
+    });
+    expect(result.A3).toEqual({
+      display: '10/5/2026',
+      number: 46300,
+      date: true,
+    });
+    expect(result.A4).toEqual({
+      display: '1/1/2026',
+      number: 46023,
+      date: true,
+    });
     // The engine formats a difference of dates as a date; a day count is not.
     expect(result.A5).toEqual({ display: '7', number: 7 });
     expect(result.A6.display).toBe('46,300.00');
-    expect(result.A7).toEqual({ display: '5/1/1985', number: 31168 });
+    expect(result.A7).toEqual({
+      display: '5/1/1985',
+      number: 31168,
+      date: true,
+    });
     // Formula results before 2000 stay serial numbers; day counts are common there.
     expect(result.A8).toEqual({ display: '31168', number: 31168 });
     // Chained formulas are entered in grid order, so each inherits the format.
-    expect(result.A9).toEqual({ display: '9/29/2026', number: 46294 });
-    expect(result.A10).toEqual({ display: '9/30/2026', number: 46295 });
+    expect(result.A9).toEqual({
+      display: '9/29/2026',
+      number: 46294,
+      date: true,
+    });
+    expect(result.A10).toEqual({
+      display: '9/30/2026',
+      number: 46295,
+      date: true,
+    });
     expect(result.A11).toEqual({ display: '46293', number: 46293 });
     expect(result.A12).toEqual({ display: 'Sep 28, 2026' });
     expect(result.A13).toEqual({ display: '2026', number: 2026 });
     expect(result.A14.display).toBe('46300.0');
+  });
+
+  it('marks numbers shown as calendar dates, not times or plain numbers', () => {
+    const result = calculator.calculate({
+      A1: { value: '46293', format: 'date' },
+      A2: { value: '46293.5', numberFormat: 'mmm d, yyyy h:mm' },
+      A3: { value: '0.5', format: 'time' },
+      A4: { value: '0.5', numberFormat: 'h:mm' },
+      A5: { value: '46293', numberFormat: '#,##0 "days"' },
+      A6: { value: '$1,000' },
+    });
+    expect(result.A1.date).toBe(true);
+    expect(result.A2).toEqual({
+      display: 'Sep 28, 2026 12:00',
+      number: 46293.5,
+      date: true,
+    });
+    for (const address of ['A3', 'A4', 'A5', 'A6'])
+      expect(result[address].date).toBeUndefined();
+  });
+
+  it('shows serials in date formats as dates, and formulas on them inherit a date display', () => {
+    const result = calculator.calculate({
+      A1: { value: '46023', format: 'date', numberFormat: 'mmm yyyy' },
+      A2: { value: '=A1+31' },
+      A3: {
+        value: '46282',
+        format: 'date',
+        numberFormat: 'dddd, mmmm d, yyyy',
+      },
+      A4: { value: '=A3-A1' },
+      A5: { value: '46023', format: 'date' },
+      A6: { value: '=A1+31', format: 'number', decimals: 0 },
+    });
+    expect(result.A1).toEqual({
+      display: 'Jan 2026',
+      number: 46023,
+      date: true,
+    });
+    expect(result.A2).toEqual({
+      display: '2/1/2026',
+      number: 46054,
+      date: true,
+    });
+    expect(result.A3).toEqual({
+      display: 'Thursday, September 17, 2026',
+      number: 46282,
+      date: true,
+    });
+    expect(result.A4).toEqual({ display: '259', number: 259 });
+    expect(result.A5).toEqual({
+      display: '1/1/2026',
+      number: 46023,
+      date: true,
+    });
+    expect(result.A6.display).toBe('46,054');
   });
 
   it('keeps text-formatted values literal during calculation and copying', () => {

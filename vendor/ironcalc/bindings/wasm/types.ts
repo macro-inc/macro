@@ -604,6 +604,14 @@ export interface IronCalcTheme {
   fol_hlink: string;
 }
 
+/** MACRO: the cells of a filtered table, for setFilteredRanges. */
+export interface FilteredRange {
+  /** The index of its sheet. */
+  sheet: number;
+  /** The cells it covers: [top, left, bottom, right], counted from 1. */
+  range: [number, number, number, number];
+}
+
 /** MACRO: a pivot table as GETPIVOTDATA reads it, for setPivotTables.
  *  Names and texts are trimmed and in lower case. */
 export interface PivotLayout {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::OnboardingStatus;
+use crate::domain::models::{OnboardingStatus, PromptId};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
@@ -36,4 +36,51 @@ async fn delete_row_is_idempotent(pool: PgPool) {
     repo.delete_row(&never_onboarded).await.unwrap();
 
     assert!(repo.get_row(&never_onboarded).await.unwrap().is_none());
+}
+
+fn prompt(id: &str) -> PromptId {
+    PromptId::parse(id).expect("valid prompt id")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn dismissals_are_per_user_idempotent_and_ordered(pool: PgPool) {
+    let repo = PgOnboardingRepo::new(pool);
+    let alice = user("alice@example.com");
+    let bob = user("bob@example.com");
+
+    repo.dismiss_prompt(&alice, &prompt("import:files"))
+        .await
+        .unwrap();
+    repo.dismiss_prompt(&alice, &prompt("home-setup"))
+        .await
+        .unwrap();
+    repo.dismiss_prompt(&alice, &prompt("import:files"))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.dismissed_prompts(&alice).await.unwrap(),
+        vec!["import:files".to_string(), "home-setup".to_string()]
+    );
+    assert!(repo.dismissed_prompts(&bob).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_row_removes_dismissals_without_an_onboarding_row(pool: PgPool) {
+    // Users who never entered onboarding can still dismiss prompts; account
+    // deletion must clear those too.
+    let repo = PgOnboardingRepo::new(pool);
+    let deleted = user("deleted@example.com");
+    let kept = user("kept@example.com");
+    repo.dismiss_prompt(&deleted, &prompt("calendar-accounts"))
+        .await
+        .unwrap();
+    repo.dismiss_prompt(&kept, &prompt("calendar-accounts"))
+        .await
+        .unwrap();
+
+    repo.delete_row(&deleted).await.unwrap();
+
+    assert!(repo.dismissed_prompts(&deleted).await.unwrap().is_empty());
+    assert_eq!(repo.dismissed_prompts(&kept).await.unwrap().len(), 1);
 }

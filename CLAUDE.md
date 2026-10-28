@@ -36,7 +36,7 @@ patterns in older code.
 | --- | --- |
 | `CODING.md` | Coding rules for every language; read before writing code. |
 | `AGENTS.md` in a directory | Scope, map, checks, and gotchas for that subtree; a sibling `CLAUDE.md` symlinks to it. |
-| `.agents/skills/` | Task workflows. `.claude/skills` and `.pi/skills` symlink here. |
+| `.agents/skills/` | Task workflows. Cursor loads this directory. `.claude/skills` and `.pi/skills` symlink here. |
 | `.agents/rules/` | Path-scoped conventions, loaded when you touch matching files. `.claude/rules` and `.cursor/rules` symlink here. |
 | `.agents/agents/` | Subagents (`auditor`, `browser-verifier`). `.claude/agents` symlinks here. |
 | `.agents/templates/` | Templates for new rules and `AGENTS.md` files. |
@@ -55,6 +55,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
 | iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
+| Android Play releases from pull requests | [Android development](docs/development/android.md) |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
 | Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
 | Giving the user a local preview link | `local-preview` skill |
@@ -72,10 +73,17 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - Do only what was asked. Questions get answers, not code changes.
 - Commit as you go, in small logical commits on a feature branch, without
   asking. Never commit to `main`. Push or open a PR only when asked.
+  Once authorized, finish in-scope review fixes and follow-up pushes without
+  per-fix confirmation.
+- Keep each feature's development, validation, and local preview on one branch/worktree.
 - Flag real risks; once the user decides, act on it.
 - Disagree when they're wrong. No flattery.
 - Answer simple questions directly.
 - For UI work, ask how it should behave on mobile unless that's obvious.
+- Ground UI proposals and prototypes in the existing Macro app screens and
+  design system, preserving its shell, typography, controls, and spacing.
+- Treat an approved UI proposal followed by a PR request as a request to
+  implement it; keep standalone prototypes outside the repository unless asked.
 - Be brief. No justification essays, no time estimates.
 
 **Environment**
@@ -85,7 +93,12 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - Never deploy (`pulumi up`, `wrangler deploy`, workflow dispatch) without
   explicit permission for that deploy.
 - Never reset databases or wipe stack volumes without approval.
-- Never paste or commit secrets.
+- Never paste or commit secrets, or put customer PII (emails, phones,
+  addresses) in commits, PR titles, or PR descriptions.
+- PR titles and bodies, commits, review replies, comments, and docs describe
+  only the code. Never name people, customers, their companies or products,
+  places, or support channels and tickets; state any reason in general terms.
+  See the `git` skill's Privacy section; CI's `PR Privacy Check` enforces it.
 - Never `git stash`; it's shared across sessions.
 - Memory is context, not authority; verify against code.
 - Treat hosted dev data as real. `.cursor/*.sh` is Cursor Cloud only.

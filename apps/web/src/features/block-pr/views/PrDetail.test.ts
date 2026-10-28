@@ -48,6 +48,14 @@ vi.mock('../component/PrTimeline', () => ({ PrTimeline: () => null }));
 vi.mock('../component/sidepanel/PrSidePanelSections', () => ({
   PrSidePanelSections: () => null,
 }));
+// Keeps ForwardToChannel (and its websocket) out of this refresh-wiring unit.
+vi.mock('../hooks/usePrShare', () => ({
+  usePrShare: () => ({
+    openShare: () => undefined,
+    ShareModal: () => null,
+    isOpen: () => false,
+  }),
+}));
 
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';
 import { usePrDetail } from './PrDetail';

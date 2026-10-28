@@ -116,6 +116,40 @@ describe('Doc — structure & refs', () => {
     expect(out.indexOf('<hr')).toBeLessThan(out.indexOf('<h2'));
   });
 
+  it('moves an image, and moves blocks after and before one', () => {
+    const { session, ids } = setup('a\n\nb\n\nc');
+    const [idA, idB, idC] = ids;
+    const doc = new Doc(session);
+    doc.apply({
+      kind: 'insertNode',
+      ref: 'img',
+      spec: {
+        block: 'image',
+        srcType: 'url',
+        url: 'https://example.com/a.png',
+      },
+      at: { after: idC! },
+    });
+    doc.apply({ kind: 'moveNode', node: 'img', at: { after: idA! } });
+    expect(
+      read(session, () =>
+        $getRoot()
+          .getChildren()
+          .map((n) => $getId(n))
+      )
+    ).toEqual([idA, 'img', idB, idC]);
+
+    doc.apply({ kind: 'moveNode', node: idC!, at: { after: 'img' } });
+    doc.apply({ kind: 'moveNode', node: idA!, at: { before: 'img' } });
+    expect(
+      read(session, () =>
+        $getRoot()
+          .getChildren()
+          .map((n) => $getId(n))
+      )
+    ).toEqual([idA, 'img', idC, idB]);
+  });
+
   it('appendListItem rejects a non-list target', () => {
     const { session, ids } = setup('para');
     expect(() =>

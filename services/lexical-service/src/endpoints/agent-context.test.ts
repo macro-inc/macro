@@ -27,7 +27,7 @@ describe('agent context', () => {
       parent: { type, id: 'parent-1' },
     });
     expect(response.status).toBe(200);
-    const { markdown } = await response.json<{ markdown: string }>();
+    const { markdown }: { markdown: string } = await response.json();
     expect(markdown).toContain(`conversation type=\\"${type}\\"`);
   });
 
@@ -47,7 +47,7 @@ describe('agent context', () => {
       },
     });
     expect(response.status).toBe(200);
-    const { markdown } = await response.json<{ markdown: string }>();
+    const { markdown }: { markdown: string } = await response.json();
     expect(markdown).toContain(`trigger kind=\\"conversation\\"`);
     expect(markdown).toContain('your private conversation with the user');
   });

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_accounts\n        SET sync_status = 'disabled',\n            last_sync_error = 'Calendar permission is no longer granted',\n            updated_at = now()\n        WHERE email_link_id = $1\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "581d1e09623746d7a9c5e80a9d7f544b27c9c477e03beb1fb0cade3d3f381439"
+}

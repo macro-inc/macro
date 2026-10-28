@@ -1,4 +1,5 @@
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { calendarKeys } from '@queries/calendar/keys';
 import {
   createCalendarOccurrenceQueryRange,
@@ -90,6 +91,6 @@ export function useAvailabilityRanges(settings: () => AvailabilitySettings) {
     days,
     refreshRange,
     isError: () => query.isError,
-    retry: () => void query.refetch(),
+    retry: () => fireAndForget(query.refetch(), 'calendar-availability'),
   };
 }

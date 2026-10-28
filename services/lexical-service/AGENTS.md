@@ -1,8 +1,5 @@
 # lexical-service
 
-Status: migrating from Cloudflare Workers to ECS; `wrangler.jsonc` and
-`deploy-lexical-service.yml` still deploy the old worker.
-
 ## What it is
 
 Serves Documents: a Bun server exposing stateless Lexical document
@@ -17,13 +14,14 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
   middleware.
 - `src/endpoints/`: one file per route (`plaintext.ts`, `search-text.ts`,
   `cognition-text.ts`/`cognition-v2.ts`, `markdown.ts`, `markdown-snapshot.ts`,
-  `html.ts`, `xml.ts`, `comment-mark.ts`, `comment-only-change.ts`,
+  `notion-snapshot.ts`, `html.ts`, `xml.ts`, `comment-mark.ts`,
+  `comment-only-change.ts`,
   `image-markdown.ts`, `agent-context.ts`, `agent-announcement.ts`,
   `extract-reply.ts`, `mentions.ts`).
 - `src/lib/`: conversion logic the endpoints call into (`editor.ts`,
   `markdown.ts`, `html.ts`, `comment-only-change.ts`, `comment-mark.ts`,
   `sync-service.ts` client, `schemas.ts`).
-- `README.md`: endpoint reference, local `.dev.vars.local` secrets, deploy commands.
+- `src/server.ts`: Bun entry; reads env, strips the gateway's `/lexical` prefix.
 
 ## Scope
 
@@ -46,16 +44,19 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
 - `bun test test/tests.ts` and the `*.test.ts` files beside their endpoints
   (`bun test`).
 - `bun run check` (`tsc --noEmit --project tsconfig.check.json`).
-- `bun run plaintext|search|cognition <document-id>` against a local dev server
-  (`bun run dev`, port 8931) to sanity-check an endpoint end to end.
+- `bun run plaintext|search|cognition <document-id>` against the local stack's
+  `lexical_service` (port 8096) to sanity-check an endpoint end to end.
 
 ## Gotchas
 
 - Called only internally, authenticated by `x-internal-auth-key`
-  (`INTERNAL_API_SECRET_KEY`); it also calls `sync-service` with
-  `SYNC_SERVICE_AUTH_KEY`. On ECS both come from its Doppler project; locally
-  from `.dev.vars.local`.
-- Never deploy without explicit permission, by either path.
+  (`INTERNAL_AUTH_KEY`); it also calls `sync-service` with
+  `SYNC_SERVICE_AUTH_KEY`. On ECS these come from its Doppler project and
+  Secrets Manager; locally from `docker/docker-compose.yml`.
+- Run the bundle, not `src/server.ts` directly: unbundled, Bun hits a TDZ in
+  the circular `@lexical/*` imports (see the Dockerfile).
+- Deploys to dev on every push to `main` and to prod on release. Never deploy
+  without explicit permission.
 
 ## Related
 

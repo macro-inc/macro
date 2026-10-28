@@ -20,7 +20,7 @@ env_vars! {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    MacroEntrypoint::default().init();
+    let telemetry = Arc::new(MacroEntrypoint::default().init());
     let database_url = DatabaseUrl::new()?;
     // Bound preview queries as well as deletes. One maintenance connection per
     // process, and reserved Lambda concurrency of one, isolate foreground work.
@@ -41,7 +41,18 @@ async fn main() -> Result<(), Error> {
     ));
     run(service_fn(move |event| {
         let service = Arc::clone(&service);
-        async move { handler::handle(&service, event).await }
+        let telemetry = Arc::clone(&telemetry);
+        async move {
+            // `handle` must finish (closing its root span) before flushing.
+            // A telemetry outage must not turn a committed cleanup into a retry.
+            let result = handler::handle(&service, event).await;
+            match tokio::time::timeout(Duration::from_secs(5), telemetry.force_flush()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => tracing::error!(error = ?error, "notification retention telemetry flush failed"),
+                Err(error) => tracing::error!(error = ?error, "notification retention telemetry flush timed out"),
+            }
+            result
+        }
     }))
     .await
 }

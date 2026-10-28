@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS \"turn_prompter: MacroUserIdStr<'static>\"\n            FROM agent_session\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "turn_action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "turn_prompter_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "turn_prompter: MacroUserIdStr<'static>",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "0decf212c328e4883edc037f6532626002354baf88a77b73d0b7237c47ffef71"
+}

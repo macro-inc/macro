@@ -225,9 +225,9 @@ async fn hidden_sessions_leave_the_allowlist_unless_named(pool: PgPool) {
     sqlx::query!(
         r#"
         INSERT INTO agent_session (
-            id, owner_id, bot_id, model, harness, repo_url, workspace, list_hidden
+            id, owner_id, bot_id, model, harness, repo_url, workspace, visibility
         )
-        VALUES ($1, $2, '00000000-0000-0000-0000-00000000a9e7', 'model', 'harness', NULL, '/workspace', TRUE)
+        VALUES ($1, $2, '00000000-0000-0000-0000-00000000a9e7', 'model', 'harness', NULL, '/workspace', 'hidden')
         "#,
         session,
         viewer,

@@ -91,6 +91,15 @@ ignore = [
   { id = "RUSTSEC-2026-0258", reason = "h2 0.3 (via Stripe 0.41's hyper-0.14 client) has no patched release; the hyper 1.x line is bumped to the patched 0.4.16" },
   { id = "RUSTSEC-2026-0346", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
   { id = "RUSTSEC-2026-0349", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
+  # zip 3.0.0 remains only as a utoipa-swagger-ui 9 build-dependency; workspace crates use patched zip 9.
+  # Revisit: drop these when a released utoipa-swagger-ui depends on zip >= 9 (juhaku/utoipa#1645).
+  { id = "RUSTSEC-2026-0367", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
+  { id = "RUSTSEC-2026-0368", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
+  { id = "RUSTSEC-2026-0369", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
+  # 0.26.11 only re-exports webpki-roots 1.x; the bans below require patched roots.
+  # Remove this exception when SQLx and the remaining callers stop using the wrapper.
+  { id = "RUSTSEC-2026-0381", reason = "webpki-roots 0.26.11 contains no certificates and re-exports patched 1.0.10; bans reject every other version below 1.0.10" },
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 has no patched release; it is reached only through aws-sigv4's optional SigV4a (ECDSA) signing. 0.7 is updated to the patched 0.7.6" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
@@ -132,6 +141,11 @@ confidence-threshold = 0.8
 # Allow 1 or more licenses on a per-crate basis, so that particular licenses
 # aren't accepted for every possible crate as with the normal allow list
 exceptions = [
+  # JSON Schema URI parsing; the published license is MIT No Attribution.
+  { allow = ["MIT-0"], crate = "borrow-or-share@0.2.4" },
+  # Signal's libsignal, used by whatsmeow_signal; AGPL like this repository.
+  { allow = ["AGPL-3.0-only"], crate = "libsignal-core" },
+  { allow = ["AGPL-3.0-only"], crate = "libsignal-debug" },
   # Each entry is the crate and version constraint, and its specific allow
   # list
   #{ allow = ["Zlib"], crate = "adler32" },
@@ -197,6 +211,10 @@ allow = [
 ]
 # List of crates to deny
 deny = [
+  # Preserve RUSTSEC-2026-0381 protection while allowing the certificate-free
+  # 0.26.11 compatibility wrapper. Its 1.x parent must also satisfy these bans.
+  { crate = "webpki-roots:<0.26.11", reason = "Contains distrusted emSign roots (RUSTSEC-2026-0381)" },
+  { crate = "webpki-roots:>0.26.11, <1.0.10", reason = "Contains distrusted emSign roots (RUSTSEC-2026-0381)" },
   { crate = "aws-config", wrappers = [
     "aws-msk-iam-sasl-signer", # External crate, requires aws-config directly
     "macro_aws_config",
@@ -207,6 +225,7 @@ deny = [
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests
+    "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
@@ -215,6 +234,8 @@ deny = [
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "genai_telemetry",           # GenAI span tests
+    "graphql_email",             # Unavailable-thread warning field and span tests only
+    "graphql_entity_mutation",   # Batch failure span field tests only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "loom",                      # External concurrency testing dependency
     "macro_entrypoint",
@@ -231,6 +252,8 @@ deny = [
     "tracing-tree",
     "tracing-web",               # External WASM tracing layer
     "turso_core",                # External Turso crate requires tracing-subscriber directly
+    "whatsapp_session_service",  # Notification span propagation test only
+    "whatsmeow",                 # Span hierarchy and JID-redaction tests only
     "worker-rs-otel",             # Cloudflare/WASM OpenTelemetry integration
     "workspace-hack",             # cargo-hakari generated crate
   ], reason = "Use macro_entrypoint for tracing setup in workspace crates" },

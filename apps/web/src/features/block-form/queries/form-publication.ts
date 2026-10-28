@@ -39,7 +39,7 @@ export function publicationMessage(
       match(problem)
         .with(
           { kind: 'bookingMustBeLast' },
-          () => 'Keep one booking step after all questions and screeners.'
+          () => 'Keep one booking step after all questions and gates.'
         )
         .with(
           { kind: 'unknownColumn' },
@@ -64,18 +64,19 @@ export function publicationMessage(
         .with(
           { kind: 'gateNamesLaterColumn' },
           ({ column }) =>
-            `${columnName(column)} must come before the screener that checks it.`
+            `${columnName(column)} must come before the gate that checks it.`
         )
         .with(
           { kind: 'gateRule' },
-          () =>
-            'Review your screener rules; one no longer matches its question.'
+          () => 'Review your gate rules; one no longer matches its question.'
         )
         .with(
           { kind: 'textTooLong' },
           ({ max }) => `Shorten the text to ${max} characters or fewer.`
         )
-        .exhaustive()
+        .exhaustive(
+          () => 'Your draft is saved, but it couldn’t be published yet.'
+        )
     )
-    .exhaustive();
+    .exhaustive(() => 'Your draft is saved, but it couldn’t be published yet.');
 }

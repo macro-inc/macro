@@ -1,5 +1,6 @@
 import { ComposerSurface, cn } from '@ui';
 import type { JSX } from 'solid-js';
+import { createMessageResizeMotion } from './message-resize-motion';
 
 interface MessageCardProps {
   messageId: string | null | undefined;
@@ -25,14 +26,17 @@ interface MessageCardProps {
  * `data-message-body-id` across an expand.
  *
  * Desktop shares the chat composer's rounded surface, soft shadow and dark
- * rim. Hover adds only a faint tint; keyboard focus uses a neutral outline.
+ * rim. Hover adds only a faint tint. The selected card uses a lighter 2% ink
+ * wash, short of a hovered settings row. Keyboard focus uses a neutral outline.
  * Touch devices retain their existing card and selection treatment.
  */
 export function MessageCard(props: MessageCardProps) {
+  const motion = createMessageResizeMotion();
   return (
     <div class="shrink-0 flex justify-center w-full">
       <div class="@container/message macro-message-width macro-message-padding mobile:px-0 w-full">
         <ComposerSurface
+          ref={motion.setCard}
           as="div"
           class={cn(
             'relative p-4 outline-none',
@@ -44,7 +48,8 @@ export function MessageCard(props: MessageCardProps) {
                 : props.allowHover && 'hover:overlay-hover'
               : [
                   'focus-visible:outline-1 focus-visible:outline-ink/20 focus-visible:outline-offset-2',
-                  props.isSelected && 'z-1',
+                  props.isSelected &&
+                    'z-1 overlay-[color-mix(in_oklab,var(--color-ink)_2%,transparent)]',
                   !props.isSelected &&
                     props.allowHover &&
                     'hover:overlay-[color-mix(in_srgb,var(--color-ink)_1%,transparent)]',
@@ -76,7 +81,9 @@ export function MessageCard(props: MessageCardProps) {
             props.onSelect?.();
           }}
         >
-          {props.children}
+          <div ref={motion.setContent} class="flow-root">
+            {props.children}
+          </div>
         </ComposerSurface>
       </div>
     </div>

@@ -17,15 +17,22 @@ const baseline: BillingInput = {
 
 describe('billing presentation policy', () => {
   it('requests a confirmed first-month trial when a Free account selects Pro', () => {
-    expect(getFreePlanCheckoutRequest('premium')).toEqual({
+    expect(getFreePlanCheckoutRequest('premium', true)).toEqual({
       plan: 'premium',
       onboardingTrial: true,
     });
   });
 
   it('keeps Max checkout on paid terms', () => {
-    expect(getFreePlanCheckoutRequest('max')).toEqual({
+    expect(getFreePlanCheckoutRequest('max', true)).toEqual({
       plan: 'max',
+      onboardingTrial: false,
+    });
+  });
+
+  it('lets a returning customer purchase Pro without requesting another trial', () => {
+    expect(getFreePlanCheckoutRequest('premium', false)).toEqual({
+      plan: 'premium',
       onboardingTrial: false,
     });
   });

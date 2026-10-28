@@ -9,11 +9,14 @@ import { grafanaTelemetryEnabled, stack } from '../../../shared';
 
 const DATADOG_API_KEY_SECRET_KEY = 'datadog-api-key';
 
-export const DATADOG_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: DATADOG_API_KEY_SECRET_KEY,
-  })
-  .apply((secret) => secret.secretString);
+const datadogApiKey = aws.secretsmanager.getSecretVersionOutput({
+  secretId: DATADOG_API_KEY_SECRET_KEY,
+});
+
+export const DATADOG_API_KEY = datadogApiKey.secretString;
+// Extensions fetch the existing key themselves; don't copy its value into
+// Lambda environment variables or grant access to unrelated secrets.
+export const DATADOG_API_KEY_SECRET_ARN = datadogApiKey.arn;
 
 interface DatadogServiceEntityArgs {
   serviceName: string;

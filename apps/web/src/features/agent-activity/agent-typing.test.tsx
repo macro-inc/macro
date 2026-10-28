@@ -123,6 +123,7 @@ function writing(text: string): FoldedMessage {
       { index: 0, kind: 'prose', start: 0, end: 1, sealed: false, rows: [] },
     ],
     phase: 'writing',
+    postedAt: null,
   };
 }
 

@@ -1,7 +1,7 @@
 ---
-source: crates/agent_fold/src/domain/test/real_recordings.rs
+source: crates/folds/agent_fold/src/domain/test/real_recordings.rs
 expression: messages
-input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
+input_file: crates/folds/agent_fold/fixtures/real/command_invocation.jsonl
 ---
 [
     FoldedMessage {
@@ -28,6 +28,7 @@ input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -52,6 +53,7 @@ input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -70,5 +72,6 @@ input_file: crates/agent_fold/fixtures/real/command_invocation.jsonl
             EndTurn,
         ),
         pending: false,
+        posted_at: None,
     },
 ]

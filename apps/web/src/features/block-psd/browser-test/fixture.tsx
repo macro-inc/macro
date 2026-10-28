@@ -109,15 +109,11 @@ function Fixture() {
   };
 
   const start = async () => {
-    try {
-      const file = params.get('file');
-      if (file) await openCorpusFile(file);
-      else if (params.has('new')) await openNew();
-    } catch (e) {
-      setError(String(e));
-    }
+    const file = params.get('file');
+    if (file) await openCorpusFile(file);
+    else if (params.has('new')) await openNew();
   };
-  void start();
+  start().catch((e: unknown) => setError(String(e)));
 
   return (
     <div class="flex h-screen flex-col bg-page text-ink">

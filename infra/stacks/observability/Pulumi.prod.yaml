@@ -2,5 +2,5 @@ config:
   aws:region: us-east-2
   observability:ciIngestSecretArn: arn:aws:secretsmanager:us-east-1:569036502058:secret:observability/dev-ingest-7UhJbL
   observability:alarmTopicArn: arn:aws:sns:us-east-2:569036502058:observability-prod-alerts
-  observability:amiId: ami-082c5befa76bfc246
+  observability:amiId: ami-0e88a39db857c8c52
   observability:secretArn: arn:aws:secretsmanager:us-east-2:569036502058:secret:observability/prod-TwQpBJ

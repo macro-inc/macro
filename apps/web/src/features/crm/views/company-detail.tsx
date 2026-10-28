@@ -1,7 +1,9 @@
 import { SidePanel } from '@components/app/side-panel';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
-import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CrmListSkeleton } from '../components/list-state';
+import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CompanyContact } from '../core/contact';
 import {
@@ -18,6 +20,7 @@ import { CompanyPropertiesSection } from './company-properties-section';
 import { CompanySharingSection } from './company-sharing-section';
 import {
   RecordCallsSection,
+  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
@@ -39,6 +42,12 @@ export function Company(props: {
   onOpenPipeline?: (pipelineId: string) => void;
 }) {
   const context = useCrmContext();
+  onCleanup(
+    context.registerTaskComposerRecord(() => ({
+      type: 'company',
+      id: props.companyId,
+    }))
+  );
   const openCreateContactModal = context.openCreateContact;
   const listsEnabled = context.listsEnabled();
   const pipelinesEnabled = context.pipelinesEnabled();
@@ -68,18 +77,16 @@ export function Company(props: {
         <div class="min-h-0 min-w-0 flex-1">
           <Switch>
             <Match when={section() === 'overview'}>
-              <div class="h-full overflow-y-auto px-6 pb-12 pt-12 scrollbar-hidden touch:pt-6">
-                <div class="mx-auto flex max-w-3xl min-w-0 flex-col gap-6">
-                  <CompanyHeader company={company()} />
-                  <Show when={pipelinesEnabled()}>
-                    <context.PipelineEntries
-                      record={{ type: 'company', id: props.companyId }}
-                      onOpenPipeline={props.onOpenPipeline}
-                    />
-                  </Show>
-                  <CompanyDiscussionSection companyId={props.companyId} />
-                </div>
-              </div>
+              <RecordOverview>
+                <CompanyHeader company={company()} />
+                <Show when={pipelinesEnabled()}>
+                  <context.PipelineEntries
+                    record={{ type: 'company', id: props.companyId }}
+                    onOpenPipeline={props.onOpenPipeline}
+                  />
+                </Show>
+                <CompanyDiscussionSection companyId={props.companyId} />
+              </RecordOverview>
             </Match>
             <Match when={section() === 'team'}>
               <CompanyContactsSection
@@ -88,7 +95,7 @@ export function Company(props: {
                 onOpenContact={props.onOpenContact}
                 actions={
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     // Contact emails are pinned to the company's primary
                     // domain; disabled until the company has loaded.
                     disabled={!company()?.domains[0]}
@@ -114,24 +121,17 @@ export function Company(props: {
               <RecordFilesSection scope={scope()} />
             </Match>
             <Match when={section() === 'tasks'}>
-              <Suspense
-                fallback={
-                  <div class="p-6 text-center text-sm text-ink-muted">
-                    Loading…
-                  </div>
-                }
-              >
+              <Suspense fallback={<CrmListSkeleton label="Loading tasks" />}>
                 <Show
                   when={scope()}
-                  fallback={
-                    <div class="p-6 text-center text-sm text-ink-muted">
-                      Loading…
-                    </div>
-                  }
+                  fallback={<CrmListSkeleton label="Loading tasks" />}
                 >
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
+            </Match>
+            <Match when={section() === 'databases'}>
+              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />

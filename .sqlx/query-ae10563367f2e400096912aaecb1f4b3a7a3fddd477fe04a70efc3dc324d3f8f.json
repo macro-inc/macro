@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT primary_macro_id FROM macro_user_links WHERE link_id = $1 AND child_macro_id = $2 ORDER BY primary_macro_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "primary_macro_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ae10563367f2e400096912aaecb1f4b3a7a3fddd477fe04a70efc3dc324d3f8f"
+}

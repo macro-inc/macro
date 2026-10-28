@@ -4,6 +4,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { renameAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
@@ -239,7 +240,7 @@ function observeRenameSettlement(
     if (finished) return;
     finished = true;
     dispose();
-    void refresh();
+    fireAndForget(refresh(), 'entity-rename');
   };
   unsubscribe = host?.onMutationSettled((settlement) => {
     if (settlement.mutationUuid === uuid && settlement.status !== 'superseded')

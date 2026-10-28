@@ -1,4 +1,4 @@
-//! The browser-facing envelopes around the serializable domain vocabulary.
+//! The reader-facing envelopes around the serializable domain vocabulary.
 //!
 //! The renderable message, tool, permission, and metadata types live in
 //! [`crate::domain::model`] and define their wire representation directly.
@@ -20,7 +20,7 @@ use specta::Type;
 #[cfg(test)]
 mod test;
 
-/// One renderable message, scoped to its agent session for the browser.
+/// One renderable message, scoped to its agent session for its reader.
 #[derive(Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FoldedMessage {
@@ -48,6 +48,10 @@ pub struct FoldedMessage {
     /// What an agent's unfinished reply is doing now; absent once its turn
     /// has ended and on a user's message.
     phase: Option<TurnPhase>,
+    /// When a user's prompt was posted, RFC 3339. Absent on agent and control
+    /// messages, until the log confirms a prompt, and on history a runtime
+    /// replayed on load.
+    posted_at: Option<String>,
 }
 
 impl FoldedMessage {
@@ -74,6 +78,7 @@ impl FoldedMessage {
             pending: message.pending,
             segments,
             phase,
+            posted_at: message.posted_at.map(|at| at.to_rfc3339()),
         }
     }
 }

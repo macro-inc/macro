@@ -1,5 +1,6 @@
-import UsersThree from '@phosphor/users-three.svg';
-import { Button, ToggleSwitch } from '@ui';
+import { fireAndForget } from '@core/util/fireAndForget';
+import UsersThree from '@icon/system/regular/users-three.svg';
+import { Button, Input, ToggleSwitch } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { AudiencePanel } from '../components/share/audience-panel';
@@ -92,7 +93,9 @@ export function ShareTabView(props: {
               context.notify.failure('Could not copy form link.')
             }
             pending={pending() || audience.pending()}
-            onChange={(next) => void audience.change(next)}
+            onChange={(next) =>
+              fireAndForget(audience.change(next), 'form-share')
+            }
           />
         </div>
         <div class="flex flex-col gap-4 rounded-xl border border-edge bg-surface p-4">
@@ -104,9 +107,12 @@ export function ShareTabView(props: {
             checked={form().status === 'open'}
             disabled={!isOwner() || pending()}
             onChange={(open) =>
-              void update(
-                { status: open ? 'open' : 'closed' },
-                'Accepting responses'
+              fireAndForget(
+                update(
+                  { status: open ? 'open' : 'closed' },
+                  'Accepting responses'
+                ),
+                'form-share'
               )
             }
           />
@@ -115,7 +121,7 @@ export function ShareTabView(props: {
               Close automatically
             </span>
             <span class="flex items-center gap-2">
-              <input
+              <Input
                 type="datetime-local"
                 value={
                   form().closesAt
@@ -123,12 +129,15 @@ export function ShareTabView(props: {
                     : ''
                 }
                 disabled={!isOwner() || pending()}
-                class="h-9 rounded-md border border-edge-muted bg-input px-2.5 text-sm text-ink outline-none focus:border-edge-focus disabled:opacity-60"
                 onChange={(event) => {
                   const closesAt = instantFromLocalInput(
                     event.currentTarget.value
                   );
-                  if (closesAt) void update({ closesAt }, 'The closing date');
+                  if (closesAt)
+                    fireAndForget(
+                      update({ closesAt }, 'The closing date'),
+                      'form-share'
+                    );
                 }}
               />
               <Show when={form().closesAt && isOwner()}>
@@ -137,7 +146,10 @@ export function ShareTabView(props: {
                   size="sm"
                   disabled={pending()}
                   onClick={() =>
-                    void update({ closesAt: null }, 'The closing date')
+                    fireAndForget(
+                      update({ closesAt: null }, 'The closing date'),
+                      'form-share'
+                    )
                   }
                 >
                   Clear
@@ -152,7 +164,10 @@ export function ShareTabView(props: {
             checked={form().tallyVisible}
             disabled={!isOwner() || pending()}
             onChange={(tallyVisible) =>
-              void update({ tallyVisible }, 'Showing results')
+              fireAndForget(
+                update({ tallyVisible }, 'Showing results'),
+                'form-share'
+              )
             }
           />
           <label class="flex flex-col gap-1">
@@ -169,9 +184,9 @@ export function ShareTabView(props: {
               onBlur={(event) => {
                 const confirmationMessage = event.currentTarget.value;
                 if (confirmationMessage !== form().confirmationMessage)
-                  void update(
-                    { confirmationMessage },
-                    'The confirmation message'
+                  fireAndForget(
+                    update({ confirmationMessage }, 'The confirmation message'),
+                    'form-share'
                   );
               }}
             />
@@ -196,7 +211,7 @@ export function ShareTabView(props: {
               Posting the form in a channel lets its members respond.
             </span>
           </div>
-          <Button variant="outline" size="sm" onClick={props.onOpenShare}>
+          <Button variant="secondary" size="sm" onClick={props.onOpenShare}>
             Manage access
           </Button>
         </div>
@@ -211,7 +226,7 @@ export function ShareTabView(props: {
             <Button
               variant="danger"
               size="sm"
-              onClick={() => void moveToTrash()}
+              onClick={() => fireAndForget(moveToTrash(), 'form-share')}
             >
               Move to trash
             </Button>

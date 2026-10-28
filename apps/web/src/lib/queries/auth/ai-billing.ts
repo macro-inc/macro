@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { AiPlanTier, PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
@@ -163,8 +164,8 @@ export function useChangePlanMutation() {
       await throwOnErr(async () => await authServiceClient.changePlan(args)),
     onSuccess: async () => {
       // Roles flip via webhook; the scheduled change is available immediately.
-      void invalidateUserInfo();
-      void invalidateAiBillingSummary();
+      fireAndForget(invalidateUserInfo(), 'ai-billing');
+      fireAndForget(invalidateAiBillingSummary(), 'ai-billing');
       await invalidateSubscriptionStatus();
     },
   }));

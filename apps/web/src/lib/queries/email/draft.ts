@@ -1,3 +1,4 @@
+import { DraftTransferAborted } from '@app/features/email-compose/context/compose-capabilities';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
@@ -6,10 +7,12 @@ import type {
   ApiDraftInput,
   CreateDraftResponse,
 } from '@service-email/generated/schemas';
+import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { refreshEmailThreadCache } from './cache-cleanup';
+import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 
 type CreateDraftParams = {
@@ -47,18 +50,12 @@ export function useSaveDraftMutation(
               .catch(Telemetry.error);
             const threadId = data.draft.thread_db_id;
             if (!threadId) return;
+            markThreadDraftSaved(threadId);
             if (!vars.skipSoupRefetch) {
               void refetchSoupEntity(threadId, 'emailThread').catch(
                 Telemetry.error
               );
             }
-            // Reopening the thread reads the messages cache; drop it so the
-            // saved draft body isn't served stale.
-            void queryClient
-              .invalidateQueries({
-                queryKey: emailKeys.threadMessages(threadId).queryKey,
-              })
-              .catch(Telemetry.error);
           } catch (error) {
             Telemetry.error(error);
           }
@@ -71,6 +68,7 @@ export function useSaveDraftMutation(
 
 type DeleteDraftParams = {
   draftId: string;
+  draftGeneration?: number;
   /** Thread the draft belonged to, refetched so it leaves the drafts tab. */
   threadId?: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
@@ -89,7 +87,10 @@ export function useDeleteDraftMutation(
     mutationFn: async (vars: DeleteDraftParams) => {
       await throwOnErr(
         async () =>
-          await emailClient.deleteDraft({ id: vars.draftId }, vars.linkId)
+          await emailClient.deleteDraft(
+            { id: vars.draftId, draftGeneration: vars.draftGeneration },
+            vars.linkId
+          )
       );
     },
     ...withCallbacks<void, Error, DeleteDraftParams>(
@@ -129,4 +130,57 @@ export function useDeleteDraftMutation(
       callbacks
     ),
   }));
+}
+
+/** Moving creates a new server identity; old queued mutations retain their old target. */
+export async function transferEmailDraft(input: {
+  operationId: string;
+  draftId: string;
+  draftGeneration?: number;
+  sourceInboxId: string;
+  destinationInboxId: string;
+}) {
+  let result;
+  try {
+    result = await throwOnErr(() =>
+      emailClient.transferDraft(
+        input.draftId,
+        {
+          operation_id: input.operationId,
+          draft_generation: input.draftGeneration ?? 0,
+          destination_link_id: input.destinationInboxId,
+        },
+        input.sourceInboxId
+      )
+    );
+  } catch (originalError) {
+    const recovery = await throwOnErr(() =>
+      emailClient.recoverDraftTransfer(input.operationId)
+    );
+    if (!recovery.committed)
+      throw new DraftTransferAborted(
+        'The inbox change did not complete. Your original draft is preserved; you can edit it and try again.',
+        { cause: originalError }
+      );
+    result = recovery.committed;
+  }
+  // Cache refresh errors must not turn a committed move into a failed write.
+  try {
+    await getGraphqlCacheHost()?.deleteRecords([
+      `GraphqlSoupEmailMessage:${result.source_id}`,
+    ]);
+    await Promise.all([
+      refreshEmailThreadCache(result.source_thread_id),
+      refreshEmailThreadCache(result.thread_id),
+    ]);
+    for (const threadId of [result.source_thread_id, result.thread_id]) {
+      await queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      });
+    }
+    invalidateAllSoup();
+  } catch (error) {
+    Telemetry.error(error);
+  }
+  return result;
 }

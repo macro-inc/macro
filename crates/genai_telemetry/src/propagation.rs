@@ -64,3 +64,18 @@ pub fn set_parent(span: &tracing::Span, meta: Option<&Map<String, Value>>) {
         let _ = span.set_parent(context);
     }
 }
+
+/// Link asynchronous delivery to a producing span without replacing the
+/// delivery worker's parent. Missing or invalid contexts are ignored.
+pub fn link(span: &tracing::Span, meta: Option<&Map<String, Value>>) {
+    let Some(carrier) = meta.and_then(|meta| meta.get(TRACE_CONTEXT)?.as_object()) else {
+        return;
+    };
+    let context = opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.extract_with_context(&opentelemetry::Context::new(), &Carrier(carrier))
+    });
+    let producer = context.span().span_context().clone();
+    if producer.is_valid() {
+        span.add_link(producer);
+    }
+}

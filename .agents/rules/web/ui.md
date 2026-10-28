@@ -21,6 +21,12 @@ Components, styling, and interaction conventions.
   default palette is disabled via `--color-*: initial` in
   `apps/web/src/index.css`, so classes like `text-red-500` silently render
   nothing. Enforced by ast-grep `tsx-no-raw-tailwind-palette`, CI error.
+- Keep runtime theme tokens together in `apps/web/src/index.css`: one
+  `:root, [data-theme-light]` block for dark defaults, followed by one
+  `[data-theme-light='true']` override block. Keep any narrower root/device
+  conditions inside that theme area. `@theme` registers Tailwind tokens;
+  component utilities and layer/inversion rules keep their own responsibilities.
+  Do not append separate border, Button, glass, or avatar theme blocks elsewhere.
 - **FE-26** Prefer composition over configurability; keep reusable components
   small and free of queries/complex state.
 - **FE-27** Don't add `cursor-pointer` to clickable elements. Enforced by
@@ -42,6 +48,8 @@ Components, styling, and interaction conventions.
 
 ## Components
 
+- Place skeletons at the loaded content's position and dimensions; use the shared
+  Macro `LoadingSpinner` when that geometry is unknown.
 - Prefer composition over configurability. Follow slot-based patterns (see
   src/features/channel, src/features/entity, or Kobalte).
 - Keep reusable components small, atomic, and decoupled from queries/complex
@@ -62,6 +70,9 @@ Components, styling, and interaction conventions.
   whenever one fits; browse them at `/app/component/ui`. Don't build a one-off
   button, dialog, menu, or input. A missing primitive is added there, with a
   `*.docs.tsx` page and tests, not inside a feature.
+- Use `Dropdown.MultiSelectItem` for multiselect filter rows; keep independent
+  checkbox settings on `Dropdown.CheckboxItem`. Follow the
+  [shared interaction pattern](../../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns).
 - **FE-54** Decide mobile behavior deliberately. Unless the change makes it
   obvious, ask the user how a UI change should look and behave on mobile, then
   follow [`mobile.md`](mobile.md).

@@ -9,6 +9,8 @@ export function createCanvasSnapping(
 ) {
   const [snapMode, setMode] = createSignal<CanvasSnapMode>('none');
   const [grid, setGridVisible] = createSignal(true);
+  const [snapToObjects, setObjects] = createSignal(true);
+  editor.setObjectSnapping(true);
   const apply = () => {
     const unit = canvasSnapUnit(snapMode(), editor.getCamera().scale, grid());
     if (unit === editor.getSnapUnit()) return;
@@ -20,6 +22,12 @@ export function createCanvasSnapping(
   return {
     snapMode,
     grid,
+    snapToObjects,
+    setSnapToObjects(enabled: boolean) {
+      cancelPreviews();
+      setObjects(enabled);
+      editor.setObjectSnapping(enabled);
+    },
     setSnapMode(mode: CanvasSnapMode) {
       batch(() => {
         setMode(mode);

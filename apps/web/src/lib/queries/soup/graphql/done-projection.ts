@@ -26,7 +26,11 @@ function reflectsIntent(
 ): boolean {
   if (!entity) return intent.done && excludesDone;
   if (hasActivityAfterDone(entity, intent)) return true;
-  if (entity.type === 'email') return entity.done === intent.done;
+  // A list that excludes done rows has reflected Done only once the row is
+  // gone: a cached page can still list a thread whose record already reads
+  // done, and releasing the intent there would show it as a done row.
+  if (entity.type === 'email')
+    return intent.done && excludesDone ? false : entity.done === intent.done;
   const notifications = soupDoneNotifications(
     entity,
     intent.scopeChannelThreads

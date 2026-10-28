@@ -8,6 +8,7 @@
 
 import type { FigEngine } from '@core/fig-engine/client';
 import type { Rect } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import type { FigCommentStore } from '../context/fig-comments';
 import type { Point } from '../core/camera';
@@ -204,7 +205,7 @@ export function createFigComments(options: {
         setActive(true);
         viewer.setTool('move');
         const thread = store.threads().find((t) => t.id === link.threadId);
-        if (thread) void reveal(thread);
+        if (thread) fireAndForget(reveal(thread), 'fig-comments');
         else viewer.setDesignOpen(true);
       }
     )

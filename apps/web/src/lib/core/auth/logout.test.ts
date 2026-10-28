@@ -29,11 +29,15 @@ vi.mock('@queries/email/local-drafts', () => ({
   flushLocalDrafts: vi.fn(async () => {}),
   listLocalDrafts: vi.fn(async () => []),
 }));
+vi.mock('@queries/email/send-queue', () => ({
+  readEmailSendIntents: vi.fn(async () => []),
+  settledSendAttempt: () => ({ status: 'ACCEPTED' }),
+}));
+vi.mock('@queries/email/outbox-session', () => ({
+  setEmailOutboxSession: vi.fn(),
+}));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'auth-logout': 'https://auth.example.com/oauth2/logout' },
-}));
-vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: vi.fn(() => false),
 }));
 vi.mock('@core/util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/platform')>()),
@@ -42,6 +46,10 @@ vi.mock('@core/util/platform', async (importOriginal) => ({
 vi.mock('@core/util/cookies', () => ({ syncLoginStorage: vi.fn() }));
 vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  recordGraphqlMutationQueueCleared: vi.fn(async () => {}),
+  setGraphqlSoupSessionActive: vi.fn(),
 }));
 vi.mock('@queries/auth/user-info', () => ({
   authKeys: {
@@ -59,14 +67,34 @@ vi.mock('./push-registration-lifecycle', () => ({
   unregisterPushRegistrationsForLogout: vi.fn(async () => {}),
 }));
 
+import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import {
   clearLocalDrafts,
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
+import { readEmailSendIntents } from '@queries/email/send-queue';
 import { authServiceClient } from '@service-auth/client';
+import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { confirmDialog } from '@ui';
 import { clearLocalAuthSession, useLogout } from './logout';
+
+describe('logout GraphQL session teardown', () => {
+  it('ends the GraphQL session only after the cache wipe', async () => {
+    client.current = new QueryClient();
+    const order: string[] = [];
+    vi.mocked(clearRegisteredCaches).mockImplementationOnce(async () => {
+      order.push('wipe');
+    });
+    vi.mocked(setGraphqlSoupSessionActive).mockImplementationOnce(() => {
+      order.push('teardown');
+    });
+    await clearLocalAuthSession();
+    expect(order).toEqual(['wipe', 'teardown']);
+    expect(setGraphqlSoupSessionActive).toHaveBeenCalledWith(false);
+    client.current.clear();
+  });
+});
 
 describe('logout notification cache isolation', () => {
   it('retires pending Done buckets and rotates the display-intent session', async () => {
@@ -189,6 +217,28 @@ describe('local draft logout warning', () => {
       expect(confirmDialog).toHaveBeenLastCalledWith(
         expect.objectContaining({
           body: expect.stringContaining('1 draft(s)'),
+        }),
+        expect.anything()
+      );
+      expect(authServiceClient.logout).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('warns about queued sends after their working copies have been retired', async () => {
+    vi.mocked(readEmailSendIntents).mockResolvedValueOnce([
+      { uuid: 'send' },
+    ] as Awaited<ReturnType<typeof readEmailSendIntents>>);
+    const { logout, dispose } = createRoot((dispose) => ({
+      logout: useLogout(),
+      dispose,
+    }));
+    try {
+      await logout();
+      expect(confirmDialog).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('signing out does not cancel them'),
         }),
         expect.anything()
       );

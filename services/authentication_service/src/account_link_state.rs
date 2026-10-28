@@ -11,6 +11,9 @@
 //! The token is `base64url(payload).base64url(signature)`, without padding,
 //! where the signature is HMAC-SHA256 over the encoded payload. This mirrors
 //! the GitHub App installation state in the `github` crate.
+//!
+//! The same key signs the `state` of a Microsoft tenant-wide admin-consent
+//! request ([`AdminConsentState`]), which returns to the same callback.
 
 use std::sync::Arc;
 
@@ -106,6 +109,45 @@ impl AccountLinkState {
     }
 }
 
+/// Signed `state` for a tenant-wide admin-consent request.
+///
+/// An administrator completes this flow from a copied link, often days later
+/// and from a different device, so it names no pending link or user and does
+/// not expire. The callback only redirects to the allow-listed `original_url`
+/// with the outcome, which is all a replay could do. The required `kind`
+/// field is what keeps an [`AccountLinkState`] token, which has none, from
+/// verifying as this type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct AdminConsentState {
+    /// The payload discriminator; always [`AdminConsentKind::AdminConsent`].
+    pub kind: AdminConsentKind,
+    /// Which callback may complete this state.
+    pub provider: LinkProvider,
+    /// Where to send the browser once the administrator has answered.
+    pub original_url: String,
+}
+
+/// The `kind` of an [`AdminConsentState`] payload.
+///
+/// A one-variant enum rather than a `#[serde(tag)]` on the struct: serde
+/// writes a struct tag but does not check it when deserializing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum AdminConsentKind {
+    AdminConsent,
+}
+
+/// What a signed `state` token verified as.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum SignedState {
+    /// A tenant-wide admin-consent request. Tried first: its `kind` field is
+    /// required, so an account-link payload never matches.
+    AdminConsent(AdminConsentState),
+    /// A pending account link.
+    AccountLink(AccountLinkState),
+}
+
 /// An error encountered while signing or verifying account-link state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum AccountLinkStateError {
@@ -163,7 +205,22 @@ pub(crate) fn sign_account_link_state(
     state: &AccountLinkState,
     key: &AccountLinkStateKey,
 ) -> Result<String, AccountLinkStateError> {
-    let json = serde_json::to_vec(state).map_err(|_| AccountLinkStateError::Serialization)?;
+    sign_payload(state, key)
+}
+
+/// Serialize and sign an admin-consent state.
+pub(crate) fn sign_admin_consent_state(
+    state: &AdminConsentState,
+    key: &AccountLinkStateKey,
+) -> Result<String, AccountLinkStateError> {
+    sign_payload(state, key)
+}
+
+fn sign_payload<T: Serialize>(
+    payload: &T,
+    key: &AccountLinkStateKey,
+) -> Result<String, AccountLinkStateError> {
+    let json = serde_json::to_vec(payload).map_err(|_| AccountLinkStateError::Serialization)?;
     let encoded_payload = URL_SAFE_NO_PAD.encode(json);
     let signature = signature_for(encoded_payload.as_bytes(), key);
 
@@ -173,17 +230,18 @@ pub(crate) fn sign_account_link_state(
     ))
 }
 
-/// Verify and deserialize an account-link state token.
+/// Verify and deserialize a signed `state` token of either kind.
 ///
-/// `current_timestamp` is expressed in Unix seconds. A token is expired when
-/// the current timestamp is equal to or later than its `exp` value. The
+/// `current_timestamp` is expressed in Unix seconds. An account-link token is
+/// expired when the current timestamp is equal to or later than its `exp`
+/// value; admin-consent tokens do not expire (see [`AdminConsentState`]). The
 /// signature is checked before the payload is decoded, so nothing in a
 /// rejected token is ever interpreted.
-pub(crate) fn verify_account_link_state(
+pub(crate) fn verify_signed_state(
     token: &str,
     key: &AccountLinkStateKey,
     current_timestamp: i64,
-) -> Result<AccountLinkState, AccountLinkStateError> {
+) -> Result<SignedState, AccountLinkStateError> {
     let (encoded_payload, encoded_signature) = split_token(token)?;
     let signature = URL_SAFE_NO_PAD
         .decode(encoded_signature)
@@ -199,12 +257,14 @@ pub(crate) fn verify_account_link_state(
     let json = URL_SAFE_NO_PAD
         .decode(encoded_payload)
         .map_err(|_| AccountLinkStateError::Malformed)?;
-    let state: AccountLinkState =
+    let state: SignedState =
         serde_json::from_slice(&json).map_err(|_| AccountLinkStateError::Malformed)?;
 
-    if current_timestamp >= state.exp {
+    if let SignedState::AccountLink(link) = &state
+        && current_timestamp >= link.exp
+    {
         return Err(AccountLinkStateError::Expired {
-            link_id: state.link_id,
+            link_id: link.link_id,
         });
     }
 

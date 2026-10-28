@@ -4,14 +4,15 @@
  */
 
 import type { ShapeOutline, TableStyleInfo } from '@core/pptx-engine/types';
-import AlignBottom from '@phosphor/align-bottom.svg';
-import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
-import AlignTop from '@phosphor/align-top.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
-import Trash from '@phosphor/trash.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import AlignBottom from '@icon/system/regular/align-bottom.svg';
+import AlignCenterVertical from '@icon/system/regular/align-center-vertical.svg';
+import AlignTop from '@icon/system/regular/align-top.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { For, Show } from 'solid-js';
 import {
   ColorPicker,
@@ -96,7 +97,10 @@ export function TableDesignTab(props: TableTabProps) {
         disabled={ro() || !c.setTableStyle}
         checked={style()?.[key] ?? false}
         onChange={(e) =>
-          void c.setTableStyle({ [key]: e.currentTarget.checked })
+          fireAndForget(
+            c.setTableStyle({ [key]: e.currentTarget.checked }),
+            'pptx-editor'
+          )
         }
       />
       {label}
@@ -133,7 +137,10 @@ export function TableDesignTab(props: TableTabProps) {
                       icon={<TableStyleSwatch name={s.name} />}
                       onClick={() => {
                         close();
-                        void c.setTableStyle({ style: s.id });
+                        fireAndForget(
+                          c.setTableStyle({ style: s.id }),
+                          'pptx-editor'
+                        );
                       }}
                     />
                   )}
@@ -157,7 +164,7 @@ export function TableDesignTab(props: TableTabProps) {
               noneLabel="No fill"
               onPick={(v) => {
                 close();
-                void c.fillCells(v);
+                fireAndForget(c.fillCells(v), 'pptx-editor');
               }}
             />
           )}
@@ -177,7 +184,7 @@ export function TableDesignTab(props: TableTabProps) {
                     icon={<BorderIcon edges={edges} />}
                     onClick={() => {
                       close();
-                      void c.borderCells(edges);
+                      fireAndForget(c.borderCells(edges), 'pptx-editor');
                     }}
                   />
                 )}
@@ -187,7 +194,7 @@ export function TableDesignTab(props: TableTabProps) {
                 icon={<BorderIcon edges="none" />}
                 onClick={() => {
                   close();
-                  void c.borderCells('all', true);
+                  fireAndForget(c.borderCells('all', true), 'pptx-editor');
                 }}
               />
               <PopoverLabel>Pen</PopoverLabel>
@@ -318,71 +325,71 @@ export function TableLayoutTab(props: TableTabProps) {
                 label="Delete columns"
                 onClick={() => {
                   close();
-                  void c.deleteColumns();
+                  fireAndForget(c.deleteColumns(), 'pptx-editor');
                 }}
               />
               <PopoverItem
                 label="Delete rows"
                 onClick={() => {
                   close();
-                  void c.deleteRows();
+                  fireAndForget(c.deleteRows(), 'pptx-editor');
                 }}
               />
               <PopoverItem
                 label="Delete table"
                 onClick={() => {
                   close();
-                  void c.deleteTable();
+                  fireAndForget(c.deleteTable(), 'pptx-editor');
                 }}
               />
             </div>
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Insert above"
+          aria-label="Insert above"
           disabled={ro()}
           data-testid="pptx-insert-row-above"
-          onClick={() => void c.insertRows('above')}
+          onClick={() => fireAndForget(c.insertRows('above'), 'pptx-editor')}
         >
           Insert above
         </RibbonTextButton>
         <RibbonTextButton
-          label="Insert below"
+          aria-label="Insert below"
           disabled={ro()}
           data-testid="pptx-insert-row-below"
-          onClick={() => void c.insertRows('below')}
+          onClick={() => fireAndForget(c.insertRows('below'), 'pptx-editor')}
         >
           Insert below
         </RibbonTextButton>
         <RibbonTextButton
-          label="Insert left"
+          aria-label="Insert left"
           disabled={ro()}
-          onClick={() => void c.insertColumns('left')}
+          onClick={() => fireAndForget(c.insertColumns('left'), 'pptx-editor')}
         >
           Insert left
         </RibbonTextButton>
         <RibbonTextButton
-          label="Insert right"
+          aria-label="Insert right"
           disabled={ro()}
           data-testid="pptx-insert-col-right"
-          onClick={() => void c.insertColumns('right')}
+          onClick={() => fireAndForget(c.insertColumns('right'), 'pptx-editor')}
         >
           Insert right
         </RibbonTextButton>
       </RibbonGroup>
       <RibbonGroup label="Merge">
         <RibbonTextButton
-          label="Merge cells"
+          aria-label="Merge cells"
           disabled={ro() || !c.canMerge()}
           data-testid="pptx-merge-cells"
-          onClick={() => void c.mergeCells()}
+          onClick={() => fireAndForget(c.mergeCells(), 'pptx-editor')}
         >
           Merge cells
         </RibbonTextButton>
         <RibbonTextButton
-          label="Split cells"
+          aria-label="Split cells"
           disabled={ro() || !c.canSplit()}
-          onClick={() => void c.splitCells()}
+          onClick={() => fireAndForget(c.splitCells(), 'pptx-editor')}
         >
           Split cells
         </RibbonTextButton>
@@ -395,7 +402,7 @@ export function TableLayoutTab(props: TableTabProps) {
           min={4}
           max={2000}
           disabled={ro()}
-          onCommit={(h) => void c.setCellSize({ h })}
+          onCommit={(h) => fireAndForget(c.setCellSize({ h }), 'pptx-editor')}
         />
         <NumberField
           label="Column width"
@@ -404,69 +411,69 @@ export function TableLayoutTab(props: TableTabProps) {
           min={4}
           max={2000}
           disabled={ro()}
-          onCommit={(w) => void c.setCellSize({ w })}
+          onCommit={(w) => fireAndForget(c.setCellSize({ w }), 'pptx-editor')}
         />
         <RibbonTextButton
-          label="Distribute rows"
+          aria-label="Distribute rows"
           disabled={ro()}
-          onClick={() => void c.distributeRows()}
+          onClick={() => fireAndForget(c.distributeRows(), 'pptx-editor')}
         >
           Distribute rows
         </RibbonTextButton>
         <RibbonTextButton
-          label="Distribute columns"
+          aria-label="Distribute columns"
           disabled={ro()}
-          onClick={() => void c.distributeColumns()}
+          onClick={() => fireAndForget(c.distributeColumns(), 'pptx-editor')}
         >
           Distribute columns
         </RibbonTextButton>
       </RibbonGroup>
       <RibbonGroup label="Alignment">
         <RibbonButton
-          label="Align left"
+          aria-label="Align left"
           tooltip="Align left"
           disabled={ro()}
-          onClick={() => void c.alignCells('left')}
+          onClick={() => fireAndForget(c.alignCells('left'), 'pptx-editor')}
         >
           <TextAlignLeft />
         </RibbonButton>
         <RibbonButton
-          label="Center"
+          aria-label="Center"
           tooltip="Center"
           disabled={ro()}
-          onClick={() => void c.alignCells('center')}
+          onClick={() => fireAndForget(c.alignCells('center'), 'pptx-editor')}
         >
           <TextAlignCenter />
         </RibbonButton>
         <RibbonButton
-          label="Align right"
+          aria-label="Align right"
           tooltip="Align right"
           disabled={ro()}
-          onClick={() => void c.alignCells('right')}
+          onClick={() => fireAndForget(c.alignCells('right'), 'pptx-editor')}
         >
           <TextAlignRight />
         </RibbonButton>
         <RibbonButton
-          label="Align top"
+          aria-label="Align top"
           tooltip="Align top"
           disabled={ro()}
-          onClick={() => void c.anchorCells('top')}
+          onClick={() => fireAndForget(c.anchorCells('top'), 'pptx-editor')}
         >
           <AlignTop />
         </RibbonButton>
         <RibbonButton
-          label="Center vertically"
+          aria-label="Center vertically"
           tooltip="Center vertically"
           disabled={ro()}
-          onClick={() => void c.anchorCells('middle')}
+          onClick={() => fireAndForget(c.anchorCells('middle'), 'pptx-editor')}
         >
           <AlignCenterVertical />
         </RibbonButton>
         <RibbonButton
-          label="Align bottom"
+          aria-label="Align bottom"
           tooltip="Align bottom"
           disabled={ro()}
-          onClick={() => void c.anchorCells('bottom')}
+          onClick={() => fireAndForget(c.anchorCells('bottom'), 'pptx-editor')}
         >
           <AlignBottom />
         </RibbonButton>
@@ -474,7 +481,9 @@ export function TableLayoutTab(props: TableTabProps) {
           current={c.textDirection()}
           disabled={ro()}
           testId="pptx-cell-text-direction"
-          onPick={(direction) => void c.setTextDirection(direction)}
+          onPick={(direction) =>
+            fireAndForget(c.setTextDirection(direction), 'pptx-editor')
+          }
           onMore={() => env.openFormatPane('text')}
         />
       </RibbonGroup>

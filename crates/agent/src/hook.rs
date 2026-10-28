@@ -2,12 +2,15 @@
 /// [`StreamPart`] items sent through a channel.
 use crate::AgentError;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
+use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{SearchableTool, ToolInfo};
 use rig_agent::agent::hook::{
     AgentHook, HookContext, InvalidToolCallAction, InvalidToolCallContext, ObservationAction,
-    StreamResponseFinish, TextDelta, ToolCallAction, ToolResultAction, ToolResultEvent,
+    StreamResponseFinish, TextDelta, ToolCallAction, ToolCallDelta, ToolResultAction,
+    ToolResultEvent,
 };
 use rig_agent::tool::ToolOutput;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -142,6 +145,9 @@ pub struct BridgeInputs {
     pub tool_loads: ToolLoads,
     /// Finishes user tools mid-turn, when the host can.
     pub user_tool_finisher: Option<UserToolFinisher>,
+    /// Cuts results too long for the model to read whole, when the host
+    /// offers [`crate::ReadToolResult`] to page through them.
+    pub result_limit: Option<ToolResultLimit>,
 }
 
 /// The answer a user tool gives when it has not been finished.
@@ -178,8 +184,15 @@ pub struct StreamBridge {
     /// Finishes a user tool's pending answer before the model reads it, on
     /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
     user_tool_finisher: Option<UserToolFinisher>,
+    /// Cuts results too long for the model to read whole.
+    result_limit: Option<ToolResultLimit>,
     /// the user has requested the stream stop
     cancel: CancellationToken,
+    /// The provider's id for each call, by rig's correlation id, for
+    /// providers whose calls carry no separate `call_id` (Anthropic). The
+    /// stream reports a call under the id the model saw, so a replayed
+    /// history repeats it and the provider's prompt cache still matches.
+    provider_ids: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl StreamBridge {
@@ -204,6 +217,7 @@ impl StreamBridge {
             register_loaded,
             tool_loads,
             user_tool_finisher,
+            result_limit,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
         (
@@ -215,7 +229,9 @@ impl StreamBridge {
                 tool_loads,
                 searchable_catalog,
                 user_tool_finisher,
+                result_limit,
                 cancel,
+                provider_ids: Arc::default(),
             },
             rx,
         )
@@ -236,12 +252,7 @@ impl StreamBridge {
 /// structured JSON on success, so a JSON content block yields its value and
 /// plain text is tried as JSON for compatibility.
 fn presentation_json(presentation: &ToolOutput) -> Option<serde_json::Value> {
-    if let Some(json) = presentation.as_json() {
-        return Some(json.clone());
-    }
-    presentation
-        .as_text()
-        .and_then(|text| serde_json::from_str(text).ok())
+    crate::tool_media::result_json(presentation)
 }
 
 /// Whether a tool's JSON result is a user tool's unfinished answer.
@@ -309,6 +320,31 @@ impl StreamBridge {
         }
     }
 
+    pub(crate) fn handle_tool_call_delta(&self, provider_id: &str, internal_call_id: &str) {
+        if !provider_id.is_empty() {
+            self.provider_ids
+                .lock()
+                .expect("provider_ids poisoned")
+                .entry(internal_call_id.to_owned())
+                .or_insert_with(|| provider_id.to_owned());
+        }
+    }
+
+    /// The id a call is reported under: the provider's `call_id`, else the
+    /// provider's own call id, else rig's correlation id.
+    fn call_id(&self, tool_call_id: Option<&str>, internal_call_id: &str) -> String {
+        match tool_call_id {
+            Some(id) => id.to_owned(),
+            None => self
+                .provider_ids
+                .lock()
+                .expect("provider_ids poisoned")
+                .get(internal_call_id)
+                .cloned()
+                .unwrap_or_else(|| internal_call_id.to_owned()),
+        }
+    }
+
     pub(crate) fn handle_tool_call(
         &self,
         tool_name: &str,
@@ -323,7 +359,7 @@ impl StreamBridge {
             .ok()
             .filter(serde_json::Value::is_object)
             .unwrap_or_else(|| serde_json::json!({}));
-        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
+        let id = self.call_id(tool_call_id, internal_call_id);
         let mcp = (self.routing)(tool_name).map(|i| match i {
             ToolInfo::ExternalTool {
                 service_name,
@@ -372,7 +408,7 @@ impl StreamBridge {
             (self.register_loaded)(pending).await;
         }
 
-        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
+        let id = self.call_id(tool_call_id, internal_call_id);
         let json = if is_success {
             presentation_json(presentation)
         } else {
@@ -413,6 +449,16 @@ impl StreamBridge {
             }
         }
 
+        // The stream carries the whole result; only the model's copy is cut.
+        // Images reach the model as images and are never cut as text.
+        let view = self
+            .result_limit
+            .as_ref()
+            .filter(|_| {
+                json.as_ref()
+                    .is_none_or(|json| json.get("modelMedia").is_none())
+            })
+            .and_then(|limit| limit.view(&id, &presentation.render()));
         let response = if let Some(json) = json {
             ToolResponse::Json {
                 id,
@@ -427,7 +473,7 @@ impl StreamBridge {
             }
         };
         let _ = self.tx.send(Ok(StreamPart::ToolResponse(response)));
-        ToolResultAction::Keep
+        view.map_or(ToolResultAction::Keep, ToolResultAction::rewrite)
     }
 
     pub(crate) fn handle_usage(&self, usage: rig_core::completion::Usage) -> ObservationAction {
@@ -442,6 +488,15 @@ impl StreamBridge {
 impl AgentHook for StreamBridge {
     async fn on_text_delta(&self, _ctx: &HookContext, event: TextDelta<'_>) -> ObservationAction {
         self.handle_text_delta(event.delta)
+    }
+
+    async fn on_tool_call_delta(
+        &self,
+        _ctx: &HookContext,
+        event: ToolCallDelta<'_>,
+    ) -> ObservationAction {
+        self.handle_tool_call_delta(event.tool_call_id, event.internal_call_id);
+        ObservationAction::Continue
     }
 
     async fn on_invalid_tool_call(

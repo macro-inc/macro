@@ -1,11 +1,11 @@
-type PipedreamConnection = { server_name: string };
-type NativeServer = { server_name: string; authenticated: boolean };
+type PipedreamConnection = { server_name: string; enabled: boolean };
+type NativeServer = {
+  server_name: string;
+  authenticated: boolean;
+  enabled: boolean;
+};
 
-/**
- * Whether the named MCP tool is connected. Mirrors the backend's
- * stack-selection rule (`mcp_select`): a user with any Pipedream connectors is
- * served those, so native rows stop counting.
- */
+/** Whether either stack has an enabled connection for the named provider. */
 export function isMcpToolConnected(
   name: string,
   sources: {
@@ -14,12 +14,16 @@ export function isMcpToolConnected(
   }
 ) {
   const wanted = name.toLowerCase();
-  if (sources.pipedream.length > 0)
-    return sources.pipedream.some(
-      (connection) => connection.server_name.toLowerCase() === wanted
-    );
-  return sources.native.some(
-    (server) =>
-      server.authenticated && server.server_name.toLowerCase() === wanted
+  return (
+    sources.pipedream.some(
+      (connection) =>
+        connection.enabled && connection.server_name.toLowerCase() === wanted
+    ) ||
+    sources.native.some(
+      (server) =>
+        server.enabled &&
+        server.authenticated &&
+        server.server_name.toLowerCase() === wanted
+    )
   );
 }

@@ -6,10 +6,18 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'grafana_monitor') THEN
     CREATE ROLE grafana_monitor LOGIN;
   END IF;
+  IF EXISTS (
+    SELECT FROM pg_roles WHERE rolname = 'grafana_monitor'
+      AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
+  ) THEN
+    RAISE EXCEPTION 'grafana_monitor must be an unprivileged monitoring role';
+  END IF;
 END $$;
-ALTER ROLE grafana_monitor NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
-  NOBYPASSRLS CONNECTION LIMIT 5;
+-- RDS administrators cannot change SUPERUSER attributes, even to disable them.
+ALTER ROLE grafana_monitor LOGIN CONNECTION LIMIT 5;
 GRANT CONNECT ON DATABASE macrodb TO grafana_monitor;
+-- Dev revokes PUBLIC schema access; USAGE resolves extension views, not app rows.
+GRANT USAGE ON SCHEMA public TO grafana_monitor;
 GRANT pg_monitor TO grafana_monitor;
 ALTER ROLE grafana_monitor SET default_transaction_read_only = on;
 ALTER ROLE grafana_monitor SET statement_timeout = '5s';

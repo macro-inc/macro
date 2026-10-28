@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
 use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
@@ -124,6 +125,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.messages",
             "macro.properties",
             "macro.initiatives",
+            "macro.calls",
         ]
     );
 }
@@ -1072,4 +1074,25 @@ impl PullRequestSessions for NoPullRequestSessions {
     async fn linked_sessions(&self, _: &str) -> Result<Vec<Entity<'static>>, Report> {
         Ok(Vec::new())
     }
+}
+
+#[test]
+fn imported_call_records_update_soup_and_native_call_events_are_ignored() {
+    let call_id = Uuid::now_v7();
+    let imported = CallTopicEvent::RecordImported(CallRecordImportedMetadata {
+        call_id,
+        owner: user(),
+    });
+    let patches = patches_from_call_event(&imported);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Call);
+    assert_eq!(patch_entity(&patches[0]).entity_id, call_id.to_string());
+
+    let summarized = CallTopicEvent::RecordSummarized(CallRecordSummarizedMetadata {
+        call_id,
+        channel_id: None,
+        ai_name_generated: false,
+    });
+    assert!(patches_from_call_event(&summarized).is_empty());
 }

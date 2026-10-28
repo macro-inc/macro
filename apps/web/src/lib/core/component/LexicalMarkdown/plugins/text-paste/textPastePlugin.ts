@@ -10,6 +10,7 @@ import {
   type BlockName,
   BlockRegistry,
 } from '@core/block';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isValidMacroAppHostname } from '@core/util/macroAppUrl';
 import { $isCodeNode } from '@lexical/code';
 import { $createLinkNode, $isLinkNode, LinkNode } from '@lexical/link';
@@ -225,34 +226,37 @@ function $insertPastedGithubPullRequest(
   $insertNodes([placeholder]);
   const placeholderKey = placeholder.getKey();
 
-  void fetchPullRequestByGithubKey(githubKey).then((entity) => {
-    if (!entity) return;
-    editor.update(
-      () => {
-        const node = $getNodeByKey(placeholderKey);
-        if (!node || !node.isAttached() || node.getTextContent() !== url) {
-          return;
-        }
-        if ($isLinkNode(node) && node.getURL() !== url) return;
+  fireAndForget(
+    fetchPullRequestByGithubKey(githubKey).then((entity) => {
+      if (!entity) return;
+      editor.update(
+        () => {
+          const node = $getNodeByKey(placeholderKey);
+          if (!node || !node.isAttached() || node.getTextContent() !== url) {
+            return;
+          }
+          if ($isLinkNode(node) && node.getURL() !== url) return;
 
-        const selection = $getSelection();
-        const caretInPlaceholder =
-          $isRangeSelection(selection) &&
-          selection.isCollapsed() &&
-          (selection.anchor.key === placeholderKey ||
-            node.isParentOf(selection.anchor.getNode()));
+          const selection = $getSelection();
+          const caretInPlaceholder =
+            $isRangeSelection(selection) &&
+            selection.isCollapsed() &&
+            (selection.anchor.key === placeholderKey ||
+              node.isParentOf(selection.anchor.getNode()));
 
-        const mention = $createPullRequestMentionNode({
-          id: entity.id,
-          label,
-          url: prUrl,
-        });
-        node.replace(mention);
-        if (caretInPlaceholder) mention.selectEnd();
-      },
-      { tag: HISTORY_MERGE_TAG }
-    );
-  });
+          const mention = $createPullRequestMentionNode({
+            id: entity.id,
+            label,
+            url: prUrl,
+          });
+          node.replace(mention);
+          if (caretInPlaceholder) mention.selectEnd();
+        },
+        { tag: HISTORY_MERGE_TAG }
+      );
+    }),
+    'markdown-text-paste'
+  );
 }
 
 function registerTextPastePlugin(

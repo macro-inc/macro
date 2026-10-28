@@ -1,12 +1,13 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
   useSaveCursorApiKey,
 } from '@queries/auth/cursor-api-key';
-import { Button, confirmDialog } from '@ui';
+import { ApiKeyInput, Button, confirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import cursorApiKeysScreenshot from './assets/cursor-api-keys.png';
 import { CursorDefaultModel } from './components/cursor-default-model';
@@ -17,7 +18,7 @@ import {
 } from './components/runtime-setup-steps';
 import {
   CURSOR_KEY_FORMAT_ERROR,
-  CURSOR_KEY_PLACEHOLDER,
+  CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
 import { SettingsPage, SettingsSurface } from './primitives';
@@ -89,7 +90,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
       description="Run agents on your own Cursor subscription. Sessions run in Cursor Cloud and stream into Macro."
       actions={
         <Button variant="ghost" size="sm" onClick={props.onClose}>
-          <ArrowLeftIcon />
+          <ArrowLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Back
         </Button>
       }
@@ -99,7 +100,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              void connect();
+              fireAndForget(connect(), 'cursor-connect');
             }}
           >
             <ol aria-label="Cursor setup steps" class="list-none">
@@ -146,23 +147,16 @@ export function CursorConnectPage(props: { onClose: () => void }) {
                         >
                           API key
                         </label>
-                        <SetupField>
-                          <input
-                            ref={focusOnMount}
-                            id="cursor-api-key"
-                            type="password"
-                            autocomplete="off"
-                            spellcheck={false}
-                            aria-describedby="cursor-api-key-help"
-                            class="ph-no-capture min-w-0 flex-1 bg-transparent font-mono text-sm text-ink outline-none"
-                            placeholder={CURSOR_KEY_PLACEHOLDER}
-                            value={apiKey()}
-                            disabled={saveKey.isPending}
-                            onInput={(event) =>
-                              setApiKey(event.currentTarget.value)
-                            }
-                          />
-                        </SetupField>
+                        <ApiKeyInput
+                          ref={focusOnMount}
+                          id="cursor-api-key"
+                          aria-describedby="cursor-api-key-help"
+                          size="lg"
+                          prefix={CURSOR_KEY_PREFIX}
+                          value={apiKey()}
+                          disabled={saveKey.isPending}
+                          onValueChange={setApiKey}
+                        />
                         <p
                           id="cursor-api-key-help"
                           class="text-xs text-ink-extra-muted"
@@ -190,7 +184,9 @@ export function CursorConnectPage(props: { onClose: () => void }) {
                         size="sm"
                         class="ml-auto text-negative"
                         disabled={disconnect.isPending}
-                        onClick={() => void disconnectCursor()}
+                        onClick={() =>
+                          fireAndForget(disconnectCursor(), 'cursor-connect')
+                        }
                       >
                         Disconnect
                       </Button>
@@ -240,7 +236,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
                     </Button>
                     <Button
                       type="submit"
-                      variant="cta"
+                      variant="neutral"
                       size="sm"
                       disabled={!apiKey().trim() || saveKey.isPending}
                     >
@@ -251,7 +247,7 @@ export function CursorConnectPage(props: { onClose: () => void }) {
               >
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="neutral"
                   size="sm"
                   onClick={props.onClose}
                 >

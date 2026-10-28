@@ -42,6 +42,13 @@ if (typeof WorkerConstructor === 'function') {
   });
 }
 
+// An uncaught error reaches the page's worker `error` listener; a rejection does not.
+const failWorker = (error: unknown): void => {
+  setTimeout(() => {
+    throw error;
+  });
+};
+
 const report = async (event: CacheEngineRuntimeEvent): Promise<void> => {
   channel ??= new BroadcastChannel(
     `graphql-cache-performance:${event.activation.scope}`
@@ -85,7 +92,7 @@ const { installCacheEngineWorker } = await import('../cache-engine-runtime');
 installCacheEngineWorker({
   hooks: {
     onEvent: (event) => {
-      void report(event);
+      report(event).catch(failWorker);
     },
   },
 });

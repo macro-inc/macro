@@ -1,4 +1,4 @@
-import PhoneIcon from '@phosphor/phone.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';

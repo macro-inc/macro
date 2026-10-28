@@ -2,6 +2,7 @@ import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
+import { fireAndForget } from '@core/util/fireAndForget';
 import IconGoogle from '@icon/macro-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import {
@@ -77,11 +78,11 @@ export function OnboardingConnectAccounts() {
       <div>
         <div class="flex flex-col gap-2">
           <Button
-            variant="strong"
+            variant="secondary"
             size="xl"
             class="border border-edge-muted"
             disabled={!isAuthenticated()}
-            onClick={() => void addInbox()}
+            onClick={() => fireAndForget(addInbox(), 'add-inbox')}
           >
             <IconGoogle class="size-5" />
             Connect Another Gmail
@@ -95,13 +96,13 @@ export function OnboardingConnectAccounts() {
 
         <div class="flex flex-col gap-2">
           <Button
-            variant="strong"
+            variant="secondary"
             size="xl"
             class="border border-edge-muted"
             disabled={
               !isAuthenticated() || githubLinked() || initGithubLink.isPending
             }
-            onClick={() => void connectGithub()}
+            onClick={() => fireAndForget(connectGithub(), 'mobile-onboarding')}
           >
             <GithubIcon class="size-5" />
             {githubLinked() ? 'GitHub Connected' : 'Connect GitHub'}

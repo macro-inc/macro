@@ -79,6 +79,7 @@ vi.mock('@queries/soup/slash-menu-pull-requests', () => ({
 vi.mock('@queries/slash-menu-mcps', () => ({
   useSlashMenuMcps: () => ({
     loading: () => false,
+    error: () => false,
     mcps: () => [
       { id: 'pipedream:linear', name: 'Linear', appSlug: 'linear' },
       { id: 'mcp:https://x.dev/mcp', name: 'Sentry MCP', appSlug: null },

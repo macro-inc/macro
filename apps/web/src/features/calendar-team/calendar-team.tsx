@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAvailabilityCalendarsQuery,
   useCalendarTeamIdentityQuery,
@@ -70,9 +71,9 @@ function CalendarTeamSettingsContent() {
         );
       }}
       onRetry={() => {
-        void identityQuery.refetch();
-        void sharing.refetch();
-        void calendars.refetch();
+        fireAndForget(identityQuery.refetch(), 'calendar-team');
+        fireAndForget(sharing.refetch(), 'calendar-team');
+        fireAndForget(calendars.refetch(), 'calendar-team');
       }}
       calendars={availabilitySources(sources(), availability())}
       calendarsLoading={identity() !== undefined && calendars.isPending}

@@ -1,4 +1,5 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
 import {
   applyDatabaseOps,
@@ -51,6 +52,10 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import {
+  type DatabaseGridHost,
+  trackQueryRuns,
+} from '../primitives/track-query-runs';
 import { createColumnCasts } from '../queries/column-casts';
 import {
   addDatabaseColumnOptions,
@@ -75,6 +80,8 @@ export type DatabaseGridProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
   databaseId: string;
+  /** Where the grid is shown, for analytics. */
+  host: DatabaseGridHost;
   table: TableDetail;
   canEdit: boolean;
   /** The view on screen: a stored one, or the table's own All records. */
@@ -188,6 +195,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     onTableChanged: (listener) =>
       useDatabaseTableChanges((change) => listener(change.tableId)),
   });
+  trackQueryRuns({
+    databaseId,
+    tableId: props.tableId,
+    host: props.host,
+    view: () => props.view,
+  });
   const source = withRelationLabels(
     createDatabaseRowsSource({
       databaseId,
@@ -205,7 +218,10 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
             return;
           listener(change.version);
           if (props.stored && props.view.layout.kind === 'board')
-            void refreshCardPositions(databaseId, props.view.id);
+            fireAndForget(
+              refreshCardPositions(databaseId, props.view.id),
+              'database-cache'
+            );
         });
         // An undo or redo is read back as soon as it answers, ahead of its ping.
         onCleanup(
@@ -253,7 +269,10 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       if (positions.isSuccess)
         return { kind: 'ready', positions: positions.data };
       if (positions.isError)
-        return { kind: 'failed', retry: () => void positions.refetch() };
+        return {
+          kind: 'failed',
+          retry: () => fireAndForget(positions.refetch(), 'database-view'),
+        };
       return { kind: 'loading' };
     },
     setPositions: (change) => {

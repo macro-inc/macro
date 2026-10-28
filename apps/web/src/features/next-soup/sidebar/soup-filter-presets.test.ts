@@ -35,9 +35,24 @@ afterEach(() => {
 
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
+import { parseSearchFilters } from '../core/search-filters';
+import { compileSearchQuery } from '../core/search-query';
 import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
 import { VIEW_TAB_LISTS } from '../soup-view/tab-lists';
 import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
+
+it.each([true, false])(
+  'preserves document exclusions with snippets enabled=%s',
+  (enabled) => {
+    mocks.snippetsEnabled = enabled;
+    const query = compileSearchQuery({
+      ...parseSearchFilters(''),
+      type: 'document-or-file',
+    });
+    expect(query.exclude?.subType).toContain('task');
+    expect(query.exclude?.subType?.includes('snippet') ?? false).toBe(!enabled);
+  }
+);
 
 const mailTabs = Object.keys(VIEW_TAB_PRESETS.mail.tabs);
 

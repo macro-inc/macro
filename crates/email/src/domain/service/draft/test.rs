@@ -3,6 +3,8 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
 fn input_with_body_html(html: &str) -> CreateDraftInput {
     CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
         sender_email: None,
         db_id: None,
         provider_id: None,

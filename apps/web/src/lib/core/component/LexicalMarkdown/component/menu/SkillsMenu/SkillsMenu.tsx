@@ -11,9 +11,10 @@ import { searchQuickAccessEntities } from '@core/context/quickAccess/entity-sear
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { GithubPullRequestEntity } from '@entity';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { type SlashMenuMcp, useSlashMenuMcps } from '@queries/slash-menu-mcps';
 import { useSlashMenuPullRequests } from '@queries/soup/slash-menu-pull-requests';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
@@ -132,9 +133,11 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     ...searchQuickAccessEntities(systemSkillItems(), activeSearchTerm()),
   ];
 
-  const { mcps: allMcps, loading: mcpsLoading } = useSlashMenuMcps(
-    props.menu.isOpen
-  );
+  const {
+    mcps: allMcps,
+    loading: mcpsLoading,
+    error: mcpsError,
+  } = useSlashMenuMcps(props.menu.isOpen);
   const mcps = createMemo(() => {
     const term = activeSearchTerm().trim().toLowerCase();
     return allMcps().filter((item) => item.name.toLowerCase().includes(term));
@@ -270,7 +273,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
 
   const deleteSkill = (item: EntityItem) => {
     closeMenu();
-    void deleteAction.execute([item.data]);
+    fireAndForget(deleteAction.execute([item.data]), 'entity-actions');
   };
 
   /**
@@ -357,30 +360,39 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     number | undefined
   >(undefined);
 
+  const preferredHeight = () => (props.agentCommands ? 384 : 256);
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
-    const preferredHeight = props.agentCommands ? 384 : 256;
-    if (h === undefined) return preferredHeight;
-    return Math.min(preferredHeight, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    if (h === undefined) return preferredHeight();
+    return Math.min(
+      preferredHeight(),
+      Math.max(0, h - PANEL_DECORATION_HEIGHT)
+    );
   };
 
   return (
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
+            fullHeight: preferredHeight() + PANEL_DECORATION_HEIGHT,
           }}
           use:clickOutside={() => {
             closeMenu();
           }}
           on:touchstart={(e) => e.stopPropagation()}
         >
-          <Surface depth={2} class="pt-2 pb-1.5 glass bg-menu-glass rounded-xl">
+          <Surface
+            depth={2}
+            hideBorder
+            class="menu-surface rounded-xl pt-2 pb-1.5"
+          >
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{ 'max-height': `${contentMaxHeight()}px` }}
@@ -443,11 +455,13 @@ function SkillsMenuInner(props: SkillsMenuProps) {
                     when={mcps().length > 0}
                     fallback={
                       <div class="px-3.5 pb-2 text-xs text-ink-extra-muted">
-                        {mcpsLoading()
-                          ? 'Loading connections…'
-                          : searchTerm()
-                            ? 'No matching connections'
-                            : 'No connections yet'}
+                        {mcpsError()
+                          ? 'Could not load connections'
+                          : mcpsLoading()
+                            ? 'Loading connections…'
+                            : searchTerm()
+                              ? 'No matching connections'
+                              : 'No connections yet'}
                       </div>
                     }
                   >

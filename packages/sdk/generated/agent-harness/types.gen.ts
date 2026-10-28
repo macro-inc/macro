@@ -210,6 +210,31 @@ export type AgentConversationsDto = {
 };
 
 /**
+ * Which kind of agent a prompt is sent to.
+ */
+export type AgentMode = 'chat' | 'code';
+
+/**
+ * Request body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceRequest = {
+    /**
+     * The prompt the composer is about to send.
+     */
+    prompt: string;
+};
+
+/**
+ * Response body for `POST /agent-mode-choice`.
+ */
+export type AgentModeChoiceResponse = {
+    /**
+     * Which kind of agent should receive the prompt.
+     */
+    mode: AgentMode;
+};
+
+/**
  * One model picker option.
  */
 export type AgentModelDto = {
@@ -350,6 +375,26 @@ export type AgentSessionChangesResponse = {
      */
     capturing: boolean;
     changeset?: null | ChangesetDto;
+};
+
+/**
+ * Response body for one session's folded log.
+ */
+export type AgentSessionFoldedLogResponse = {
+    /**
+     * The agent whose messages these are; it sent every agent message.
+     */
+    bot: SessionBot;
+    /**
+     * The conversation, oldest first: prompts, replies, tool calls and their
+     * results, plans, permission requests and how each turn ended. Each
+     * element is a `FoldedMessage` from the fold's TypeScript contract,
+     * which the SDK exports; the schema is opaque here because those types
+     * are described with specta rather than utoipa.
+     */
+    messages: Array<{
+        [key: string]: unknown;
+    }>;
 };
 
 /**
@@ -621,6 +666,13 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Editable fields for ai inference, before submission and identity resolution.
+ */
+export type AiSuggestions = {
+    [key: string]: never;
+};
+
+/**
  * Request body for answering a held tool call.
  */
 export type AnswerToolApprovalRequest = {
@@ -640,7 +692,75 @@ export type AnswerToolApprovalResponse = {
     status: ToolApprovalStatusDto;
 };
 
+/**
+ * Request body for reporting a connected app.
+ */
+export type AppConnectedRequest = {
+    actionId?: null | AgentActionId;
+    /**
+     * The Pipedream app slug the owner connected, e.g. `notion`.
+     */
+    appSlug: string;
+};
+
 export type BotId = string;
+
+/**
+ * Editable fields for calendar inference, before submission and identity resolution.
+ */
+export type CalendarSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Event end as a local wall-clock value in the request's timezone.
+     */
+    end?: string | null;
+    /**
+     * Only populated when an invitation was explicitly requested.
+     */
+    guests?: Array<string>;
+    /**
+     * Human-readable event venue or meeting URL.
+     */
+    location?: string | null;
+    recurrence?: null | RecurrenceSuggestion;
+    /**
+     * Local wall-clock values, interpreted in the request's IANA timezone.
+     */
+    start?: string | null;
+    /**
+     * Verbatim clock phrase whose missing AM/PM required an editable assumption.
+     */
+    start_assumption?: string | null;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
+};
+
+/**
+ * Call search supports speakers, channels and attendance status.
+ */
+export type CallSearchSuggestions = {
+    /**
+     * Speaker names or supplied addresses.
+     */
+    from: Array<string>;
+    /**
+     * Channel names.
+     */
+    in: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+    /**
+     * Attendance display value, resolved against supported options by the client.
+     */
+    status?: string | null;
+};
 
 /**
  * Harness names accepted by the capability-discovery endpoint.
@@ -768,6 +888,24 @@ export type ChangesetDto = {
 export type ChangesetSourceDto = 'github_pull_request';
 
 /**
+ * Message filters remain display names until resolved against the user's directory.
+ */
+export type ChannelSearchSuggestions = {
+    /**
+     * Explicit message sender names or addresses.
+     */
+    from: Array<string>;
+    /**
+     * Explicit channel names.
+     */
+    in: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+};
+
+/**
  * The channel share permission
  */
 export type ChannelSharePermission = {
@@ -782,6 +920,34 @@ export type ChannelSharePermission = {
 };
 
 /**
+ * A draft snapshot. Revisions are opaque to the server and echoed to the client.
+ */
+export type ClassifyInputRequest = {
+    /**
+     * Opaque client revision used to discard stale predictions.
+     */
+    revision: number;
+    /**
+     * Current draft text to classify without executing it.
+     */
+    text: string;
+};
+
+/**
+ * Ranked-type evidence for a particular client draft revision.
+ */
+export type ClassifyInputResponse = {
+    /**
+     * Revision echoed from the classification request.
+     */
+    revision: number;
+    /**
+     * Independent scores in the fixed intent-question order.
+     */
+    scores: Array<IntentScore>;
+};
+
+/**
  * Request or response body for the caller's coding preferences.
  */
 export type CodingPreferencesBody = {
@@ -793,20 +959,6 @@ export type CodingPreferencesBody = {
      * Whether new coding sessions deliver their work as a pull request.
      */
     openPullRequests: boolean;
-};
-
-/**
- * One-time manual code. Deliberately does not implement Debug.
- */
-export type CompleteRequest = {
-    /**
-     * Server-issued handle; never an owner selected by the caller.
-     */
-    attemptId: string;
-    /**
-     * Claude's complete code#state string, not an access token.
-     */
-    code: string;
 };
 
 /**
@@ -960,6 +1112,33 @@ export type CreateAgentSessionResponse = {
 };
 
 /**
+ * Review creation. Drafts are validated by the action's owning adapter.
+ */
+export type CreateReview = {
+    /**
+     * One to one hundred independent drafts. Email: {subject, body: Markdown,
+     * to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
+     * replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
+     * time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
+     * timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
+     * endDate: exclusive ISO date}, description?, location?, attendees?:
+     * [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
+     * presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
+     * Creating any review only presents these drafts; the user acts separately.
+     */
+    drafts: Array<unknown>;
+    executionId?: null | ExecutionId;
+    /**
+     * Existing UI and action to use.
+     */
+    kind: ReviewKind;
+    /**
+     * Stack label.
+     */
+    title: string;
+};
+
+/**
  * The triggering mention on a create request.
  *
  * Clients serialize this, so both derives are used.
@@ -989,6 +1168,11 @@ export type CreateSessionThread = {
      */
     threadId?: string | null;
 };
+
+/**
+ * Surface of a review decision.
+ */
+export type DecisionVia = 'card' | 'chat' | 'inbox';
 
 /**
  * HTTP request selecting one provider to probe.
@@ -1076,11 +1260,120 @@ export type ElicitationContentValue = string | boolean | number | number | Array
 export type ElicitationRequestId = number | string;
 
 /**
- * A JSON body is required on writes, including start/disconnect (no form-based CSRF).
+ * Email search exposes importance and connected inbox addresses, not sender filters.
  */
-export type EmptyRequest = {
-    [key: string]: never;
+export type EmailSearchSuggestions = {
+    /**
+     * Explicit importance wording, resolved by the client.
+     */
+    importance?: string | null;
+    /**
+     * Explicit connected inbox addresses, resolved by the client.
+     */
+    inboxes: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
 };
+
+/**
+ * Editable fields for email inference, before submission and identity resolution.
+ */
+export type EmailSuggestions = {
+    /**
+     * Explicit blind-carbon-copy recipient names or supplied email addresses.
+     */
+    bcc?: Array<string>;
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Explicit carbon-copy recipient names or supplied email addresses.
+     */
+    cc?: Array<string>;
+    /**
+     * Person or channel names for the client to resolve.
+     */
+    recipients?: Array<string>;
+    /**
+     * Suggested outgoing email subject.
+     */
+    subject?: string | null;
+};
+
+/**
+ * A bounded SDK operation observed during execution; not an authorization or write receipt.
+ */
+export type ExecutionActivity = {
+    /**
+     * Request identity within the execution.
+     */
+    id: number;
+    /**
+     * Server-selected label from the generated operation catalog.
+     */
+    label: string;
+    /**
+     * Observed request state; unfinished operations have unknown outcomes.
+     */
+    status: RecordedCallStatus;
+};
+
+/**
+ * Caller-selected UUID persisted in tool input before execution begins.
+ */
+export type ExecutionId = string;
+
+/**
+ * Durable source and final outcome, with historical bridge calls when present.
+ * The full journal is not included in the model's tool result.
+ */
+export type ExecutionRecord = {
+    actingAs?: null | ToolActor;
+    /**
+     * Advisory SDK operation activity, without arguments or response contents.
+     */
+    activity?: Array<ExecutionActivity>;
+    /**
+     * Additional request activity was omitted at the bounded observation limit.
+     */
+    activityTruncated?: boolean;
+    /**
+     * Historical bridge calls. Direct HTTP executions leave this empty.
+     */
+    calls: Array<RecordedToolCall>;
+    /**
+     * Safe execution failure text.
+     */
+    error?: string | null;
+    /**
+     * Execution identity.
+     */
+    executionId: ExecutionId;
+    /**
+     * JSON returned by the program, if successful.
+     */
+    result?: unknown;
+    /**
+     * The submitted JavaScript module.
+     */
+    source: string;
+    /**
+     * Overall execution state.
+     */
+    status: ExecutionStatus;
+    /**
+     * Original turn, preventing another requester from replaying a saved result.
+     */
+    turnId?: string | null;
+};
+
+/**
+ * The recorded outcome of a program.
+ */
+export type ExecutionStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
 
 /**
  * The provider-side identity of an externally-served session.
@@ -1101,6 +1394,47 @@ export type ExternalSessionResponse = {
 };
 
 /**
+ * Draft snapshot and local context used to suggest editable destination fields.
+ */
+export type ExtractInputRequest = {
+    /**
+     * Destination whose fields should be extracted.
+     */
+    intent: InputIntent;
+    /**
+     * Available task fields and display values, never authorized entity IDs.
+     */
+    property_definitions?: Array<InputPropertyDefinition>;
+    /**
+     * Reference instant for interpreting relative dates.
+     */
+    reference_time: string;
+    /**
+     * Opaque client revision used to discard stale suggestions.
+     */
+    revision: number;
+    search_type?: null | SearchType;
+    /**
+     * Original draft text; inference must not execute its instructions.
+     */
+    text: string;
+    /**
+     * IANA timezone for interpreting local dates and clock times.
+     */
+    time_zone: string;
+};
+
+/**
+ * Validated suggestions for a particular client draft revision.
+ */
+export type ExtractInputResponse = InputSuggestions & {
+    /**
+     * Revision echoed from the extraction request.
+     */
+    revision: number;
+};
+
+/**
  * What happened to a file, on the wire.
  */
 export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
@@ -1117,6 +1451,100 @@ export type GitRefDto = {
      * The commit, when known.
      */
     sha?: string | null;
+};
+
+/**
+ * A destination the composer can prepare, but never execute through inference.
+ */
+export type InputIntent = 'ai' | 'search' | 'email' | 'note' | 'task' | 'calendar' | 'message';
+
+/**
+ * A task property and the display values available for extraction.
+ */
+export type InputPropertyDefinition = {
+    /**
+     * Property display name from the client's catalog.
+     */
+    name: string;
+    /**
+     * Allowed display values; an empty list permits free-text suggestions.
+     */
+    options?: Array<string>;
+};
+
+/**
+ * Suggested display values to resolve against a real task-property catalog.
+ */
+export type InputPropertySuggestion = {
+    /**
+     * Property display name, never an authorized identifier.
+     */
+    name: string;
+    /**
+     * Suggested display values, never authorized entity identifiers.
+     */
+    values: Array<string>;
+};
+
+/**
+ * A single inferred destination together with only its applicable fields.
+ */
+export type InputSuggestions = {
+    intent: 'ai';
+    /**
+     * Editable ai fields.
+     */
+    suggestions: AiSuggestions;
+} | {
+    intent: 'search';
+    /**
+     * Editable search fields.
+     */
+    suggestions: SearchSuggestions;
+} | {
+    intent: 'email';
+    /**
+     * Editable email fields.
+     */
+    suggestions: EmailSuggestions;
+} | {
+    intent: 'note';
+    /**
+     * Editable note fields.
+     */
+    suggestions: NoteSuggestions;
+} | {
+    intent: 'task';
+    /**
+     * Editable task fields.
+     */
+    suggestions: TaskSuggestions;
+} | {
+    intent: 'calendar';
+    /**
+     * Editable calendar fields.
+     */
+    suggestions: CalendarSuggestions;
+} | {
+    intent: 'message';
+    /**
+     * Editable message fields.
+     */
+    suggestions: MessageSuggestions;
+};
+
+/**
+ * Independent yes/no probabilities; these do not sum to one.
+ */
+export type IntentScore = {
+    /**
+     * Destination evaluated by the classifier.
+     */
+    intent: InputIntent;
+    /**
+     * Independent probability between zero and one.
+     */
+    score: number;
 };
 
 /**
@@ -1159,7 +1587,7 @@ export type LoadAgentModelsResponse = {
 /**
  * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
  */
-export type LogDirectionDto = 'to_server' | 'to_runtime';
+export type LogDirectionDto = 'notification' | 'to_server' | 'to_runtime';
 
 /**
  * The two fields [`AgentSessionLogEntryDto`] flattens in.
@@ -1226,9 +1654,51 @@ export type MessageParent = {
 };
 
 /**
+ * Editable fields for message inference, before submission and identity resolution.
+ */
+export type MessageSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Person or channel names for the client to resolve.
+     */
+    recipients?: Array<string>;
+};
+
+/**
  * Harness names accepted by the model discovery endpoint.
  */
-export type ModelHarnessDto = 'in-memory' | 'cursor' | 'claude-cloud' | 'macrod';
+export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+
+/**
+ * Monthly ordinal weekday, such as the first Friday.
+ */
+export type MonthlyWeekday = {
+    /**
+     * One through five, or minus one for last.
+     */
+    ordinal: number;
+    /**
+     * Weekday selected by the ordinal.
+     */
+    weekday: WeekdayCode;
+};
+
+/**
+ * Editable fields for note inference, before submission and identity resolution.
+ */
+export type NoteSuggestions = {
+    /**
+     * Suggested Markdown content or outgoing message body.
+     */
+    body?: string | null;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
+};
 
 /**
  * The decision carried by an [`AgentPermissionAction`].
@@ -1383,6 +1853,16 @@ export type PullRequestsSessionsResponse = {
 };
 
 /**
+ * A topic for search types without additional supported facets.
+ */
+export type QuerySearchSuggestions = {
+    /**
+     * Remaining keyword phrase after supported filters and instructions.
+     */
+    query?: string | null;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -1418,6 +1898,92 @@ export type QueuedActionDto = {
 };
 
 /**
+ * A dispatch result; unfinished work is never reported as success.
+ */
+export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+
+/**
+ * A real inner call, recorded by trusted dispatch for the existing renderers.
+ */
+export type RecordedToolCall = {
+    /**
+     * Safe tool failure, if one was returned.
+     */
+    error?: string | null;
+    /**
+     * Stable, execution-scoped component identity.
+     */
+    id: string;
+    /**
+     * Arguments passed to the actual tool.
+     */
+    input: unknown;
+    /**
+     * Canonical Macro tool name from the allowlisted registry.
+     */
+    name: string;
+    /**
+     * Original tool output, retained independently of the program's return value.
+     */
+    output?: unknown;
+    /**
+     * Whether the response was omitted to keep the durable journal bounded.
+     */
+    outputOmitted: boolean;
+    /**
+     * A started call that never replied has an unknown side-effect outcome.
+     */
+    status: RecordedCallStatus;
+};
+
+/**
+ * Resolved recurrence ending condition accepted by the shared calendar editor.
+ */
+export type RecurrenceEnd = {
+    kind: 'never';
+} | {
+    /**
+     * Positive occurrence count.
+     */
+    count: number;
+    kind: 'after';
+} | {
+    /**
+     * Date resolved against the request's clock and timezone.
+     */
+    date: string;
+    kind: 'on';
+};
+
+/**
+ * Repetition units supported by the shared calendar editor.
+ */
+export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
+/**
+ * Resolved, editable repetition values; the existing calendar serializer builds RRULEs.
+ */
+export type RecurrenceSuggestion = {
+    /**
+     * Weekly weekday selectors.
+     */
+    by_day: Array<WeekdayCode>;
+    /**
+     * Resolved ending condition.
+     */
+    ends: RecurrenceEnd;
+    /**
+     * Repetition unit.
+     */
+    frequency: RecurrenceFrequency;
+    /**
+     * Positive interval.
+     */
+    interval: number;
+    monthly_by_day?: null | MonthlyWeekday;
+};
+
+/**
  * Request body for renaming an agent session.
  */
 export type RenameAgentSessionRequest = {
@@ -1438,6 +2004,156 @@ export type RetryAgentConversationTurnRequest = {
 };
 
 /**
+ * One atomic user decision against the displayed revision.
+ */
+export type ReviewDecision = {
+    action: 'edit';
+    /**
+     * Replacement action arguments.
+     */
+    draft: unknown;
+    /**
+     * Pending item to update.
+     */
+    item: string;
+    /**
+     * Revision displayed by the caller.
+     */
+    revision: number;
+} | {
+    action: 'submit';
+    /**
+     * Pending items, or an empty list to select all pending items.
+     */
+    items: Array<string>;
+    /**
+     * Revision displayed by the caller.
+     */
+    revision: number;
+} | {
+    action: 'dismiss';
+    /**
+     * Pending items, or an empty list to select all pending items.
+     */
+    items: Array<string>;
+    /**
+     * Revision displayed by the caller.
+     */
+    revision: number;
+};
+
+/**
+ * Facts about the most recent account-holder decision.
+ */
+export type ReviewDecisionContext = {
+    /**
+     * Authenticated account holder.
+     */
+    by: string;
+    /**
+     * Items selected by this decision.
+     */
+    items: Array<string>;
+    /**
+     * Revision claimed by this batch, used in notification deduplication.
+     */
+    revision: number;
+    /**
+     * Entry surface.
+     */
+    via: DecisionVia;
+};
+
+/**
+ * Persisted review identity.
+ */
+export type ReviewId = string;
+
+/**
+ * One editable item and its durable outcome.
+ */
+export type ReviewItem = {
+    /**
+     * Validated arguments for the existing composer/action.
+     */
+    draft: unknown;
+    /**
+     * Whether the account holder edited this draft before deciding.
+     */
+    edited?: boolean;
+    /**
+     * Failure or uncertainty description.
+     */
+    error?: string | null;
+    /**
+     * Stable item identity across stack navigation and edits.
+     */
+    id: string;
+    /**
+     * Actual backend response, never a model assertion.
+     */
+    result?: unknown;
+    /**
+     * Current outcome.
+     */
+    status: ReviewItemStatus;
+};
+
+/**
+ * Review item state, shared with notification consumers.
+ */
+export type ReviewItemStatus = 'pending' | 'submitting' | 'completed' | 'dismissed' | 'unknown';
+
+/**
+ * The component and action used to finish a review.
+ */
+export type ReviewKind = 'email' | 'calendar' | 'import';
+
+/**
+ * Full UI record, fetched outside the model context.
+ */
+export type ReviewRecord = {
+    /**
+     * Account whose email/calendar the drafts use; historical records use the session owner.
+     */
+    actingUser?: string | null;
+    decision?: null | ReviewDecisionContext;
+    executionId?: null | ExecutionId;
+    /**
+     * Review identity.
+     */
+    id: ReviewId;
+    /**
+     * Drafts and per-item outcomes.
+     */
+    items: Array<ReviewItem>;
+    /**
+     * Component kind.
+     */
+    kind: ReviewKind;
+    /**
+     * Durable presentation acknowledgment, separate from user decisions.
+     */
+    presentedAt?: number | null;
+    /**
+     * Compare-and-swap revision for edits and submissions.
+     */
+    revision: number;
+    /**
+     * Owning session.
+     */
+    sessionId: string;
+    /**
+     * Stack label.
+     */
+    title: string;
+    /**
+     * Milliseconds since epoch of the last state change.
+     */
+    updatedAt: number;
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -1454,6 +2170,34 @@ export type SandboxSizeBody = {
      */
     size: SandboxSize;
 };
+
+/**
+ * Only the selected type's fields can appear in a search suggestion.
+ */
+export type SearchSuggestions = (QuerySearchSuggestions & {
+    type: 'all';
+}) | (ChannelSearchSuggestions & {
+    type: 'channels';
+}) | (QuerySearchSuggestions & {
+    type: 'document-or-file';
+}) | (TaskSearchSuggestions & {
+    type: 'task';
+}) | (EmailSearchSuggestions & {
+    type: 'email';
+}) | (CallSearchSuggestions & {
+    type: 'calls';
+}) | (QuerySearchSuggestions & {
+    type: 'folders';
+}) | (QuerySearchSuggestions & {
+    type: 'agent';
+}) | (QuerySearchSuggestions & {
+    type: 'calendar';
+});
+
+/**
+ * Search indexes supported by the shared search editor.
+ */
+export type SearchType = 'all' | 'channels' | 'document-or-file' | 'task' | 'email' | 'calls' | 'folders' | 'agent' | 'calendar';
 
 /**
  * The agent behind a session, as much of it as rendering a message needs.
@@ -1568,40 +2312,57 @@ export type StartFreshAgentConversationRequest = {
 };
 
 /**
- * Public PKCE challenge and attempt handle; contains no verifier or provider tokens.
+ * Task facets match the shared search editor; assignee and creator are distinct.
  */
-export type StartResponse = {
+export type TaskSearchSuggestions = {
     /**
-     * Opaque owner-bound attempt handle.
+     * Assigned people's names or supplied addresses.
      */
-    attemptId: string;
+    assignees: Array<string>;
     /**
-     * Claude-hosted consent page.
+     * Task creators' names or supplied addresses.
      */
-    authorizationUrl: string;
+    created_by: Array<string>;
     /**
-     * Attempt lifetime in seconds.
+     * Priority display values for client-side option resolution.
      */
-    expiresIn: number;
+    priority: Array<string>;
+    /**
+     * Remaining keyword phrase.
+     */
+    query?: string | null;
+    /**
+     * Status display values for client-side option resolution.
+     */
+    status: Array<string>;
 };
 
 /**
- * Safe connection metadata.
+ * Editable fields for task inference, before submission and identity resolution.
  */
-export type StatusResponse = {
+export type TaskSuggestions = {
     /**
-     * Whether the authenticated Macro user has connected.
+     * Suggested Markdown content or outgoing message body.
      */
-    connected: boolean;
+    body?: string | null;
     /**
-     * Whether this deployment supports browser connection.
+     * Task deadline as a local ISO date.
      */
-    enabled: boolean;
+    due_date?: string | null;
     /**
-     * Whether reconnecting after service restart is required.
+     * Display names/values that the client resolves against available task fields.
      */
-    ephemeral: boolean;
+    properties?: Array<InputPropertySuggestion>;
+    /**
+     * Suggested note, task, or event title.
+     */
+    title?: string | null;
 };
+
+/**
+ * Which authenticated participant's access a tool call requests.
+ */
+export type ToolActor = 'requester' | 'owner';
 
 /**
  * How a person answers a held tool call.
@@ -1654,6 +2415,11 @@ export type WarmAgentSessionRequest = {
 export type WarmAgentSessionResponse = {
     session?: null | AgentSessionResponse;
 };
+
+/**
+ * RFC weekday values used by the existing recurrence UI.
+ */
+export type WeekdayCode = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 
 /**
  * Just a session id, for the preview variants that carry nothing else.
@@ -1852,6 +2618,45 @@ export type RetryAgentConversationTurnResponses = {
 };
 
 export type RetryAgentConversationTurnResponse = RetryAgentConversationTurnResponses[keyof RetryAgentConversationTurnResponses];
+
+export type ChooseAgentModeData = {
+    body: AgentModeChoiceRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-mode-choice';
+};
+
+export type ChooseAgentModeErrors = {
+    /**
+     * The prompt is blank
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The caller cannot start new AI work
+     */
+    402: unknown;
+    /**
+     * Auto mode is not enabled for the caller
+     */
+    403: unknown;
+    /**
+     * The classifier is unconfigured, failed, or timed out
+     */
+    503: unknown;
+};
+
+export type ChooseAgentModeResponses = {
+    /**
+     * The kind of agent the prompt goes to
+     */
+    200: AgentModeChoiceResponse;
+};
+
+export type ChooseAgentModeResponse = ChooseAgentModeResponses[keyof ChooseAgentModeResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
@@ -2170,6 +2975,44 @@ export type GetAgentSessionResponses = {
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
 
+export type ReportAgentSessionAppConnectedData = {
+    body: AppConnectedRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/app-connections';
+};
+
+export type ReportAgentSessionAppConnectedErrors = {
+    401: string;
+    /**
+     * Not the session's owner, or no edit access
+     */
+    403: string;
+    /**
+     * The session is archived
+     */
+    409: string;
+    /**
+     * The owner has not connected that app
+     */
+    422: string;
+    500: string;
+};
+
+export type ReportAgentSessionAppConnectedError = ReportAgentSessionAppConnectedErrors[keyof ReportAgentSessionAppConnectedErrors];
+
+export type ReportAgentSessionAppConnectedResponses = {
+    /**
+     * The session continues once it is idle
+     */
+    202: unknown;
+};
+
 export type SetAgentSessionArchivedData = {
     body: SetAgentSessionArchivedRequest;
     path: {
@@ -2279,6 +3122,55 @@ export type RefreshAgentSessionChangesResponses = {
 
 export type RefreshAgentSessionChangesResponse = RefreshAgentSessionChangesResponses[keyof RefreshAgentSessionChangesResponses];
 
+export type GetCodeExecutionData = {
+    body?: never;
+    path: {
+        /**
+         * Owning session
+         */
+        session_id: string;
+        /**
+         * Execution receipt identity
+         */
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}';
+};
+
+export type GetCodeExecutionErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    500: unknown;
+};
+
+export type GetCodeExecutionResponses = {
+    200: ExecutionRecord;
+};
+
+export type GetCodeExecutionResponse = GetCodeExecutionResponses[keyof GetCodeExecutionResponses];
+
+export type ListExecutionReviewsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/reviews';
+};
+
+export type ListExecutionReviewsErrors = {
+    403: unknown;
+};
+
+export type ListExecutionReviewsResponses = {
+    200: Array<ReviewRecord>;
+};
+
+export type ListExecutionReviewsResponse = ListExecutionReviewsResponses[keyof ListExecutionReviewsResponses];
+
 export type ControlAgentSessionData = {
     body: ControlRequest;
     path: {
@@ -2342,6 +3234,32 @@ export type GetAgentSessionLogResponses = {
 };
 
 export type GetAgentSessionLogResponse = GetAgentSessionLogResponses[keyof GetAgentSessionLogResponses];
+
+export type GetAgentSessionFoldedLogData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/log/folded';
+};
+
+export type GetAgentSessionFoldedLogErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionFoldedLogError = GetAgentSessionFoldedLogErrors[keyof GetAgentSessionFoldedLogErrors];
+
+export type GetAgentSessionFoldedLogResponses = {
+    200: AgentSessionFoldedLogResponse;
+};
+
+export type GetAgentSessionFoldedLogResponse = GetAgentSessionFoldedLogResponses[keyof GetAgentSessionFoldedLogResponses];
 
 export type RenameAgentSessionData = {
     body: RenameAgentSessionRequest;
@@ -2643,6 +3561,68 @@ export type SteerQueuedActionResponses = {
 
 export type SteerQueuedActionResponse = SteerQueuedActionResponses[keyof SteerQueuedActionResponses];
 
+export type CreateSessionReviewData = {
+    body: CreateReview;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/reviews';
+};
+
+export type CreateSessionReviewErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type CreateSessionReviewResponses = {
+    200: ReviewRecord;
+};
+
+export type CreateSessionReviewResponse = CreateSessionReviewResponses[keyof CreateSessionReviewResponses];
+
+export type GetSessionReviewData = {
+    body?: never;
+    path: {
+        session_id: string;
+        review_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/reviews/{review_id}';
+};
+
+export type GetSessionReviewErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type GetSessionReviewResponses = {
+    200: ReviewRecord;
+};
+
+export type GetSessionReviewResponse = GetSessionReviewResponses[keyof GetSessionReviewResponses];
+
+export type DecideSessionReviewData = {
+    body: ReviewDecision;
+    path: {
+        session_id: string;
+        review_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/reviews/{review_id}';
+};
+
+export type DecideSessionReviewErrors = {
+    403: unknown;
+    409: unknown;
+};
+
+export type DecideSessionReviewResponses = {
+    200: ReviewRecord;
+};
+
+export type DecideSessionReviewResponse = DecideSessionReviewResponses[keyof DecideSessionReviewResponses];
+
 export type PutAgentSessionSandboxSizeData = {
     body: SandboxSizeBody;
     path: {
@@ -2711,100 +3691,66 @@ export type AnswerAgentSessionToolApprovalResponses = {
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
 
-export type DisconnectData = {
-    body: EmptyRequest;
+export type ClassifyData = {
+    body: ClassifyInputRequest;
     path?: never;
     query?: never;
-    url: '/claude-auth';
+    url: '/universal_input/classify';
 };
 
-export type DisconnectErrors = {
+export type ClassifyErrors = {
     /**
-     * Disabled
+     * Invalid input
      */
-    403: unknown;
-};
-
-export type DisconnectResponses = {
-    /**
-     * Disconnected
-     */
-    204: void;
-};
-
-export type DisconnectResponse = DisconnectResponses[keyof DisconnectResponses];
-
-export type StatusData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/claude-auth';
-};
-
-export type StatusErrors = {
+    400: unknown;
     /**
      * Unauthenticated
      */
     401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: unknown;
+    /**
+     * Detection unavailable
+     */
+    503: unknown;
 };
 
-export type StatusResponses = {
-    200: StatusResponse;
+export type ClassifyResponses = {
+    200: ClassifyInputResponse;
 };
 
-export type StatusResponse2 = StatusResponses[keyof StatusResponses];
+export type ClassifyResponse = ClassifyResponses[keyof ClassifyResponses];
 
-export type CompleteData = {
-    body: CompleteRequest;
+export type ExtractData = {
+    body: ExtractInputRequest;
     path?: never;
     query?: never;
-    url: '/claude-auth/complete';
+    url: '/universal_input/extract';
 };
 
-export type CompleteErrors = {
+export type ExtractErrors = {
     /**
-     * Invalid code
+     * Invalid input
      */
     400: unknown;
     /**
-     * Expired or replayed
+     * Unauthenticated
      */
-    409: unknown;
+    401: unknown;
     /**
-     * Provider failed
+     * AI allowance exhausted
      */
-    502: unknown;
-};
-
-export type CompleteResponses = {
+    402: unknown;
     /**
-     * Connected
+     * Extraction unavailable
      */
-    204: void;
+    503: unknown;
 };
 
-export type CompleteResponse = CompleteResponses[keyof CompleteResponses];
-
-export type StartData = {
-    body: EmptyRequest;
-    path?: never;
-    query?: never;
-    url: '/claude-auth/start';
+export type ExtractResponses = {
+    200: ExtractInputResponse;
 };
 
-export type StartErrors = {
-    /**
-     * Disabled
-     */
-    403: unknown;
-    /**
-     * Too many attempts
-     */
-    429: unknown;
-};
-
-export type StartResponses = {
-    200: StartResponse;
-};
-
-export type StartResponse2 = StartResponses[keyof StartResponses];
+export type ExtractResponse = ExtractResponses[keyof ExtractResponses];

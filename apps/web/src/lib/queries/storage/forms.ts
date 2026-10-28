@@ -150,9 +150,9 @@ export function collaborateOnForm(
 
 /** After a form's metadata or existence changed, its lists read again. */
 function invalidateFormLists(databaseId?: string) {
-  void queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
+  queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
   if (databaseId)
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: formsKeys.forDatabase(databaseId).queryKey,
     });
 }
@@ -169,7 +169,7 @@ export function createForm(
     });
     setFormDetail(detail);
     invalidateFormLists(detail.form.databaseId);
-    void queryClient.invalidateQueries({
+    queryClient.invalidateQueries({
       queryKey: databasesKeys.detail(detail.form.databaseId).queryKey,
     });
     return detail;
@@ -208,11 +208,11 @@ export function updateForm(
 
 /** Re-read the viewer's own response and the counts a new response moves. */
 function afterResponse(formId: string) {
-  void queryClient.invalidateQueries({ queryKey: myResponseKeyOf(formId) });
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({ queryKey: myResponseKeyOf(formId) });
+  queryClient.invalidateQueries({
     queryKey: formsKeys.summary(formId).queryKey,
   });
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({
     queryKey: formsKeys.tally(formId).queryKey,
   });
 }

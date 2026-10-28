@@ -1,17 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useMutation } from '@tanstack/solid-query';
-
 import {
   invalidateAiBillingSummary,
   invalidateSubscriptionStatus,
 } from '../auth';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
 import { teamKeys } from './keys';
 import { invalidateTeam } from './teams';
 
@@ -61,7 +60,7 @@ export function useRemoveUserFromTeamMutation(
         },
 
         onSuccess: (_data, { teamId }) => {
-          invalidateTeam(teamId);
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
           toast.success('Member removed');
         },
 
@@ -104,9 +103,9 @@ export function useSetTeamMemberPlanMutation(
     ...withCallbacks<void, Error, SetTeamMemberPlanArgs>(
       {
         onSuccess: (_data, { teamId, plan }) => {
-          invalidateTeam(teamId);
-          void invalidateAiBillingSummary();
-          void invalidateSubscriptionStatus();
+          fireAndForget(invalidateTeam(teamId), 'team-settings');
+          fireAndForget(invalidateAiBillingSummary(), 'team-settings');
+          fireAndForget(invalidateSubscriptionStatus(), 'team-settings');
           toast.success(
             plan === 'max'
               ? 'Max applies immediately. Any pending downgrade is canceled.'

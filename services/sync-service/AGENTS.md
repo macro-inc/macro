@@ -41,6 +41,9 @@ updates over WebSocket.
   `src/domain/` (surface-specific logic) → migration in
   `src/durable_object/surface_migration.rs` if it changes stored shape.
 
+Active-peer queries with `include_ai=false` exclude signed agent actors and the
+legacy reserved AI peer range; Canvas workers use random full-width peer IDs.
+
 ## Checks
 
 - `just test` (runs `worker-build`, then `npx vitest run` and `cargo test`)
@@ -56,6 +59,16 @@ updates over WebSocket.
 - Durable Object in-memory state (including the loro document) evicts after
   10s of inactivity even with open connections; the alarm-based heartbeat in
   `src/keepalive.rs` is what keeps it warm, not WebSocket traffic.
+- The Durable Object handles one request or WebSocket message at a time
+  (`mutation_barrier` in `src/durable_object.rs`). Keep per-update work
+  proportional to the update; `LoroDoc::diff`, `fork`, and checkouts cost time
+  that grows with document history. A backlog past `DEFAULT_TIMEOUT_MS` (4.5 s)
+  makes the front worker fail connects, which clients see as close 1006.
+- Document history names each Loro peer from D1 `peer_user_map`, so every
+  path that writes operations maps the peers it writes with: WebSocket and
+  HTTP `/update` writes to their user, `/initialize` snapshots to the system
+  author (`SYSTEM_AUTHOR_ID`), and `/copy` copies the source's mappings first.
+  A new write path does the same (`tests/peer_authors.test.ts`).
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.
@@ -63,3 +76,8 @@ updates over WebSocket.
 ## Related
 
 - Docs: this directory's `README.md`
+
+- Room `/exists` checks the durable snapshot, not the document ID set by a
+  connection. To regress connect-before-initialize, build without
+  `create-default-state` and run `SYNC_TEST_UNINITIALIZED_ROOMS=true npx vitest run
+  tests/canvas_initialization.test.ts`; the usual test build seeds automatically.

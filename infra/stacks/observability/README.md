@@ -289,7 +289,7 @@ From `infra/stacks/observability`, on an x86_64 Linux Nix builder:
 
 ```bash
 nix build . --cores 2
-python3 nixos/publish-image.py result '<private Ohio image-artifact bucket>'
+python3 nixos/publish-image.py result macro-observability-images-569036502058-us-east-2 --role macro-observability-vmimport
 ```
 
 The build produces a UEFI VHD with the complete host configuration. KVM speeds up
@@ -413,8 +413,8 @@ Tempo spans link to the service's logs in a time window and its generated metric
 logs carrying an OTLP trace ID link back to the trace. FireLens logs do not always
 carry trace IDs, so service/time correlation is not a claim of exact trace-to-log
 matching. Service graph edges require correctly related client/server spans.
-Profiles, database query monitoring, RUM/session replay, and complete Datadog
-dashboard/monitor migration remain separate coverage work.
+Profiles, production/full database-query parity, RUM/session replay, and complete
+Datadog dashboard/monitor migration remain separate coverage work.
 
 ### Provisioned dashboards and alerts
 
@@ -508,6 +508,17 @@ stack definitions and the CloudWatch-logged preview gateway need a separate
 coverage pass. Lambda CloudWatch logs, RUM/session replay, synthetics and database query monitoring
 are separate sources; ECS/edge OTLP duplication alone does not provide parity.
 
+## PostgreSQL query monitoring
+
+The separate [dev database collector](../database-observability/README.md) sends
+query statistics to Prometheus and normalized SQL/activity samples to Loki. Its
+query dashboard at `/d/macro-postgres-queries` links from `/d/macro-postgres`.
+Deploy the Ohio image with the authenticated POST-only `/loki/api/v1/push` route
+before upgrading the collector. The route reuses the existing ingestion
+credential and exposes no Loki query or administration APIs. SQL records are
+sensitive and use Loki's existing retention/access controls. Database setup and
+collector deployment are manual; merging the PR does not enable collection.
+
 ## Validation and subsequent passes
 
 From `infra/`, run `bunx biome check stacks/observability` and `bun run check`.
@@ -524,9 +535,10 @@ Follow-up PRs:
    independent bounded queues, retries and matching sampling. Check actual
    metrics temporality and attribute mapping before enabling all services.
 2. Inventory non-OTEL sources: Datadog agents, infrastructure metrics, CloudWatch,
-   RDS/Postgres query monitoring and logs, browser RUM, synthetics, profiling and
-   security features. They are not covered by duplicating OTLP. Add DB collectors
-   with dedicated read-only monitoring identities and evaluate query-level
+   production RDS/Postgres query parity and logs, browser RUM, synthetics,
+   profiling and security features. They are not covered by duplicating OTLP.
+   Extend the dev DB collector to production with dedicated read-only monitoring
+   identities and evaluate query-level
    parity before replacing Datadog DBM.
 3. Port dashboards/alerts and run representative incidents in both tools. Add
    pipeline/queue alerts, ingestion canaries, host/root-disk monitoring and a

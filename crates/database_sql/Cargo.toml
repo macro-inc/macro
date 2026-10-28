@@ -9,6 +9,8 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+# OpenAPI schemas for the HTTP SQL query response.
+openapi = ["dep:utoipa"]
 # The `database_sql_types` codegen binary: native developer tooling that
 # writes the TypeScript face of the wire types. Off by default so the wasm
 # build never compiles the exporter; the derives themselves need only `specta`.
@@ -37,6 +39,7 @@ specta-serde = { workspace = true, optional = true }
 specta-typescript = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
+utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 # The wasm-bindgen shell in `wasm`, which only exists on wasm32. Target-gated

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_event_sources\n            SET normalized_payload = jsonb_set(normalized_payload, '{event,guestPolicy}', $2)\n            WHERE event_id = $1\n              AND normalized_payload ? 'event'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "688a085f4f67daad52d94c704abea6e304b36376b75e2b6bec571fedbfe4d66c"
+}

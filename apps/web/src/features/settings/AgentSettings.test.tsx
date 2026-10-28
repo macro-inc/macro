@@ -3,7 +3,9 @@
  */
 
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AgentKind } from '../agents-view/core/agent-kind';
 import { AgentSettings } from './AgentSettings';
 
 const searchParams = vi.hoisted(() => ({
@@ -15,12 +17,16 @@ vi.mock('@solidjs/router', () => ({
 
 vi.mock('./Agents', () => ({
   Agents: (props: {
+    createKind?: AgentKind;
+    onCloseCreate?: () => void;
     onCursor: () => void;
     onSetUpRuntime: () => void;
     onManageRuntimes: () => void;
   }) => (
     <div>
       <h1>Agents page</h1>
+      <span>{props.createKind}</span>
+      <button onClick={props.onCloseCreate}>Cancel create</button>
       <button type="button" onClick={props.onCursor}>
         Connect Cursor
       </button>
@@ -106,4 +112,27 @@ describe('AgentSettings', () => {
     render(() => <AgentSettings />);
     expect(screen.getByRole('heading', { name: 'Runtimes page' })).toBeTruthy();
   });
+});
+
+it('opens a requested creation from runtimes and returns to the agent list on cancel', () => {
+  const [kind, setKind] = createSignal<AgentKind>();
+  render(() => (
+    <AgentSettings
+      initialSection="runtimes"
+      createKind={kind()}
+      onCloseCreate={() => setKind(undefined)}
+    />
+  ));
+  expect(screen.getByText('Runtimes page')).toBeTruthy();
+  setKind('coder');
+  expect(screen.getByText('coder')).toBeTruthy();
+  expect(screen.queryByText('Runtimes page')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel create' }));
+  expect(screen.getByText('Agents page')).toBeTruthy();
+  setKind('agent');
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Manage paired runtimes' })
+  );
+  expect(screen.getByText('Runtimes page')).toBeTruthy();
+  expect(kind()).toBeUndefined();
 });

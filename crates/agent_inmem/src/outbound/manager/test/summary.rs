@@ -210,7 +210,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
     let read: Vec<String> = engine.requests()[0]
         .messages
         .iter()
-        .map(|message| label(message))
+        .map(|message| label(without_invocation_context(message)))
         .collect();
     assert_eq!(
         read,

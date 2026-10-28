@@ -54,7 +54,18 @@ fn prompt_texts(container: &ContainerMock) -> Vec<Vec<ContentBlock>> {
         .received_requests()
         .into_iter()
         .filter_map(|request| match request {
-            ClientRequest::PromptRequest(prompt) => Some(prompt.prompt),
+            ClientRequest::PromptRequest(prompt) => Some(
+                prompt
+                    .prompt
+                    .into_iter()
+                    .filter(|block| {
+                        !matches!(block, ContentBlock::Text(text)
+                            if text.meta.as_ref().and_then(|meta| meta.get(
+                                agent_runtime_protocol::domain::action::INVOCATION_CONTEXT_META
+                            )) == Some(&serde_json::Value::Bool(true)))
+                    })
+                    .collect(),
+            ),
             _ => None,
         })
         .collect()

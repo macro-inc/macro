@@ -1,0 +1,16 @@
+---
+title: ManageAgentSession
+description: >-
+  Rename, archive/unarchive, delete, prompt, or stop an agent session.
+---
+
+# ManageAgentSession
+
+Rename, archive/unarchive, delete, prompt, or stop an agent session. Use ListEntities or NameSearch to find sessions and ReadAgentSession to inspect them. Rename, archive, and delete require ownership; prompting and stopping require edit access. Delete releases the runtime and permanently removes the session; use only when the user asks to delete it. Prompt returns sent/queued acceptance, not completed work. After an uncertain error, read the session before retrying; never automatically resend a prompt. This tool cannot answer permission or approval requests.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sessionId` | string | Yes | Session UUID from a mention, listing, or search result. |
+| `action` | SessionAction | Yes | Session lifecycle actions available to agents. Human approvals are deliberately absent. |

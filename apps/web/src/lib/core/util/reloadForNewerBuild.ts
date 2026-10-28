@@ -1,3 +1,5 @@
+import type { ReloadReason } from '@app/observability/generated/native-diagnostics';
+import { reloadApp } from '@app/observability/reload';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal } from 'solid-js';
@@ -10,7 +12,7 @@ export interface ReloadPage {
   isOffline(): boolean;
   /** Whether focus is in a text field that holds text a reload would lose. */
   isEditingText(): boolean;
-  reload(): void;
+  reload(reason: ReloadReason): void;
   /** Runs `callback` each time the page is hidden or comes back online. */
   onHiddenOrOnline(callback: () => void): void;
   /** Offers the user a reload now; `build` is the newer build, when known. */
@@ -44,7 +46,7 @@ const browserPage: ReloadPage = {
         : focused?.textContent;
     return Boolean(text?.trim());
   },
-  reload: () => window.location.reload(),
+  reload: reloadApp,
   onHiddenOrOnline(callback) {
     // Run a task later: a page being unloaded also turns hidden, and its
     // timers never run, so leaving the app never becomes a reload.
@@ -110,11 +112,11 @@ export function reloadForNewerBuild(
       holds.size === 0 &&
       !page.isEditingText()
     ) {
-      page.reload();
+      page.reload('cache_replaced_automatic');
     }
   };
   page.onHiddenOrOnline(reloadIfIdle);
-  page.promptReload(() => page.reload(), build);
+  page.promptReload(() => page.reload('update_accepted'), build);
   reloadIfIdle();
 }
 
@@ -128,7 +130,7 @@ export function promptReloadForFailedLoad(): void {
   reloadForNewerBuild();
   const current = pendingWebUpdate();
   setPendingWebUpdate({
-    reload: current?.reload ?? (() => window.location.reload()),
+    reload: () => reloadApp('failed_load_recovery'),
     build: current?.build,
     failedLoads: (current?.failedLoads ?? 0) + 1,
   });

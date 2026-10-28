@@ -1,10 +1,9 @@
-import { TabsInset } from '@core/component/TabsInset';
-import CheckSquareIcon from '@phosphor/check-square.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FilesIcon from '@phosphor/files.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import SquaresFourIcon from '@phosphor/squares-four.svg';
-import UsersIcon from '@phosphor/users.svg';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { getIconConfig } from '@core/component/EntityIcon';
+import { enableDatabases } from '@core/constant/featureFlags';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import { Tabs } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   CRM_RECORD_SECTION_LABELS,
@@ -17,10 +16,11 @@ const SECTION_ICONS: Record<
 > = {
   overview: SquaresFourIcon,
   team: UsersIcon,
-  emails: EnvelopeIcon,
-  files: FilesIcon,
-  tasks: CheckSquareIcon,
-  calls: PhoneIcon,
+  emails: getIconConfig('email').icon,
+  files: getIconConfig('files').icon,
+  tasks: getIconConfig('task').icon,
+  calls: getIconConfig('call').icon,
+  databases: getIconConfig('database').icon,
 };
 
 /**
@@ -33,27 +33,22 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
   onChange: (section: S) => void;
   compact?: boolean;
 }) {
-  const list = () =>
-    props.sections.map((section) => {
-      const label = CRM_RECORD_SECTION_LABELS[section];
-      if (!props.compact) return { value: section, label };
-      const Icon = SECTION_ICONS[section];
-      return {
-        value: section,
-        label: (
-          <span class="flex items-center" title={label}>
-            <Icon class="size-4" />
-          </span>
-        ),
-      };
-    });
+  const databasesFlag = useFeatureFlag(enableDatabases);
   return (
-    <TabsInset
-      list={list()}
-      value={props.value}
-      onChange={(value) => props.onChange(value as S)}
+    <Tabs
       aria-label="Record sections"
-      class="shrink-0 whitespace-nowrap"
+      touch="inset"
+      class="shrink-0"
+      options={props.sections
+        .filter((section) => section !== 'databases' || databasesFlag().enabled)
+        .map((section) => ({
+          value: section,
+          label: CRM_RECORD_SECTION_LABELS[section],
+          icon: props.compact ? SECTION_ICONS[section] : undefined,
+        }))}
+      iconOnly={props.compact}
+      value={props.value}
+      onChange={props.onChange}
     />
   );
 }

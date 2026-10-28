@@ -1,14 +1,15 @@
-import PlusIcon from '@phosphor/plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, Show } from 'solid-js';
 import {
+  type CreateDatabaseColumn,
   columnSchemaMessage,
-  type DatabaseSchemaChange,
 } from '../core/column-schema';
 
 /** Shared add-column control; the host owns schema persistence. */
 export function AddColumnButton(props: {
-  create(): DatabaseSchemaChange<string>;
+  create: CreateDatabaseColumn;
   label?: string;
   onCreated?: (columnId: string) => boolean;
 }) {
@@ -18,10 +19,16 @@ export function AddColumnButton(props: {
     if (pending()) return;
     setPending(true);
     setError('');
-    const created = await props.create();
+    let announced = false;
+    const created = await props.create((id) => {
+      announced = true;
+      props.onCreated?.(id);
+    });
     setPending(false);
     created.match(
-      (id) => props.onCreated?.(id),
+      (id) => {
+        if (!announced) props.onCreated?.(id);
+      },
       (error) => setError(columnSchemaMessage(error))
     );
   }
@@ -32,7 +39,7 @@ export function AddColumnButton(props: {
         size="sm"
         disabled={pending()}
         aria-label={props.label ?? 'Add column'}
-        onClick={() => void add()}
+        onClick={() => fireAndForget(add(), 'database')}
       >
         <PlusIcon class="size-3.5" />
         {props.label ?? 'Add column'}

@@ -1,7 +1,7 @@
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
+import Check from '@icon/system/regular/check-circle.svg';
 import { $isEquationNode } from '@macro-inc/lexical-core';
-import Check from '@phosphor/check-circle.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Tooltip } from '@ui';
 import { $getNodeByKey } from 'lexical';
@@ -222,7 +222,7 @@ export function FloatingEquationMenu(
   return (
     <Show when={menuOpen()}>
       <div
-        class="p-4 fixed border border-edge bg-surface top-0 left-0 z-action-menu rounded-lg shadow-lg w-96"
+        class="menu-surface p-4 fixed top-0 left-0 z-action-menu w-96"
         use:floatWithElement={{ element: getElement }}
         use:floatWithSelection={{
           selection: untrack(getSelection),

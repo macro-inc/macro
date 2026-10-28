@@ -62,8 +62,9 @@ def main():
     options = urllib.parse.urlencode({
         'sslmode': 'verify-full', 'sslrootcert': '/etc/ssl/certs/rds-us-east-1.pem',
         'connect_timeout': '5', 'application_name': 'grafana_database_collector',
-        'options': '-c statement_timeout=5000 -c lock_timeout=1000 -c default_transaction_read_only=on',
     })
+    # The monitoring role enforces timeouts/read-only defaults. Alloy's DSN
+    # normalization cannot round-trip a libpq options value containing spaces.
     values = {'otlp_token': token}
     for target in ['writer', 'replica']:
         values[target + '_dsn'] = (

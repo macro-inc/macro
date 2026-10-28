@@ -68,8 +68,8 @@ export function useCreateMeetingMutation() {
     mutationFn: (body: CreateMeetingRequest) =>
       throwOnErr(() => callServiceClient.createMeeting(body)),
     onSuccess: () => {
-      void queryClient.invalidateQueries(callKeys.meetings);
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.meetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
 }
@@ -115,8 +115,8 @@ export function useUpdateMeetingMutation() {
         callKeys.meeting(meeting.shareToken).queryKey,
         meeting
       );
-      void queryClient.invalidateQueries(callKeys.meetings);
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.meetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
 }
@@ -126,13 +126,13 @@ export function useCancelMeetingMutation() {
     mutationFn: (meetingId: string) =>
       throwOnErr(() => callServiceClient.cancelMeeting(meetingId)),
     onSuccess: () => {
-      void queryClient.invalidateQueries(callKeys.meetings);
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.meetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
       // A revoked link must stop rendering as live everywhere: the meeting
       // page holds callKeys.meeting(token) and the copy-link affordances
       // cache callKeys.link(callId) with staleTime: Infinity.
-      void queryClient.invalidateQueries({ queryKey: callKeys.meeting._def });
-      void queryClient.invalidateQueries({ queryKey: callKeys.link._def });
+      queryClient.invalidateQueries({ queryKey: callKeys.meeting._def });
+      queryClient.invalidateQueries({ queryKey: callKeys.link._def });
     },
   }));
 }
@@ -164,7 +164,7 @@ export function useJoinMeetingMutation() {
             )
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries(callKeys.activeMeetings);
+      queryClient.invalidateQueries(callKeys.activeMeetings);
     },
   }));
 }
@@ -173,6 +173,6 @@ export async function leaveMeeting(shareToken: string, token: string) {
   const result = await throwOnErr(() =>
     callServiceClient.leaveMeeting(shareToken, token)
   );
-  void queryClient.invalidateQueries(callKeys.activeMeetings);
+  queryClient.invalidateQueries(callKeys.activeMeetings);
   return result;
 }

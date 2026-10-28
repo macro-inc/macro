@@ -1,3 +1,4 @@
+mod publication;
 mod state;
 
 use crate::domain::models::{Notification, request::NotificationCategory};
@@ -1345,6 +1346,10 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
         .unwrap();
     assert!(result.is_some());
 
+    pool.complete_notification_publication(notification_id)
+        .await
+        .unwrap();
+
     // Second creation with same ID should return None
     let result = pool
         .create_notification(request2, notification_id, "test_service", None)
@@ -1507,4 +1512,35 @@ async fn test_delete_all_user_notifications_does_not_affect_other_users(pool: Po
     .unwrap()
     .unwrap();
     assert_eq!(other_count, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_devices"))
+)]
+async fn android_native_call_capability_round_trips_and_can_be_cleared(pool: Pool<Postgres>) {
+    use crate::domain::models::device::DeviceType;
+    use crate::outbound::device_registration::DeviceRegistrationDbOps;
+    let user = test_user("user1@test.com");
+    for capable in [true, false] {
+        pool.upsert_device(
+            user.clone(),
+            "native-token",
+            "native-endpoint",
+            &DeviceType::Android,
+            capable,
+        )
+        .await
+        .unwrap();
+        let devices = pool
+            .get_device_endpoints(std::slice::from_ref(&user))
+            .await
+            .unwrap();
+        let endpoints = &devices[&user];
+        assert!(endpoints.iter().any(|endpoint| match endpoint {
+            DeviceEndpoint::AndroidNativeCall(arn) => capable && arn == "native-endpoint",
+            DeviceEndpoint::Android(arn) => !capable && arn == "native-endpoint",
+            _ => false,
+        }));
+    }
 }

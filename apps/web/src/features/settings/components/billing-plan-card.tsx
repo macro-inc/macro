@@ -47,7 +47,12 @@ export function BillingPlanCard(props: {
   plan: PaidPlanTier;
   state: Pick<
     BillingState,
-    'hasPaid' | 'teamRole' | 'aiUsageEnabled' | 'pending'
+    | 'hasPaid'
+    | 'teamRole'
+    | 'aiUsageEnabled'
+    | 'pending'
+    | 'trialEligible'
+    | 'trialing'
   >;
   onSelectPlan?: (plan: PaidPlanTier) => void;
 }) {
@@ -66,7 +71,13 @@ export function BillingPlanCard(props: {
               <h3 class="text-lg font-medium text-ink">
                 {PLAN_BY_TIER[props.plan].name}
               </h3>
-              <Show when={!props.state.hasPaid && props.plan === 'premium'}>
+              <Show
+                when={
+                  !props.state.hasPaid &&
+                  props.plan === 'premium' &&
+                  props.state.trialEligible === true
+                }
+              >
                 <span class="text-sm font-medium text-accent">
                   Free for one month!
                 </span>
@@ -81,9 +92,13 @@ export function BillingPlanCard(props: {
           <Show when={props.onSelectPlan}>
             <Button
               class="w-full py-1.5 px-3 @sm/plan-card:w-auto @sm/plan-card:justify-self-end"
-              depth={2}
-              variant="cta"
-              disabled={props.state.pending}
+              variant="neutral"
+              disabled={
+                props.state.pending ||
+                (!props.state.hasPaid &&
+                  props.plan === 'premium' &&
+                  props.state.trialEligible === undefined)
+              }
               onClick={() => props.onSelectPlan?.(props.plan)}
             >
               {props.state.hasPaid
@@ -111,7 +126,9 @@ export function BillingPlanCard(props: {
         >
           <p class="text-xs text-ink-extra-muted">
             <Show when={props.plan === 'max'}>
-              Prorated for the rest of this period.
+              {props.state.trialing
+                ? 'Charged today. The Pro trial ends.'
+                : 'Prorated for the rest of this period.'}
             </Show>
             <Show when={props.state.teamRole === 'owner'}>
               {' '}

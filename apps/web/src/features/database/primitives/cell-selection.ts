@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, createSignal, onCleanup } from 'solid-js';
 
 export type CellAddress = { rowId: string; columnId: string };
@@ -160,16 +161,19 @@ export function createCellSelection(options: {
       if (clearing) return;
       const current = bounds()!;
       clearing = true;
-      void (async () => {
-        try {
-          await options.onClear?.(
-            options.rows().slice(current.top, current.bottom + 1),
-            options.columns().slice(current.left, current.right + 1)
-          );
-        } finally {
-          clearing = false;
-        }
-      })();
+      fireAndForget(
+        (async () => {
+          try {
+            await options.onClear?.(
+              options.rows().slice(current.top, current.bottom + 1),
+              options.columns().slice(current.left, current.right + 1)
+            );
+          } finally {
+            clearing = false;
+          }
+        })(),
+        'database'
+      );
     },
   };
 }

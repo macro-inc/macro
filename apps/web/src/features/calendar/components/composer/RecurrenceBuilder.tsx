@@ -10,7 +10,7 @@ import {
   WEEKDAY_CODES,
   type WeekdayCode,
 } from '../../utils/recurrence';
-import { EventDateField } from './EventDateTimeInputs';
+import { EventDateField } from './EventDateField';
 
 const DATE_VALUE = 'yyyy-MM-dd';
 
@@ -136,9 +136,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
                 {(code) => (
                   <Button
                     type="button"
-                    variant={
-                      props.value.byDay.includes(code) ? 'accent' : 'ghost'
-                    }
+                    variant="secondary"
                     size="icon-sm"
                     class="text-xxs"
                     aria-label={code}

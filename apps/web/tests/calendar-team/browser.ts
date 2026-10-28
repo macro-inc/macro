@@ -93,6 +93,16 @@ const ownPoint = {
     time: pointTime(11),
   },
 };
+const nextDate = new Date(Date.parse(fixtureDate) + 86_400_000)
+  .toISOString()
+  .slice(0, 10);
+// Busy-only sharing withholds the title, so the chip falls back to "Out of office".
+const bobOutOfOffice = {
+  eventId: '00000000-0000-0000-0000-000000009002',
+  occurrenceKey: fixtureDate,
+  ownerId: BOB,
+  time: { kind: 'allDay', startDate: fixtureDate, endDate: nextDate },
+};
 await page.route('**/*', async (route) => {
   const request = route.request();
   const url = new URL(request.url());
@@ -198,7 +208,7 @@ await page.route('**/*', async (route) => {
     return respond({}, 404);
   }
   if (path === '/dss/calendar-events/team-out-of-office')
-    return respond({ items: [], hasMore: false });
+    return respond({ items: [bobOutOfOffice], hasMore: false });
   if (
     path === `/calendar/events/${ownPoint.event.id}` &&
     request.method() === 'PATCH'
@@ -355,6 +365,38 @@ try {
   await page.keyboard.press('Escape');
   mutations.length = 0;
 
+  // The section checkbox hides only the grid overlay; the list keeps the row.
+  const teamOooToggle = sidebar.getByRole('checkbox', {
+    name: 'Show team out of office on the calendar',
+  });
+  const teamOooChip = activeCalendar.getByText('Bob Fixture: Out of office', {
+    exact: true,
+  });
+  const teamOooRow = sidebar.getByRole('button', { name: /Bob Fixture/ });
+  await expect(teamOooToggle).toBeChecked();
+  await expect(teamOooChip).toBeVisible();
+  await expect(teamOooRow).toBeVisible();
+  await sidebar.getByTitle('Show on calendar').click();
+  await expect(teamOooToggle).not.toBeChecked();
+  await expect(teamOooChip).toHaveCount(0);
+  await expect(teamOooRow).toBeVisible();
+  assert.deepEqual(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem('macro:pref:calendar:settings') ?? '{}')
+          .hiddenSourceIds
+    ),
+    ['team-ooo'],
+    'Hiding team out of office must persist with calendar visibility'
+  );
+  await page.screenshot({
+    path: '/tmp/calendar-team-ooo-hidden.png',
+    fullPage: true,
+  });
+  await sidebar.getByTitle('Show on calendar').click();
+  await expect(teamOooToggle).toBeChecked();
+  await expect(teamOooChip).toBeVisible();
+
   await page.goto(`${origin}/app/settings/calendar`, {
     waitUntil: 'domcontentloaded',
   });
@@ -444,7 +486,7 @@ try {
   assert.deepEqual(errors, []);
   assert.deepEqual(requestFailures, []);
   console.log(
-    'PASS: imported point rendering and metadata-only edit, no team calendar overlay or controls, team sharing select, account-grouped busy calendars, and settings changes without a loading flash'
+    'PASS: imported point rendering and metadata-only edit, team out-of-office overlay checkbox, no team calendar overlay or controls, team sharing select, account-grouped busy calendars, and settings changes without a loading flash'
   );
 } catch (error) {
   console.error(error);

@@ -21,6 +21,10 @@ pub(super) fn content_block_text(block: ContentBlock) -> Option<String> {
 /// `resource_link` blocks a prompt's files travel as. `None` for the block
 /// kinds this side never sends in a prompt.
 pub(super) fn user_content_part(block: ContentBlock) -> Option<MessagePart> {
+    if matches!(&block, ContentBlock::Text(text) if text.meta.as_ref().and_then(|meta| meta.get(agent_runtime_protocol::domain::action::INVOCATION_CONTEXT_META)) == Some(&serde_json::Value::Bool(true)))
+    {
+        return None;
+    }
     if let Some(attachment) = PromptAttachment::from_content_block(&block) {
         return Some(MessagePart::Attachment {
             uri: attachment.uri,

@@ -1,3 +1,4 @@
+import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
@@ -29,6 +30,16 @@ export function getNotificationAction(n: UnifiedNotification): string {
         'replied_to_document_comment_thread',
         () => 'replied to a comment on'
       )
+      .with(
+        'entity_access_requested',
+        () =>
+          `requested ${n.notification_metadata.tag === 'entity_access_requested' ? n.notification_metadata.content.accessLevel : ''} access to`
+      )
+      .with(
+        'entity_access_granted',
+        () =>
+          `granted you ${n.notification_metadata.tag === 'entity_access_granted' ? n.notification_metadata.content.accessLevel : ''} access to`
+      )
       .with('commented_on_document', () => 'commented on')
       .with(P.union('initiative_discussion', 'crm_discussion'), () => {
         const meta = n.notification_metadata;
@@ -46,6 +57,12 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('call_started', () => 'started a call')
       .with('channel_invite', () => 'invited you to')
       .with('new_email', () => 'sent a new email')
+      .with('external_chat_message', () => {
+        const meta = n.notification_metadata;
+        if (n.sender_id || meta.tag !== 'external_chat_message')
+          return 'sent a message in';
+        return `New ${providerIdentity(meta.content.provider).label} message in`;
+      })
       .with('invite_to_team', () => 'invited you to')
       .with('task_assigned', () => 'assigned you a task')
       // Self-set, so there is no actor — the sentence reads "Reminder about X"
@@ -53,6 +70,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('reminder', () => 'Reminder')
       // Same shape: no actor, reads "Upcoming event · <event title>".
       .with('calendar_event_reminder', () => 'Upcoming event')
+      .with('calendar_event_join_request', () => 'asked to join')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -74,7 +92,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
-      .exhaustive()
+      .exhaustive(() => 'notified you about')
   );
 }
 
@@ -95,6 +113,10 @@ export function getNotificationTargetName(
         (m) => m.content.documentName
       )
       .with({ tag: 'initiative_discussion' }, (m) => m.content.projectName)
+      .with(
+        { tag: P.union('entity_access_requested', 'entity_access_granted') },
+        (m) => m.content.entityName
+      )
       .with({ tag: 'commented_on_document' }, (m) => m.content.documentName)
       .with({ tag: 'crm_discussion' }, (m) => m.content.recordName)
       .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
@@ -110,11 +132,17 @@ export function getNotificationTargetName(
       .with({ tag: 'channel_message_reply' }, () => undefined)
       .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? undefined)
       .with({ tag: 'new_email' }, () => undefined)
+      .with({ tag: 'external_chat_message' }, (m) => m.content.chatName)
       // The reminder's entity name is resolved from the notification's entity,
       // not carried in the metadata.
       .with({ tag: 'reminder' }, () => undefined)
       .with(
-        { tag: 'calendar_event_reminder' },
+        {
+          tag: P.union(
+            'calendar_event_reminder',
+            'calendar_event_join_request'
+          ),
+        },
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
@@ -128,7 +156,7 @@ export function getNotificationTargetName(
         },
         (m) => m.content.sessionName
       )
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -154,9 +182,17 @@ export function getNotificationContent(
         (m) => m.content.text
       )
       .with({ tag: 'initiative_discussion' }, (m) => m.content.text)
+      .with(
+        { tag: P.union('entity_access_requested', 'entity_access_granted') },
+        () => undefined
+      )
       .with({ tag: 'commented_on_document' }, (m) => m.content.text)
       .with({ tag: 'crm_discussion' }, (m) => m.content.text)
       .with({ tag: 'new_email' }, (m) => m.content.subject)
+      .with(
+        { tag: 'external_chat_message' },
+        (m) => `New ${providerIdentity(m.content.provider).label} message`
+      )
       .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
       .with(
         { tag: P.union('github_pr_status_changed', 'github_review_requested') },
@@ -187,6 +223,7 @@ export function getNotificationContent(
       .with({ tag: 'calendar_event_reminder' }, (m) =>
         formatCalendarReminderTime(m.content)
       )
+      .with({ tag: 'calendar_event_join_request' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .with(
         { tag: 'agent_session_settled' },
@@ -197,7 +234,7 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -242,12 +279,17 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'ai_response' }, () => false)
       .with({ tag: 'call_started' }, () => true)
       .with({ tag: 'new_email' }, () => false)
+      .with({ tag: 'external_chat_message' }, () => true)
       .with({ tag: 'task_assigned' }, () => true)
       .with({ tag: P.union(...GITHUB_EVENT_TYPES) }, () => true)
       .with({ tag: 'document_mention' }, () => true)
       .with({ tag: 'mentioned_in_document_comment' }, () => true)
       .with({ tag: 'replied_to_document_comment_thread' }, () => true)
       .with({ tag: 'initiative_discussion' }, () => true)
+      .with(
+        { tag: P.union('entity_access_requested', 'entity_access_granted') },
+        () => true
+      )
       .with({ tag: 'commented_on_document' }, () => true)
       .with({ tag: 'crm_discussion' }, () => true)
       .with({ tag: 'channel_invite' }, () => true)
@@ -256,6 +298,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       // reminder resolves to no target name and renders without one anyway.
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
+      .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with(
         {
@@ -267,6 +310,6 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
         },
         () => true
       )
-      .exhaustive()
+      .exhaustive(() => true)
   );
 }

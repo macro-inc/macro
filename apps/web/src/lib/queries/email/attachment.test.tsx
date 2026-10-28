@@ -11,6 +11,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 const addDraftAttachmentMock = vi.hoisted(() => vi.fn());
+const completeDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const removeDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const uploadToPresignedUrlMock = vi.hoisted(() => vi.fn());
 const toastFailureMock = vi.hoisted(() => vi.fn());
@@ -20,6 +21,7 @@ const contentHashMock = vi.hoisted(() => vi.fn(async () => 'a'.repeat(64)));
 vi.mock('@service-email/client', () => ({
   emailClient: {
     addDraftAttachment: addDraftAttachmentMock,
+    completeDraftAttachment: completeDraftAttachmentMock,
     removeDraftAttachment: removeDraftAttachmentMock,
   },
 }));
@@ -59,6 +61,7 @@ beforeEach(() => {
     })
   );
   removeDraftAttachmentMock.mockResolvedValue(ok(undefined));
+  completeDraftAttachmentMock.mockResolvedValue(ok(undefined));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -194,6 +197,36 @@ describe('useUploadDraftAttachmentsMutation', () => {
     expect(onAttachmentUploadFailed).toHaveBeenCalledWith(attachment);
     expect(toastFailureMock).toHaveBeenCalledWith('Failed to save attachments');
   });
+
+  it('fails with readable copy when S3 rejects the content upload', async () => {
+    const storage = await vi.importActual<
+      typeof import('@service-storage/util/uploadToPresignedUrl')
+    >('@service-storage/util/uploadToPresignedUrl');
+    uploadToPresignedUrlMock.mockImplementation(storage.uploadToPresignedUrl);
+    fetchMock.mockResolvedValue(
+      new Response(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>AccessDenied</Code><Message>no VPC endpoint policy allows the s3:PutObject action</Message><RequestId>9T8VG69R5KVNCQFK</RequestId></Error>',
+        { status: 403 }
+      )
+    );
+    const onAttachmentUploadFailed = vi.fn();
+    const attachment = file();
+
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+    await expect(
+      mutation.mutateAsync({
+        draftID: 'draft-1',
+        attachments: [attachment],
+        onAttachmentUploadFailed,
+      })
+    ).rejects.toThrow(/^Upload failed$/);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://bucket/att-1',
+      expect.objectContaining({ method: 'PUT' })
+    );
+    expect(onAttachmentUploadFailed).toHaveBeenCalledWith(attachment);
+  });
+
   it('uploads native clipboard bytes with the real size and checksum', async () => {
     const attachment = createNativeStagedUploadFile('pasteboard', {
       token: 'paste-stage-fixture',
@@ -213,6 +246,7 @@ describe('useUploadDraftAttachmentsMutation', () => {
       {
         draftID: 'draft-1',
         attachment: {
+          upload_id: expect.any(String),
           file_name: 'photo.png',
           size: 1024,
           sha: 'ab'.repeat(32),
@@ -265,7 +299,12 @@ describe('useUploadDraftAttachmentsMutation', () => {
       expect(addDraftAttachmentMock).toHaveBeenCalledWith(
         {
           draftID: 'draft-1',
-          attachment: { file_name: 'photo.png', size: 3, sha: 'a'.repeat(64) },
+          attachment: {
+            upload_id: expect.any(String),
+            file_name: 'photo.png',
+            size: 3,
+            sha: 'a'.repeat(64),
+          },
         },
         undefined
       );

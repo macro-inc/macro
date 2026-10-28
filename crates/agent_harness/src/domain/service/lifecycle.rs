@@ -48,6 +48,50 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    async fn present_tool(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: agent_session::domain::model::SessionToolPresentation,
+    ) -> agent_session::domain::error::Result<()> {
+        // Authorize before forwarding, and allow acknowledgment recovery even if
+        // the actor disconnected after persisting the original presentation.
+        if self
+            .inner
+            .sessions
+            .tool_presentation_persisted(id, actor.clone(), presentation.clone())
+            .await?
+        {
+            return Ok(());
+        }
+        self.execute(
+            id,
+            HarnessCommand::PresentTool {
+                actor: actor.clone(),
+                presentation: presentation.clone(),
+            },
+        )
+        .await
+        .map_err(into_session_error)?;
+        // A remote queue acknowledges publication before its actor runs. Confirm
+        // durable frames before the caller marks the presentation delivered.
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if self
+                    .inner
+                    .sessions
+                    .tool_presentation_persisted(id, actor.clone(), presentation.clone())
+                    .await?
+                {
+                    return Ok(());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .map_err(|_| AgentSessionError::DeliveryTimedOut(id))?
+    }
+
     async fn delete_user_sessions(
         &self,
         owner: MacroUserIdStr<'static>,

@@ -10,9 +10,10 @@ import { useUserId } from '@core/context/user';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import ChatIcon from '@phosphor/chat-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useMessageLink,
   useMessageRootsQuery,
@@ -23,8 +24,8 @@ import {
   useSendMessageMutation,
 } from '@queries/messages/mutations';
 import type { MessageListItem } from '@service-storage/messages';
+import { Tabs } from '@ui';
 import { Button } from '@ui/components/Button';
-import { SegmentedControl } from '@ui/components/SegmentedControl';
 import {
   createEffect,
   createMemo,
@@ -400,7 +401,9 @@ export function SpreadsheetComments(props: {
                   Could not load comments.{' '}
                   <button
                     class="underline"
-                    onClick={() => void query.refetch()}
+                    onClick={() =>
+                      fireAndForget(query.refetch(), 'spreadsheet-comments')
+                    }
                   >
                     Try again
                   </button>
@@ -418,7 +421,8 @@ export function SpreadsheetComments(props: {
               >
                 <section aria-label="Cell comments">
                   <div class="mb-3">
-                    <SegmentedControl
+                    <Tabs
+                      touch="segmented"
                       value={commentFilter()}
                       options={COMMENT_FILTER_OPTIONS}
                       onChange={setCommentFilter}

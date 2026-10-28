@@ -1,4 +1,6 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { createBulkRemoveFromProjectDssEntityMutation } from '@entity';
 import { restoreSoupFocus } from '../utils';
@@ -22,8 +24,10 @@ export const makeRemoveFromProjectAction = () => {
     if (!result) return false;
     toast.success(
       entities.length > 1
-        ? `Removed ${entities.length} items from folder`
-        : 'Removed from folder'
+        ? t('entityActions.toastRemovedCountFromFolder', {
+            count: entities.length,
+          })
+        : t('entityActions.toastRemovedFromFolder')
     );
     return true;
   };
@@ -44,7 +48,7 @@ export const makeRemoveFromProjectAction = () => {
     if (nextRow) {
       soup.focus.set(nextRow.id);
     }
-    restoreSoupFocus(nextRow?.id);
+    fireAndForget(restoreSoupFocus(nextRow?.id), 'entity-actions');
   };
 
   return { canExecute, execute, executeWithSoup };

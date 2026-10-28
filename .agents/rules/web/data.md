@@ -28,6 +28,12 @@ Queries, caching, and where data is fetched.
 - **FE-07** Don't hardcode backend-owned config in the frontend (e.g. system bot
   config) — fetch it dynamically or generate types from the backend source of
   truth.
+- **FE-57** Never hardcode a `provider/model` id. Pick AI models from
+  `@core/component/AI/constant` by plan: `FREE_DEFAULT_MODEL` for AI every plan
+  runs, `defaultModelForPlan`/`modelsForPlan` for user choices. `FREE_MODELS`
+  is generated from the backend's `FreeTierModel` schema, and the backend 403s
+  anything outside the user's plan. Enforced by ast-grep
+  `ts-no-hardcoded-model-id` + `tsx-no-hardcoded-model-id`, error.
 - **FE-29** Every new query call site (`useQuery`/`useInfiniteQuery` or a hook
   from `src/lib/queries/**`) needs a deliberate `Suspense` boundary: reading
   `query.data` suspends to the *nearest ancestor* boundary. When reviewing, walk
@@ -74,8 +80,17 @@ Examples: [session query factory](../../../apps/web/src/lib/queries/agent-sessio
 - **FE-49** Refetches and optimistic updates never wipe local state (drafts,
   anchors, selections), and a refetch started before a mutation can't overwrite
   its result. Optimistic rollback state lives in `onMutate`; temporary ids are
-  never openable.
+  never openable. Solid Query returns new objects on every refetch, so a query
+  that polls or refetches under open lists and pickers sets `reconcile: 'id'`;
+  otherwise rows remount and drop focus.
 - **FE-50** Scope invalidation to what changed, but update every reader of it.
   Query keys hold exactly the fetch inputs.
+- **FE-58** With the GraphQL normalized cache, a mutation never refetches the
+  lists the cache maintains: its optimistic write and returned records update
+  them, and they re-evaluate locally. A refetch reads a replica that can lag the
+  write and puts stale state back. Read again only lists the cache cannot keep
+  current (`unmaintainedOnly`), everything without the cache, or as a failure
+  fallback; a write the server answers only in part writes the confirmed rest
+  into the cache itself.
 - **FE-51** State moved into the URL round-trips every field. Removed or renamed
   routes and route ids get redirects, and saved split layouts keep working.

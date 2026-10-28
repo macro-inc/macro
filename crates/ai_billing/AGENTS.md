@@ -39,6 +39,8 @@ provider cost (plus markup for overage).
 - Change a pricing number: Doppler (never hardcode) → `src/config.rs` →
   `src/domain/pricing.rs`.
 - Add an admission check: `src/domain/admission.rs` → `src/inbound/admission.rs`.
+- Grant a user credit (operator refund): `tooling/ai_billing_cli` →
+  `src/domain/credit_grant.rs` → `src/outbound/pg_credit_grant_repo.rs`.
 
 ## Checks
 

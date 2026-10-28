@@ -1,0 +1,17 @@
+---
+title: CreateChannelMediaUpload
+description: >-
+  Reserve a direct upload for an image or video to attach to a channel message;
+  use this for media too large to pass inline, such as screen recordings.
+---
+
+# CreateChannelMediaUpload
+
+Reserve a direct upload for an image or video to attach to a channel message; use this for media too large to pass inline, such as screen recordings. Returns an uploadUrl: immediately PUT the raw file bytes to it from your shell with the returned contentType as the Content-Type header (see uploadCommand), then call SendChannelMessage with an attachment whose id is attachmentId and whose kind is the returned kind. The URL must be used within 2 minutes; call again for a fresh one if it expires. Only images and videos are accepted; attach other files by uploading them as documents and passing the document ID.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `fileName` | string | Yes | Filename including its extension, for example demo.mp4. Do not include a directory path. |
+| `contentType` | string | No | MIME type such as video/mp4 or image/png. Omit to infer it from the fileName extension. |

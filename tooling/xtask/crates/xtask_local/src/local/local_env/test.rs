@@ -93,13 +93,16 @@ fn emits_required_keys() {
         "FUSIONAUTH_API_KEY_SECRET_KEY",
         "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
-        "MCP_PUBLIC_URL",
+        "OVERRIDE_COGNITION_PUBLIC_URL",
         "JWT_SECRET_KEY",
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
         "REDIS_HOST",
         "MACRO_DB_URL",
         "INTERNAL_API_KEY",
+        "PIPEDREAM_CLIENT_ID",
+        "PIPEDREAM_CLIENT_SECRET",
+        "PIPEDREAM_PROJECT_ID",
         "AUTHENTICATION_SERVICE_SECRET_KEY",
         "OPENSEARCH_USERNAME",
         "OPENSEARCH_PASSWORD",
@@ -268,12 +271,25 @@ fn emits_in_network_service_url_overrides() {
             "http://document-storage-service:8080",
         ),
         (
+            "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+            "http://agent-harness-service:8080/cognition",
+        ),
+        (
+            "OVERRIDE_NOTIFICATION_SERVICE_URL",
+            "http://notification-service:8080",
+        ),
+        (
+            "OVERRIDE_CONTACTS_SERVICE_URL",
+            "http://contacts-service:8080",
+        ),
+        ("OVERRIDE_UNFURL_SERVICE_URL", "http://unfurl-service:8080"),
+        (
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
-            "http://agent-harness-service:8101",
+            "http://agent-harness-service:8080",
         ),
         (
             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
-            "http://scheduled-action-service:8080",
+            "http://agent-harness-service:8080/scheduled-action",
         ),
         (
             "OVERRIDE_STATIC_FILE_SERVICE_URL",
@@ -423,6 +439,14 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
     );
 }
 
+#[test]
+fn the_whatsapp_session_service_never_points_at_the_fake_server() {
+    let env = local_env();
+    // Tests point the client at a fake server; a local stack never does.
+    assert!(!env.contains_key("OVERRIDE_WHATSAPP_WEBSOCKET_URL"));
+    assert!(!env.contains_key("OVERRIDE_WHATSAPP_MEDIA_HOST"));
+}
+
 /// Sandboxes and the harness are both containers, so they reach each other on a
 /// shared Compose network and never over the host's loopback. The network name
 /// has to track the instance, or a named stack's sandboxes join the wrong one.
@@ -458,7 +482,7 @@ fn local_sandboxes_join_the_instances_compose_network() {
 }
 
 #[test]
-fn mcp_public_url_uses_the_proxy_cognition_route() {
+fn mcp_client_public_url_uses_the_proxy_cognition_route() {
     let default = Instance::derive(None, None).unwrap();
     let named = Instance::derive(Some("2508"), None).unwrap();
     let default_env = LocalEnv::for_instance(Mode::Local, &default, true, Tunnels::default())
@@ -470,11 +494,15 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
     let named_public_url = format!("https://localhost:{}/cognition", named.port(Port::Proxy));
 
     assert_eq!(
-        default_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        default_env
+            .get("OVERRIDE_COGNITION_PUBLIC_URL")
+            .map(String::as_str),
         Some("https://localhost:8090/cognition")
     );
     assert_eq!(
-        named_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        named_env
+            .get("OVERRIDE_COGNITION_PUBLIC_URL")
+            .map(String::as_str),
         Some(named_public_url.as_str())
     );
 }
@@ -498,19 +526,17 @@ fn frontend_origin_tracks_how_the_app_is_served() {
             for key in [
                 "FRONTEND_ORIGIN",
                 "PIPEDREAM_ALLOWED_ORIGINS",
-                "PREVIEW_APP_ORIGIN",
+                "OVERRIDE_APP_SERVICE_URL",
             ] {
                 assert_eq!(env[key], origin, "{key}");
             }
-            assert_eq!(env["MCP_PUBLIC_URL"], format!("{origin}/cognition"));
+            assert_eq!(
+                env["OVERRIDE_COGNITION_PUBLIC_URL"],
+                format!("{origin}/cognition")
+            );
             assert_eq!(
                 env["OVERRIDE_STATIC_FILE_PUBLIC_URL"],
                 format!("{origin}/static-file")
-            );
-            assert!(
-                env["PREVIEW_CONTROL_HOSTS"]
-                    .split(',')
-                    .any(|host| host == super::super::tls::hostname().unwrap())
             );
         }
     }
@@ -541,7 +567,7 @@ fn the_mcp_service_override_is_an_in_network_base_url() {
     let env = local_env();
     assert_eq!(
         env.get("OVERRIDE_MCP_SERVICE_URL").map(String::as_str),
-        Some("http://mcp-service:8080")
+        Some("http://agent-harness-service:8080")
     );
     assert!(!env.contains_key("MACRO_MCP_URL"));
 }
@@ -651,4 +677,20 @@ fn the_preview_ssh_proxy_host_is_empty_without_a_published_tunnel() {
     );
     // The on-machine endpoint stays first; the tunnel is a fallback, not a swap.
     assert_eq!(env["PREVIEW_SSH_HOST"], "localhost");
+}
+
+#[test]
+fn a_static_stack_presigns_files_for_this_machines_name() {
+    let instance = Instance::derive(Some("image"), None).expect("named instance derives");
+    let env = LocalEnv::for_instance(Mode::Local, &instance, true, Tunnels::default())
+        .unwrap()
+        .to_env();
+    assert_eq!(env["FRONTEND_ORIGIN"], proxy::url(&instance));
+    assert_eq!(
+        env["LOCAL_AWS_PUBLIC_URL"],
+        format!(
+            "{}/local-storage",
+            super::super::frontend::https_origin(&instance).unwrap()
+        )
+    );
 }

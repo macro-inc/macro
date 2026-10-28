@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.link_id FROM email_link_initializations r JOIN email_links l ON l.id = r.link_id\n            WHERE r.attempt_id = $1 AND r.actor_id = $2 AND (l.macro_id = $2 OR EXISTS (\n                SELECT 1 FROM macro_user_links e WHERE e.link_id = l.id\n                    AND e.primary_macro_id = $2 AND e.child_macro_id = l.macro_id))\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cf14bafb590ce03eb3cf164da24f46e2f5837b77e0028fdc92a4319f98bb9155"
+}

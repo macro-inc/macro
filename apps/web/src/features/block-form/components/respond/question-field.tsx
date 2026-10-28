@@ -1,7 +1,21 @@
-import Paperclip from '@phosphor/paperclip.svg';
-import Spinner from '@phosphor/spinner.svg';
-import UploadSimple from '@phosphor/upload-simple.svg';
-import X from '@phosphor/x.svg';
+import { DateTimeRangeFields } from '@app/components/date-time-range/date-time-range-fields';
+import {
+  type DateTimeRangeValue,
+  dateTimeRangeValue,
+  EMPTY_DATE_TIME_RANGE,
+  moveAllDayRange,
+  moveTimedRange,
+  timeRangeFromValue,
+  withAllDay,
+} from '@app/components/date-time-range/time-range';
+import {
+  timeRangeFromInstants,
+  timeRangeToInstants,
+} from '@app/features/database/core/cell-date-range';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
+import UploadSimple from '@icon/system/regular/upload-simple.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Checkbox, cn, RadioGroup } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
@@ -32,6 +46,63 @@ function optionIds(value: FormCellValue | undefined): string[] {
 
 function textOf(value: FormCellValue | undefined): string {
   return value?.type === 'text' ? value.value : '';
+}
+
+/**
+ * A start and an end, all day or with times, as a time-range cell holds
+ * them. The answer holds a range only once both ends are set; a backwards
+ * range is kept so its problem can be shown.
+ */
+function DateRangeField(props: {
+  id: string;
+  subject: string;
+  value: FormCellValue | undefined;
+  invalid: boolean;
+  disabled: boolean;
+  describedBy: string | undefined;
+  onChange: (value: FormCellValue | undefined) => void;
+}) {
+  const stored =
+    props.value?.type === 'date_range'
+      ? timeRangeFromInstants(props.value.value)
+      : undefined;
+  const [range, setRange] = createSignal<DateTimeRangeValue>(
+    stored ? dateTimeRangeValue(stored) : EMPTY_DATE_TIME_RANGE
+  );
+  const update = (next: DateTimeRangeValue) => {
+    setRange(next);
+    const answer = timeRangeFromValue(next);
+    props.onChange(
+      answer
+        ? { type: 'date_range', value: timeRangeToInstants(answer) }
+        : undefined
+    );
+  };
+  return (
+    <DateTimeRangeFields
+      id={props.id}
+      subject={props.subject}
+      start={range().start}
+      end={range().end}
+      allDay={range().allDay}
+      onStartChange={(start) =>
+        update(
+          range().allDay
+            ? moveAllDayRange(range(), start)
+            : moveTimedRange(range(), start)
+        )
+      }
+      onEndChange={(end) =>
+        update({ ...range(), start: range().start || end, end })
+      }
+      onAllDayChange={(allDay) => update(withAllDay(range(), allDay))}
+      startDisabled={props.disabled}
+      endDisabled={props.disabled}
+      allDayDisabled={props.disabled}
+      invalid={props.invalid}
+      describedBy={props.describedBy}
+    />
+  );
 }
 
 function ChoiceList(props: {
@@ -426,6 +497,17 @@ export function QuestionField(props: {
               {props.column.name}. {props.question.helpText} {props.problem}
             </Checkbox.Description>
           </Checkbox>
+        </Match>
+        <Match when={kind().type === 'date_range'}>
+          <DateRangeField
+            id={id()}
+            subject={props.column.name}
+            value={props.value}
+            invalid={invalid()}
+            disabled={props.disabled}
+            describedBy={describedBy()}
+            onChange={props.onChange}
+          />
         </Match>
         <Match when={kind().type === 'date' && props.widget === 'date'}>
           <input

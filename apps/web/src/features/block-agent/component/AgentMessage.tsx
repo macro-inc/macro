@@ -18,11 +18,21 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
-import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  For,
+  Index,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
+import { useOpenPromptOrigin } from '../open-prompt-origin';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
+import { agentContextText, promptOrigin } from '../state/prompt-origin';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
@@ -33,6 +43,7 @@ import {
   WorkingLine,
 } from '../ui';
 import { LiveToolGroup } from '../views/LiveToolGroup';
+import { PromptFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
@@ -69,6 +80,7 @@ function AgentMessagePart(props: {
           <TextPart
             text={part().text}
             inFlight={props.inFlight}
+            hideIncompleteXml={props.message.author.kind === 'agent'}
             observeRender={
               props.message.author.kind === 'agent'
                 ? (element) =>
@@ -247,34 +259,24 @@ function promptAuthorName(
     : idToDisplayName(author.userId);
 }
 
-const AGENT_CONTEXT_OPEN = '<m-agent-context>';
-const PENDING_AGENT_CONTEXT = `${AGENT_CONTEXT_OPEN}{"version":1,"text":""}</m-agent-context>\n\n`;
-
 /**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
  * rounded, filled surface shared with production chat. A prompt another
- * participant sent carries their name above the bubble.
+ * participant sent carries their name above the bubble; under it, when it was
+ * posted and, when the harness delivered it from elsewhere, where from.
  */
 function UserMessage(props: { message: FoldedMessage }) {
   const userId = useUserId();
   const authorName = () => promptAuthorName(props.message.author, userId());
-  // The harness puts context before every prompt it delivers. Until the log
-  // confirms this one, an empty stand-in renders where it will, through the
-  // same markdown, so nothing moves when the real one arrives.
-  const parts = () => {
-    const parts = props.message.parts;
-    if (!props.message.pending) return parts;
-    const first = parts.findIndex((part) => part.kind === 'text');
-    const part = parts[first];
-    if (part?.kind !== 'text' || part.text.startsWith(AGENT_CONTEXT_OPEN))
-      return parts;
-    return parts.map((each, index) =>
-      index === first
-        ? { ...part, text: PENDING_AGENT_CONTEXT + part.text }
-        : each
-    );
-  };
+  const openOrigin = useOpenPromptOrigin();
+  // Memoized: reading the origin parses the context's XML.
+  const origin = createMemo(() => {
+    const first = props.message.parts.find((part) => part.kind === 'text');
+    const context =
+      first?.kind === 'text' ? agentContextText(first.text) : undefined;
+    return context === undefined ? undefined : promptOrigin(context);
+  });
 
   return (
     <div
@@ -298,7 +300,7 @@ function UserMessage(props: { message: FoldedMessage }) {
         )}
       </Show>
       <UserMessageBubble>
-        <For each={parts()}>
+        <For each={props.message.parts}>
           {(part, index) => (
             <AgentMessagePart
               part={part}
@@ -309,6 +311,20 @@ function UserMessage(props: { message: FoldedMessage }) {
           )}
         </For>
       </UserMessageBubble>
+      <Show when={origin() || props.message.postedAt}>
+        <PromptFooter
+          origin={origin()}
+          postedAt={props.message.postedAt ?? undefined}
+          onOpen={
+            origin()?.destination
+              ? (options) => {
+                  const destination = origin()?.destination;
+                  if (destination) openOrigin(destination, options);
+                }
+              : undefined
+          }
+        />
+      </Show>
     </div>
   );
 }

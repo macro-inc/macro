@@ -16,9 +16,12 @@ export function McpRow(props: {
   return (
     <div
       ref={ref}
-      class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
-        'bg-ink/5': props.selected,
-      })}
+      class={cn(
+        'group flex items-center touch:min-h-[44px] p-1.5 mx-1.5 rounded-md',
+        {
+          'bg-ink/5': props.selected,
+        }
+      )}
       onPointerDown={(event) => event.preventDefault()}
       onMouseDown={(event) => event.preventDefault()}
       onMouseMove={props.onHover}

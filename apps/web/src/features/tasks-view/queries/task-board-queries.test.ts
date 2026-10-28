@@ -28,7 +28,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
 }));
 vi.mock('@app/features/projects/queries/project-identity', () => ({
-  createProjectDetailQuery: (
+  createProjectIdentityQuery: (
     _client: unknown,
     _user: unknown,
     id: () => string
@@ -140,7 +140,7 @@ it('attempts project moves without destination edit access and preserves column 
   fixture.projectQueries = [
     {
       isSuccess: true,
-      data: { project: { id: 'launch', name: 'Launch', access: 'view' } },
+      data: { id: 'launch', name: 'Launch', access: 'view' },
     },
   ];
   const source = setup({

@@ -1,6 +1,7 @@
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
@@ -35,7 +36,7 @@ export function ProjectWorkspace(props: {
   commands: ReturnType<ProjectsContext['createCommands']>;
   section: ProjectSection;
   onOpenTask: ProjectTasksListProps['onOpenTask'];
-  onCreateTask(dueDate?: Date): void;
+  onCreateTask: NonNullable<ProjectTasksListProps['onCreateTask']>;
   discussion: JSX.Element;
   description: JSX.Element;
 }) {
@@ -116,19 +117,24 @@ export function ProjectWorkspace(props: {
                       ariaLabel="Project name"
                       class="w-full text-2xl"
                       onRename={(name) =>
-                        void run(() =>
-                          props.commands.rename(props.project.id, name)
+                        fireAndForget(
+                          run(() =>
+                            props.commands.rename(props.project.id, name)
+                          ),
+                          'projects'
                         )
                       }
                     />
                   </Show>
                   <div
-                    class="mb-6 mt-3 flex flex-wrap items-center gap-2"
+                    class="mb-6 mt-3 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden"
                     aria-label="Project properties"
                   >
                     <For each={props.source.properties()}>
                       {(property) => (
                         <PropertyValuePill
+                          variant="secondary"
+                          size="xs"
                           property={property}
                           canEdit={canEdit()}
                           onSave={(property, value) =>

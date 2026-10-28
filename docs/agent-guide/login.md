@@ -23,7 +23,18 @@
 
 Production Google/SSO and inbox/calendar connections may return to either
 `https://macro.com` or `https://www.macro.com`. Verify connections from both hosts;
-the inbox link flow returns to `/app/inbox-link-callback` on the originating host.
+the web inbox link flow returns to `/app/inbox-link-callback` on the originating host.
+
+On desktop, connecting a Gmail or Outlook account, reconnecting one, or enabling
+calendar opens the selected provider's consent in the system browser. The app
+stays open; the callback is
+`macro:///inbox-link-callback?link_id=...`, which provisions the inbox using the
+existing app session and restores the saved layout, including its query and hash.
+Verify each enabled provider, including reconnects with email-only and calendar
+permissions. Check that opening consent alone does not report an account
+connected, that returning from consent shows the second account, and that
+canceling leaves the app usable. iOS and Android continue to use their native
+authentication sessions.
 
 ## Temporary open signup in Develop
 
@@ -33,6 +44,38 @@ the configured bypass flag. Verify with an authorized test account outside
 `macro.com` that is absent from the allowlist. Email verification and provider
 sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
 for restoring allowlist enforcement.
+
+## GraphQL cache session lifecycle
+
+Signed-out pages use the network client without creating the GraphQL cache,
+draft queue runner, or live-update subscriptions. Signing in activates them in
+the same tab, including after a session expiry. Queued draft writes wait for
+authenticated user info; unrelated mutations can continue draining.
+
+Verify expiry followed by signing into a different account without reloading:
+the new account's lists must load and receive live updates, and the previous
+account's cached data must be absent. Logout wipes local caches before retiring
+their clients. Mounted query observers must receive the next account's data
+after the wipe. Previous account data must not return through initial data,
+placeholder data, or a later query reset.
+
+## CI deploy-preview authentication
+
+PR previews at `https://<id>.preview.macro.com/app` use the dev backend and
+its shared `.macro.com` HttpOnly cookies (`dev-macro-access-token` and
+`dev-macro-refresh-token`). The `login` hint is host-only and `macro:login`
+localStorage is origin-scoped, so a fresh preview has neither. Preview startup
+must check identity anyway; the hostname is not proof of authentication.
+Account queries and WebSockets still wait for a confirmed authenticated user.
+
+Verify in a browser signed into `https://dev.macro.com`: open a fresh preview
+hostname (or clear only that preview's localStorage and `login` hint, keeping
+the shared dev cookies). It should request
+`https://dev-gateway.macro.com/auth/user/legacy_user_permissions` and enter the
+signed-in app without another login. Repeat in a clean browser context: the
+identity check should fail without starting account services, and a public
+document should remain readable. Ordinary signed-out public links without a
+login hint should not start identity checks or account services.
 
 ## Hosted-dev proxy SSO
 
@@ -63,6 +106,14 @@ For simulator checks, `xcrun devicectl device process launch --device <udid>
 Signed universal links and share-sheet flows still need end-to-end verification;
 see the [Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle)
 and [repeatable iOS smoke test](../../apps/web/tests/native/ios/README.md).
+
+## Signed-out GraphQL regression
+
+Open a public sharing link with stale login hints and an expired session. Once
+user-info returns 401, GraphQL must use the plain network client, dispose any
+normalized cache and live-update session, and clear the login hints. Repeat with
+retained user-info data from an earlier successful request. A network failure or
+5xx must not end the session; successful sign-in must re-enable eligible caching.
 
 ## Native Android
 
@@ -141,8 +192,36 @@ preferences only. Security and Google steps have a Read more section below the f
 Work and personal account buttons use the existing Gmail linking flow. Skipping
 work email skips the secondary-account prompt. Verify that a Google return
 restores the correct step, shows the connected address, and allows continuation.
-Tools use the same Pipedream catalog and connection UI as Settings. Search, load
-more, cancel/retry connection, and confirm connected checks persist on return.
+
+Tools show a stable featured list: Linear, Notion, Slack, then startup tools
+such as PostHog and Stripe, followed by small-business tools such as QuickBooks.
+The featured Pipedream metadata is checked in; the remaining catalog uses one
+live paginated query. Search still covers the full directory. Verify load more,
+search, cancel/retry connection, and state persistence on return. Paging and
+Slack aliases must not duplicate cards. New Slack connections use `slack_v2`;
+existing `slack` accounts remain recognized. Production release requires a real
+Slack authorization and a successful read-only tool call, not just fixture tests.
+Cards use the Pipedream logo, with bundled icons and a generic plug as fallbacks.
+The catalog scrolls with the page; Continue stays visible in a sticky footer.
+At desktop and phone widths, verify scrolling over the cards moves the page,
+the last row remains reachable, and Continue stays fully visible after searching.
+
+GitHub uses Macro's native OAuth/re-authorization flow and returns to the tools
+step. It shows **Account linked**, distinct from agent-tool readiness. A
+**Configure GitHub repositories** action opens native GitHub App installation;
+repository access must not be inferred from the account link. No Pipedream
+GitHub card is offered. The same setup remains available in Settings.
+
+Gmail and Google Calendar are hidden, including search and later pages. Google
+Drive and Google Sheets remain available in browse and search, with separate
+Pipedream connection state. Native Gmail and Calendar consent does not request
+Drive or Sheets scopes. Enabled native MCP and Pipedream connections show
+Connected. Disabled existing connections show Enable and reuse their stored
+authorization. Native and hosted tools coexist in both chat and sandbox agents,
+with native preference for known overlapping providers and Slack alias deduplication.
+Connection status failures have an explicit retry; they must not prevent
+independent providers such as native GitHub from connecting. Verify unknown
+status never launches a duplicate OAuth flow and continuation remains possible.
 Team setup retains existing membership, invite acceptance, domain suggestions,
 and editable invite recipients; submitting the form sends real invitations.
 On the create-team form, type a workspace name and edit a teammate address,
@@ -162,26 +241,36 @@ The confirmed tutorial save updates the session cache before leaving. A successf
 finish must not show "Couldn't finish setup — please try again", including when
 a background session refresh overlaps it.
 
-The final screen keeps the “Free Claude & GPT for 30 days” headline and trial
-button above the fold. The “See more” scroll cue opens the pricing grid
+The final screen shows “Free Claude & GPT for 30 days” and the trial button
+only after the server confirms first-subscription eligibility. Returning
+customers without an existing subscription see “Get more with Pro.” and
+`Get Pro` with paid monthly terms. Existing subscribers see `Manage subscription`
+to review their subscription and payment details. The “See more” scroll cue opens the pricing grid
 below, comparing Free, Pro, and Max. The grid loads monthly subscription prices
 from the billing catalog and describes Max as 10× Pro usage, without displaying
 dollar-denominated included AI allowances. Monthly prices use the compact
 `/usr/mo` unit on one line; Free email branding reads “Sent with Macro”.
 Free completes onboarding without a
-card. Pro returns to the trial offer; Max starts standard paid checkout.
+card. Pro returns to the account-specific Pro offer; Max starts standard paid
+checkout with no trial period. The trial copy and button stay on the Pro offer.
 The trial button requests 30 days free through Stripe Checkout, with no coupon
 required. Stripe collects the payment method for billing after the trial. Only a
 customer's first subscription qualifies, including canceled subscriptions in that
-check. Ineligible requests show an error instead of opening an immediately paid
-checkout. Invite promotions retain their own offer and terms.
+check. Eligibility loading or failure disables Pro checkout without advertising
+a trial; a failed lookup offers `Try again`. A trial rejected at checkout
+shows the server explanation and refreshes eligibility, without automatically
+retrying as a paid purchase. Invite promotions retain their own offer and terms.
 Cancellation returns to this step. A successful return polls the server's license
 state, completes onboarding, and enters the app without an extra confirmation
 click. A pending webhook shows a retryable confirmation state. If the catalog
-cannot load, Free remains available, Pro still returns to the trial offer, and
+cannot load, Free remains available, Pro still returns to its offer, and
 Max checkout stays disabled until prices can be loaded with the retry action.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
-connector, building, and summary step names are migrated on resume.
+connector, building, and summary step names are migrated on resume. A lifecycle
+email can open a specific step with `/app/onboarding?step=<step>` (see
+[onboarding](onboarding.md#resume-link)). The step is kept in
+localStorage for that user. A checkout return or an in-progress Google sign-up
+still wins, then saved progress, then the link.
 
 ## Public onboarding preview
 
@@ -191,7 +280,7 @@ with no plan header or divider. The card scrolls internally at a maximum of
 360px or half the viewport height. Entering at least 15 digits in the local
 preview input reveals expiration, security code, country, and ZIP previews;
 clearing it hides them again. Use a test number such as `4242 4242 4242 4242`.
-The primary CTA reads `Start 30 day trial`, with the billing and cancellation
+For eligible customers, the primary CTA reads `Start 30 day trial`, with the billing and cancellation
 note immediately below it. The quiet `Continue as Guest` scroll cue beneath it
 moves focus to the below-fold Guest and Pro comparison,
 using the same layout as the security details. The table includes email account
@@ -228,3 +317,18 @@ The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-t
 survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
+
+### Google OAuth through a remote local stack
+
+Use the stack's configured HTTPS frontend origin for Google account linking.
+In local mode, authentication accepts that exact origin (including port) as a
+return URL. Remote hostnames must use HTTPS; hosted environments retain their
+existing redirect allowlist.
+
+If Google redirects to `http://localhost:<auth-port>/oauth2/google/callback`,
+forward that port from the browser's machine to the VM's authentication port
+in addition to the app tunnel. A callback request without parameters should
+return HTTP 400 with `missing field state`; connection refusal indicates a
+missing forward. For a completed consent that returns HTTP 400, inspect auth
+logs for `original_url_rejected` before changing tunnels. After a fix, restart
+Connect Google from Command K to obtain fresh state and an authorization code.

@@ -5,9 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RequestedLayoutOneOf } from './requestedLayoutOneOf';
+import type { RequestedLayoutOneOfFive } from './requestedLayoutOneOfFive';
 import type { RequestedLayoutOneOfThree } from './requestedLayoutOneOfThree';
 
 /**
- * A layout as an op asks for it: a board may leave its card title out.
+ * A layout as an op asks for it: a board or timeline may leave its title
+out.
  */
-export type RequestedLayout = RequestedLayoutOneOf | RequestedLayoutOneOfThree;
+export type RequestedLayout =
+  | RequestedLayoutOneOf
+  | RequestedLayoutOneOfThree
+  | RequestedLayoutOneOfFive;

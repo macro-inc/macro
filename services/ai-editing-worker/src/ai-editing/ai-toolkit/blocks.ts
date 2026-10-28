@@ -5,12 +5,9 @@ import {
   type HeadingTagType,
 } from '@lexical/rich-text';
 import { $isCustomCodeNode } from '@macro-inc/lexical-core/nodes/CustomCodeNode';
-import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import {
   $createParagraphNode,
   $createTextNode,
-  $getNodeByKey,
-  $getRoot,
   $isElementNode,
   $isTextNode,
   type ElementNode,
@@ -68,72 +65,6 @@ export function $setText(block: ElementNode, text: string): void {
     block.clear();
     block.append($createTextNode(text));
   }
-}
-
-/** Append pre-built block node(s) at the end of the document. */
-export function $appendBlock(...nodes: ElementNode[]): ElementNode[] {
-  const root = $getRoot();
-  for (const node of nodes) {
-    root.append(node);
-  }
-  return nodes;
-}
-
-/** Prepend pre-built block node(s) at the top of the document. */
-export function $prependBlock(...nodes: ElementNode[]): ElementNode[] {
-  const root = $getRoot();
-  const first = root.getFirstChild();
-  if (!first) {
-    for (const node of nodes) {
-      root.append(node);
-    }
-    return nodes;
-  }
-  for (const node of nodes) {
-    first.insertBefore(node);
-  }
-  return nodes;
-}
-
-/** Relocate a block to after/before another (by id). */
-export function $moveBlock(
-  block: LexicalNode,
-  to: { placement: 'after' | 'before'; id: string },
-  session?: LexicalSession
-): void {
-  // `to` id is resolved against the active editor state via key mappings if a
-  // session is provided; otherwise the target is resolved by walking the root.
-  const target = findTopLevelById(to.id, session);
-  if (!target) {
-    throw new Error(`No block with id "${to.id}"`);
-  }
-  block.remove();
-  if (to.placement === 'after') {
-    target.insertAfter(block);
-  } else {
-    target.insertBefore(block);
-  }
-}
-
-function findTopLevelById(
-  id: string,
-  session?: LexicalSession
-): ElementNode | null {
-  if (session) {
-    const key = session.ids.idToNodeKeyMap.get(id);
-    if (key) {
-      const node = $getNodeByKey(key);
-      if (node && $isElementNode(node)) {
-        return node;
-      }
-    }
-  }
-  for (const child of $getRoot().getChildren()) {
-    if ($getId(child) === id && $isElementNode(child)) {
-      return child;
-    }
-  }
-  return null;
 }
 
 /**

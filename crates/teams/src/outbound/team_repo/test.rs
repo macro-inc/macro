@@ -7,6 +7,7 @@ use super::*;
 use crate::domain::model::SeatPlan;
 
 mod delete_team;
+mod invite_link;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -512,8 +513,8 @@ async fn test_get_new_invites_keeps_invites_scoped_to_team(
     Ok(())
 }
 
-/// Re-inviting an already-invited user within the 5-minute window should not
-/// return them (rate limited), so the result should be empty.
+/// Re-inviting an already-invited user inside the invite email's rate-limit
+/// window should not return them (rate limited), so the result should be empty.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
@@ -537,8 +538,39 @@ async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> an
     Ok(())
 }
 
-/// Re-inviting an already-invited user after the 5-minute window has passed
-/// should return them (re-sent).
+/// A resend minutes after the last email would be dropped by the email's
+/// rate limit, so the repository must not offer it for sending.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_invite_existing_user_inside_email_rate_limit(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    sqlx::query!(
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '30 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        &team_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites)
+        .await?;
+
+    assert!(invited.is_empty());
+
+    Ok(())
+}
+
+/// Re-inviting an already-invited user after the invite email's rate-limit
+/// window has passed should return them (re-sent).
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
@@ -548,9 +580,9 @@ async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> any
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
 
-    // Push last_sent_at back 10 minutes so the rate limit window has passed
+    // Push last_sent_at back past the invite email's rate-limit window
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -582,7 +614,7 @@ async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Resul
 
     // Push existing invite past the rate limit window
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -620,7 +652,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
 
     // Push past rate limit
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -662,7 +694,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
 
     // Push past rate limit
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE team_id = $1 AND email = 'invite@macro.com'"#,
         &team_id,
     )
     .execute(&pool)
@@ -701,7 +733,7 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     // Push last_sent_at back so it's past the rate limit
     sqlx::query!(
-        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '10 minutes' WHERE id = $1"#,
+        r#"UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '3 days' WHERE id = $1"#,
         &invite_id,
     )
     .execute(&pool)
@@ -1403,6 +1435,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1432,6 +1465,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1460,6 +1494,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1487,6 +1522,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(Some(LinkShare::Public)),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1498,6 +1534,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1509,6 +1546,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(None),
+        language: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1814,5 +1852,236 @@ async fn test_allow_non_admin_invites_defaults_true_and_toggles(
         Err(TeamError::TeamDoesNotExist)
     ));
 
+    Ok(())
+}
+
+// -- Invite reminders --
+
+const TEAM_1: &str = "11111111-1111-1111-1111-111111111111";
+
+/// Sets the fixture invite to `invite@macro.com` as `days_old` days old, last
+/// emailed `last_sent_days_ago` days ago, with `reminders_sent` reminders.
+async fn age_invite(
+    pool: &Pool<Postgres>,
+    days_old: i32,
+    last_sent_days_ago: i32,
+    reminders_sent: i16,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE team_invite
+        SET created_at = NOW() - make_interval(days => $1),
+            last_sent_at = NOW() - make_interval(days => $2),
+            reminders_sent = $3
+        WHERE email = 'invite@macro.com'
+        "#,
+    )
+    .bind(days_old)
+    .bind(last_sent_days_ago)
+    .bind(reminders_sent)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Puts team1 in good standing; the fixture leaves it not paying.
+async fn mark_team_1_paying(pool: &Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query("UPDATE team SET paying = true WHERE id = $1::uuid")
+        .bind(TEAM_1)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+async fn claimed_emails(team_repo: &TeamRepositoryImpl) -> anyhow::Result<Vec<(String, u8)>> {
+    Ok(team_repo
+        .claim_due_invite_reminders(100)
+        .await?
+        .into_iter()
+        .map(|r| (r.email, r.reminder_number))
+        .collect())
+}
+
+/// Three days after the invite email, the first reminder is claimed once.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn first_invite_reminder_is_due_after_three_days(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    mark_team_1_paying(&pool).await?;
+    age_invite(&pool, 3, 3, 0).await?;
+
+    let claimed = team_repo.claim_due_invite_reminders(100).await?;
+    assert_eq!(claimed.len(), 1);
+    let reminder = &claimed[0];
+    assert_eq!(reminder.email, "invite@macro.com");
+    assert_eq!(reminder.reminder_number, 1);
+    assert_eq!(reminder.team_name, "team1");
+    assert_eq!(reminder.invited_by, "macro|user@user.com");
+    assert!(reminder.paying && reminder.has_subscription && !reminder.enterprise);
+
+    // Claiming counted the reminder and restarted the clock.
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+    let (reminders_sent, recently_sent): (i16, bool) = sqlx::query_as(
+        "SELECT reminders_sent, last_sent_at > NOW() - INTERVAL '1 minute' FROM team_invite WHERE email = 'invite@macro.com'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!((reminders_sent, recently_sent), (1, true));
+    Ok(())
+}
+
+/// Two days after the invite email, nothing is due yet.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn invite_reminder_is_not_due_before_three_days(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    mark_team_1_paying(&pool).await?;
+    age_invite(&pool, 2, 2, 0).await?;
+
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+    Ok(())
+}
+
+/// The second reminder waits four days after the first, and there is no third.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn second_invite_reminder_is_the_last(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    mark_team_1_paying(&pool).await?;
+
+    age_invite(&pool, 6, 3, 1).await?;
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+
+    age_invite(&pool, 7, 4, 1).await?;
+    assert_eq!(
+        claimed_emails(&team_repo).await?,
+        vec![("invite@macro.com".to_string(), 2)]
+    );
+
+    age_invite(&pool, 13, 6, 2).await?;
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+    Ok(())
+}
+
+/// Invites older than 14 days are never reminded, so a deploy does not
+/// email people about invites from long ago.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn old_invites_are_not_reminded(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    mark_team_1_paying(&pool).await?;
+    age_invite(&pool, 15, 15, 0).await?;
+
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+    Ok(())
+}
+
+/// No reminder for an invitee who already joined, one whose inviter left the
+/// team, or one the invitee could not accept because the team stopped paying.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn invite_reminders_skip_invites_that_cannot_lead_anywhere(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    age_invite(&pool, 5, 5, 0).await?;
+
+    // team1 has a subscription but is not paying.
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+    mark_team_1_paying(&pool).await?;
+
+    // The invitee (here user3, who has an account) joined some other way
+    // and the invite row stayed.
+    sqlx::query("DELETE FROM team_invite WHERE email = 'user3@user.com'")
+        .execute(&pool)
+        .await?;
+    sqlx::query("UPDATE team_invite SET email = 'user3@user.com' WHERE email = 'invite@macro.com'")
+        .execute(&pool)
+        .await?;
+    sqlx::query("INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1::uuid, 'macro|user3@user.com', 'member')")
+        .bind(TEAM_1)
+        .execute(&pool)
+        .await?;
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+    sqlx::query("DELETE FROM team_user WHERE user_id = 'macro|user3@user.com'")
+        .execute(&pool)
+        .await?;
+    assert_eq!(claimed_emails(&team_repo).await?.len(), 1);
+    sqlx::query(
+        "UPDATE team_invite SET reminders_sent = 0, last_sent_at = NOW() - INTERVAL '5 days'",
+    )
+    .execute(&pool)
+    .await?;
+
+    // The inviter is no longer on the team.
+    sqlx::query("UPDATE team_invite SET invited_by = 'macro|user4@user.com'")
+        .execute(&pool)
+        .await?;
+    assert!(claimed_emails(&team_repo).await?.is_empty());
+    Ok(())
+}
+
+/// Free teams and enterprise teams get reminders too.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn free_and_enterprise_teams_get_invite_reminders(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    age_invite(&pool, 5, 5, 0).await?;
+
+    sqlx::query("UPDATE team SET enterprise = true WHERE id = $1::uuid")
+        .bind(TEAM_1)
+        .execute(&pool)
+        .await?;
+    let claimed = team_repo.claim_due_invite_reminders(100).await?;
+    assert_eq!(claimed.len(), 1);
+    assert!(claimed[0].enterprise);
+
+    age_invite(&pool, 5, 5, 0).await?;
+    sqlx::query("UPDATE team SET enterprise = false, subscription_id = NULL WHERE id = $1::uuid")
+        .bind(TEAM_1)
+        .execute(&pool)
+        .await?;
+    let claimed = team_repo.claim_due_invite_reminders(100).await?;
+    assert_eq!(claimed.len(), 1);
+    assert!(!claimed[0].paying && !claimed[0].has_subscription);
+    Ok(())
+}
+
+/// A sweep claims at most `limit` invites, oldest first.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn invite_reminder_claims_respect_the_limit(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    mark_team_1_paying(&pool).await?;
+    sqlx::query(
+        "UPDATE team_invite SET created_at = NOW() - INTERVAL '6 days', last_sent_at = NOW() - INTERVAL '6 days' WHERE email = 'user3@user.com'",
+    )
+    .execute(&pool)
+    .await?;
+    age_invite(&pool, 5, 5, 0).await?;
+
+    let first = team_repo.claim_due_invite_reminders(1).await?;
+    assert_eq!(first.len(), 1);
+    assert_eq!(first[0].email, "user3@user.com");
+    assert_eq!(
+        claimed_emails(&team_repo).await?,
+        vec![("invite@macro.com".to_string(), 1)]
+    );
     Ok(())
 }

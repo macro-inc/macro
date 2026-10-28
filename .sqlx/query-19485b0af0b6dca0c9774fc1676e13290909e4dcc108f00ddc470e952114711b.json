@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET provider_id = $2 WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "19485b0af0b6dca0c9774fc1676e13290909e4dcc108f00ddc470e952114711b"
+}

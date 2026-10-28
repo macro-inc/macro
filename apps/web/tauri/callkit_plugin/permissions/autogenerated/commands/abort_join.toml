@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-abort-join"
+description = "Enables the abort_join command without any pre-configured scope."
+commands.allow = ["abort_join"]
+
+[[permission]]
+identifier = "deny-abort-join"
+description = "Denies the abort_join command without any pre-configured scope."
+commands.deny = ["abort_join"]

@@ -54,6 +54,15 @@ impl CompaniesRepository for StubRepo {
         Ok(vec![])
     }
 
+    async fn resolve_activity(
+        &self,
+        scope: CrmContactListScope<'_>,
+    ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
+        self.resolve_association(scope, crate::domain::association::CrmAssociation::Activity)
+            .await
+            .map(Option::unwrap_or_default)
+    }
+
     async fn resolve_association(
         &self,
         scope: CrmContactListScope<'_>,
@@ -117,6 +126,19 @@ impl CompaniesRepository for StubRepo {
         _domain: &str,
         _metadata: &crate::domain::model::DomainMetadata,
     ) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn insert_pending_domain(&self, _domain: &str) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn claim_pending_domains(
+        &self,
+        _limit: i64,
+        _max_attempts: i16,
+        _attempted_before: DateTime<Utc>,
+    ) -> Result<Vec<String>, CrmError> {
         unimplemented!()
     }
 

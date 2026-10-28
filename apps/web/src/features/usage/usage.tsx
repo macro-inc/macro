@@ -7,6 +7,7 @@ import {
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingPlansQuery,
   useAiBillingSummaryQuery,
@@ -68,7 +69,7 @@ export function Usage() {
     loading: () => summary.isPending,
     failed: () => summary.isError,
     refresh: () => {
-      void summary.refetch();
+      fireAndForget(summary.refetch(), 'usage');
     },
     checkout: {
       pending: () => checkout.isPending,

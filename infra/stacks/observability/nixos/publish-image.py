@@ -70,7 +70,7 @@ ami = aws('ec2', 'register-image', '--name', f'{args.name_prefix}-{digest[:20]}'
           '--block-device-mappings', json.dumps([{
               'DeviceName': '/dev/xvda',
               'Ebs': {'SnapshotId': snapshot, 'VolumeType': 'gp3',
-                      'VolumeSize': 30, 'DeleteOnTermination': True},
+                      'DeleteOnTermination': True},
           }]))['ImageId']
 print(f'AMI: {ami}; SHA256: {digest}', flush=True)
 aws('ec2', 'create-tags', '--resources', ami, snapshot, '--tags',

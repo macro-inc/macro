@@ -25,7 +25,7 @@ and highlights.
 - **Beacons.** A tour never navigates or opens things for you. When a step's
   feature is behind something (a collapsed sidebar, another page, an unopened
   conversation), the card hides and a pulsing dot marks the control that
-  reveals it: the sidebar toggle, the Agents nav item, New conversation, or the
+  reveals it: the sidebar toggle, the Agents nav item, Create, or the
   top conversation row. A small card beside it says what to do ("Open a
   channel or DM to continue"), with Skip below to move on. If that control is itself in a collapsed
   sidebar, the dot marks the sidebar toggle first, then moves once the
@@ -34,13 +34,14 @@ and highlights.
 
 ## Per view
 
-- **Agents:** the Work / Code switch (beacon on the sidebar toggle), then the
-  agent and model picker (beacon on New conversation), then the
+- **Agents:** the Chat / Code switch, then the
+  agent and model picker (both use a Create → Agent entry when the composer is hidden), then the
   Your agents list and the Cursor / Bring your own agent strips (beacon on
   Agents), then Create for automations.
 - **Channels:** channels and DMs, creation, then threads, @mentions, and calls,
   which wait on the channel list until a conversation is open. No Slack action.
-- **Email:** Signal/Noise, tags, then keyboard shortcuts.
+- **Email:** Signal/Noise tabs beside the Inbox title (beacon on Inbox when
+  another mailbox is open), tags, then keyboard shortcuts.
 - **Customers:** Companies and People records, relationship details, then the
   **New** menu.
 - **Calendar:** calendar sources and copy availability (beacon on the sidebar

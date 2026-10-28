@@ -103,7 +103,7 @@ export async function uploadInputAttachments(options: {
 
       if (result.failed) {
         options.tracker.removeAttachment(pendingId);
-        toast.failure(`Failed to upload ${file.name}`);
+        toast.failure(result.reason ?? `Failed to upload ${file.name}`);
         continue;
       }
 

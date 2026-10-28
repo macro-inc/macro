@@ -16,6 +16,7 @@ const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   pending: false,
   segments: [],
   phase: null,
+  postedAt: null,
   ...overrides,
 });
 

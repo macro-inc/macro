@@ -12,6 +12,7 @@ async fn execute_initiative_query(harness: &TestHarness, query: &str) -> async_g
                     graphql_soup::soup_item_loader(
                         harness.soup_service.clone(),
                         Arc::new(harness.email_service.clone()),
+                        harness.state.entity_access.as_ref().clone(),
                     ),
                 )),
         )

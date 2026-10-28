@@ -28,6 +28,7 @@ function reply(
     pending: false,
     segments,
     phase: closed ? null : 'writing',
+    postedAt: null,
   };
 }
 

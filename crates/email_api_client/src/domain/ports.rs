@@ -1,17 +1,19 @@
 //! Capability-oriented ports for provider email APIs.
 
+mod mailbox;
+pub use mailbox::*;
+
 use std::future::Future;
 
 use models_email::email::service::label::Label;
-use models_email::email::service::message::Message;
 use models_email::service::contact::{Contact, ContactList};
 use models_email::service::link::Link;
 use uuid::Uuid;
 
 use super::models::{
     AccessToken, ApiOperationKind, CalendarPart, ChangeBatch, EmailApiError,
-    MessageWithCalendarParts, ProviderSubscription, RateLimitRefusal, SendRequest, SentIds,
-    SyncCursor, ThreadListPage, TokenError, TokenFreshness,
+    MessageWithCalendarParts, ProviderSubscription, RateLimitRefusal, RequestPermit, SendRequest,
+    SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
 };
 
 #[cfg(test)]
@@ -81,13 +83,14 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         provider_thread_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
 
-    /// Fetches and normalizes every message in a provider thread.
+    /// Fetches and normalizes every message in a provider thread, each with
+    /// its calendar invitation parts, in one provider read.
     fn get_thread(
         &self,
         access_token: &AccessToken,
         link_id: Uuid,
         provider_thread_id: &str,
-    ) -> impl Future<Output = Result<Vec<Message>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<Vec<MessageWithCalendarParts>, EmailApiError>> + Send;
 
     /// Lists one page of provider threads.
     fn list_threads(
@@ -106,6 +109,17 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         label_ids_to_add: &[String],
         label_ids_to_remove: &[String],
     ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
+
+    /// Adds and removes provider labels from many messages in one request.
+    /// The provider reports no per-message outcome: the request succeeds or
+    /// fails as a whole.
+    fn batch_modify_message_labels(
+        &self,
+        access_token: &AccessToken,
+        provider_message_ids: &[String],
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
 }
 
 /// Message sending capability.
@@ -117,6 +131,27 @@ pub trait MailboxSendClient: Send + Sync + 'static {
         request: &SendRequest,
         provider_thread_id: Option<&str>,
     ) -> impl Future<Output = Result<SentIds, EmailApiError>> + Send;
+}
+
+/// Explicitly separated provider dispatch and delivery reconciliation.
+///
+/// This optional capability leaves existing message-send implementations intact.
+pub trait MailboxSendRecoveryClient: Send + Sync + 'static {
+    /// Dispatches already-built MIME once, without token refresh or send retries.
+    fn send_prepared(
+        &self,
+        access_token: &AccessToken,
+        mime: &[u8],
+        provider_thread_id: Option<&str>,
+    ) -> impl Future<Output = Result<SentIds, EmailApiError>> + Send;
+
+    /// Finds one sent message by the stable RFC 5322 Message-ID. An empty result
+    /// does not prove that an earlier ambiguous request was never delivered.
+    fn find_sent_message(
+        &self,
+        access_token: &AccessToken,
+        message_id: &str,
+    ) -> impl Future<Output = Result<Option<SentIds>, EmailApiError>> + Send;
 }
 
 /// Mailbox label management capabilities.
@@ -291,6 +326,27 @@ pub trait ProviderRateLimiter: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), RateLimitRefusal>> + Send;
 }
 
+/// Admits provider requests for a linked mailbox. An admitted request holds a
+/// permit until it completes. A permit dropped unfinished releases itself, and
+/// a crashed process's permits expire on their own.
+pub trait ProviderRequestGate: Send + Sync + 'static {
+    /// Admits one operation, or reports when the mailbox may try again. An
+    /// adapter may hold the caller briefly for room before refusing.
+    fn acquire(
+        &self,
+        link_id: Uuid,
+        operation: ApiOperationKind,
+    ) -> impl Future<Output = Result<RequestPermit, RateLimitRefusal>> + Send;
+
+    /// Releases a permit. A provider rate limit in `error` makes every caller
+    /// for the mailbox wait out a shared cooldown.
+    fn finish(
+        &self,
+        permit: RequestPermit,
+        error: Option<&EmailApiError>,
+    ) -> impl Future<Output = ()> + Send;
+}
+
 /// Mailbox adapter used when provider capabilities are intentionally unavailable.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoOpMailboxClient;
@@ -373,7 +429,7 @@ impl MailboxMessageClient for NoOpMailboxClient {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<MessageWithCalendarParts>, EmailApiError> {
         Err(unavailable())
     }
 
@@ -396,6 +452,16 @@ impl MailboxMessageClient for NoOpMailboxClient {
     ) -> Result<(), EmailApiError> {
         Err(unavailable())
     }
+
+    async fn batch_modify_message_labels(
+        &self,
+        _: &AccessToken,
+        _: &[String],
+        _: &[String],
+        _: &[String],
+    ) -> Result<(), EmailApiError> {
+        Err(unavailable())
+    }
 }
 
 impl MailboxSendClient for NoOpMailboxClient {
@@ -405,6 +471,25 @@ impl MailboxSendClient for NoOpMailboxClient {
         _: &SendRequest,
         _: Option<&str>,
     ) -> Result<SentIds, EmailApiError> {
+        Err(unavailable())
+    }
+}
+
+impl MailboxSendRecoveryClient for NoOpMailboxClient {
+    async fn send_prepared(
+        &self,
+        _: &AccessToken,
+        _: &[u8],
+        _: Option<&str>,
+    ) -> Result<SentIds, EmailApiError> {
+        Err(unavailable())
+    }
+
+    async fn find_sent_message(
+        &self,
+        _: &AccessToken,
+        _: &str,
+    ) -> Result<Option<SentIds>, EmailApiError> {
         Err(unavailable())
     }
 }
@@ -512,5 +597,19 @@ impl ProviderTokenSource for NoOpProviderTokenSource {
 impl ProviderRateLimiter for AlwaysAllowRateLimiter {
     async fn check_rate_limit(&self, _: Uuid, _: ApiOperationKind) -> Result<(), RateLimitRefusal> {
         Ok(())
+    }
+}
+
+impl ProviderRequestGate for AlwaysAllowRateLimiter {
+    async fn acquire(
+        &self,
+        link_id: Uuid,
+        _: ApiOperationKind,
+    ) -> Result<RequestPermit, RateLimitRefusal> {
+        Ok(RequestPermit::new(link_id, Uuid::nil(), |_, _| {}))
+    }
+
+    async fn finish(&self, permit: RequestPermit, _: Option<&EmailApiError>) {
+        permit.disarm();
     }
 }

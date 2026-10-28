@@ -3,6 +3,7 @@
 // base branch. The release workflow applies the same definition when it
 // decides whether a production release needs a new App Bundle; catching a
 // missing bump here keeps it from failing there, after the deploy.
+import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -31,8 +32,18 @@ export function checkAndroidVersion({
     '--end-of-options',
     `${head}^{commit}`,
   ]);
-  if (androidNativeHash(git, baseCommit) === androidNativeHash(git, headCommit))
+  const output = (changed) => {
+    if (process.env.GITHUB_OUTPUT)
+      appendFileSync(
+        process.env.GITHUB_OUTPUT,
+        `changed=${changed}\nversion_code=${androidVersionCode(git, headCommit)}\n`
+      );
+  };
+  if (androidNativeHash(git, baseCommit) === androidNativeHash(git, headCommit)) {
+    output(false);
     return 'No Android native changes; no Android version bump needed.';
+  }
+  output(true);
 
   const reason = androidChangeReasons(git, baseCommit, headCommit).join(
     ' and '

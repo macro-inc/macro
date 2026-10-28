@@ -12,15 +12,18 @@ use filter_ast::Expr;
 use item_filters::{
     SharedEmailFilter,
     ast::{
-        EmailFilterAst, EntityFilterAst, agent_session::AgentSessionLiteral,
-        channel::ChannelThreadLiteral, document::DocumentLiteral, email::EmailLiteral,
+        EmailFilterAst, EntityFilterAst,
+        agent_session::{AgentSessionLiteral, AgentSessionVisibility},
+        channel::ChannelThreadLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 
-use super::models::WorkFeedItemType;
+use super::models::{WorkFeedItemType, WorkFeedScope};
 
 #[cfg(test)]
 mod test;
@@ -34,15 +37,15 @@ const GITHUB_PULL_REQUEST_SOURCE: &str = "github_pull_request";
 ///   Noise mail stays out even when the viewer touches it.
 /// - Channel threads include the viewer as a participant.
 /// - Pull requests include the viewer.
-/// - Agent sessions are opted in (Soup excludes them by default).
+/// - Agent sessions are opted in (Soup excludes them by default), except
+///   unlisted ones: a routine's runs, unless the routine lists them, live in
+///   its history and the Agents list.
 /// - Snippets are documents only when the caller shows them.
-pub fn signal_filter(user: &MacroUserIdStr<'static>, include_snippets: bool) -> EntityFilterAst {
+/// - Tasks are documents only when the scope asks for both; asking for one
+///   of documents and tasks keeps the other out.
+pub fn signal_filter(user: &MacroUserIdStr<'static>, scope: &WorkFeedScope) -> EntityFilterAst {
     EntityFilterAst {
-        document_filter: (!include_snippets).then(|| {
-            Arc::new(Expr::is_not(Expr::val(DocumentLiteral::SubType(
-                DocumentSubType::Snippet,
-            ))))
-        }),
+        document_filter: document_filter(scope).map(Arc::new),
         email_filter: EmailFilterAst {
             tree: Some(Arc::new(Expr::and(
                 Expr::val(EmailLiteral::Importance(true)),
@@ -59,8 +62,41 @@ pub fn signal_filter(user: &MacroUserIdStr<'static>, include_snippets: bool) -> 
             )),
             Expr::val(ForeignEntityLiteral::IncludesMe),
         ))),
-        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Include))),
+        agent_session_filter: Some(Arc::new(Expr::and(
+            Expr::val(AgentSessionLiteral::Include),
+            Expr::is_not(Expr::val(AgentSessionLiteral::Visibility(
+                AgentSessionVisibility::Unlisted,
+            ))),
+        ))),
         ..Default::default()
+    }
+}
+
+/// The document conditions of `scope`: snippets unless it shows them, and
+/// the task subtype when it asks for only one of documents and tasks.
+fn document_filter(scope: &WorkFeedScope) -> Option<Expr<DocumentLiteral>> {
+    let requested: &[WorkFeedItemType] = if scope.types.is_empty() {
+        &WorkFeedItemType::ALL
+    } else {
+        &scope.types
+    };
+    let is_task = || Expr::val(DocumentLiteral::SubType(DocumentSubType::Task));
+    let tasks = match (
+        requested.contains(&WorkFeedItemType::Document),
+        requested.contains(&WorkFeedItemType::Task),
+    ) {
+        (true, false) => Some(Expr::is_not(is_task())),
+        (false, true) => Some(is_task()),
+        _ => None,
+    };
+    let snippets = (!scope.include_snippets).then(|| {
+        Expr::is_not(Expr::val(DocumentLiteral::SubType(
+            DocumentSubType::Snippet,
+        )))
+    });
+    match (tasks, snippets) {
+        (Some(tasks), Some(snippets)) => Some(Expr::and(tasks, snippets)),
+        (tasks, snippets) => tasks.or(snippets),
     }
 }
 

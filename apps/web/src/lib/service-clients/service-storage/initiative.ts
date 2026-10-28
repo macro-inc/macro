@@ -14,6 +14,7 @@ import {
   type GraphqlEntityAccessLevel,
   type InitiativeDetailFieldsFragment,
   InitiativeDocument,
+  type InitiativeIdentityFieldsFragment,
   type InitiativeLinkShare,
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
@@ -58,17 +59,25 @@ const OPERATION_TO_GRAPHQL = {
   replace: 'REPLACE',
 } as const;
 
-export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
-  const sharing = project.sharePermission;
+export function mapInitiativeIdentity(
+  project: InitiativeIdentityFieldsFragment
+) {
   const permission = project.viewerPermission;
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
-    updatedAt: project.metadata.updatedAt ?? '',
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
         : ('view' as const),
+  };
+}
+
+export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
+  const sharing = project.sharePermission;
+  return {
+    ...mapInitiativeIdentity(project),
+    updatedAt: project.metadata.updatedAt ?? '',
     taskCount: project.taskCount,
     completedTaskCount: project.completedTaskCount,
     properties: mapGraphqlProperties(project.properties),

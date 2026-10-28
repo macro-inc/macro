@@ -693,3 +693,135 @@ fn recovered_history_appears_only_through_a_later_standard_load() {
         Some(crate::domain::model::StopReason::EndTurn)
     );
 }
+
+#[test]
+fn trusted_system_and_quiet_inputs_survive_repeated_chunked_history_replay() {
+    use crate::domain::log::Message;
+    use agent_client_protocol::schema::v1::{RequestId, SessionId};
+    use agent_runtime_protocol::domain::{
+        action::AgentAction,
+        notification::{Notification, NotificationEvent, NotificationInput, notification_context},
+    };
+    let event = Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    };
+    for system_turn in [true, false] {
+        let mut action = AgentAction::prompt("owner request");
+        if let AgentAction::Prompt(prompt) = &mut action {
+            prompt.notifications = Some(NotificationInput {
+                notifications: vec![event.clone()],
+                system_turn,
+            });
+        }
+        let original = AgentSessionLog {
+            agent_session_id: super::util::test_session(),
+            user_id: None,
+            logged_at: None,
+            content: Message::Notification(
+                action
+                    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+                    .unwrap(),
+            ),
+        };
+        let mut frames = vec![
+            original,
+            update("agent_message_chunk", "<noop/>"),
+            frame(
+                "to_server",
+                json!({"id":"event","result":{"stopReason":"end_turn"}}),
+            ),
+        ];
+        let xml = notification_context(&[event.clone()]).unwrap();
+        for epoch in [5, 6] {
+            frames.extend([
+                request("initialize", json!(0)),
+                result(json!(0)),
+                request("session/load", json!(epoch)),
+                update("user_message_chunk", &xml[..10]),
+                update("user_message_chunk", &xml[10..]),
+                update("user_message_chunk", "owner request"),
+                update("agent_message_chunk", "<noop/>"),
+                update("user_message_chunk", "next question"),
+                update("agent_message_chunk", "answer"),
+                result(json!(epoch)),
+            ]);
+        }
+        let mut machine = FoldMachineImpl::new();
+        for entry in frames {
+            machine.push(entry);
+        }
+        assert_eq!(machine.metadata().notifications.len(), 1);
+        let text: Vec<_> = machine
+            .messages()
+            .iter()
+            .filter_map(|message| message.last_text())
+            .collect();
+        if system_turn {
+            assert_eq!(text, ["next question", "answer"]);
+            assert_eq!(machine.metadata().noop_turn, Some(0));
+        } else {
+            assert_eq!(
+                text,
+                ["owner request", "<noop/>", "next question", "answer"]
+            );
+            assert_eq!(machine.metadata().noop_turn, None);
+        }
+        for entry in [
+            request("initialize", json!(0)),
+            result(json!(0)),
+            request("session/load", json!(7)),
+            update("user_message_chunk", &xml),
+            update("user_message_chunk", "owner request"),
+            update("agent_message_chunk", "<noop/>"),
+            result(json!(7)),
+        ] {
+            machine.push(entry);
+        }
+        if system_turn {
+            assert!(machine.messages().is_empty());
+            assert_eq!(machine.metadata().noop_turn, Some(0));
+        }
+        for entry in [
+            request("initialize", json!(0)),
+            result(json!(0)),
+            request("session/load", json!(8)),
+            update("user_message_chunk", &xml),
+            update("user_message_chunk", "different user request"),
+            update("agent_message_chunk", "<noop/>"),
+            result(json!(8)),
+        ] {
+            machine.push(entry);
+        }
+        assert!(machine.messages().iter().any(|message| {
+            message
+                .last_text()
+                .is_some_and(|text| text.contains("different user request"))
+        }));
+        assert_eq!(
+            machine.messages().last().unwrap().last_text().as_deref(),
+            Some("<noop/>")
+        );
+    }
+}
+
+#[test]
+fn an_untrusted_xml_prefix_is_still_user_text() {
+    let mut frames = replay(json!(8));
+    frames.insert(
+        3,
+        update(
+            "user_message_chunk",
+            "<m-notifications>untrusted</m-notifications>",
+        ),
+    );
+    assert!(fold(frames).iter().any(|message| {
+        message
+            .last_text()
+            .is_some_and(|text| text.contains("untrusted"))
+    }));
+}

@@ -5,12 +5,13 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+genai_telemetry = { path = "../genai_telemetry" }
 ai_billing = { path = "../ai_billing" }
-claude_cloud_agents = { path = "../claude_cloud_agents" }
 async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
 codex_connection = { path = "../codex_connection" }
 agent = { path = "../agent" }
+agent_api_keys = { path = "../agent_api_keys" }
 agent-client-protocol = { workspace = true }
 # The session-token claim shape and its signing, so the harness and the proxy
 # cannot disagree about what a token says.
@@ -48,10 +49,13 @@ github = { path = "../github", default-features = false, features = [
   "ports",
   "sync",
 ] }
+feature_flags = { path = "../feature_flags" }
+jev = { path = "../jev" }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
 mcp_client = { path = "../mcp_client" }
+mcp_select = { path = "../mcp_select" }
 pipedream_mcp = { path = "../pipedream_mcp" }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }

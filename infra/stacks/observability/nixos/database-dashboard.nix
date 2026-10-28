@@ -39,7 +39,7 @@ let
       from = "now-6h";
       to = "now";
     };
-    description = "Dev writer and replica collected directly from PostgreSQL. Start with connection health and collection errors. No query text or plans are collected in this baseline. Missing data means collection needs attention, not that the database is healthy.";
+    description = "Dev writer and replica collected directly from PostgreSQL. Start with connection health and collection errors. Open the query dashboard for statement costs, normalized SQL and sampled waits. Plans are disabled. Missing data means collection needs attention, not that the database is healthy.";
     templating.list = [
       {
         name = "database";
@@ -57,6 +57,11 @@ let
       }
     ];
     links = [
+      {
+        title = "Query costs, SQL and sampled waits";
+        type = "link";
+        url = "/d/macro-postgres-queries";
+      }
       {
         title = "AWS database health";
         type = "link";

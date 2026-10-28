@@ -92,6 +92,15 @@ each one as a plain out-of-office block without its title; `all` adds the title;
 `none` hides it. Gate-off deployment suppresses that overlay, and its absence is
 not a claim that the person has no time off.
 
+Calendar refresh notifications carry `team_ooo_changed`. Only an explicit `false`
+lets the frontend retain OOO rows and open details while refetching. The server
+certifies this for unchanged sources and changes to sources that were and remain
+non-OOO, provided no calendar metadata, coverage failure, cancellation, or source
+retirement makes the result uncertain. OOO edits (including becoming private or
+ceasing to be OOO), sharing changes, and disconnects require immediate clearing.
+Missing or malformed hints from older servers also clear immediately. The
+60-second cache expiry and session-reset behavior remain in force.
+
 Team projections and availability use server-confirmed source copies. An offline
 edit can appear immediately in the editor's own calendar through the mutation
 queue, but does not change what teammates see or their availability results until

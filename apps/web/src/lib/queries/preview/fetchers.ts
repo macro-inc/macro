@@ -14,6 +14,7 @@ import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import type { ApiThread } from '@service-email/generated/schemas';
+import { scheduledActionClient } from '@service-scheduled-action/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { entityMessagesClient } from '@service-storage/messages';
@@ -25,6 +26,7 @@ import { emailKeys } from '../email/keys';
 import { threadQueryOptions } from '../email/thread';
 import { representativeThreadMessage } from '../email/thread-subject';
 import { normalizeMessageSender } from '../messages/message-sender';
+import { failedReadAccess } from './failed-read';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -428,14 +430,7 @@ async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
       const base = { id, type: 'database', loading: false } as const;
       const detail = await storageServiceClient.databases.get({ id });
       if (detail.isErr())
-        return {
-          ...base,
-          access: detail.error.some(
-            (error) => error.code === 'NOT_FOUND' || error.code === 'GONE'
-          )
-            ? 'does_not_exist'
-            : 'no_access',
-        };
+        return { ...base, access: failedReadAccess(detail.error) };
       const { database } = detail.value;
       if (database.trashed_at !== null)
         return { ...base, access: 'does_not_exist' };
@@ -460,17 +455,7 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
       const base = { id, type: 'form', loading: false } as const;
       const detail = await storageServiceClient.forms.get({ id });
       if (detail.isErr())
-        return {
-          ...base,
-          access: detail.error.some(
-            (error) =>
-              error.code === 'NOT_FOUND' ||
-              error.code === 'GONE' ||
-              error.refusal?.code === 'notFound'
-          )
-            ? 'does_not_exist'
-            : 'no_access',
-        };
+        return { ...base, access: failedReadAccess(detail.error) };
       const { form } = detail.value;
       return {
         ...base,
@@ -478,6 +463,26 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
         rawName: form.name,
         name: form.name,
         owner: form.ownerId,
+      };
+    })
+  );
+}
+
+/** A routine previews from its own read; one that is gone reads as deleted. */
+async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'routine', loading: false } as const;
+      const routine = await scheduledActionClient.getRoutine(id);
+      if (routine.isErr())
+        return { ...base, access: failedReadAccess(routine.error) };
+      return {
+        ...base,
+        access: 'access',
+        rawName: routine.value.name,
+        name: routine.value.name,
+        owner: routine.value.owner,
+        updatedAt: routine.value.updated_at,
       };
     })
   );
@@ -513,6 +518,7 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
     doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
     doFetch(fetchFormPreviews, filterMapToId(items, 'form')),
+    doFetch(fetchRoutinePreviews, filterMapToId(items, 'routine')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {

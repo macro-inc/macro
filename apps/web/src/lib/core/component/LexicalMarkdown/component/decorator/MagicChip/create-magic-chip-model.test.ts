@@ -111,6 +111,7 @@ const prompt: FoldedMessage = {
   pending: false,
   segments: [],
   phase: null,
+  postedAt: null,
 };
 
 const response: FoldedMessage = {
@@ -123,6 +124,7 @@ const response: FoldedMessage = {
   pending: false,
   segments: [],
   phase: null,
+  postedAt: null,
 };
 
 const openResponse: FoldedMessage = {
@@ -364,7 +366,9 @@ describe('createMagicChipModel', () => {
           resolveStale = resolve;
         })
       );
-      void handleAgentSessionUpdated({ agentSessionId: 'session' });
+      const staleUpdate = handleAgentSessionUpdated({
+        agentSessionId: 'session',
+      });
       await settle();
       serviceClient.get.mockResolvedValue(snapshot(first));
       await handleAgentSessionUpdated({ agentSessionId: 'session' });
@@ -378,6 +382,7 @@ describe('createMagicChipModel', () => {
       expect(model.header()?.pullRequestUrl).toBe(first);
       expect(sibling.header()?.pullRequestUrl).toBe(first);
       resolveStale(snapshot(null));
+      await staleUpdate;
       await settle();
       expect(model.header()?.pullRequestUrl).toBe(first);
 

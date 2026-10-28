@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
-import { changeWorkbookAxis } from '@macro-inc/spreadsheet/workbook-structure';
+import {
+  changeWorkbookAxis,
+  moveWorkbookRange,
+} from '@macro-inc/spreadsheet/workbook-structure';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SpreadsheetWorkbookSheet } from './workbook-document';
 
@@ -360,3 +363,268 @@ it.each([
     expect(next[0].cells[axis === 'row' ? 'C2' : 'B3'].value).toBe(expected);
   }
 );
+
+describe('moving a range of cells', () => {
+  it('moves cells with their formats and points references from every sheet at them', () => {
+    const before = workbook();
+    before[0].cells.D1 = { value: '=A1*2+A3' };
+    before[0].cells.D2 = { value: '=SUM(A1:A3)' };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 0 },
+      rows: 4,
+      columns: 2,
+    });
+    expect(next[0].cells.A1).toBeUndefined();
+    expect(next[0].cells.A2).toBeUndefined();
+    expect(next[0].cells.C5).toEqual({ value: '10', bold: true });
+    expect(next[0].cells.C6).toEqual({ value: '20' });
+    expect(next[0].cells.B2.value).toBe('=SUM($C$5:C6)');
+    expect(next[0].cells.D1.value).toBe('=C5*2+A3');
+    // A range follows only when all of it moves.
+    expect(next[0].cells.D2.value).toBe('=SUM(A1:A3)');
+    expect(next[0].cells.C1).toEqual({ value: '=A1', format: 'text' });
+    expect(next[1].cells.A1.value).toBe('=Inputs!C6+Inputs!$C$5');
+    expect(next[0].metadata?.definedNames?.[0].formula).toBe(
+      'Inputs!$C$5:$C$6'
+    );
+    expect(before[0].cells.A1).toEqual({ value: '10', bold: true });
+  });
+
+  it('keeps the references inside moved formulas on the same cells', () => {
+    const before = workbook();
+    before[0].cells.D1 = { value: '=B2*2' };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 1, left: 1, bottom: 1, right: 1 },
+      rows: 8,
+      columns: 3,
+    });
+    expect(next[0].cells.B2).toBeUndefined();
+    expect(next[0].cells.E10.value).toBe('=SUM($A$1:A2)');
+    expect(next[0].cells.D1.value).toBe('=E10*2');
+  });
+
+  it('moves a block with formulas that refer within it, preserving sheet names as written', () => {
+    const before: SpreadsheetWorkbookSheet[] = [
+      {
+        id: 'one',
+        name: 'My Data',
+        cells: {
+          A1: { value: '5' },
+          A2: { value: '=A1+1' },
+          A3: { value: "=SUM('My Data'!A1:A2)" },
+        },
+        layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
+      },
+      {
+        id: 'two',
+        name: 'Report',
+        cells: {
+          A1: { value: "= 'my data'!A3 * 'My Data'!$A$1" },
+          A2: { value: '=A3' },
+        },
+        layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
+      },
+    ];
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 2, right: 0 },
+      rows: 0,
+      columns: 1,
+    });
+    expect(next[0].cells).toEqual({
+      B1: { value: '5' },
+      B2: { value: '=B1+1' },
+      B3: { value: "=SUM('My Data'!B1:B2)" },
+    });
+    expect(next[1].cells.A1.value).toBe("= 'my data'!B3 * 'My Data'!$B$1");
+    // An unqualified reference on another sheet names that sheet.
+    expect(next[1].cells.A2.value).toBe('=A3');
+  });
+
+  it('replaces the destination, and its references become #REF!', () => {
+    const before = workbook();
+    before[0].cells = {
+      A1: { value: '1' },
+      A2: { value: '2' },
+      A3: { value: '3' },
+      C1: { value: 'old', fillColor: '#ff0000' },
+      C2: { value: 'old' },
+      D1: { value: '=C1' },
+      D2: { value: '=SUM(C1:C2)' },
+      D3: { value: '=SUM(C1:C9)' },
+      D4: { value: '=A3' },
+    };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 0 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(next[0].cells.C1).toEqual({ value: '1' });
+    expect(next[0].cells.C2).toEqual({ value: '2' });
+    expect(next[0].cells.D1.value).toBe('=#REF!');
+    expect(next[0].cells.D2.value).toBe('=SUM(#REF!)');
+    expect(next[0].cells.D3.value).toBe('=SUM(C1:C9)');
+    expect(next[0].cells.D4.value).toBe('=A3');
+  });
+
+  it('moves a range onto part of itself', () => {
+    const before = workbook();
+    before[0].cells = {
+      A1: { value: '1' },
+      A2: { value: '2' },
+      A3: { value: '3' },
+      A4: { value: '4' },
+      B1: { value: '=A2+A4' },
+      B2: { value: '=SUM(A1:A3)' },
+    };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 2, right: 0 },
+      rows: 1,
+      columns: 0,
+    });
+    expect(next[0].cells.A1).toBeUndefined();
+    expect(next[0].cells.A2).toEqual({ value: '1' });
+    expect(next[0].cells.A3).toEqual({ value: '2' });
+    expect(next[0].cells.A4).toEqual({ value: '3' });
+    expect(next[0].cells.B1.value).toBe('=A3+#REF!');
+    expect(next[0].cells.B2.value).toBe('=SUM(A2:A4)');
+  });
+
+  it('moves notes, merges, arrays and rules with their cells and splits rules that partly move', () => {
+    const before = workbook();
+    before[0].metadata = {
+      notes: { A1: 'Moves', C1: 'Replaced', E5: 'Stays' },
+      merges: ['A1:B1', 'E7:F7'],
+      arrayFormulas: { A2: 'A2:B2' },
+      validations: [
+        { range: 'A1:A10', type: 'list', formulas: ['"Yes,No"'] },
+        { range: 'C2', type: 'whole', formulas: ['$A$1', '100'] },
+      ],
+      conditionalFormats: [
+        { range: 'B1:B2', type: 'expression', formulas: ['$B1>$A$2'] },
+      ],
+      drawings: [
+        {
+          id: 'chart',
+          type: 'chart',
+          from: { row: 4, column: 2, x: 0, y: 0 },
+          to: { row: 9, column: 6, x: 0, y: 0 },
+          chart: {
+            plots: [{ kind: 'column', series: [{ values: 0 }] }],
+            references: ['Inputs!$A$1:$B$2'],
+          },
+        },
+      ],
+    };
+    const next = moveWorkbookRange(before, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 1 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(next[0].metadata).toMatchObject({
+      notes: { C1: 'Moves', E5: 'Stays' },
+      merges: ['C1:D1', 'E7:F7'],
+      arrayFormulas: { C2: 'C2:D2' },
+      validations: [
+        { range: 'A3:A10', formulas: ['"Yes,No"'] },
+        { range: 'C1:C2', formulas: ['"Yes,No"'] },
+      ],
+      conditionalFormats: [{ range: 'D1:D2', formulas: ['$D1>$C$2'] }],
+      drawings: [
+        {
+          from: { row: 4, column: 2 },
+          chart: { references: ['Inputs!$C$1:$D$2'] },
+        },
+      ],
+    });
+    // The validation on C2 was replaced by the moved cells' rule.
+    expect(next[0].metadata?.validations).toHaveLength(2);
+  });
+
+  it('refuses to split a merged cell without changing the workbook', () => {
+    const sheets = workbook();
+    const before = JSON.stringify(sheets);
+    expect(() =>
+      moveWorkbookRange(sheets, {
+        sheetId: 'one',
+        source: { top: 2, left: 2, bottom: 2, right: 2 },
+        rows: 3,
+        columns: 0,
+      })
+    ).toThrow('This move would split a merged cell.');
+    expect(() =>
+      moveWorkbookRange(sheets, {
+        sheetId: 'one',
+        source: { top: 0, left: 0, bottom: 0, right: 0 },
+        rows: 2,
+        columns: 3,
+      })
+    ).toThrow('This move would split a merged cell.');
+    expect(JSON.stringify(sheets)).toBe(before);
+  });
+
+  it('moves whole-row references with rows selected by their headers and grows the sheet to fit', () => {
+    const sheets = workbook();
+    sheets[0].cells = {
+      A1: { value: '1' },
+      A10: { value: '=SUM(1:2)+SUM($1:$1)+SUM(A:A)' },
+    };
+    sheets[0].metadata = undefined;
+    const next = moveWorkbookRange(sheets, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 1, right: 25 },
+      rows: 250,
+      columns: 0,
+    });
+    expect(next[0].cells.A251).toEqual({ value: '1' });
+    expect(next[0].cells.A10.value).toBe(
+      '=SUM(251:252)+SUM($251:$251)+SUM(A:A)'
+    );
+    expect(next[0].layout).toMatchObject({ rowCount: 252, columnCount: 26 });
+  });
+
+  it('moves whole-column references with columns selected by their headers', () => {
+    const sheets = workbook();
+    sheets[0].cells = {
+      A1: { value: '1' },
+      D1: { value: '=SUM(A:A)+SUM($A:$A)+SUM(1:1)+SUM(A1:B1)' },
+    };
+    sheets[0].metadata = undefined;
+    const next = moveWorkbookRange(sheets, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 199, right: 0 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(next[0].cells.C1).toEqual({ value: '1' });
+    expect(next[0].cells.D1.value).toBe(
+      '=SUM(C:C)+SUM($C:$C)+SUM(1:1)+SUM(A1:B1)'
+    );
+    // A column that is not the whole sheet height leaves A:A where it is.
+    const partial = moveWorkbookRange(sheets, {
+      sheetId: 'one',
+      source: { top: 0, left: 0, bottom: 198, right: 0 },
+      rows: 0,
+      columns: 2,
+    });
+    expect(partial[0].cells.D1.value).toBe(
+      '=SUM(A:A)+SUM($A:$A)+SUM(1:1)+SUM(A1:B1)'
+    );
+  });
+
+  it.each([
+    { top: 0, left: 0, bottom: 0, right: 0, rows: 0, columns: 0 },
+    { top: 0, left: 0, bottom: 0, right: 0, rows: -1, columns: 0 },
+    { top: 99_999, left: 0, bottom: 99_999, right: 0, rows: 1, columns: 0 },
+    { top: 1, left: 0, bottom: 0, right: 0, rows: 1, columns: 0 },
+  ])('rejects an invalid move %o', ({ rows, columns, ...source }) => {
+    expect(() =>
+      moveWorkbookRange(workbook(), { sheetId: 'one', source, rows, columns })
+    ).toThrow('Invalid cell range.');
+  });
+});

@@ -99,6 +99,7 @@ function withText(text = 'Hello'): PromptTrace {
         pending: false,
         segments: [],
         phase: null,
+        postedAt: null,
       },
     },
     {
@@ -113,6 +114,7 @@ function withText(text = 'Hello'): PromptTrace {
         pending: false,
         segments: [],
         phase: null,
+        postedAt: null,
       },
     },
   ]);
@@ -368,6 +370,7 @@ describe('PromptTrace', () => {
           pending: true,
           segments: [],
           phase: null,
+          postedAt: null,
         },
       },
     ];
@@ -385,6 +388,7 @@ describe('PromptTrace', () => {
           pending: false,
           segments: [],
           phase: null,
+          postedAt: null,
         },
       },
     ];
@@ -402,6 +406,7 @@ describe('PromptTrace', () => {
           pending: false,
           segments: [],
           phase: null,
+          postedAt: null,
         },
       },
     ];
@@ -472,6 +477,7 @@ describe('PromptTrace', () => {
           pending: false,
           segments: [],
           phase: null,
+          postedAt: null,
         },
       },
       {
@@ -486,6 +492,7 @@ describe('PromptTrace', () => {
           pending: false,
           segments: [],
           phase: null,
+          postedAt: null,
         },
       },
     ]);
@@ -526,6 +533,7 @@ describe('PromptTrace', () => {
             pending: false,
             segments: [],
             phase: null,
+            postedAt: null,
           },
         },
         {
@@ -540,6 +548,7 @@ describe('PromptTrace', () => {
             pending: false,
             segments: [],
             phase: null,
+            postedAt: null,
           },
         },
       ],
@@ -579,6 +588,7 @@ describe('PromptTrace', () => {
             pending: false,
             segments: [],
             phase: null,
+            postedAt: null,
           },
           {
             agentSessionId: SESSION,
@@ -590,6 +600,7 @@ describe('PromptTrace', () => {
             pending: false,
             segments: [],
             phase: null,
+            postedAt: null,
           },
         ],
       },

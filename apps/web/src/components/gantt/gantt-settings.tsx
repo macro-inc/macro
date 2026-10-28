@@ -1,6 +1,7 @@
-import CheckIcon from '@phosphor/check.svg';
-import GearIcon from '@phosphor/gear-six.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import GearIcon from '@icon/system/regular/gear-six.svg';
 import { Dropdown } from '@ui';
+import { Show } from 'solid-js';
 import { useGantt } from './gantt-context';
 
 function SettingOption(props: { value: string; children: string }) {
@@ -14,14 +15,13 @@ function SettingOption(props: { value: string; children: string }) {
   );
 }
 
-/** Period changes zoom; grid settings only change calendar decoration. */
+/** Period changes zoom; grid settings only change calendar decoration, and hours zoom draws its own. */
 export function GanttSettings() {
   const gantt = useGantt();
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        depth={2}
-        variant="outline"
+        variant="secondary"
         size="icon-md"
         class="bg-surface shadow-sm"
         aria-label="Timeline settings"
@@ -35,11 +35,19 @@ export function GanttSettings() {
           <Dropdown.RadioGroup
             value={gantt.scale()}
             onChange={(value) => {
-              if (value === 'day' || value === 'week' || value === 'month') {
+              if (
+                value === 'hour' ||
+                value === 'day' ||
+                value === 'week' ||
+                value === 'month'
+              ) {
                 gantt.setScale(value);
               }
             }}
           >
+            <Show when={gantt.hours()}>
+              <SettingOption value="hour">Hours</SettingOption>
+            </Show>
             <SettingOption value="day">Day</SettingOption>
             <SettingOption value="week">Week</SettingOption>
             <SettingOption value="month">Month</SettingOption>

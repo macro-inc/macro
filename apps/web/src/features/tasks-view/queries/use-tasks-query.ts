@@ -45,13 +45,15 @@ import { buildTaskSearchRequest } from './task-search';
 
 export type TasksDataSourceInput = Pick<
   TasksViewState,
-  'tab' | 'search' | 'groupBy' | 'sort' | 'facets'
+  'tab' | 'search' | 'groupBy' | 'sort' | 'facets' | 'savedViewActive'
 >;
 
 export type UseTasksDataSourceOptions = {
   userId: Accessor<string | undefined>;
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
+  /** Saved definitions supply stable tag bindings and viewer-relative people. */
+  facetContext?: Accessor<TaskFacetContext>;
   isGroupExpanded: (groupId: string) => boolean;
   /** Only tasks whose property references this entity. */
   reference?: Accessor<TaskReferenceScope>;
@@ -103,6 +105,7 @@ function referencesEntity(
  * are known only to the server and arrive with the next fetch.
  */
 function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
+  if (crm.type === 'activity') return false;
   return getTaskReferencedEntityIds(
     task,
     crm.type === 'company'
@@ -121,12 +124,18 @@ export function useTasksDataSource(
     withEntityNotifications(entity, notificationSource);
 
   const facetContext = createMemo(
-    (): TaskFacetContext => createTagFacetContext(options.tagSets())
+    (): TaskFacetContext =>
+      options.facetContext?.() ?? {
+        ...createTagFacetContext(options.tagSets()),
+        viewerId: options.userId(),
+      }
   );
   const facetOptionsReady = () =>
     (options.enabled?.() ?? true) &&
     state.tab !== 'projects' &&
-    tagFacetReady(state.facets, options.tagSetsReady());
+    (state.savedViewActive
+      ? Boolean(options.userId())
+      : tagFacetReady(state.facets, options.tagSetsReady()));
 
   const queryArgsFor = (nameContains?: string) =>
     buildTaskQuery({
@@ -219,6 +228,7 @@ export function useTasksDataSource(
         enabled: facetOptionsReady,
       })
     : createSearchState({
+        surface: () => 'tasks',
         text: () => state.search,
         localPool,
         enabled: facetOptionsReady,
@@ -235,6 +245,7 @@ export function useTasksDataSource(
       });
 
   const groupedQueries = createGroupedSoupQueries({
+    groupedPaging: () => query.groupedPaging,
     initialPage: createMemo(() => {
       if (search.isSearching() || query.isLoading || query.isPlaceholderData) {
         return;
@@ -448,7 +459,7 @@ export function useTasksDataSource(
       await search.refetch();
       return;
     }
-    groupedQueries.resetToInitialPage();
+    if (query.transport !== 'graphql') groupedQueries.resetToInitialPage();
     await query.refresh();
   };
 

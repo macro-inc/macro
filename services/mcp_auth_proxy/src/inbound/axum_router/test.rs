@@ -10,7 +10,8 @@ use tower::ServiceExt;
 use super::{health, mcp_router, mount_at_root_and_prefix, oauth_router};
 use crate::test_support::{
     ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, Harness, TRUSTED_REDIRECT_URI,
-    UPSTREAM_ACCESS_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for, query_param,
+    UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
+    query_param,
 };
 use axum::{Router, routing::get};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -247,6 +248,81 @@ async fn token_endpoint_refuses_a_code_presented_by_another_client() {
     assert_eq!(retried.body, "invalid or expired code");
 }
 
+fn revoke_request(form: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/revoke")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(form.to_owned()))
+        .expect("request should build")
+}
+
+/// The disconnect flow over HTTP: another client is refused with an RFC 6749
+/// error body, the owner revokes, the revoked token no longer refreshes, and
+/// revoking again still succeeds.
+#[tokio::test]
+async fn client_disconnects_by_revoking_its_refresh_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    let exchange = send(
+        &harness,
+        token_request(&format!(
+            "grant_type=authorization_code&code={code}&code_verifier={VICTIM_CODE_VERIFIER}\
+             &redirect_uri={}&client_id={client_id}",
+            urlencoding::encode(TRUSTED_REDIRECT_URI)
+        )),
+    )
+    .await;
+    assert_eq!(exchange.status, StatusCode::OK);
+    assert!(
+        exchange.json()["expires_in"].is_u64(),
+        "expires_in must always be present"
+    );
+
+    let anonymous = send(
+        &harness,
+        revoke_request(&format!("token={UPSTREAM_REFRESH_TOKEN}")),
+    )
+    .await;
+    assert_eq!(anonymous.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(anonymous.json()["error"], "invalid_client");
+
+    let other_client = send(
+        &harness,
+        revoke_request(&format!(
+            "token={UPSTREAM_REFRESH_TOKEN}&token_type_hint=refresh_token&client_id=some-other-client"
+        )),
+    )
+    .await;
+    assert_eq!(other_client.status, StatusCode::BAD_REQUEST);
+    assert_eq!(other_client.json()["error"], "invalid_grant");
+
+    for _ in 0..2 {
+        let revoked = send(
+            &harness,
+            revoke_request(&format!(
+                "token={UPSTREAM_REFRESH_TOKEN}&token_type_hint=refresh_token&client_id={client_id}"
+            )),
+        )
+        .await;
+        assert_eq!(revoked.status, StatusCode::OK);
+        assert_eq!(revoked.body, "");
+    }
+
+    let refresh = send(
+        &harness,
+        token_request(&format!(
+            "grant_type=refresh_token&refresh_token={UPSTREAM_REFRESH_TOKEN}&client_id={client_id}"
+        )),
+    )
+    .await;
+    assert_eq!(refresh.status, StatusCode::BAD_REQUEST);
+    assert_eq!(refresh.body, "refresh token is not bound to a client");
+}
+
 async fn ok() -> &'static str {
     "ok"
 }
@@ -358,4 +434,27 @@ async fn unprefixed_unknown_path_is_not_rewritten_onto_the_prefix() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn mounted_mcp_preserves_process_readiness_and_bearer_protection() {
+    let app = super::mounted_mcp_router(
+        Harness::new().service,
+        JwtValidationArgs::new_testing(),
+        Router::new().route("/", get(ok)),
+    )
+    .merge(Router::new().route("/health", get(|| async { StatusCode::SERVICE_UNAVAILABLE })));
+
+    for (path, expected) in [
+        ("/health", StatusCode::SERVICE_UNAVAILABLE),
+        ("/mcp/.well-known/oauth-protected-resource", StatusCode::OK),
+        (
+            "/mcp/.well-known/oauth-authorization-server",
+            StatusCode::OK,
+        ),
+        ("/mcp", StatusCode::UNAUTHORIZED),
+        ("/mcp/mcp", StatusCode::UNAUTHORIZED),
+    ] {
+        assert_eq!(get_status(app.clone(), path).await, expected, "{path}");
+    }
 }

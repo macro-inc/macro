@@ -11,6 +11,7 @@ import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
@@ -72,7 +73,7 @@ function BlockUnknownContent() {
   const downloadDocument = createCallback(async () => {
     try {
       const blob = await getBlob();
-      downloadFile(blob, downloadName());
+      await downloadFile(blob, downloadName());
     } catch (error) {
       console.error('error downloading file', error);
       toast.failure('Error downloading file');
@@ -94,7 +95,9 @@ function BlockUnknownContent() {
                 fileName={fileName()}
                 convertingTo={convertingTo()}
                 onShare={openShare}
-                onDownload={() => void downloadDocument()}
+                onDownload={() =>
+                  fireAndForget(downloadDocument(), 'unknown-file')
+                }
               />
             }
           >
@@ -126,36 +129,39 @@ function useLegacyOfficeUpgrade(documentId: string) {
     const controller = new AbortController();
     onCleanup(() => controller.abort());
 
-    void (async () => {
-      const upgraded = await pollForLegacyUpgrade({
-        target,
-        fetchMetadata: () => fetchDocumentMetadata(documentId),
-        fileTypeOf: (metadata) => metadata.fileType,
-        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-      if (!upgraded) {
-        setWaiting(false);
-        return;
-      }
-      // Word content becomes readable once the DOCX pipeline processes it.
-      if (target === 'docx') {
-        await waitForDocumentContentReady({
-          documentId,
-          timeoutMs: 60_000,
-        }).catch(() => undefined);
+    fireAndForget(
+      (async () => {
+        const upgraded = await pollForLegacyUpgrade({
+          target,
+          fetchMetadata: () => fetchDocumentMetadata(documentId),
+          fileTypeOf: (metadata) => metadata.fileType,
+          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          signal: controller.signal,
+        });
         if (controller.signal.aborted) return;
-      }
-      const blockName = fileTypeToBlockName(upgraded.fileType);
-      if (blockName === 'unknown') {
-        // Excel workbooks stay in this block, which previews them.
-        blockMetadataSignal.set(upgraded);
-        setWaiting(false);
-        return;
-      }
-      replaceSplit({ content: { type: blockName, id: documentId } });
-    })();
+        if (!upgraded) {
+          setWaiting(false);
+          return;
+        }
+        // Word content becomes readable once the DOCX pipeline processes it.
+        if (target === 'docx') {
+          await waitForDocumentContentReady({
+            documentId,
+            timeoutMs: 60_000,
+          }).catch(() => undefined);
+          if (controller.signal.aborted) return;
+        }
+        const blockName = fileTypeToBlockName(upgraded.fileType);
+        if (blockName === 'unknown') {
+          // Excel workbooks stay in this block, which previews them.
+          blockMetadataSignal.set(upgraded);
+          setWaiting(false);
+          return;
+        }
+        replaceSplit({ content: { type: blockName, id: documentId } });
+      })(),
+      'legacy-office-upgrade'
+    );
   });
 
   return () => (waiting() && target ? upgradedOfficeLabel(target) : undefined);

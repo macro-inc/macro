@@ -20,6 +20,8 @@ export const MIN_COLUMN_WIDTH = 8;
 export const MAX_COLUMN_WIDTH = 640;
 export const SPREADSHEET_FORMAT_VERSION = 1;
 export const SPREADSHEET_MAX_CELL_LENGTH = 10_000;
+/** Excel's limit for a cell's indent level. */
+export const SPREADSHEET_MAX_INDENT = 250;
 
 export type SpreadsheetFormat =
   | 'general'
@@ -42,6 +44,9 @@ export type SpreadsheetCell = {
   textColor?: string;
   fillColor?: string;
   horizontalAlign?: 'auto' | 'left' | 'center' | 'right';
+  /** Excel's indent level: three spaces each, from the right edge of
+   * right-aligned cells and the left edge otherwise. Centered text ignores it. */
+  indent?: number;
   verticalAlign?: 'top' | 'middle' | 'bottom';
   wrap?: boolean;
   borderTop?: boolean;
@@ -61,6 +66,8 @@ export type SpreadsheetCell = {
   borderBottomColor?: string;
   borderLeftStyle?: string;
   borderLeftColor?: string;
+  /** Shows a TRUE or FALSE value as a checkbox, like Excel's checkbox format. */
+  checkbox?: boolean;
 };
 export type SpreadsheetCellStyle = Omit<SpreadsheetCell, 'value'>;
 export type SpreadsheetCells = Record<string, SpreadsheetCell>;
@@ -76,6 +83,7 @@ export const SPREADSHEET_DEFAULT_STYLE: Required<SpreadsheetCellStyle> = {
   textColor: '',
   fillColor: '',
   horizontalAlign: 'auto',
+  indent: 0,
   verticalAlign: 'middle',
   wrap: false,
   borderTop: false,
@@ -94,6 +102,7 @@ export const SPREADSHEET_DEFAULT_STYLE: Required<SpreadsheetCellStyle> = {
   borderBottomColor: '',
   borderLeftStyle: '',
   borderLeftColor: '',
+  checkbox: false,
 };
 
 const booleanStyle = (value: unknown): value is boolean =>
@@ -158,6 +167,11 @@ const styleFields: {
       value === 'center' ||
       value === 'right',
   },
+  indent: {
+    map: 'spreadsheetIndent',
+    valid: (value): value is number =>
+      integerStyle(value, 0, SPREADSHEET_MAX_INDENT),
+  },
   verticalAlign: {
     map: 'spreadsheetVerticalAlign',
     valid: (value): value is 'top' | 'middle' | 'bottom' =>
@@ -201,6 +215,7 @@ const styleFields: {
       value.length <= 512 &&
       Array.from(value).every((character) => character.charCodeAt(0) >= 32),
   },
+  checkbox: { map: 'spreadsheetCheckboxes', valid: booleanStyle },
 };
 const styleKeys = Object.keys(styleFields) as (keyof SpreadsheetCellStyle)[];
 const styleFieldsByMap = new Map(

@@ -103,6 +103,7 @@ fn appended(session: AgentSessionId, ids: impl IntoIterator<Item = u128>) -> Log
                     content: Message::ToServer(ToServerMessage::Event {
                         event: SystemEvent::AcpReady,
                     }),
+                    logged_at: None,
                 },
             })
             .collect(),

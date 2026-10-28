@@ -5,6 +5,7 @@ import {
   borderEdits,
   csvImportEdits,
   findCells,
+  indentEdits,
   replaceCellText,
   sortedRangeCopies,
   trimWhitespaceEdits,
@@ -48,6 +49,56 @@ describe('spreadsheet range operations', () => {
       borderRight: true,
     });
     expect(borderEdits(origin, 'none').A1).toEqual(edges.B2);
+  });
+
+  it('moves each selected cell one indent level from its own, aligning centered text left', () => {
+    const cells = {
+      A1: { value: 'Revenue' },
+      A2: { value: 'Product', indent: 1 },
+      A3: { value: 'Hardware', indent: 2 },
+      A4: { value: 'Title', horizontalAlign: 'center' as const },
+      A5: { value: 'Deepest', indent: 250 },
+    };
+    const column = {
+      anchor: { row: 0, column: 0 },
+      focus: { row: 4, column: 0 },
+    };
+    expect(indentEdits(cells, column, 1)).toEqual({
+      A1: { indent: 1 },
+      A2: { indent: 2 },
+      A3: { indent: 3 },
+      A4: { indent: 1, horizontalAlign: 'left' },
+    });
+    expect(indentEdits(cells, column, -1)).toEqual({
+      A2: { indent: 0 },
+      A3: { indent: 1 },
+      A5: { indent: 249 },
+    });
+  });
+
+  it('indents empty cells in a selection up to a full column, and only held cells past it', () => {
+    expect(
+      indentEdits(
+        {},
+        { anchor: { row: 0, column: 0 }, focus: { row: 1, column: 0 } },
+        1
+      )
+    ).toEqual({ A1: { indent: 1 }, A2: { indent: 1 } });
+
+    const cells = {
+      A1: { value: 'Revenue', indent: 1 },
+      Z100000: { value: 'Last' },
+      AA1: { value: 'Outside' },
+    };
+    const sheet = {
+      anchor: { row: 0, column: 0 },
+      focus: { row: 99_999, column: 25 },
+    };
+    expect(indentEdits(cells, sheet, 1)).toEqual({
+      A1: { indent: 2 },
+      Z100000: { indent: 1 },
+    });
+    expect(indentEdits(cells, sheet, -1)).toEqual({ A1: { indent: 0 } });
   });
 
   it('sorts whole selected rows by the anchor column, retaining styles and stable ties', () => {

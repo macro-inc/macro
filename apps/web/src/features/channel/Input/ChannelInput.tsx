@@ -24,6 +24,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createMessageComposer } from '@core/messages/create-message-composer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import {
   chatRuleset,
@@ -31,10 +32,11 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
-import AtIcon from '@phosphor/at.svg';
+import AtIcon from '@icon/system/regular/at.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import PhoneIcon from '@phosphor/phone.svg';
+import GifIcon from '@phosphor/gif.svg';
 import type { MessageParent } from '@service-storage/messages';
 import { CollapsedInput, ComposerSurface, cn } from '@ui';
 import {
@@ -90,9 +92,50 @@ import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { clearComposer as clearComposerPreservingFocus } from './utils/clear-composer';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
+import type { UploadResult } from './utils/file-helpers';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
 import { hasSendableInputContent } from './utils/sendable-content';
+
+/**
+ * What the composer offers beyond text, formatting and file attachments.
+ * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
+ */
+type ChannelInputFeatures = {
+  /**
+   * `@` mentions of people, agents and Macro items, including Ask Macro.
+   * `'participants'` offers only the `participants` prop: no agents, items,
+   * `@here` or mention tracking (a WhatsApp group's own members).
+   */
+  mentions: boolean | 'participants';
+  /** Creating Macro items from the composer: tasks, documents, polls, forms. */
+  createItems: boolean;
+  gifs: boolean;
+  /** Blocks plain-text hosts can't carry: headings, checklists, tables, math, embeds. */
+  richBlocks: boolean;
+};
+
+const ALL_FEATURES: ChannelInputFeatures = {
+  mentions: true,
+  createItems: true,
+  gifs: true,
+  richBlocks: true,
+};
+
+/** Slash actions behind each switchable feature. */
+const CREATE_ITEM_ACTION_IDS = [
+  'task',
+  'document',
+  'database',
+  'database-query',
+];
+const RICH_BLOCK_ACTION_IDS = [
+  'heading1',
+  'heading2',
+  'heading3',
+  'list-check',
+  'table',
+];
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -125,6 +168,12 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
+  /** Defaults to every feature; calls are offered through `onStartCall`. */
+  features?: Partial<ChannelInputFeatures>;
+  /** Uploads one picked or dropped file. Defaults to Macro's chat upload. */
+  uploadAttachment?: (file: File) => Promise<UploadResult>;
+  /** File picker filter. Defaults to the media and documents channels accept. */
+  fileAccept?: string;
   /**
    * Drop the composer's own card chrome (rounding, background, shadow) and sit
    * flat on whatever surface hosts it. For composers that already live inside a
@@ -155,11 +204,8 @@ function WebDefaultActions(props: {
   );
 }
 
-function IosDefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-  addMenu: JSX.Element;
-}) {
+// The iOS keyboard dictates on its own, so there is no microphone to place.
+function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -169,7 +215,6 @@ function IosDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -192,16 +237,16 @@ function DefaultActions(props: {
         />
       }
     >
-      <IosDefaultActions
-        input={props.input}
-        dictation={props.dictation}
-        addMenu={props.addMenu}
-      />
+      <IosDefaultActions input={props.input} addMenu={props.addMenu} />
     </Show>
   );
 }
 
 export function ChannelInput(props: ChannelInputProps) {
+  const features = (): ChannelInputFeatures => ({
+    ...ALL_FEATURES,
+    ...props.features,
+  });
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   let clearComposer = () => {};
@@ -228,6 +273,7 @@ export function ChannelInput(props: ChannelInputProps) {
         files,
         tracker: attachmentTracker,
         uploadFile: (file) =>
+          props.uploadAttachment?.(file) ??
           uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
       });
     },
@@ -308,17 +354,31 @@ export function ChannelInput(props: ChannelInputProps) {
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUsers; participants and parent agents feed it here.
-  const mentionUsers = useAgentMentionUsers(() => [
-    ...(props.participants?.() ?? parentParticipants()),
-    ...(props.bots?.() ?? parentBots()),
-  ]);
+  // The editor is configured once, at mount.
+  const initialFeatures = features();
+  const participantsOnly = initialFeatures.mentions === 'participants';
+  const mentionUsers = participantsOnly
+    ? () => props.participants?.() ?? []
+    : useAgentMentionUsers(() => [
+        ...(props.participants?.() ?? parentParticipants()),
+        ...(props.bots?.() ?? parentBots()),
+      ]);
 
-  const groupMentions = !props.parent || props.parent.type === 'channel';
+  const groupMentions =
+    !participantsOnly && (!props.parent || props.parent.type === 'channel');
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions,
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     resolveAppLink: useMacroMentionLinkResolver(),
-    enableMentions: true,
+    enableMentions: initialFeatures.mentions !== false,
+    mentionSources: participantsOnly ? ['users'] : undefined,
+    disableMentionTracking: participantsOnly || undefined,
+    composerActions: initialFeatures.createItems,
+    ignoreActionIds: [
+      ...(initialFeatures.createItems ? [] : CREATE_ITEM_ACTION_IDS),
+      ...(initialFeatures.richBlocks ? [] : RICH_BLOCK_ACTION_IDS),
+      ...(initialFeatures.gifs ? [] : ['gif']),
+    ],
     users: mentionUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
@@ -331,13 +391,16 @@ export function ChannelInput(props: ChannelInputProps) {
     onEnter: () => {
       if (isTouchDevice()) return false;
       typingTracker.stop();
-      void commands.send();
+      fireAndForget(commands.send(), 'channel-input');
       return true;
     },
-    sendMessage: () => void commands.send(),
+    sendMessage: () => fireAndForget(commands.send(), 'channel-input'),
     onPasteFilesAndDirs: (files, directories) => {
-      void handleFileFolderDrop(files, directories, (entries) =>
-        inputState.commands.attachFiles(entries.map((entry) => entry.file))
+      fireAndForget(
+        handleFileFolderDrop(files, directories, (entries) =>
+          inputState.commands.attachFiles(entries.map((entry) => entry.file))
+        ),
+        'channel-input'
       );
     },
     onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
@@ -361,7 +424,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const actionContext: ActionContext = {
     sourceBlockName: groupMentions ? 'channel' : undefined,
   };
-  const sendFromAction = () => void commands.send();
+  const sendFromAction = () => fireAndForget(commands.send(), 'channel-input');
   const slashAction = (id: string) =>
     [...ACTIONS, ...channelComposerActions(sendFromAction)].find(
       (action) => action.id === id
@@ -418,52 +481,77 @@ export function ChannelInput(props: ChannelInputProps) {
         },
       ];
     };
-    const macro = macroUser();
+    // The picker opens at the caret, so the editor takes focus first.
+    const gif = (): ComposerAddMenuGroup['items'] => {
+      const action = slashAction('gif');
+      if (!action || !features().gifs) return [];
+      return [
+        {
+          id: 'gif',
+          label: 'GIF',
+          icon: <GifIcon class="size-3.5" />,
+          onSelect: () =>
+            runInEditor((editor) => action.action(editor, actionContext), {
+              focus: true,
+            }),
+          focusesEditor: true,
+        },
+      ];
+    };
+    const macro = features().mentions === true ? macroUser() : undefined;
     const startCall = props.onStartCall;
     const callInProgress = !!props.callInProgress;
     return [
       {
         items: [
-          {
-            id: 'mention',
-            label: 'Mention',
-            icon: <AtIcon class="size-3.5" />,
-            hint: '@',
-            onSelect: () => runInEditor(openMentionTypeahead, { focus: true }),
-            focusesEditor: true,
-          },
+          ...(features().mentions
+            ? [
+                {
+                  id: 'mention',
+                  label: 'Mention',
+                  icon: <AtIcon class="size-3.5" />,
+                  hint: '@',
+                  onSelect: () =>
+                    runInEditor(openMentionTypeahead, { focus: true }),
+                  focusesEditor: true,
+                },
+              ]
+            : []),
           {
             id: 'attach',
             label: 'Attach files',
             icon: <PaperclipIcon class="size-3.5" />,
             onSelect: () => collapsedInput.attach(),
           },
+          ...gif(),
         ],
       },
       {
         label: 'Create',
-        items: [
-          ...create(
-            'task',
-            'New task',
-            <EntityIcon targetType="task" size="xs" />
-          ),
-          ...create(
-            'poll',
-            'New poll',
-            <ChartBarIcon class="size-3.5 text-violet" />
-          ),
-          ...create(
-            'form',
-            'New form',
-            <EntityIcon targetType="form" size="xs" />
-          ),
-          ...create(
-            'document',
-            'New document',
-            <EntityIcon targetType="md" size="xs" />
-          ),
-        ],
+        items: !features().createItems
+          ? []
+          : [
+              ...create(
+                'task',
+                'New task',
+                <EntityIcon targetType="task" size="xs" />
+              ),
+              ...create(
+                'poll',
+                'New poll',
+                <ChartBarIcon class="size-3.5 text-violet" />
+              ),
+              ...create(
+                'form',
+                'New form',
+                <EntityIcon targetType="form" size="xs" />
+              ),
+              ...create(
+                'document',
+                'New document',
+                <EntityIcon targetType="md" size="xs" />
+              ),
+            ],
       },
       {
         items: [
@@ -477,15 +565,18 @@ export function ChannelInput(props: ChannelInputProps) {
                   onSelect: () =>
                     runInEditor(
                       (editor) => {
-                        void handleUserMention(macro, {
-                          editor,
-                          blockName: groupMentions ? 'channel' : undefined,
-                        }).then(() =>
-                          editor.update(() => {
-                            const selection = $getSelection();
-                            if ($isRangeSelection(selection))
-                              selection.insertText(' ');
-                          })
+                        fireAndForget(
+                          handleUserMention(macro, {
+                            editor,
+                            blockName: groupMentions ? 'channel' : undefined,
+                          }).then(() =>
+                            editor.update(() => {
+                              const selection = $getSelection();
+                              if ($isRangeSelection(selection))
+                                selection.insertText(' ');
+                            })
+                          ),
+                          'channel-input'
                         );
                       },
                       { focus: true }
@@ -743,7 +834,7 @@ export function ChannelInput(props: ChannelInputProps) {
         type="file"
         class="hidden"
         multiple
-        accept={CHANNEL_FILE_PICKER_ACCEPT}
+        accept={props.fileAccept ?? CHANNEL_FILE_PICKER_ACCEPT}
         onChange={collapsedInput.onFilePickerChange}
         data-collapsed-input-file-picker
       />
@@ -767,12 +858,12 @@ export function ChannelInput(props: ChannelInputProps) {
           getFocusTarget={() => lexicalEditor().getRootElement()}
           leadingAction={addMenu(true)}
           onOpen={collapsedInput.expand}
-          trailingAction={<DictationButton dictation={dictation} />}
-          onSend={() => void commands.send()}
+          onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />
       </Show>
       <Dynamic
         component={props.flat ? 'div' : ComposerSurface}
+        data-glass-input={props.flat ? undefined : ''}
         onFocusOut={(e: FocusEvent & { currentTarget: HTMLElement }) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;

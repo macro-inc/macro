@@ -4,6 +4,7 @@
  * (redeem, then the offer the plan step shows).
  */
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { CreateGtmInviteLinkRequest } from '@service-auth/generated/schemas/createGtmInviteLinkRequest';
@@ -11,10 +12,8 @@ import type { GtmInviteLink } from '@service-auth/generated/schemas/gtmInviteLin
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-
 import { gtmInviteKeys } from './keys';
 
 export type { GtmInviteLink, GtmInviteOffer };
@@ -57,7 +56,7 @@ export function useCreateGtmInviteLinkMutation(
     ...withCallbacks<GtmInviteLink, Error, CreateGtmInviteLinkRequest>(
       {
         onSuccess: () => {
-          invalidateGtmInviteLinks();
+          fireAndForget(invalidateGtmInviteLinks(), 'gtm-invite');
         },
         onError: (error) => {
           toast.failure(error.message || "Couldn't create the invite link");
@@ -84,7 +83,7 @@ export function useRevokeGtmInviteLinkMutation(
     ...withCallbacks<GtmInviteLink, Error, RevokeLinkArgs>(
       {
         onSuccess: () => {
-          invalidateGtmInviteLinks();
+          fireAndForget(invalidateGtmInviteLinks(), 'gtm-invite');
           toast.success('Invite link revoked');
         },
         onError: (error) => {
@@ -152,7 +151,7 @@ export function useRedeemGtmInviteLinkMutation(callbacks?: RedeemCallbacks) {
     ...withCallbacks<GtmInviteOffer, Error, RedeemArgs>(
       {
         onSuccess: () => {
-          invalidateGtmInviteOffer();
+          fireAndForget(invalidateGtmInviteOffer(), 'gtm-invite');
         },
       },
       callbacks

@@ -24,6 +24,11 @@ Pipedream compatibility. Live verification remains a release prerequisite.
 New-connection slug: `slack_v2`, the OAuth app slug published in
 [Pipedream's Slack connector metadata](https://pipedream.com/apps/slack-v2).
 Existing connections retain the selection order `slack`, then `slack_v2`.
+On 2026-10-12 the authenticated production
+`/cognition/pipedream/mcp/catalog?search=Slack` endpoint returned `slack_v2`
+(display name Slack), and the production Connect token opened its hosted flow.
+This verifies catalog/Connect availability, not authorization or successful
+Slack tool execution; those still require the live checks below.
 
 | Evidence | `slack` | `slack_v2` |
 | --- | --- | --- |
@@ -210,9 +215,7 @@ gates, not successful observations:
 3. Find channels again: verify no duplicate rows, refreshed counts on staged
    rows, and already-imported rows remaining nonselectable. Check archived
    filtering, empty/error states, and exclusion of private/DM conversations.
-4. Onboard a fresh user with Slack connected: verify auto-imported channels
-   include matched teammates, without changing onboarding to manual selection.
-5. Record channel-list, directory, per-channel member, complete discovery, and
+4. Record channel-list, directory, per-channel member, complete discovery, and
    two-channel import latency with workspace/channel sizes. **No live latency
    was measured**; test durations above are not service latency measurements.
 
@@ -225,9 +228,8 @@ gates, not successful observations:
   batches attempt fresh resolution with one shared session/directory; failures
   fall back to staged participants, potentially leaving only the importer.
 - Best-effort membership enrichment shares a deadline measured from the start
-  of discovery: 170 seconds for onboarding, 350 seconds for manual discovery,
-  leaving 10 seconds before the outer timeout. Directory/member reads, metadata
-  enrichment, and notifications are bounded; expiry keeps staged channels ready
+  of discovery: 350 seconds, leaving 10 seconds before the outer timeout.
+  Directory/member reads, metadata enrichment, and notifications are bounded; expiry keeps staged channels ready
   with unresolved membership instead of failing an otherwise usable discovery.
   Initial listing or staging can still fail or reach the outer timeout.
 - Stored matched participants are capped at 100; `member_count` is separate.

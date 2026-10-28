@@ -24,16 +24,21 @@ use notification::domain::service::NotificationIngress;
 use serde_json::json;
 use uuid::Uuid;
 
+mod access;
 mod active_meetings;
+mod channel_startup;
+mod guest_chat;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
+mod orphan_rooms;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
     CallRecord, CallRecordTranscriptSegment, CallWebhookEvent, DeletedCallRecordStorageKeys,
-    EditCallRecordRequest, EgressS3Config, RingStatus, VerifiedRingToken, VoipPushPayloadRequest,
+    EditCallRecordRequest, EgressS3Config, RingStatus, RtcRoom, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
@@ -117,6 +122,10 @@ impl CallRtcClient for MockRtcClient {
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_rooms(&self) -> anyhow::Result<Vec<RtcRoom>> {
+        Ok(Vec::new())
     }
 
     async fn generate_token<'a>(
@@ -439,11 +448,7 @@ fn started_event_call(created_by: &str) -> Call {
     }
 }
 
-fn mock_get_or_create_repo(
-    scenario: GetOrCreateScenario,
-    call: Call,
-    recording_enabled: bool,
-) -> MockCallRepository {
+fn mock_get_or_create_repo(scenario: GetOrCreateScenario, call: Call) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
 
     match scenario {
@@ -481,12 +486,6 @@ fn mock_get_or_create_repo(
         }
     }
 
-    if recording_enabled {
-        repo.expect_set_egress_id()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok(()) }));
-    }
-
     repo.expect_find_active_call_for_user()
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
@@ -504,7 +503,7 @@ fn mock_get_or_create_repo(
     repo
 }
 
-type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
+type BaseGetOrCreateCallService<Cn, B = macro_event_broker::NoopMacroEventBroker> = CallServiceImpl<
     MockCallRepository,
     MockRtcClient,
     Cn,
@@ -512,6 +511,9 @@ type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
     StubNotificationIngress,
     StubRecordingStorage,
     NoopCallSummarizer,
+    (),
+    NoOpVoiceRepository,
+    B,
 >;
 
 fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionService>(
@@ -519,7 +521,7 @@ fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionServic
     connection_service: Cn,
     event_broker: B,
     recording_enabled: bool,
-) -> impl CallService {
+) -> BaseGetOrCreateCallService<Cn, B> {
     let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -550,13 +552,40 @@ async fn get_or_create_call(
     recording_enabled: bool,
 ) -> Result<crate::domain::models::CallTokenResponse, CallError> {
     let call = started_event_call(created_by);
-    let repo = mock_get_or_create_repo(scenario, call, recording_enabled);
+    let repo = mock_get_or_create_repo(scenario, call);
     let service =
         build_get_or_create_service(repo, StubConnectionService, broker, recording_enabled);
 
-    service
+    let mut completed = None;
+    if matches!(scenario, GetOrCreateScenario::CreatorWins) && recording_enabled {
+        let (sent, received) = tokio::sync::oneshot::channel();
+        let mut background_repo = MockCallRepository::new();
+        background_repo
+            .expect_attach_meeting_recording()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(true) }));
+        background_repo
+            .expect_get_call_by_id()
+            .times(1)
+            .return_once(move |_| {
+                Box::pin(async move {
+                    sent.send(()).unwrap();
+                    Ok(Some(started_event_call(STARTED_EVENT_CREATOR)))
+                })
+            });
+        configure_repository_clone(&service.repo, background_repo);
+        completed = Some(received);
+    }
+    let result = service
         .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
-        .await
+        .await;
+    if let Some(completed) = completed {
+        tokio::time::timeout(Duration::from_secs(2), completed)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    result
 }
 
 #[tokio::test]
@@ -676,7 +705,7 @@ async fn malformed_stored_creator_skips_only_started_event() {
 #[tokio::test]
 async fn get_or_create_call_sends_call_answered_to_joining_user() {
     let call = started_event_call(STARTED_EVENT_CREATOR);
-    let repo = mock_get_or_create_repo(GetOrCreateScenario::ExistingCall, call, false);
+    let repo = mock_get_or_create_repo(GetOrCreateScenario::ExistingCall, call);
     let connection_service = RecordingConnectionService::default();
     let service = build_get_or_create_service(
         repo,
@@ -1044,7 +1073,7 @@ fn build_webhook_service(
     repo: MockCallRepository,
     rtc_client: MockCallRtcClient,
     event_broker: RecordingEventBroker,
-) -> impl CallService {
+) -> impl CallService + messages::domain::service::guest_chat::GuestCallAuthorizer {
     build_webhook_service_with_connection(repo, rtc_client, StubConnectionService, event_broker)
 }
 
@@ -1053,7 +1082,7 @@ fn build_webhook_service_with_connection<Cn: ConnectionService>(
     rtc_client: MockCallRtcClient,
     connection_service: Cn,
     event_broker: RecordingEventBroker,
-) -> impl CallService {
+) -> impl CallService + messages::domain::service::guest_chat::GuestCallAuthorizer {
     let service: BaseWebhookCallService<Cn> = CallServiceImpl::new(
         repo,
         rtc_client,
@@ -1540,7 +1569,7 @@ fn call_record_for_mutation() -> CallRecord {
     CallRecord {
         call_id: MUTATED_EVENT_CALL_ID,
         channel_id: Some(MUTATED_EVENT_CHANNEL_ID),
-        room_name: "mutation-event-room".to_string(),
+        room_name: Some("mutation-event-room".to_string()),
         created_by: "macro|creator@example.com".to_string(),
         started_at: archived_event_started_at(),
         ended_at: Some(archived_event_ended_at()),
@@ -1563,6 +1592,7 @@ fn call_record_for_mutation() -> CallRecord {
         participants: Vec::new(),
         guests: Vec::new(),
         transcript: Vec::new(),
+        source: None,
     }
 }
 
@@ -2683,7 +2713,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
     CallRecord {
         call_id: SUMMARIZED_EVENT_CALL_ID,
         channel_id: Some(SUMMARIZED_EVENT_CHANNEL_ID),
-        room_name: SUMMARIZED_EVENT_CHANNEL_ID.to_string(),
+        room_name: Some(SUMMARIZED_EVENT_CHANNEL_ID.to_string()),
         created_by: "macro|creator@example.com".to_string(),
         started_at: started_event_timestamp(),
         ended_at: Some(started_event_timestamp()),
@@ -2715,6 +2745,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
             ended_at: Some(started_event_timestamp()),
             sequence_num: 1,
         }],
+        source: None,
     }
 }
 
@@ -4400,4 +4431,28 @@ async fn call_record_reader_reports_a_deleted_record_as_not_found() {
             .await,
         Err(CallError::NotFound(_))
     ));
+}
+
+#[test]
+fn native_call_fallback_persists_only_users_with_unhandled_platforms() {
+    use notification::domain::models::{MobilePushRecipients, NativeCallPushResult};
+    let fully_handled = user("fully@example.com");
+    let ios_fallback = user("ios-fallback@example.com");
+    let android_fallback = user("android-fallback@example.com");
+    let result = NativeCallPushResult {
+        delivered: MobilePushRecipients {
+            ios: HashSet::from([fully_handled.clone(), android_fallback.clone()]),
+            android: HashSet::from([fully_handled.clone(), ios_fallback.clone()]),
+        },
+        fully_delivered: HashSet::from([fully_handled.clone()]),
+    };
+    let fallback = exclude_voip_recipients(
+        HashSet::from([
+            fully_handled,
+            ios_fallback.clone(),
+            android_fallback.clone(),
+        ]),
+        &result.fully_delivered,
+    );
+    assert_eq!(fallback, HashSet::from([ios_fallback, android_fallback]));
 }

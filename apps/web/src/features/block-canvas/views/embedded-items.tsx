@@ -1,23 +1,17 @@
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { DocumentPreviewSkeleton } from '@core/component/DocumentPreviewSkeleton';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import type { ShapeViewProps } from '@macro-inc/graphics/solid';
-import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import { Card } from '@ui';
-import {
-  type Component,
-  createEffect,
-  createSignal,
-  ErrorBoundary,
-  on,
-  onCleanup,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { type Component, ErrorBoundary, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
+import {
+  CanvasMediaContent,
+  CanvasMediaSkeleton,
+} from '../components/media-content';
 import { canEmbedDocument } from '../core/document-display';
+import { useCanvasMediaSource } from '../queries/media';
 
 export function CanvasMediaView(
   props: ShapeViewProps<'image' | 'video'> & {
@@ -25,43 +19,7 @@ export function CanvasMediaView(
     onStop: () => void;
   }
 ) {
-  const source = () => props.item.geometry.source;
-  const query = useBinaryDocumentQuery(() => {
-    const s = source();
-    return s.type === 'document' ? s.id : '';
-  });
-  const url = () => {
-    const value = source();
-    if (value.type === 'url') return value.url;
-    if (value.type === 'static') return staticFileIdEndpoint(value.id);
-    return query.isSuccess ? query.data : undefined;
-  };
-  const [failed, setFailed] = createSignal(false);
-  const [video, setVideo] = createSignal<HTMLVideoElement>();
-  createEffect(on(url, () => setFailed(false)));
-  createEffect(
-    on([video, () => props.playing], ([element, playing]) => {
-      if (!element) return;
-      if (!playing) {
-        element.pause();
-        return;
-      }
-      let cancelled = false;
-      onCleanup(() => {
-        cancelled = true;
-        element.pause();
-      });
-      async function play() {
-        try {
-          await element!.play();
-        } catch {
-          if (!cancelled) props.onStop();
-        }
-      }
-      void play();
-    })
-  );
-  const unavailable = () => failed() || query.isError;
+  const source = useCanvasMediaSource(() => props.item.geometry.source);
   return (
     <div
       data-canvas-media={props.item.type}
@@ -73,55 +31,26 @@ export function CanvasMediaView(
         'box-sizing': 'border-box',
       }}
     >
-      <Suspense
-        fallback={
-          <div class="grid size-full place-items-center bg-hover text-sm">
-            Loading media…
-          </div>
-        }
-      >
-        <Show
-          when={url() && !unavailable()}
-          fallback={
-            <div class="grid size-full place-items-center border border-edge-muted bg-panel p-3 text-xs text-ink-muted">
-              {unavailable() ? 'Media unavailable' : 'Loading media…'}
-            </div>
-          }
-        >
-          <Show
-            when={props.item.type === 'image'}
-            fallback={
-              <video
-                ref={setVideo}
-                src={url()}
-                preload="metadata"
-                playsinline
-                class="size-full object-fill"
-                onError={() => setFailed(true)}
-                onEnded={props.onStop}
-              />
-            }
-          >
-            <img
-              src={url()}
-              alt={props.item.geometry.name}
-              draggable={false}
-              class="size-full object-fill"
-              onError={() => setFailed(true)}
-            />
-          </Show>
-        </Show>
+      <Suspense fallback={<CanvasMediaSkeleton />}>
+        <CanvasMediaContent
+          url={source.url()}
+          type={props.item.type}
+          name={props.item.geometry.name}
+          unavailable={source.unavailable()}
+          playing={props.playing}
+          onStop={props.onStop}
+        />
       </Suspense>
     </div>
   );
 }
+
 export function CanvasDocumentView(
   props: ShapeViewProps<'document'> & {
     embedView: Component<CanvasEmbedViewProps>;
     active: boolean;
     onEnter: () => void;
     onExit: () => void;
-    onEmbed: () => void;
   }
 ) {
   const embedded = () =>
@@ -164,11 +93,6 @@ export function CanvasDocumentView(
                     type: fileTypeToBlockName(props.item.geometry.fileType),
                     params: {},
                     isOpenable: true,
-                  }}
-                  previewInfo={{
-                    showPreview: canEmbedDocument(props.item.geometry.fileType),
-                    isPreviewable: true,
-                    handlePreviewToggle: props.onEmbed,
                   }}
                 />
               </div>

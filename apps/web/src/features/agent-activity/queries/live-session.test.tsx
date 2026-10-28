@@ -43,6 +43,7 @@ function message(text: string): FoldedMessage {
     pending: false,
     segments: [],
     phase: 'writing',
+    postedAt: null,
   };
 }
 

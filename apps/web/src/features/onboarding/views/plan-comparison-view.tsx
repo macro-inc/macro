@@ -8,11 +8,19 @@ export function PlanComparisonView(props: {
   onBackToPro: () => void;
   onStartMax: () => void;
 }) {
-  const plans = useOnboardingContext().createPlanCatalog();
+  const context = useOnboardingContext();
+  const plans = context.createPlanCatalog();
+  const trial = context.createTrialEligibility();
+  const trialEligible = () => {
+    const state = trial.eligibility();
+    return state.t === 'ready' && state.value;
+  };
   return (
     <PlanComparison
       {...props}
       catalog={plans.catalog()}
+      trialEligible={trialEligible()}
+      existingSubscription={trial.existingSubscription()}
       onRetry={plans.retry}
     />
   );

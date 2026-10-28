@@ -5,8 +5,10 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent_code_mode = { path = "../agent_code_mode" }
 ai_billing = { path = "../ai_billing" }
 agent = { path = "../agent" }
+agent_api_keys = { path = "../agent_api_keys" }
 # The egress proxy's domain service, driven in-process: the same verification,
 # resolution and stamping a sandbox reaches over the wire, minus the wire.
 agent_egress = { path = "../agent_egress" }
@@ -23,8 +25,10 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 bot_id = { path = "../bot_id" }
 chat = { path = "../chat", default-features = false }
+cognition = { path = "../cognition" }
 dashmap = { workspace = true }
 futures = { workspace = true }
+feature_flags = { path = "../feature_flags" }
 genai_telemetry = { path = "../genai_telemetry" }
 macro_user_id = { path = "../macro_user_id" }
 model_owner = { path = "../model_owner" }
@@ -52,6 +56,7 @@ url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+rootcause = { workspace = true }
 agent_fold = { path = "../folds/agent_fold" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }

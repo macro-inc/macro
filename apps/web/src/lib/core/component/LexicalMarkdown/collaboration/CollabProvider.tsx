@@ -45,7 +45,7 @@ import {
   SKIP_SCROLL_INTO_VIEW_TAG,
   stripDraftCommentMarks,
 } from '@macro-inc/lexical-core';
-import type { Span } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { NodeKey, UpdateListenerPayload } from 'lexical';
 import {
   $addUpdateTag,
@@ -431,11 +431,17 @@ export function CollabProvider(props: CollabProviderProps) {
     $afterSyncCursorUpdate(loroManager);
   }
 
+  function reportSyncError(error: unknown) {
+    Telemetry.error(error, { surface: 'collab-lexical-to-loro-sync' });
+  }
+
   function lexicalStateSyncPlugin() {
     return mergeRegister(
       props.editor.registerUpdateListener(
         ({ editorState, tags, mutatedNodes }) => {
-          syncLexicalToLoro(editorState, mutatedNodes, tags);
+          syncLexicalToLoro(editorState, mutatedNodes, tags).catch(
+            reportSyncError
+          );
           return false;
         }
       ),
@@ -443,7 +449,7 @@ export function CollabProvider(props: CollabProviderProps) {
         FORCE_SYNC_COMMAND,
         () => {
           const stateToSync = loroSyncState(props.editor.getEditorState());
-          syncEngine.syncStateToLoro(stateToSync as any);
+          syncEngine.syncStateToLoro(stateToSync as any).catch(reportSyncError);
           return true;
         },
         COMMAND_PRIORITY_NORMAL

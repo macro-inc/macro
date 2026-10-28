@@ -1,19 +1,46 @@
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { createSignal, For, Show } from 'solid-js';
+import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
+import { fireAndForget } from '@core/util/fireAndForget';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
 import { ToolTile } from '../components/tool-tile';
 import { type Tool, useOnboardingContext } from '../context/onboarding-context';
+import {
+  readPendingConnectors,
+  savePendingConnectors,
+} from '../primitives/flow-storage';
+import { orderOnboardingTools } from '../primitives/tools';
 
 /** Uses the same searchable, paginated catalog and hosted connection flow as Settings. */
 export function ToolsStep(props: { onContinue: () => void }) {
   const context = useOnboardingContext();
   const catalog = context.createToolCatalog();
   const connected = context.createConnectedTools({ poll: true });
+  const entries = () => orderOnboardingTools(catalog.entries());
   const [busy, setBusy] = createSignal<string>();
+  // Hosted OAuth finishes out of band, so a connection counts once polling
+  // reports a tool this step started connecting. Kept in session storage
+  // because GitHub's web OAuth reloads the page before its link lands.
+  const [pending, setPending] = createSignal(readPendingConnectors());
+  createEffect(() => savePendingConnectors(pending()));
+  createEffect(() => {
+    const landed = [...pending()].filter((slug) =>
+      ['connected', 'account-linked'].includes(connected.state(slug))
+    );
+    if (landed.length === 0) return;
+    for (const slug of landed)
+      context.track('onboarding_v4_connector_connected', { connector: slug });
+    setPending((set) => new Set([...set].filter((s) => !landed.includes(s))));
+  });
 
   const connect = async (tool: Tool) => {
-    if (busy()) return;
+    if (
+      busy() ||
+      !['available', 'disabled'].includes(connected.state(tool.slug))
+    )
+      return;
     setBusy(tool.slug);
+    setPending((set) => new Set(set).add(canonicalPipedreamSlug(tool.slug)));
     try {
       await context.connectTool(tool);
     } finally {
@@ -34,26 +61,52 @@ export function ToolsStep(props: { onContinue: () => void }) {
           class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
         />
       </label>
-      <div
-        role="region"
-        aria-label="Available integrations"
-        tabindex="0"
-        class="h-[32rem] overflow-y-auto rounded-xl px-1 py-1 outline-none focus-visible:ring-1 focus-visible:ring-ink/30"
-        style={{ 'scrollbar-gutter': 'stable' }}
-      >
+      <div role="region" aria-label="Available integrations" class="px-1 py-1">
         <div class="grid grid-cols-3 gap-x-2 gap-y-5 sm:grid-cols-4">
-          <For each={catalog.entries()}>
+          <For each={entries()}>
             {(tool) => (
               <ToolTile
                 tool={tool}
                 busy={busy() === tool.slug}
-                disabled={busy() !== undefined || connected() === undefined}
-                connected={connected()?.has(tool.slug) ?? false}
-                onConnect={() => void connect(tool)}
+                disabled={
+                  busy() !== undefined ||
+                  ['loading', 'error'].includes(connected.state(tool.slug))
+                }
+                state={connected.state(tool.slug)}
+                onConnect={() => fireAndForget(connect(tool), 'onboarding')}
               />
             )}
           </For>
         </div>
+        <Show
+          when={entries().some(
+            (tool) => connected.state(tool.slug) === 'error'
+          )}
+        >
+          <p role="alert" class="py-4 text-center text-sm text-ink-muted">
+            Couldn't check some connections.{' '}
+            <button type="button" class="underline" onClick={connected.retry}>
+              Retry connection status
+            </button>
+          </p>
+        </Show>
+        <Show
+          when={
+            entries().some((tool) => tool.slug === 'github') &&
+            connected.state('github') === 'account-linked'
+          }
+        >
+          <p class="py-4 text-center text-sm text-ink-muted">
+            GitHub account linked. Choose repositories to sync with Macro.{' '}
+            <button
+              type="button"
+              class="underline"
+              onClick={context.configureGithubRepositories}
+            >
+              Configure GitHub repositories
+            </button>
+          </p>
+        </Show>
         <Show when={catalog.failed()}>
           <p role="alert" class="py-6 text-center text-sm text-ink-muted">
             Couldn't load integrations.{' '}
@@ -71,7 +124,8 @@ export function ToolsStep(props: { onContinue: () => void }) {
           when={
             !catalog.fetching() &&
             !catalog.failed() &&
-            catalog.entries().length === 0
+            entries().length === 0 &&
+            !catalog.hasMore()
           }
         >
           <p class="py-6 text-center text-sm text-ink-muted">
@@ -89,10 +143,12 @@ export function ToolsStep(props: { onContinue: () => void }) {
           </button>
         </Show>
       </div>
-      <ContinueButton
-        disabled={busy() !== undefined}
-        onClick={props.onContinue}
-      />
+      <div class="sticky bottom-0 z-10 bg-surface pb-[var(--safe-bottom,0px)]">
+        <ContinueButton
+          disabled={busy() !== undefined}
+          onClick={props.onContinue}
+        />
+      </div>
     </div>
   );
 }

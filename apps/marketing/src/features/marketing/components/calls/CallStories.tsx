@@ -493,6 +493,9 @@ export function CallFollowupDemo() {
   const w = createCallProject();
   w.open('tasks', 'invite');
   w.updateTask('invite', { steps: [], comments: [] });
+  const initialInvite = {
+    ...w.data.tasks.find((task) => task.id === 'invite')!,
+  };
   const [tools, setTools] = createSignal(1);
   const [done, setDone] = createSignal(false);
   const [updated, setUpdated] = createSignal(false);
@@ -551,7 +554,18 @@ export function CallFollowupDemo() {
   const playback = createProductWalkthrough({
     root: () => root,
     steps: 4,
-    reset: () => {},
+    loop: { hold: 9000 },
+    reset: () => {
+      w.updateTask('invite', initialInvite);
+      setTools(1);
+      setDone(false);
+      setUpdated(false);
+      setOpen(true);
+      setFollowups([]);
+      setOpenedItem(undefined);
+      sourcePlayer.pause();
+      sourcePlayer.seek(0);
+    },
     reduced: finish,
     delay: (step) => [0, 800, 800, 800, 1000][step] ?? 800,
     advance: (step) => {

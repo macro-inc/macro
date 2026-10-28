@@ -456,6 +456,21 @@ export function GraphicsSurface(props: {
               projection.camera().y,
             ])}
           >
+            <For each={projection.session().transform?.snapGuides}>
+              {(guide) => (
+                <line
+                  data-graphics-snap-guide={guide.axis}
+                  x1={guide.axis === 'x' ? guide.value : guide.start}
+                  y1={guide.axis === 'y' ? guide.value : guide.start}
+                  x2={guide.axis === 'x' ? guide.value : guide.end}
+                  y2={guide.axis === 'y' ? guide.value : guide.end}
+                  stroke={SELECTION_COLOR}
+                  stroke-width="1"
+                  stroke-dasharray="4 3"
+                  vector-effect="non-scaling-stroke"
+                />
+              )}
+            </For>
             <For each={indicatedShapes()}>
               {(id) => {
                 const initial = scene().items[id];
