@@ -176,6 +176,10 @@ The editor and model picker stay mounted so collapsing preserves the draft.
 Dismissing the model or effort selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
+In new and active agent composers, check that the model selector and lightning
+speed toggle share a height and vertical center: 32px on desktop and 36px with
+touch emulation. Open the model picker and toggle fast mode to verify both
+controls remain interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
