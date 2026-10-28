@@ -56,14 +56,14 @@ function CheckboxMark(props: {
         pathLength="1"
         stroke-dasharray="1 2"
         stroke-dashoffset={props.checked && !props.indeterminate ? 0 : 1.2}
-        class="transition-[stroke-dashoffset] duration-150 ease-out motion-reduce:transition-none"
+        class="transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none"
       />
       <path
         d="M2.5 6h7"
         pathLength="1"
         stroke-dasharray="1 2"
         stroke-dashoffset={props.indeterminate ? 0 : 1.2}
-        class="transition-[stroke-dashoffset] duration-150 ease-out motion-reduce:transition-none"
+        class="transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none"
       />
     </svg>
   );
