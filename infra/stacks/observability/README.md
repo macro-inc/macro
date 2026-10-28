@@ -542,8 +542,9 @@ point shows as failing.
    stack's `goalertIntegrationKey` Pulumi secret.
 7. Subscribe the on-call phones to the `alarmTopicArn` SNS topic by SMS in the
    console. Phone numbers are personal data; never put them in code.
-8. Add a heartbeat monitor on the `Heartbeats` service for the monitoring stack
-   to ping, and send a test page to every enrolled phone.
+8. Send a test page to every enrolled phone. A heartbeat monitor that Datadog
+   pings is a follow-up; until then the monitoring stack's `goalert-health`
+   synthetic and the `observability-goalert` alarm watch GoAlert.
 
 ### Schedules and escalation
 
@@ -558,7 +559,7 @@ point shows as failing.
   1. Immediately: on-call user of `Macro prod on-call`.
   2. After 10 minutes unacknowledged: `Secondary`.
   3. After 20 minutes: everyone in the rotation.
-- Services `Datadog critical`, `Grafana critical` and `Heartbeats`, all on
+- Services `Datadog critical` and `Grafana critical`, both on
   `Macro prod`. Warnings never page; they only reach the channel.
 
 ### Recovery

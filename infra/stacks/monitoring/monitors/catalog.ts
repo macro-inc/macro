@@ -66,6 +66,8 @@ new datadog.LogsMetric('macro-logs-errors', {
 
 for (const rule of catalog.rules) {
   const { warning, critical } = rule.thresholds;
+  // Only one side pages a rule; Grafana's copy pages when the catalog names it.
+  const pages = rule.pages && rule.pager === 'datadog';
   const anomaly = rule.datadog.query.includes('anomalies(');
   new datadog.Monitor(
     `catalog-${rule.id}`,
@@ -76,10 +78,10 @@ for (const rule of catalog.rules) {
       message: alertMessage({
         description: rule.description,
         runbook: rule.runbook,
-        pages: rule.pages,
+        pages,
       }),
       tags: ['env:prod', `service:${rule.service}`, `catalog:${rule.id}`],
-      priority: rule.pages ? '2' : '3',
+      priority: pages ? '2' : '3',
       monitorThresholds: {
         critical: String(critical),
         ...(warning === undefined ? {} : { warning: String(warning) }),
@@ -95,6 +97,6 @@ for (const rule of catalog.rules) {
       includeTags: true,
       notifyAudit: false,
     },
-    { dependsOn: rule.pages ? goalertWebhooks : [] }
+    { dependsOn: pages ? goalertWebhooks : [] }
   );
 }
