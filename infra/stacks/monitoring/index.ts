@@ -21,6 +21,7 @@ import './synthetics';
 import './goalert';
 import './monitors/ai-editing';
 import './monitors/calls';
+import './monitors/catalog';
 import './monitors/graphql-soup';
 import './monitors/whatsapp-session';
 import { notificationRetentionDashboard } from './monitors/notification-retention';

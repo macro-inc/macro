@@ -263,8 +263,7 @@
       "runbook": "docs/runbooks/macrodb.md#storage",
       "datadog": {
         "type": "query alert",
-        "query": "min(next_1w):forecast(min:aws.rds.free_storage_space{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}, 'linear', 1, interval='60m', history='1w', model='default') <= 500000000000",
-        "thresholdWindows": { "triggerWindow": "last_1h", "recoveryWindow": "last_1h" }
+        "query": "min(next_1w):forecast(min:aws.rds.free_storage_space{dbinstanceidentifier:macro-db-prod*} by {dbinstanceidentifier}, 'linear', 1, interval='60m', history='1w', model='default') <= 500000000000"
       },
       "grafana": { "gap": "Grafana alerting has no forecast function." }
     },
@@ -348,8 +347,7 @@
       "runbook": "docs/runbooks/redis.md#memory",
       "datadog": {
         "type": "query alert",
-        "query": "max(next_3d):forecast(max:aws.elasticache.database_memory_usage_percentage{cacheclusterid:*prod*} by {cacheclusterid}, 'linear', 1, interval='60m', history='1w', model='default') >= 95",
-        "thresholdWindows": { "triggerWindow": "last_1h", "recoveryWindow": "last_1h" }
+        "query": "max(next_3d):forecast(max:aws.elasticache.database_memory_usage_percentage{cacheclusterid:*prod*} by {cacheclusterid}, 'linear', 1, interval='60m', history='1w', model='default') >= 95"
       },
       "grafana": { "gap": "Grafana alerting has no forecast function." }
     },
@@ -546,7 +544,7 @@
       "runbook": "docs/runbooks/regressions.md#latency",
       "datadog": {
         "type": "query alert",
-        "query": "avg(last_4h):anomalies(p95:trace.http.server.request{env:prod,service:cloud-storage-service OR service:authentication-service} by {service}, 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "query": "avg(last_4h):anomalies(p95:trace.http.server.request{env:prod AND (service:cloud-storage-service OR service:authentication-service)} by {service}, 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
         "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
       },
       "grafana": { "gap": "Prod traces are not exported to Tempo, and Grafana alerting has no anomaly detection." }
@@ -564,7 +562,7 @@
       "runbook": "docs/runbooks/regressions.md#errors",
       "datadog": {
         "type": "query alert",
-        "query": "avg(last_4h):anomalies(sum:macro.logs.errors{env:prod} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+        "query": "avg(last_4h):anomalies(sum:macro.logs.errors{*} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
         "thresholdWindows": { "triggerWindow": "last_30m", "recoveryWindow": "last_15m" }
       },
       "grafana": { "gap": "Prod logs are not exported to Loki, and Grafana alerting has no anomaly detection." }
