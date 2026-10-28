@@ -664,9 +664,9 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
-`Advanced` starts collapsed on desktop and mobile, showing only its heading,
-summary, and `Show` action, without an empty card beneath it. `Show` reveals the
-settings; `Hide` collapses them again and preserves the selected options.
+`More options` starts collapsed on desktop and mobile, showing only the button
+and a summary line of the current choices. Its caret turns down when it opens
+the settings below, and closing it preserves the selected options.
 Under `More options`, `Answering a mention` chooses between `Coding agent` (a
 channel mention is answered with a magic chip that opens into the live session)
 and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
