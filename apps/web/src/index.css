@@ -78,43 +78,6 @@
   --left-of-channel-rail: calc(var(--left-of-connector) - var(--channel-rail-width) / 2);
   --channel-rail-center: calc(var(--left-of-channel-rail) + var(--channel-rail-width) / 2);
 
-  /* Glass chrome, ported from the marketing site's hero CTA ring
-     (solid-site `.home-hero-cta-bar`). The look is four things layered on a
-     translucent surface: a backdrop blur, a bright inner top edge, a dark
-     inner bottom edge, and a diagonal specular rim. Touch surfaces use only
-     the diagonal reflections with short, dimmer opposing corners.
-
-     Split in two so the size scale and the theme stay independent:
-
-     - PALETTE (below, plus a light-mode pass) says which way the light comes
-       from and how strong the effect is at full size. The site is dark-only,
-       so its hard-coded values are the dark half; in a light theme the lift
-       comes from white, not from the (dark) ink color.
-     - GEOMETRY (owned by the utilities) says how big it is: blur/shadow
-       extents, and `--glass-scale` multiplying every palette strength. The
-       utilities set their tokens *on the element*, which would out-specify an
-       inherited light-mode value, so they must never name a color or a
-       strength directly — palette lives here, and only here. */
-  --glass-tint: var(--color-content-1);
-  --glass-press-tint: var(--color-content-1);
-  --glass-shade-color: var(--color-surface-0);
-  --glass-shadow-alpha: 0.55;
-  --glass-highlight-base: 6%;
-  --glass-shade-base: 40%;
-  --glass-rim-strong-base: 13.5%;
-  --glass-rim-soft-base: 9%;
-  --glass-rim-shade-base: 0%;
-  --glass-rim-gap-ratio: 0;
-  --glass-desktop-outline: rgb(0 0 0 / 0.4);
-  --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
-  --glass-desktop-top-edge: rgb(255 255 255 / 0.12);
-  /* Dark desktop glass separates by its outline; light adds a cast shadow. */
-  --glass-desktop-cast-alpha: 0;
-  --elevated-control-scale: 0.4;
-  /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
-  --island-rim-strong: 28%;
-  --island-rim-soft: 12%;
-
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
   --layer-inset: var(--color-surface-0);
@@ -123,35 +86,6 @@
     background-color: oklch(from var(--color-ink) l c h / 0.1);
   }
 
-}
-
-/* Light themes invert where the glass gets its lift: the bright edge is white
-   rather than the (dark) ink color, the bottom edge is a hint of ink rather
-   than a hole punched in black, and the cast shadow is softer so the surface
-   reads as raised instead of cut out. Palette only — the geometry tokens are
-   shared, so every size scales the same way in both themes. */
-html[data-theme-light='true'] {
-  --glass-tint: white;
-  --glass-press-tint: white;
-  --glass-shade-color: var(--color-content-0);
-  --glass-shadow-alpha: 0.28;
-  --glass-highlight-base: 55%;
-  --glass-shade-base: 8%;
-  --glass-rim-strong-base: 52.5%;
-  --glass-rim-soft-base: 30%;
-  /* A faint ink rim keeps white reflections legible on pale surfaces. */
-  --glass-rim-shade-base: 7%;
-  /* Keep quiet corners close to the highlight instead of exposing a dark rim. */
-  --glass-rim-gap-ratio: 0.85;
-  --glass-desktop-outline: var(--color-edge-frame);
-  --glass-desktop-inner-edge: rgb(255 255 255 / 0.6);
-  --glass-desktop-top-edge: rgb(255 255 255 / 0.9);
-  /* A fine outline alone vanishes on near-white content: keep the glass cast
-     shadow, and give controls a full 1px edge like a bordered input. */
-  --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
-  --elevated-control-scale: 1;
-  --island-rim-strong: 75%;
-  --island-rim-soft: 40%;
 }
 
 html[data-platform='ios'],
@@ -696,26 +630,18 @@ body.tauri-ios {
   --sidepanel-label-width: 5.5rem;
 }
 
-/* Shared neutral borders. Focus, status, and glass edges stay independent. */
+/* Runtime theme tokens. Dark is the default; light overrides follow.
+   Reset shared materials at every theme marker so previews resolve locally.
+   Root-only and device conditions retain their existing scope. */
 :root,
 [data-theme-light] {
+  /* Neutral borders. Focus, status, and glass edges stay independent. */
   --border-primary: oklch(1 0 0 / 16%);
   --border-secondary: oklch(1 0 0 / 12%);
   --border-tertiary: oklch(1 0 0 / 8%);
   --divider: oklch(1 0 0 / 4%);
-}
 
-[data-theme-light='true'] {
-  --border-primary: oklch(0 0 0 / 16%);
-  --border-secondary: oklch(0 0 0 / 12%);
-  --border-tertiary: oklch(0 0 0 / 8%);
-  --divider: oklch(0 0 0 / 4%);
-}
-
-/* Shared Button roles. Other app colors keep their current meaning. */
-/* Reset on each theme scope so previews resolve their own palette inputs. */
-:root,
-[data-theme-light] {
+  /* Button materials. */
   --button-primary-bg: var(--color-accent);
   --button-primary-ink: white;
   --button-primary-state-mix: black;
@@ -750,9 +676,49 @@ body.tauri-ios {
 
   /* Negative spread keeps the faint contact shadow beneath the button. */
   --button-shadow: 0 2px 1px -1px oklch(0 0 0 / 10%);
+
+  /* Avatar edges remain at the current 0.4 review strength. */
+  --color-avatar-edge: oklch(0 0 0 / 0.4);
+
+  /* The document owns the glass palette; geometry stays in the utilities. */
+  &:where(:root) {
+    /* Colors and strengths stay here; utilities own blur, dimensions, and
+       --glass-scale so control sizes share the same material. */
+    --glass-tint: var(--color-content-1);
+    --glass-press-tint: var(--color-content-1);
+    --glass-shade-color: var(--color-surface-0);
+    --glass-shadow-alpha: 0.55;
+    --glass-highlight-base: 6%;
+    --glass-shade-base: 40%;
+    --glass-rim-strong-base: 13.5%;
+    --glass-rim-soft-base: 9%;
+    --glass-rim-shade-base: 0%;
+    --glass-rim-gap-ratio: 0;
+    --glass-desktop-outline: rgb(0 0 0 / 0.4);
+    --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
+    --glass-desktop-top-edge: rgb(255 255 255 / 0.12);
+    /* Dark desktop glass separates by its outline; light adds a cast shadow. */
+    --glass-desktop-cast-alpha: 0;
+    --elevated-control-scale: 0.4;
+    /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
+    --island-rim-strong: 28%;
+    --island-rim-soft: 12%;
+  }
+
+  /* Preserve the darker thread rail only on an explicitly dark document. */
+  &:is(html):where([data-theme-light='false']) {
+    --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
+  }
 }
 
 [data-theme-light='true'] {
+  /* Neutral borders. */
+  --border-primary: oklch(0 0 0 / 16%);
+  --border-secondary: oklch(0 0 0 / 12%);
+  --border-tertiary: oklch(0 0 0 / 8%);
+  --divider: oklch(0 0 0 / 4%);
+
+  /* Button materials. */
   --button-neutral-bg: black;
   --button-neutral-ink: white;
   /* Keep hover and pressed shading neutral over the lightly tinted face. */
@@ -773,6 +739,39 @@ body.tauri-ios {
   --button-success-pressed: oklch(from var(--color-success) l c h / 32%);
 
   --button-shadow: 0 2px 1px -1px oklch(0 0 0 / 5%);
+
+  /* Avatar and composer surfaces. */
+  --color-avatar-edge: oklch(1 0 0 / 0.4);
+  --color-composer: var(--color-surface-4);
+
+  /* Light document glass keeps its existing root-only scope. */
+  &:is(html) {
+    --glass-tint: white;
+    --glass-press-tint: white;
+    --glass-shade-color: var(--color-content-0);
+    --glass-shadow-alpha: 0.28;
+    --glass-highlight-base: 55%;
+    --glass-shade-base: 8%;
+    --glass-rim-strong-base: 52.5%;
+    --glass-rim-soft-base: 30%;
+    /* A faint ink rim keeps white reflections legible on pale surfaces. */
+    --glass-rim-shade-base: 7%;
+    /* Keep quiet corners close to the highlight instead of exposing a dark rim. */
+    --glass-rim-gap-ratio: 0.85;
+    --glass-desktop-outline: var(--color-edge-frame);
+    --glass-desktop-inner-edge: rgb(255 255 255 / 0.6);
+    --glass-desktop-top-edge: rgb(255 255 255 / 0.9);
+    /* A fine outline alone vanishes on near-white content: keep the glass cast
+       shadow, and give controls a full 1px edge like a bordered input. */
+    --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
+    --elevated-control-scale: 1;
+    --island-rim-strong: 75%;
+    --island-rim-soft: 40%;
+
+    &:not([data-touch-device='true']) {
+      --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
+    }
+  }
 }
 @theme inline {
   --color-border-primary: var(--border-primary);
@@ -859,38 +858,11 @@ html:not([data-touch-device="true"]) [data-invert] {
 @custom-variant light-mode (&:where([data-theme-light="true"] *));
 @custom-variant dark-mode (&:where([data-theme-light="false"] *));
 
-/* Dark surfaces need a larger ink step for the thread path to remain visible.
-   Both inputs stay opaque, so overlapping rail segments still render evenly. */
-html[data-theme-light='false'] {
-  --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
-}
-
-/* The avatar hairline follows the surface it sits on: it darkens the edge on
-   dark surfaces and lightens it on light ones, so the avatar settles into the
-   page instead of being ringed against it. Ancestor-scoped for the same reason
-   as the variants above.
-
-   NOTE: turned up to 0.4 so the treatment is obvious while it is being
-   reviewed. The intended production value is 0.08 — change both alphas below
-   (and the @theme default) once the look is settled. */
-[data-theme-light='false'] {
-  --color-avatar-edge: oklch(0 0 0 / 0.4);
-}
-
-[data-theme-light='true'] {
-  --color-avatar-edge: oklch(1 0 0 / 0.4);
-  --color-composer: var(--color-surface-4);
-}
-
 /* Desktop floating surfaces use a close contact shadow rather than the longer
    touch shadow. */
 html:not([data-touch-device='true']) {
   --shadow-menu: 0 2px 6px -3px rgb(0 0 0 / 0.12), 0 1px 2px -1px rgb(0 0 0 / 0.08);
   --shadow-control: 0 1px 2px rgb(0 0 0 / 0.06);
-}
-
-html[data-theme-light='true']:not([data-touch-device='true']) {
-  --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
 }
 
 /* Header Button presentation belongs to the shared Button recipes. */
