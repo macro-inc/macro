@@ -443,7 +443,29 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           (composer.message().attachments?.length ?? 0) + 1
         );
         const deliveries = await Promise.all(
-          targets.map((target) => sendForward(target, accessLevel))
+          targets.map((target, index) =>
+            span.span('share.deliver', async (deliverySpan) => {
+              deliverySpan.setAttr('target.index', index);
+              deliverySpan.setAttr('target.type', target.type);
+              if (target.type === 'channel') {
+                deliverySpan.setAttr('channel.id', target.id);
+              } else {
+                // User IDs can contain email addresses; only record the count.
+                deliverySpan.setAttr('recipient.count', target.users.length);
+              }
+              const delivery = await sendForward(target, accessLevel);
+              deliverySpan.setAttr(
+                'delivery.outcome',
+                delivery ? 'success' : 'failure'
+              );
+              if (delivery) {
+                deliverySpan.setAttr('channel.id', delivery.channelId);
+              } else {
+                deliverySpan.error('Share delivery failed');
+              }
+              return delivery;
+            })
+          )
         );
         if (deliveries.some((delivery) => !delivery))
           span.error('Share failed');

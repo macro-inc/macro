@@ -1,3 +1,4 @@
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import {
   cleanup,
   fireEvent,
@@ -5,7 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import type { ComponentProps, JSX } from 'solid-js';
+import { type ComponentProps, createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForwardToChannel } from './ForwardToChannel';
 import { Permissions } from './SharePermissions';
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
   failure: vi.fn(),
   shareOptions: vi.fn(),
-  uploading: false,
+  uploading: (): boolean => false,
   attachments: [] as {
     entity_type: string;
     entity_id: string;
@@ -36,7 +37,7 @@ vi.mock('@core/component/ForwardMessageComposer', () => ({
       mentions: [],
       attachments: mocks.attachments,
     }),
-    isUploading: () => mocks.uploading,
+    isUploading: () => mocks.uploading(),
     clear: vi.fn(),
   }),
   ForwardMessageComposer: () => <textarea aria-label="Optional message" />,
@@ -149,7 +150,7 @@ function mountForward(
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.uploading = false;
+  mocks.uploading = () => false;
   mocks.attachments = [];
   mocks.recipients = [{ kind: 'channel', id: 'channel-1' }];
 });
@@ -460,13 +461,52 @@ describe('forwarding image attachments', () => {
     }
   );
 
-  it('blocks the submit handler while images are uploading', async () => {
-    mocks.uploading = true;
-    const { submit } = mountForward();
-    await submit();
-    expect(mocks.sendToChannel).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole('button', { name: 'Share' }).hasAttribute('disabled')
-    ).toBe(true);
-  });
+  it.each(['button', 'shortcut'] as const)(
+    'blocks sharing from the %s until an image upload completes',
+    async (path) => {
+      const [uploading, setUploading] = createSignal(true);
+      mocks.uploading = uploading;
+      mocks.sendToChannel.mockResolvedValue({
+        channelId: 'channel-1',
+        navigateToChannel: vi.fn(),
+      });
+      const { onSubmit } = mountForward();
+      const button = screen.getByRole('button', { name: 'Share' });
+      const shortcut = vi
+        .mocked(registerHotkey)
+        .mock.calls.find(
+          ([options]) => options.hotkey === 'cmd+enter'
+        )?.[0].keyDownHandler;
+      if (!shortcut) throw new Error('Share shortcut was not registered');
+
+      expect(button.hasAttribute('disabled')).toBe(true);
+      fireEvent.click(button);
+      shortcut(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true }));
+      expect(mocks.sendToChannel).not.toHaveBeenCalled();
+
+      mocks.attachments = [
+        {
+          entity_type: 'static/image',
+          entity_id: 'image-1',
+          width: 20,
+          height: 10,
+        },
+      ];
+      setUploading(false);
+      await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
+      if (path === 'button') fireEvent.click(button);
+      else
+        shortcut(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true }));
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+      expect(mocks.sendToChannel).toHaveBeenCalledOnce();
+      expect(mocks.sendToChannel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [
+            { entity_type: 'agent_session', entity_id: 'session-1' },
+            ...mocks.attachments,
+          ],
+        })
+      );
+    }
+  );
 });
