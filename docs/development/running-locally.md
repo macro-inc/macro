@@ -93,6 +93,13 @@ On Linux, the Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-
 
 On macOS, install a Docker runtime such as Docker Desktop, OrbStack, or Colima. The Nix dev shell supplies the Docker CLI, but macOS still needs the runtime to provide the daemon.
 
+Install workspace dependencies from the repository root inside the Nix shell
+for each checkout or worktree before starting the stack:
+
+```bash
+bun install --frozen-lockfile
+```
+
 Run the preflight check before the first start:
 
 ```bash
