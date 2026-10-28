@@ -222,9 +222,9 @@ export function HomeFilterDropdown() {
             tooltip="Filter Home"
             ref={tourTarget(HOME_TOUR.filter)}
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
           >
-            <FilterIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            <FilterIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
         }
         groups={HOME_FILTER_GROUPS}
