@@ -11,6 +11,7 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import TerminalIcon from '@icon/system/regular/terminal-window.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
+import { Telemetry } from '@macro-inc/observability';
 import {
   removeAgentApiKey,
   saveAgentApiKey,
@@ -37,9 +38,10 @@ import {
 import { AdvancedGroup } from './components/agent-advanced-group';
 import {
   AgentEditFrame,
+  AgentEditHero,
   AgentEditSection,
 } from './components/agent-edit-frame';
-import { AgentFace, createDarkTheme } from './components/agent-face';
+import { createDarkTheme } from './components/agent-face';
 import { agentFaceImage } from './components/agent-face-paint';
 import { AgentLookFields } from './components/agent-look-fields';
 import { AgentModelPicker } from './components/agent-model-picker';
@@ -429,36 +431,61 @@ export function AgentEditorPage(props: {
    * chosen `face` replaces the agent's picture with a picture of that face,
    * so it looks the same wherever agents are shown as images.
    */
-  const submit = async (face?: AgentFaceLook) => {
-    if (!canCreate()) return undefined;
-    const picture = face ? await uploadFace(face) : avatarUrl();
-    if (face && !picture) return undefined;
+  const submit = (face?: AgentFaceLook) =>
+    Telemetry.span(
+      props.agent ? 'agent.update' : 'agent.create',
+      async (span) => {
+        if (props.agent) span.setAttr('agent.id', props.agent.bot.id);
+        span.setAttr(
+          'agent.picture',
+          face ? 'face' : avatarUrl() ? 'upload' : 'none'
+        );
+        if (!canCreate()) {
+          span.setAttr('agent.outcome', 'invalid');
+          return undefined;
+        }
+        const picture = face
+          ? await span.span('agent.face_upload', () => uploadFace(face))
+          : avatarUrl();
+        if (face && !picture) {
+          span.setAttr('agent.outcome', 'face_upload_failed');
+          return undefined;
+        }
 
-    const harness = selectedHarness();
-    const saved = await props.onSave({
-      avatarUrl: picture,
-      channelIds: channelMode() === 'all' ? [] : selectedChannelIds(),
-      channelScope: channelMode(),
-      defaultModel: selectedDefaultModelId(),
-      handle: slugAgentTag(tag()),
-      // Registered macrod harnesses send the 'macrod' slug plus their uuid;
-      // built-ins keep sending their own slug with no harness id.
-      harness: harness?.kind === 'macrod' ? 'macrod' : (harness?.id ?? ''),
-      harnessId: harness?.kind === 'macrod' ? harness.id : undefined,
-      name: name().trim(),
-      instructions: instructions().trim(),
-      // Always sent, flag or no flag, so an editor without the Connections
-      // section never wipes a selection somebody else made.
-      mcp: mcp(),
-      teamId: selectedTeamId(),
-      autoAcceptPermissions: autoAcceptPermissions(),
-      isCoding: isCoding(),
-    });
-    if (!saved) return undefined;
-    await saveApiKey(saved);
-    if (props.agent) close();
-    return saved;
-  };
+        const harness = selectedHarness();
+        const saved = await span.span('agent.save', () =>
+          props.onSave({
+            avatarUrl: picture,
+            channelIds: channelMode() === 'all' ? [] : selectedChannelIds(),
+            channelScope: channelMode(),
+            defaultModel: selectedDefaultModelId(),
+            handle: slugAgentTag(tag()),
+            // Registered macrod harnesses send the 'macrod' slug plus their
+            // uuid; built-ins keep sending their own slug with no harness id.
+            harness:
+              harness?.kind === 'macrod' ? 'macrod' : (harness?.id ?? ''),
+            harnessId: harness?.kind === 'macrod' ? harness.id : undefined,
+            name: name().trim(),
+            instructions: instructions().trim(),
+            // Always sent, flag or no flag, so an editor without the
+            // Connections section never wipes a selection somebody else made.
+            mcp: mcp(),
+            teamId: selectedTeamId(),
+            autoAcceptPermissions: autoAcceptPermissions(),
+            isCoding: isCoding(),
+          })
+        );
+        if (!saved) {
+          span.setAttr('agent.outcome', 'save_failed');
+          return undefined;
+        }
+        span.setAttr('agent.id', saved);
+        await span.span('agent.api_key', () => saveApiKey(saved));
+        span.setAttr('agent.outcome', 'saved');
+        if (props.agent) close();
+        return saved;
+      }
+    );
 
   const nameFields = (layout: 'row' | 'stack') => (
     <>
@@ -749,28 +776,6 @@ export function AgentEditorPage(props: {
   const editLook = () => pickedLook() ?? agentFaceLook(tag() || name());
   const editAccent = () =>
     agentFaceColor(editLook().color).swatch[dark() ? 'dark' : 'light'];
-  const editHero = () => (
-    <Show
-      when={!pickedLook() && avatarUrl()}
-      fallback={
-        <AgentFace
-          look={editLook()}
-          animated
-          followPointer
-          state={props.pending ? 'thinking' : 'idle'}
-          class="size-28 sm:size-32"
-        />
-      }
-    >
-      {(url) => (
-        <img
-          src={url()}
-          alt={`${name()} avatar`}
-          class="size-24 rounded-full object-cover ring ring-edge-muted"
-        />
-      )}
-    </Show>
-  );
   const lookFields = () => (
     <AgentLookFields
       look={editLook()}
@@ -795,7 +800,14 @@ export function AgentEditorPage(props: {
   const editForm = () => (
     <AgentEditFrame
       accent={editAccent()}
-      hero={editHero()}
+      hero={
+        <AgentEditHero
+          look={editLook()}
+          picture={pickedLook() ? undefined : avatarUrl()}
+          name={name()}
+          thinking={props.pending}
+        />
+      }
       title={name().trim() || 'Untitled agent'}
       subtitle={
         <>

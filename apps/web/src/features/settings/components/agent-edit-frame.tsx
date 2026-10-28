@@ -1,6 +1,8 @@
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import type { AgentFaceLook } from '../core/agent-face';
+import { AgentFace } from './agent-face';
 import { AgentHero, AgentStage, AgentStageTitle } from './agent-stage';
 
 /**
@@ -88,5 +90,36 @@ export function AgentEditSection(props: {
       </div>
       {props.children}
     </section>
+  );
+}
+
+/** The agent's uploaded picture, or its face animated over the glow. */
+export function AgentEditHero(props: {
+  look: AgentFaceLook;
+  picture?: string;
+  name: string;
+  thinking: boolean;
+}) {
+  return (
+    <Show
+      when={props.picture}
+      fallback={
+        <AgentFace
+          look={props.look}
+          animated
+          followPointer
+          state={props.thinking ? 'thinking' : 'idle'}
+          class="size-28 sm:size-32"
+        />
+      }
+    >
+      {(url) => (
+        <img
+          src={url()}
+          alt={`${props.name} avatar`}
+          class="size-24 rounded-full object-cover ring ring-edge-muted"
+        />
+      )}
+    </Show>
   );
 }

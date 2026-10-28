@@ -53,6 +53,11 @@ export function AgentFace(props: {
   let canvas!: HTMLCanvasElement;
   const dark = createDarkTheme();
   const [pixels, setPixels] = createSignal(0);
+  // Under reduced motion an animated face draws like a static one.
+  const reducedMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)'
+  ).matches;
+  const moving = () => props.animated && !reducedMotion;
 
   const draw = (pose: AgentFacePose) => {
     const ctx = canvas.getContext('2d');
@@ -76,10 +81,7 @@ export function AgentFace(props: {
     sizeObserver.observe(canvas);
     onCleanup(() => sizeObserver.disconnect());
 
-    const reducedMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)'
-    ).matches;
-    if (!props.animated || reducedMotion) return;
+    if (!moving()) return;
 
     let visible = true;
     const visibility = new IntersectionObserver(([entry]) => {
@@ -164,9 +166,9 @@ export function AgentFace(props: {
     });
   });
 
-  // Static faces redraw when their look, size, or theme changes.
+  // Static faces redraw when their look, size, theme, or state changes.
   createEffect(() => {
-    if (props.animated) return;
+    if (moving()) return;
     draw({
       ...RESTING_POSE,
       happy: props.state === 'done' ? 1 : 0,
