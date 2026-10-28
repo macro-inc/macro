@@ -1,5 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
 import { Button } from '@ui';
 import { type JSX, Match, Switch } from 'solid-js';
 import type { RoutineSuggestion } from '../core/suggestions';

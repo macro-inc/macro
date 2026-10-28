@@ -1,7 +1,7 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import LightningIcon from '@phosphor/lightning.svg';
-import SlidersIcon from '@phosphor/sliders-horizontal.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import { Button, cn, TextField, ToggleSwitch } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createUniqueId, type JSX, Match, Show, Switch } from 'solid-js';
@@ -71,7 +71,7 @@ export function RoutineSuggestionRow(props: {
             <CaretDownIcon
               aria-hidden="true"
               class={cn(
-                'size-3 shrink-0 text-ink-extra-muted transition-transform',
+                'size-3.5 shrink-0 text-ink-extra-muted transition-transform',
                 props.expanded && 'rotate-180'
               )}
             />
@@ -81,7 +81,11 @@ export function RoutineSuggestionRow(props: {
           </span>
           <span class="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-4 text-ink-extra-muted">
             <span class="flex items-center gap-1 text-violet-ink">
-              <LightningIcon class="size-3" aria-hidden="true" />
+              <LightningIcon
+                class="size-3.5"
+                aria-hidden="true"
+                data-icon-motion="none"
+              />
               {props.suggestion.when}
             </span>
             <Show when={props.suggestion.reason}>

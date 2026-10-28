@@ -1,4 +1,4 @@
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 import { RoutineSparkGlyph } from './routine-spark-glyph';
@@ -19,7 +19,7 @@ export function RoutineSuggestionsCard(props: {
   return (
     <div
       class={cn(
-        'group/routine-card relative min-w-0 shrink-0 rounded-xl border border-violet/20 bg-linear-to-br from-violet-bg/70 via-panel to-pink-bg/60 transition-colors not-touch:hover:border-violet/40',
+        'group/routine-card relative min-w-0 shrink-0 rounded-xl border border-violet/20 bg-panel transition-colors not-touch:hover:border-violet/40',
         props.class
       )}
     >

@@ -76,11 +76,12 @@ card sits above **Settings**, outside the scrolling list.
 
 The Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews, and Agents
 sidebars open with a **Suggested routines** card
-(`src/features/routine-suggestions`): a violet loop-and-spark glyph, the top
-suggestion's name, and **+N** for the rest. It has no feature flag; its close
-button (**Dismiss suggested routines**) hides it per sidebar for good. Clicking
+(`src/features/routine-suggestions`): a shared repeat icon on a flat violet
+tile, the top suggestion's name, and **+N** for the rest. It has no feature flag;
+its close button (**Dismiss suggested routines**) hides it per sidebar for good. Clicking
 it opens **Routines for <Surface>**, a modal (a sheet on phones) with up to
-three AI-picked routines for that sidebar. Each row shows what the routine
+three AI-picked routines for that sidebar. The card and modal use flat surfaces
+and the shared Macro icon family. Each row shows what the routine
 does, when it runs (an event such as "When a new email arrives", optionally
 narrowed by a yes/no condition, or a schedule), and why it fits this user.
 
