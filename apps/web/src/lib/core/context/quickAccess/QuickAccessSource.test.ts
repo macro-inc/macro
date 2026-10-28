@@ -1,3 +1,4 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import type {
   CrmCompanyEntity,
   CrmContactEntity,
@@ -16,6 +17,7 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HydrationSearchChanges } from '@graphql-cache/protocol';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { render } from '@solidjs/testing-library';
 import {
@@ -44,10 +46,18 @@ import {
   type QuickAccessListOptions,
 } from './types';
 
+const localDrafts = vi.hoisted(() => ({ read: (): LocalDraft[] => [] }));
+vi.mock('@queries/email/local-draft-source', async () => ({
+  createLocalDraftSource: (enabled: () => boolean) => ({
+    drafts: () => (enabled() ? localDrafts.read() : []),
+    ready: () => true,
+  }),
+}));
+
 const mocks = vi.hoisted(() => ({
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
-  channels: vi.fn(() => []),
+  channels: vi.fn<() => ApiChannelWithLatest[]>(() => []),
   cachedChannels: (): CachedGraphqlChannel[] => [],
   projectedChannels: [] as CachedGraphqlChannel[],
   changed: undefined as
@@ -235,6 +245,7 @@ function page(start: number, count: number, more = false): SearchCachePage {
   };
 }
 beforeEach(() => {
+  localDrafts.read = () => [];
   vi.clearAllMocks();
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   mocks.history = [];
@@ -659,8 +670,79 @@ describe('Quick Access source integration', () => {
       }
     }
   );
-  it('uses only GraphQL channels when the cache is enabled', async () => {
+  it('keeps known channels searchable before the cache has hydrated them', async () => {
+    mocks.channels.mockReturnValue([
+      {
+        id: 'uncached-channel',
+        name: 'Planning',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-02T00:00:00.000Z',
+      },
+    ]);
+    const [cached, setCached] = createSignal<CachedGraphqlChannel[]>([]);
+    mocks.cachedChannels = cached;
+    const list = setup((source) =>
+      source.useList({ buckets: ['channel'], searchTerm: () => 'planning' })
+    );
+
+    expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
+
+    setCached([
+      cachedChannel('uncached-channel', {
+        name: 'Planning',
+        ownerId: 'cached-owner',
+        participantIds: ['participant-1'],
+        channelType: 'private',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        interactedAt: '2026-08-03T00:00:00.000Z',
+      }),
+    ]);
+    expect(list.items().map((item) => item.id)).toEqual(['uncached-channel']);
+    expect(list.items()[0]).toMatchObject({
+      data: {
+        ownerId: 'cached-owner',
+        participantIds: ['participant-1'],
+        channelType: 'private',
+        createdAt: '2026-07-01T00:00:00.000Z',
+        interactedAt: '2026-08-03T00:00:00.000Z',
+      },
+    });
+  });
+
+  it('merges complete channels with cached channels and prefers cached metadata', async () => {
     const channel = cachedChannel('cached-channel');
+    mocks.channels.mockReturnValue([
+      {
+        id: channel.id,
+        name: 'Previous name',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: channel.createdAt,
+        updated_at: channel.updatedAt,
+        viewed_at: '2026-08-03T00:00:00.000Z',
+      },
+      {
+        id: 'uncached-channel',
+        name: 'Planning',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: channel.createdAt,
+        updated_at: channel.updatedAt,
+      },
+    ]);
     mocks.cachedChannels = () => [channel];
     mocks.search.mockResolvedValue({
       documents: [channelHit(channel)],
@@ -674,9 +756,15 @@ describe('Quick Access source integration', () => {
       expect(lists.every((list) => !list.isLoading())).toBe(true)
     );
     for (const list of lists) {
-      expect(list.items().map((item) => item.id)).toEqual(['cached-channel']);
+      expect(list.items().map((item) => item.id)).toEqual([
+        'cached-channel',
+        'uncached-channel',
+      ]);
+      expect(list.items()[0].searchText).toBe(channel.name);
+      expect(list.items()[0].sortTimestamp).toBe(
+        Date.parse('2026-08-03T00:00:00.000Z')
+      );
     }
-    expect(mocks.channels).not.toHaveBeenCalled();
   });
 
   it('loads channels beyond the recent query through cache search', async () => {
@@ -694,7 +782,57 @@ describe('Quick Access source integration', () => {
     expect(list.items()).toHaveLength(75);
     expect(new Set(list.items().map((item) => item.id)).size).toBe(75);
     expect(list.items().some((item) => item.id === 'channel-74')).toBe(true);
-    expect(mocks.channels).not.toHaveBeenCalled();
+  });
+
+  it('uses projected channel metadata beyond the recent cache page while preserving live viewed recency', async () => {
+    const [knownChannels, setKnownChannels] = createSignal<
+      ApiChannelWithLatest[]
+    >([
+      {
+        id: 'renamed-channel',
+        name: 'Old planning name',
+        channel_type: 'public',
+        owner_id: 'owner',
+        participants: [],
+        auto_join_team: false,
+        is_participant: true,
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-02T00:00:00.000Z',
+        viewed_at: '2026-08-03T00:00:00.000Z',
+      },
+    ]);
+    mocks.channels.mockImplementation(knownChannels);
+    const projectedChannel = cachedChannel('renamed-channel', {
+      name: 'New planning name',
+    });
+    mocks.projectedChannels = [projectedChannel];
+    mocks.search.mockResolvedValue({
+      documents: [channelHit(projectedChannel)],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['channel'], searchTerm: () => 'new planning' })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.searchText)).toEqual([
+      'New planning name',
+    ]);
+    expect(list.items()[0].sortTimestamp).toBe(
+      Date.parse('2026-08-03T00:00:00.000Z')
+    );
+
+    setKnownChannels((channels) =>
+      channels.map((channel) => ({
+        ...channel,
+        viewed_at: '2026-08-04T00:00:00.000Z',
+      }))
+    );
+    expect(list.items().map((item) => item.searchText)).toEqual([
+      'New planning name',
+    ]);
+    expect(list.items()[0].sortTimestamp).toBe(
+      Date.parse('2026-08-04T00:00:00.000Z')
+    );
   });
 
   it('sorts projected and known browse rows together using viewed recency', async () => {
@@ -1422,4 +1560,107 @@ describe('database command discovery', () => {
     });
     expect(mocks.history).toEqual([]);
   });
+});
+
+it('finds an unqueued first-use draft by title without a cached thread and retires it after sync', async () => {
+  const [copies, setCopies] = createSignal<LocalDraft[]>([
+    {
+      key: 'local-draft',
+      draftId: 'local-draft',
+      threadId: 'local-thread',
+      accountId: 'viewer',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Offline receipt' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ]);
+  localDrafts.read = copies;
+  const [term, setTerm] = createSignal('receipt');
+  const { source, list, notes } = setup((source) => ({
+    source,
+    list: source.useList({ buckets: ['email'], searchTerm: term }),
+    notes: source.useList({ buckets: ['note'], searchTerm: term }),
+  }));
+  expect(list.items().map((item) => item.id)).toEqual(['local-thread']);
+  expect(source.getById('local-thread')?.data.name).toBe('Offline receipt');
+  expect(notes.items()).toEqual([]);
+  setTerm('unrelated');
+  expect(list.items()).toEqual([]);
+  setTerm('receipt');
+  setCopies([{ ...copies()[0], status: 'synced', acknowledgedRevision: 1 }]);
+  expect(list.items()).toEqual([]);
+  expect(source.getById('local-thread')).toBeUndefined();
+});
+
+it('keeps a cached sender hit when the same thread has an unmatched local draft', async () => {
+  localDrafts.read = () => [
+    {
+      key: 'reply',
+      draftId: 'reply',
+      threadId: 'thread-1',
+      accountId: 'viewer',
+      generation: 'generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      content: { subject: 'Weekly update' },
+      attachments: [],
+      status: 'dirty',
+      updatedAt: 1,
+    },
+  ];
+  mocks.search.mockResolvedValue({
+    documents: [
+      {
+        profile: 'quick-access-v1',
+        recordKey: 'GraphqlSoupEmailThread:thread-1',
+        bucket: 'email',
+        searchText: 'weekly update | teo | teo@example.com',
+        timestampMs: 1,
+        sourceHash: 'hash',
+      },
+    ],
+    nextCursor: null,
+  });
+  mocks.readRecordsByKeys.mockResolvedValue({
+    revision: INITIAL_CACHE_REVISION,
+    records: [
+      {
+        recordKey: 'GraphqlSoupEmailThread:thread-1',
+        record: {
+          __typename: 'GraphqlSoupEmailThread',
+          id: 'thread-1',
+          name: 'Weekly update',
+          ownerId: 'viewer',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          viewedAt: null,
+          senderName: 'Teo',
+          senderEmail: 'teo@example.com',
+          linkId: 'inbox',
+          isRead: true,
+          isDraft: false,
+          isImportant: false,
+          inboxVisible: true,
+        },
+      },
+    ],
+  });
+  const loaded = Promise.withResolvers<void>();
+  const list = setup((source) => {
+    const list = source.useList({
+      buckets: ['email'],
+      searchTerm: () => 'teo',
+    });
+    createRenderEffect(() => {
+      if (!list.isLoading()) loaded.resolve();
+    });
+    return list;
+  });
+  await loaded.promise;
+  expect(list.items().map((item) => item.id)).toEqual(['thread-1']);
+  expect(list.items()[0].searchText).toContain('teo@example.com');
 });

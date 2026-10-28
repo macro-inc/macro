@@ -1,3 +1,4 @@
+use crate::tool_result_limit::ToolResultLimit;
 /// Conversions between agent message types and `rig` message types.
 use crate::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use attachment::image::ImageData;
@@ -76,14 +77,26 @@ impl ToUserContent for ImageData {
 /// reconstructs the turn boundaries Anthropic expects:
 /// `assistant(text + tool_calls)`, `user(tool_results)`, `assistant(text)`.
 pub fn to_rig_messages(messages: &[ChatMessage]) -> Vec<Message> {
-    messages.iter().flat_map(convert_one).collect()
+    messages
+        .iter()
+        .flat_map(|msg| convert_one(msg, None))
+        .collect()
 }
 
-fn convert_one(msg: &ChatMessage) -> Vec<Message> {
+/// [`to_rig_messages`], with each tool result too long for the model cut as
+/// `limit` cut it when it arrived, so it reads the same in every turn.
+pub fn to_rig_messages_limited(messages: &[ChatMessage], limit: &ToolResultLimit) -> Vec<Message> {
+    messages
+        .iter()
+        .flat_map(|msg| convert_one(msg, Some(limit)))
+        .collect()
+}
+
+fn convert_one(msg: &ChatMessage, limit: Option<&ToolResultLimit>) -> Vec<Message> {
     match msg.role {
         Role::System => vec![],
         Role::User => convert_user(msg),
-        Role::Assistant => convert_assistant(msg),
+        Role::Assistant => convert_assistant(msg, limit),
     }
 }
 
@@ -116,7 +129,7 @@ fn convert_user(msg: &ChatMessage) -> Vec<Message> {
     }
 }
 
-fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
+fn convert_assistant(msg: &ChatMessage, limit: Option<&ToolResultLimit>) -> Vec<Message> {
     let parts = match &msg.content {
         ChatMessageContent::Text(text) => {
             return vec![Message::assistant(text)];
@@ -168,9 +181,8 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
                             ))
                         })
                 } else {
-                    OneOrMany::one(ToolResultContent::text(
-                        serde_json::to_string(json).unwrap_or_default(),
-                    ))
+                    let text = serde_json::to_string(json).unwrap_or_default();
+                    OneOrMany::one(ToolResultContent::text(model_view(limit, id, text)))
                 };
                 tool_results.push(UserContent::tool_result_with_call_id(
                     replay_item_id(id),
@@ -184,7 +196,11 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
                 tool_results.push(UserContent::tool_result_with_call_id(
                     replay_item_id(id),
                     replay_call_id(id),
-                    OneOrMany::one(ToolResultContent::text(description.clone())),
+                    OneOrMany::one(ToolResultContent::text(model_view(
+                        limit,
+                        id,
+                        description.clone(),
+                    ))),
                 ));
             }
             AssistantMessagePart::Thinking { .. } => {}
@@ -193,6 +209,14 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
 
     flush(&mut out, &mut assistant_parts, &mut tool_results);
     out
+}
+
+/// What the model reads of a replayed tool result: `text` itself, unless
+/// `limit` cuts it.
+fn model_view(limit: Option<&ToolResultLimit>, id: &str, text: String) -> String {
+    limit
+        .and_then(|limit| limit.view(id, &text))
+        .unwrap_or(text)
 }
 
 /// `call_id` replayed to the provider for a persisted tool call or result.

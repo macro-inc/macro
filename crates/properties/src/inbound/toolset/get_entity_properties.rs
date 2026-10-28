@@ -227,6 +227,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
     let data_type = match info.data_type {
         DataType::Boolean => "boolean",
         DataType::Date => "date",
+        DataType::DateRange => "date_range",
         DataType::Number => "number",
         DataType::String => "string",
         DataType::SelectNumber => "select_number",

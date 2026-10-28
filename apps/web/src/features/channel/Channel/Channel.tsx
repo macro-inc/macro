@@ -58,10 +58,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
-import {
-  invalidateChannelsActivity,
-  useUpdateChannelsActivityMutation,
-} from '@queries/channel/activity';
+import { recordChannelViewWhenIdle } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -85,7 +82,6 @@ import {
 import { timelineEntryKey } from '@queries/messages/timeline-entries';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
-import { useBeforeLeave } from '@solidjs/router';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
@@ -105,7 +101,10 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
-import { decodeSystemActivity } from '../queries/system-activity';
+import {
+  decodeSystemActivityRow,
+  mergesSystemActivity,
+} from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
 import { ThreadRow } from '../Thread/ThreadRow';
@@ -267,10 +266,12 @@ export function Channel(props: ChannelProps) {
   );
 
   // The index reads immediately, before EntityLoadGate's boundary exists.
-  const messageIndex = createMessageIndex(() =>
-    queryReadyGate(messagesQuery)
-      ? (messagesQuery.data as MessageTimelineData)
-      : undefined
+  const messageIndex = createMessageIndex(
+    () =>
+      queryReadyGate(messagesQuery)
+        ? (messagesQuery.data as MessageTimelineData)
+        : undefined,
+    mergesSystemActivity
   );
 
   const messageById = () => messageIndex.byId;
@@ -293,30 +294,21 @@ export function Channel(props: ChannelProps) {
 
   const activity = useChannelActivity(props.channelId);
 
-  const updateActivityMutation = useUpdateChannelsActivityMutation({
-    onSuccess: () => {
-      invalidateChannelsActivity();
-    },
-  });
-
-  const markAsViewed = () => {
-    updateActivityMutation.mutate({
-      channelId: props.channelId,
-      activityType: 'view',
-    });
-  };
-
-  onMount(() => {
-    markAsViewed();
-  });
-
-  onCleanup(() => {
-    markAsViewed();
-  });
-
-  useBeforeLeave(() => {
-    markAsViewed();
-  });
+  // One view on entry, after the first page and away from the open's own
+  // requests, and one on leaving. The channel remounts per id, so cleanup
+  // covers every way out of it.
+  let entryViewRecorded = false;
+  createEffect(
+    on(
+      () => queryReadyGate(messagesQuery),
+      (loaded) => {
+        if (!loaded || entryViewRecorded) return;
+        entryViewRecorded = true;
+        recordChannelViewWhenIdle(props.channelId);
+      }
+    )
+  );
+  onCleanup(() => recordChannelViewWhenIdle(props.channelId));
 
   const unifiedInput = createUnifiedInputManager({
     initialReplyTarget: props.initialMessagesStateSnapshot?.replyTarget,
@@ -846,8 +838,10 @@ export function Channel(props: ChannelProps) {
                                             listMeta={listMetaByKey()[item.id]}
                                           >
                                             <SystemActivity
-                                              event={decodeSystemActivity(
-                                                activity()
+                                              event={decodeSystemActivityRow(
+                                                messageIndex.activityGroupByKey.get(
+                                                  item.id
+                                                ) ?? [activity()]
                                               )}
                                             />
                                             <Show when={isNewestRow()}>

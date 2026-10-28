@@ -144,7 +144,7 @@ export default function SpreadsheetDemo() {
       <SplitHeaderRight>
         <div class="order-[1000] flex items-center gap-1">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="bg-surface"
             disabled={!!actions.pending()}
@@ -155,14 +155,14 @@ export default function SpreadsheetDemo() {
             Ask Macro
           </Button>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="bg-surface"
             disabled={!!actions.pending()}
             aria-busy={actions.pending() === 'share'}
             onClick={() => fireAndForget(actions.share(), 'spreadsheet-draft')}
           >
-            <IconShared />
+            <IconShared class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             {actions.pending() === 'share' ? 'Saving…' : 'Share'}
           </Button>
         </div>
@@ -208,7 +208,7 @@ export default function SpreadsheetDemo() {
             </Button>
             <Button
               size="sm"
-              variant="strong"
+              variant="secondary"
               type="submit"
               disabled={!renameDraft()?.trim() || !canRename()}
             >

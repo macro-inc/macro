@@ -11,9 +11,9 @@
  * directory.
  */
 
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import FolderOpenIcon from '@phosphor/folder-open.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import FolderOpenIcon from '@icon/system/regular/folder-open.svg';
 import {
   createContext,
   createMemo,
@@ -176,10 +176,11 @@ function Root<T>(props: FileTreeRootProps<T>) {
             </Row>
             <span class="absolute top-1/2 right-1.5 flex -translate-y-1/2">
               <Button
+                aria-label={`${open() ? 'Collapse' : 'Expand'} ${row.directory.name}`}
+                tooltip={`${open() ? 'Collapse' : 'Expand'} ${row.directory.name}`}
                 variant="ghost"
                 size="icon-sm"
                 class="size-6 shrink-0 rounded-lg touch:size-9"
-                label={`${open() ? 'Collapse' : 'Expand'} ${row.directory.name}`}
                 aria-expanded={open()}
                 onClick={() => toggle(path())}
               >

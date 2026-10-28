@@ -1,6 +1,9 @@
 import type { RoutineTarget } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
+/** A Pipedream app, as stored on the routine's task. */
+export type RoutineApp = { app_slug: string; server_name: string };
+
 export type ScheduleFrequency = 'week' | 'month' | 'once';
 
 /**
@@ -27,6 +30,8 @@ export type ScheduleDraft = {
   /** 1-31 day-of-month when frequency === "month". */
   dayOfMonth: string;
   target: RoutineTarget;
+  /** Apps every run requires, added to the target's own. Each must be connected. */
+  apps: RoutineApp[];
   onceAt?: string;
   timezone?: string;
 };

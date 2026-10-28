@@ -5,12 +5,12 @@ import {
 } from '@core/component/AI/component/input/modelCatalog';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
@@ -130,9 +130,10 @@ export function MobileAgentPicker(props: AgentPickerProps) {
           <div class="flex items-center gap-2 px-4 pb-3">
             <Show when={browsing() || showAll()}>
               <Button
+                aria-label={showAll() ? 'Back to Suggested' : 'Back to agents'}
+                tooltip={showAll() ? 'Back to Suggested' : 'Back to agents'}
                 variant="ghost"
                 size="icon-md"
-                label={showAll() ? 'Back to Suggested' : 'Back to agents'}
                 onClick={() => {
                   if (showAll()) {
                     setShowAll(false);
@@ -141,7 +142,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                   } else browse();
                 }}
               >
-                <ArrowLeft />
+                <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
             <h2 class="min-w-0 flex-1 truncate font-medium">
@@ -288,13 +289,14 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                             </MobileDrawer.Item>
                             <Show when={!agent.unavailableReason}>
                               <Button
+                                aria-label={`Models for ${agent.name}`}
+                                tooltip={`Models for ${agent.name}`}
                                 variant="ghost"
                                 size="icon-md"
                                 class="mr-1 size-11 shrink-0"
-                                label={`Models for ${agent.name}`}
                                 onClick={() => browse(agent)}
                               >
-                                <CaretRight />
+                                <CaretRight class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                               </Button>
                             </Show>
                           </div>
@@ -317,9 +319,8 @@ export function MobileAgentPicker(props: AgentPickerProps) {
             </Show>
             <div class="flex justify-end px-4 pt-1">
               <Button
-                variant="strong"
+                variant="secondary"
                 size="sm"
-                glass={false}
                 class="gap-1.5"
                 onClick={() => {
                   changeOpen(false);

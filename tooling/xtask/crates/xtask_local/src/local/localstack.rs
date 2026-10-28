@@ -84,6 +84,10 @@ async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
             resources::CODEX_OAUTH_KMS_ALIAS,
             "ChatGPT OAuth envelope encryption key (local)",
         ),
+        (
+            resources::WHATSAPP_SESSION_KMS_ALIAS,
+            "WhatsApp session data key encryption key (local)",
+        ),
     ] {
         if existing
             .aliases()

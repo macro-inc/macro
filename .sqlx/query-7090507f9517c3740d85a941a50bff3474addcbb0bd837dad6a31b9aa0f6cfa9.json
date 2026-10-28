@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, backfill_imported, backfill_cursor, adopted_at FROM external_chat\n        WHERE user_id = $1 AND provider = 'whatsapp' AND remote_id = $2 AND state = 'active'\n          AND backfill_state IN ('waiting_for_message', 'pending', 'running', 'waiting_for_phone')\n        ORDER BY id FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "backfill_imported",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "backfill_cursor",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "adopted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "7090507f9517c3740d85a941a50bff3474addcbb0bd837dad6a31b9aa0f6cfa9"
+}

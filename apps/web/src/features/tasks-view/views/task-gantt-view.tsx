@@ -8,11 +8,11 @@ import {
   getTaskStatusOptionId,
   type TaskEntityWithProperties,
 } from '@entity';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { Button, cn, Layer } from '@ui';
 import type { ComponentProps } from 'solid-js';
@@ -83,6 +83,7 @@ export function TaskGanttView(props: {
         <Match when={props.source.isLoading?.()}>
           <div class="grid flex-1 place-items-center text-ink-muted">
             <SpinnerIcon
+              aria-hidden={false}
               aria-label="Loading timeline"
               class="size-5 animate-spin"
             />
@@ -95,6 +96,7 @@ export function TaskGanttView(props: {
           >
             Tasks couldn’t be loaded.
             <Button
+              variant="ghost"
               onClick={() =>
                 fireAndForget(props.source.refresh?.(), 'tasks-view')
               }

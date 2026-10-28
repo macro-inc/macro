@@ -43,6 +43,9 @@ sender/generic-address checks.
 
 - Enable `scraper`'s `deterministic` feature: thread reads recompute replyless
   HTML, and shuffled attributes rebuild otherwise unchanged email bodies.
+- Outlook mobile and Outlook on the web start the quoted thread at `<hr>` plus
+  `div#divRplyFwdMsg` (plaintext: a line of underscores, then `From:`). Cut
+  there. A later `border-top` "From:" block is a nested quote.
 - Sanitization is security-sensitive (XSS via email HTML): any allowlist
   change needs a test proving the previously-dangerous input is now stripped,
   not just that benign input survives.

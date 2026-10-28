@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { TimestampedItem } from '@core/util/freshSort';
@@ -28,7 +29,10 @@ export const newProjectCommand: CreateProjectCommandItem = {
   id: 'new-project',
   kind: 'new-project',
   bucket: 'command',
-  searchText: 'Create new project',
+  // Searched in the interface language, so read at match time.
+  get searchText() {
+    return t('create.createNewProject');
+  },
   sortTimestamp: 0,
   timestamps: { viewedAt: undefined, updatedAt: undefined },
 };

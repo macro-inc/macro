@@ -18,12 +18,15 @@ export type MergePullRequestAction = {
   pending: Accessor<boolean>;
 };
 
-function mergeFailureMessage(error: unknown): string {
-  // A declined merge carries GitHub's own reason; anything else is ours.
+/** GitHub's own reason when it declined a pull request change; anything else is ours. */
+export function pullRequestFailureMessage(
+  error: unknown,
+  fallback: string
+): string {
   if (error instanceof ThrownResultError && error.errors.length > 0) {
     return error.message;
   }
-  return 'Failed to merge pull request';
+  return fallback;
 }
 
 /**
@@ -51,7 +54,9 @@ export function createMergePullRequestAction(options: {
     try {
       await mutation.mutateAsync(input);
     } catch (error) {
-      toast.failure(mergeFailureMessage(error));
+      toast.failure(
+        pullRequestFailureMessage(error, 'Failed to merge pull request')
+      );
       return;
     }
     toast.success(`Merged ${name}`);

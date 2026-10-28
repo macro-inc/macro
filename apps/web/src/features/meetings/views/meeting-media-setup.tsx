@@ -2,13 +2,13 @@ import { MediaBackgroundPicker } from '@core/component/media/media-background-pi
 import { MediaDevicePicker } from '@core/component/media/media-device-picker';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Image from '@phosphor/image.svg';
-import Microphone from '@phosphor/microphone.svg';
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import Speaker from '@phosphor/speaker-high.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import Warning from '@phosphor/warning-circle.svg';
+import Image from '@icon/system/regular/image.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
+import Speaker from '@icon/system/regular/speaker-high.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
+import Warning from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui';
 import {
   children,
@@ -127,14 +127,20 @@ export function MeetingMediaSetup(props: {
         <div class="absolute inset-x-0 bottom-4 flex justify-center">
           <div class="flex items-center gap-1 rounded-xl border border-edge-muted bg-panel p-1 shadow-sm">
             <Button
-              size="icon-lg"
-              class="size-12"
-              label={
+              variant="ghost"
+              aria-label={
                 media.microphoneEnabled()
                   ? 'Turn off microphone'
                   : 'Turn on microphone'
               }
-              tooltipPlacement="top"
+              tooltip={{
+                content: media.microphoneEnabled()
+                  ? 'Turn off microphone'
+                  : 'Turn on microphone',
+                placement: 'top',
+              }}
+              size="icon-lg"
+              class="size-12"
               disabled={props.disabled}
               aria-pressed={media.microphoneEnabled()}
               onClick={() =>
@@ -143,39 +149,56 @@ export function MeetingMediaSetup(props: {
             >
               <Show
                 when={media.microphoneEnabled()}
-                fallback={<MicrophoneSlash />}
+                fallback={
+                  <MicrophoneSlash class="size-5 touch:size-6 shrink-0 pointer-events-none" />
+                }
               >
-                <Microphone />
+                <Microphone class="size-5 touch:size-6 shrink-0 pointer-events-none" />
               </Show>
             </Button>
             <Button
-              size="icon-lg"
-              class="size-12"
-              label={
+              variant="ghost"
+              aria-label={
                 media.cameraEnabled() ? 'Turn off camera' : 'Turn on camera'
               }
-              tooltipPlacement="top"
+              tooltip={{
+                content: media.cameraEnabled()
+                  ? 'Turn off camera'
+                  : 'Turn on camera',
+                placement: 'top',
+              }}
+              size="icon-lg"
+              class="size-12"
               disabled={props.disabled}
               aria-pressed={media.cameraEnabled()}
               onClick={() => media.setCameraEnabled(!media.cameraEnabled())}
             >
               <Show
                 when={media.cameraEnabled()}
-                fallback={<VideoCameraSlash />}
+                fallback={
+                  <VideoCameraSlash class="size-5 touch:size-6 shrink-0 pointer-events-none" />
+                }
               >
-                <VideoCamera />
+                <VideoCamera class="size-5 touch:size-6 shrink-0 pointer-events-none" />
               </Show>
             </Button>
             <Button
-              size="icon-lg"
-              class="size-12"
-              disabled={props.disabled || uploading()}
-              label={
+              variant="ghost"
+              aria-label={
                 media.backgroundEffect().type === 'none'
                   ? 'Turn on background'
                   : 'Turn off background'
               }
-              tooltipPlacement="top"
+              tooltip={{
+                content:
+                  media.backgroundEffect().type === 'none'
+                    ? 'Turn on background'
+                    : 'Turn off background',
+                placement: 'top',
+              }}
+              size="icon-lg"
+              class="size-12"
+              disabled={props.disabled || uploading()}
               aria-pressed={media.backgroundEffect().type !== 'none'}
               onClick={() =>
                 selectBackground(
@@ -185,7 +208,7 @@ export function MeetingMediaSetup(props: {
                 )
               }
             >
-              <Image />
+              <Image class="size-5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
         </div>

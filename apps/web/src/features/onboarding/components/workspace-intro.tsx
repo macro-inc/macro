@@ -1,5 +1,5 @@
 import { WorkspaceTexture } from '@app/components/WorkspaceTexture';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import {
   createEffect,
   createSignal,

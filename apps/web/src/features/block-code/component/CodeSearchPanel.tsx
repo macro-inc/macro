@@ -10,13 +10,13 @@ import {
 } from '@codemirror/search';
 import type { EditorState } from '@codemirror/state';
 import { type EditorView, runScopeHandlers } from '@codemirror/view';
-import ReplaceAllIcon from '@phosphor/arrow-bend-double-up-right.svg';
-import ReplaceIcon from '@phosphor/arrow-bend-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import X from '@phosphor/x.svg';
+import ReplaceAllIcon from '@icon/system/regular/arrow-bend-double-up-right.svg';
+import ReplaceIcon from '@icon/system/regular/arrow-bend-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Surface } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 
@@ -179,12 +179,18 @@ export function CodeSearchPanel(props: CodeSearchPanelProps) {
       <div class="flex min-w-0 items-center gap-1">
         <Show when={canReplace()}>
           <Button
+            variant="ghost"
             size="icon-sm"
             tooltip={replaceOpen() ? 'Hide replace' : 'Show replace'}
             onClick={() => setReplaceOpen(!replaceOpen())}
           >
-            <Show when={replaceOpen()} fallback={<CaretRight />}>
-              <CaretDown />
+            <Show
+              when={replaceOpen()}
+              fallback={
+                <CaretRight class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              }
+            >
+              <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Show>
           </Button>
         </Show>
@@ -229,23 +235,28 @@ export function CodeSearchPanel(props: CodeSearchPanelProps) {
         </span>
 
         <Button
+          variant="ghost"
           size="icon-sm"
-          tooltip="Previous match"
-          shortcut="shift+enter"
+          tooltip={{ content: 'Previous match', shortcut: 'shift+enter' }}
           onClick={() => findPrevious(props.view)}
         >
-          <CaretUp />
+          <CaretUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          variant="ghost"
           size="icon-sm"
-          tooltip="Next match"
-          shortcut="enter"
+          tooltip={{ content: 'Next match', shortcut: 'enter' }}
           onClick={() => findNext(props.view)}
         >
-          <CaretDown />
+          <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
-        <Button size="icon-sm" tooltip="Close find" onClick={close}>
-          <X />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          tooltip="Close find"
+          onClick={close}
+        >
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
 
@@ -267,18 +278,20 @@ export function CodeSearchPanel(props: CodeSearchPanelProps) {
             />
           </Surface>
           <Button
+            variant="ghost"
             size="icon-sm"
             tooltip="Replace"
             onClick={() => replaceNext(props.view)}
           >
-            <ReplaceIcon />
+            <ReplaceIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
+            variant="ghost"
             size="icon-sm"
             tooltip="Replace all"
             onClick={() => replaceAll(props.view)}
           >
-            <ReplaceAllIcon />
+            <ReplaceAllIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
       </Show>

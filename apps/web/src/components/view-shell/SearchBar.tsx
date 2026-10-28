@@ -1,6 +1,6 @@
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { TextField } from '@kobalte/core/text-field';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { Button, cn, Hotkey, Surface } from '@ui';
 import type { JSX, JSXElement } from 'solid-js';
@@ -114,7 +114,11 @@ export function SearchBar(props: SearchBarProps) {
               class="pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap text-sm text-ink-placeholder group-focus-within:hidden"
             >
               <span class="truncate">{inputProps.placeholder}</span>
-              <Hotkey shortcut={local.hotkey} theme="subtle" class="shrink-0" />
+              <Hotkey
+                shortcut={local.hotkey}
+                theme="subtle"
+                class="shrink-0 touch:hidden"
+              />
             </div>
           </Show>
         </div>
@@ -123,7 +127,7 @@ export function SearchBar(props: SearchBarProps) {
             <Hotkey
               shortcut={hotkey()}
               theme="subtle"
-              class="shrink-0 group-focus-within:hidden"
+              class="shrink-0 group-focus-within:hidden touch:hidden"
             />
           )}
         </Show>
@@ -134,14 +138,15 @@ export function SearchBar(props: SearchBarProps) {
           }
         >
           <Button
+            aria-label={local.onClose ? 'Close search' : 'Clear search'}
+            tooltip={local.onClose ? 'Close search' : 'Clear search'}
             type="button"
-            size={local.size === 'sm' ? 'icon-xs' : 'sm'}
-            square
-            label={local.onClose ? 'Close search' : 'Clear search'}
+            variant="ghost"
+            size="icon-xs"
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => (local.onClose ?? clear)()}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </TextField>

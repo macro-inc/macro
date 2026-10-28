@@ -21,7 +21,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import StackIcon from '@phosphor/stack.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Button, Tabs } from '@ui';
@@ -42,7 +42,7 @@ import {
   type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
-import { type ProjectRoute, projectRouteId } from './core/route';
+import type { ProjectRoute } from './core/route';
 import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
@@ -168,10 +168,7 @@ function ProjectTitleMenu(props: {
         }
         onCopyLink={(row) =>
           fireAndForget(
-            copyLink.executeByBlock(
-              projectRouteId({ id: row.project.id, section: 'overview' }),
-              'component'
-            ),
+            copyLink.executeByBlock(row.project.id, 'initiative'),
             'projects'
           )
         }
@@ -351,6 +348,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   longer have access.
                 </p>
                 <Button
+                  variant="ghost"
                   onClick={() => fireAndForget(source.refresh(), 'projects')}
                 >
                   Try again

@@ -76,6 +76,7 @@ fn compare(cell: &Cell, value: &Value) -> Option<Ordering> {
         (Cell::Number(number), Value::Number(other)) => number.partial_cmp(other),
         (Cell::Bool(checked), Value::Bool(other)) => Some(checked.cmp(other)),
         (Cell::Date(date), Value::Date(other)) => Some(date.cmp(other)),
+        (Cell::DateRange(range), Value::Date(other)) => Some(range.compare_to(*other)),
         (Cell::Options(ids), Value::Option(id)) => single(ids).map(|only| only.cmp(id)),
         (Cell::Entities(ids), Value::Entity(id)) => {
             single(ids).map(|only| only.as_str().cmp(id.as_str()))

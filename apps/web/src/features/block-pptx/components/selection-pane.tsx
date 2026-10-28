@@ -6,13 +6,13 @@
  */
 
 import type { ShapeOutline, SlideOutline } from '@core/pptx-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import X from '@phosphor/x.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, Show } from 'solid-js';
 
@@ -228,12 +228,13 @@ export function SelectionPane(props: {
       <div class="flex h-9 items-center justify-between border-edge-muted border-b px-3">
         <span class="font-semibold text-ink text-sm">Selection</span>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="flex items-center gap-1 border-edge-muted border-b px-2 py-1.5">
@@ -257,9 +258,9 @@ export function SelectionPane(props: {
         </Button>
         <div class="flex-1" />
         <Button
+          aria-label="Bring forward"
           size="icon-sm"
           variant="ghost"
-          label="Bring forward"
           tooltip="Bring Forward"
           data-testid="pptx-selection-forward"
           disabled={
@@ -272,12 +273,12 @@ export function SelectionPane(props: {
             if (id !== undefined) props.onMove(id, 1);
           }}
         >
-          <ArrowUp />
+          <ArrowUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Send backward"
           size="icon-sm"
           variant="ghost"
-          label="Send backward"
           tooltip="Send Backward"
           data-testid="pptx-selection-backward"
           disabled={ro() || !position() || position()!.index === 0}
@@ -286,7 +287,7 @@ export function SelectionPane(props: {
             if (id !== undefined) props.onMove(id, -1);
           }}
         >
-          <ArrowDown />
+          <ArrowDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div

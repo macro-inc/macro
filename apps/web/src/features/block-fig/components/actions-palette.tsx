@@ -3,7 +3,7 @@
  * shortcut, searched by name, run with Enter. It opens above the toolbar.
  */
 
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { paletteActions } from '../core/palette';
 import type { ViewerAction } from '../core/shortcuts';

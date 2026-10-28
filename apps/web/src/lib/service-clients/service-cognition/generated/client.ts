@@ -29,6 +29,7 @@ import type {
   GetChatResponse,
   GetChatsForAttachmentResponse,
   HttpSendChatMessageRequest,
+  ImportSource,
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
@@ -39,6 +40,8 @@ import type {
   PipedreamCatalogResponse,
   PipedreamCompleteRequest,
   PipedreamConnectionResponse,
+  PipedreamOverlayResponse,
+  PipedreamRecoverRequest,
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
   ProjectionStateResponse,
@@ -1566,6 +1569,88 @@ export const getStateHandler = async (
 };
 
 /**
+ * @summary Report progress for one reviewed workspace source.
+ */
+export type workspaceReportHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type workspaceReportHandlerResponseSuccess =
+  workspaceReportHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type workspaceReportHandlerResponse =
+  workspaceReportHandlerResponseSuccess;
+
+export const getWorkspaceReportHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}`;
+};
+
+export const workspaceReportHandler = async (
+  source: ImportSource,
+  options?: RequestInit
+): Promise<workspaceReportHandlerResponse> => {
+  const res = await fetch(getWorkspaceReportHandlerUrl(source), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: workspaceReportHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as workspaceReportHandlerResponse;
+};
+
+/**
+ * @summary Cancel this source's plan or write, keeping completed entities.
+ */
+export type cancelWorkspaceHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type cancelWorkspaceHandlerResponseSuccess =
+  cancelWorkspaceHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type cancelWorkspaceHandlerResponse =
+  cancelWorkspaceHandlerResponseSuccess;
+
+export const getCancelWorkspaceHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}/cancel`;
+};
+
+export const cancelWorkspaceHandler = async (
+  source: ImportSource,
+  options?: RequestInit
+): Promise<cancelWorkspaceHandlerResponse> => {
+  const res = await fetch(getCancelWorkspaceHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelWorkspaceHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelWorkspaceHandlerResponse;
+};
+
+/**
  * @summary List all MCP servers configured for the authenticated user.
  */
 export type listMcpServersResponse200 = {
@@ -2268,7 +2353,8 @@ export const browsePipedreamMcpCatalog = async (
 
 /**
  * Verifies with Pipedream that the account exists and was connected for
-the authenticated user before persisting anything.
+the authenticated user before persisting anything. An overlaid app is
+refused with 409: it connects through its own MCP server instead.
  * @summary Register a connected account reported by the Pipedream Connect UI.
  */
 export type completePipedreamMcpConnectionResponse200 = {
@@ -2284,6 +2370,11 @@ export type completePipedreamMcpConnectionResponse401 = {
 export type completePipedreamMcpConnectionResponse404 = {
   data: ErrorResponse;
   status: 404;
+};
+
+export type completePipedreamMcpConnectionResponse409 = {
+  data: ErrorResponse;
+  status: 409;
 };
 
 export type completePipedreamMcpConnectionResponse500 = {
@@ -2303,6 +2394,7 @@ export type completePipedreamMcpConnectionResponseSuccess =
 export type completePipedreamMcpConnectionResponseError = (
   | completePipedreamMcpConnectionResponse401
   | completePipedreamMcpConnectionResponse404
+  | completePipedreamMcpConnectionResponse409
   | completePipedreamMcpConnectionResponse500
   | completePipedreamMcpConnectionResponse501
 ) & {
@@ -2533,6 +2625,147 @@ export const deletePipedreamMcpConnection = async (
     status: res.status,
     headers: res.headers,
   } as deletePipedreamMcpConnectionResponse;
+};
+
+/**
+ * Clients connect these with the native MCP OAuth flow against
+`server_url`; Pipedream refuses to complete a connection for them.
+ * @summary List the catalog apps that connect through their own MCP server.
+ */
+export type listPipedreamMcpOverlaysResponse200 = {
+  data: PipedreamOverlayResponse[];
+  status: 200;
+};
+
+export type listPipedreamMcpOverlaysResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listPipedreamMcpOverlaysResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listPipedreamMcpOverlaysResponseSuccess =
+  listPipedreamMcpOverlaysResponse200 & {
+    headers: Headers;
+  };
+export type listPipedreamMcpOverlaysResponseError = (
+  | listPipedreamMcpOverlaysResponse401
+  | listPipedreamMcpOverlaysResponse500
+) & {
+  headers: Headers;
+};
+
+export type listPipedreamMcpOverlaysResponse =
+  | listPipedreamMcpOverlaysResponseSuccess
+  | listPipedreamMcpOverlaysResponseError;
+
+export const getListPipedreamMcpOverlaysUrl = () => {
+  return `/pipedream/mcp/overlays`;
+};
+
+export const listPipedreamMcpOverlays = async (
+  options?: RequestInit
+): Promise<listPipedreamMcpOverlaysResponse> => {
+  const res = await fetch(getListPipedreamMcpOverlaysUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listPipedreamMcpOverlaysResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listPipedreamMcpOverlaysResponse;
+};
+
+/**
+ * Called after the Connect UI closes without a success event. Answers 404
+when Pipedream has no new account for this user and app.
+An overlaid app is refused with 409, as in [`complete_connection`].
+ * @summary Register an account a Connect flow created but the Connect UI never
+reported.
+ */
+export type recoverPipedreamMcpConnectionResponse200 = {
+  data: PipedreamConnectionResponse;
+  status: 200;
+};
+
+export type recoverPipedreamMcpConnectionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recoverPipedreamMcpConnectionResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type recoverPipedreamMcpConnectionResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type recoverPipedreamMcpConnectionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type recoverPipedreamMcpConnectionResponse501 = {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type recoverPipedreamMcpConnectionResponseSuccess =
+  recoverPipedreamMcpConnectionResponse200 & {
+    headers: Headers;
+  };
+export type recoverPipedreamMcpConnectionResponseError = (
+  | recoverPipedreamMcpConnectionResponse401
+  | recoverPipedreamMcpConnectionResponse404
+  | recoverPipedreamMcpConnectionResponse409
+  | recoverPipedreamMcpConnectionResponse500
+  | recoverPipedreamMcpConnectionResponse501
+) & {
+  headers: Headers;
+};
+
+export type recoverPipedreamMcpConnectionResponse =
+  | recoverPipedreamMcpConnectionResponseSuccess
+  | recoverPipedreamMcpConnectionResponseError;
+
+export const getRecoverPipedreamMcpConnectionUrl = () => {
+  return `/pipedream/mcp/recover`;
+};
+
+export const recoverPipedreamMcpConnection = async (
+  pipedreamRecoverRequest: PipedreamRecoverRequest,
+  options?: RequestInit
+): Promise<recoverPipedreamMcpConnectionResponse> => {
+  const res = await fetch(getRecoverPipedreamMcpConnectionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pipedreamRecoverRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recoverPipedreamMcpConnectionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recoverPipedreamMcpConnectionResponse;
 };
 
 /**

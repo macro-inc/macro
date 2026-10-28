@@ -49,7 +49,7 @@ pub(super) const FOLDER_ENTITY: &str = "project";
 /// down, or another process took the run over); long writes check it between
 /// batches, rows and tasks so a stop takes effect within seconds.
 #[derive(Debug, Default)]
-pub(super) struct Cancel(std::sync::atomic::AtomicBool);
+pub(in crate::domain::service) struct Cancel(std::sync::atomic::AtomicBool);
 
 impl Cancel {
     /// Mark the import cancelled.
@@ -71,7 +71,7 @@ impl Cancel {
 
 /// A plan row ready to write.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct WriteItem {
+pub(in crate::domain::service) struct WriteItem {
     /// The ledger row.
     pub import_id: Uuid,
     /// The ledger row it sits under, if any.
@@ -231,7 +231,7 @@ pub(super) fn notion_links(
 }
 
 /// The document plan row `import_id` becomes, the same on every attempt.
-pub(super) fn document_id(import_id: Uuid) -> Uuid {
+pub(in crate::domain::service) fn document_id(import_id: Uuid) -> Uuid {
     derived_id(import_id, "document")
 }
 

@@ -234,6 +234,12 @@ describe('task preview data ownership', () => {
   });
 
   it('never mounts child queries for pending or loaded GraphQL edges', () => {
+    const priority = {
+      ...status,
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+      displayName: 'Priority',
+      value: ['priority-1'],
+    } as Property;
     const [metadata, setMetadata] = createSignal<PreviewDocumentProperties>({
       properties: undefined,
       canEdit: false,
@@ -250,19 +256,28 @@ describe('task preview data ownership', () => {
       expect(accessQuery).not.toHaveBeenCalled();
       setMetadata((old) => ({ ...old, properties: [], canEdit: false }));
       expect(view.container.textContent).toBe('');
-      setMetadata((old) => ({ ...old, properties: [status], canEdit: true }));
-      expect(view.container.textContent).toContain('status-1');
+      setMetadata((old) => ({
+        ...old,
+        properties: [status, priority],
+        canEdit: true,
+      }));
+      expect(view.container.textContent).toContain('priority-1');
+      // The mention's leading icon already shows status.
+      expect(view.container.textContent).not.toContain('status-1');
       expect(view.container.querySelector('section')?.dataset.canEdit).toBe(
         'true'
       );
       // A live property write and permission change flow through without a refetch.
       setMetadata((old) => ({
         ...old,
-        properties: [{ ...status, value: ['status-2'] } as Property],
+        properties: [
+          status,
+          { ...priority, value: ['priority-2'] } as Property,
+        ],
         canEdit: false,
       }));
-      expect(view.container.textContent).toContain('status-2');
-      expect(view.container.textContent).not.toContain('status-1');
+      expect(view.container.textContent).toContain('priority-2');
+      expect(view.container.textContent).not.toContain('priority-1');
       expect(view.container.querySelector('section')?.dataset.canEdit).toBe(
         'false'
       );

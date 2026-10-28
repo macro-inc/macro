@@ -61,6 +61,16 @@ export function agentImportHandoff(
   provider: ImportProvider
 ): AgentImportHandoff {
   if (provider.ledger === 'notion') return NOTION_WORKSPACE_HANDOFF;
+  if (provider.ledger === 'linear' || provider.ledger === 'jira') {
+    return {
+      input: `Import my ${provider.name} workspace into Macro.`,
+      instructions: [
+        `The user started this from Macro's import dialog and has just connected ${provider.name}.`,
+        `Use ImportFrom${provider.name} to plan their workspace, ask who should see it if required, and present the import review right away.`,
+        `Never recreate plan items with other tools, and never edit or delete anything in ${provider.name}.`,
+      ].join(' '),
+    };
+  }
   return {
     input: `Import my most recent ${config.items} from ${provider.name} into ${config.destination}.`,
     instructions: [

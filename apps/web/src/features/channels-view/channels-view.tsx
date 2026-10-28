@@ -1,4 +1,4 @@
-import { ViewShell } from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
@@ -16,7 +16,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { useIsAuthenticated } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import {
   createContext,
@@ -188,6 +188,7 @@ function ChannelsViewRoot() {
                         name="ChannelsView.rail"
                         fallback={
                           <SpinnerIcon
+                            aria-hidden={false}
                             aria-label="Loading channels"
                             class="size-5 animate-spin"
                           />
@@ -216,9 +217,9 @@ function ChannelsViewRoot() {
                               fallback={() => (
                                 <>
                                   <ViewShell.TopBar>
-                                    <span class="text-sm font-semibold">
+                                    <ViewSidebar.Title caret={false}>
                                       Chat
-                                    </span>
+                                    </ViewSidebar.Title>
                                   </ViewShell.TopBar>
                                   <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
                                     <div class="flex max-w-sm flex-col gap-2">
@@ -248,6 +249,7 @@ function ChannelsViewRoot() {
                   fallback={
                     <div class="grid size-full place-items-center text-ink-muted">
                       <SpinnerIcon
+                        aria-hidden={false}
                         aria-label="Loading channels"
                         class="size-5 animate-spin"
                       />

@@ -10,5 +10,5 @@ export type FilterTestOneOfNineKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FilterTestOneOfNineKind = {
-  checkbox: 'checkbox',
+  dateRange: 'dateRange',
 } as const;

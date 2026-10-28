@@ -291,6 +291,32 @@ describe('SyncServiceSource', () => {
     expect(await acked).toBe(true);
   });
 
+  it('releases unacknowledged edits on disconnect before a fast resubscribe', async () => {
+    vi.useFakeTimers();
+    try {
+      const ws = new FakeSocket();
+      const src = new SyncServiceSource(ws, 'doc1', { newId: () => 'retry' });
+      ws.deliver(remote.initialSync(snap, aw));
+      await src.doInitialSync();
+      let delivered: boolean | undefined;
+      void src.pushUpdate([new Uint8Array([1])]).then((result) => {
+        delivered = result;
+      });
+      ws.fireClose(1012, 'restart');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(delivered).toBe(false);
+      expect(await src.pushUpdate([new Uint8Array([1])])).toBe(false);
+      ws.fireReconnect();
+      ws.deliver(remote.initialSync(snap, aw));
+      const retried = src.pushUpdate([new Uint8Array([1])]);
+      ws.deliver(remote.ack('retry'));
+      expect(await retried).toBe(true);
+      src.cleanup();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('pushUpdate resolves false when the ack times out', async () => {
     vi.useFakeTimers();
     try {

@@ -49,6 +49,10 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under
   `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`.
+- Native apps run this crate from their binary while the web bundle updates
+  over the air, so web code meets older versions. Requests use
+  `deny_unknown_fields`: send a new field only once a result shows the engine
+  supports it, as `endCursor` does for a Mail page's `through`.
 
 ## Related
 

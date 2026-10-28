@@ -1,11 +1,8 @@
 use super::*;
-use crate::domain::ics::{CalendarEventExport, CalendarEventExportAccess};
+use crate::domain::ics::EventSnapshot;
 
-fn export(time: EventTime, recurrence_lines: Vec<String>) -> CalendarEventExport {
-    CalendarEventExport {
-        access: CalendarEventExportAccess::ChannelShared,
-        owner_id: "macro|organizer@example.com".to_string(),
-        event_type: EventType::Default,
+fn export(time: EventTime, recurrence_lines: Vec<String>) -> EventSnapshot {
+    EventSnapshot {
         ical_uid: "meeting@example.com".to_string(),
         sequence: 4,
         title: "Offsite".to_string(),
@@ -15,7 +12,6 @@ fn export(time: EventTime, recurrence_lines: Vec<String>) -> CalendarEventExport
         recurrence_lines,
         organizer_email: Some("organizer@example.com".to_string()),
         organizer_name: Some("Organizer".to_string()),
-        updated_at: Utc::now(),
     }
 }
 

@@ -1,7 +1,7 @@
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SmileyIcon from '@phosphor/smiley.svg';
+import SmileyIcon from '@icon/system/regular/smiley.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useMessage, useMessageActions } from './context';
@@ -76,7 +76,7 @@ export function Reactions(props: ReactionsProps) {
             triggerProps={{
               size: 'icon-sm',
               tooltip: 'Add reaction',
-              variant: 'outline',
+              variant: 'secondary',
               class: 'rounded-full h-7 min-w-7',
               'aria-label': 'Add reaction',
               onClick: (e: MouseEvent) => e.stopPropagation(),

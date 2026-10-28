@@ -8,6 +8,9 @@ vi.mock('@app/components/view-shell/ViewShell', () => ({
     TopBar: (props: ParentProps) => <div>{props.children}</div>,
   },
 }));
+vi.mock('@app/components/view-shell/ViewSidebar', () => ({
+  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
+}));
 afterEach(cleanup);
 
 it('uses the block title control without duplicating its title or session menu', () => {

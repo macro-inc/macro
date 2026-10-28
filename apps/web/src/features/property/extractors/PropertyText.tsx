@@ -10,6 +10,7 @@ import {
   formatDate,
   formatNumber,
   formatPropertyValue,
+  formatTimeRange,
 } from '../utils/formatting';
 import {
   getEntityValues,
@@ -18,6 +19,7 @@ import {
   hasValue,
   isBooleanProperty,
   isDateProperty,
+  isDateRangeProperty,
   isEntityProperty,
   isLinkProperty,
   isNumberProperty,
@@ -44,6 +46,7 @@ type Props = {
  * - NUMBER: formatted number
  * - BOOLEAN: "True"/"False"
  * - DATE: formatted date
+ * - DATE_RANGE: formatted range of days
  * - SELECT_*: first option's display label
  * - ENTITY+USER (single): user's first name
  * - ENTITY+USER (multi): "N people"
@@ -162,6 +165,8 @@ function extractText(property: Property): string {
     return property.value === null ? '' : formatBoolean(property.value);
   if (isDateProperty(property))
     return property.value === null ? '' : formatDate(property.value);
+  if (isDateRangeProperty(property))
+    return property.value === null ? '' : formatTimeRange(property.value);
 
   if (isSelectProperty(property)) {
     const first = getSelectValues(property)[0];

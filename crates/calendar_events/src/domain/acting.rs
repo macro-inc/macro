@@ -14,12 +14,29 @@ pub struct OwnedInbox {
     pub email: String,
     /// The provider the inbox's calendar syncs from.
     pub provider: CalendarProvider,
+    /// Provider ids of the calendars the inbox can write. Google names the
+    /// calendar an event was created on as its organizer, so an event made
+    /// on a secondary calendar is organized by that calendar's id, not the
+    /// inbox's address.
+    pub writable_calendar_ids: Vec<String>,
 }
 
 impl OwnedInbox {
     /// Whether an attendee address is this inbox's.
     pub fn matches(&self, email: &str) -> bool {
         self.email.eq_ignore_ascii_case(email)
+    }
+
+    /// Whether this inbox organizes an event with this organizer: its own
+    /// address, or a calendar it can write. Google lets whoever can write the
+    /// organizer's calendar change the event as its organizer, from any of
+    /// their copies.
+    pub fn organizes(&self, organizer_email: &str) -> bool {
+        self.matches(organizer_email)
+            || self
+                .writable_calendar_ids
+                .iter()
+                .any(|id| id.eq_ignore_ascii_case(organizer_email))
     }
 }
 
@@ -71,6 +88,7 @@ impl ActorInboxes {
                 link_id: Uuid::nil(),
                 email: email.into().to_ascii_lowercase(),
                 provider: CalendarProvider::Google,
+                writable_calendar_ids: Vec::new(),
             }],
         }
     }

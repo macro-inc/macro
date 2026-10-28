@@ -1,8 +1,8 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { RadioGroup as KobalteRadioGroup } from '@kobalte/core/radio-group';
-import CheckIcon from '@phosphor/check.svg';
-import CloseIcon from '@phosphor/x.svg';
 import type { CalendarRsvpScope } from '@service-email/client';
 import { Button, Dialog, Panel, RadioGroup } from '@ui';
 import { For, Show } from 'solid-js';
@@ -40,7 +40,7 @@ export function EventRsvpScopeDialog(props: {
                 variant="ghost"
                 size="icon-sm"
               >
-                <CloseIcon />
+                <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dialog.CloseButton>
               <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
                 RSVP to recurring event
@@ -70,7 +70,7 @@ export function EventRsvpScopeDialog(props: {
                 <Button variant="ghost" onClick={props.onClose}>
                   Cancel
                 </Button>
-                <Button variant="strong" onClick={props.onConfirm}>
+                <Button variant="secondary" onClick={props.onConfirm}>
                   OK
                 </Button>
               </div>
@@ -152,7 +152,7 @@ export function EventRsvpScopeDialog(props: {
                   Cancel
                 </Button>
                 <Button
-                  variant="strong"
+                  variant="secondary"
                   class="min-h-11 flex-1"
                   onClick={props.onConfirm}
                 >

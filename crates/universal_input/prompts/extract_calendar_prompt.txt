@@ -1,0 +1,2 @@
+Extract only title, body, location and guests. Scheduling, durations and recurrence are extracted independently as typed expressions and resolved by Rust; do not include them in these content fields.
+Calendar guests must be empty unless the draft explicitly requests inviting people. A person mentioned as an activity companion is not an invitation.

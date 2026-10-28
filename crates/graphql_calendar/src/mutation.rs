@@ -241,7 +241,9 @@ pub(crate) fn mutation_error(error: CalendarMutationError) -> async_graphql::Err
         ),
         CalendarMutationError::AlreadyOnCalendar => (
             "already_on_calendar",
-            "this event is already on one of your calendars".into(),
+            "This meeting is already on one of your calendars, so it can't be added to another \
+             one."
+                .into(),
         ),
         CalendarMutationError::JoinRequestOpen => (
             "join_request_open",

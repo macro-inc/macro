@@ -26,6 +26,10 @@ import {
 import type { CardMove } from '../../database/core/board-moves';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { createKeyedSerializer } from '../../database/core/keyed-serializer';
+import {
+  newTimelineWithTimeRangeColumn,
+  timelineWithTimeRangeColumn,
+} from '../../database/core/timeline-range';
 import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import { applyOp, isResult, patchViews } from './detail-cache';
 import { databaseViewKeys } from './keys';
@@ -152,6 +156,37 @@ export function showAsBoardWithStatusColumn(
     view.tableId,
     view.id,
     boardWithStatusColumn({ view, columns, status: mintStatusColumn() })
+  );
+}
+
+/** Add a timeline along a new Time range column, the column and the timeline in one batch. */
+export function createTimelineWithTimeRangeColumn(params: {
+  databaseId: string;
+  tableId: string;
+  name: string;
+  query: ViewQuery;
+  columns: readonly DatabaseViewColumn[];
+  viewId: string;
+  column: string;
+}): ResultAsync<DatabaseView, DatabaseOpFailure> {
+  return applyColumnAndView(
+    params.databaseId,
+    params.tableId,
+    viewListKey(params.tableId),
+    newTimelineWithTimeRangeColumn(params)
+  );
+}
+
+/** Lay a view out as a timeline along a new Time range column, the column and the change in one batch. */
+export function showAsTimelineWithTimeRangeColumn(
+  view: DatabaseView,
+  columns: readonly DatabaseViewColumn[]
+): ResultAsync<DatabaseView, DatabaseOpFailure> {
+  return applyColumnAndView(
+    view.databaseId,
+    view.tableId,
+    view.id,
+    timelineWithTimeRangeColumn({ view, columns, column: uuidv7() })
   );
 }
 

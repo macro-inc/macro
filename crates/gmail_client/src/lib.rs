@@ -16,8 +16,13 @@ mod test;
 
 use regex::Regex;
 use std::sync::LazyLock;
+use std::time::Duration;
 
 const MAX_ERROR_BODY_LEN: usize = 1024;
+// A stalled request fails instead of holding its worker, and its mailbox's
+// request-gate permit, indefinitely. Callers size permit leases above this.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 static EMAIL_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
@@ -108,8 +113,14 @@ impl GmailClient {
         audience: String,
     ) -> Self {
         Self {
-            inner: reqwest::Client::new(),
+            inner: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .connect_timeout(CONNECT_TIMEOUT)
+                .build()
+                .expect("Gmail HTTP client should initialize"),
             send_client: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .connect_timeout(CONNECT_TIMEOUT)
                 .retry(reqwest::retry::never())
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
@@ -240,6 +251,30 @@ impl GmailClient {
             self,
             access_token,
             provider_message_id,
+            label_ids_to_add,
+            label_ids_to_remove,
+        )
+        .await
+    }
+
+    /// Adds and removes labels on many messages in one request (at most
+    /// [`models_email::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES`] ids).
+    #[tracing::instrument(
+        skip(self, access_token, provider_message_ids),
+        fields(message_count = provider_message_ids.len()),
+        err
+    )]
+    pub async fn batch_modify_message_labels(
+        &self,
+        access_token: &str,
+        provider_message_ids: &[String],
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> Result<(), GmailApiHttpError> {
+        labels::batch_modify_message_labels(
+            self,
+            access_token,
+            provider_message_ids,
             label_ids_to_add,
             label_ids_to_remove,
         )

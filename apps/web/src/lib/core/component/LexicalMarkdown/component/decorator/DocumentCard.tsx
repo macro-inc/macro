@@ -14,6 +14,14 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { matches } from '@core/util/match';
+import Minimize from '@icon/system/regular/arrows-in.svg';
+import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import Link from '@icon/system/regular/link.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -25,14 +33,6 @@ import {
   setDocumentCardPreviewComponent,
   unsetDocumentCardPreviewCache,
 } from '@macro-inc/lexical-core';
-import Minimize from '@phosphor/arrows-in.svg';
-import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import Link from '@phosphor/link.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,
@@ -545,7 +545,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 variant="ghost"
                 aria-label="Document card actions"
               >
-                <DotsThree />
+                <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>

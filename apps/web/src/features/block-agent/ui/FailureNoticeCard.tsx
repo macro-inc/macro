@@ -8,8 +8,8 @@
  * quiet rule an opaque runtime error gets.
  */
 
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import type { FailureNotice } from '@service-agent-fold/generated/types';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
@@ -42,7 +42,7 @@ export function FailureNoticeCard(props: FailureNoticeCardProps) {
           {(link) => (
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               class="gap-1.5"
               onClick={() => props.onOpenLink(link().url)}

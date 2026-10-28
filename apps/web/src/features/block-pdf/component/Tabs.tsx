@@ -5,8 +5,8 @@ import {
   useDeleteTab,
   useNavigateToTab,
 } from '@block-pdf/signal/tab';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { For, Show } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { usePdfViewer } from '../context/pdf-viewer-context';

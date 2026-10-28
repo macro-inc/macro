@@ -75,6 +75,11 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   (keeps the column), **Required**, and the ⋯ menu (Move up / Move down / Move
   to section / **Delete column and answers…**, which confirms with the row
   count).
+- A **Time range** question (Numbers & dates) asks with the calendar
+  composer's **Start** → **End** date/time fields and **All day** switch, as a
+  database cell does; the answer counts once both ends are set, and an end
+  before the start is refused. Receipts show it as the table does. Gates test
+  it with the database's range tests.
 - Required questions show a **Required** badge below their answer preview.
   Selecting the question puts its Required switch at the bottom right, with
   duplicate, remove, and more actions on the left.

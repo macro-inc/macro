@@ -2,9 +2,9 @@ import { ViewSidebar } from '@app/components/view-shell';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import ChatCircleIcon from '@phosphor/chat-circle.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import ChatCircleIcon from '@icon/system/regular/chat-circle.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dropdown } from '@ui';
 import { Show } from 'solid-js';
 
@@ -22,10 +22,11 @@ export function ConversationsCreateMenu(props: {
         when={props.presentation}
         fallback={
           <Dropdown.Trigger
+            aria-label="Create channel or direct message"
+            tooltip="Create channel or direct message"
             as={ViewSidebar.Control}
             variant="ghost"
             size="icon-sm"
-            label="Create channel or direct message"
           >
             <PlusIcon class="size-3.5" />
           </Dropdown.Trigger>

@@ -40,6 +40,13 @@ const [state, setState] = createStore({
 const fetchNextPage = vi.fn();
 const observations: Array<{ intersect: () => void; node: Element }> = [];
 
+vi.mock('@queries/pipedream-connectors', () => ({
+  usePipedreamConnectedSlugs: () => ({
+    slugs: () => new Set<string>(),
+    ready: () => true,
+  }),
+}));
+
 vi.mock('@core/pipedream/catalog', () => ({
   createPipedreamCatalogSearch: () => {
     const [search, setSearch] = createSignal('');

@@ -1,5 +1,5 @@
 import type { GithubPullRequestEntity } from '@entity';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { cn } from '@ui';
 import { createEffect } from 'solid-js';
 
