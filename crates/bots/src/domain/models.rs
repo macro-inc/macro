@@ -148,7 +148,7 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    /// Whether mentioning this bot can start an AI agent session.
     pub has_agent: bool,
 }
 
@@ -615,7 +615,7 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    /// Whether mentioning this bot can start an AI agent session. Defaults to false.
     pub has_agent: Option<bool>,
 }
 
@@ -631,7 +631,7 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+    /// Whether mentioning this bot can start an AI agent session. Omit to leave unchanged.
     pub has_agent: Option<bool>,
 }
 
@@ -671,7 +671,7 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    /// Whether mentioning this bot can start an AI agent session. Defaults to false.
     pub has_agent: Option<bool>,
 }
 
