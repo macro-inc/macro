@@ -1,4 +1,4 @@
-import { Button, cn } from '@ui';
+import { Button, type ButtonVariant, cn } from '@ui';
 import type { JSX, Ref } from 'solid-js';
 
 /** Shared geometry for labeled actions in a block's header. */
@@ -10,12 +10,14 @@ export function HeaderActionButton(props: {
   tooltip?: string;
   disabled?: boolean;
   busy?: boolean;
+  /** Header actions are quiet ghosts; a filled variant calls for attention. */
+  variant?: ButtonVariant;
   class?: string;
 }) {
   return (
     <Button
       ref={props.ref}
-      variant="ghost"
+      variant={props.variant ?? 'ghost'}
       size="md"
       data-header-action
       aria-label={props.label}

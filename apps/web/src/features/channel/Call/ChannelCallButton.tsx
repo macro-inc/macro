@@ -21,9 +21,10 @@ export function ChannelCallButton(props: { channelId: string }) {
         tooltip={tooltip()}
         label={label()}
         icon={<PhoneIcon />}
+        variant={call.isCallInProgress() ? 'success' : 'ghost'}
         class={cn(
           call.isCallInProgress() &&
-            'bg-success text-surface not-touch:not-disabled:hover:text-surface'
+            'border-transparent bg-success text-surface'
         )}
       />
     </Show>
