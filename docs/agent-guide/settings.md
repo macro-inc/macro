@@ -282,14 +282,18 @@ Left nav (feature and platform gates still apply):
 - **Developer**: Runtimes, MCP server, API Keys, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
-**Desktop App (Alpha)** and shows a compact version and build-date card in the
-desktop app. The date is when the running app bundle was built, not when it was
-installed on the computer. In the browser it links to the latest desktop release
+**Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
+date card in the desktop app. Build date is when the running JavaScript was
+built, not when it was installed on the computer. Bundle date is when the active
+OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
+the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
 native mobile never shows it.
 
-The **Mobile App** page is titled **Mobile app** and offers a QR code
-to download **Macro** from the App Store.
+The **Mobile App** page is titled **Mobile app**. In the browser it offers a QR
+code to download **Macro** from the App Store; inside the iOS and Android apps
+it shows the same Version, Build date, and Bundle date card as the desktop app,
+and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
