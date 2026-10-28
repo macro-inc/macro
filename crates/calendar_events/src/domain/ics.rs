@@ -203,7 +203,7 @@ pub enum CalendarEventForwardKind {
     /// A real invitation (`METHOD:REQUEST`) from an organizer outside
     /// Google, as Google's own Add guests sends on such a copy: it names the
     /// recipients as attendees, they answer it to the organizer, and the
-    /// organizer is copied on the email.
+    /// email goes to the organizer too.
     Invitation {
         /// Who the answers go to.
         organizer: IcsParticipant,

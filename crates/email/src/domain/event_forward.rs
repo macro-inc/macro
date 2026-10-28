@@ -9,9 +9,10 @@
 //! - An organizer outside Google: Google keeps such an invitation as a
 //!   private copy and offers its own Add guests there as a forward, so this
 //!   sends what that does: a real invitation (`METHOD:REQUEST`) naming the
-//!   recipients as attendees, as the message's calendar body, with the
-//!   organizer copied. Recipients answer it to the organizer with Yes, Maybe
-//!   or No; the forwarder's own copy and answer are untouched.
+//!   recipients as attendees, as the message's calendar body, addressed to
+//!   them and to the organizer, as Google addresses its own. Recipients
+//!   answer it to the organizer with Yes, Maybe or No; the forwarder's own
+//!   copy and answer are untouched.
 //! - Anything else, notably a Google organizer who turned inviting off: the
 //!   shared-event file (`METHOD:PUBLISH`) naming no attendees, so a
 //!   recipient can add the event to their own calendar but has nothing to
@@ -58,8 +59,8 @@ const EVENT_FILE_NOTE: &str = "This invitation was forwarded to you. Add the eve
                                organizer's guest list.";
 
 /// Ends a forwarded invitation's body: who hears the recipient's answer.
-const INVITATION_NOTE: &str = "This invitation was forwarded to you. Your answer goes to \
-                               the organizer, who is copied on this email.";
+const INVITATION_NOTE: &str =
+    "This invitation was forwarded to you. Your answer goes to the organizer.";
 
 /// What a forward sends besides the event.
 #[derive(Debug, Clone)]
@@ -188,10 +189,10 @@ where
         title => title,
     };
     let document = forward.ics.document.into_bytes();
-    let (note, cc, files) = match forward.kind {
+    let (note, to, files) = match forward.kind {
         CalendarEventForwardKind::EventFile => (
             EVENT_FILE_NOTE,
-            Vec::new(),
+            to,
             vec![SourcedAttachment {
                 file_name: format!("{}.ics", file_stem(title)),
                 content_type: ICS_CONTENT_TYPE.to_owned(),
@@ -201,7 +202,7 @@ where
         ),
         CalendarEventForwardKind::Invitation { organizer } => (
             INVITATION_NOTE,
-            organizer_cc(organizer, &to),
+            with_organizer(to, organizer),
             vec![
                 SourcedAttachment {
                     file_name: INVITATION_FILE_NAME.to_owned(),
@@ -234,7 +235,7 @@ where
         thread_db_id: None,
         subject: title.to_owned(),
         to,
-        cc,
+        cc: Vec::new(),
         bcc: Vec::new(),
         body_html: Some(URL_SAFE_NO_PAD.encode(text_html(&body_text))),
         body_text: Some(body_text),
@@ -252,20 +253,21 @@ where
         .map_err(EventForwardError::Email)
 }
 
-/// The organizer, copied on an invitation they will get the answers to,
-/// unless they are already one of its recipients.
-fn organizer_cc(organizer: IcsParticipant, to: &[ContactInfo]) -> Vec<ContactInfo> {
-    if to
+/// The recipients followed by the organizer, who gets the answers, as
+/// Google addresses its own forward; an organizer already among the
+/// recipients is not added twice.
+fn with_organizer(mut to: Vec<ContactInfo>, organizer: IcsParticipant) -> Vec<ContactInfo> {
+    if !to
         .iter()
         .any(|contact| contact.email.eq_ignore_ascii_case(&organizer.email))
     {
-        return Vec::new();
+        to.push(ContactInfo {
+            email: organizer.email,
+            name: organizer.name,
+            photo_url: None,
+        });
     }
-    vec![ContactInfo {
-        email: organizer.email,
-        name: organizer.name,
-        photo_url: None,
-    }]
+    to
 }
 
 /// The requested recipients as valid, distinct addresses, in the order given.

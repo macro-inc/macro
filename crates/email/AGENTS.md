@@ -25,7 +25,7 @@ tools — hexagonal, heavily feature-gated.
   and forwarding one of the viewer's events from the inbox holding their copy
   (`domain/event_forward.rs`): that same file, or, for an organizer outside
   Google, a real invitation (`METHOD:REQUEST`) sent as the message's calendar
-  body with the organizer copied, whichever the calendar decides.
+  body to the recipients and the organizer, whichever the calendar decides.
 - Not here: raw provider API calls → `email_api_client`; HTML
   parsing/sanitization → `email_utils`; SQLx queries over email tables →
   `email_db_client`.

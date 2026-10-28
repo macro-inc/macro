@@ -634,10 +634,10 @@ the server decides what it is from the stored copy, ending the body with the mat
   way and reports it as `guestsCanInviteOthers: false`): a real invitation, as Google's own
   Add guests sends there. The message's calendar body is `METHOD:REQUEST` with the original
   organizer and the recipients (only them) as attendees, an `invite.ics` copy is attached,
-  and the organizer is copied. Recipients get Yes / Maybe / No in Gmail and Outlook and
-  their answers go to the organizer; the forwarder's own copy and answer are untouched. The
-  note reads `This invitation was forwarded to you. Your answer goes to the organizer, who is
-  copied on this email.`
+  and the email goes to the recipients and the organizer, as Google addresses its own.
+  Recipients get Yes / Maybe / No in Gmail and Outlook and their answers go to the
+  organizer; the forwarder's own copy and answer are untouched. The note reads `This
+  invitation was forwarded to you. Your answer goes to the organizer.`
 - Anything else, notably a Google organizer who turned inviting off, and whenever the
   evidence is missing (an Outlook copy, a snapshot, a private copy whose UID ends in
   `@google.com`, which is an imported Google meeting, an organizer Macro cannot name, or a

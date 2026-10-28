@@ -492,7 +492,7 @@ does not name, from the inbox that holds the viewer's copy, with the
 usual undo delay, carrying the copy's join link. When the copy is Google's
 private copy of an invitation from an organizer outside Google, it is a
 real invitation (`METHOD:REQUEST`) naming the recipients, who answer it to
-the organizer, who is copied. Otherwise it is the event's file
+the organizer, who gets the email too. Otherwise it is the event's file
 (`METHOD:PUBLISH`, no attendees): recipients can add the event to their
 own calendar, are not added to the guest list, and the organizer is not
 told.

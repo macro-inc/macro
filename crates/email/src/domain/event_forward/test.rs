@@ -211,7 +211,7 @@ async fn sends_the_event_file_from_the_inbox_holding_the_copy() {
 }
 
 #[tokio::test]
-async fn an_outside_organizers_invitation_goes_out_answerable_with_the_organizer_copied() {
+async fn an_outside_organizers_invitation_goes_out_answerable_to_the_recipients_and_organizer() {
     let fake = outside_invitation();
     forward(
         &fake,
@@ -236,14 +236,30 @@ async fn an_outside_organizers_invitation_goes_out_answerable_with_the_organizer
     );
     let sent = fake.sent.lock().unwrap();
     let (_, input, files) = &sent[0];
-    assert_eq!(input.to.len(), 1);
-    assert_eq!(input.cc.len(), 1);
-    assert_eq!(input.cc[0].email, "organizer@exchange.example");
-    assert_eq!(input.cc[0].name.as_deref(), Some("The Organizer"));
+    let to: Vec<_> = input
+        .to
+        .iter()
+        .map(|to| (to.email.as_str(), to.name.as_deref()))
+        .collect();
+    assert_eq!(
+        to,
+        [
+            ("friend@example.org", Some("A Friend")),
+            ("organizer@exchange.example", Some("The Organizer")),
+        ],
+        "the organizer is addressed beside the recipients, as Google does"
+    );
+    assert!(input.cc.is_empty() && input.bcc.is_empty());
     let body = input.body_text.as_deref().unwrap();
     assert!(body.starts_with("Board review\nWhen: Friday\n\n"), "{body}");
-    assert!(body.contains("Your answer goes to the organizer"), "{body}");
-    assert!(!body.contains("attached file"), "{body}");
+    assert!(
+        body.ends_with("Your answer goes to the organizer."),
+        "{body}"
+    );
+    assert!(
+        !body.contains("attached file") && !body.contains("copied"),
+        "{body}"
+    );
     assert_eq!(files.len(), 2);
     assert_eq!(files[0].content_type, "text/calendar; method=REQUEST");
     assert!(
@@ -258,7 +274,7 @@ async fn an_outside_organizers_invitation_goes_out_answerable_with_the_organizer
 }
 
 #[tokio::test]
-async fn an_organizer_among_the_recipients_is_not_copied_again() {
+async fn an_organizer_among_the_recipients_is_not_addressed_twice() {
     let fake = outside_invitation();
     forward(
         &fake,
@@ -271,6 +287,8 @@ async fn an_organizer_among_the_recipients_is_not_copied_again() {
     .unwrap();
 
     let sent = fake.sent.lock().unwrap();
+    let to: Vec<_> = sent[0].1.to.iter().map(|to| to.email.as_str()).collect();
+    assert_eq!(to, ["Organizer@Exchange.example"]);
     assert!(sent[0].1.cc.is_empty());
 }
 
