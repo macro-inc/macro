@@ -5,14 +5,14 @@ import { type Intent, rankIntents, type Scores } from './input';
  * surface opts in by naming itself in the attribute, which also tells the
  * offer and its telemetry which surface the text came from.
  */
-export const SELECTION_OFFER_ATTRIBUTE = 'data-selection-offer';
+const SELECTION_OFFER_ATTRIBUTE = 'data-selection-offer';
 
 /**
  * Shapes worth offering for text that is already on screen. `ai` and `search`
  * answer a question the reader has not asked, and `email` and `message` need a
  * recipient the selected text cannot supply; Command K covers all four.
  */
-export const OFFERED_INTENTS: readonly Intent[] = ['calendar', 'task', 'note'];
+const OFFERED_INTENTS: readonly Intent[] = ['calendar', 'task', 'note'];
 
 /** Fewer words than this carry no shape to recognize. */
 const MINIMUM_WORDS = 4;
@@ -51,7 +51,7 @@ function offerContainer(node: Node): HTMLElement | undefined {
   return undefined;
 }
 
-export function offerableText(text: string): boolean {
+function offerableText(text: string): boolean {
   return (
     text.length <= MAXIMUM_CHARACTERS &&
     text.split(/\s+/).filter(Boolean).length >= MINIMUM_WORDS

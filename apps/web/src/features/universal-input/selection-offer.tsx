@@ -54,6 +54,8 @@ export function SelectionOffer() {
     const live = document.getSelection();
     if (!offer || !live?.rangeCount) return;
     selection.hold();
+    // The last card's room belongs to the text it was opened on.
+    setRoom(undefined);
     setDraft({ ...offer, anchor: live.getRangeAt(0).cloneRange() });
   };
 
