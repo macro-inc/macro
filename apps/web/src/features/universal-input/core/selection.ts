@@ -37,7 +37,8 @@ export type ReadableSelection = Pick<
 function offerContainer(node: Node): HTMLElement | undefined {
   let current: Node | null = node;
   while (current) {
-    const element = current instanceof Element ? current : current.parentElement;
+    const element =
+      current instanceof Element ? current : current.parentElement;
     const container = element?.closest<HTMLElement>(
       `[${SELECTION_OFFER_ATTRIBUTE}]`
     );
