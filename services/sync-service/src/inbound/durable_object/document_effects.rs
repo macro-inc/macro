@@ -4,9 +4,7 @@ use macro_sync_service_jwt::session::SessionKind;
 use tracing::{error, warn};
 use worker::Env;
 
-use super::{
-    DocumentSyncSession, bump_alarm, surface_api::session_kind_from_storage_key, take_editors,
-};
+use super::{SyncSession, bump_alarm, surface_api::session_kind_from_storage_key, take_editors};
 use crate::{
     domain::document::{DocumentAttribution, DocumentError, DocumentUpdateEffects},
     dss_internal::{DssInternal, DssInternalClient, InteractionReason},
@@ -53,7 +51,7 @@ pub(super) async fn report_interaction(session_key: &str, env: &Env, reason: Int
 }
 
 pub(super) struct WorkerDocumentEffects<'a> {
-    pub session: &'a DocumentSyncSession,
+    pub session: &'a SyncSession,
     pub document_state: &'a DocumentState,
     pub document_id: &'a str,
     pub attribution: Option<&'a DocumentAttribution>,
