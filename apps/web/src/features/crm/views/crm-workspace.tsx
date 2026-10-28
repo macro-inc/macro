@@ -689,30 +689,26 @@ export function CrmWorkspaceView(props: {
           </Show>
           <Show when={!recordOpen() && !pipelineId() && activityTab()} keyed>
             {(tab) => (
-              <>
-                <Show when={!isTouchDevice()}>
-                  <ListHeader
-                    title={
-                      <div class="flex min-w-0 items-center gap-3">
-                        <NavigationToggle onExpand={() => setCollapsed(false)}>
-                          <Suspense>{sidebar()}</Suspense>
-                        </NavigationToggle>
-                        <h1
-                          class="min-w-0 truncate text-sm font-semibold"
-                          title={title()}
-                        >
-                          {title()}
-                        </h1>
-                      </div>
-                    }
-                  />
-                </Show>
-                <Suspense
-                  fallback={<CrmListSkeleton label="Loading CRM activity" />}
-                >
-                  <CrmActivityView tab={tab} />
-                </Suspense>
-              </>
+              <Suspense
+                fallback={<CrmListSkeleton label="Loading CRM activity" />}
+              >
+                <CrmActivityView
+                  tab={tab}
+                  title={
+                    <div class="flex min-w-0 items-center gap-3">
+                      <NavigationToggle onExpand={() => setCollapsed(false)}>
+                        <Suspense>{sidebar()}</Suspense>
+                      </NavigationToggle>
+                      <h1
+                        class="min-w-0 truncate text-sm font-semibold"
+                        title={title()}
+                      >
+                        {title()}
+                      </h1>
+                    </div>
+                  }
+                />
+              </Suspense>
             )}
           </Show>
           <Show

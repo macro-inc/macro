@@ -2,13 +2,11 @@ import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { CrmListEmpty } from '../components/list-state';
-import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmActivityTab, CrmSoupActivityTab } from '../core/navigation';
+import { ActivitySection } from './activity-section';
 import { CrmDatabasesView } from './databases';
 import { RecordItemList } from './record-item-list';
 
@@ -44,16 +42,23 @@ const CONTENT = {
 };
 
 /** Workspace activity shares the paged rows and states of record sections. */
-export function CrmActivityView(props: { tab: CrmActivityTab }) {
+export function CrmActivityView(props: {
+  tab: CrmActivityTab;
+  title?: JSX.Element;
+}) {
   const tab = () => (props.tab === 'databases' ? undefined : props.tab);
   return (
-    <Show when={tab()} keyed fallback={<CrmDatabasesView />}>
-      {(current) => <ActivityList tab={current} />}
+    <Show
+      when={tab()}
+      keyed
+      fallback={<CrmDatabasesView title={props.title} />}
+    >
+      {(current) => <ActivityList tab={current} title={props.title} />}
     </Show>
   );
 }
 
-function ActivityList(props: { tab: CrmSoupActivityTab }) {
+function ActivityList(props: { tab: CrmSoupActivityTab; title?: JSX.Element }) {
   const crm = useCrmContext();
   const source = crm.createActivity(() => props.tab);
   const [search, setSearch] = createSignal('');
@@ -64,16 +69,13 @@ function ActivityList(props: { tab: CrmSoupActivityTab }) {
     return crm.openCreateItem(props.tab);
   };
   return (
-    <RecordSection
-      title={content().title}
+    <ActivitySection
+      label={content().title}
+      title={props.title}
       search={search()}
       onSearchChange={setSearch}
-      actions={
-        <Button variant="outline" onClick={create}>
-          <PlusIcon class="size-4" />
-          {content().action}
-        </Button>
-      }
+      createLabel={content().action}
+      onCreate={create}
     >
       <RecordItemList
         source={source}
@@ -88,6 +90,6 @@ function ActivityList(props: { tab: CrmSoupActivityTab }) {
           />
         }
       />
-    </RecordSection>
+    </ActivitySection>
   );
 }

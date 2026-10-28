@@ -89,6 +89,8 @@ centered and raised toward the toolbar, with
 creation guidance, distinct search-empty actions, retryable error states, and
 shared list skeletons. Keep search and available header actions visible in every
 state. A failed continuation retains rows and retries that page.
+Workspace activity uses the shared single-row desktop header with New and an
+expandable Search control; record-detail tabs retain their section toolbar.
 
 Activity extends the existing authorized CRM association path rather than
 splitting the feed into independent client queries. This preserves one sorted

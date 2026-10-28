@@ -67,6 +67,11 @@ the toolbar rather than vertically centered. Search-empty states use a
 different illustration and **Clear search**, not a creation prompt. Initial list
 failures offer **Try again**; failed continuation pages retain existing rows.
 Loading uses list skeletons while search and header actions remain available.
+On desktop, each workspace activity view keeps its title, **New**, and expandable
+**Search** in one header row, including when empty or loading. Command-F expands
+and focuses Search; Escape clears and closes it. Phone activity views keep the
+search field and creation action below the CRM navigation tabs. Record-detail
+tabs retain their own section toolbar.
 
 Verify activity loading with a CRM containing thousands of companies and
 contacts, not only an empty fixture. Opening a tab must settle without repeated
