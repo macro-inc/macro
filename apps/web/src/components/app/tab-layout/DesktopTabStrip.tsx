@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { globalTabManager } from '@app/signal/tabLayout';
 import { TOKENS } from '@core/hotkey/tokens';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -8,7 +9,7 @@ import { For, Show } from 'solid-js';
 import type { DesktopTab, TabManager } from './tab-manager';
 
 function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
-  const title = () => props.tabManager.tabTitle(props.tab);
+  const title = () => props.tabManager.tabTitle(props.tab) ?? t('tabs.newTab');
   const active = () => props.tabManager.activeTabId() === props.tab.id;
   const paneCount = () => props.tabManager.tabPaneCount(props.tab);
   const closable = () => props.tabManager.tabs().length > 1;
@@ -31,7 +32,7 @@ function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
       }}
     >
       <Show when={paneCount() > 1}>
-        <Tooltip label={`${paneCount()} splits`} as="span">
+        <Tooltip label={t('tabs.splitCount', { count: paneCount() })} as="span">
           <span class="flex shrink-0 items-center gap-0.5 text-2xs text-ink-extra-muted">
             <SquareSplitIcon class="size-3.5" />
             {paneCount()}
@@ -45,7 +46,7 @@ function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
         <Button
           variant="ghost"
           size="icon-xs"
-          label="Close Tab"
+          label={t('tabs.closeTab')}
           noTouchResize
           class={cn(
             'shrink-0',
@@ -77,7 +78,7 @@ export function DesktopTabStrip() {
         >
           <div
             role="tablist"
-            aria-label="Tabs"
+            aria-label={t('tabs.tablist')}
             class="flex min-w-0 items-center gap-1 overflow-hidden"
           >
             <For each={tabManager().tabs()}>
@@ -87,7 +88,7 @@ export function DesktopTabStrip() {
           <Button
             variant="ghost"
             size="icon-sm"
-            label="New Tab"
+            label={t('tabs.newTab')}
             hotkey={TOKENS.tabs.new}
             onClick={() => tabManager().newTab()}
           >

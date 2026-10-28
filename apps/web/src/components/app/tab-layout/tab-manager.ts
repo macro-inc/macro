@@ -235,10 +235,12 @@ export function createTabManager(options: TabManagerOptions) {
     tabs,
     activeTabId,
 
-    /** Live title for the strip: the active tab reads the layout manager. */
-    tabTitle(tab: DesktopTab): string {
+    /** Live title for the strip: the active tab reads the layout manager.
+     * Undefined when the tab has no title yet; the strip renders the
+     * translated placeholder. */
+    tabTitle(tab: DesktopTab): string | undefined {
       const live = tab.id === activeTabId() ? manager.tabTitle() : undefined;
-      return live ?? tab.title ?? 'New Tab';
+      return live ?? tab.title;
     },
 
     /** Live pane count for the strip's split indicator. */

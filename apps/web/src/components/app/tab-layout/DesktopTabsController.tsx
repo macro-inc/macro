@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import type { SplitRouter } from '@app/lib/split-router';
 import { setGlobalTabManager } from '@app/signal/tabLayout';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
@@ -22,7 +23,7 @@ function registerTabHotkeys(tabManager: TabManager) {
     hotkeyToken: TOKENS.tabs.new,
     hotkey: 'cmd+t',
     scopeId: 'global',
-    description: 'New Tab',
+    description: () => t('tabs.newTab'),
     keyDownHandler: () => {
       tabManager.newTab();
       return true;
@@ -34,7 +35,7 @@ function registerTabHotkeys(tabManager: TabManager) {
     hotkeyToken: TOKENS.tabs.close,
     hotkey: 'shift+cmd+w',
     scopeId: 'global',
-    description: 'Close Tab',
+    description: () => t('tabs.closeTab'),
     condition: () => tabManager.tabs().length > 1,
     keyDownHandler: () => {
       tabManager.closeTab(tabManager.activeTabId());
@@ -47,7 +48,7 @@ function registerTabHotkeys(tabManager: TabManager) {
     hotkeyToken: TOKENS.tabs.next,
     hotkey: 'ctrl+tab',
     scopeId: 'global',
-    description: 'Next Tab',
+    description: () => t('tabs.nextTab'),
     condition: () => tabManager.tabs().length > 1,
     keyDownHandler: () => {
       tabManager.activateNextTab(1);
@@ -60,7 +61,7 @@ function registerTabHotkeys(tabManager: TabManager) {
     hotkeyToken: TOKENS.tabs.previous,
     hotkey: 'ctrl+shift+tab',
     scopeId: 'global',
-    description: 'Previous Tab',
+    description: () => t('tabs.previousTab'),
     condition: () => tabManager.tabs().length > 1,
     keyDownHandler: () => {
       tabManager.activateNextTab(-1);
