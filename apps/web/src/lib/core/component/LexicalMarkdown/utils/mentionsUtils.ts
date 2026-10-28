@@ -9,6 +9,7 @@ import type { AgentSessionEntity, EmailEntity } from '@entity';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import type { UploadSuccess } from '@service-storage/util/upload';
 import type { LexicalEditor } from 'lexical';
 import { v7 } from 'uuid';
@@ -418,11 +419,11 @@ export type AgentSessionMentionItem = Omit<
   'kind'
 > & { kind: 'agentSession' };
 
-/** A WhatsApp group in Macro; not a Soup entity, so it has its own kind. */
-export type WhatsAppGroupMentionItem = {
-  kind: 'whatsappGroup';
+/** An external chat in Macro; not a Soup entity, so it has its own kind. */
+export type ExternalChatMentionItem = {
+  kind: 'externalChat';
   id: string;
-  data: { id: string; name: string };
+  data: { id: string; name: string; provider: ExternalChatProvider };
 };
 
 export type MentionItem =
@@ -432,7 +433,7 @@ export type MentionItem =
   | AgentSessionMentionItem
   | BookingLinkMentionItem
   | CalendarEventMentionItem
-  | WhatsAppGroupMentionItem;
+  | ExternalChatMentionItem;
 
 /**
  * Type guard for DateMentionItem.

@@ -463,6 +463,11 @@ function propertyFromPendingDefinition(
       value: null,
     }))
     .with('DATE', () => ({ ...base, valueType: 'DATE' as const, value: null }))
+    .with('DATE_RANGE', () => ({
+      ...base,
+      valueType: 'DATE_RANGE' as const,
+      value: null,
+    }))
     .with('SELECT_STRING', () => ({
       ...base,
       valueType: 'SELECT_STRING' as const,

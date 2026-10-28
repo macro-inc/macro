@@ -10,7 +10,7 @@ import {
   WEEKDAY_CODES,
   type WeekdayCode,
 } from '../../utils/recurrence';
-import { EventDateField } from './EventDateTimeInputs';
+import { EventDateField } from './EventDateField';
 
 const DATE_VALUE = 'yyyy-MM-dd';
 

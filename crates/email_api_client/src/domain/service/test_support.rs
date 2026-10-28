@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use models_email::email::service::label::Label;
-use models_email::email::service::message::Message;
 use models_email::service::contact::{Contact, ContactList};
 use uuid::Uuid;
 
@@ -217,7 +216,7 @@ impl MailboxMessageClient for FakeRepository {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<crate::domain::models::MessageWithCalendarParts>, EmailApiError> {
         self.unavailable("get_thread")
     }
 

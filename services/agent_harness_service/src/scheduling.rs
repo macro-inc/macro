@@ -7,7 +7,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use jev::{domain::JevClassifier, outbound::TypesafeJev};
+use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -15,6 +15,7 @@ use macro_authorization::{
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
+mod routine_analytics;
 use config::Config;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
@@ -136,7 +137,15 @@ pub async fn build(
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
-    .with_admission(ai_admission);
+    .with_admission(ai_admission)
+    .with_observer(Arc::new(routine_analytics::RoutineAnalytics(
+        agent_harness_service::product_analytics::ProductAnalytics::new(
+            config.posthog_api_key.value(),
+            config.posthog_host.value(),
+            environment,
+            &db,
+        ),
+    )));
     let service_executor = Arc::new(dispatcher_executor.clone());
 
     let jwt_args = JwtValidationArgs::new_with_secret_manager(environment, &secretsmanager_client)
@@ -172,7 +181,7 @@ pub async fn build(
     let typesafe = config
         .typesafe_api_key
         .value()
-        .map(TypesafeJev::new)
+        .map(SystemOneJev::typesafe)
         .transpose()
         .context("invalid TYPESAFE_API_KEY")?;
     let conditions_enabled = typesafe.is_some();

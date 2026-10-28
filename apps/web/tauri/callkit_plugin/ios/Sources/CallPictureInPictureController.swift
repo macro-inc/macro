@@ -16,11 +16,13 @@ protocol CallPictureInPictureManaging: AnyObject {
 
 func makeCallPictureInPictureController(
     sourceViewProvider: @escaping () -> UIView?,
+    isCallActive: @escaping () -> Bool,
     onRestore: @escaping () -> Void
 ) -> CallPictureInPictureManaging {
     if #available(iOS 15.0, *) {
         return AVKitCallPictureInPictureController(
             sourceViewProvider: sourceViewProvider,
+            isCallActive: isCallActive,
             onRestore: onRestore
         )
     }
@@ -38,32 +40,42 @@ private final class NoOpCallPictureInPictureController: CallPictureInPictureMana
         remoteTrack: VideoTrack?
     ) {
         if localTrack != nil || remoteTrack != nil {
-            print("[CallKit] Picture in Picture unavailable before iOS 15")
+            callKitLog("Picture in Picture unavailable before iOS 15")
         }
     }
 
     func stopAndReset() {}
 }
 
+/// Picture in Picture exists only while a call is active: every prepare and
+/// start path checks `isCallActive` (main-thread), so app lifecycle events
+/// after a call ended can never bring back a PiP window with no call behind it.
 @available(iOS 15.0, *)
 private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPictureControllerDelegate, CallPictureInPictureManaging, @unchecked Sendable {
     private let sourceViewProvider: () -> UIView?
+    private let isCallActive: () -> Bool
     private let onRestore: () -> Void
     private let videoCallController = CallPiPVideoCallViewController()
 
     private weak var currentSourceView: UIView?
     private weak var currentLocalTrack: VideoTrack?
     private weak var currentRemoteTrack: VideoTrack?
-    private var currentLocalTitle: String?
-    private var currentRemoteTitle: String?
     private var pictureInPictureController: AVPictureInPictureController?
+    /// Controllers replaced or stopped while their PiP was active or still
+    /// starting. Held until AVKit reports they stopped or failed to start:
+    /// dropping the only reference mid-transition can leave a system PiP
+    /// window that nothing can stop.
+    private var retiringControllers: [AVPictureInPictureController] = []
+    private var isPictureInPictureStarting = false
     private var didObserveAppLifecycle = false
 
     init(
         sourceViewProvider: @escaping () -> UIView?,
+        isCallActive: @escaping () -> Bool,
         onRestore: @escaping () -> Void
     ) {
         self.sourceViewProvider = sourceViewProvider
+        self.isCallActive = isCallActive
         self.onRestore = onRestore
         super.init()
         observeAppLifecycle()
@@ -91,31 +103,29 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
 
             let normalizedLocalTitle = self.normalizedTitle(localTitle)
             let normalizedRemoteTitle = self.normalizedTitle(remoteTitle)
-            self.currentLocalTitle = normalizedLocalTitle
-            self.currentRemoteTitle = normalizedRemoteTitle
             self.videoCallController.setTitles(
                 localTitle: normalizedLocalTitle,
                 remoteTitle: normalizedRemoteTitle
             )
-            print("[CallKit] Picture in Picture setParticipants localTitle=\(normalizedLocalTitle ?? "nil") localTrack=\(localTrack == nil ? "nil" : "set") remoteTitle=\(normalizedRemoteTitle ?? "nil") remoteTrack=\(remoteTrack == nil ? "nil" : "set")")
+            callKitLog("Picture in Picture setParticipants localTrack=\(localTrack == nil ? "nil" : "set") remoteTrack=\(remoteTrack == nil ? "nil" : "set")")
 
             if self.currentLocalTrack !== localTrack {
                 self.currentLocalTrack = localTrack
                 self.videoCallController.setLocalTrack(localTrack)
-                print("[CallKit] Picture in Picture local video track \(localTrack == nil ? "detached" : "attached")")
+                callKitLog("Picture in Picture local video track \(localTrack == nil ? "detached" : "attached")")
             }
 
             if self.currentRemoteTrack !== remoteTrack {
                 self.currentRemoteTrack = remoteTrack
                 self.videoCallController.setRemoteTrack(remoteTrack)
-                print("[CallKit] Picture in Picture remote video track \(remoteTrack == nil ? "detached" : "attached")")
+                callKitLog("Picture in Picture remote video track \(remoteTrack == nil ? "detached" : "attached")")
             }
 
             if localTrack == nil {
-                print("[CallKit] Picture in Picture local side using placeholder")
+                callKitLog("Picture in Picture local side using placeholder")
             }
             if remoteTrack == nil {
-                print("[CallKit] Picture in Picture remote side using placeholder")
+                callKitLog("Picture in Picture remote side using placeholder")
             }
             self.prepareControllerIfPossible()
         }
@@ -124,16 +134,18 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
     func stopAndReset() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if self.pictureInPictureController?.isPictureInPictureActive == true {
-                print("[CallKit] Stopping Picture in Picture")
-                self.pictureInPictureController?.stopPictureInPicture()
+            // Stop even when not yet active: a PiP that is still starting would
+            // otherwise finish starting after the call ended.
+            self.retireController(stop: true)
+            // A controller replaced by a source-view change may still be on
+            // screen; it stays tracked until AVKit reports it stopped.
+            for controller in self.retiringControllers {
+                controller.canStartPictureInPictureAutomaticallyFromInline = false
+                controller.stopPictureInPicture()
             }
             self.currentLocalTrack = nil
             self.currentRemoteTrack = nil
-            self.currentLocalTitle = nil
-            self.currentRemoteTitle = nil
             self.currentSourceView = nil
-            self.pictureInPictureController = nil
             self.videoCallController.resetLocal(hasVideo: false)
             self.videoCallController.resetRemote(hasVideo: false)
             self.videoCallController.setTitles(localTitle: nil, remoteTitle: nil)
@@ -155,24 +167,44 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
-        print("[CallKit] Picture in Picture observing app lifecycle")
+        callKitLog("Picture in Picture observing app lifecycle")
+    }
+
+    private func retireController(stop: Bool) {
+        guard let controller = pictureInPictureController else { return }
+        pictureInPictureController = nil
+        controller.canStartPictureInPictureAutomaticallyFromInline = false
+        let isTransitioning = controller.isPictureInPictureActive || isPictureInPictureStarting
+        if stop {
+            callKitLog("Stopping Picture in Picture active=\(controller.isPictureInPictureActive) starting=\(isPictureInPictureStarting)")
+            controller.stopPictureInPicture()
+        }
+        if isTransitioning {
+            retiringControllers.append(controller)
+        }
+    }
+
+    private func releaseRetiringController(_ controller: AVPictureInPictureController) {
+        retiringControllers.removeAll { $0 === controller }
     }
 
     private func prepareControllerIfPossible() {
+        guard isCallActive() else { return }
         guard AVPictureInPictureController.isPictureInPictureSupported() else {
-            print("[CallKit] Picture in Picture unsupported on this device")
+            callKitLog("Picture in Picture unsupported on this device")
             return
         }
         guard let sourceView = sourceViewProvider() else {
-            print("[CallKit] Picture in Picture source view unavailable")
+            callKitLog("Picture in Picture source view unavailable")
             return
         }
 
         if pictureInPictureController != nil, currentSourceView === sourceView {
-            print("[CallKit] Picture in Picture controller already prepared sourceView=\(type(of: sourceView)) hidden=\(sourceView.isHidden) window=\(sourceView.window != nil) possible=\(pictureInPictureController?.isPictureInPicturePossible ?? false)")
+            callKitLog("Picture in Picture controller already prepared sourceView=\(type(of: sourceView)) hidden=\(sourceView.isHidden) window=\(sourceView.window != nil) possible=\(pictureInPictureController?.isPictureInPicturePossible ?? false)")
             return
         }
 
+        retireController(stop: false)
         currentSourceView = sourceView
         videoCallController.loadViewIfNeeded()
         let contentSource = AVPictureInPictureController.ContentSource(
@@ -183,34 +215,35 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
         controller.canStartPictureInPictureAutomaticallyFromInline = true
         controller.delegate = self
         pictureInPictureController = controller
-        print("[CallKit] Picture in Picture controller prepared sourceView=\(type(of: sourceView)) hidden=\(sourceView.isHidden) window=\(sourceView.window != nil) localTitle=\(currentLocalTitle ?? "nil") localTrack=\(currentLocalTrack != nil) remoteTitle=\(currentRemoteTitle ?? "nil") remoteTrack=\(currentRemoteTrack != nil) possible=\(controller.isPictureInPicturePossible)")
+        callKitLog("Picture in Picture controller prepared sourceView=\(type(of: sourceView)) hidden=\(sourceView.isHidden) window=\(sourceView.window != nil) localTrack=\(currentLocalTrack != nil) remoteTrack=\(currentRemoteTrack != nil) possible=\(controller.isPictureInPicturePossible)")
     }
 
     @objc private func appWillResignActive() {
         DispatchQueue.main.async { [weak self] in
-            print("[CallKit] Picture in Picture app will resign active")
             self?.startPictureInPictureIfPossible(reason: "willResignActive")
         }
     }
 
     @objc private func appDidEnterBackground() {
         DispatchQueue.main.async { [weak self] in
-            print("[CallKit] Picture in Picture app did enter background")
             self?.startPictureInPictureIfPossible(reason: "didEnterBackground")
         }
     }
 
     private func startPictureInPictureIfPossible(reason: String) {
+        guard isCallActive() else { return }
+        callKitLog("Picture in Picture app lifecycle reason=\(reason)")
         prepareControllerIfPossible()
 
         guard let controller = pictureInPictureController else { return }
         guard !controller.isPictureInPictureActive else { return }
         guard controller.isPictureInPicturePossible else {
-            print("[CallKit] Picture in Picture not possible reason=\(reason) localTitle=\(currentLocalTitle ?? "nil") localTrack=\(currentLocalTrack != nil) remoteTitle=\(currentRemoteTitle ?? "nil") remoteTrack=\(currentRemoteTrack != nil)")
+            callKitLog("Picture in Picture not possible reason=\(reason) localTrack=\(currentLocalTrack != nil) remoteTrack=\(currentRemoteTrack != nil)")
             return
         }
 
-        print("[CallKit] Starting Picture in Picture reason=\(reason) localTitle=\(currentLocalTitle ?? "nil") localTrack=\(currentLocalTrack != nil) remoteTitle=\(currentRemoteTitle ?? "nil") remoteTrack=\(currentRemoteTrack != nil)")
+        callKitLog("Starting Picture in Picture reason=\(reason) localTrack=\(currentLocalTrack != nil) remoteTrack=\(currentRemoteTrack != nil)")
+        isPictureInPictureStarting = true
         controller.startPictureInPicture()
     }
 
@@ -220,29 +253,41 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
     }
 
     func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        print("[CallKit] Picture in Picture will start")
+        callKitLog("Picture in Picture will start")
+        isPictureInPictureStarting = true
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        print("[CallKit] Picture in Picture did start")
+        isPictureInPictureStarting = false
+        guard isCallActive() else {
+            callKitLog("Picture in Picture started with no active call; stopping it")
+            pictureInPictureController.canStartPictureInPictureAutomaticallyFromInline = false
+            pictureInPictureController.stopPictureInPicture()
+            return
+        }
+        callKitLog("Picture in Picture did start")
     }
 
     func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: Error
     ) {
-        print("[CallKit] Picture in Picture failed to start error=\(error)")
+        callKitLog("Picture in Picture failed to start error=\(error)", level: .error)
+        isPictureInPictureStarting = false
+        releaseRetiringController(pictureInPictureController)
     }
 
     func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        print("[CallKit] Picture in Picture did stop")
+        callKitLog("Picture in Picture did stop")
+        isPictureInPictureStarting = false
+        releaseRetiringController(pictureInPictureController)
     }
 
     func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
     ) {
-        print("[CallKit] Picture in Picture restore requested")
+        callKitLog("Picture in Picture restore requested callActive=\(isCallActive())")
         onRestore()
         completionHandler(true)
     }

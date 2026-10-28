@@ -272,6 +272,7 @@ export function EmailDetailView(props: {
           tabIndex={-1}
         >
           <EmailThreadLoadGate
+            isLocalDraft={source.isLocalDraft()}
             result={loadResult}
             notificationSource={notificationSource}
             threadId={props.thread.id}

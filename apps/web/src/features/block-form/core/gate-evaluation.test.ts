@@ -516,6 +516,65 @@ describe('gatePasses', () => {
     ).toBe(false);
   });
 
+  it('tests a date range against a day, failing an unanswered range', () => {
+    const rules = (test: GateTest): GateRules => ({
+      conjunction: 'and',
+      conditions: [{ kind: 'condition', column: START, test }],
+    });
+    const answers = new Map<string, FormCellValue>([
+      [
+        START,
+        {
+          type: 'date_range',
+          value: {
+            start: '2026-03-01T00:00:00Z',
+            end: '2026-03-05T00:00:00Z',
+          },
+        },
+      ],
+    ]);
+    const passes = (test: GateTest) => gatePasses(rules(test), answers);
+
+    expect(
+      passes({
+        kind: 'dateRange',
+        operator: 'contains',
+        value: '2026-03-05T00:00:00Z',
+      })
+    ).toBe(true);
+    expect(
+      passes({
+        kind: 'dateRange',
+        operator: 'doesNotContain',
+        value: '2026-03-06T00:00:00Z',
+      })
+    ).toBe(true);
+    expect(
+      passes({
+        kind: 'dateRange',
+        operator: 'endsBefore',
+        value: '2026-03-05T00:00:00Z',
+      })
+    ).toBe(false);
+    expect(
+      passes({
+        kind: 'dateRange',
+        operator: 'startsOnOrBefore',
+        value: '2026-03-01T00:00:00Z',
+      })
+    ).toBe(true);
+    expect(
+      gatePasses(
+        rules({
+          kind: 'dateRange',
+          operator: 'doesNotContain',
+          value: '2026-03-06T00:00:00Z',
+        }),
+        new Map()
+      )
+    ).toBe(false);
+  });
+
   it('passes a gate without rules', () => {
     expect(gatePasses({ conjunction: 'and', conditions: [] }, new Map())).toBe(
       true

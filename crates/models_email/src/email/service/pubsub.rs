@@ -43,6 +43,8 @@ pub enum FailureReason {
     CalendarBackfillBusy,
     GmailApiFailed,
     GmailApiRateLimited,
+    /// Every fleet-wide backfill write slot stayed taken; the operation is deferred.
+    BackfillWritesBusy,
     OutdatedHistoryId,
     AttachmentParsingFailed,
     DSSUploadFailed,

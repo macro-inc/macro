@@ -1,3 +1,6 @@
+import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
+import { dateBucket } from '@app/features/soup/collection/date-buckets';
+import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ListEntity,
@@ -33,14 +36,42 @@ export function RecordItemList(props: {
   search?: string;
   /** Row layout when the list is narrow, e.g. in the information panel. */
   narrowLayout?: NarrowLayoutVariant;
+  /** Property IDs to display as inline reference pills when needed. */
+  referencePropertyIds?: readonly string[];
+  /** Group the existing newest-first list by its last-updated date. */
+  groupByDate?: boolean;
+  /** Date field matching the list's server-side ordering. */
+  dateField?: 'updated_at' | 'created_at' | 'viewed_at';
 }) {
   const { openEntity } = useCrmContext().createNavigation();
   // Reading `data` before the first page resolves would suspend the tab.
   const items = () =>
     props.source.isPending ? [] : (props.source.data?.entities ?? []);
-  const filteredItems = createMemo(() =>
-    items().filter((item) => recordItemMatchesSearch(item, props.search ?? ''))
+  const rows = createKeyedProjection(
+    items,
+    (item) => `${item.type}:${item.id}`,
+    (item) => item
   );
+  const filteredItems = createMemo(() =>
+    rows().filter((item) => recordItemMatchesSearch(item, props.search ?? ''))
+  );
+  const dateHeadings = createMemo(() => {
+    if (!props.groupByDate) return [];
+    const now = new Date();
+    let previous: string | undefined;
+    return filteredItems().map((entity) => {
+      const date =
+        props.dateField === 'created_at'
+          ? entity.createdAt
+          : props.dateField === 'viewed_at'
+            ? entity.viewedAt
+            : entity.updatedAt;
+      const bucket = dateBucket(date ?? entity.createdAt, now);
+      const label = bucket.key !== previous ? bucket.label : undefined;
+      previous = bucket.key;
+      return label;
+    });
+  });
   const [listRef, setListRef] = createSignal<HTMLElement>();
   const [sentinelRef, setSentinelRef] = createSignal<HTMLDivElement>();
 
@@ -68,12 +99,12 @@ export function RecordItemList(props: {
           onRetry={() => props.source.refetch()}
         />
       </Match>
-      <Match when={items().length === 0}>
+      <Match when={items().length === 0 && !props.source.hasNextPage}>
         <div class="rounded-lg border border-dashed border-edge-muted p-6 text-center text-sm text-ink-muted">
           {props.empty}
         </div>
       </Match>
-      <Match when={items().length > 0}>
+      <Match when={items().length > 0 || props.source.hasNextPage}>
         <ListEntityMetadataQueryProvider>
           <ListLayoutProvider ref={listRef} narrowLayout={props.narrowLayout}>
             <div ref={setListRef} class="flex flex-col">
@@ -86,13 +117,24 @@ export function RecordItemList(props: {
                 </div>
               </Show>
               <For each={filteredItems()}>
-                {(entity) => (
-                  <ListEntity
-                    entity={entity}
-                    hideCheckbox
-                    timestamp={entity.updatedAt}
-                    onClick={() => openEntity(entity)}
-                  />
+                {(entity, index) => (
+                  <>
+                    <Show when={dateHeadings()[index()]}>
+                      {(label) => (
+                        <DateGroupHeading
+                          label={label()}
+                          isFirst={index() === 0}
+                        />
+                      )}
+                    </Show>
+                    <ListEntity
+                      entity={entity}
+                      hideCheckbox
+                      timestamp={entity.updatedAt}
+                      onClick={() => openEntity(entity)}
+                      referencePropertyIds={props.referencePropertyIds}
+                    />
+                  </>
                 )}
               </For>
             </div>

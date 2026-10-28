@@ -12,10 +12,17 @@ import {
 } from './graphql/generated/graphql';
 import { executeGraphqlUpdateNotificationsForEntities } from './graphql-update-notifications';
 
+const mocks = vi.hoisted(() => ({ cache: false }));
+vi.mock('./graphql-soup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./graphql-soup')>()),
+  graphqlCacheEnabled: () => mocks.cache,
+}));
+
 const cleanup: Array<() => void> = [];
 afterEach(() => {
   for (const dispose of cleanup.splice(0)) dispose();
   vi.restoreAllMocks();
+  mocks.cache = false;
 });
 
 function setup() {
@@ -48,7 +55,7 @@ const input = {
   operation: 'MARK_SEEN' as const,
 };
 
-describe('entity notification reconciliation', () => {
+describe('entity notification reconciliation without the normalized cache', () => {
   it.each(['MARK_SEEN', 'MARK_DONE'] as const)(
     'reconciles an empty %s response without changing its undo IDs',
     async (operation) => {
@@ -186,5 +193,96 @@ describe('entity notification reconciliation', () => {
       input
     );
     expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe('entity notification reconciliation with the normalized cache', () => {
+  function setupCached() {
+    mocks.cache = true;
+    const query = vi.fn(() => ({ toPromise: async () => ({ data: {} }) }));
+    const initial = { input: { initial: { limit: 20 } } };
+    const maintained = { document: SoupDocument, variables: initial };
+    const grouped = { document: GroupSoupDocument, variables: initial };
+    cleanup.push(
+      registerGraphqlSoupRevalidations(
+        () => [maintained],
+        undefined,
+        () => true
+      ),
+      registerGraphqlSoupRevalidations(() => [grouped])
+    );
+    const feed = vi.fn(async () => undefined);
+    cleanup.push(
+      registerNotificationReader({
+        client: () => client,
+        isEnabled: () => true,
+        refresh: feed,
+        cacheMaintained: () => true,
+      })
+    );
+    const respond = (rows: { id: string }[]) =>
+      vi.fn(() => ({
+        toPromise: async () => ({
+          data: {
+            updateNotificationsForEntity: rows.map((row) => ({
+              __typename: 'GraphqlNotification',
+              state: 'SEEN',
+              ...row,
+            })),
+          },
+        }),
+      }));
+    const client = { query, mutation: respond([]) } as unknown as Client;
+    return { client, query, feed, grouped, maintained, respond };
+  }
+
+  it('reads again only the readers the cache does not maintain', async () => {
+    const { client, query, feed, grouped, respond } = setupCached();
+    const withRows = {
+      ...client,
+      mutation: respond([{ id: 'n1' }]),
+    } as unknown as Client;
+
+    await executeGraphqlUpdateNotificationsForEntities(withRows, {
+      ...input,
+      expectedNotificationIds: ['n1'],
+    });
+
+    expect(query).toHaveBeenCalledExactlyOnceWith(
+      grouped.document,
+      grouped.variables,
+      { requestPolicy: 'network-only' }
+    );
+    expect(feed).not.toHaveBeenCalled();
+  });
+
+  it('reads every reader again when a mark seen leaves out an expected row', async () => {
+    const { client, query, feed, maintained } = setupCached();
+
+    // This client showed n1 unseen; the server changed nothing, so n1 is
+    // already seen or done there and only a read can tell which.
+    await executeGraphqlUpdateNotificationsForEntities(client, {
+      ...input,
+      expectedNotificationIds: ['n1'],
+    });
+
+    expect(query).toHaveBeenCalledWith(
+      maintained.document,
+      maintained.variables,
+      { requestPolicy: 'network-only' }
+    );
+    expect(feed).toHaveBeenCalledOnce();
+  });
+
+  it('never sends the expected rows to the server', async () => {
+    const { client } = setupCached();
+    await executeGraphqlUpdateNotificationsForEntities(client, {
+      ...input,
+      expectedNotificationIds: ['n1'],
+    });
+    expect(client.mutation).toHaveBeenCalledWith(
+      UpdateNotificationsForEntityDocument,
+      { input }
+    );
   });
 });

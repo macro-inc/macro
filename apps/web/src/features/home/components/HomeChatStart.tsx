@@ -22,7 +22,7 @@ export function HomeChatStart() {
     <ChatInputProvider>
       <Show when={showHomeTopBar()}>
         <ViewShell.TopBar>
-          <ViewSidebar.Title>Home</ViewSidebar.Title>
+          <ViewSidebar.Title caret={false}>Home</ViewSidebar.Title>
         </ViewShell.TopBar>
       </Show>
       <DragDropWrapper class="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-6">

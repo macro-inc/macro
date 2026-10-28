@@ -33,7 +33,8 @@ the gateway `/email` prefix.
 ## Recipes
 
 - Add an email API route: `src/api/email.rs` (or `src/api/gmail.rs`,
-  `src/api/calendar_invitations.rs`) → `src/api/context.rs` → `src/openapi.rs`.
+  `src/api/calendar_invitations.rs`, `src/api/calendar_event_forward.rs`) →
+  `src/api/context.rs` → `src/api/swagger.rs`.
 - Add a pubsub consumer: new module under `src/pubsub/` → wire into
   `src/pubsub/mod.rs` and the `pubsub_workers` binary.
 - Add a backfill step: `src/backfill_init_service.rs` →
@@ -81,6 +82,30 @@ the gateway `/email` prefix.
   would spend the queue's 20 deliveries.
   Inbox sync releases the upload claims of a refused attachment fetch and
   requeues the upsert, because a claimed attachment is never offered again.
+- BackfillThread reads a whole thread with one Gmail `threads.get` and writes
+  the thread row and all of its messages in one transaction
+  (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
+  to skip. Each message has its own savepoint: one whose data can never be
+  stored (`db_error::is_unstorable`) is skipped and logged, and the rest of the
+  thread commits. The CRM fan-out is enqueued after the write slot is taken
+  and before the write: after the commit nothing in the handler may request a
+  retry, because a retry would find the thread and skip it, and an operation
+  deferred for a busy slot must not repeat the fan-out. Invitation and attachment fan-outs only log their
+  failures, and the metadata step is enqueued last. BackfillMessage only drains
+  operations enqueued before thread writes.
+- Backfill keeps a message hidden while its operation runs
+  (`process::keep_invisible`, a 20 s heartbeat restoring the queue's 60 s
+  visibility timeout). Without it, a slow thread is delivered to a second
+  worker, which counts the written thread again.
+- Each backfill thread write, and each BackfillMessage write still draining,
+  holds one of twenty fleet-wide Redis write slots
+  (`util/redis/backfill_write_slots.rs`), however many workers and tasks run,
+  so a large backfill can't queue enough writers on the primary to slow every
+  other query. A write waits up to 10 s for a slot and is then deferred like a
+  rate limit; Redis failing to decide also defers it. Run the write through
+  `BackfillWriteSlot::hold`, which renews the 120 s lease while the write runs,
+  so a stalled write can't lose its slot to another writer. Live inbox
+  sync writes take no slot. Keep new bulk backfill writes behind the same slots.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages;
   one `batchModify` from ten messages up, separate `messages.modify` calls

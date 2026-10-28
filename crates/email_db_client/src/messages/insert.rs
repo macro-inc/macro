@@ -194,6 +194,118 @@ async fn insert_db_message(
     Ok(existing_id)
 }
 
+/// A message a backfill write left out because its own data can never be
+/// stored; the rest of its thread was still written.
+#[derive(Debug)]
+pub struct SkippedMessage {
+    /// The message's position in the slice passed to the write.
+    pub index: usize,
+    /// Why it could not be stored.
+    pub error: anyhow::Error,
+}
+
+/// Writes backfilled messages one savepoint at a time.
+///
+/// A message whose contacts or rows fail with an error `is_unstorable`
+/// accepts is skipped and reported, and the others still commit: one bad
+/// message must not cost its whole thread. Any other error fails the write.
+pub(crate) struct BackfillMessageWriter<'a, U> {
+    pub(crate) pool: &'a PgPool,
+    pub(crate) link_id: Uuid,
+    pub(crate) is_unstorable: U,
+}
+
+impl<U: Fn(&anyhow::Error) -> bool> BackfillMessageWriter<'_, U> {
+    /// Upserts each message's contacts, in order. Contacts are shared across
+    /// messages, so this runs before the messages' transaction to avoid
+    /// deadlocks. A skipped message gets `None`.
+    pub(crate) async fn upsert_contacts(
+        &self,
+        messages: &[message::Message],
+        skipped: &mut Vec<SkippedMessage>,
+    ) -> anyhow::Result<Vec<Option<UpsertedRecipients>>> {
+        let mut recipients = Vec::with_capacity(messages.len());
+        for (index, message) in messages.iter().enumerate() {
+            match contacts::upsert_message::parse_and_upsert_message_contacts(
+                self.pool,
+                self.link_id,
+                addresses_from_message(message),
+            )
+            .await
+            {
+                Ok(upserted) => recipients.push(Some(upserted)),
+                Err(error) if (self.is_unstorable)(&error) => {
+                    skipped.push(SkippedMessage { index, error });
+                    recipients.push(None);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(recipients)
+    }
+
+    /// Inserts each message whose contacts were stored, under its own savepoint.
+    pub(crate) async fn insert_messages(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        thread_db_id: Uuid,
+        messages: &mut [message::Message],
+        recipients: Vec<Option<UpsertedRecipients>>,
+        skipped: &mut Vec<SkippedMessage>,
+    ) -> anyhow::Result<()> {
+        for (index, (message, recipients)) in messages.iter_mut().zip(recipients).enumerate() {
+            let Some(recipients) = recipients else {
+                continue;
+            };
+            let mut savepoint = sqlx::Acquire::begin(&mut *tx).await?;
+            match insert_message_with_tx(
+                &mut savepoint,
+                thread_db_id,
+                message,
+                self.link_id,
+                recipients,
+                false,
+            )
+            .await
+            {
+                Ok(()) => savepoint.commit().await?,
+                Err(error) if (self.is_unstorable)(&error) => {
+                    savepoint.rollback().await?;
+                    skipped.push(SkippedMessage { index, error });
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Inserts messages into an existing thread in one transaction, leaving its
+/// metadata and `replying_to` links to the caller's later metadata update.
+/// Returns the messages it skipped because `is_unstorable` accepted their error.
+#[tracing::instrument(skip(pool, messages, is_unstorable), fields(message_count = messages.len()), err)]
+pub async fn insert_thread_messages(
+    pool: &PgPool,
+    thread_db_id: Uuid,
+    link_id: Uuid,
+    messages: &mut [message::Message],
+    is_unstorable: impl Fn(&anyhow::Error) -> bool,
+) -> anyhow::Result<Vec<SkippedMessage>> {
+    let writer = BackfillMessageWriter {
+        pool,
+        link_id,
+        is_unstorable,
+    };
+    let mut skipped = Vec::new();
+    let recipients = writer.upsert_contacts(messages, &mut skipped).await?;
+    let mut tx = pool.begin().await?;
+    writer
+        .insert_messages(&mut tx, thread_db_id, messages, recipients, &mut skipped)
+        .await?;
+    tx.commit().await?;
+    Ok(skipped)
+}
+
 /// Inserts a single message into the database with transaction handling
 #[tracing::instrument(skip(pool, message), fields(link_id = %message.link_id), err)]
 pub async fn insert_message(

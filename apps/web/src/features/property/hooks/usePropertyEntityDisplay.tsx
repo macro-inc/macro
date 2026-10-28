@@ -45,6 +45,8 @@ type PropertyEntityDisplayResult = {
   icon: Accessor<JSX.Element>;
   /** Whether preview data is still loading */
   isLoading: Accessor<boolean>;
+  /** Whether the current preview confirms access to the referenced entity. */
+  hasPreviewAccess: Accessor<boolean>;
   /** Block or file type for linking (null if not linkable) */
   blockOrFileType: Accessor<string | null>;
   /** URL params for navigation (e.g., message ID for threads) */
@@ -103,6 +105,10 @@ export function usePropertyEntityDisplay(
   // Keep subscription ownership separate from its value: a live result must
   // not dispose and reacquire the preview that produced it.
   const preview = () => previewSource()?.();
+  const hasPreviewAccess = () => {
+    const item = preview();
+    return !!item && isAccessiblePreviewItem(item);
+  };
 
   const channelNameSource = createMemo(() => {
     const eType = entityType();
@@ -217,6 +223,7 @@ export function usePropertyEntityDisplay(
     name,
     icon,
     isLoading,
+    hasPreviewAccess,
     blockOrFileType,
     nativeProjectId,
     linkParams,

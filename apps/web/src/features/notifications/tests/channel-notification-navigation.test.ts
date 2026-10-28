@@ -239,7 +239,7 @@ it.each(['split', 'closed'] as const)(
   }
 );
 
-it('opens a WhatsApp notification in External without a channel block', async () => {
+it('opens an external chat notification in External without a channel block', async () => {
   vi.mocked(isFeatureEnabled).mockImplementation(
     (flag) => flag === enableWhatsappLinked
   );
@@ -249,8 +249,12 @@ it('opens a WhatsApp notification in External without a channel block', async ()
     {
       entity_id: '11111111-1111-4111-8111-111111111111',
       notification_metadata: {
-        tag: 'whatsapp_group_message',
-        content: { groupName: 'Family', messageId: 'message' },
+        tag: 'external_chat_message',
+        content: {
+          provider: 'whatsapp',
+          chatName: 'Family',
+          messageId: 'message',
+        },
       },
     } as UnifiedNotification,
     layout
@@ -265,8 +269,8 @@ it('opens a WhatsApp notification in External without a channel block', async ()
             expect.anything(),
             { id: 'view-external', params: {} },
             {
-              id: 'external-whatsapp-group',
-              params: { groupId: '11111111-1111-4111-8111-111111111111' },
+              id: 'external-chat',
+              params: { chatId: '11111111-1111-4111-8111-111111111111' },
             },
           ],
         },
@@ -278,7 +282,7 @@ it('opens a WhatsApp notification in External without a channel block', async ()
   expect(navigate).not.toHaveBeenCalled();
 });
 
-it('keeps WhatsApp notifications behind the existing feature flag', async () => {
+it('keeps external chat notifications behind the existing feature flag', async () => {
   vi.mocked(isFeatureEnabled).mockReturnValue(false);
   const { layout, createBlockInstance } = setup('closed');
   const open = vi.spyOn(layout, 'openWithSplit');
@@ -286,8 +290,12 @@ it('keeps WhatsApp notifications behind the existing feature flag', async () => 
     {
       entity_id: '11111111-1111-4111-8111-111111111111',
       notification_metadata: {
-        tag: 'whatsapp_group_message',
-        content: { groupName: 'Family', messageId: 'message' },
+        tag: 'external_chat_message',
+        content: {
+          provider: 'whatsapp',
+          chatName: 'Family',
+          messageId: 'message',
+        },
       },
     } as UnifiedNotification,
     layout

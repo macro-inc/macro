@@ -7,6 +7,7 @@ import { For, type JSX, Show } from 'solid-js';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { boardGroupColumns, laneLabel, withLaneHidden } from '../core/views';
 import { BoardCardTitlePicker } from './board-card-title-picker';
+import { ShownFieldsPicker } from './shown-fields-picker';
 
 type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
@@ -77,30 +78,14 @@ function GroupByItem(props: BoardMenuItemProps) {
 
 function CardFieldsItem(props: BoardMenuItemProps) {
   return (
-    <Submenu label="Card fields">
-      <For
-        each={props.columns.filter(
-          (column) => column.id !== props.layout.groupBy
-        )}
-      >
-        {(column) => (
-          <Dropdown.CheckboxItem
-            checked={props.layout.cardFields.includes(column.id)}
-            onChange={(shown) =>
-              props.onChange({
-                ...props.layout,
-                cardFields: shown
-                  ? [...props.layout.cardFields, column.id]
-                  : props.layout.cardFields.filter((id) => id !== column.id),
-              })
-            }
-            closeOnSelect={false}
-          >
-            <span class="truncate">{column.name}</span>
-          </Dropdown.CheckboxItem>
-        )}
-      </For>
-    </Submenu>
+    <ShownFieldsPicker
+      label="Card fields"
+      columns={props.columns.filter(
+        (column) => column.id !== props.layout.groupBy
+      )}
+      shown={props.layout.cardFields}
+      onChange={(cardFields) => props.onChange({ ...props.layout, cardFields })}
+    />
   );
 }
 

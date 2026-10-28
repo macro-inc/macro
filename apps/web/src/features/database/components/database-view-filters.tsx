@@ -296,7 +296,10 @@ function TestValue(props: {
 }) {
   const text = () => (props.test.kind === 'text' ? props.test : undefined);
   const number = () => (props.test.kind === 'number' ? props.test : undefined);
-  const date = () => (props.test.kind === 'date' ? props.test : undefined);
+  const date = () =>
+    props.test.kind === 'date' || props.test.kind === 'dateRange'
+      ? props.test
+      : undefined;
   const options = () =>
     props.test.kind === 'options' ? props.test : undefined;
   return (

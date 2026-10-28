@@ -25,3 +25,6 @@ From `infra/`:
 - `monitors/whatsapp-session.ts` reads log events by `telemetry_event`; its
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.
+- `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
+  log in `crates/notification/src/domain/service/voip.rs` and the
+  `PushEndpointUnavailable` message. Rewording either silently breaks it.

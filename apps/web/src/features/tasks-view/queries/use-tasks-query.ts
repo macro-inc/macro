@@ -105,6 +105,7 @@ function referencesEntity(
  * are known only to the server and arrive with the next fetch.
  */
 function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
+  if (crm.type === 'activity') return false;
   return getTaskReferencedEntityIds(
     task,
     crm.type === 'company'

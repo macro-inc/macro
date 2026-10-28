@@ -25,6 +25,7 @@ import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
 import { commandSearchResultKey } from '../contact-items';
 import {
@@ -377,6 +378,7 @@ function MobileFullTextResults(props: {
  */
 export function MobileSearchResults() {
   const session = createMobileSearchEntry();
+  const universalInputEnabled = useUniversalInputEnabled();
   const accountId = useUserId();
   const authenticated = useIsAuthenticated();
   return (
@@ -387,29 +389,33 @@ export function MobileSearchResults() {
         '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',
       }}
     >
-      <MobileViewsRow session={session} />
-      <Show when={authenticated() === true ? accountId() : undefined} keyed>
-        {(id) => (
-          <Suspense
-            fallback={
-              <p
-                role="status"
-                class="px-3 touch:pt-(--mobile-content-inset-top)"
-              >
-                {t('commandMenu.loading')}
-              </p>
-            }
-          >
-            <Show
-              when={session.mode() === 'full-text'}
-              fallback={<MobileNameResults session={session} accountId={id} />}
+      <Show when={!universalInputEnabled() || !session.universalInputActive()}>
+        <MobileViewsRow session={session} />
+        <Show when={authenticated() === true ? accountId() : undefined} keyed>
+          {(id) => (
+            <Suspense
+              fallback={
+                <p
+                  role="status"
+                  class="px-3 touch:pt-(--mobile-content-inset-top)"
+                >
+                  {t('commandMenu.loading')}
+                </p>
+              }
             >
-              <MobileFullTextResults session={session} accountId={id} />
-            </Show>
-          </Suspense>
-        )}
+              <Show
+                when={session.mode() === 'full-text'}
+                fallback={
+                  <MobileNameResults session={session} accountId={id} />
+                }
+              >
+                <MobileFullTextResults session={session} accountId={id} />
+              </Show>
+            </Suspense>
+          )}
+        </Show>
+        <MobileTopEdgeFade />
       </Show>
-      <MobileTopEdgeFade />
     </div>
   );
 }

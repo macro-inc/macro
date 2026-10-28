@@ -1,5 +1,5 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { Telemetry } from '@macro-inc/observability';
 import { syncCalendarOccurrences } from '@queries/calendar/occurrences';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';

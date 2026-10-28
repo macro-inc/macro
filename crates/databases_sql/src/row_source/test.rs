@@ -123,6 +123,10 @@ fn soup_row(row: &Row) -> SoupItem<SoupPropertiesField> {
                         Cell::Number(number) => PropertyValue::Num(*number),
                         Cell::Bool(checked) => PropertyValue::Bool(*checked),
                         Cell::Date(date) => PropertyValue::Date(*date),
+                        Cell::DateRange(range) => PropertyValue::DateRange(
+                            models_properties::shared::DateRange::new(range.start, range.end)
+                                .unwrap(),
+                        ),
                         Cell::Options(ids) => PropertyValue::SelectOption(
                             ids.iter().map(|id| id.into_uuid()).collect(),
                         ),

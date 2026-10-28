@@ -1,12 +1,12 @@
 use std::sync::Mutex;
 
 use chrono::Utc;
+use external_chat::domain::ports::ExternalChatResult;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
     InboundEvent, InboundKind, Message, MessageKind, SessionScope,
 };
 use whatsapp_linked::domain::models::Identity;
-use whatsapp_linked::domain::ports::LinkedResult;
 
 use super::{InboundGate, InboundStore};
 use crate::domain::ports::InboundSink;
@@ -27,7 +27,7 @@ struct FakeStore {
 }
 
 impl InboundStore for FakeStore {
-    async fn observed_groups(&self, _scope: SessionScope) -> LinkedResult<Vec<String>> {
+    async fn observed_groups(&self, _scope: SessionScope) -> ExternalChatResult<Vec<String>> {
         *self.loads.lock().unwrap() += 1;
         Ok(self.adopted.lock().unwrap().clone())
     }
@@ -36,7 +36,7 @@ impl InboundStore for FakeStore {
         &self,
         _scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         self.stored.lock().unwrap().push(event.event_id);
         self.stored_chats
             .lock()

@@ -20,6 +20,7 @@ export function TasksLoading() {
 /** Renders the selected layout from the host's task scope and navigation capabilities. */
 export function TasksContent(props: {
   ref?: (element: HTMLDivElement) => void;
+  referencePropertyIds?: readonly string[];
 }) {
   const { state } = useTasksView();
 
@@ -33,7 +34,10 @@ export function TasksContent(props: {
           <TasksGantt ref={props.ref} />
         </Match>
         <Match when={state.layout === 'list'}>
-          <TaskList ref={props.ref} />
+          <TaskList
+            ref={props.ref}
+            referencePropertyIds={props.referencePropertyIds}
+          />
         </Match>
       </Switch>
     </Suspense>

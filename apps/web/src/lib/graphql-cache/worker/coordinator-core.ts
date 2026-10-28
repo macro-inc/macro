@@ -7,6 +7,10 @@ import {
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
 } from '../protocol';
+import {
+  CacheChangeBatch,
+  type CoalescedCacheChange,
+} from './cache-change-batch';
 import type {
   DatabaseAction,
   DatabaseActionProof,
@@ -76,7 +80,7 @@ export type CoordinatorAction =
       request: CacheRequest;
     }
   | { kind: 'deliver-response'; tabId: string; response: CacheResponse }
-  | { kind: 'broadcast-push'; push: CachePush }
+  | { kind: 'broadcast-push'; push: CachePush; coalescedCount?: number }
   | {
       kind: 'reject-request';
       tabId: string;
@@ -164,6 +168,7 @@ export class CoordinatorCore {
   private supersededReason: string | undefined;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
+  private readonly cacheChanges = new CacheChangeBatch();
   private currentEpoch = 0;
   private nextRouteId = 1;
   private staleMessageDrops = 0;
@@ -439,21 +444,46 @@ export class CoordinatorCore {
     }
 
     this.inFlight.delete(routeId);
-    if (!this.tabs.includes(request.tabId)) return [];
-    return [
-      {
+    const actions = this.broadcastCacheChanges(
+      this.cacheChanges.requestCompleted(this.inFlight.size === 0)
+    );
+    if (this.tabs.includes(request.tabId)) {
+      actions.push({
         kind: 'deliver-response',
         tabId: request.tabId,
         response: { ...response, id: request.request.id },
-      },
-    ];
+      });
+    }
+    return actions;
   }
 
   enginePush(ownerEpoch: OwnerEpoch, push: CachePush): CoordinatorAction[] {
     if (!this.acceptsEngineMessages(ownerEpoch)) {
       return [this.dropStale(ownerEpoch, undefined, 'stale-epoch')];
     }
-    return [{ kind: 'broadcast-push', push }];
+    if (push.kind !== 'cache-changed' && push.kind !== 'cache-hydrated') {
+      return [{ kind: 'broadcast-push', push }];
+    }
+    // The engine's local queue can look empty between MessagePort deliveries.
+    // Only the coordinator knows how much accepted work remains in transit.
+    this.cacheChanges.add(push);
+    if (
+      this.inFlight.size <= 1 ||
+      (push.kind === 'cache-changed' && push.reset)
+    ) {
+      return this.broadcastCacheChanges(this.cacheChanges.flush());
+    }
+    return [];
+  }
+
+  private broadcastCacheChanges(
+    changes: CoalescedCacheChange[]
+  ): CoordinatorAction[] {
+    return changes.map(({ push, count }) => ({
+      kind: 'broadcast-push',
+      push,
+      ...(count > 1 ? { coalescedCount: count } : {}),
+    }));
   }
 
   beginGracefulDeparture(
@@ -540,11 +570,14 @@ export class CoordinatorCore {
     }
     const reason = SUPERSEDED_REASON;
     this.supersededReason = reason;
-    const actions: CoordinatorAction[] = this.queuedRequests
-      .splice(0)
-      .map(({ tabId, request }) =>
-        this.rejectUnavailable(tabId, request.id, reason)
-      );
+    const actions: CoordinatorAction[] = [
+      ...this.broadcastCacheChanges(this.cacheChanges.flush()),
+      ...this.queuedRequests
+        .splice(0)
+        .map(({ tabId, request }) =>
+          this.rejectUnavailable(tabId, request.id, reason)
+        ),
+    ];
     for (const tabId of this.tabs) this.unavailableTabs.set(tabId, reason);
     actions.push({ kind: 'broadcast-cache-superseded', reason });
     this.assertInvariants();
@@ -567,6 +600,7 @@ export class CoordinatorCore {
     };
     this.assertInvariants();
     return [
+      ...this.broadcastCacheChanges(this.cacheChanges.flush()),
       {
         kind: 'terminal-failure',
         error: reason,
@@ -635,6 +669,9 @@ export class CoordinatorCore {
     }
     this.removeTabRecord(tabId);
     this.retiringTabs.delete(tabId);
+    if (this.inFlight.size === 0) {
+      actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
+    }
     this.assertInvariants();
     return actions;
   }
@@ -721,7 +758,8 @@ export class CoordinatorCore {
     error: string,
     errorCode?: CacheResponseErrorCode
   ): CoordinatorAction[] {
-    const actions: CoordinatorAction[] = [];
+    // Never carry a committed hint into another engine's revision space.
+    const actions = this.broadcastCacheChanges(this.cacheChanges.flush());
     for (const [routeId, request] of this.inFlight) {
       if (request.ownerEpoch !== ownerEpoch) continue;
       this.inFlight.delete(routeId);

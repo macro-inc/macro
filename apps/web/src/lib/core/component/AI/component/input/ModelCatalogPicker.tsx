@@ -8,7 +8,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import LockIcon from '@icon/system/regular/lock-simple.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import SquaresFour from '@icon/system/regular/squares-four.svg';
-import { Button, cn, Dropdown } from '@ui';
+import { Button, type ButtonSize, cn, Dropdown } from '@ui';
 import {
   type Component,
   createMemo,
@@ -43,6 +43,7 @@ type ModelCatalogPickerProps = {
   children?: JSX.Element;
   emptyMessage?: string;
   triggerClass?: string;
+  triggerSize?: ButtonSize;
   contentClass?: string;
   placeholder?: string;
   searchPlaceholder?: string;
@@ -227,7 +228,8 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
   );
   const triggerClass = () =>
     cn(
-      'h-9 justify-between border border-edge-muted bg-transparent px-3 text-left text-sm text-ink hover:bg-ink/3',
+      'justify-between border border-edge-muted bg-transparent px-3 text-left text-sm text-ink hover:bg-ink/3',
+      props.triggerSize === undefined && 'h-9',
       props.triggerClass
     );
 
@@ -253,7 +255,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
       >
         <Dropdown.Trigger
           variant="ghost"
-          size="sm"
+          size={props.triggerSize ?? 'sm'}
           class={triggerClass()}
           aria-label={props.ariaLabel}
           aria-busy={props.pending || undefined}
@@ -309,6 +311,7 @@ function ModelCatalogSheet(
 ) {
   const [query, setQuery] = createSignal('');
   const [showAll, setShowAll] = createSignal(false);
+  const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
   let searchInput: HTMLInputElement | undefined;
   const catalog = createMemo(() => buildModelCatalog(props.options, true));
   const groups = createMemo(() => {
@@ -349,9 +352,10 @@ function ModelCatalogSheet(
       preventScrollbarShift={false}
     >
       <MobileDrawer.Trigger
+        ref={setTrigger}
         as={Button}
         variant="ghost"
-        size="sm"
+        size={props.triggerSize ?? 'sm'}
         aria-label={props.ariaLabel}
         aria-busy={props.pending || undefined}
         title={props.title}
@@ -363,9 +367,21 @@ function ModelCatalogSheet(
       >
         {props.trigger}
       </MobileDrawer.Trigger>
-      <MobileDrawer.Portal>
+      <MobileDrawer.Portal
+        mount={trigger()?.closest<HTMLElement>('.portal-scope') ?? undefined}
+      >
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="Choose a model">
+        <MobileDrawer.Content
+          aria-label="Choose a model"
+          on:keydown={(event: KeyboardEvent) => {
+            if (event.key !== 'Escape' || event.isComposing) return;
+            // Corvu and Kobalte have separate dismissal stacks. Consume the
+            // sheet's Escape before it can dismiss a surrounding dialog.
+            event.preventDefault();
+            event.stopPropagation();
+            changeOpen(false);
+          }}
+        >
           <MobileDrawer.Handle />
           <div class="flex items-center gap-2 px-4 pb-3">
             <Show when={showAll()}>

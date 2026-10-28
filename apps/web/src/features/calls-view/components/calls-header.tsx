@@ -1,6 +1,7 @@
 import {
   ListSortDropdown,
   useViewControlHotkeys,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -48,11 +49,7 @@ export function CallsHeader() {
   return (
     <>
       <ListHeader
-        title={
-          <h1 class="min-w-0 truncate text-sm font-semibold text-ink">
-            {title()}
-          </h1>
-        }
+        title={<ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>}
       >
         <HeaderActionGroup label="Call filters">
           <UnifiedFilterDropdown hideLabel variant="ghost" />

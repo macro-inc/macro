@@ -16,3 +16,4 @@ mod process;
 mod seed_sent_contact;
 mod update_metadata;
 pub mod worker;
+mod write_slot;

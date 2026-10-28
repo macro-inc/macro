@@ -116,6 +116,14 @@ export const TOKENS = {
     zoomReset: 'global.zoomReset',
   },
 
+  // desktop tabs
+  tabs: {
+    new: 'tabs.new',
+    close: 'tabs.close',
+    next: 'tabs.next',
+    previous: 'tabs.previous',
+  },
+
   // sidebar navigation
   sidebar: {
     goToLeader: 'sidebar.goToLeader',

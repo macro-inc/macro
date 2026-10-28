@@ -1,0 +1,1 @@
+Names or email addresses explicitly addressed after email or email to at the beginning of the draft. Exclude explicit Cc and Bcc recipients, and people mentioned only in the message body.

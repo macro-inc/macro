@@ -1,5 +1,5 @@
 import { resumeDocumentSpan } from '@block-md/observability';
-import { SYNC_VIA_GATEWAY } from '@core/constant/featureFlags';
+import { isFeatureEnabled, syncViaGateway } from '@core/constant/featureFlags';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
   InitialSync,
@@ -7,7 +7,7 @@ import type {
   SyncError,
   TimeoutError,
 } from '@macro-inc/collaboration/collab/source';
-import { GatewaySyncTransport } from '@macro-inc/collaboration/sync-service/gateway';
+import { SyncRouterTransport } from '@macro-inc/collaboration/sync-service/router';
 import {
   createSyncSocket,
   type SyncSocket,
@@ -19,9 +19,9 @@ import {
 } from '@macro-inc/collaboration/sync-service/source';
 import type { UrlResolver } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
-import { resolveWsUrl as resolveGatewayWsUrl } from '@service-connection/websocket-url';
 import { storageServiceClient } from '@service-storage/client';
 import type { ResultAsync } from 'neverthrow';
+import { resolveSyncRouterWsUrl } from '../websocket-url';
 import type { DocumentSyncAuthorization } from './authorization';
 import { guardDocumentSyncSource } from './guarded-source';
 
@@ -107,10 +107,10 @@ export function createSyncServiceSocket(
   );
 }
 
-let gatewayTransport: GatewaySyncTransport | undefined;
-function syncGatewayTransport(): GatewaySyncTransport {
-  gatewayTransport ??= new GatewaySyncTransport(resolveGatewayWsUrl);
-  return gatewayTransport;
+let routerTransport: SyncRouterTransport | undefined;
+function syncRouterTransport(): SyncRouterTransport {
+  routerTransport ??= new SyncRouterTransport(resolveSyncRouterWsUrl);
+  return routerTransport;
 }
 
 async function refreshPermissionToken(documentId: string): Promise<string> {
@@ -130,8 +130,10 @@ export const createSyncServiceSource = (
   source: LiveSyncSource;
   doInitialSync: () => ResultAsync<InitialSync, SyncError>;
 } => {
-  const ws: SyncSocket = SYNC_VIA_GATEWAY
-    ? syncGatewayTransport().attach(
+  // Pick a transport for this source's lifetime. Later flag changes apply to
+  // newly created sources without interrupting an editor's active sync session.
+  const ws: SyncSocket = isFeatureEnabled(syncViaGateway)
+    ? syncRouterTransport().attach(
         documentId,
         authorization ? undefined : token,
         authorization?.getToken ?? (() => refreshPermissionToken(documentId))

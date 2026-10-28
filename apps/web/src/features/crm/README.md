@@ -75,6 +75,24 @@ links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
 visible company domains/contact addresses in the viewer's own mailbox, without
 team-scope widening or requiring a property link on the email.
 
+Activity rows render stored Companies and Contacts reference properties as inline
+pills through the shared Soup row. Pills use the shared property preview and open
+a record independently of the row; additional values use the shared overflow menu.
+Email still matches visible company domains and contact addresses for feed
+membership, but the row displays only stored properties, not inferred matches.
+No separate CRM association metadata lookup or row footer runs during paging.
+Record-detail lists and activity membership remain unchanged.
+Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
+layouts (subject to the normal feature flags and touch fallback). They use a separate
+CRM persistence scope, and every query, including search and grouped continuation,
+retains the mandatory CRM association. Record-detail Tasks stay unchanged.
+Email reuses the shared read/done/attachment/calendar/tag facets. Notes expose creator
+and tag filters; Calls expose audience and tag filters. These lists have independent
+per-entry search, sort direction, and date/none grouping settings. Date headings follow
+the selected sort field in viewer-local time. Email defaults to last-update date groups;
+Notes and Calls default to no grouping. Local-only filters continue paging through
+empty pages; clearing filters never clears the CRM scope.
+
 Activity extends the existing authorized CRM association path rather than
 splitting the feed into independent client queries. This preserves one sorted
 cursor and a complete scope without raising GraphQL's filter safety limits.

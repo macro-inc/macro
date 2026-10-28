@@ -28,7 +28,7 @@ startup loudly.
 - In ECS the whole Doppler config arrives as `APP_SECRETS_JSON`, and
   `MacroConfig` reads **only** that JSON when it is present. A Pulumi container
   `environment:` entry is invisible to `MacroConfig`; a value that comes from
-  infra must be written into Doppler (see `infra/stacks/preview-gateway`).
+  infra must be written into Doppler (see `infra/stacks/agent-harness-service`).
 
 ## Service URLs
 

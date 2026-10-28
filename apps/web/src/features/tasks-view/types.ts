@@ -30,10 +30,9 @@ export type TaskReferenceScope = {
  * resolves the membership: the record's Companies or Contacts property, a
  * reference to the record, or (for a company) either for any of its contacts.
  */
-export type TaskCrmScope = {
-  type: 'company' | 'contact';
-  id: string;
-};
+export type TaskCrmScope =
+  | { type: 'company' | 'contact'; id: string }
+  | { type: 'activity' };
 
 export type TaskDetailTarget = {
   id: string;

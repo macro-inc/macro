@@ -6,7 +6,7 @@ use gtm_invite::domain::{models::GtmInviteError, ports::GtmInviteService};
 use macro_user_id::user_id::MacroUserIdStr;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use teams::domain::model::{CustomerError, SeatPrices};
+use teams::domain::model::{CustomerError, SeatPlan, SeatPrices};
 use thiserror::Error;
 use tracing::Instrument;
 
@@ -195,6 +195,11 @@ impl<I> StripeCheckoutGateway<I> {
         terms: CheckoutTerms,
         promotion: Option<stripe::PromotionCodeId>,
     ) -> Result<String, StripeCheckoutError> {
+        // Trial days are attached only for the Pro price. Max checkout is paid
+        // up front; a Trial term for any other plan is a caller bug.
+        if terms == CheckoutTerms::Trial && request.plan != SeatPlan::Premium {
+            return Err(StripeCheckoutError::TrialUnavailable);
+        }
         let mut params = checkout_params(
             customer.clone(),
             &request,

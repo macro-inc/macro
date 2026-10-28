@@ -43,6 +43,35 @@ describe('apiValuesToGraphqlPropertyValue', () => {
       dateValue: '2026-07-10T00:00:00.000Z',
     });
 
+    expect(
+      apiValuesToGraphqlPropertyValue({
+        valueType: 'DATE_RANGE',
+        value: {
+          allDay: true,
+          start: new Date(2026, 6, 10),
+          end: new Date(2026, 6, 12),
+        },
+      })
+    ).toEqual({
+      __typename: 'GraphqlDateRangePropertyValue',
+      rangeStart: '2026-07-10T00:00:00.000Z',
+      rangeEnd: '2026-07-12T00:00:00.000Z',
+    });
+    expect(
+      apiValuesToGraphqlPropertyValue({
+        valueType: 'DATE_RANGE',
+        value: {
+          allDay: false,
+          start: new Date('2026-07-10T13:00:00.000Z'),
+          end: new Date('2026-07-10T21:30:00.000Z'),
+        },
+      })
+    ).toEqual({
+      __typename: 'GraphqlDateRangePropertyValue',
+      rangeStart: '2026-07-10T13:00:00.000Z',
+      rangeEnd: '2026-07-10T21:30:00.000Z',
+    });
+
     // Single- and multi-select share the SelectOption shape.
     expect(
       apiValuesToGraphqlPropertyValue({

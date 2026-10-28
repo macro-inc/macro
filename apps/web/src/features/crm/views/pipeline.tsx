@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -114,9 +115,9 @@ export function PipelineView(props: {
           <Show
             when={canEdit()}
             fallback={
-              <h1 class="min-w-0 truncate px-1 text-sm font-semibold">
+              <ViewSidebar.Title caret={false} class="px-1">
                 {props.pipeline.name}
-              </h1>
+              </ViewSidebar.Title>
             }
           >
             <span ref={title} class="flex min-w-0 px-1">

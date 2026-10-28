@@ -2,12 +2,14 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUnfurl } from '@core/signal/unfurl';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { usePropertyEntityDisplay } from '@property/hooks';
-import type { Property } from '@property/types';
+import type { DateRangeProperty, Property } from '@property/types';
 import {
   extractDomain,
   formatPropertyValue,
+  formatTimeRange,
   isBooleanProperty,
   isDateProperty,
+  isDateRangeProperty,
   isEntityProperty,
   isLinkProperty,
   isNumberProperty,
@@ -57,6 +59,9 @@ export const PropertyTooltip = (props: PropertyTooltipProps): JSX.Element => {
         </Match>
         <Match when={isDateProperty(props.property) && props.property}>
           {(property) => <DateTooltipContent property={property()} />}
+        </Match>
+        <Match when={isDateRangeProperty(props.property) && props.property}>
+          {(property) => <DateRangeTooltipContent property={property()} />}
         </Match>
         <Match when={isSelectProperty(props.property) && props.property}>
           {(property) => <SelectTooltipContent property={property()} />}
@@ -183,6 +188,18 @@ const DateTooltipContent = (props: {
     </div>
   );
 };
+
+const DateRangeTooltipContent = (props: { property: DateRangeProperty }) => (
+  <TooltipWrapper property={props.property}>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <ValueContainer>
+        <span class="truncate max-w-37.5">
+          {props.property.value ? formatTimeRange(props.property.value) : ''}
+        </span>
+      </ValueContainer>
+    </div>
+  </TooltipWrapper>
+);
 
 const SelectTooltipContent = (props: {
   property: Property & { valueType: 'SELECT_STRING' | 'SELECT_NUMBER' };

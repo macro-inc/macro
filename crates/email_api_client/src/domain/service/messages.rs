@@ -1,4 +1,3 @@
-use models_email::email::service::message::Message;
 use uuid::Uuid;
 
 use super::super::models::{CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage};
@@ -79,13 +78,14 @@ where
         .await
     }
 
-    /// Fetches and normalizes every message in one provider thread.
+    /// Fetches and normalizes every message in one provider thread, with any
+    /// calendar invitation parts, in a single provider read.
     #[tracing::instrument(skip(self), fields(retry_count = 0, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
     pub async fn get_thread(
         &self,
         link_id: Uuid,
         provider_thread_id: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<MessageWithCalendarParts>, EmailApiError> {
         self.read_with_token(link_id, ApiOperationKind::GetThread, |token| async move {
             self.repository
                 .get_thread(&token, link_id, provider_thread_id)

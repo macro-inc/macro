@@ -11,7 +11,7 @@ import type { ChannelEntity } from '../types/entity';
 import { createEntityDraggable } from './draggable';
 
 vi.mock('@components/app/ItemDragAndDrop', () => ({
-  useDragOperation: () => ({ isAltKey: () => false }),
+  useOptionalDragOperation: () => ({ isAltKey: () => false }),
 }));
 
 const entity: ChannelEntity = {

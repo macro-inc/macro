@@ -1,0 +1,1 @@
+Explicit email importance filter: important or unimportant. Return null when absent. Do not infer importance from the topic. Unimportant means the false importance filter, never important.

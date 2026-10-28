@@ -54,6 +54,16 @@ fn a_gmail_rate_limit_without_retry_after_is_deferred_too() {
 }
 
 #[test]
+fn a_write_refused_a_backfill_write_slot_is_deferred_with_backoff() {
+    let refused = DetailedError {
+        reason: FailureReason::BackfillWritesBusy,
+        source: anyhow::anyhow!("no backfill write slot freed up in time"),
+    };
+
+    assert_eq!(rate_limit(&refused), Some(None));
+}
+
+#[test]
 fn other_retryable_failures_keep_waiting_out_the_visibility_timeout() {
     let database = retryable(map_db_error(
         anyhow::anyhow!("connection reset"),
