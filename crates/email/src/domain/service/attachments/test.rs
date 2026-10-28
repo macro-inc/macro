@@ -112,6 +112,7 @@ impl DraftAttachmentSource for Fake {
             file_name: format!("{id}.pdf"),
             content_type: "application/pdf".to_owned(),
             bytes: bytes.clone(),
+            is_inline: false,
         })
     }
 }
@@ -140,11 +141,13 @@ impl DraftAttachmentRepo for Fake {
         );
         assert_eq!(attachment.sha.len(), 64);
         assert!(!attachment.upload_pending);
-        assert!(!attachment.is_inline);
         assert!(attachment.content_id.is_none());
         self.calls.push(format!(
-            "record:{}:{}:{}",
-            attachment.file_name, attachment.content_type, attachment.size
+            "record:{}:{}:{}{}",
+            attachment.file_name,
+            attachment.content_type,
+            attachment.size,
+            if attachment.is_inline { ":inline" } else { "" }
         ));
         Ok(())
     }
@@ -360,6 +363,7 @@ async fn a_file_the_caller_holds_is_staged_on_the_draft_then_sent() {
                 file_name: "Office tour.ics".to_owned(),
                 content_type: "text/calendar".to_owned(),
                 bytes: vec![1, 2],
+                is_inline: false,
             }],
         )
         .await
@@ -379,6 +383,40 @@ async fn a_file_the_caller_holds_is_staged_on_the_draft_then_sent() {
 }
 
 #[tokio::test]
+async fn an_invitations_calendar_body_is_staged_inline_beside_its_file() {
+    let fake = fake_with(vec![]);
+    StagedAttachmentSender::new(fake.clone(), fake.clone(), fake.clone())
+        .send_message_with_files(
+            &link(),
+            &[link()],
+            input(),
+            vec![
+                SourcedAttachment {
+                    file_name: "invite.ics".to_owned(),
+                    content_type: "text/calendar; method=REQUEST".to_owned(),
+                    bytes: vec![1, 2],
+                    is_inline: true,
+                },
+                SourcedAttachment {
+                    file_name: "invite.ics".to_owned(),
+                    content_type: "application/ics".to_owned(),
+                    bytes: vec![1, 2],
+                    is_inline: false,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+
+    let calls = fake.calls.take();
+    assert_eq!(
+        calls[2],
+        "record:invite.ics:text/calendar; method=REQUEST:2:inline"
+    );
+    assert_eq!(calls[4], "record:invite.ics:application/ics:2");
+}
+
+#[tokio::test]
 async fn oversized_files_are_refused_before_any_draft_exists() {
     let fake = fake_with(vec![]);
     let error = StagedAttachmentSender::new(fake.clone(), fake.clone(), fake.clone())
@@ -390,6 +428,7 @@ async fn oversized_files_are_refused_before_any_draft_exists() {
                 file_name: "big.ics".to_owned(),
                 content_type: "text/calendar".to_owned(),
                 bytes: vec![0; MAX_DRAFT_ATTACHMENTS_BYTES + 1],
+                is_inline: false,
             }],
         )
         .await

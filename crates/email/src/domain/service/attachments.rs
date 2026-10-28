@@ -128,7 +128,7 @@ where
                 s3_key,
                 upload_pending: false,
                 content_id: None,
-                is_inline: false,
+                is_inline: sourced.is_inline,
             };
             self.repo
                 .insert_draft_attachment(link.id, &record)

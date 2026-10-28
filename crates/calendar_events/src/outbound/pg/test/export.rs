@@ -126,3 +126,97 @@ async fn event_export_resolves_own_copies_before_channel_shares(pool: PgPool) {
         None
     );
 }
+
+fn with_raw_payload(
+    mut upsert: CalendarEventUpsert,
+    raw: serde_json::Value,
+) -> CalendarEventUpsert {
+    if let CalendarEventSource::Google(source) = &mut upsert.source {
+        source.raw_payload = raw;
+    }
+    upsert
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn forwarded_copy_reads_googles_private_copy_flag_and_the_conference(pool: PgPool) {
+    let owner_id = "macro|forward-guest@example.com";
+    let link = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link).await;
+
+    let mut outside = with_raw_payload(
+        timed_upsert(
+            owner_id,
+            link,
+            provider,
+            "040000008200E000-outside",
+            "Outside",
+            1,
+        ),
+        serde_json::json!({ "privateCopy": true, "guestsCanInviteOthers": false }),
+    );
+    outside.event.conference_url = Some("https://teams.microsoft.com/l/meetup-join/abc".into());
+    outside.event.conference_provider = Some(ConferenceProvider::MicrosoftTeams);
+    let outside_id = outside.event.id;
+    repo.upsert_event_fixture(outside).await.unwrap();
+
+    let invited = with_raw_payload(
+        timed_upsert(owner_id, link, provider, "invited@google.com", "Invited", 1),
+        serde_json::json!({ "guestsCanInviteOthers": false }),
+    );
+    let invited_id = invited.event.id;
+    repo.upsert_event_fixture(invited).await.unwrap();
+
+    let mut snapshot = with_raw_payload(
+        timed_upsert(
+            owner_id,
+            link,
+            provider,
+            "snapshot@google.com",
+            "Snapshot",
+            1,
+        ),
+        serde_json::json!({ "privateCopy": true }),
+    );
+    snapshot.event.is_snapshot = true;
+    let snapshot_id = snapshot.event.id;
+    repo.upsert_event_fixture(snapshot).await.unwrap();
+
+    let outside = repo
+        .forwarded_copy(owner_id, outside_id)
+        .await
+        .unwrap()
+        .expect("the guest owns the copy");
+    assert!(outside.google_private_copy);
+    assert!(!outside.is_snapshot);
+    assert_eq!(
+        outside.join_link,
+        Some(crate::domain::ics::JoinLink {
+            url: "https://teams.microsoft.com/l/meetup-join/abc".to_string(),
+            provider: Some(ConferenceProvider::MicrosoftTeams),
+        })
+    );
+
+    let invited = repo
+        .forwarded_copy(owner_id, invited_id)
+        .await
+        .unwrap()
+        .expect("the guest owns the copy");
+    assert!(!invited.google_private_copy);
+    assert_eq!(invited.join_link, None);
+
+    let snapshot = repo
+        .forwarded_copy(owner_id, snapshot_id)
+        .await
+        .unwrap()
+        .expect("the guest owns the copy");
+    assert!(snapshot.google_private_copy);
+    assert!(snapshot.is_snapshot);
+
+    assert_eq!(
+        repo.forwarded_copy("macro|someone-else@example.com", outside_id)
+            .await
+            .unwrap(),
+        None
+    );
+}
