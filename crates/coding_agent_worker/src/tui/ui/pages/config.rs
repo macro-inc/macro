@@ -1,5 +1,8 @@
+#[cfg(test)]
+mod test;
+
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize as _};
 use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph};
 
@@ -32,18 +35,47 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
                 0
             }
     };
-    if let Some(start) = herdr_start {
+    let team_warning = app.config.identity.scope == IdentityScope::Team;
+    let bypass_warning = app.config.identity.allow_permission_bypass;
+    let [content, warnings] = Layout::vertical([
+        Constraint::Min(0),
+        Constraint::Length(u16::from(team_warning) + if bypass_warning { 2 } else { 0 }),
+    ])
+    .areas(inner);
+    let selected_height = if settings[app.selected_setting] == Setting::PermissionBypass {
+        3
+    } else {
+        1
+    };
+    let scroll = (row_of(app.selected_setting) + selected_height).saturating_sub(content.height);
+    let visible_row = |offset: u16, height: u16| {
+        let offset = offset.checked_sub(scroll)?;
+        let row = Rect {
+            y: content.y + offset,
+            height,
+            ..content
+        }
+        .intersection(content);
+        if row.is_empty() { None } else { Some(row) }
+    };
+    if let Some(start) = herdr_start
+        && let Some(row) = visible_row(row_of(start) - 1, 1)
+    {
         frame.render_widget(
             Paragraph::new(section("Herdr", "each session in its own tab", inner.width)),
-            Rect {
-                y: inner.y + row_of(start) - 1,
-                height: 1,
-                ..inner
-            },
+            row,
         );
     }
     for (index, setting) in settings.iter().enumerate() {
         let selected = index == app.selected_setting;
+        let height = if *setting == Setting::PermissionBypass {
+            3
+        } else {
+            1
+        };
+        let Some(row) = visible_row(row_of(index), height) else {
+            continue;
+        };
         if *setting == Setting::PermissionBypass {
             frame.render_widget(
                 Paragraph::new(app.form.display(*setting, &app.config))
@@ -59,19 +91,10 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
                             .border_type(BorderType::Rounded)
                             .padding(Padding::horizontal(1)),
                     ),
-                Rect {
-                    y: inner.y + row_of(index),
-                    height: 3,
-                    ..inner
-                },
+                row,
             );
             continue;
         }
-        let row = Rect {
-            y: inner.y + row_of(index),
-            height: 1,
-            ..inner
-        };
         frame.render_widget(
             Paragraph::new(format!("{}{:<14}", focus_marker(selected), setting.label()))
                 .style(focus_style(selected)),
@@ -81,7 +104,11 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
             x: row.x + 16,
             width: row.width.saturating_sub(16),
             ..row
-        };
+        }
+        .intersection(row);
+        if value_area.is_empty() {
+            continue;
+        }
         match &app.mode {
             Mode::EditSetting {
                 index: edit_index,
@@ -103,26 +130,25 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
             }
         }
     }
-    if app.config.identity.allow_permission_bypass {
+    let [team_warning_area, bypass_warning_area] = Layout::vertical([
+        Constraint::Length(u16::from(team_warning)),
+        Constraint::Length(if bypass_warning { 2 } else { 0 }),
+    ])
+    .areas(warnings);
+    if bypass_warning {
         frame.render_widget(
             Paragraph::new("Warning: agents can run commands and edit files without approval.\nApplies at next pairing.")
                 .style(Style::new().fg(WARN)),
-            Rect { y: inner.y + row_of(settings.len()) + 2, height: 2, ..inner },
+            bypass_warning_area,
         );
     }
-    if app.config.identity.scope == IdentityScope::Team {
-        let warning = Rect {
-            x: inner.x,
-            y: inner.y + row_of(settings.len()) + 1,
-            width: inner.width,
-            height: 1,
-        };
+    if team_warning {
         frame.render_widget(
             Paragraph::new(
                 "Warning: teammates can command agents on this machine. Trust your team.",
             )
             .style(Style::new().fg(WARN)),
-            warning,
+            team_warning_area,
         );
     }
 }

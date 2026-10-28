@@ -1891,7 +1891,9 @@ must stay hidden; subsequent live messages must still appear.
   agents may run commands and edit files on the machine without approval.
   Macrod Quickstart and Config also offer `Full Access`, off by
   default. Quickstart and Config give Full Access a bordered, three-line control
-  labeled `Suggested`, without enabling it. The choice applies at the next pairing:
+  labeled `Suggested`, without enabling it. On short terminals, Config scrolls to
+  the selected setting and keeps consent warnings below it; Quickstart keeps its
+  submit button visible. The choice applies at the next pairing:
   off disables bypass in the pairing page; on preselects bypass with a warning,
   and the approving user can turn it off. Older daemons leave this choice to the pairing page.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`

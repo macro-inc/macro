@@ -27,6 +27,12 @@ pub(crate) fn render_quickstart(
     let block = modal("Quickstart", ACCENT).padding(Padding::new(2, 2, 1, 1));
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    let intro_height = if setup.status.is_some() { 3 } else { 2 };
+    let permission_warning_height = if setup.allow_permission_bypass { 2 } else { 0 };
+    let scope_warning_height = u16::from(setup.scope == IdentityScope::Team);
+    // Custom, workspace, access, Full Access and submit occupy eleven fixed rows.
+    let form_height =
+        intro_height + discovered_height + 11 + permission_warning_height + scope_warning_height;
     let [
         intro,
         discovered_area,
@@ -42,19 +48,19 @@ pub(crate) fn render_quickstart(
         _details_spacer,
         details_area,
     ] = Layout::vertical([
-        Constraint::Length(3),
+        Constraint::Length(intro_height),
         Constraint::Length(discovered_height),
         Constraint::Length(3),
-        Constraint::Length(1),
+        Constraint::Fill(1),
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(3),
-        Constraint::Length(2),
-        Constraint::Min(1),
+        Constraint::Length(permission_warning_height),
+        Constraint::Fill(1),
         Constraint::Length(3),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(scope_warning_height),
+        Constraint::Fill(1),
+        Constraint::Length(u16::from(inner.height > form_height)),
     ])
     .areas(inner);
 

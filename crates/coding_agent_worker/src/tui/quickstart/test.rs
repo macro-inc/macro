@@ -180,9 +180,17 @@ fn quickstart_renders_permission_consent_and_warning() {
         }),
         Vec::new(),
     );
-    for allowed in [false, true] {
+    for (width, height, allowed, status) in [
+        (100, 40, false, false),
+        (100, 40, true, false),
+        (80, 26, false, false),
+        (80, 26, true, false),
+        (80, 26, false, true),
+        (80, 26, true, true),
+    ] {
         setup.allow_permission_bypass = allowed;
-        let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+        setup.status = status.then(|| ("Pairing failed".to_owned(), true));
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
             .draw(|frame| {
                 crate::tui::ui::render_quickstart(
@@ -211,7 +219,7 @@ fn quickstart_renders_permission_consent_and_warning() {
             .backend()
             .buffer()
             .content()
-            .chunks(100)
+            .chunks(usize::from(width))
             .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
             .collect::<Vec<_>>();
         let workspace = rows.iter().find(|row| row.contains("Workspace")).unwrap();
