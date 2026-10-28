@@ -19,6 +19,13 @@ export const GUEST_LIST_HIDDEN =
 export const FORWARD_INVITATION_INSTEAD =
   "You can forward the invitation instead. The people you send it to can add the event to their calendar but won't be on the guest list.";
 
+/**
+ * Ends a forwarded invitation's email, for the people it goes to; the
+ * server's default body says the same.
+ */
+export const FORWARDED_INVITATION_NOTE =
+  "This invitation was forwarded to you. Add the event to your calendar from the attached file. You won't be on the organizer's guest list.";
+
 /** Shown where a guest would change the event when the organizer does not allow it. */
 export const GUEST_EDITS_RESTRICTED =
   'Only the organizer can change this event.';

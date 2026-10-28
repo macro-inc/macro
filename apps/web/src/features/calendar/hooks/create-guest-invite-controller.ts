@@ -18,6 +18,7 @@ import { eventForwardSummary } from '../utils/event-forward-summary';
 import {
   canForwardInvitation,
   FORWARD_INVITATION_INSTEAD,
+  FORWARDED_INVITATION_NOTE,
   GUEST_INVITES_RESTRICTED,
   GUEST_LIST_HIDDEN,
   guestInvitesRestrictedReason,
@@ -130,7 +131,7 @@ export function createGuestInviteController(
           email,
           name: name === email ? undefined : name,
         })),
-        bodyText: `${eventForwardSummary(current, preferences.timeFormat)}\n\n${FORWARD_INVITATION_INSTEAD}`,
+        bodyText: `${eventForwardSummary(current, preferences.timeFormat)}\n\n${FORWARDED_INVITATION_NOTE}`,
       }),
       (error) => error
     );

@@ -510,7 +510,11 @@ describe('forwarding the invitation from event details', () => {
       { email: 'ada@example.com', name: 'Ada Lovelace' },
     ]);
     expect(args.bodyText).toMatch(/^Planning\n/);
-    expect(args.bodyText.endsWith(`\n\n${FORWARD_INSTEAD}`)).toBe(true);
+    expect(
+      args.bodyText.endsWith(
+        "\n\nThis invitation was forwarded to you. Add the event to your calendar from the attached file. You won't be on the organizer's guest list."
+      )
+    ).toBe(true);
     expect(
       screen
         .getByRole('button', { name: 'Forward invitation' })
