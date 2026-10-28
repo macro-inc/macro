@@ -1420,8 +1420,12 @@ action is unavailable.
 Calendar split that is already open; otherwise a click replaces the email with Calendar and a
 shift-click opens Calendar in a new split beside it, from the inline card and the `.ics` dialog.
 `View your day` opens a compact agenda without changing the active split; Close returns
-focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
-and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
+focus to its trigger. The event appears once, as the viewer's own copy in its time slot,
+highlighted and marked `This invitation` (also on a shared event's card after `Add to
+calendar`). Only while that copy is not in the day's list (an unreadable time, the calendar
+unavailable or syncing, or past the first 20 events) does a `This invitation` line with
+the invitation's own time stand above it. Busy overlapping events are labeled, while
+cancelled, declined, and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
 
 For a writable Outlook event you organize, the editor's `Replace event…` action

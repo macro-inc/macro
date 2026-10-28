@@ -3,6 +3,7 @@ import {
   createCalendarOccurrenceQueryRange,
   useCalendarOccurrencesQuery,
 } from '@queries/calendar/occurrences';
+import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import {
@@ -11,7 +12,12 @@ import {
 } from '../email-message/core/calendar-invitation';
 import { invitationConflicts } from './queries/invitation-conflict';
 
-/** A local-day agenda using the same occurrence cache as the calendar. */
+/**
+ * A local-day agenda using the same occurrence cache as the calendar. The
+ * viewer's own copy of the event is the invitation's row in its time slot;
+ * the invitation's own time stands in above the list only while that row
+ * is not in it.
+ */
 export function CalendarInvitationDay(props: {
   invitation: CalendarInvitation;
   eventId: string;
@@ -38,6 +44,11 @@ export function CalendarInvitationDay(props: {
     range: range(),
   }));
   const data = () => (query.isSuccess ? query.data : undefined);
+  const items = () => data()?.items.slice(0, 20);
+  const isInvitation = (item: CalendarOccurrenceItem) =>
+    item.event.id === props.eventId &&
+    item.occurrence.occurrenceKey === props.occurrenceKey;
+  const invitationListed = () => items()?.some(isInvitation) ?? false;
   const label = (value: string) =>
     new Intl.DateTimeFormat(undefined, {
       hour: 'numeric',
@@ -55,16 +66,18 @@ export function CalendarInvitationDay(props: {
           Close
         </Button>
       </div>
-      <p class="my-3 rounded-md bg-accent-bg p-3 text-ink">
-        <span class="mr-2 font-medium">This invitation</span>
-        {
-          invitationSchedule(
-            props.invitation,
-            props.hour12,
-            Intl.DateTimeFormat().resolvedOptions().timeZone
-          ).when
-        }
-      </p>
+      <Show when={!(range() && query.isPending) && !invitationListed()}>
+        <p class="my-3 rounded-md bg-accent-bg p-3 text-ink">
+          <span class="mr-2 font-medium">This invitation</span>
+          {
+            invitationSchedule(
+              props.invitation,
+              props.hour12,
+              Intl.DateTimeFormat().resolvedOptions().timeZone
+            ).when
+          }
+        </p>
+      </Show>
       <Show
         when={range()}
         fallback={
@@ -91,16 +104,12 @@ export function CalendarInvitationDay(props: {
       >
         <p>No events found for this day.</p>
       </Show>
-      <ul class="flex flex-col gap-2">
-        <For each={data()?.items.slice(0, 20)}>
+      <ul class="mt-3 flex flex-col gap-2">
+        <For each={items()}>
           {(item) => (
             <li
               class="rounded-md p-2 [overflow-wrap:anywhere]"
-              classList={{
-                'bg-accent-bg':
-                  item.event.id === props.eventId &&
-                  item.occurrence.occurrenceKey === props.occurrenceKey,
-              }}
+              classList={{ 'bg-accent-bg': isInvitation(item) }}
             >
               <span class="mr-3 text-ink-muted">
                 {item.occurrence.time.kind === 'timed'
@@ -108,6 +117,9 @@ export function CalendarInvitationDay(props: {
                   : 'All day'}
               </span>
               {item.event.title}
+              <Show when={isInvitation(item)}>
+                <span class="ml-2 font-medium">This invitation</span>
+              </Show>
               <Show when={invitationConflicts(props.invitation, item, props)}>
                 <span class="ml-2 text-ink-muted">
                   Overlaps this invitation
