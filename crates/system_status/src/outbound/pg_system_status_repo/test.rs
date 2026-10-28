@@ -70,12 +70,12 @@ async fn updates_round_trip_newest_first(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn schema_rejects_operational_with_message_and_outage_without(pool: PgPool) {
     let insert = |status: &'static str, message: Option<&'static str>| {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO system_status (id, status, message, user_id) VALUES ($1, $2, $3, 'macro|oncall@macro.com')",
+            Uuid::now_v7(),
+            status,
+            message,
         )
-        .bind(Uuid::now_v7())
-        .bind(status)
-        .bind(message)
         .execute(&pool)
     };
 
