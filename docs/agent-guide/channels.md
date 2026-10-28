@@ -575,11 +575,14 @@ Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
-model supplies only the URL. The tool records the link, not the GitHub PR itself.
+model supplies only the URL. The tool records the link, not the GitHub PR itself,
+and returns the session's `/app/agent/<id>` URL.
 Macro Internal MCP's server instructions ask coding agents to register PRs with
-it, to open them ready for review rather than as drafts, and to get CI passing
-before handing off. External MCP clients get the ready-for-review rule in
-Macro's MCP instructions, and in-app agents tell coding agents they dispatch. It is not prepended
+it, to link the returned session URL in the PR description (the PR block reads
+that link as the PR's origin), to open them ready for review rather than as
+drafts, and to get CI passing before handing off. External MCP clients get the
+ready-for-review rule in Macro's MCP instructions, and in-app agents tell coding
+agents they dispatch. It is not prepended
 to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
