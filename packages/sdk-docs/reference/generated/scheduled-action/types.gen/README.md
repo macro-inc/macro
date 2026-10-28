@@ -55,6 +55,7 @@
 - [RoutineModelId](type-aliases/RoutineModelId.md)
 - [RoutineTrigger](type-aliases/RoutineTrigger.md)
 - [RoutineTriggers](type-aliases/RoutineTriggers.md)
+- [RunVisibility](type-aliases/RunVisibility.md)
 - [Schedule](type-aliases/Schedule.md)
 - [ScheduledAction](type-aliases/ScheduledAction.md)
 - [ScheduledActionHealthData](type-aliases/ScheduledActionHealthData.md)

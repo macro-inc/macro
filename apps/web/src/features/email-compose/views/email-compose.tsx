@@ -1,4 +1,4 @@
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -9,6 +9,8 @@ import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ComposerSurface } from '@ui';
 import { createResource, createSignal, Show } from 'solid-js';
+import { MessageOperationRecovery } from '../../email-message/views/message-operation-recovery';
+import { DraftBackMenu } from '../components/draft-back-menu';
 import { DraftSyncStatus } from '../components/draft-sync-status';
 import { EmailScheduleBar } from '../components/email-schedule-summary';
 import { SignaturePreview } from '../components/signature-preview';
@@ -32,6 +34,9 @@ export type EmailComposeViewProps = Pick<
   | 'onRecipientsChange'
   | 'initialTo'
   | 'initialInboxId'
+  | 'initialSubject'
+  | 'initialBodyText'
+  | 'initialAttachments'
 > & { context: EmailComposeContext };
 export function EmailComposeView(props: EmailComposeViewProps) {
   // The split mounts one composer per initial draft. Keep this content load
@@ -48,17 +53,36 @@ export function EmailComposeView(props: EmailComposeViewProps) {
       return result;
     }
   );
+  const [reloadRequest, setReloadRequest] = createSignal<{
+    draftId: string;
+    threadId: string;
+  }>();
+  const [reloaded, { refetch: retryReload }] = createResource(
+    reloadRequest,
+    async ({ draftId, threadId }) => {
+      const draft = await props.context.drafts.reloadDraft?.(draftId, threadId);
+      if (!draft) throw new Error('The mailbox draft is not available yet.');
+      return draft;
+    }
+  );
   return (
     <Show
-      when={!saved.loading}
+      when={!saved.loading && !reloaded.loading}
       fallback={<div role="status">Loading draft…</div>}
     >
       <Show
-        when={!saved.error}
+        when={!saved.error && !reloaded.error}
         fallback={
           <div role="alert">
             Unable to load this draft.{' '}
-            <button onClick={() => fireAndForget(refetch(), 'email-compose')}>
+            <button
+              onClick={() =>
+                fireAndForget(
+                  reloadRequest() ? retryReload() : refetch(),
+                  'email-compose'
+                )
+              }
+            >
               Retry
             </button>
           </div>
@@ -66,8 +90,11 @@ export function EmailComposeView(props: EmailComposeViewProps) {
       >
         <LoadedEmailComposeView
           {...props}
-          draft={saved()?.draft ?? props.draft}
+          draft={reloaded() ?? saved()?.draft ?? props.draft}
           draftPersistence={saved()?.persistence}
+          onReloadDraft={(draftId, threadId) =>
+            setReloadRequest({ draftId, threadId })
+          }
           localDraft={saved()?.local}
           localAttachments={saved()?.attachments}
         />
@@ -81,17 +108,21 @@ function LoadedEmailComposeView(
     Pick<
       EmailComposerOptions,
       'draftPersistence' | 'localDraft' | 'localAttachments'
-    >
+    > & {
+      onReloadDraft: (draftId: string, threadId: string) => void;
+    }
 ) {
   const composeContext = props.context;
   const state = createEmailComposer({
     drafts: composeContext.drafts,
+    operations: composeContext.operations,
     attachmentStorage: composeContext.attachmentStorage,
     delivery: composeContext.delivery,
     draftLifecycle: composeContext.draftLifecycle,
     notices: composeContext.notices,
     accounts: composeContext.accounts,
     connectivity: composeContext.connectivity,
+    editorFiles: composeContext.editorFiles,
     viewerEmail: composeContext.viewerEmail,
     hasPaidAccess: composeContext.hasPaidAccess,
     recipients: composeContext.recipients,
@@ -106,12 +137,14 @@ function LoadedEmailComposeView(
     onRecipientsChange: props.onRecipientsChange,
     initialTo: props.initialTo,
     initialInboxId: props.initialInboxId,
+    initialSubject: props.initialSubject,
+    initialBodyText: props.initialBodyText,
+    initialAttachments: props.initialAttachments,
   });
   const sync = createDraftSyncStatus({
     drafts: composeContext.drafts,
     draftId: state.draftId,
     localSaveState: state.localSaveState,
-    acknowledgeSaved: state.acknowledgeSaved,
     retry: state.retryDraft,
     discard: state.deleteDraftAndReset,
   });
@@ -142,7 +175,6 @@ function LoadedEmailComposeView(
     },
     isMobile: composeContext.presentation.isMobile,
     scheduleEnabled: composeContext.presentation.scheduleEnabled,
-    attachmentFailure: composeContext.notices.feedback.failure,
     onUpgrade: composeContext.presentation.onUpgrade,
     viewerLoading: composeContext.presentation.viewerLoading,
     signaturePreview: () => (
@@ -209,6 +241,11 @@ function LoadedEmailComposeView(
 
   return (
     <ComposeProvider value={ctxValue}>
+      {/* On touch devices the composer fills the screen and keeps its send
+          actions in the header, so it holds the bottom accessory slot empty
+          and the page's New button cannot float over the message. Persistent
+          prompts wait too, as they do over the full-screen reply composer. */}
+      <FloatRegion region="accessory" />
       <Show when={!composeContext.presentation.isMobile()}>
         <SplitHeaderLeft>
           <StaticSplitLabel
@@ -224,7 +261,22 @@ function LoadedEmailComposeView(
           />
         </SplitHeaderLeft>
       </Show>
-      <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
+      <div
+        class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm"
+        data-holds-prompts
+      >
+        <Show when={state.operationSource}>
+          {(source) => (
+            <MessageOperationRecovery
+              source={source()}
+              onReloadDraft={() => {
+                const draftId = state.currentDraftId();
+                const threadId = state.currentThreadId();
+                if (draftId && threadId) props.onReloadDraft(draftId, threadId);
+              }}
+            />
+          )}
+        </Show>
         {/* No overflow clipping on desktop: the card clips its own content, and
             clipping here would slice the composer shadow flat at the top and
             bottom while the side padding lets it show. */}
@@ -247,62 +299,49 @@ function LoadedEmailComposeView(
                   operation={ctxValue.schedule.operation()}
                   onSelectTime={ctxValue.schedule.onSelect}
                   onCancelSchedule={ctxValue.schedule.onCancel}
+                  onCheckStatus={ctxValue.schedule.onCheckStatus}
                   class="-mt-6 rounded-b-[20px] border border-t-0 border-edge-muted px-4 pt-8 pb-2"
                 />
               </div>
             )}
           >
             <ComposeLayout
-              toolbar={
-                <EmailComposeToolbar editor={editor} status={<SyncStatus />} />
+              toolbar={<EmailComposeToolbar editor={editor} />}
+              notice={
+                // A missing inbox must not hide a draft that only this
+                // device holds, so both notices can show together.
+                hasInboxError() || sync.state() ? (
+                  <div class="flex flex-col gap-2">
+                    <Show when={hasInboxError()}>
+                      <EmailPermissionsBanner />
+                    </Show>
+                    <SyncStatus />
+                  </div>
+                ) : undefined
               }
-              notice={hasInboxError() ? <EmailPermissionsBanner /> : undefined}
-              class="size-full p-4 touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
+              // Full-frame mobile/tablet: the surface runs under the floating
+              // chrome while the body, signature and attachment pills rest
+              // above it (ComposeLayout owns the top inset).
+              class="size-full p-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)] touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>
         </div>
       </div>
       <Show when={composeContext.presentation.isMobile()}>
-        <MobileDrawer
-          side="bottom"
+        <DraftBackMenu
           open={draftBackMenuOpen()}
           onOpenChange={setDraftBackMenuOpen}
-          preventScroll={false}
-          preventScrollbarShift={false}
-        >
-          <MobileDrawer.Portal>
-            <MobileDrawer.Overlay />
-            <MobileDrawer.Content aria-label="Draft options">
-              <MobileDrawer.Handle />
-              <MobileDrawer.Section class="mb-3">
-                <button
-                  type="button"
-                  class="w-full bg-surface px-3 py-3.5 text-sm font-medium text-failure text-center not-last:mb-px"
-                  onClick={async () => {
-                    // Navigate only once the deletion landed; the mutation
-                    // toasts on failure and the composer stays put.
-                    try {
-                      if (!(await deleteDraftAndReset())) return;
-                    } catch {
-                      setDraftBackMenuOpen(false);
-                      return;
-                    }
-                    setDraftBackMenuOpen(false);
-                  }}
-                >
-                  Delete Draft
-                </button>
-                <button
-                  type="button"
-                  class="w-full bg-surface px-3 py-3.5 text-sm font-medium text-center"
-                  onClick={leaveCompose}
-                >
-                  Save Draft
-                </button>
-              </MobileDrawer.Section>
-            </MobileDrawer.Content>
-          </MobileDrawer.Portal>
-        </MobileDrawer>
+          onSave={leaveCompose}
+          onDelete={async () => {
+            try {
+              if (!(await deleteDraftAndReset())) return;
+            } catch {
+              setDraftBackMenuOpen(false);
+              return;
+            }
+            setDraftBackMenuOpen(false);
+          }}
+        />
       </Show>
     </ComposeProvider>
   );

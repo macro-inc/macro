@@ -1,7 +1,7 @@
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@phosphor/check.svg';
 import {
   type ComponentProps,
   createSignal,
@@ -15,11 +15,13 @@ import {
   addCtrlJKMenuNavigation,
   highlightFirstMenuItemOnOpen,
 } from '../utils/menuKeyboardNavigation';
+import { createMultiSelectIntent } from '../utils/multiSelectSelection';
 import {
   createSelectionDismissal,
   type SelectionDismissal,
 } from '../utils/selectionDismissal';
 import { Button, type ButtonProps } from './Button';
+import { MultiSelectItemContent } from './MultiSelectItemContent';
 import { Surface, type SurfaceProps } from './Surface';
 
 /*
@@ -96,6 +98,15 @@ export type DropdownItemProps = Omit<
   'closeOnSelect'
 > & {
   closeOnSelect?: SelectionDismissal;
+};
+export type DropdownMultiSelectItemProps = Omit<
+  DropdownItemProps,
+  'onSelect' | 'closeOnSelect'
+> & {
+  checked: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+  onOnly: () => void;
 };
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
@@ -368,6 +379,56 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
   );
 }
 
+/**
+ * Checkbox/Space toggles without closing; row/Enter adds and closes.
+ * Shift activation and Only replace the group selection without closing.
+ *
+ * @do Use for options in a multiselect filter, not independent settings.
+ * @do Replace only this item's group in `onOnly`, preserving other filters.
+ */
+function DropdownMultiSelectItem(props: DropdownMultiSelectItemProps) {
+  const selectionIntent = createMultiSelectIntent();
+  const [local, rest] = splitProps(props, [
+    'checked',
+    'label',
+    'onChange',
+    'onOnly',
+    'class',
+    'children',
+    'ref',
+  ]);
+  return (
+    <KobalteDropdownMenu.Item
+      {...rest}
+      role="menuitemcheckbox"
+      aria-label={local.label}
+      aria-checked={local.checked}
+      textValue={local.label}
+      aria-keyshortcuts="Space Enter Shift+Enter"
+      class={cn(ROW_CLASS, 'relative pr-14 touch:min-h-11', local.class)}
+      ref={(element) => {
+        selectionIntent.track(element);
+        callRef(local.ref, element);
+      }}
+      closeOnSelect={selectionIntent.shouldClose()}
+      onSelect={() => {
+        if (selectionIntent.intent() === 'only') local.onOnly();
+        else
+          local.onChange(selectionIntent.intent() === 'add' || !local.checked);
+      }}
+    >
+      <MultiSelectItemContent
+        checked={local.checked}
+        label={local.label}
+        disabled={rest.disabled}
+        onOnly={local.onOnly}
+      >
+        {local.children}
+      </MultiSelectItemContent>
+    </KobalteDropdownMenu.Item>
+  );
+}
+
 function DropdownItemIndicator(props: DropdownItemIndicatorProps) {
   return <KobalteDropdownMenu.ItemIndicator {...props} />;
 }
@@ -442,6 +503,7 @@ export const Dropdown = Object.assign(
     ItemDescription:
       KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
     CheckboxItem: DropdownCheckboxItem,
+    MultiSelectItem: DropdownMultiSelectItem,
     SubContent: DropdownSubContent,
     SubTrigger: DropdownSubTrigger,
     GroupLabel: DropdownGroupLabel,

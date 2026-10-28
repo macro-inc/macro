@@ -211,6 +211,7 @@ it('keeps unpinned assignments visible in the panel when title pins change', () 
 
 it('adds side-panel properties without exposing an automatic pin callback', () => {
   const pins: string[] = [];
+  const pin = vi.fn((id: string) => pins.push(id));
   const [properties, setProperties] = createSignal<Property[]>([]);
   mocks.getProperties = properties;
   render(() => (
@@ -220,6 +221,8 @@ it('adds side-panel properties without exposing an automatic pin callback', () =
       canEdit
       showTags={false}
       pinnedPropertyIds={() => pins}
+      onPropertyPinned={pin}
+      onPropertyUnpinned={vi.fn()}
     />
   ));
   mocks.context.onPropertyAdded(['Custom']);
@@ -227,6 +230,7 @@ it('adds side-panel properties without exposing an automatic pin callback', () =
   mocks.context.onPropertyAdded(['Custom']);
   expect(screen.getByText('"saved value"')).toBeTruthy();
   expect(mocks.context.onPropertyPinned).toBeUndefined();
+  expect(pin).not.toHaveBeenCalled();
   expect(pins).toEqual([]);
 });
 
@@ -250,4 +254,213 @@ it('preserves an existing property without reattaching or pinning it', async () 
   expect(mocks.add).not.toHaveBeenCalled();
   expect(mocks.context.onPropertyPinned).toBeUndefined();
   expect(screen.getByText('"Acme"')).toBeTruthy();
+});
+
+it('pins and unpins an assigned property without changing its value or panel visibility', async () => {
+  mocks.properties = [field('Custom', 'saved value')];
+  const [pins, setPins] = createSignal<string[]>([]);
+  const pin = vi.fn((id: string) => setPins([id]));
+  const unpin = vi.fn(() => setPins([]));
+  const [canEdit, setCanEdit] = createSignal(true);
+  render(() => (
+    <EntityPropertiesSection
+      entityId="document"
+      entityType="DOCUMENT"
+      canEdit={canEdit()}
+      showTags={false}
+      pinnedPropertyIds={pins}
+      onPropertyPinned={pin}
+      onPropertyUnpinned={unpin}
+    />
+  ));
+
+  await fireEvent.click(
+    screen.getByRole('button', { name: 'Pin below title' })
+  );
+  expect(pin).toHaveBeenCalledWith('instance-Custom', mocks.properties);
+  expect(
+    screen
+      .getByRole('button', { name: 'Unpin from title' })
+      .getAttribute('aria-pressed')
+  ).toBe('true');
+  await fireEvent.click(
+    screen.getByRole('button', { name: 'Unpin from title' })
+  );
+  expect(unpin).toHaveBeenCalledWith(
+    'instance-Custom',
+    mocks.properties,
+    'Custom'
+  );
+  expect(screen.getByText('"saved value"')).toBeTruthy();
+  expect(mocks.remove).not.toHaveBeenCalled();
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(mocks.context.onPropertyPinned).toBeUndefined();
+
+  setCanEdit(false);
+  expect(screen.queryByRole('button', { name: 'Pin below title' })).toBeNull();
+});
+
+it('does not offer pinning for placeholders, metadata, or hosts without title pin support', () => {
+  mocks.properties = [
+    { ...field('Pending'), propertyId: 'pending:Pending' },
+    { ...field('Metadata'), isMetadata: true },
+  ];
+  render(() => (
+    <EntityPropertiesSection
+      entityId="document"
+      entityType="DOCUMENT"
+      canEdit
+      includeMetadata
+      showTags={false}
+      pinnedPropertyIds={() => []}
+      onPropertyPinned={vi.fn()}
+      onPropertyUnpinned={vi.fn()}
+    />
+  ));
+  expect(screen.queryByRole('button', { name: 'Pin below title' })).toBeNull();
+
+  cleanup();
+  mocks.properties = [field('Custom')];
+  render(() => (
+    <EntityPropertiesSection
+      entityId="chat"
+      entityType="CHAT"
+      canEdit
+      showTags={false}
+    />
+  ));
+  expect(screen.queryByRole('button', { name: 'Pin below title' })).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Remove from entity' })
+  ).toBeTruthy();
+});
+
+it('locks pin actions during removal and unpins only after removal succeeds', async () => {
+  mocks.properties = [field('Custom', 'saved value')];
+  let finishRemoval!: () => void;
+  mocks.remove.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finishRemoval = resolve;
+      })
+  );
+  const unpin = vi.fn();
+  render(() => (
+    <EntityPropertiesSection
+      entityId="document"
+      entityType="DOCUMENT"
+      canEdit
+      showTags={false}
+      pinnedPropertyIds={() => ['instance-Custom']}
+      onPropertyPinned={vi.fn()}
+      onPropertyUnpinned={unpin}
+    />
+  ));
+
+  await fireEvent.click(
+    screen.getByRole('button', { name: 'Remove from entity' })
+  );
+  expect(
+    screen
+      .getByRole('button', { name: 'Unpin from title' })
+      .hasAttribute('disabled')
+  ).toBe(true);
+  expect(unpin).not.toHaveBeenCalled();
+  finishRemoval();
+  await vi.waitFor(() =>
+    expect(unpin).toHaveBeenCalledWith(
+      'instance-Custom',
+      mocks.properties,
+      'Custom'
+    )
+  );
+});
+
+it('shows implicit task defaults as pinned while preserving deletion guards and explicit empty pins', async () => {
+  mocks.properties = [
+    field('Status', 'Active'),
+    field('Priority', 'High'),
+    field('Custom', 'saved'),
+  ];
+  const defaults = ['Status', 'Priority'];
+  const defaultIds = ['instance-Status', 'instance-Priority'];
+  const [pins, setPins] = createSignal<string[] | undefined>();
+  const pin = vi.fn((id: string) => setPins([...(pins() ?? defaultIds), id]));
+  const unpin = vi.fn((id: string) =>
+    setPins((pins() ?? defaultIds).filter((current) => current !== id))
+  );
+  render(() => (
+    <EntityPropertiesSection
+      entityId="task"
+      entityType="TASK"
+      canEdit
+      showTags={false}
+      defaultPinnedPropertyIds={() => defaults}
+      defaultTitlePropertyDefinitionIds={() => defaults}
+      pinnedPropertyIds={pins}
+      onPropertyPinned={pin}
+      onPropertyUnpinned={unpin}
+    />
+  ));
+  expect(
+    screen.getAllByRole('button', { name: 'Unpin from title' })
+  ).toHaveLength(2);
+  expect(
+    screen.getAllByRole('button', { name: 'Remove from entity' })
+  ).toHaveLength(1);
+  await fireEvent.click(
+    screen.getAllByRole('button', { name: 'Unpin from title' })[0]
+  );
+  expect(unpin).toHaveBeenCalledWith(
+    'instance-Status',
+    mocks.properties,
+    'Status'
+  );
+  expect(pins()).toEqual(['instance-Priority']);
+  expect(
+    screen.getAllByRole('button', { name: 'Unpin from title' })
+  ).toHaveLength(1);
+  setPins([]);
+  expect(screen.queryByRole('button', { name: 'Unpin from title' })).toBeNull();
+  expect(
+    screen.getAllByRole('button', { name: 'Pin below title' })
+  ).toHaveLength(3);
+  expect(screen.getByText('"Active"')).toBeTruthy();
+  expect(screen.getByText('"High"')).toBeTruthy();
+  expect(mocks.remove).not.toHaveBeenCalled();
+});
+
+it('pins and unpins a virtual default without creating or deleting an assignment', async () => {
+  const placeholder = { ...field('Project'), propertyId: 'pending:Project' };
+  const [pins, setPins] = createSignal<string[] | undefined>();
+  const pin = vi.fn((id: string) => setPins([id]));
+  const unpin = vi.fn(() => setPins([]));
+  render(() => (
+    <EntityPropertiesSection
+      entityId="task"
+      entityType="TASK"
+      canEdit
+      showTags={false}
+      defaultProperties={() => [placeholder]}
+      defaultTitlePropertyDefinitionIds={() => ['Project']}
+      pinnedPropertyIds={pins}
+      onPropertyPinned={pin}
+      onPropertyUnpinned={unpin}
+    />
+  ));
+  expect(
+    screen.queryByRole('button', { name: 'Remove from entity' })
+  ).toBeNull();
+  await fireEvent.click(
+    screen.getByRole('button', { name: 'Unpin from title' })
+  );
+  expect(pins()).toEqual([]);
+  await fireEvent.click(
+    screen.getByRole('button', { name: 'Pin below title' })
+  );
+  expect(pins()).toEqual(['pending:Project']);
+  expect(pin).toHaveBeenCalledWith('pending:Project', [placeholder]);
+  expect(mocks.add).not.toHaveBeenCalled();
+  expect(mocks.remove).not.toHaveBeenCalled();
+  expect(mocks.save).not.toHaveBeenCalled();
 });

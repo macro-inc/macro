@@ -11,6 +11,14 @@ event contract (schema, sanitization, delivery semantics).
 
 - `src/domain/team_service.rs`: the main service — creation, invites,
   membership, role changes, auto-join-domain toggle.
+- `src/domain/team_service/invite_link.rs`: the team's shareable invite link
+  (`TeamInviteLinkService`) — who may see, create, reset, or turn it off, and
+  joining through it via the same direct-join path as domain auto-join.
+- `src/domain/team_service/invite_reminders.rs` +
+  `src/inbound/invite_reminder_worker.rs`: reminder emails for unanswered
+  invites, swept hourly in `authentication_service`. The repository claims
+  due invites and counts the reminder before sending, so replicas never
+  double-send and a failed send drops that reminder rather than retrying.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
@@ -30,7 +38,7 @@ event contract (schema, sanitization, delivery semantics).
   `analytics_client`, `ai_toolset` (feature `ai_tools`).
 - Used by: `services/authentication_service`, `services/document_storage_service`,
   `services/calendar_service`, `services/agent_harness_service`,
-  `services/mcp_service`, `services/scheduled_action`, `crates/ai_tools`,
+  `services/agent_harness_service`, `crates/scheduled_action`, `crates/ai_tools`,
   `crates/ai_billing`, `crates/calendar_scheduling`.
 
 ## Recipes

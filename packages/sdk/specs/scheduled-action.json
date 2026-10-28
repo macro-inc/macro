@@ -620,6 +620,10 @@
           "name": {
             "type": "string"
           },
+          "run_visibility": {
+            "$ref": "#/components/schemas/RunVisibility",
+            "description": "Omitted by clients that predate the setting; runs then start unlisted."
+          },
           "task": {
             "type": "object"
           },
@@ -631,7 +635,7 @@
       },
       "ActionConfigurationUpdate": {
         "type": "object",
-        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value.",
+        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` keeps\nit too, so clients that predate the setting do not reset it.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
           "enabled": {
@@ -644,6 +648,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "run_visibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunVisibility"
+              }
+            ]
           },
           "task": {
             "type": "object"
@@ -1056,6 +1070,11 @@
         },
         "description": "Bounded schedules and one combined set of event filters."
       },
+      "RunVisibility": {
+        "type": "string",
+        "description": "Whether a routine's runs are listed in Home and the Agents list. Routines\nthat run often would bury the owner's own work, so runs start unlisted;\neither way they stay in the routine's history. The string form is the\n`scheduled_action.run_visibility` column's.",
+        "enum": ["listed", "unlisted"]
+      },
       "Schedule": {
         "type": "string"
       },
@@ -1070,7 +1089,8 @@
           "updated_at",
           "configuration_revision",
           "task",
-          "enabled"
+          "enabled",
+          "run_visibility"
         ],
         "properties": {
           "claimed": {
@@ -1113,6 +1133,10 @@
           "owner": {
             "type": "string",
             "description": "Who the action belongs to. Every action is user-owned today, but the\ntype no longer says so: the principal string on the wire and in the\n`owner` column is the same, and a bot- or team-owned row decodes\nrather than failing to parse."
+          },
+          "run_visibility": {
+            "$ref": "#/components/schemas/RunVisibility",
+            "description": "Whether the action's runs are listed in Home and the Agents list."
           },
           "task": {
             "type": "object"

@@ -6,19 +6,19 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import ChartBar from '@phosphor/chart-bar.svg';
-import FilmStrip from '@phosphor/film-strip.svg';
-import ImageIcon from '@phosphor/image.svg';
-import Layout from '@phosphor/layout.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import PencilSimpleLine from '@phosphor/pencil-simple-line.svg';
-import RectangleDashed from '@phosphor/rectangle-dashed.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
-import Table from '@phosphor/table.svg';
-import Textbox from '@phosphor/textbox.svg';
-import Trash from '@phosphor/trash.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
-import XCircle from '@phosphor/x-circle.svg';
+import ChartBar from '@icon/system/regular/chart-bar.svg';
+import FilmStrip from '@icon/system/regular/film-strip.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import Layout from '@icon/system/regular/layout.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import PencilSimpleLine from '@icon/system/regular/pencil-simple-line.svg';
+import RectangleDashed from '@icon/system/regular/rectangle-dashed.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
+import Table from '@icon/system/regular/table.svg';
+import Textbox from '@icon/system/regular/textbox.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import TreeStructure from '@icon/system/regular/tree-structure.svg';
+import XCircle from '@icon/system/regular/x-circle.svg';
 import { For, type JSX } from 'solid-js';
 import {
   backgroundStylePreview,

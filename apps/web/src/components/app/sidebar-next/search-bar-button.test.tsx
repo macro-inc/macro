@@ -38,7 +38,7 @@ vi.mock('@app/signal/splitLayout', () => ({
 vi.mock('@components/app/app-sidebar/sidebar', () => ({
   navigateToSidebarView: mocks.navigate,
 }));
-vi.mock('@components/app/split-layout/layout', () => ({
+vi.mock('../split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: vi.fn() }),
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));

@@ -9,7 +9,16 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
-import { crmViewReference } from '@app/features/crm/crm-route';
+import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
+import {
+  crmPipelineParams,
+  crmPipelineReference,
+  crmRecordClaim,
+  crmRecordParams,
+  crmRecordReference,
+  crmRecordTrailSchema,
+  crmViewReference,
+} from '@app/features/crm/crm-route';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
 import {
   DRIVE_DETAIL_TYPES,
@@ -619,8 +628,40 @@ export const companiesRoute = defineRoute({
   path: 'companies',
   search: '*' as const,
   externalSearch: ['crmView'],
+  state: crmRecordTrailSchema,
   claim: () => ({ namespace: 'component', id: 'companies' }),
   toReference: (_, query) => crmViewReference(query),
+});
+
+/** A company or contact opened from a Customers list. */
+export const crmRecordRoute = defineRoute({
+  id: 'companies-record',
+  path: ':recordType/:recordId/:section?',
+  params: crmRecordParams,
+  state: crmRecordTrailSchema,
+  claim: crmRecordClaim,
+  toReference: crmRecordReference,
+});
+
+export const crmPipelineRecordRoute = defineRoute({
+  id: 'companies-pipeline-record',
+  path: ':recordType/:recordId/:section?',
+  params: crmRecordParams,
+  state: crmRecordTrailSchema,
+  claim: crmRecordClaim,
+  toReference: crmRecordReference,
+});
+
+export const crmPipelineRoute = defineRoute({
+  id: 'companies-pipeline',
+  path: 'pipeline/:pipelineId',
+  params: crmPipelineParams,
+  state: crmRecordTrailSchema,
+  claim: ({ pipelineId }) => ({
+    namespace: 'block',
+    id: `pipeline:${pipelineId}`,
+  }),
+  toReference: ({ pipelineId }) => crmPipelineReference(pipelineId),
 });
 
 export const foldersRoute = defineRoute({
@@ -634,7 +675,10 @@ export const searchRoute = defineRoute({
   id: 'view-search',
   path: 'search',
   search: '*' as const,
+  state: mobileSearchRouteStateSchema,
   claim: () => ({ namespace: 'component', id: 'search' }),
+  // Each visit owns its query and result scroll state, even in a reused pane.
+  remountKey: (_params, { entryId }) => entryId,
 });
 
 export const prDetailRoute = defineRoute({

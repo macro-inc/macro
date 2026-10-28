@@ -54,6 +54,13 @@ pub enum EmailApiError {
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },
+    /// The provider explicitly rejected message submission without accepting it.
+    /// Unlike a malformed success response, this permits cancelling and editing.
+    #[error("email provider rejected the message: {message}")]
+    SendRejected {
+        /// A sanitized diagnostic suitable for logs.
+        message: String,
+    },
 }
 
 impl EmailApiError {

@@ -1,7 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/build_dmg_on_tag.rs
 name: Build macOS DMG
-'on':
+on:
   workflow_call:
     inputs:
       ref:
@@ -11,6 +11,15 @@ name: Build macOS DMG
     secrets:
       POSTHOG_API_KEY:
         description: PostHog project API key inlined into the desktop bundle
+        required: true
+      MACOS_DEVELOPER_ID_CERTIFICATE_BASE64:
+        description: Developer ID certificate for signing the macOS app
+        required: true
+      MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD:
+        description: Password for the Developer ID certificate
+        required: true
+      MACOS_RELEASE_DOPPLER_TOKEN:
+        description: Doppler token for notarizing the macOS DMG
         required: true
 jobs:
   build-dmg:
@@ -129,10 +138,23 @@ jobs:
         fi
         echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
         echo "Using signing identity: $identity"
+
+        # The Developer ID provisioning profile authorizes the communication
+        # notifications entitlement, which shows senders' avatars on notifications.
+        # A signed build without it would be killed at launch, so require both.
+        if [ -z "${MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64}" ]; then
+          echo "MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 must be set alongside the Developer ID certificate" >&2
+          exit 1
+        fi
+        profile_path="$RUNNER_TEMP/macro-developer-id.provisionprofile"
+        printf '%s' "$MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$profile_path" 2>/dev/null \
+          || printf '%s' "$MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64" | base64 -D > "$profile_path"
+        echo "MACOS_PROVISIONING_PROFILE=$profile_path" >> "$GITHUB_ENV"
       shell: bash
       env:
         MACOS_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_BASE64 }}
         MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 }}
     - id: metadata
       name: Derive artifact metadata
       run: |
@@ -357,6 +379,38 @@ jobs:
           exit 1
         fi
         codesign --verify --deep --strict --verbose=2 "$app"
+
+        framework="$app/Contents/Frameworks/Chromium Embedded Framework.framework"
+        if [ ! -s "$framework/Chromium Embedded Framework" ]; then
+          echo "Signed DMG is missing the Chromium framework" >&2
+          exit 1
+        fi
+        helpers=("$app"/Contents/Frameworks/*.app)
+        if [ "${#helpers[@]}" -lt 5 ]; then
+          echo "Signed DMG is missing Chromium helper apps" >&2
+          exit 1
+        fi
+
+        check_cef_entitlements() {
+          local bundle="$1"
+          local entitlements
+          entitlements=$(mktemp)
+          codesign -d --entitlements :- "$bundle" > "$entitlements" 2>/dev/null
+          for key in \
+            com.apple.security.cs.allow-jit \
+            com.apple.security.cs.allow-unsigned-executable-memory \
+            com.apple.security.cs.disable-library-validation; do
+            if [ "$(/usr/libexec/PlistBuddy -c "Print :$key" "$entitlements")" != true ]; then
+              echo "$bundle is missing the $key entitlement" >&2
+              exit 1
+            fi
+          done
+          rm "$entitlements"
+        }
+        check_cef_entitlements "$app"
+        for helper in "${helpers[@]}"; do
+          check_cef_entitlements "$helper"
+        done
 
         dylib_refs=$(mktemp)
         search_roots=("$app/Contents/MacOS")

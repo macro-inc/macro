@@ -2,11 +2,11 @@ import '@fontsource-variable/inter';
 import '../../../index.css';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import TextAa from '@phosphor/text-aa.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Button, SendButton } from '@ui';
 import { format } from 'date-fns/format';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
@@ -18,8 +18,11 @@ import {
 } from '../components/email-schedule-summary';
 import type { EmailScheduleState } from '../primitives/email-send-schedule';
 import { AndroidBackFixture } from './android-back-fixture';
+import { CalendarReplacementFixture } from './calendar-replacement-fixture';
 import { DraftOwnerFixture } from './draft-owner-fixture';
 import { DraftRecoveryFixture } from './draft-recovery-fixture';
+import { OutlookRecoveryFixture } from './outlook-recovery-fixture';
+import { ScheduleRecoveryFixture } from './schedule-recovery-fixture';
 import { SenderFixture } from './sender-fixture';
 
 type ScheduledItem = {
@@ -336,12 +339,18 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
 render(
   () =>
-    new URLSearchParams(location.search).has('senders') ? (
+    new URLSearchParams(location.search).has('calendar-replacement') ? (
+      <CalendarReplacementFixture />
+    ) : new URLSearchParams(location.search).has('outlook-recovery') ? (
+      <OutlookRecoveryFixture />
+    ) : new URLSearchParams(location.search).has('senders') ? (
       <SenderFixture />
     ) : new URLSearchParams(location.search).has('draft-owner') ? (
       <DraftOwnerFixture />
     ) : new URLSearchParams(location.search).has('recovery') ? (
       <DraftRecoveryFixture />
+    ) : new URLSearchParams(location.search).has('scheduled-recovery') ? (
+      <ScheduleRecoveryFixture />
     ) : new URLSearchParams(location.search).has('android-back') ? (
       <AndroidBackFixture />
     ) : (

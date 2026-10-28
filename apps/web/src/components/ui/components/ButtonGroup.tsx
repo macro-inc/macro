@@ -24,13 +24,14 @@ type ButtonGroupProps = {
   size?: ButtonSize;
   orientation?: ButtonGroupOrientation;
   class?: string;
+  label?: string;
   children?: JSX.Element;
 };
 
 /** Canonical classes for the button-group frame. */
 export const buttonGroupVariants = createVariants(
   cn(
-    'inline-flex items-center justify-center rounded-[10px] data-[orientation=horizontal]:rounded-full border border-edge-button bg-control',
+    'inline-flex items-center justify-center rounded-[10px] data-[orientation=horizontal]:rounded-full border border-edge-button bg-control not-touch:elevated',
     'has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted',
     'has-[[data-slot=input-group-control]]:rounded-full',
     'data-[orientation=horizontal]:flex-row',
@@ -125,6 +126,7 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
             props.class
           )}
           role="group"
+          aria-label={props.label}
         >
           {/* Clip the segments independently of the group frame. */}
           <div class="flex size-full min-w-0 items-center justify-center overflow-hidden rounded-[inherit] [flex-direction:inherit]">

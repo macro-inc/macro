@@ -9,8 +9,9 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
+import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
-import type { CrmRecordScope } from '../core/record';
+import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
   CompanyImporter,
   CompanySource,
@@ -51,6 +52,7 @@ export type CrmContext = {
   contactInitials(name: string | null | undefined, email: string): string;
   userEmail(id: string): string;
   copyViewLink(config: import('../core/saved-view').CrmViewConfig): void;
+  copyPipelineLink(pipelineId: string): void;
   copyRecordLink(target: {
     type: 'company' | 'contact';
     id: string;
@@ -79,6 +81,13 @@ export type CrmContext = {
     scope: Accessor<CrmEmailScope>,
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
+  /** Paged CRM-wide activity, limited to associated records. */
+  createActivity(tab: Accessor<CrmActivityTab>): ItemListSource;
+  openTaskComposer(): void;
+  /** Newest mounted record source wins; cleanup restores the parent record source. */
+  registerTaskComposerRecord(
+    source: Accessor<CrmTaskRecord | undefined>
+  ): () => void;
   /** Files associated with the record or attached to its emails. */
   createRecordFiles(
     scope: Accessor<CrmRecordScope | undefined>
@@ -132,9 +141,6 @@ export type CrmContext = {
   createTeamConfigSource(): TeamConfigSource;
   createCapabilities(): CrmCapabilities;
   createDealStages(): DealStages;
-  createClosedStageIds(
-    stages: Accessor<{ id: string; label: string }[]>
-  ): Accessor<Set<string>>;
   createPersonalViews(): PersonalViewsSource;
   createTeamViews(): TeamViewsSource;
   createLists(teamId: Accessor<string | undefined>): ListsSource;

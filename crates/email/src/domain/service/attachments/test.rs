@@ -30,6 +30,7 @@ struct Fake {
 
 fn created(fake: &Fake, input: &CreateDraftInput) -> CreatedDraft {
     CreatedDraft {
+        draft_generation: 0,
         db_id: fake.draft_id,
         provider_id: None,
         replying_to_id: input.replying_to_id,
@@ -81,6 +82,8 @@ impl DraftSendService for Fake {
         &self,
         _: MacroUserIdStr<'_>,
         draft_id: Uuid,
+
+        _expected_generation: i32,
     ) -> Result<DeletedUserDraft, EmailErr> {
         self.calls.push(format!("delete:{draft_id}"));
         Ok(DeletedUserDraft {
@@ -136,6 +139,9 @@ impl DraftAttachmentRepo for Fake {
             draft_attachment_key(self.draft_id, attachment.id)
         );
         assert_eq!(attachment.sha.len(), 64);
+        assert!(!attachment.upload_pending);
+        assert!(!attachment.is_inline);
+        assert!(attachment.content_id.is_none());
         self.calls.push(format!(
             "record:{}:{}:{}",
             attachment.file_name, attachment.content_type, attachment.size
@@ -160,6 +166,8 @@ fn link() -> Link {
 
 fn input() -> CreateDraftInput {
     CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
         sender_email: None,
         db_id: None,
         provider_id: None,

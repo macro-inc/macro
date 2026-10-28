@@ -25,7 +25,6 @@ pub enum ToolEntityType {
     Task,
     Initiative,
     Project,
-    Chat,
     // Listing and search tools report email threads as `email`. A doc comment
     // here would turn the schema enum into a named type, so this stays a plain
     // comment.
@@ -45,7 +44,6 @@ impl From<ToolEntityType> for EntityType {
             ToolEntityType::Task => EntityType::Task,
             ToolEntityType::Initiative => EntityType::Initiative,
             ToolEntityType::Project => EntityType::Project,
-            ToolEntityType::Chat => EntityType::Chat,
             ToolEntityType::Thread => EntityType::Thread,
             ToolEntityType::Channel => EntityType::Channel,
             ToolEntityType::Call => EntityType::CallRecord,
@@ -65,7 +63,6 @@ pub enum ToolPropertyTargetEntityType {
     Document,
     Initiative,
     Project,
-    Chat,
     // Listing and search tools report email threads as `email`. A doc comment
     // here would turn the schema enum into a named type, so this stays a plain
     // comment.
@@ -83,7 +80,6 @@ impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
             ToolPropertyTargetEntityType::Document => Self::Document,
             ToolPropertyTargetEntityType::Initiative => Self::Initiative,
             ToolPropertyTargetEntityType::Project => Self::Project,
-            ToolPropertyTargetEntityType::Chat => Self::Chat,
             ToolPropertyTargetEntityType::Thread => Self::EmailThread,
             ToolPropertyTargetEntityType::Channel => Self::Channel,
             ToolPropertyTargetEntityType::Call => Self::Call,

@@ -30,6 +30,7 @@ export * from './calendarEventSearchResponseItemWithMetadataAllOfMetadata';
 export * from './calendarEventSearchResponseItemWithMetadataAllOfProperties';
 export * from './calendarEventSearchResult';
 export * from './calendarEventSearchResultScore';
+export * from './calendarEventSearchScope';
 export * from './calendarEventSearchTime';
 export * from './calendarEventSearchTimeOneOf';
 export * from './calendarEventSearchTimeOneOfFour';

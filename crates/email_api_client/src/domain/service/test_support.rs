@@ -33,11 +33,22 @@ pub(super) fn call_log() -> CallLog {
 pub(super) struct FakeTokenSource {
     calls: CallLog,
     result: Result<AccessToken, TokenError>,
+    fresh_result: Option<Result<AccessToken, TokenError>>,
 }
 
 impl FakeTokenSource {
     pub(super) fn new(calls: CallLog, result: Result<AccessToken, TokenError>) -> Self {
-        Self { calls, result }
+        Self {
+            calls,
+            result,
+            fresh_result: None,
+        }
+    }
+
+    /// Answers fresh link-id fetches with `result` instead.
+    pub(super) fn with_fresh(mut self, result: Result<AccessToken, TokenError>) -> Self {
+        self.fresh_result = Some(result);
+        self
     }
 }
 
@@ -51,7 +62,10 @@ impl ProviderTokenSource for FakeTokenSource {
             .lock()
             .unwrap()
             .push(Call::Token(link_id, freshness));
-        self.result.clone()
+        match (&self.fresh_result, freshness) {
+            (Some(fresh), TokenFreshness::Fresh) => fresh.clone(),
+            _ => self.result.clone(),
+        }
     }
 
     async fn get_access_token_for_link(

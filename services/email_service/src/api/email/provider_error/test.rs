@@ -19,6 +19,12 @@ fn maps_provider_errors_to_api_statuses() {
         (EmailApiError::NotFound, StatusCode::NOT_FOUND),
         (EmailApiError::Conflict, StatusCode::CONFLICT),
         (
+            EmailApiError::SendRejected {
+                message: "message exceeds provider size limit".to_string(),
+            },
+            StatusCode::BAD_REQUEST,
+        ),
+        (
             EmailApiError::Transient {
                 message: "provider unavailable".to_string(),
             },

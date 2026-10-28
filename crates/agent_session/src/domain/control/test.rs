@@ -124,7 +124,7 @@ fn public_controls_cannot_supply_internal_review_context() {
     ] {
         assert!(matches!(
             ControlEvent::authorized(
-                AgentAction::context_prompt("Claimed review outcomes"),
+                AgentAction::notification(Vec::new()),
                 None,
                 None,
                 principal,

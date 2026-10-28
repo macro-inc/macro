@@ -3,16 +3,13 @@ import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, batch, createSignal } from 'solid-js';
 import type { EntitySearchCategory } from '../queries/entity-search';
 
-interface IMobileSearchState {
-  /**
-   * Whether a search session is active — from the dock's search button until
-   * the input's X is pressed (or a result opens). Blurring the input only
-   * drops the keyboard; it never ends the session.
-   */
-  isOpen: Accessor<boolean>;
-  open: () => void;
-  close: () => void;
+export type MobileSearchSnapshot = {
+  query: string;
+  category: EntitySearchCategory;
+  mode: 'name' | 'full-text';
+};
 
+export interface MobileSearchSession {
   category: Accessor<EntitySearchCategory>;
   setCategory: (category: EntitySearchCategory) => void;
   mode: Accessor<'name' | 'full-text'>;
@@ -21,15 +18,20 @@ interface IMobileSearchState {
   /** query (the dock input's live value) */
   query: Accessor<string>;
   setQuery: (value: string) => void;
+  snapshot: () => MobileSearchSnapshot;
 }
 
-export function createMobileSearchState(): IMobileSearchState {
-  const [isOpen, setIsOpen] = createControlledOpenSignal(false, {
-    id: 'command',
-  });
-  const [query, writeQuery] = createSignal('');
-  const [category, writeCategory] = createSignal<EntitySearchCategory>('all');
-  const [mode, setMode] = createSignal<'name' | 'full-text'>('name');
+/** Query state belongs to a Search history entry, including while it is covered. */
+export function createMobileSearchSession(
+  initial?: MobileSearchSnapshot
+): MobileSearchSession {
+  const [query, writeQuery] = createSignal(initial?.query ?? '');
+  const [category, writeCategory] = createSignal<EntitySearchCategory>(
+    initial?.category ?? 'all'
+  );
+  const [mode, setMode] = createSignal<'name' | 'full-text'>(
+    initial?.mode ?? 'name'
+  );
   const setQuery = (value: string) =>
     batch(() => {
       writeQuery(value);
@@ -52,46 +54,58 @@ export function createMobileSearchState(): IMobileSearchState {
     }
   };
 
-  function open() {
-    if (isOpen()) return;
-    batch(() => {
-      writeQuery('');
-      writeCategory('all');
-      setMode('name');
-      setIsOpen(true);
-    });
-  }
-
-  /**
-   * Ends and resets the session. Passes `shouldReturnFocus: false` — the
-   * dock mounts and focuses the input when opening; restoring focus during
-   * teardown could re-raise the keyboard.
-   */
-  function close() {
-    batch(() => {
-      setIsOpen(false, false);
-      writeQuery('');
-      writeCategory('all');
-      setMode('name');
-    });
-  }
-
   return {
-    isOpen,
-    open,
-    close,
-
     query,
     setQuery,
     category,
     setCategory,
     mode,
     searchFullText,
+    snapshot: () => ({ query: query(), category: category(), mode: mode() }),
+  };
+}
+
+export function createMobileSearchState() {
+  const [isOpen, setIsOpen] = createControlledOpenSignal(false, {
+    id: 'command',
+  });
+  const [session, setSession] = createSignal(createMobileSearchSession());
+  return {
+    isOpen,
+    session,
+    open: () => {
+      if (isOpen()) return;
+      batch(() => {
+        setSession(createMobileSearchSession());
+        setIsOpen(true);
+      });
+    },
+    close: () => {
+      batch(() => {
+        setIsOpen(false, false);
+        setSession(createMobileSearchSession());
+      });
+    },
+    resume: (value: MobileSearchSession) => {
+      batch(() => {
+        setSession(value);
+        setIsOpen(true);
+      });
+    },
+    suspend: (value: MobileSearchSession) => {
+      if (session() === value) setIsOpen(false, false);
+    },
+    query: () => session().query(),
+    setQuery: (value: string) => session().setQuery(value),
+    category: () => session().category(),
+    setCategory: (value: EntitySearchCategory) => session().setCategory(value),
+    mode: () => session().mode(),
+    searchFullText: () => session().searchFullText(),
   };
 }
 
 /**
- * Global mobile search session singleton — the dock input whose query feeds
- * the Search route's transient entity and full-text search.
+ * App chrome controls the foreground Search entry. Opening from the dock
+ * creates a session before mounting/focusing its input in the tap handler.
  */
 export const SearchState = createMobileSearchState();

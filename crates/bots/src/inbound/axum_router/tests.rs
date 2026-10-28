@@ -126,6 +126,14 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn manageable_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
     async fn patch_agent(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -417,6 +425,7 @@ impl JwtValidator for FakeJwtValidator {
         }
 
         Ok(ValidatedIdentity {
+            agent_id: None,
             user_id: jwt.to_string(),
             fusion_user_id: "fusion-user".to_string(),
             organization_id: None,

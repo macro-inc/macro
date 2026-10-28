@@ -31,8 +31,8 @@
  *   through the standard write path so dependent cached queries update.
  *
  * Cache failures normally degrade to the network. An admitted optimistic
- * enqueue with an unfenced transport outcome emits an error instead, because
- * forwarding could duplicate a side effect already durable in the old scope.
+ * enqueue with an unknown durable outcome emits an error instead, because
+ * forwarding could duplicate a side effect already in the persistent queue.
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -96,6 +96,10 @@ import {
   replayDocument,
   withQueueRequestTimeout,
 } from './mutation-queue-runner';
+import {
+  type MutationQueueTelemetry,
+  NOOP_MUTATION_QUEUE_TELEMETRY,
+} from './mutation-queue-telemetry';
 import type { QueryRevalidation } from './optimistic';
 import {
   normalizedEntityKey,
@@ -419,6 +423,8 @@ export interface NormalizedCacheExchangeOptions {
    * a later background attempt. Defaults to `false`.
    */
   shouldRetryMutation?: (error: CombinedError) => boolean | Promise<boolean>;
+  /** Spans, bounded logs, and counters for the durable mutation queue. */
+  mutationQueueTelemetry?: MutationQueueTelemetry;
 }
 
 export function normalizedCacheExchange(
@@ -847,6 +853,8 @@ export function normalizedCacheExchange(
       };
 
       const queueOwner = `exchange:${host.clientId}`;
+      const queueTelemetry =
+        options.mutationQueueTelemetry ?? NOOP_MUTATION_QUEUE_TELEMETRY;
       const mutationQueue = createMutationQueueRunner({
         host,
         client,
@@ -1067,26 +1075,35 @@ export function normalizedCacheExchange(
           nowMs: now,
           leaseExpiresAtMs: now + QUEUE_LEASE_MS,
         };
+        const enqueueTelemetry = queueTelemetry.enqueue({
+          uuid: args.uuid,
+          operationName: args.operationName,
+        });
         let enqueue: EnqueueOptimisticMutationResult;
+        let linkPatchesDegraded = false;
         try {
           enqueue = await host.enqueueOptimisticMutation(args, claim);
         } catch (error) {
-          if (!mutationQueue.isCurrent(epoch))
+          if (!mutationQueue.isCurrent(epoch)) {
+            enqueueTelemetry.failed('storage-changed');
             return uncertainEnqueueResult(
               op,
               new Error('cache storage changed during enqueue', {
                 cause: error,
               })
             );
+          }
           if (isAdmittedEnqueueUncertainError(error)) {
+            enqueueTelemetry.failed('uncertain');
             options.onCacheError?.(error, op);
-            // The old-scope queue may already contain the side effect. It is
-            // unsafe to forward or retry without a coordinator fence.
+            // Fencing the old engine does not remove a committed queue entry.
+            // Never forward or retry an enqueue whose reply was lost.
             return uncertainEnqueueResult(op, error);
           }
           // Another context holds the database, so the enqueue never reached
           // an engine. Send it as a disabled cache would.
           if (isOwnerLockUnavailableError(error)) {
+            enqueueTelemetry.failed('owner-lock');
             enqueueForward(op);
             return undefined;
           }
@@ -1094,10 +1111,12 @@ export function normalizedCacheExchange(
           // not expose a partial relation move: retain entity optimism and
           // the post-success revalidation descriptors instead.
           if (args.linkPatches.length === 0) {
+            enqueueTelemetry.failed('rejected');
             options.onCacheError?.(error, op);
             enqueueForward(op);
             return undefined;
           }
+          linkPatchesDegraded = true;
           // Deliberately loud: this fallback is durable but invisible until
           // reconnect — the mutation's optimistic list membership silently
           // becomes eventual. A systematic rejection (schema drift, a patch
@@ -1131,27 +1150,38 @@ export function normalizedCacheExchange(
               claim
             );
           } catch (fallbackError) {
-            if (!mutationQueue.isCurrent(epoch))
+            if (!mutationQueue.isCurrent(epoch)) {
+              enqueueTelemetry.failed('storage-changed');
               return uncertainEnqueueResult(
                 op,
                 new Error('cache storage changed during enqueue', {
                   cause: fallbackError,
                 })
               );
+            }
             options.onCacheError?.(fallbackError, op);
             if (isAdmittedEnqueueUncertainError(fallbackError)) {
+              enqueueTelemetry.failed('uncertain');
               return uncertainEnqueueResult(op, fallbackError);
             }
+            enqueueTelemetry.failed('rejected');
             enqueueForward(op);
             return undefined;
           }
         }
         if (!mutationQueue.isCurrent(epoch)) {
+          enqueueTelemetry.failed('storage-changed');
           return uncertainEnqueueResult(
             op,
             new Error('cache storage changed during enqueue')
           );
         }
+        enqueueTelemetry.persisted({
+          transactionId: enqueue.transactionId,
+          replaced: enqueue.upsertKind.kind === 'replaced-pending',
+          claimed: enqueue.initialClaim.kind === 'claimed',
+          linkPatchesDegraded,
+        });
         return await mutationQueue.admit(op, enqueue, epoch);
       }
 
@@ -1535,6 +1565,26 @@ export function normalizedCacheExchange(
             !activeOps.has(result.operation.key)
           )
             return result;
+          const current = liveQueries.get(result.operation.key);
+          // As with persistence, a failed network response (partial nulls or
+          // no data at all) is not authoritative: mounted readers keep the view
+          // they hold and later results keep updating it. Cache reads still
+          // apply when they carry that failure's error.
+          if (
+            current &&
+            result.error !== undefined &&
+            normalizedCacheResultMetadata(result)?.source === 'live-network'
+          ) {
+            const liveResult = withLiveQueryData(
+              { ...result },
+              current.view.data
+            );
+            liveQueries.set(result.operation.key, {
+              view: current.view,
+              result: liveResult,
+            });
+            return liveResult;
+          }
           if (
             !isQueryObject(result.data) ||
             !supportsStoreReconciliation(result.data)
@@ -1542,7 +1592,6 @@ export function normalizedCacheExchange(
             liveQueries.delete(result.operation.key);
             return result;
           }
-          const current = liveQueries.get(result.operation.key);
           const view =
             current?.view ??
             new LiveQuery(result.data, queryShape(result.operation.query));

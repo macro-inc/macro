@@ -1,8 +1,8 @@
 import { CommandState } from '@app/features/command';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { Dropdown } from '@ui';
 import type { ComponentProps } from 'solid-js';
 

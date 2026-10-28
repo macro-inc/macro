@@ -14,6 +14,8 @@ asking. Never commit to `main`. Push or open a PR only when the user asks.
 branch. For dependent work, stack branches and open one PR per layer, each based on
 the branch below it.
 
+Use the user's established branch prefix, not the OS username.
+
 ## Commits and PR titles
 
 [Conventional Commits](https://www.conventionalcommits.org): `type(scope): summary`.

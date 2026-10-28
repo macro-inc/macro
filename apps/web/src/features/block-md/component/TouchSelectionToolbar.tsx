@@ -1,15 +1,15 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import { hasNativeEditMenu } from '@core/mobile/nativeEditMenu';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import GridIcon from '@phosphor/grid-four.svg';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-solid';
-import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
-import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
+import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import SparkleIcon from '@icon/system/bold/sparkle-bold.svg?component-solid';
+import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-solid';
+import GridIcon from '@icon/system/regular/grid-four.svg';
+import LinkIcon from '@icon/system/regular/link.svg?component-solid';
 import { Button } from '@ui';
 import {
   createEffect,

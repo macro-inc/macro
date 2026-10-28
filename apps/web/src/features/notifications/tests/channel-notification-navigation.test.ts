@@ -1,9 +1,14 @@
 import { createRoutedSplitLayout } from '@components/app/split-layout/tests/fixtures';
 import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { getNotificationById } from '@queries/notification/user-notifications';
 import { createRoot } from 'solid-js';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
-import { openNotification } from '../notification-navigation';
+import {
+  openNotification,
+  openNotificationFromId,
+} from '../notification-navigation';
+import type { NotificationSource } from '../notification-source';
 import type { UnifiedNotification } from '../types';
 
 vi.mock('@app/signal/splitLayout', () => ({
@@ -40,6 +45,9 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));
 vi.mock('@queries/notification/user-notifications', () => ({
   getNotificationById: vi.fn(),
+}));
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: vi.fn(async () => {}),
 }));
 vi.mock('@queries/reminders/reminders', () => ({ getReminderById: vi.fn() }));
 vi.mock('../notification-resolvers', () => ({
@@ -128,7 +136,7 @@ it.each([
     expect(navigate).toHaveBeenCalledWith({
       channel_message_id: 'message',
       ...(tag === 'channel_message_send'
-        ? {}
+        ? { channel_thread_id: 'message' }
         : { channel_thread_id: 'thread' }),
     });
 
@@ -137,6 +145,30 @@ it.each([
     expect(createBlockInstance).toHaveBeenCalledOnce();
   }
 );
+
+it('opens a direct push target without looking up the notification or loading the feed', async () => {
+  const { layout, navigate } = setup('closed');
+  const notifications = vi.fn();
+  const source = { notifications } as unknown as NotificationSource;
+  const onApplied = vi.fn();
+  const result = await openNotificationFromId('notification', layout, source, {
+    target: {
+      type: 'channel',
+      channelId: 'channel',
+      messageId: 'message',
+      threadId: null,
+    },
+    onApplied,
+  });
+  expect(result.isOk()).toBe(true);
+  expect(notifications).not.toHaveBeenCalled();
+  expect(getNotificationById).not.toHaveBeenCalled();
+  expect(navigate).toHaveBeenCalledWith({
+    channel_message_id: 'message',
+    channel_thread_id: 'message',
+  });
+  expect(onApplied).toHaveBeenCalledOnce();
+});
 
 it.each(['channel_invite', 'call_started'] as const)(
   'activates the existing preview for %s without opening a split',
@@ -196,6 +228,9 @@ it.each(['split', 'closed'] as const)(
     expect(createBlockInstance).toHaveBeenCalledOnce();
     if (location === 'split') expect(layout.activeSplitId()).toBe(first.id);
     expect(toast.alert).not.toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith({ channel_message_id: 'message' });
+    expect(navigate).toHaveBeenCalledWith({
+      channel_message_id: 'message',
+      channel_thread_id: 'message',
+    });
   }
 );

@@ -4,8 +4,8 @@ import {
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import XIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import { Button } from '@ui';

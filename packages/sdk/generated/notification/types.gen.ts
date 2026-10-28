@@ -176,6 +176,26 @@ export type BulkGetByEventItemIdsRequest = {
 };
 
 /**
+ * A channel member who sees a calendar event only through a channel share
+ * asked the person who shared it to add them as a guest. Sent to the sharer,
+ * with the requester as sender.
+ */
+export type CalendarEventJoinRequestMetadata = {
+    /**
+     * The shared calendar event entity the request is for.
+     */
+    eventId: string;
+    /**
+     * Stable request identity, answered from the event's details.
+     */
+    requestId: string;
+    /**
+     * Event title when the request was made.
+     */
+    title: string;
+};
+
+/**
  * A calendar event alarm came due. Like [`ReminderMetadata`], these are
  * self-notifications: `sender_id` must stay `None` or the only recipient is
  * filtered out. Everything the alert renders rides in here so the
@@ -238,6 +258,20 @@ export type CallStartedMetadata = {
      * Profile picture URL of the user who started the call, when available.
      */
     sender_profile_picture_url?: string | null;
+};
+
+/**
+ * A person asked to join a channel the recipient participates in.
+ */
+export type ChannelAccessRequestedMetadata = CommonChannelMetadata & {
+    /**
+     * The attempt to join, which is also this notification's id.
+     */
+    requestId: string;
+    /**
+     * Optional requester profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
 };
 
 /**
@@ -919,6 +953,14 @@ export type InviteToTeamMetadata = {
      */
     invitedBy: string;
     /**
+     * What the invitee gets by joining, as the team stood when the invite was sent.
+     */
+    inviteePlan?: InviteePlan;
+    /**
+     * Whether this email reminds the invitee of an invite they have not answered.
+     */
+    reminder?: boolean;
+    /**
      * Role/permission level in the team
      */
     role?: string | null;
@@ -939,6 +981,11 @@ export type InviteToTeamMetadata = {
      */
     teamName: string;
 };
+
+/**
+ * What a team invitee gets by joining.
+ */
+export type InviteePlan = 'free' | 'premium';
 
 /**
  * Metadata for when a item is shared with a user
@@ -1211,6 +1258,19 @@ export type NotifEvent = {
      */
     content: ChannelMessageReactionMetadata;
     tag: 'channel_message_reaction';
+} | {
+    /**
+     * A channel member asked to be added as a guest of an event the
+     * user shared with the channel.
+     */
+    content: CalendarEventJoinRequestMetadata;
+    tag: 'calendar_event_join_request';
+} | {
+    /**
+     * Someone asked to join a channel the user participates in.
+     */
+    content: ChannelAccessRequestedMetadata;
+    tag: 'channel_access_requested';
 };
 
 /**
@@ -1249,16 +1309,44 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  */
 export type NotificationTypeName = string;
 
+/**
+ * the value we send as the payload in the ios notification
+ * This data is accessible to the client
+ */
 export type PushNotificationData = {
+    navigation?: null | PushNotificationNavigation;
     /**
      * The id of the notification record (UserNotification.id)
      */
     notificationId: string;
     /**
+     * Account that owns the receiving device, set during per-recipient delivery.
+     */
+    recipientId?: string | null;
+    /**
      * The sender's profile picture URL, used by the Notification Service Extension
      * to download and attach as a rich notification image.
      */
     senderProfilePictureUrl?: string | null;
+};
+
+/**
+ * Open a channel at a specific message.
+ */
+export type PushNotificationNavigation = {
+    /**
+     * Channel containing the message.
+     */
+    channelId: string;
+    /**
+     * Message to highlight.
+     */
+    messageId: string;
+    /**
+     * Root of the message's thread; null identifies a top-level message.
+     */
+    threadId: string | null;
+    type: 'channel';
 };
 
 /**

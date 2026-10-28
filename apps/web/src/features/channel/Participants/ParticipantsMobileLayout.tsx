@@ -1,5 +1,5 @@
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Button, Tabs } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { ParticipantsActionSheet } from './ParticipantsActionSheet';
@@ -31,7 +31,8 @@ export function ParticipantsMobileLayout(props: {
       <div class="shrink-0 overflow-x-auto scrollbar-hidden">
         <Tabs
           aria-label="Channel participants"
-          list={[
+          size="lg"
+          options={[
             { value: 'people', label: 'People' },
             ...(props.bots ? [{ value: 'bots', label: 'Bots' }] : []),
             ...(props.settings
@@ -42,8 +43,6 @@ export function ParticipantsMobileLayout(props: {
           onChange={(tab) =>
             setSelection({ tab, request: props.inviteBotFocusRequest })
           }
-          class="h-11"
-          labelClass="h-11"
         />
       </div>
       <Switch>

@@ -53,7 +53,7 @@ function columnValueKind(column: DatabaseViewColumn): ValueKind {
     .with('BOOLEAN', () => 'checkbox')
     .with('SELECT_STRING', 'SELECT_NUMBER', 'TAG', () => 'options')
     .with('ENTITY', () => 'entities')
-    .exhaustive();
+    .exhaustive(() => 'text');
 }
 
 function operatorId(test: FilterOperator | FilterTest): string {

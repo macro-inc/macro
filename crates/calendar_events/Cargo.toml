@@ -6,6 +6,8 @@ version = "0.1.0"
 
 [features]
 default = []
+notes = ["dep:entity_access"]
+outlook = ["dep:tokio"]
 # The AI toolset adapter exposing calendar CRUD to agents.
 ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 # The meeting-link adapter that mints Macro calls through the call domain
@@ -24,6 +26,7 @@ inbound = [
   "dep:axum",
   "dep:macro_authorization",
   "dep:models_pagination",
+  "dep:urlencoding",
   "schema",
 ]
 # The notification-service reminder notifier.
@@ -42,6 +45,8 @@ call = { path = "../call", default-features = false, features = [
 ], optional = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+email_utils = { path = "../email_utils" }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"], optional = true }
 futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
@@ -69,6 +74,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound", "ports"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_user_id = { path = "../macro_user_id" }
 tokio = { workspace = true }

@@ -24,13 +24,15 @@ export function GmailReauthenticationPrompt() {
 
   useKeyedPersistentToasts({
     items: () =>
-      (linksQuery.data?.links ?? []).filter((link) => link.needs_reauth),
+      (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
+        (link) => link.needs_reauth
+      ),
     key: (link) => link.id,
     toast: (link, dismiss) => ({
       title:
         reconnectScopes(link) === 'gmail_and_calendar'
           ? 'Reconnect email and calendar'
-          : 'Reconnect Gmail',
+          : 'Reconnect inbox',
       content(): string {
         return `Sync stopped for ${link.email_address}. Reconnect to restore ${reconnectScopes(link) === 'gmail_and_calendar' ? 'email and calendar' : 'email'} sync.`;
       },
@@ -44,6 +46,8 @@ export function GmailReauthenticationPrompt() {
             fireAndForget(
               startAddInbox({
                 scopes: reconnectScopes(link),
+                provider: link.provider,
+                reconnectLinkId: link.id,
                 emailAddress: link.email_address,
               }),
               'add-inbox'

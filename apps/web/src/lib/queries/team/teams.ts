@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import {
@@ -46,10 +46,11 @@ export function useTeamQuery(teamId: Accessor<string>) {
 
 /** The current user's team, or `null` if they don't belong to one. */
 export function useCurrentTeamQuery(enabled?: Accessor<boolean>) {
+  const authenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: teamKeys.currentTeam.queryKey,
     queryFn: fetchTeam,
-    enabled: enabled?.() ?? true,
+    enabled: authenticated() === true && (enabled?.() ?? true),
   }));
 }
 

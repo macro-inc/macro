@@ -1,3 +1,4 @@
+import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import {
@@ -411,7 +412,7 @@ describe('draft session: compose composer', () => {
       const root = mountEmailComposer(context);
       try {
         root.edit('With an attachment');
-        await root.state.context.onAddAttachments([{ type: 'local', file }]);
+        await root.state.context.onAddAttachments([file]);
         await vi.advanceTimersByTimeAsync(600);
         root.state.context.onSend();
         await vi.advanceTimersByTimeAsync(10);
@@ -451,7 +452,7 @@ describe.each(['reply', 'compose'] as const)(
         schedule: root.state.context.schedule.onSelect,
         cancelSchedule: root.state.context.schedule.onCancel,
         addAttachment: (file: File) =>
-          root.state.context.onAddAttachments([{ type: 'local', file }]),
+          root.state.context.onAddAttachments([file]),
       };
     };
 
@@ -510,6 +511,7 @@ describe.each(['reply', 'compose'] as const)(
         );
         expect(context.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
           {
+            draftGeneration: 0,
             draftId: 'scheduled-server',
             threadId: 'thread',
             sendTime: '2027-01-01T12:00:00.000Z',
@@ -518,6 +520,34 @@ describe.each(['reply', 'compose'] as const)(
           'inbox'
         );
         expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    });
+
+    it('reads operation status only under a server-confirmed draft ID', async () => {
+      const context = createComposeContext();
+      let operationId: Accessor<string | undefined> = () => undefined;
+      context.operations = (messageId) => {
+        operationId = messageId;
+        return { operation: () => undefined, resolve: async () => {} };
+      };
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+        queued(input)
+      );
+      const root = mount(context);
+      try {
+        root.edit('Queued behind the durable queue');
+        await vi.advanceTimersByTimeAsync(600);
+        expect(savedInputs(context)[0].clientHandles?.draftId).toBeTruthy();
+        expect(operationId()).toBeUndefined();
+
+        vi.mocked(context.drafts.saveDraft).mockResolvedValue(
+          committed('server-operation')
+        );
+        root.edit('Confirmed by the server');
+        await vi.advanceTimersByTimeAsync(600);
+        expect(operationId()).toBe('server-operation');
       } finally {
         root.dispose();
       }

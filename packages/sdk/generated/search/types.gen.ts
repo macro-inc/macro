@@ -220,6 +220,17 @@ export type CalendarEventSearchResult = {
 };
 
 /**
+ * Which calendar events a unified search covers.
+ *
+ * Sharing an event with a channel lets its members see the sharer's copy,
+ * which is on none of their own calendars, so the default scope never finds
+ * it. Shared events are a separate scope rather than part of the default, so
+ * a caller can list them after the caller's own events without reordering
+ * those.
+ */
+export type CalendarEventSearchScope = 'own' | 'shared_with_you';
+
+/**
  * Timed or all-day span of a calendar event.
  *
  * Deliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`
@@ -2422,6 +2433,13 @@ export type TaskFilters = {
 };
 
 export type UnifiedSearchRequest = {
+    /**
+     * Which calendar events to search. Defaults to `own`: events on the
+     * caller's own and delegated calendars. `shared_with_you` searches only
+     * events shared with a channel the caller belongs to that are on none of
+     * their calendars.
+     */
+    calendar_event_scope?: CalendarEventSearchScope;
     collapse?: boolean | null;
     /**
      * Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search.

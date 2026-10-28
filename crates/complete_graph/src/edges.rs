@@ -583,6 +583,30 @@ where
             .map(|timestamp| timestamp.to_rfc3339()))
     }
 
+    /// Timestamp of the latest outbound message, in RFC 3339 format: the SENT
+    /// view's sort key.
+    async fn latest_outbound_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .latest_outbound_message_ts
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
+    /// Timestamp of the latest message that is not spam, in RFC 3339 format:
+    /// the sort key of every mail view except INBOX and SENT.
+    async fn latest_non_spam_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .latest_non_spam_message_ts
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
     /// Complete body-free metadata for local draft edits and discards.
     async fn mail_draft_state(
         &self,

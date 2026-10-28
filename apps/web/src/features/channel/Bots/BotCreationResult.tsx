@@ -1,4 +1,4 @@
-import HashIcon from '@phosphor/hash.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
 import CheckCircleIcon from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, Surface } from '@ui';
@@ -76,9 +76,9 @@ export function BotCreationResult(props: {
           {(token) => (
             <>
               <CredentialField
-                label="Webhook token"
+                label="Bot token"
                 value={token()}
-                help="Send as x-macro-channel-bot-token"
+                help="Use with the Macro SDK, or send as x-macro-channel-bot-token for webhooks."
               />
               <Show when={props.channels[0]}>
                 {(channel) => (

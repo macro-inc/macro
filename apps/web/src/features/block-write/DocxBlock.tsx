@@ -131,7 +131,12 @@ export default function DocxBlock(props: { share?: string }) {
           id={documentId}
           itemType="document"
           name={name()}
-          ops={[{ op: 'rename' }, { op: 'moveToProject' }, { op: 'delete' }]}
+          ops={[
+            { op: 'rename' },
+            { op: 'copy' },
+            { op: 'moveToProject' },
+            { op: 'delete' },
+          ]}
           tools={[
             {
               group: 'sharing',

@@ -1,4 +1,4 @@
-import LightningIcon from '@phosphor-fill/lightning-fill.svg';
+import LightningIcon from '@icon/system/fill/lightning-fill.svg';
 import { Button, cn } from '@ui';
 import { onCleanup, Show } from 'solid-js';
 import { acceleratedSpeed } from '../../constant/speed';

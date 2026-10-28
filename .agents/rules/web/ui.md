@@ -62,6 +62,9 @@ Components, styling, and interaction conventions.
   whenever one fits; browse them at `/app/component/ui`. Don't build a one-off
   button, dialog, menu, or input. A missing primitive is added there, with a
   `*.docs.tsx` page and tests, not inside a feature.
+- Use `Dropdown.MultiSelectItem` for multiselect filter rows; keep independent
+  checkbox settings on `Dropdown.CheckboxItem`. Follow the
+  [shared interaction pattern](../../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns).
 - **FE-54** Decide mobile behavior deliberately. Unless the change makes it
   obvious, ask the user how a UI change should look and behave on mobile, then
   follow [`mobile.md`](mobile.md).

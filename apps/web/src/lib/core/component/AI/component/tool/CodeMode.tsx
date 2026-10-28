@@ -1,5 +1,5 @@
-import CaretRight from '@phosphor/caret-right.svg';
-import CodeIcon from '@phosphor/code.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
 import { createSignal, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';

@@ -1,36 +1,18 @@
-use crate::api::context::{ApiContext, AuthorizationService};
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
-use email::domain::forwarded_attachments::ForwardedAttachmentError;
+use super::attachment_error::AttachmentApiError;
+use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+    http::StatusCode,
+};
+use axum_extra::extract::Cached;
+use email::inbound::axum::api_types::DraftEditPrecondition;
+use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
-use models_email::service::link::Link;
-use utoipa::{IntoParams, ToSchema};
+use utoipa::IntoParams;
+use utoipa::ToSchema;
 use uuid::Uuid;
-
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct AddForwardedAttachmentError(#[from] ForwardedAttachmentError);
-
-impl IntoResponse for AddForwardedAttachmentError {
-    fn into_response(self) -> Response {
-        let status_code = match &self.0 {
-            ForwardedAttachmentError::DraftNotFound
-            | ForwardedAttachmentError::AttachmentNotFound => StatusCode::NOT_FOUND,
-            ForwardedAttachmentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: self.to_string().into(),
-            }),
-        )
-            .into_response()
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Debug, IntoParams)]
 pub struct PathParams {
     /// The ID of the draft to add the forwarded attachment to.
@@ -61,7 +43,7 @@ pub struct AddForwardedAttachmentResponse {
     tag = "Drafts",
     path = "/email/drafts/{id}/forwarded-attachments",
     operation_id = "add_forwarded_attachment",
-    params(PathParams),
+    params(PathParams, DraftEditPrecondition),
     request_body = AddForwardedAttachmentRequest,
     responses(
         (status = 201, body = AddForwardedAttachmentResponse),
@@ -69,28 +51,30 @@ pub struct AddForwardedAttachmentResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(link_id = %link.id), err)]
+#[tracing::instrument(skip_all, err)]
 pub async fn handler(
+    Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
-    link: Extension<Link>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<EmailSvc, AuthorizationService>>,
     Path(PathParams { id: draft_id }): Path<PathParams>,
     Json(req): Json<AddForwardedAttachmentRequest>,
-) -> Result<(StatusCode, Json<AddForwardedAttachmentResponse>), AddForwardedAttachmentError> {
+) -> Result<(StatusCode, Json<AddForwardedAttachmentResponse>), AttachmentApiError> {
+    let actor = &authorization.authorization.user.macro_user_id;
     let attachment = ctx
-        .forwarded_attachments
-        .add(
-            &authorization.authorization.user.macro_user_id,
+        .draft_attachments
+        .forward(
+            actor,
             link.id,
             draft_id,
             req.attachment_id,
+            precondition.draft_generation,
         )
         .await?;
-
     Ok((
         StatusCode::CREATED,
         Json(AddForwardedAttachmentResponse {
-            attachment_id: attachment.db_id,
+            attachment_id: attachment.id,
             filename: attachment.filename,
             mime_type: attachment.mime_type,
             size_bytes: attachment.size_bytes,

@@ -39,8 +39,12 @@ const Context = createContext<DriveContext>();
 
 export const DriveProvider = Context.Provider;
 
+export function useOptionalDriveView(): DriveContext | undefined {
+  return useContext(Context);
+}
+
 export function useDriveView(): DriveContext {
-  const context = useContext(Context);
+  const context = useOptionalDriveView();
 
   if (!context) throw new Error('DriveProvider is required');
 

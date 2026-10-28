@@ -8,7 +8,7 @@ import {
   isValidTime,
   parseCron as parseCronParts,
 } from '@core/util/cron';
-import type { ScheduleDraft } from './draft';
+import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from './draft';
 import { routineTargetSchema } from './routine-target';
 import { describeTriggers, validateTriggers } from './routine-triggers';
 
@@ -74,6 +74,7 @@ export function createEmptyDraft(model: string): ScheduleDraft {
     daysOfWeek: [...DEFAULT_WEEKDAYS],
     dayOfMonth: '1',
     target: { kind: 'model', model },
+    runVisibility: DEFAULT_RUN_VISIBILITY,
   };
 }
 

@@ -963,6 +963,16 @@ export const listTypedNotificationsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          inviteePlan: zod
+                            .enum(['free', 'premium'])
+                            .optional()
+                            .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -2062,6 +2072,70 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The shared calendar event entity the request is for.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              "Stable request identity, answered from the event's details."
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event title when the request was made.'),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -2929,6 +3003,16 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          inviteePlan: zod
+                            .enum(['free', 'premium'])
+                            .optional()
+                            .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -4028,6 +4112,70 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The shared calendar event entity the request is for.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              "Stable request identity, answered from the event's details."
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event title when the request was made.'),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -4889,6 +5037,16 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          inviteePlan: zod
+                            .enum(['free', 'premium'])
+                            .optional()
+                            .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -5988,6 +6146,70 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The shared calendar event entity the request is for.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              "Stable request identity, answered from the event's details."
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event title when the request was made.'),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -6788,6 +7010,16 @@ export const getTypedNotificationByIdResponse = zod
                   invitedBy: zod
                     .string()
                     .describe('The user who sent the invitation'),
+                  inviteePlan: zod
+                    .enum(['free', 'premium'])
+                    .optional()
+                    .describe('What a team invitee gets by joining.'),
+                  reminder: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      'Whether this email reminds the invitee of an invite they have not answered.'
+                    ),
                   role: zod
                     .string()
                     .nullish()
@@ -7798,6 +8030,66 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['channel_message_reaction']),
             })
             .describe("Someone reacted to one of the user's channel messages."),
+          zod
+            .object({
+              content: zod
+                .object({
+                  eventId: zod
+                    .uuid()
+                    .describe(
+                      'The shared calendar event entity the request is for.'
+                    ),
+                  requestId: zod
+                    .uuid()
+                    .describe(
+                      "Stable request identity, answered from the event's details."
+                    ),
+                  title: zod
+                    .string()
+                    .describe('Event title when the request was made.'),
+                })
+                .describe(
+                  'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                ),
+              tag: zod.enum(['calendar_event_join_request']),
+            })
+            .describe(
+              'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    requestId: zod
+                      .uuid()
+                      .describe(
+                        "The attempt to join, which is also this notification's id."
+                      ),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional requester profile picture URL.'),
+                  })
+                )
+                .describe(
+                  'A person asked to join a channel the recipient participates in.'
+                ),
+              tag: zod.enum(['channel_access_requested']),
+            })
+            .describe(
+              'Someone asked to join a channel the user participates in.'
+            ),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'

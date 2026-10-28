@@ -1,9 +1,9 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Dropdown, Hotkey, Calendar as MiniCalendar } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -130,7 +130,10 @@ function CustomDatePicker(props: { controls: CalendarPeriodControls }) {
 }
 
 /** Desktop calendar period selector and custom-date dropdown. */
-export function PeriodSelector(props: { isNarrow?: boolean }) {
+export function PeriodSelector(props: {
+  isNarrow?: boolean;
+  compact?: boolean;
+}) {
   const controls = createCalendarPeriodControls();
 
   return (
@@ -142,7 +145,7 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
       <Dropdown.Trigger
         aria-label="Choose calendar view"
         variant="ghost"
-        size="lg"
+        size={props.compact ? 'md' : 'lg'}
         class="shrink-0 border-transparent bg-transparent text-sm"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())

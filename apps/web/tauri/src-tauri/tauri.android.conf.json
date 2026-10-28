@@ -1,20 +1,50 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Macro Alpha",
-  "identifier": "com.macro.workspace.mobile",
   "version": "2.5.0",
   "bundle": {
     "android": {
-      "versionCode": 5
+      "versionCode": 18
     }
   },
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Macro",
+  "identifier": "com.macro.workspace.mobile",
   "plugins": {
     "deep-link": {
       "mobile": [
-        { "scheme": ["macro"], "host": "app", "appLink": false },
-        { "host": "macro.com", "path": ["/app"], "pathPrefix": ["/app/"] },
-        { "host": "dev.macro.com", "path": ["/app"], "pathPrefix": ["/app/"] },
-        { "host": "staging.macro.com", "path": ["/app"], "pathPrefix": ["/app/"] }
+        {
+          "scheme": [
+            "macro"
+          ],
+          "host": "app",
+          "appLink": false
+        },
+        {
+          "host": "macro.com",
+          "path": [
+            "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
+          ]
+        },
+        {
+          "host": "dev.macro.com",
+          "path": [
+            "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
+          ]
+        },
+        {
+          "host": "staging.macro.com",
+          "path": [
+            "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
+          ]
+        }
       ]
     }
   },

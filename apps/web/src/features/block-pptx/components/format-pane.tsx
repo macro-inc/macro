@@ -6,8 +6,8 @@
 
 import type { TextDirection } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { boxOf } from '../core/geometry';
@@ -149,7 +149,7 @@ function ColorButton(props: {
         <span class="text-ink-muted">▾</span>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-action-menu rounded-xl border border-edge bg-menu p-2 shadow-xl outline-none">
+        <Popover.Content class="menu-surface z-action-menu p-2 outline-none">
           <ColorPicker
             themeGrid={props.env.themeGrid()}
             standard={props.env.standardColors}

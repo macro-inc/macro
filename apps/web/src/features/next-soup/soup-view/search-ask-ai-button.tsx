@@ -46,10 +46,10 @@ export function SearchAskAiButton() {
   return (
     <Button
       variant="ghost"
-      size="sm"
+      size="md"
       depth={2}
       tooltip="Ask AI"
-      class="shrink-0 h-7 touch:h-9 gap-1.5 px-2"
+      class="shrink-0"
       disabled={isAsking()}
       onClick={askAi}
     >

@@ -90,6 +90,43 @@ describe('controlled confirmation', () => {
 });
 
 describe('imperative confirmation', () => {
+  it.each(['confirm', 'escape'] as const)(
+    'resolves a hero confirmation only after %s',
+    async (action) => {
+      render(() => <ImperativeDialogHost />);
+      const result = confirmDialog({
+        title: 'Start a call with Jacob',
+        body: 'They’ll receive a notification to join.',
+        mobileHero: <span>Avatars</span>,
+        confirmLabel: 'Start call',
+        tone: 'success',
+      });
+      const resolved = vi.fn();
+      const resolution = (async () => resolved(await result))();
+      expect(resolved).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Close confirmation' })
+      ).toBeNull();
+      expect(
+        screen
+          .getByRole('dialog', { name: 'Start a call with Jacob' })
+          .getAttribute('aria-describedby')
+      ).toBeTruthy();
+
+      if (action === 'confirm') {
+        fireEvent.click(screen.getByRole('button', { name: 'Start call' }));
+      } else {
+        fireEvent.keyDown(document, { key: 'Escape' });
+      }
+      await vi.advanceTimersByTimeAsync(249);
+      expect(resolved).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await resolution;
+      expect(resolved).toHaveBeenCalledExactlyOnceWith(action === 'confirm');
+    }
+  );
+
   it.each([
     ['Confirm', true],
     ['Cancel', false],

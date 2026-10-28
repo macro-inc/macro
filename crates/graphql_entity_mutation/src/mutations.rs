@@ -313,7 +313,7 @@ fn validate_share_policy_inputs(
 }
 
 /// Stable machine-readable mutation error code.
-#[derive(Clone, Copy, Enum, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum GraphqlEntityMutationErrorCode {
     /// Operation is unavailable for the requested entity kind.
     UnsupportedOperation,
@@ -463,7 +463,21 @@ pub struct EntityMutationPayload<E> {
 
 impl<E> EntityMutationPayload<E> {
     /// Construct a batch payload from ordered domain mutation outcomes.
+    ///
+    /// Per-item failures are successful GraphQL responses, so the resolver
+    /// span records them for the batch.
     fn new(results: Vec<MutateEntitiesResult>) -> Self {
+        let span = tracing::Span::current();
+        let mut failures = results.iter().filter_map(|result| result.as_ref().err());
+        if let Some(first) = failures.next() {
+            span.record("entity_mutation.failed_count", failures.count() + 1);
+            span.record(
+                "entity_mutation.error_code",
+                tracing::field::debug(GraphqlEntityMutationErrorCode::new(*first)),
+            );
+        } else {
+            span.record("entity_mutation.failed_count", 0);
+        }
         EntityMutationPayload {
             results,
             edges: PhantomData,
@@ -499,6 +513,15 @@ fn mutation_actor(ctx: &Context<'_>) -> async_graphql::Result<EntityMutationActo
 #[Object]
 impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     /// Rename heterogeneous entities in one request.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn rename_entities(
         &self,
         ctx: &Context<'_>,
@@ -522,6 +545,15 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     }
 
     /// Move heterogeneous entities to a project or to the root.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn move_entities(
         &self,
         ctx: &Context<'_>,
@@ -545,6 +577,15 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     }
 
     /// Update link, explicit team, and channel share policies across supported entity kinds.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn update_entity_share_policies(
         &self,
         ctx: &Context<'_>,
@@ -569,6 +610,15 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     }
 
     /// Soft-delete entities with a reversible trash lifecycle.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = entities.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn trash_entities(
         &self,
         ctx: &Context<'_>,
@@ -589,6 +639,15 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     }
 
     /// Restore reversibly deleted entities.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = entities.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn restore_entities(
         &self,
         ctx: &Context<'_>,
@@ -609,6 +668,15 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     }
 
     /// Irreversibly delete entities.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = entities.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn delete_entities_permanently(
         &self,
         ctx: &Context<'_>,
@@ -632,6 +700,15 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
     }
 
     /// Duplicate supported entities.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(
+            entity_mutation.count = inputs.len(),
+            entity_mutation.failed_count = tracing::field::Empty,
+            entity_mutation.error_code = tracing::field::Empty,
+        )
+    )]
     async fn duplicate_entities(
         &self,
         ctx: &Context<'_>,

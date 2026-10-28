@@ -41,7 +41,7 @@ export function SettingsSidebar(props: {
           autocomplete="off"
           value={props.searchQuery}
           onValueChange={props.onSearchQueryChange}
-          class="border-0 bg-ink/5 shadow-none"
+          size="sm"
           onEscape={() => props.onSearchQueryChange('')}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {

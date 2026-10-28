@@ -55,6 +55,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('channel_message_reply', () => 'replied in')
       .with('call_started', () => 'started a call')
       .with('channel_invite', () => 'invited you to')
+      .with('channel_access_requested', () => 'asked to join')
       .with('new_email', () => 'sent a new email')
       .with('invite_to_team', () => 'invited you to')
       .with('task_assigned', () => 'assigned you a task')
@@ -63,6 +64,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('reminder', () => 'Reminder')
       // Same shape: no actor, reads "Upcoming event · <event title>".
       .with('calendar_event_reminder', () => 'Upcoming event')
+      .with('calendar_event_join_request', () => 'asked to join')
       .with('github_pr_status_changed', () => 'updated a pull request')
       .with('github_pr_check_run', () => {
         const meta = n.notification_metadata;
@@ -84,7 +86,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
-      .exhaustive()
+      .exhaustive(() => 'notified you about')
   );
 }
 
@@ -95,6 +97,7 @@ export function getNotificationTargetName(
   return (
     match(m)
       .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
+      .with({ tag: 'channel_access_requested' }, (m) => m.content.channelName)
       .with({ tag: 'document_mention' }, (m) => m.content.documentName)
       .with(
         { tag: 'mentioned_in_document_comment' },
@@ -128,7 +131,12 @@ export function getNotificationTargetName(
       // not carried in the metadata.
       .with({ tag: 'reminder' }, () => undefined)
       .with(
-        { tag: 'calendar_event_reminder' },
+        {
+          tag: P.union(
+            'calendar_event_reminder',
+            'calendar_event_join_request'
+          ),
+        },
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
@@ -142,7 +150,7 @@ export function getNotificationTargetName(
         },
         (m) => m.content.sessionName
       )
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -199,12 +207,14 @@ export function getNotificationContent(
           m.content.reviewSnippet || m.content.title || m.content.displayName
       )
       .with({ tag: 'channel_invite' }, () => undefined)
+      .with({ tag: 'channel_access_requested' }, () => undefined)
       .with({ tag: 'invite_to_team' }, () => undefined)
       // The description the user wrote is the whole point of a reminder.
       .with({ tag: 'reminder' }, (m) => m.content.description)
       .with({ tag: 'calendar_event_reminder' }, (m) =>
         formatCalendarReminderTime(m.content)
       )
+      .with({ tag: 'calendar_event_join_request' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
       .with(
         { tag: 'agent_session_settled' },
@@ -215,7 +225,7 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -273,11 +283,13 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'commented_on_document' }, () => true)
       .with({ tag: 'crm_discussion' }, () => true)
       .with({ tag: 'channel_invite' }, () => true)
+      .with({ tag: 'channel_access_requested' }, () => true)
       .with({ tag: 'invite_to_team' }, () => true)
       // Shown so "Reminder" reads as being about something; a standalone
       // reminder resolves to no target name and renders without one anyway.
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
+      .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with(
         {
@@ -289,6 +301,6 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
         },
         () => true
       )
-      .exhaustive()
+      .exhaustive(() => true)
   );
 }

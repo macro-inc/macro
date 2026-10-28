@@ -438,7 +438,8 @@ ensure-ai-engine-wasm:
         just --justfile "{{justfile()}}" build-ai-engine-wasm
     fi
 
-# Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts
+# Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts (and
+# the SDK's packages/sdk/generated/agent-fold/index.ts)
 # from agent_fold's Rust wire types with specta. Run after changing anything
 # under crates/folds/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
 # commas, not this project's style, so biome reformats it in place - without

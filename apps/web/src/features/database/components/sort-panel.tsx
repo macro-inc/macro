@@ -1,6 +1,6 @@
-import GripIcon from '@phosphor/dots-six-vertical.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import GripIcon from '@icon/system/regular/dots-six-vertical.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { Button } from '@ui/components/Button';

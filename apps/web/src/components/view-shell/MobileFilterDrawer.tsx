@@ -3,11 +3,11 @@ import {
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SlidersHorizontalIcon from '@icon/system/regular/sliders-horizontal.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import XIcon from '@phosphor/x.svg';
-import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { Button, cn } from '@ui';
 import {
   type Accessor,
@@ -188,7 +188,10 @@ function Option(props: {
     <MobileDrawer.Item
       role={props.selectionMode === 'single' ? 'radio' : 'checkbox'}
       aria-checked={props.checked}
-      class={props.class}
+      class={cn(
+        '[&[role=checkbox][aria-checked=true]:has(+[role=checkbox][aria-checked=true])]:rounded-b-none [&[role=checkbox][aria-checked=true]+[role=checkbox][aria-checked=true]]:rounded-t-none',
+        props.class
+      )}
       onClick={() => props.onChange(!props.checked)}
     >
       <Show when={props.icon}>

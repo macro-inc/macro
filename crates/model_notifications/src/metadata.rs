@@ -1,9 +1,15 @@
 mod access_request;
+mod calendar_join_request;
+mod channel_push;
 pub use access_request::{
-    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
+    ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
+    RequestedAccessLevel,
 };
+pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
-pub use invite_email::{ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata};
+pub use invite_email::{
+    ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
+};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
@@ -1052,6 +1058,8 @@ fn alert_apns<T: NotificationTitle>(
         push_notification_data: PushNotificationData {
             notification_id,
             sender_profile_picture_url,
+            recipient_id: None,
+            navigation: None,
         },
     })
 }
@@ -1098,11 +1106,19 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            None,
+        )
     }
 }
 
@@ -1116,16 +1132,18 @@ impl NotificationExtIos for ChannelMessageReactionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        alert_apns(
+        channel_push::channel_apns(
             self,
             sender_id,
             notification_id,
             self.sender_profile_picture_url.clone(),
+            entity,
+            &self.message_id,
+            self.thread_id.as_deref(),
         )
-        .ok()
     }
 }
 
@@ -1139,11 +1157,19 @@ impl NotificationExtIos for ChannelMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            self.thread_id.as_deref(),
+        )
     }
 }
 
@@ -1157,11 +1183,19 @@ impl NotificationExtIos for ChannelReplyMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.message_id,
+            Some(&self.thread_id),
+        )
     }
 }
 
@@ -1175,11 +1209,19 @@ impl NotificationExtIos for DocumentMentionMetadata {
     fn as_apns<'a>(
         &self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
+        entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.channel.sender_profile_picture_url.clone();
-        alert_apns(self, sender_id, notification_id, profile_pic).ok()
+        channel_push::channel_apns(
+            self,
+            sender_id,
+            notification_id,
+            profile_pic,
+            entity,
+            &self.channel.message_id,
+            self.channel.thread_id.as_deref(),
+        )
     }
 }
 
@@ -1691,6 +1733,39 @@ impl NotificationTitle for CalendarEventReminderMetadata {
             1 => "Starts in 1 minute".to_string(),
             minutes => format!("Starts in {minutes} minutes"),
         })
+    }
+}
+
+impl notification::domain::models::NotificationExtEmail for CalendarEventReminderMetadata {
+    fn format_email(&self) -> notification::domain::models::queue_message::EmailContent {
+        let title = self
+            .format_title(None)
+            .unwrap_or_else(|_| "Calendar reminder".into());
+        let when = self.format_body(None).unwrap_or_default();
+        notification::domain::models::queue_message::EmailContent {
+            subject: format!("Reminder: {}", title.replace(['\r', '\n'], " ")),
+            body: format!(
+                "<p>{}</p><p>{}</p><p>Calendar reminder from Macro.</p>",
+                html_escape::encode_text(&title),
+                html_escape::encode_text(&when)
+            ),
+        }
+    }
+    fn rate_limit_config() -> notification::domain::models::RateLimitConfig {
+        notification::domain::models::RateLimitConfig {
+            max_count: 1,
+            window: std::time::Duration::from_secs(86400),
+        }
+    }
+    fn rate_limit_key(&self) -> notification::domain::models::RateLimitKey {
+        notification::domain::models::RateLimitKey::from_str_hashed(&format!(
+            "calendar-reminder:{}:{}:{}:{:?}:{:?}",
+            self.event_id,
+            self.occurrence_key,
+            self.minutes_before,
+            self.starts_at,
+            self.start_date
+        ))
     }
 }
 

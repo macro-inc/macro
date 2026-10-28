@@ -41,7 +41,7 @@ describe('scheduling form validation', () => {
     expect(meetingPlaceLabel(event)).toBe('Macro call');
     expect(
       meetingPlaceLabel({ ...event, macroCall: false, googleMeet: true })
-    ).toBe('Google Meet');
+    ).toBe('Video meeting');
     expect(
       meetingPlaceLabel({
         ...event,

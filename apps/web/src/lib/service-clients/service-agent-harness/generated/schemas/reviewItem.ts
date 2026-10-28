@@ -13,6 +13,8 @@ import type { ReviewItemStatus } from './reviewItemStatus';
 export interface ReviewItem {
   /** Validated arguments for the existing composer/action. */
   draft: unknown;
+  /** Whether the account holder edited this draft before deciding. */
+  edited?: boolean;
   /** Failure or uncertainty description. */
   error?: ReviewItemError;
   /** Stable item identity across stack navigation and edits. */

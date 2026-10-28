@@ -11,6 +11,13 @@ use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPerm
 
 use crate::domain::owned_entity_cleanup::OwnedEntityCleanupError;
 
+mod invite_link;
+
+pub use invite_link::{
+    JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, ManageTeamInviteLinkError,
+    TeamInviteLinkTeam, TeamInviteLinkToken,
+};
+
 /// Team plans
 #[derive(
     Eq,
@@ -579,6 +586,30 @@ impl TeamInvite<'static> {
     }
 }
 
+/// An unanswered team invite whose reminder email is due, claimed by the
+/// reminder sweep. Claiming already counted the reminder as sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueInviteReminder {
+    /// The team invite id
+    pub team_invite_id: uuid::Uuid,
+    /// The team id
+    pub team_id: uuid::Uuid,
+    /// The team name
+    pub team_name: String,
+    /// The invited email
+    pub email: String,
+    /// The user who sent the invitation
+    pub invited_by: String,
+    /// Which reminder this is, starting at 1
+    pub reminder_number: u8,
+    /// Whether the team is an enterprise team
+    pub enterprise: bool,
+    /// Whether the team is in good standing
+    pub paying: bool,
+    /// Whether the team has a subscription
+    pub has_subscription: bool,
+}
+
 /// Snapshot of a team invite before it is accepted.
 #[derive(Debug, Clone)]
 pub struct TeamInviteSnapshot<'a> {
@@ -653,8 +684,8 @@ pub enum CreateTeamError {
 /// Errors for inviting users to team
 #[derive(Debug, thiserror::Error)]
 pub enum InviteUsersToTeamError {
-    /// Too many emails were provided
-    #[error("Too many emails were provided")]
+    /// The team has hit its daily limit on new invites
+    #[error("the team has sent too many invites today")]
     TooManyEmails,
     /// The team only allows admins to invite and the caller is not an admin
     #[error("only team admins may invite users to this team")]
@@ -719,7 +750,7 @@ pub enum CustomerError {
     #[error("No stripe customer id")]
     /// The customer does not have a stripe customer id
     NoStripeCustomerId,
-    /// The subscription is not active
+    /// The customer has no active or trialing subscription
     #[error("Subscription is not active")]
     SubscriptionNotActive,
     /// Invalid promotion code
@@ -841,9 +872,10 @@ pub enum ToggleAutoJoinDomainError {
     TeamError(#[from] TeamError),
 }
 
-/// Errors for automatically joining a team by email domain
+/// Errors for adding a user to a team without an email invite: by matching
+/// the team's auto-join domain, or through the team's invite link.
 #[derive(Debug, thiserror::Error)]
-pub enum TryJoinTeamByDomainError {
+pub enum JoinTeamDirectlyError {
     /// Underlying team error
     #[error("Underlying team error {0}")]
     TeamError(#[from] TeamError),

@@ -3,7 +3,7 @@
 ## What it is
 
 Supports agent sessions: lets external MCP clients (e.g. cursor.com)
-authenticate against Macro. A library crate (mounted into `mcp_service`, not
+authenticate against Macro. A library crate (mounted into `agent_harness_service`, not
 its own binary) implementing an OAuth 2.1 Dynamic Client Registration broker
 in front of FusionAuth, which doesn't support DCR itself.
 
@@ -25,12 +25,12 @@ in front of FusionAuth, which doesn't support DCR itself.
 
 - Owns: DCR-compliant client registration, authorization-code issuance, and
   refresh-token rotation/binding, all proxied in front of FusionAuth.
-- Not here: the MCP tool surface itself → `mcp_service`.
+- Not here: the MCP tool surface itself → `services/agent_harness_service/src/public_mcp.rs`.
 
 ## Recipes
 
 - Change redirect URI policy: `src/domain/redirect_uri.rs` → update the README
-  section it implements → `services/mcp_service/src/config.rs`
+  section it implements → `services/agent_harness_service/src/public_mcp.rs`
   (`DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS`) if the default allowlist changes.
 - Add a new grant type: `src/domain/models.rs` → `src/domain/service.rs` →
   `src/outbound/fusionauth.rs` → `src/inbound/axum_router.rs`.
@@ -38,6 +38,12 @@ in front of FusionAuth, which doesn't support DCR itself.
 ## Checks
 
 - `cargo test -p mcp_auth_proxy` (`SQLX_OFFLINE` unset).
+
+## Shared listener
+
+Use `mounted_mcp_router` in the harness so MCP does not override process
+readiness at `/health`. The standalone `mcp_router` remains available to tests
+and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 
 ## Gotchas
 

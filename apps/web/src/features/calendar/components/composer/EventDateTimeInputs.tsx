@@ -1,9 +1,9 @@
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Listbox } from '@kobalte/core/listbox';
 import { Popover } from '@kobalte/core/popover';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
@@ -152,7 +152,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
       <EventComposerPopoverPortal>
         <Layer depth={4}>
           <Popover.Content
-            class="z-action-menu max-h-64 min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu-glass p-1.5 glass menu-open-animation"
+            class="menu-surface z-action-menu max-h-64 min-w-[var(--kb-popper-anchor-width)] overflow-y-auto p-1.5 menu-open-animation"
             style={{
               'z-index': 'calc(var(--z-index-action-menu) + 1)',
             }}
@@ -252,7 +252,7 @@ export function EventDateField(props: EventDateFieldProps) {
       <div class="hidden" ref={setPortalSearchRef} />
       <Popover.Portal mount={portalMount()}>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-3 glass menu-open-animation">
+          <Popover.Content class="menu-surface z-action-menu w-72 max-w-[calc(100vw-1rem)] p-3 menu-open-animation">
             <Popover.Title class="sr-only">
               Choose {props.label.toLowerCase()} date
             </Popover.Title>

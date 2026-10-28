@@ -225,6 +225,22 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
     async fn send_message_for_user(
         &self,
         _user: MacroUserIdStr<'static>,
@@ -284,10 +300,11 @@ impl EmailService for MockEmail {
         }))
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -346,6 +363,7 @@ impl EmailService for MockEmail {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -396,6 +414,7 @@ impl EmailService for MockEmail {
 
     async fn set_sender_policy(
         &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _link: &email::domain::models::Link,
         _sender_email: &str,
         _policy: email::domain::models::SenderPolicy,
@@ -710,6 +729,22 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
     async fn send_message_for_user(
         &self,
         _user: MacroUserIdStr<'static>,
@@ -759,10 +794,11 @@ impl EmailService for MockEmailLinkResult {
         (self.get_link_result)()
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -821,6 +857,7 @@ impl EmailService for MockEmailLinkResult {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -871,6 +908,7 @@ impl EmailService for MockEmailLinkResult {
 
     async fn set_sender_policy(
         &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _link: &email::domain::models::Link,
         _sender_email: &str,
         _policy: email::domain::models::SenderPolicy,

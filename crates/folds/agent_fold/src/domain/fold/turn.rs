@@ -94,6 +94,18 @@ impl FoldState {
         // Text blocks join into one part, since a harness may split prose
         // across blocks; each attached file is its own part, in prompt order
         // after the text, which is the order this side sends them in.
+        let input = params.cloned().and_then(|params| {
+            let value = params.into_value();
+            value
+                .get("_meta")?
+                .get(agent_runtime_protocol::domain::notification::NOTIFICATIONS_META)
+                .and_then(|value| {
+                    serde_json::from_value::<
+                        agent_runtime_protocol::domain::notification::NotificationInput,
+                    >(value.clone())
+                    .ok()
+                })
+        });
         let mut text = String::new();
         let mut attachments = Vec::new();
         if let Some(request) = deserialize_params::<PromptRequest>(params) {
@@ -103,7 +115,10 @@ impl FoldState {
             if !self.speculative {
                 self.acp_session = Some(request.session_id.clone());
             }
-            for block in request.prompt {
+            for (index, block) in request.prompt.into_iter().enumerate() {
+                if index == 0 && input.is_some() {
+                    continue;
+                }
                 match user_content_part(block) {
                     Some(MessagePart::Text { text: chunk }) => text.push_str(&chunk),
                     Some(part) => attachments.push(part),
@@ -111,8 +126,37 @@ impl FoldState {
                 }
             }
         }
+        let system_turn = input.as_ref().is_some_and(|input| input.system_turn);
+        if let Some(input) = input {
+            for notification in input.notifications {
+                if let Some(existing) = self
+                    .metadata
+                    .notifications
+                    .iter_mut()
+                    .find(|existing| existing.id == notification.id.to_string())
+                {
+                    // A recovered interrupted action keeps the event identity,
+                    // but its response belongs to the retry's turn.
+                    existing.turn = id.0;
+                    existing.action_id = prompt_id.to_string();
+                    existing.system_turn = system_turn;
+                    continue;
+                }
+                self.metadata
+                    .notifications
+                    .push(crate::domain::model::SessionNotification {
+                        id: notification.id.to_string(),
+                        subject_id: notification.subject_id,
+                        created_at: notification.created_at,
+                        event: notification.event,
+                        turn: id.0,
+                        action_id: prompt_id.to_string(),
+                        system_turn,
+                    });
+            }
+        }
         let mut parts = attachments;
-        if !text.is_empty() {
+        if !system_turn && !text.is_empty() {
             parts.insert(0, MessagePart::Text { text });
         }
 
@@ -134,6 +178,10 @@ impl FoldState {
 
         self.turn = Some(Turn {
             id,
+            notification: system_turn,
+            noop_buffer: String::new(),
+            pending_thought: String::new(),
+            can_noop: system_turn,
             prompt_pending: self.speculative,
             stop_requested: false,
             prompt_id: Some(prompt_id.clone()),
@@ -177,7 +225,26 @@ impl FoldState {
             return None;
         }
 
-        self.close_turn(stop)
+        let new_message = self.turn.as_ref().is_some_and(|turn| turn.agent.is_none());
+        if let Some(turn) = self.turn.as_mut()
+            && turn.can_noop
+            && turn.noop_buffer != "<noop/>"
+        {
+            turn.can_noop = false;
+            let remaining = std::mem::take(&mut turn.noop_buffer);
+            let thought = std::mem::take(&mut turn.pending_thought);
+            if !thought.is_empty() {
+                self.append_thought(thought);
+            }
+            self.append_text(remaining);
+        }
+        self.close_turn(stop).map(|changed| {
+            if new_message {
+                Changed::new(changed.message)
+            } else {
+                changed
+            }
+        })
     }
 
     /// End the open turn because its prompt was answered with an error.
@@ -230,6 +297,10 @@ impl FoldState {
             return None;
         };
         let turn = self.turn.take()?;
+        if turn.notification && turn.can_noop && turn.noop_buffer == "<noop/>" {
+            self.metadata.noop_turn = Some(turn.id.0);
+            return None;
+        }
         let (message, changed) = match turn.agent {
             Some(message) => (message, Changed::updated(message)),
             None => self.mint_agent_message(turn.id),
@@ -274,6 +345,10 @@ impl FoldState {
 
         self.turn = Some(Turn {
             id,
+            notification: false,
+            noop_buffer: String::new(),
+            pending_thought: String::new(),
+            can_noop: false,
             prompt_pending: false,
             stop_requested: false,
             prompt_id: None,

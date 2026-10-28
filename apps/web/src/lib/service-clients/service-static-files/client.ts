@@ -1,4 +1,4 @@
-import { SERVER_HOSTS } from '@core/constant/servers';
+import { SERVER_HOSTS, staticFileIdEndpoint } from '@core/constant/servers';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
@@ -6,6 +6,10 @@ import {
 import { platformFetch } from '@core/util/platformFetch';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import {
+  type FetchProgress,
+  fetchPresignedBlobWithProgress,
+} from '@service-storage/util/fetchPresigned';
 import type { Result } from 'neverthrow';
 import type { FileMetadata } from './generated/schemas/fileMetadata';
 import type { PutFileRequest } from './generated/schemas/putFileRequest';
@@ -33,6 +37,19 @@ function staticFetch<T extends ObjectLike = never>(
 type WithFileId = { file_id: string };
 
 export const staticFileClient = {
+  getFileBlob(
+    args: WithFileId,
+    options: {
+      signal: AbortSignal;
+      onProgress: (progress: FetchProgress) => void;
+    }
+  ) {
+    return fetchPresignedBlobWithProgress(
+      staticFileIdEndpoint(args.file_id),
+      options.onProgress,
+      { signal: options.signal }
+    );
+  },
   async makePresignedUrl(args: PutFileRequest) {
     return (
       await staticFetch<PutFileResponse>('/api/file', {

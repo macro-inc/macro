@@ -18,8 +18,15 @@ outbound-gmail = [
   "dep:mailparse",
   "dep:serde_json",
 ]
+microsoft-gate = ["ports", "dep:redis"]
+outbound-outlook = ["dep:scraper", "dep:html-escape", "dep:calendar_events", "dep:chrono-tz", "ports", "dep:sha2", "dep:base64", "dep:reqwest", "dep:serde_json", "dep:url", "dep:httpdate", "dep:mailparse"]
 
 [dependencies]
+scraper = { workspace = true, optional = true }
+calendar_events = { path = "../calendar_events", features = ["outlook"], optional = true }
+chrono-tz = { workspace = true, optional = true }
+redis = { workspace = true, features = ["tokio-rustls-comp"], optional = true }
+sha2 = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 chrono = { workspace = true }
 email_utils = { path = "../email_utils" }
@@ -27,12 +34,15 @@ encoding_rs = { workspace = true, optional = true }
 gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
+httpdate = { workspace = true, optional = true }
 lol_html = { workspace = true, optional = true }
 mail-builder = "0.4.3"
 mailparse = { version = "0.16.1", optional = true }
 models_email = { path = "../models_email" }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

@@ -1,6 +1,7 @@
-import { getIconConfig } from '@core/component/EntityIcon';
-import { Button, cn, Hotkey } from '@ui';
-import { createEffect, For, on, Show } from 'solid-js';
+import { WorkspaceTexture } from '@app/components/WorkspaceTexture';
+import { ENTITY_ICON_CONFIGS } from '@core/component/EntityIcon';
+import { cn, Hotkey } from '@ui';
+import { createEffect, createUniqueId, For, on, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   type CreateMenuSection,
@@ -21,6 +22,7 @@ export function LauncherDetails(props: {
   scrollSelectedIntoView?: boolean;
   detailsLeft?: boolean;
 }) {
+  const textureId = createUniqueId();
   let list: HTMLDivElement | undefined;
   const selected = () => props.items[props.selectedIndex];
   const shortcut = (item: CreatableBlock) =>
@@ -69,142 +71,127 @@ export function LauncherDetails(props: {
         >
           <For each={props.sections}>
             {(section, sectionIndex) => (
-              <div role="group" aria-label={section.group.label} class="mb-1.5">
-                <div class="px-2.5 pt-2 pb-1 text-[10px] font-medium tracking-wide text-ink-extra-muted uppercase">
-                  {section.group.label}
-                </div>
-                <For each={section.items}>
-                  {(item, itemIndex) => {
-                    const index = () =>
-                      props.sections
-                        .slice(0, sectionIndex())
-                        .reduce(
-                          (offset, entry) => offset + entry.items.length,
-                          0
-                        ) + itemIndex();
-                    return (
-                      <button
-                        type="button"
-                        role="option"
-                        id={`${props.itemId(item)}-${section.group.id}`}
-                        data-create-option
-                        aria-selected={props.selectedIndex === index()}
-                        tabindex={-1}
+              <For each={section.items}>
+                {(item, itemIndex) => {
+                  const index = () =>
+                    props.sections
+                      .slice(0, sectionIndex())
+                      .reduce(
+                        (offset, entry) => offset + entry.items.length,
+                        0
+                      ) + itemIndex();
+                  return (
+                    <button
+                      type="button"
+                      role="option"
+                      id={`${props.itemId(item)}-${section.group.id}`}
+                      data-create-option
+                      aria-selected={props.selectedIndex === index()}
+                      tabindex={-1}
+                      class={cn(
+                        'flex h-8 w-full scroll-m-2 items-center gap-2.5 rounded-lg px-2.5 text-left outline-none transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-accent motion-reduce:transition-none',
+                        props.selectedIndex === index()
+                          ? 'bg-ink/[0.07] text-ink'
+                          : 'text-ink-muted'
+                      )}
+                      onPointerMove={(event) => {
+                        if (event.movementX || event.movementY)
+                          props.onSelect(index());
+                      }}
+                      onFocus={() => props.onSelect(index())}
+                      onClick={() => props.onChoose(item)}
+                    >
+                      <span
                         class={cn(
-                          'flex h-9 w-full scroll-m-2 items-center gap-2.5 rounded-md px-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-accent',
+                          'size-4 shrink-0 transition-colors duration-100 motion-reduce:transition-none [&_svg]:size-4',
                           props.selectedIndex === index()
-                            ? 'bg-ink/6 text-ink'
-                            : 'text-ink-muted'
+                            ? 'text-ink'
+                            : 'text-ink-extra-muted'
                         )}
-                        onPointerMove={(event) => {
-                          if (event.movementX || event.movementY)
-                            props.onSelect(index());
-                        }}
-                        onFocus={() => props.onSelect(index())}
-                        onClick={() => props.onChoose(item)}
                       >
-                        <span
-                          class={cn(
-                            'size-4 shrink-0 [&_svg]:size-4',
-                            getIconConfig(item.blockName).foreground
-                          )}
-                        >
-                          <Dynamic component={item.icon} />
+                        <Dynamic component={item.icon} />
+                      </span>
+                      <span
+                        class="min-w-0 flex-1 truncate text-[13px] font-medium"
+                        title={item.label}
+                      >
+                        {item.label}
+                      </span>
+                      <Show when={props.showHotkeys}>
+                        <span class="rounded-md border border-ink/12 px-1.5 py-px text-xxs font-normal text-ink-muted">
+                          <Hotkey
+                            token={item.hotkeyToken}
+                            shortcut={shortcut(item)}
+                          />
                         </span>
-                        <span
-                          class="min-w-0 flex-1 truncate text-sm font-medium"
-                          title={item.label}
-                        >
-                          {item.label}
-                        </span>
-                        <Show when={props.showHotkeys}>
-                          <span class="rounded-md border border-ink/12 px-1.5 py-px text-xxs font-normal text-ink-muted">
-                            <Hotkey
-                              token={item.hotkeyToken}
-                              shortcut={shortcut(item)}
-                            />
-                          </span>
-                        </Show>
-                      </button>
-                    );
-                  }}
-                </For>
-              </div>
+                      </Show>
+                    </button>
+                  );
+                }}
+              </For>
             )}
           </For>
         </div>
         <div
           class={cn(
-            'min-w-0 flex-1 overflow-y-auto',
+            'relative isolate min-w-0 flex-1 overflow-hidden light-mode:text-ink',
+            ENTITY_ICON_CONFIGS[selected()?.blockName ?? 'default'].foreground,
             props.detailsLeft
               ? 'border-r border-edge-divider'
               : 'border-l border-edge-divider'
           )}
         >
-          <Show when={selected()}>
-            {(item) => (
-              <section
-                aria-label={`${item().label} details`}
-                class="flex min-h-full flex-col p-6"
-              >
-                <div
-                  class={cn(
-                    'mb-5 flex size-18 shrink-0 items-center justify-center rounded-2xl shadow-[0_0_20px_0] shadow-current/[0.06]',
-                    getIconConfig(item().blockName).background,
-                    getIconConfig(item().blockName).foreground
-                  )}
+          <div
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 -z-10 opacity-65 light-mode:opacity-35"
+            style={{
+              background:
+                'radial-gradient(ellipse at center, color-mix(in srgb, currentColor 14%, transparent), transparent 72%)',
+            }}
+          />
+          <div class="pointer-events-none absolute inset-0 opacity-65 light-mode:opacity-20">
+            <WorkspaceTexture accent="currentColor" filterId={textureId} />
+          </div>
+          <div class="relative h-full overflow-y-auto">
+            <Show when={selected()}>
+              {(item) => (
+                <section
+                  aria-label={`${item().label} details`}
+                  class="flex min-h-full flex-col items-center justify-center px-5 py-6 text-center sm:px-7"
                 >
-                  <div class="size-9 [&_svg]:size-full">
-                    <Dynamic component={item().icon} />
+                  <div class="mb-6 flex size-18 shrink-0 items-center justify-center rounded-[22px] dark-mode:glass bg-dialog bg-linear-145 from-ink/[0.06] to-transparent light-mode:bg-composer light-mode:bg-none light-mode:composer-shadow">
+                    <div class="size-8 [&_svg]:size-full">
+                      <Dynamic component={item().icon} />
+                    </div>
                   </div>
-                </div>
-                <h2 class="text-xl font-semibold">{item().label}</h2>
-                <p class="mt-1 text-left text-sm leading-relaxed text-ink-muted">
-                  {createMenuDetails(item())?.details ??
-                    createMenuTagline(item())}
-                </p>
-                <div
-                  class={cn(
-                    'mt-3 flex items-center gap-1.5 text-xs text-ink-muted',
-                    !props.showHotkeys && 'invisible'
-                  )}
-                >
-                  Shortcut
-                  <Hotkey shortcut="c" theme="subtle" class="border-ink/12" />
-                  then
-                  <Hotkey
-                    token={item().hotkeyToken}
-                    shortcut={shortcut(item())}
-                    theme="subtle"
-                    class="border-ink/12"
-                  />
-                </div>
-                <div class="mt-auto flex shrink-0 flex-col items-end gap-2 pt-6">
-                  <span
-                    class={cn(
-                      'text-xs text-ink-muted',
-                      !props.shiftHeld && 'invisible'
-                    )}
-                  >
-                    In new split
-                  </span>
-                  <Button
-                    size="lg"
-                    variant="strong"
-                    aria-label={`Create ${item().label}${props.shiftHeld ? ' in new split' : ''}`}
-                    onClick={() => props.onChoose(item())}
-                  >
-                    Create {item().label}
-                    <Hotkey
-                      shortcut={props.shiftHeld ? 'shift+enter' : 'enter'}
-                      theme="current"
-                      aria-hidden="true"
-                    />
-                  </Button>
-                </div>
-              </section>
-            )}
-          </Show>
+                  <h2 class="text-xl font-semibold tracking-[-0.025em] text-ink">
+                    {item().label}
+                  </h2>
+                  <p class="mt-2 max-w-[26rem] whitespace-pre-line text-center text-[13px] leading-relaxed text-ink-muted">
+                    {createMenuDetails(item())?.details ??
+                      createMenuTagline(item())}
+                  </p>
+                  <Show when={props.showHotkeys}>
+                    <div class="mt-4 flex shrink-0 items-center gap-1.5 text-xs text-ink-extra-muted">
+                      Shortcut
+                      <Hotkey
+                        shortcut="c"
+                        theme="subtle"
+                        class="border-ink/12"
+                      />
+                      then
+                      <Hotkey
+                        token={item().hotkeyToken}
+                        shortcut={shortcut(item())}
+                        theme="subtle"
+                        class="border-ink/12"
+                      />
+                    </div>
+                  </Show>
+                </section>
+              )}
+            </Show>
+          </div>
         </div>
       </Show>
     </div>

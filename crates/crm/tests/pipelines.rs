@@ -737,6 +737,7 @@ async fn http_creation_listing_schema_and_records_use_pipeline_access(pool: PgPo
                 ));
             }
             Ok(ValidatedIdentity {
+                agent_id: None,
                 user_id: if jwt == "owner" { OWNER } else { OUTSIDER }.into(),
                 fusion_user_id: "test-fusion-user".into(),
                 organization_id: None,

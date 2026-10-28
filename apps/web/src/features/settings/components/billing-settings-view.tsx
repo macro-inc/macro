@@ -1,7 +1,7 @@
 import { type PaidPlanTier, PLAN_BY_TIER } from '@app/features/paywall/plans';
 import { plural } from '@core/util/string';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import { Button, Layer } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { type BillingState, describeSeatPlans } from '../core/billing-state';
@@ -88,7 +88,7 @@ export function BillingSettingsView(props: {
                       each seat's plan in{' '}
                       <a
                         class="text-link hover:text-link-hover"
-                        href="/app/settings/team"
+                        href="/app/settings/team-members"
                         onClick={props.onTeamSettings}
                       >
                         Team settings
@@ -109,7 +109,7 @@ export function BillingSettingsView(props: {
                       • set each seat's plan in{' '}
                       <a
                         class="text-link hover:text-link-hover"
-                        href="/app/settings/team"
+                        href="/app/settings/team-members"
                         onClick={props.onTeamSettings}
                       >
                         Team settings

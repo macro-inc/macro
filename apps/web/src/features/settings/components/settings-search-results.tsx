@@ -36,11 +36,11 @@ export function SettingsSearchResults(props: {
                 <span class="block text-sm leading-5 text-ink">
                   {result.title}
                 </span>
-                <Show when={result.title !== result.page.label}>
-                  <span class="mt-1 block text-sm text-ink/50">
-                    {result.page.label}
-                  </span>
-                </Show>
+                <span class="mt-1 block text-sm text-ink/50">
+                  {result.title === result.page.label
+                    ? result.group
+                    : `${result.group} · ${result.page.label}`}
+                </span>
               </span>
             </button>
           )}

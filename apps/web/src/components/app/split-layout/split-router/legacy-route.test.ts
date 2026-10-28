@@ -6,7 +6,7 @@ import {
   notFoundRoute,
 } from '@app/routes/routes';
 import { describe, expect, it, vi } from 'vitest';
-import { upgradeLegacyPath } from './legacy-route';
+import { resolveContentLocation, upgradeLegacyPath } from './legacy-route';
 
 vi.mock('@components/app/split-layout/componentRegistry', () => ({
   resolveComponent: vi.fn(() => ({ type: 'mock-component' })),
@@ -35,5 +35,27 @@ const routes = createRoutesManifest({
 describe('upgradeLegacyPath', () => {
   it('sends the retired Getting Started path to Home', () => {
     expect(upgradeLegacyPath(routes, '/getting-started')).toBe('/home');
+  });
+});
+
+describe('resolveContentLocation', () => {
+  it.each(['company', 'contact'] as const)(
+    'keeps the Discussion message a %s opens at',
+    (type) => {
+      const location = resolveContentLocation(routes, {
+        type,
+        id: 'record',
+        params: { comment_id: 'message' },
+      });
+      expect(location.search).toEqual({
+        'crm-record': { commentId: ['message'], seek: [expect.any(String)] },
+      });
+    }
+  );
+
+  it('adds no message to a record opened without one', () => {
+    expect(
+      resolveContentLocation(routes, { type: 'company', id: 'record' }).search
+    ).toBeUndefined();
   });
 });

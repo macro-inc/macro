@@ -12,6 +12,7 @@ import {
   committedEvent,
   executeGraphqlCreate,
   executeGraphqlDelete,
+  executeGraphqlInviteGuests,
   executeGraphqlRsvp,
   executeGraphqlUpdate,
   trackCalendarCreateSettlements,
@@ -153,6 +154,16 @@ function fakeClient(
                 isSubscription: false,
                 syncError: null,
                 defaultReminders: [],
+                provider: 'GOOGLE',
+                capabilities: {
+                  autoDecline: true,
+                  conferenceProvider: 'GOOGLE_MEET',
+                  customRecurrence: true,
+                  emailReminders: true,
+                  removeConference: true,
+                  resetRsvp: true,
+                  guestPolicy: true,
+                },
               },
             ],
           },
@@ -235,6 +246,87 @@ describe('executeGraphqlRsvp', () => {
     });
     expect(calls[1]?.optimistic.uuid).toBe(calls[0]?.optimistic.uuid);
     expect(host.calendarCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeGraphqlInviteGuests', () => {
+  it('adds guests to the series and every instance carrying its own attendee list', async () => {
+    const declined = instance(6, {
+      overrideAttendees: [attendee('me@example.com', 'DECLINED')],
+    });
+    const host = fakeHost(graphqlEvent(), [instance(5), declined]);
+    const { calls, client } = fakeClient('committed');
+
+    await executeGraphqlInviteGuests(
+      host,
+      {
+        eventId: 'event-1',
+        guests: [
+          { email: 'dana@example.com', optional: true },
+          { email: 'ME@example.com' },
+        ],
+      },
+      client
+    );
+
+    const [call] = calls;
+    expect(call?.variables.input).toEqual({
+      eventId: 'event-1',
+      guests: [
+        { email: 'dana@example.com', optional: true },
+        { email: 'ME@example.com', optional: false },
+      ],
+      scope: 'ALL',
+    });
+    const optimistic = response(call!);
+    const dana = {
+      ...attendee('dana@example.com', 'NEEDS_ACTION'),
+      isOptional: true,
+    };
+    expect(optimistic.event?.attendees).toEqual([
+      attendee('me@example.com', 'NEEDS_ACTION'),
+      dana,
+    ]);
+    expect(optimistic.occurrences).toEqual([
+      {
+        __typename: 'GraphqlCalendarOccurrence',
+        id: declined.id,
+        overrideAttendees: [attendee('me@example.com', 'DECLINED'), dana],
+      },
+    ]);
+  });
+
+  it('adds guests to one instance alone', async () => {
+    const host = fakeHost(graphqlEvent(), [instance(5), instance(6)]);
+    const { calls, client } = fakeClient('committed');
+
+    await executeGraphqlInviteGuests(
+      host,
+      {
+        eventId: 'event-1',
+        guests: [{ email: 'dana@example.com' }],
+        scope: 'this_event',
+        recurrenceId: 'r6',
+        occurrenceKey: '2026-10-06T09:00:00+00:00',
+      },
+      client
+    );
+
+    const optimistic = response(calls[0]!);
+    expect(optimistic.event).toBeUndefined();
+    expect(optimistic.occurrences).toEqual([
+      expect.objectContaining({
+        id: 'event-1:2026-10-06T09:00:00+00:00',
+        overrideAttendees: [
+          attendee('me@example.com', 'NEEDS_ACTION'),
+          attendee('dana@example.com', 'NEEDS_ACTION'),
+        ],
+      }),
+    ]);
+    expect(calls[0]?.variables.input).toMatchObject({
+      scope: 'THIS_EVENT',
+      recurrenceId: 'r6',
+    });
   });
 });
 
@@ -475,52 +567,57 @@ describe('executeGraphqlDelete', () => {
 describe('executeGraphqlCreate', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows the event at once under its idempotency key', async () => {
-    const { calls, client } = fakeClient('committed', {
-      event: graphqlEvent({ id: 'server-1', title: 'Lunch' }),
-    });
+  it.each(['google_meet', 'microsoft_teams'] as const)(
+    'shows a %s event at once under its idempotency key',
+    async (conference) => {
+      const { calls, client } = fakeClient('committed', {
+        event: graphqlEvent({ id: 'server-1', title: 'Lunch' }),
+      });
 
-    const { event } = await executeGraphqlCreate(
-      {
-        title: 'Lunch',
-        time: {
-          kind: 'timed',
-          startsAt: '2026-10-07T12:00:00Z',
-          endsAt: '2026-10-07T13:00:00Z',
+      const { event } = await executeGraphqlCreate(
+        {
+          title: 'Lunch',
+          conference,
+          time: {
+            kind: 'timed',
+            startsAt: '2026-10-07T12:00:00Z',
+            endsAt: '2026-10-07T13:00:00Z',
+          },
+          attendees: [{ email: 'guest@example.com' }],
         },
-        attendees: [{ email: 'guest@example.com' }],
-      },
-      client
-    );
+        client
+      );
 
-    const [call] = calls;
-    const clientId = call?.optimistic.uuid;
-    expect(call?.variables.input.idempotencyKey).toBe(clientId);
-    const optimistic = response(call!);
-    expect(optimistic.event).toMatchObject({
-      id: clientId,
-      linkId: 'link-1',
-      calendarId: 'calendar-1',
-      title: 'Lunch',
-      status: 'CONFIRMED',
-    });
-    expect(optimistic.occurrences).toEqual([
-      expect.objectContaining({
-        id: `${clientId}:2026-10-07T12:00:00+00:00`,
-        eventId: clientId,
+      const [call] = calls;
+      const clientId = call?.optimistic.uuid;
+      expect(call?.variables.input.idempotencyKey).toBe(clientId);
+      expect(call?.variables.input.conference).toBe(conference.toUpperCase());
+      const optimistic = response(call!);
+      expect(optimistic.event).toMatchObject({
+        id: clientId,
         linkId: 'link-1',
-        isCancelled: false,
-      }),
-    ]);
-    expect(call?.optimistic.identityBindings).toEqual([
-      {
-        localKey: `GraphqlCalendarEvent:${clientId}`,
-        responsePath: ['createCalendarEvent', 'event'],
-        referenceFields: ['GraphqlCalendarOccurrence.eventId'],
-      },
-    ]);
-    expect(event.id).toBe('server-1');
-  });
+        calendarId: 'calendar-1',
+        title: 'Lunch',
+        status: 'CONFIRMED',
+      });
+      expect(optimistic.occurrences).toEqual([
+        expect.objectContaining({
+          id: `${clientId}:2026-10-07T12:00:00+00:00`,
+          eventId: clientId,
+          linkId: 'link-1',
+          isCancelled: false,
+        }),
+      ]);
+      expect(call?.optimistic.identityBindings).toEqual([
+        {
+          localKey: `GraphqlCalendarEvent:${clientId}`,
+          responsePath: ['createCalendarEvent', 'event'],
+          referenceFields: ['GraphqlCalendarOccurrence.eventId'],
+        },
+      ]);
+      expect(event.id).toBe('server-1');
+    }
+  );
 
   it('asks the server for a Macro call only when the create requests one', async () => {
     const { calls, client } = fakeClient('committed', {

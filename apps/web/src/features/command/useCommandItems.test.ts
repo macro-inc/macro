@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   requestedBuckets: [] as Bucket[],
   entityMode: (): boolean => false,
   scope: (): CommandWithInfo[] => [],
+  goTo: [] as CommandWithInfo[],
 }));
 // These tests exercise entity loading independently of Projects and its providers.
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -37,7 +38,8 @@ vi.mock('@app/constants/hotkeys', () => ({
 vi.mock('@core/context/quickAccess', () => ({
   exclude: () => ['note', 'channel'],
   useQuickAccess: () => ({
-    useList: (options: QuickAccessListOptions) => {
+    useList: (options: Bucket | QuickAccessListOptions) => {
+      if (typeof options === 'string') return { items: () => [] };
       mocks.requestedBuckets = [...options.buckets];
       if (!mocks.list) throw new Error('Missing test list');
       return mocks.list;
@@ -49,7 +51,7 @@ vi.mock('@core/context/quickAccess', () => ({
 vi.mock('@core/hotkey/getCommands', () => ({
   getActiveCommandsFromScope: (scope: string) =>
     scope === 'go-to'
-      ? []
+      ? mocks.goTo
       : [
           {
             scopeId: 'global',
@@ -75,6 +77,7 @@ vi.mock('./state', () => ({
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
+  mocks.goTo = [];
 });
 function setup() {
   return createRoot((cleanup) => {
@@ -92,6 +95,7 @@ function setup() {
       totalCount: () => items().length,
       hasMore: () => false,
       isLoadingMore: () => false,
+      error: () => undefined,
       loadMore: async () => {},
     };
     const result = useCommandItems(() => '', category, {
@@ -233,5 +237,41 @@ it('keeps desktop All email-free while mobile composes emails without desktop co
     expect(mocks.requestedBuckets).toEqual(['email']);
     expect(mobile.rankItems(mobile.items(), 'teo')).toEqual([email]);
     cleanup();
+  });
+});
+
+describe('command menu go-to sequences', () => {
+  it('shows a letter on the command it runs when a focused view claims it', () => {
+    const goTo = (
+      description: string,
+      handlerPriority?: CommandWithInfo['handlerPriority']
+    ) => ({
+      scopeId: 'go-to',
+      description,
+      hotkeys: ['t' as const],
+      handlerPriority,
+      runWithInputFocused: false,
+      scopeLevel: 0,
+      hotkeyIsShadowed: false,
+    });
+    mocks.goTo = [goTo('Go to Tasks'), goTo('Go to Sent', 3)];
+    const { result } = setup();
+
+    const item = (description: string) => {
+      const found = result
+        .items()
+        .find(
+          (item) =>
+            item.kind === 'command' && item.data.description === description
+        );
+      return found?.kind === 'command' ? found : undefined;
+    };
+    expect(item('Go to Sent')?.displayHotkeySequence).toEqual([
+      { shortcut: 'g' },
+      { shortcut: 't' },
+    ]);
+    expect(item('Go to Sent')?.hideHotkey).toBe(false);
+    expect(item('Go to Tasks')?.displayHotkeySequence).toBeUndefined();
+    expect(item('Go to Tasks')?.hideHotkey).toBe(true);
   });
 });

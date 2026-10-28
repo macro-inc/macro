@@ -5,7 +5,6 @@ import { defineTourTargets } from '@ui/components/Tour';
 
 export const AGENTS_TOUR = defineTourTargets('agents', [
   'modeSwitch',
-  'newChat',
   'rosterNav',
   'picker',
   'composer',
@@ -24,19 +23,19 @@ export const agentsTour = defineViewTour({
   steps: [
     {
       target: AGENTS_TOUR.modeSwitch,
-      entry: [VIEW_SHELL_TOUR.sidebarToggle],
-      entryLabel: 'Open the sidebar to continue',
-      title: 'Switch between Work and Code',
+      entry: APP_TOUR.createMenu,
+      entryLabel: 'Choose Create → Agent to start a conversation',
+      title: 'Choose Chat or Code',
       description:
-        'Work shows your chat agents and their conversations. Code shows your coding agents, their sessions, and the repository each one works in.',
+        'Chat starts a conversation with an agent that works with your documents and apps. Code starts a coding agent on a repository. Filter the sidebar to find either kind.',
     },
     {
       target: AGENTS_TOUR.picker,
-      entry: [AGENTS_TOUR.newChat, VIEW_SHELL_TOUR.sidebarToggle],
-      entryLabel: 'Start a new conversation to continue',
+      entry: APP_TOUR.createMenu,
+      entryLabel: 'Choose Create → Agent to start a conversation',
       title: 'Choose your agent and model',
       description:
-        'Open this picker to choose an agent for the current mode. In Work, Macro’s models are listed here too; each agent’s submenu lets you choose a model for that conversation.',
+        'Open this picker to choose an agent for the current mode. In Chat, Macro’s models are listed here too; each agent’s submenu lets you choose a model for that conversation.',
     },
     {
       target: AGENTS_TOUR.agentList,

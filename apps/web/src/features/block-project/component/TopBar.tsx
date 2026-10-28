@@ -5,6 +5,7 @@ import {
 } from '@app/features/chat/ChatWithAgentButton';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsivePermissionsBadge,
@@ -34,6 +35,7 @@ import {
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   useCanEdit,
   useGetPermissions,
@@ -117,7 +119,25 @@ export function TopBar() {
         <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <div class="order-[1000] flex items-center gap-1">
+        <div class="order-[1000] flex items-center gap-2">
+          <Show when={!isTouchDevice()}>
+            <HeaderActionGroup label="Folder actions">
+              <For each={toolbarTools()}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    {tool.buttonComponent ? (
+                      <tool.buttonComponent />
+                    ) : (
+                      <ToolButton tool={tool} />
+                    )}
+                  </Show>
+                )}
+              </For>
+            </HeaderActionGroup>
+            <Show when={ops().length > 0 && canEdit()}>
+              <ProjectCreateMenu id={id} name={name()} />
+            </Show>
+          </Show>
           <Show when={showShare()}>
             <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
           </Show>
@@ -133,7 +153,7 @@ export function TopBar() {
           tools={isMobile() ? [...toolbarTools(), ...createTools] : undefined}
         />
       </SplitTitleFileMenu>
-      <Show when={!isMobile()}>
+      <Show when={!isMobile() && isTouchDevice()}>
         <SplitToolbarLeft class="flex-0">
           <div class="flex gap-2 p-1">
             <Show when={ops().length > 0}>

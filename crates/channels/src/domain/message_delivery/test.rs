@@ -114,6 +114,7 @@ fn message() -> Message {
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
         content: "Message".into(),
         created_at: Utc::now(),

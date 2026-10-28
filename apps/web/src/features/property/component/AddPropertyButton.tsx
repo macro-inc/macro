@@ -1,13 +1,16 @@
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { badgeTriggerClasses } from '@ui';
 import { usePropertiesContext } from '../context/PropertiesContext';
 
-export function AddPropertyButton(props: { class?: string }) {
+export function AddPropertyButton(props: {
+  class?: string;
+  onClick?: () => void;
+}) {
   const { openPropertySelector } = usePropertiesContext();
   return (
     <button
       type="button"
-      onClick={openPropertySelector}
+      onClick={() => (props.onClick ?? openPropertySelector)()}
       class={badgeTriggerClasses({
         variant: 'outline',
         size: 'sm',

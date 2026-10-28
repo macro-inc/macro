@@ -1,6 +1,7 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
+import { TOKENS } from '@core/hotkey/tokens';
+import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 
@@ -38,6 +39,7 @@ export function MessageActions(props: {
           noTouchResize
           onClick={onChangeReplyType('reply-all')}
           tooltip="Reply"
+          hotkey={TOKENS.email.reply}
         >
           <ArrowBendUpLeft class="size-3.5" />
         </Button>
@@ -50,6 +52,7 @@ export function MessageActions(props: {
           noTouchResize
           onClick={onChangeReplyType('forward')}
           tooltip="Forward"
+          hotkey={TOKENS.email.forward}
         >
           <ArrowBendUpRight class="size-3.5" />
         </Button>

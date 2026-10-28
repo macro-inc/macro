@@ -220,7 +220,7 @@ pub async fn process_message(
                 }
             };
             let peer_ids = Wsm::new(dss, sender.websocket())
-                .get_peer_ids()
+                .get_peer_ids(true)
                 .await
                 .unwrap_or_default();
             let peer_id = peer_ids.first().copied();

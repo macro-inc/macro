@@ -46,6 +46,10 @@ type EntityLoadGateProps<Data> = {
   onRetry?: () => void;
   /** Entity-specific title for the `LOAD_FAILED` state. */
   loadErrorTitle?: string;
+  /** Entity-specific view for `UNAUTHORIZED` and `FORBIDDEN`, such as a way to ask for access. */
+  unauthorized?: JSX.Element;
+  /** Keep an entity's loading geometry consistent across its data boundaries. */
+  loadingFallback?: JSX.Element;
   children: JSX.Element;
 };
 
@@ -132,7 +136,7 @@ export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
   const hasData = () => props.result.data() !== undefined;
 
   return (
-    <Suspense fallback={<LoadingBlock />}>
+    <Suspense fallback={props.loadingFallback ?? <LoadingBlock />}>
       <Switch
         fallback={
           <div class="flex flex-col items-center justify-center h-full text-lg">
@@ -141,7 +145,7 @@ export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
         }
       >
         <Match when={error() === 'UNAUTHORIZED' || error() === 'FORBIDDEN'}>
-          <Unauthorized />
+          {props.unauthorized ?? <Unauthorized />}
         </Match>
         <Match when={error() === 'NOT_FOUND'}>
           <NotFound />
@@ -166,7 +170,7 @@ export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
           />
         </Match>
         <Match when={props.result.isPending()}>
-          <LoadingBlock />
+          {props.loadingFallback ?? <LoadingBlock />}
         </Match>
         <Match when={hasData()}>{props.children}</Match>
       </Switch>

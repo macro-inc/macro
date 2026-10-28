@@ -16,6 +16,7 @@ pub fn build_coding_agent_tool_context(
     let client = CodingAgentsClient::new(url.as_ref(), &internal_api_key)
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(ToolCodingAgentToolContext {
+        sessions: Arc::new(client.clone()),
         service: Arc::new(client),
     })
 }

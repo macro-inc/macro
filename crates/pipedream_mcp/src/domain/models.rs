@@ -57,6 +57,8 @@ pub struct CatalogEntry {
     pub description: Option<String>,
     /// URL of the app's icon, when the directory provides one.
     pub icon_url: Option<String>,
+    /// Categories assigned by the Pipedream app directory.
+    pub categories: Vec<String>,
 }
 
 /// One page of catalog results.

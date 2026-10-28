@@ -20,6 +20,7 @@ function setup(
     const services = {
       uploadAttachments: vi.fn(uploadAttachments),
       addForwardedAttachments: vi.fn(async () => {}),
+      completeAttachment: async () => {},
       removeAttachment: vi.fn(async () => {}),
       removeForwardedAttachment: vi.fn(async () => {}),
     };
@@ -105,11 +106,13 @@ describe('draft attachment persistence', () => {
     ];
     expect(state.form.attachments.list()).toEqual([]);
     expect(state.services.removeAttachment).toHaveBeenCalledWith({
+      draftGeneration: 0,
       draftId: 'draft',
       attachmentId: 'local',
       inboxId: 'secondary-inbox',
     });
     expect(state.services.removeForwardedAttachment).toHaveBeenCalledWith({
+      draftGeneration: 0,
       draftId: 'draft',
       attachmentId: 'forwarded',
       inboxId: 'secondary-inbox',

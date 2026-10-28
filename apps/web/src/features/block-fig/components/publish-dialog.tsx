@@ -8,7 +8,7 @@ import type {
   AssetChange,
   LibraryStatus,
 } from '@core/fig-engine/library-types';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -35,7 +35,7 @@ function ChangeBadge(props: { change: AssetChange['change'] }) {
         .with('NEW', () => 'New')
         .with('CHANGED', () => 'Changed')
         .with('REMOVED', () => 'Removed')
-        .exhaustive()}
+        .exhaustive(() => 'Changed')}
     </span>
   );
 }

@@ -68,8 +68,11 @@ export function createProjectedList<T extends { id: string }>(options: {
   const [items, setItems] = createSignal<T[]>([]);
   const [hasMore, setHasMore] = createSignal(false);
   const [loading, setLoading] = createSignal<'idle' | 'initial' | 'more'>(
-    'idle'
+    untrack(() =>
+      options.enabled?.() !== false && buckets().length > 0 ? 'initial' : 'idle'
+    )
   );
+  const [error, setError] = createSignal<unknown>();
   let current: Request | undefined;
   onCleanup(() => {
     current = undefined;
@@ -158,11 +161,13 @@ export function createProjectedList<T extends { id: string }>(options: {
       );
       request.cursor = cursor;
       request.pages = pages;
+      setError(undefined);
       setItems([...merged.values()]);
       setHasMore(cursor !== undefined);
     } catch (error) {
       span.error('Quick Access cache search failed');
       if (current !== request) return;
+      setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
       // The mentions page loader guards automatic retries at the same frontier.
@@ -200,6 +205,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     // Genuine query/bucket changes, disabling, and disposal still fence off
     // obsolete responses and their queued refreshes.
     current = undefined;
+    setError(undefined);
     setHasMore(false);
     const sameBuckets =
       previous?.buckets.length === activeBuckets.length &&
@@ -228,6 +234,7 @@ export function createProjectedList<T extends { id: string }>(options: {
 
   return {
     items,
+    error,
     hasMore,
     isLoading: () => loading() === 'initial',
     isLoadingMore: () => loading() === 'more',

@@ -6,6 +6,7 @@ mod references;
 #[cfg(test)]
 mod tests;
 
+mod access_requests;
 mod agent_dm;
 mod channel_agents;
 
@@ -15,12 +16,12 @@ use crate::domain::ports::ChannelAttachmentRepo;
 use crate::domain::ports::{ChannelListRepo, ChannelListUserRepo};
 use crate::domain::{
     models::{
-        Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
-        AttachmentGenericReference, BotId, BotSenderProfile, ChannelAttachment,
-        ChannelAttachmentType, ChannelInfo, ChannelListItem, ChannelMessage, ChannelMetadata,
-        ChannelParticipant, ChannelPreviewRow, ChannelType, ChannelWithParticipants,
-        CountedReaction, CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel,
-        EntityMention, GetChannelsParams, GetThreadReplyRowsParams, LatestMessage,
+        Activity, ActivityType, AttachmentChannelReference, AttachmentCommentReference,
+        AttachmentEntityReference, AttachmentGenericReference, BotId, BotSenderProfile,
+        ChannelAttachment, ChannelAttachmentType, ChannelInfo, ChannelListItem, ChannelMessage,
+        ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType,
+        ChannelWithParticipants, CountedReaction, CreateChannelRequest, CreateEntityMentionOptions,
+        CreatedChannel, EntityMention, GetChannelsParams, GetThreadReplyRowsParams, LatestMessage,
         MessageAttachment, NameLookup, ParticipantRole, PatchChannelRequest, RecentChannelMessage,
         ReferencedShareItemType, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
         TopLevelMessageRow, UserName, fallback_user_name,
@@ -48,6 +49,53 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use uuid::Uuid;
+
+/// Add or revive an active participant, returning whether membership changed.
+async fn add_participant<'e>(
+    executor: impl Executor<'e, Database = Postgres>,
+    channel_id: Uuid,
+    user_id: &str,
+    role: ParticipantRole,
+) -> anyhow::Result<bool> {
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (channel_id, user_id) DO UPDATE
+        SET role = EXCLUDED.role,
+            joined_at = now(),
+            left_at = NULL
+        WHERE comms_channel_participants.left_at IS NOT NULL
+        "#,
+        channel_id,
+        user_id,
+        role as ParticipantRole,
+    )
+    .execute(executor)
+    .await
+    .context("unable to add participant to channel")?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// Record channel activity so the channel sorts as recently updated.
+async fn touch_channel_updated_at<'e>(
+    executor: impl Executor<'e, Database = Postgres>,
+    channel_id: Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE comms_channels
+        SET updated_at = $2
+        WHERE id = $1
+        "#,
+        channel_id,
+        Utc::now(),
+    )
+    .execute(executor)
+    .await
+    .context("unable to update the channel updated_at timestamp")?;
+    Ok(())
+}
 
 /// Postgres-backed repository for channels.
 #[derive(Clone)]
@@ -293,7 +341,7 @@ async fn resolve_channel_display_name(
 /// Display name for a participant principal: users resolve through the name
 /// lookup, bots through the bot-name lookup (Macro AI is code-defined).
 /// Unrecognized principals yield `None`.
-fn principal_display_name(
+pub(super) fn principal_display_name(
     principal: &str,
     name_lookup: &NameLookup,
     bot_name_lookup: &HashMap<BotId, String>,
@@ -332,10 +380,10 @@ async fn load_active_participant_principals(
     Ok(rows.into_iter().map(|row| row.user_id).collect())
 }
 
-async fn load_bot_display_names(
+pub(super) async fn load_bot_display_names(
     pool: &PgPool,
     bot_ids: &[BotId],
-) -> anyhow::Result<HashMap<BotId, String>> {
+) -> Result<HashMap<BotId, String>, sqlx::Error> {
     if bot_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -369,10 +417,10 @@ async fn load_bot_display_names(
     Ok(names)
 }
 
-async fn load_user_display_names(
+pub(super) async fn load_user_display_names(
     pool: &PgPool,
     user_ids: &[MacroUserIdStr<'static>],
-) -> anyhow::Result<NameLookup> {
+) -> Result<NameLookup, sqlx::Error> {
     if user_ids.is_empty() {
         return Ok(NameLookup::new());
     }
@@ -540,24 +588,45 @@ static CHANNEL_LIST_SELECT: &str = r#"
     END) DESC, pc.id::text DESC
 "#;
 
+/// Matches channels where the user has a live notification in `state`.
+///
+/// Unseen and seen rows are few per user and usually the newest of a channel,
+/// so a per-channel `EXISTS` walks the channel's whole notification history
+/// before finding them. Those states read the user's own notifications once
+/// instead. `= ANY(ARRAY(...))` keeps that set an InitPlan; a plain `IN` is
+/// pulled up into a semi-join that probes every channel's history again.
+/// Done rows accumulate without bound and the oldest one usually matches, so
+/// the per-channel `EXISTS` stays cheaper for them.
 #[cfg(feature = "list")]
-fn build_channel_notification_exists_clause(
-    entity_id_sql: &str,
-    entity_type: &str,
-    predicate_sql: &str,
-) -> String {
-    format!(
-        r#"EXISTS (
+fn build_channel_notification_state_clause(state: item_filters::NotificationState) -> String {
+    let predicate = notification_state_predicate(state);
+    match state {
+        item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen => {
+            format!(
+                r#"(c.id)::text = ANY(ARRAY(
+            SELECT DISTINCT n.event_item_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.user_id = $1
+              AND un.deleted_at IS NULL
+              AND {predicate}
+              AND n.event_item_type = 'channel'
+        ))"#
+            )
+        }
+        item_filters::NotificationState::Done => format!(
+            r#"EXISTS (
             SELECT 1
             FROM notification n
             JOIN user_notification un ON un.notification_id = n.id
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
-              AND n.event_item_type = '{entity_type}'
-              AND n.event_item_id = ({entity_id_sql})::text
-              AND {predicate_sql}
+              AND n.event_item_type = 'channel'
+              AND n.event_item_id = (c.id)::text
+              AND {predicate}
         )"#
-    )
+        ),
+    }
 }
 
 #[cfg(feature = "list")]
@@ -613,15 +682,7 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
             )
         }
         filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationState(state)) => {
-            build_channel_notification_exists_clause(
-                "c.id",
-                "channel",
-                match state {
-                    item_filters::NotificationState::Unseen => "un.state = 'unseen'",
-                    item_filters::NotificationState::Seen => "un.state = 'seen'",
-                    item_filters::NotificationState::Done => "un.state = 'done'",
-                },
-            )
+            build_channel_notification_state_clause(state)
         }
     });
     if formatting.is_empty() {
@@ -732,13 +793,18 @@ fn push_channel_thread_filter_expr(
             push_channel_thread_notification_filter_expr(
                 builder,
                 user_id,
-                match state {
-                    item_filters::NotificationState::Unseen => "un.state = 'unseen'",
-                    item_filters::NotificationState::Seen => "un.state = 'seen'",
-                    item_filters::NotificationState::Done => "un.state = 'done'",
-                },
+                notification_state_predicate(*state),
             );
         }
+    }
+}
+
+#[cfg(feature = "list")]
+fn notification_state_predicate(state: item_filters::NotificationState) -> &'static str {
+    match state {
+        item_filters::NotificationState::Unseen => "un.state = 'unseen'",
+        item_filters::NotificationState::Seen => "un.state = 'seen'",
+        item_filters::NotificationState::Done => "un.state = 'done'",
     }
 }
 
@@ -828,6 +894,252 @@ fn push_channel_thread_notification_filter_expr(
 }
 
 #[cfg(feature = "list")]
+const CHANNEL_MESSAGE_ID_PATTERN: &str =
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+
+/// Positive notification states, plus predicates that were ANDed onto them.
+///
+/// `Unsafe` is a NOT, or an OR that mixes a notification with anything else.
+/// Those trees are not "the user's notified roots" and stay on the channel scan.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+enum ThreadNotifPlan<'a> {
+    Absent,
+    Ready {
+        ids_sql: String,
+        residuals: Vec<&'a Expr<ChannelThreadLiteral>>,
+    },
+    Unsafe,
+}
+
+#[cfg(feature = "list")]
+fn channel_thread_expr_mentions_notification(expr: &Expr<ChannelThreadLiteral>) -> bool {
+    match expr {
+        Expr::Literal(ChannelThreadLiteral::NotificationState(_)) => true,
+        Expr::Literal(_) => false,
+        Expr::Not(inner) => channel_thread_expr_mentions_notification(inner),
+        Expr::And(left, right) | Expr::Or(left, right) => {
+            channel_thread_expr_mentions_notification(left)
+                || channel_thread_expr_mentions_notification(right)
+        }
+    }
+}
+
+/// Root ids of channel-message notifications in `state_predicate`.
+///
+/// `$1` is the requesting user, the first bind `build_channel_thread_notification_query`
+/// pushes. Each arm fences the user's rows and the notification lookup with
+/// `OFFSET 0`. Without the inner fence Postgres hashes every `channel_message`
+/// notification in the table when that type's statistics are too low. AND is
+/// `INTERSECT` because two states can be witnessed by different notification
+/// rows. OR is `UNION`.
+#[cfg(feature = "list")]
+fn channel_message_notification_ids_sql(state_predicate: &str) -> String {
+    format!(
+        r#"SELECT DISTINCT n.secondary_event_item_id::uuid AS root_id,
+                  n.event_item_id AS channel_id
+           FROM (
+               SELECT un.notification_id
+               FROM user_notification un
+               WHERE un.user_id = $1
+                 AND un.deleted_at IS NULL
+                 AND {state_predicate}
+               OFFSET 0
+           ) un
+           JOIN LATERAL (
+               SELECT n.secondary_event_item_id, n.event_item_id
+               FROM notification n
+               WHERE n.id = un.notification_id
+                 AND n.event_item_type = 'channel'
+                 AND n.secondary_event_item_type = 'channel_message'
+                 AND n.secondary_event_item_id ~ '{CHANNEL_MESSAGE_ID_PATTERN}'
+               OFFSET 0
+           ) n ON TRUE"#
+    )
+}
+
+#[cfg(feature = "list")]
+fn classify_channel_thread_notification(expr: &Expr<ChannelThreadLiteral>) -> ThreadNotifPlan<'_> {
+    match expr {
+        Expr::Literal(ChannelThreadLiteral::NotificationState(state)) => ThreadNotifPlan::Ready {
+            ids_sql: channel_message_notification_ids_sql(notification_state_predicate(*state)),
+            residuals: Vec::new(),
+        },
+        Expr::Literal(_) => ThreadNotifPlan::Absent,
+        Expr::Not(inner) => {
+            if channel_thread_expr_mentions_notification(inner) {
+                ThreadNotifPlan::Unsafe
+            } else {
+                ThreadNotifPlan::Absent
+            }
+        }
+        Expr::Or(left, right) => {
+            match (
+                classify_channel_thread_notification(left),
+                classify_channel_thread_notification(right),
+            ) {
+                (
+                    ThreadNotifPlan::Ready {
+                        ids_sql: left_ids,
+                        residuals: left_residuals,
+                    },
+                    ThreadNotifPlan::Ready {
+                        ids_sql: right_ids,
+                        residuals: right_residuals,
+                    },
+                ) if left_residuals.is_empty() && right_residuals.is_empty() => {
+                    ThreadNotifPlan::Ready {
+                        ids_sql: format!("({left_ids}) UNION ({right_ids})"),
+                        residuals: Vec::new(),
+                    }
+                }
+                (ThreadNotifPlan::Absent, ThreadNotifPlan::Absent) => ThreadNotifPlan::Absent,
+                _ => ThreadNotifPlan::Unsafe,
+            }
+        }
+        Expr::And(left, right) => {
+            match (
+                classify_channel_thread_notification(left),
+                classify_channel_thread_notification(right),
+            ) {
+                (ThreadNotifPlan::Unsafe, _) | (_, ThreadNotifPlan::Unsafe) => {
+                    ThreadNotifPlan::Unsafe
+                }
+                (ThreadNotifPlan::Absent, ThreadNotifPlan::Absent) => ThreadNotifPlan::Absent,
+                (
+                    ThreadNotifPlan::Ready {
+                        ids_sql,
+                        mut residuals,
+                    },
+                    ThreadNotifPlan::Absent,
+                ) => {
+                    residuals.push(right);
+                    ThreadNotifPlan::Ready { ids_sql, residuals }
+                }
+                (
+                    ThreadNotifPlan::Absent,
+                    ThreadNotifPlan::Ready {
+                        ids_sql,
+                        mut residuals,
+                    },
+                ) => {
+                    residuals.push(left);
+                    ThreadNotifPlan::Ready { ids_sql, residuals }
+                }
+                (
+                    ThreadNotifPlan::Ready {
+                        ids_sql: left_ids,
+                        mut residuals,
+                    },
+                    ThreadNotifPlan::Ready {
+                        ids_sql: right_ids,
+                        residuals: right_residuals,
+                    },
+                ) => {
+                    residuals.extend(right_residuals);
+                    ThreadNotifPlan::Ready {
+                        ids_sql: format!("({left_ids}) INTERSECT ({right_ids})"),
+                        residuals,
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "list")]
+fn push_channel_thread_keyset(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    sort_method_str: String,
+    cursor_timestamp: Option<DateTime<Utc>>,
+    cursor_id_str: Option<String>,
+    query_limit: Option<i64>,
+) {
+    builder.push(" AND (");
+    builder.push_bind(cursor_timestamp);
+    builder.push("::timestamptz IS NULL OR (");
+    push_channel_thread_sort_expr(builder, sort_method_str.clone());
+    builder.push(", m.id::text) < (");
+    builder.push_bind(cursor_timestamp);
+    builder.push(", ");
+    builder.push_bind(cursor_id_str);
+    builder.push(")) ORDER BY ");
+    push_channel_thread_sort_expr(builder, sort_method_str);
+    builder.push(" DESC, m.id::text DESC LIMIT ");
+    builder.push_bind(query_limit);
+}
+
+/// Threads the user was notified about, then the same activity sort as the scan.
+/// Active channel membership is always applied: a notification does not keep a
+/// thread in a channel the user has left.
+#[cfg(feature = "list")]
+fn build_channel_thread_notification_query(
+    params: &GetThreadReplyRowsParams,
+    ids_sql: String,
+    residuals: &[&Expr<ChannelThreadLiteral>],
+    sort_method_str: String,
+    query_limit: Option<i64>,
+    cursor_timestamp: Option<DateTime<Utc>>,
+    cursor_id_str: Option<String>,
+) -> QueryBuilder<'static, Postgres> {
+    let mut builder = QueryBuilder::new(format!(
+        r#"
+        WITH notified AS MATERIALIZED (
+            {ids_sql}
+        )
+        SELECT
+            m.id AS id,
+            m.parent_entity_id::uuid AS channel_id,
+            m.sender_id AS sender_id,
+            m.triggered_by_user_id AS triggered_by_user_id,
+            m.content AS content,
+            m.created_at AS created_at,
+            m.updated_at AS updated_at,
+            m.edited_at::timestamptz AS edited_at,
+            m.deleted_at::timestamptz AS deleted_at
+        FROM comms_messages m
+        JOIN notified
+          ON notified.root_id = m.id
+         AND notified.channel_id = m.parent_entity_id
+        JOIN comms_channels c ON c.id::text = m.parent_entity_id
+        LEFT JOIN LATERAL (
+            SELECT MAX(reply.updated_at) AS latest_reply_updated_at
+            FROM comms_messages reply
+            WHERE reply.thread_id = m.id
+              AND reply.deleted_at IS NULL
+        ) thread_stats ON TRUE
+        WHERE m.thread_id IS NULL
+          AND m.deleted_at IS NULL
+          AND m.parent_entity_type = 'channel'
+          AND EXISTS (
+              SELECT 1
+              FROM comms_channel_participants cp
+              WHERE cp.channel_id::text = m.parent_entity_id
+                AND cp.user_id = "#
+    ));
+    // First bind. The `$1` literals inside `ids_sql` are this same user.
+    builder.push_bind(params.user().as_ref().to_string());
+    builder.push(
+        r#"
+                AND cp.left_at IS NULL
+          )
+        "#,
+    );
+    for residual in residuals {
+        builder.push(" AND ");
+        push_channel_thread_filter_expr(&mut builder, residual, params.user());
+    }
+    push_channel_thread_keyset(
+        &mut builder,
+        sort_method_str,
+        cursor_timestamp,
+        cursor_id_str,
+        query_limit,
+    );
+    builder
+}
+
+#[cfg(feature = "list")]
 fn build_channel_thread_rows_query(
     params: &GetThreadReplyRowsParams,
 ) -> QueryBuilder<'static, Postgres> {
@@ -839,6 +1151,21 @@ fn build_channel_thread_rows_query(
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id_str = cursor_id.map(|id| id.to_string());
     let cursor_timestamp = cursor_timestamp.cloned();
+
+    if let Some(expr) = cursor.filter().as_deref()
+        && let ThreadNotifPlan::Ready { ids_sql, residuals } =
+            classify_channel_thread_notification(expr)
+    {
+        return build_channel_thread_notification_query(
+            params,
+            ids_sql,
+            &residuals,
+            sort_method_str,
+            query_limit,
+            cursor_timestamp,
+            cursor_id_str,
+        );
+    }
 
     let mut builder = QueryBuilder::new(
         r#"
@@ -880,18 +1207,13 @@ fn build_channel_thread_rows_query(
         push_channel_thread_filter_expr(&mut builder, expr, params.user());
     }
 
-    builder.push(" AND (");
-    builder.push_bind(cursor_timestamp);
-    builder.push("::timestamptz IS NULL OR (");
-    push_channel_thread_sort_expr(&mut builder, sort_method_str.clone());
-    builder.push(", m.id::text) < (");
-    builder.push_bind(cursor_timestamp);
-    builder.push(", ");
-    builder.push_bind(cursor_id_str);
-    builder.push(")) ORDER BY ");
-    push_channel_thread_sort_expr(&mut builder, sort_method_str);
-    builder.push(" DESC, m.id::text DESC LIMIT ");
-    builder.push_bind(query_limit);
+    push_channel_thread_keyset(
+        &mut builder,
+        sort_method_str,
+        cursor_timestamp,
+        cursor_id_str,
+        query_limit,
+    );
 
     builder
 }
@@ -1228,6 +1550,10 @@ impl ChannelListRepo for PgChannelsRepo {
             .bind(query_limit)
             .bind(cursor_timestamp)
             .bind(cursor_id_str)
+            // Unnamed statement: a generic plan cannot see how many notifications
+            // the user has and nested-loops a large backlog row by row, several
+            // times slower than the hash join a custom plan picks.
+            .persistent(false)
             .try_map(|row: PgRow| {
                 ChannelListRow {
                     id: row.try_get("id")?,
@@ -1867,9 +2193,53 @@ impl ChannelRepo for PgChannelsRepo {
             .context("failed to get generic entity references")
         };
 
-        let (attachment_references, mention_references, generic_rows) = tokio::try_join!(
+        // Comments on documents, initiatives, CRM records, and calls: every
+        // parent is returned and the domain service authorizes it, since a
+        // comment's visibility follows its parent rather than channel membership.
+        let comment_references_fut = async {
+            sqlx::query_as!(
+                AttachmentCommentReference,
+                r#"
+                SELECT
+                    m.parent_entity_type             AS "parent_entity_type!",
+                    m.parent_entity_id               AS "parent_entity_id!",
+                    m.id                             AS "message_id!: uuid::Uuid",
+                    m.thread_id                      AS "thread_id?: uuid::Uuid",
+                    m.sender_id                      AS "sender_id!",
+                    m.content                        AS "message_content!",
+                    m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
+                    r.created_at                     AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
+                FROM (
+                    -- The CASE keeps non-message source ids out of the uuid cast.
+                    SELECT CASE WHEN em.source_entity_type = 'message' THEN em.source_entity_id::uuid END AS message_id,
+                           em.created_at
+                    FROM comms_entity_mentions em
+                    WHERE em.source_entity_type = 'message'
+                      AND em.entity_type = ANY($1)
+                      AND em.entity_id  = $2
+                    UNION ALL
+                    SELECT a.message_id, a.created_at
+                    FROM comms_attachments a
+                    WHERE a.entity_type = ANY($1)
+                      AND a.entity_id  = $2
+                ) r
+                JOIN comms_messages m ON m.id = r.message_id
+                WHERE m.parent_entity_type <> 'channel'
+                  AND m.deleted_at IS NULL
+                ORDER BY r.created_at DESC
+                "#,
+                &entity_types,
+                entity_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get comment references")
+        };
+
+        let (attachment_references, mention_references, comment_references, generic_rows) = tokio::try_join!(
             attachment_references_fut,
             mention_references_fut,
+            comment_references_fut,
             generic_references_fut,
         )?;
 
@@ -1895,22 +2265,22 @@ impl ChannelRepo for PgChannelsRepo {
                 .map(AttachmentEntityReference::Channel),
         );
         references.extend(
+            comment_references
+                .into_iter()
+                .map(AttachmentEntityReference::Comment),
+        );
+        references.extend(
             generic_references
                 .into_iter()
                 .map(AttachmentEntityReference::Generic),
         );
 
-        references.sort_by(|a, b| {
-            let a_time = match a {
-                AttachmentEntityReference::Channel(c) => c.attachment_created_at,
-                AttachmentEntityReference::Generic(g) => g.created_at,
-            };
-            let b_time = match b {
-                AttachmentEntityReference::Channel(c) => c.attachment_created_at,
-                AttachmentEntityReference::Generic(g) => g.created_at,
-            };
-            b_time.cmp(&a_time)
-        });
+        let created_at = |reference: &AttachmentEntityReference| match reference {
+            AttachmentEntityReference::Channel(c) => c.attachment_created_at,
+            AttachmentEntityReference::Comment(c) => c.attachment_created_at,
+            AttachmentEntityReference::Generic(g) => g.created_at,
+        };
+        references.sort_by_key(|reference| std::cmp::Reverse(created_at(reference)));
 
         Ok(references)
     }
@@ -2066,6 +2436,13 @@ impl ChannelRepo for PgChannelsRepo {
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> Result<String, Self::Err> {
         resolve_channel_display_name(&self.pool, info, viewer_user_id).await
+    }
+
+    async fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<NameLookup, Self::Err> {
+        Ok(load_user_display_names(&self.pool, user_ids).await?)
     }
 
     async fn user_has_team(&self, user_id: String, team_id: Uuid) -> Result<bool, Self::Err> {
@@ -2495,24 +2872,7 @@ impl ChannelRepo for PgChannelsRepo {
         user_id: MacroUserIdStr<'_>,
         role: ParticipantRole,
     ) -> Result<bool, Self::Err> {
-        let result = sqlx::query!(
-            r#"
-            INSERT INTO comms_channel_participants (channel_id, user_id, role)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (channel_id, user_id) DO UPDATE
-            SET role = EXCLUDED.role,
-                joined_at = now(),
-                left_at = NULL
-            WHERE comms_channel_participants.left_at IS NOT NULL
-            "#,
-            channel_id,
-            user_id.as_ref(),
-            role as ParticipantRole,
-        )
-        .execute(&self.pool)
-        .await
-        .context("unable to add participant to channel")?;
-        Ok(result.rows_affected() > 0)
+        add_participant(&self.pool, channel_id, user_id.as_ref(), role).await
     }
 
     async fn remove_participant(&self, channel_id: Uuid, user_id: String) -> Result<(), Self::Err> {
@@ -2531,19 +2891,7 @@ impl ChannelRepo for PgChannelsRepo {
     }
 
     async fn touch_channel_updated_at(&self, channel_id: Uuid) -> Result<(), Self::Err> {
-        sqlx::query!(
-            r#"
-            UPDATE comms_channels
-            SET updated_at = $2
-            WHERE id = $1
-            "#,
-            channel_id,
-            Utc::now(),
-        )
-        .execute(&self.pool)
-        .await
-        .context("unable to update the channel updated_at timestamp")?;
-        Ok(())
+        touch_channel_updated_at(&self.pool, channel_id).await
     }
 
     async fn create_entity_mention(

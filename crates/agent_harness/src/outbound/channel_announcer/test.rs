@@ -57,7 +57,6 @@ fn declined_mentions_target_their_harness_settings() {
             "codex-cloud",
             "Codex",
         ),
-        (SessionBlocker::ClaudeNotConnected, "claude-cloud", "Claude"),
     ] {
         let prompt = connection_prompt(blocker);
         assert_eq!(
@@ -386,6 +385,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
         content: "composed pointer".to_owned(),
         created_at: chrono::Utc::now(),
@@ -500,6 +500,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     triggered_by: None,
                     bot_profile: None,
                     mentions: vec![],
+                    guest_name: None,
                     imported_author: None,
                     content: post.content,
                     created_at: chrono::Utc::now(),

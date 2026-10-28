@@ -1,7 +1,11 @@
 import { openPipedreamConnectUI } from '@core/pipedream/connect-ui';
 import { pipedreamSlugsMatch } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { type Span, Telemetry } from '@macro-inc/observability';
+import { authKeys } from '@queries/auth/keys';
+import type { UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -195,7 +199,8 @@ let pipedreamUnsupported = false;
  *
  * Mints a Connect token (Pipedream owns the consent flow, credential
  * storage, and refresh), opens the hosted Connect UI in a fullscreen
- * iframe, and — once the user authorizes — registers the resulting account
+ * iframe on web or in the system browser on native, and — once the user
+ * authorizes — registers the resulting account
  * with our backend, which verifies ownership against Pipedream before
  * storing it.
  *
@@ -212,9 +217,33 @@ export async function connectPipedreamApp(args: {
   /** Where the Connect iframe mounts; see `openPipedreamConnectUI`. */
   container?: HTMLElement;
 }): Promise<PipedreamConnectOutcome> {
+  return Telemetry.span('pipedream.connect', async (span) => {
+    span.setAttr('connector.app_slug', args.appSlug);
+    span.setAttr('connector.native', isTauri());
+    try {
+      const outcome = await connectPipedreamAccount(args, span);
+      span.setAttr('connector.outcome', outcome);
+      return outcome;
+    } catch (error) {
+      // Do not copy third-party errors or Connect URLs into telemetry.
+      span.error('Pipedream connection failed');
+      throw error;
+    }
+  });
+}
+
+async function connectPipedreamAccount(
+  args: Parameters<typeof connectPipedreamApp>[0],
+  span: Span
+): Promise<PipedreamConnectOutcome> {
   if (pipedreamUnsupported) return 'unsupported';
 
-  const token = await cognitionApiServiceClient.createPipedreamToken();
+  const currentUserId = () =>
+    queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
+  const userId = currentUserId();
+  const token = await span.span('pipedream.token', async () =>
+    cognitionApiServiceClient.createPipedreamToken()
+  );
   if (token.isErr()) {
     if (token.error.some((e) => e.code === PIPEDREAM_DISABLED)) {
       pipedreamUnsupported = true;
@@ -223,27 +252,46 @@ export async function connectPipedreamApp(args: {
     throw new ThrownResultError(token.error);
   }
 
+  const openConnectUI = isTauri()
+    ? (await import('@core/pipedream/connect-native'))
+        .openNativePipedreamConnectUI
+    : openPipedreamConnectUI;
+  if (currentUserId() !== userId) return 'closed';
+  const consent = span.span('pipedream.consent');
   return await new Promise<PipedreamConnectOutcome>((resolve, reject) => {
     let settled = false;
-    const ui = openPipedreamConnectUI({
+    const ui = openConnectUI({
       token: token.value.token,
       app: args.appSlug,
       container: args.container,
       onEvent: (event) => {
         if (event.type === 'success' && !settled) {
           settled = true;
+          consent.end();
           fireAndForget(
             (async () => {
               try {
-                const connection = await throwOnErr(
+                if (currentUserId() !== userId) {
+                  resolve('closed');
+                  return;
+                }
+                const connection = await span.span(
+                  'pipedream.register',
                   async () =>
-                    await cognitionApiServiceClient.completePipedreamConnection(
-                      {
-                        account_id: event.accountId,
-                        server_name: args.serverName,
-                      }
+                    throwOnErr(
+                      async () =>
+                        await cognitionApiServiceClient.completePipedreamConnection(
+                          {
+                            account_id: event.accountId,
+                            server_name: args.serverName,
+                          }
+                        )
                     )
                 );
+                if (currentUserId() !== userId) {
+                  resolve('closed');
+                  return;
+                }
                 if (
                   !pipedreamSlugsMatch(connection.app_slug, args.appSlug) ||
                   !connection.enabled
@@ -267,11 +315,12 @@ export async function connectPipedreamApp(args: {
           );
         } else if (event.type === 'close' && !settled) {
           settled = true;
+          consent.end();
           resolve('closed');
         }
         // 'error' events are shown inside the Connect UI itself; the user
         // can retry there or close, so they don't settle the promise.
       },
     });
-  });
+  }).finally(() => consent.end());
 }

@@ -1,6 +1,7 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import Database from '@phosphor/database.svg';
-import Plus from '@phosphor/plus.svg';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Database from '@icon/system/regular/database.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { QuestionTypeId } from '../../core/question-types';
@@ -20,13 +21,11 @@ export function BuilderSkeleton() {
         aria-hidden="true"
         class="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-12 px-6"
       >
-        <div class="h-8 w-2/5 rounded bg-hover motion-safe:animate-pulse" />
-        <div class="h-5 w-1/4 rounded bg-hover motion-safe:animate-pulse" />
-        <div class="h-5 w-3/5 rounded bg-hover motion-safe:animate-pulse" />
+        <ListSkeleton.Bar class="h-8 w-2/5 rounded-lg" />
+        <ListSkeleton.Bar class="h-4 w-1/4" />
+        <ListSkeleton.Bar class="h-4 w-3/5" />
         <For each={[0, 1]}>
-          {() => (
-            <div class="h-56 rounded-xl border border-edge-muted bg-surface motion-safe:animate-pulse" />
-          )}
+          {() => <ListSkeleton.Bar class="h-56 w-full rounded-xl" />}
         </For>
       </div>
     </div>

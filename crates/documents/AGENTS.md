@@ -14,6 +14,18 @@ word docs, Illustrator/Photoshop files).
   adapters implement.
 - `src/domain/content.rs`: document content storage model (markdown vs legacy
   Office formats, S3 locations).
+- `src/domain/docx_export.rs`: DOCX export readiness policy; empty parts mean
+  extraction is pending. Its entry point requires a checked document receipt.
+- Native Canvas creation follows markdown: metadata → canonical shared snapshot →
+  ready SyncService content, with compensation on failure. `create_canvas` and
+  CreateDocument with empty Canvas content need no browser initialization.
+- `src/domain/canvas.rs`: permission-scoped Canvas read/render/edit workflows, native
+  type checks, actor-bearing tokens, AI admission and per-model metering.
+  `ReadCanvas`/`RenderCanvas` are view-scoped; `ApplyCanvasEdits` applies
+  precise revision-checked SDK batches without a nested model, while `EditCanvas`
+  delegates design work. Both use edit receipts and live scene
+  deltas, never whole-file saves. Render output includes native media plus an
+  immutable revision, crop/object mapping and actual DOM text bounds.
 - `src/inbound/toolset.rs`: one submodule per AI document tool (`create_document`,
   `edit_document`, `word_document`, `spreadsheet`, `presentation`, ...).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
@@ -22,11 +34,18 @@ word docs, Illustrator/Photoshop files).
 
 ## Scope
 
+- Copying a legacy Canvas preserves its JSON seed and live sync room. Native
+  Canvas copies use the room and retain the SyncService content location. Failed
+  copies compensate destination storage and sync artifacts before
+  removing the new document rows, logging cleanup failures independently.
 - Owns: document lifecycle (create/rename/purge/upgrade), content storage and
   markdown backfill, comments, AI-editing tools, and file-type domain services
   (spreadsheet, presentation, word, illustrator, photoshop).
 - Not here: realtime collaborative sync of document content → sync-service;
-  the lexical markdown node/editor implementation → `packages/lexical-core`.
+  the lexical markdown node/editor implementation → `packages/lexical-core`;
+  Discussion comments, replies and thread state on any entity → the `messages`
+  toolset (this crate keeps only `CommentOnText`, the inline comment that
+  places a mark).
 
 ## Boundaries
 
@@ -46,6 +65,10 @@ word docs, Illustrator/Photoshop files).
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
   outbound capability.
+- Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
+  (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
+  lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`
+  and returns the Macro markdown that mention tracking reads.
 - Change content storage/markdown lifecycle: `src/domain/content.rs` →
   `src/outbound/s3_markdown_source.rs` / `src/outbound/markdown_init.rs` →
   `src/bin/backfill_markdown_content_location.rs` if existing documents need

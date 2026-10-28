@@ -1,12 +1,12 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::pubsub::util::{
-    CrmContactRecipient, build_notification_recipients, enqueue_populate_crm_contacts,
+    CrmContactRecipient, build_contact_connections, build_notification_recipients,
+    enqueue_populate_crm_contacts,
 };
 use crate::pubsub::util::{cg_refresh_email, publish_email_event};
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
-use contacts::domain::models::messages::ContactConnection;
 use contacts::domain::ports::ContactsIngress;
 use email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, MessageDraftSyncedMetadata, MessageReceivedMetadata,
@@ -510,23 +510,11 @@ async fn handle_contacts_sync(
         sender_email.into_iter().collect()
     };
 
-    if connection_emails.is_empty() {
+    let connections = build_contact_connections(&link.macro_id, link.id, connection_emails);
+
+    if connections.is_empty() {
         return Ok(());
     }
-
-    let connections = connection_emails
-        .iter()
-        .map(|email| {
-            MacroUserIdStr::try_from_email(email)
-                .map(|contact| ContactConnection::new(link.macro_id.clone(), contact))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: anyhow::anyhow!(e).context("invalid user email for contacts"),
-            })
-        })?;
 
     ctx.contacts_ingress
         .enqueue_contact_connections(connections)

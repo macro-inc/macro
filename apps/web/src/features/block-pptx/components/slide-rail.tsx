@@ -6,13 +6,13 @@
 
 import { ContextMenuContent } from '@core/component/ContextMenu';
 import type { SlideOutline } from '@core/pptx-engine/types';
+import ChatIcon from '@icon/system/regular/chat.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ChatIcon from '@phosphor/chat.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import EyeSlashIcon from '@phosphor/eye-slash.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { PresentationPeer } from '../context/pptx-editor-context';

@@ -1,7 +1,7 @@
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import CircleNotchIcon from '@phosphor/circle-notch.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import CircleNotchIcon from '@icon/system/regular/circle-notch.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

@@ -21,6 +21,7 @@ vi.mock('@service-email/client', () => ({
   emailClient: {
     markThreadAsSeen: mocks.markSeen,
     updateThreadLabel: mocks.updateLabel,
+    updateThreadState: mocks.updateLabel,
     getUserLabels: mocks.getLabels,
   },
 }));

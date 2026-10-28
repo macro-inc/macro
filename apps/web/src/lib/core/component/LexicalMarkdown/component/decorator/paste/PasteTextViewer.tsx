@@ -1,6 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { Button, Dialog } from '@ui';
 import { Show } from 'solid-js';
 
@@ -52,7 +52,6 @@ export function PasteTextViewer(props: {
           open={props.open}
           onOpenChange={props.onOpenChange}
           position="center"
-          class="rounded-lg border border-edge bg-surface shadow-lg"
         >
           <div class="flex items-center justify-between px-4 py-2 border-b border-edge text-xs text-ink-muted">
             {header()}

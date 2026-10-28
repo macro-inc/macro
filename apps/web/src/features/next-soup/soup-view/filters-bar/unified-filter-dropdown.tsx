@@ -26,8 +26,8 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useGithubLinkStatusQuery } from '@queries/auth';
@@ -716,8 +716,8 @@ export const UnifiedFilterDropdown = (
               <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
                 <Dropdown.Trigger
                   variant={props.variant ?? 'outline'}
+                  size={props.hideLabel ? 'icon-md' : 'sm'}
                   depth={2}
-                  class={props.variant === 'ghost' ? undefined : 'bg-surface'}
                   aria-label={props.hideLabel ? 'Filter' : undefined}
                 >
                   <FilterIcon />

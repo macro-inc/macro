@@ -1,6 +1,7 @@
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -16,6 +17,10 @@ import {
 import { match } from 'ts-pattern';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { ActionGraph } from '../components/action-graph';
+import {
+  ActivityScopePills,
+  ActivityScopeTabs,
+} from '../components/activity-scope-tabs';
 import { ActivityTimelineRow as ActivityTimelineRowView } from '../components/activity-timeline-row';
 import { TopEntitiesSection, TopEntityChip } from '../components/top-entities';
 import {
@@ -23,7 +28,7 @@ import {
   useActivityContext,
 } from '../context/activity-context';
 import { entryHead, type FeedEntry } from '../core/collapse-runs';
-import type { ActivityTopEntity } from '../core/event';
+import type { ActivityScope, ActivityTopEntity } from '../core/event';
 import {
   type FeedRow,
   pinnedDayLabel,
@@ -59,9 +64,10 @@ function FeedStatus(props: { children: JSX.Element }) {
 }
 
 /**
- * The user's own activity, newest first, as one virtualized list with the
- * overview card as its first row. Scrolling near the end fetches the next
- * page. Reads `ActivityContext`; the host decides what a row click opens.
+ * The user's own activity or their team's, newest first, as one virtualized
+ * list; the user's own feed has the overview card as its first row. The
+ * host owns the selected `scope` and decides what a row click opens.
+ * Scrolling near the end fetches the next page. Reads `ActivityContext`.
  *
  * Rows are absolutely positioned by the virtualizer, so a day header cannot
  * stick on its own. Instead a zero-height sticky slot at the head of the
@@ -69,22 +75,31 @@ function FeedStatus(props: { children: JSX.Element }) {
  *
  * On full-frame touch devices the split header floats over the content, so
  * an in-scroll spacer (measured, then handed to virtua as `startMargin`, the
- * `SoupList` pattern) rests the list below it and the pinned header sticks
- * under it; a matching spacer clears the bottom toolbar.
+ * `SoupList` pattern) rests the list and the You / Team pills below it and
+ * the pinned header sticks under it; a matching spacer clears the bottom
+ * toolbar.
  */
 export function MyActivityView(props: {
+  scope: ActivityScope;
+  onScopeChange: (scope: ActivityScope) => void;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
   const context = useActivityContext();
-  const state = createMyActivityState(context);
+  const state = createMyActivityState(context, () => props.scope);
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   const [startIndex, setStartIndex] = createSignal(0);
+  const [scrollOffset, setScrollOffset] = createSignal(0);
   let handle: VirtualizerHandle | undefined;
 
+  // Until the list itself reaches the top edge its first day header is in
+  // view, so nothing pins (the team feed has no overview row above it, and
+  // on touch the You / Team pills sit where the pinned copy would).
   const pinnedDay = createMemo(() =>
-    pinnedDayLabel(state.rows(), startIndex())
+    scrollOffset() > (topSpacerSize.height ?? 0)
+      ? pinnedDayLabel(state.rows(), startIndex())
+      : undefined
   );
 
   const fetchMoreIfNearEnd = (offset: number) => {
@@ -101,9 +116,19 @@ export function MyActivityView(props: {
   };
 
   const onScroll = (offset: number) => {
+    setScrollOffset(offset);
     if (handle) setStartIndex(handle.findItemIndex(offset));
     fetchMoreIfNearEnd(offset);
   };
+
+  // The other tab's rows replace these wholesale, so its feed opens at the top.
+  createEffect(
+    on(
+      () => props.scope,
+      () => handle?.scrollTo(0),
+      { defer: true }
+    )
+  );
 
   // A page that does not fill the viewport never scrolls, so re-check once
   // virtua has laid out the new rows.
@@ -119,7 +144,15 @@ export function MyActivityView(props: {
   return (
     <div class="@container/u-list flex size-full flex-col">
       <SplitHeaderLeft>
-        <span class="font-semibold text-sm">Activity</span>
+        <div class="flex items-center gap-3">
+          <span class="font-semibold text-sm">Activity</span>
+          <Show when={!isTouchDevice()}>
+            <ActivityScopeTabs
+              value={props.scope}
+              onChange={props.onScopeChange}
+            />
+          </Show>
+        </div>
       </SplitHeaderLeft>
       <StaticMarkdownContext>
         <div ref={setScroller} class="min-h-0 flex-1 overflow-y-auto py-1">
@@ -132,11 +165,16 @@ export function MyActivityView(props: {
               )}
             </Show>
           </div>
-          <div
-            ref={setTopSpacer}
-            aria-hidden
-            class="h-0 touch:h-(--mobile-content-inset-top)"
-          />
+          <div ref={setTopSpacer} class="touch:pt-(--mobile-content-inset-top)">
+            <Show when={isTouchDevice()}>
+              <div class="px-(--mobile-chrome-gutter) pb-2">
+                <ActivityScopePills
+                  value={props.scope}
+                  onChange={props.onScopeChange}
+                />
+              </div>
+            </Show>
+          </div>
           <div class="mx-auto w-full max-w-[1000px]">
             <Virtualizer
               data={state.rows()}
@@ -149,7 +187,12 @@ export function MyActivityView(props: {
               onScroll={onScroll}
             >
               {(row) => (
-                <FeedRowView row={row} state={state} onOpen={props.onOpen} />
+                <FeedRowView
+                  row={row}
+                  state={state}
+                  scope={props.scope}
+                  onOpen={props.onOpen}
+                />
               )}
             </Virtualizer>
           </div>
@@ -166,6 +209,7 @@ export function MyActivityView(props: {
 function FeedRowView(props: {
   row: FeedRow;
   state: MyActivityState;
+  scope: ActivityScope;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
   return match(props.row)
@@ -191,7 +235,11 @@ function FeedRowView(props: {
       </FeedStatus>
     ))
     .with({ kind: 'status', status: 'empty' }, () => (
-      <FeedStatus>No activity yet.</FeedStatus>
+      <FeedStatus>
+        {props.scope === 'team'
+          ? 'No activity from your team yet.'
+          : 'No activity yet.'}
+      </FeedStatus>
     ))
     .with({ kind: 'tail' }, () => <FeedTail state={props.state} />)
     .exhaustive();

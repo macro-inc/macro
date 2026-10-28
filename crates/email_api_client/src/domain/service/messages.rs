@@ -15,85 +15,87 @@ where
 {
     /// Fetches and normalizes one provider message, including any calendar
     /// invitation parts, in a single provider read.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn get_message(
         &self,
         link_id: Uuid,
         provider_message_id: &str,
     ) -> Result<Option<MessageWithCalendarParts>, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::GetMessage).await?;
-
-        self.repository
-            .get_message(&access_token, link_id, provider_message_id)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(link_id, ApiOperationKind::GetMessage, |token| async move {
+            self.repository
+                .get_message(&token, link_id, provider_message_id)
+                .await
+        })
+        .await
     }
 
     /// Fetches the provider label identifiers attached to one message.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn get_message_label_ids(
         &self,
         link_id: Uuid,
         provider_message_id: &str,
     ) -> Result<Option<Vec<String>>, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::GetMessage).await?;
-
-        self.repository
-            .get_message_label_ids(&access_token, provider_message_id)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(link_id, ApiOperationKind::GetMessage, |token| async move {
+            self.repository
+                .get_message_label_ids(&token, provider_message_id)
+                .await
+        })
+        .await
     }
 
     /// Lists message identifiers carrying all requested provider labels.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn list_messages(
         &self,
         link_id: Uuid,
         limit: u32,
         label_ids: &[&str],
     ) -> Result<Vec<String>, EmailApiError> {
-        let access_token = self
-            .prepare(link_id, ApiOperationKind::ListMessages)
-            .await?;
-
-        self.repository
-            .list_messages(&access_token, limit, label_ids)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(
+            link_id,
+            ApiOperationKind::ListMessages,
+            |token| async move {
+                self.repository
+                    .list_messages(&token, limit, label_ids)
+                    .await
+            },
+        )
+        .await
     }
 
     /// Lists message identifiers belonging to one provider thread.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn get_message_ids_for_thread(
         &self,
         link_id: Uuid,
         provider_thread_id: &str,
     ) -> Result<Vec<String>, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::GetThread).await?;
-
-        self.repository
-            .get_message_ids_for_thread(&access_token, provider_thread_id)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(link_id, ApiOperationKind::GetThread, |token| async move {
+            self.repository
+                .get_message_ids_for_thread(&token, provider_thread_id)
+                .await
+        })
+        .await
     }
 
     /// Fetches and normalizes every message in one provider thread.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn get_thread(
         &self,
         link_id: Uuid,
         provider_thread_id: &str,
     ) -> Result<Vec<Message>, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::GetThread).await?;
-
-        self.repository
-            .get_thread(&access_token, link_id, provider_thread_id)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(link_id, ApiOperationKind::GetThread, |token| async move {
+            self.repository
+                .get_thread(&token, link_id, provider_thread_id)
+                .await
+        })
+        .await
     }
 
     /// Lists one page of provider threads.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), fields(retry_count = 0))]
     pub async fn list_threads(
         &self,
         link_id: Uuid,
@@ -101,12 +103,12 @@ where
         next_page_token: Option<&str>,
         label_ids: &[&str],
     ) -> Result<ThreadListPage, EmailApiError> {
-        let access_token = self.prepare(link_id, ApiOperationKind::ListThreads).await?;
-
-        self.repository
-            .list_threads(&access_token, limit, next_page_token, label_ids)
-            .await
-            .inspect_err(log_operation_error)
+        self.read_with_token(link_id, ApiOperationKind::ListThreads, |token| async move {
+            self.repository
+                .list_threads(&token, limit, next_page_token, label_ids)
+                .await
+        })
+        .await
     }
 
     /// Applies provider label additions and removals to one message.

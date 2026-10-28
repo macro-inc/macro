@@ -26,7 +26,9 @@ const INMEM_MODELS: ModelOption[] = [
 ].map((id) => ({ id, name: id, description: null, group: null }));
 
 let motionStyles: HTMLStyleElement;
+const originalScrollTo = HTMLElement.prototype.scrollTo;
 beforeEach(() => {
+  HTMLElement.prototype.scrollTo = vi.fn();
   // jsdom omits the motion defaults Kobalte and Corvu track presence with.
   motionStyles = document.createElement('style');
   motionStyles.textContent =
@@ -44,6 +46,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  HTMLElement.prototype.scrollTo = originalScrollTo;
   motionStyles.remove();
   device.touch = false;
   vi.unstubAllGlobals();
@@ -125,4 +128,75 @@ describe('agent model selector', () => {
     ));
     expect(screen.getByRole('button').textContent).toContain('Opus 5 High');
   });
+});
+
+it('uses the searchable touch sheet with custom desktop model rows', async () => {
+  device.touch = true;
+  const select = vi.fn();
+  render(() => (
+    <AgentModelSelector
+      model="anthropic/claude-opus-5-5"
+      options={[
+        {
+          id: 'anthropic/claude-opus-5-5',
+          name: 'Opus 5.5',
+          description: null,
+          group: null,
+        },
+        {
+          id: 'anthropic/claude-haiku-4-5',
+          name: 'Haiku 4.5',
+          description: null,
+          group: null,
+        },
+      ]}
+      modelRow={() => <div>Desktop custom row</div>}
+      onSelect={select}
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Agent model' }));
+  const search = await screen.findByRole('textbox', { name: 'Search models' });
+  await waitFor(() => expect(document.activeElement).toBe(search));
+  expect(screen.getByRole('radiogroup', { name: 'Suggested' })).toBeTruthy();
+  expect(screen.queryByText('Desktop custom row')).toBeNull();
+  expect(screen.queryByRole('radio', { name: 'Haiku 4.5' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'More models' }));
+  expect(screen.getByRole('radio', { name: 'Opus 5.5' })).toBeTruthy();
+  expect(screen.getByRole('radio', { name: 'Haiku 4.5' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Suggested' }));
+  fireEvent.input(search, { target: { value: 'haiku' } });
+  fireEvent.click(screen.getByRole('radio', { name: 'Haiku 4.5' }));
+  expect(select).toHaveBeenCalledExactlyOnceWith('anthropic/claude-haiku-4-5');
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
+it('keeps the touch picker visible while models load', async () => {
+  device.touch = true;
+  render(() => (
+    <AgentModelSelector
+      model="openai/gpt-5.6"
+      options={[]}
+      onSelect={vi.fn()}
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Agent model' }));
+  const status = await screen.findByRole('status');
+  expect(status.textContent).toContain('Waiting for the agent');
+  expect(screen.getByRole('textbox', { name: 'Search models' })).toBeTruthy();
+});
+
+it('preserves the current effort label in the mobile model trigger', () => {
+  device.touch = true;
+  render(() => (
+    <AgentModelSelector
+      model="gpt-5"
+      options={[{ id: 'gpt-5', name: 'GPT-5', group: null, description: null }]}
+      effortLabel="High"
+      onSelect={vi.fn()}
+    />
+  ));
+  expect(
+    screen.getByRole('button', { name: 'Agent model' }).textContent
+  ).toContain('GPT-5 · High');
+  expect(screen.queryByRole('slider')).toBeNull();
 });

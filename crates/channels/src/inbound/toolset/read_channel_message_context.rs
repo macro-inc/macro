@@ -3,8 +3,8 @@ use messages::domain::ports::MessageTimelineQuery;
 
 use super::ChannelToolContext;
 use super::types::{
-    ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage, ToolThreadReply,
-    clamp_max_chars, content_truncation_omissions,
+    SenderNames, ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage,
+    ToolThreadReply, clamp_max_chars, content_truncation_omissions, user_senders,
 };
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -121,7 +121,12 @@ where
 {
     type Output = ReadChannelMessageContextResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[tracing::instrument(
+        name = "channels.tool.read_message_context",
+        skip_all,
+        fields(user_id=?request_context.user_id, channel_id=%self.channel_id),
+        err
+    )]
     async fn call(
         &self,
         service_context: ServiceContext<ChannelToolContext<Svc, AccessSvc>>,
@@ -158,6 +163,26 @@ where
             .await
             .map_err(tool_err("failed to read channel context around message"))?;
         channel_page.items.reverse();
+        let thread_replies = match resolved.thread_id {
+            None => None,
+            Some(_) => Some(
+                service_context
+                    .messages
+                    .get_thread(access, resolved.root_id())
+                    .await
+                    .map_err(tool_err("failed to read thread"))?
+                    .replies,
+            ),
+        };
+
+        let senders = user_senders(
+            channel_page
+                .items
+                .iter()
+                .flat_map(|item| std::iter::once(&item.message).chain(&item.thread.preview))
+                .chain(thread_replies.iter().flatten()),
+        );
+        let names = service_context.sender_names(senders).await;
         let channel_messages: Vec<ToolChannelMessage> = channel_page
             .items
             .into_iter()
@@ -167,6 +192,7 @@ where
                     self.channel_id,
                     true,
                     max_chars_per_message,
+                    &names,
                 )
             })
             .collect();
@@ -187,15 +213,10 @@ where
             after,
         };
 
-        let thread_context = match resolved.thread_id {
+        let thread_context = match thread_replies {
             None => None,
-            Some(_) => Some(read_reply_context(
-                service_context
-                    .messages
-                    .get_thread(access, resolved.root_id())
-                    .await
-                    .map_err(tool_err("failed to read thread"))?
-                    .replies,
+            Some(replies) => Some(read_reply_context(
+                replies,
                 ReplyContextArgs {
                     reply_id: self.message_id,
                     thread_id: resolved.root_id(),
@@ -203,6 +224,7 @@ where
                     before: self.thread_before,
                     after: self.thread_after,
                     max_chars_per_message,
+                    names: &names,
                 },
             )?),
         };
@@ -244,18 +266,19 @@ where
     }
 }
 
-struct ReplyContextArgs {
+struct ReplyContextArgs<'a> {
     reply_id: Uuid,
     thread_id: Uuid,
     parent: ToolChannelMessage,
     before: Option<u16>,
     after: Option<u16>,
     max_chars_per_message: usize,
+    names: &'a SenderNames,
 }
 
 fn read_reply_context(
     replies: Vec<messages::domain::models::Message>,
-    args: ReplyContextArgs,
+    args: ReplyContextArgs<'_>,
 ) -> Result<ToolThreadReplyContextWindow, ToolCallError> {
     let before = usize::from(args.before.unwrap_or(10).min(50));
     let after = usize::from(args.after.unwrap_or(10).min(50));
@@ -276,7 +299,14 @@ fn read_reply_context(
         .into_iter()
         .skip(start)
         .take(end - start)
-        .map(|reply| ToolThreadReply::from_reply(reply, args.thread_id, args.max_chars_per_message))
+        .map(|reply| {
+            ToolThreadReply::from_reply(
+                reply,
+                args.thread_id,
+                args.max_chars_per_message,
+                args.names,
+            )
+        })
         .collect();
     let anchor_offset = anchor_index - start;
     let replies_after = mapped.split_off(anchor_offset + 1);

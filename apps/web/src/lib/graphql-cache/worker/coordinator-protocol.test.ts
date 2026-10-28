@@ -525,6 +525,7 @@ describe('coordinator runtime protocol', () => {
       scope: 'scope',
       tabId: 'tab',
       livenessLockName: 'graphql-cache-tab:scope:tab',
+      visible: true,
       buildTime: 1_790_000_000_000,
     },
     {
@@ -777,6 +778,7 @@ describe('coordinator runtime protocol', () => {
         scope: 'scope',
         tabId: 'tab',
         livenessLockName: 'lock',
+        visible: true,
         buildTime: 0,
       }).ok
     ).toBe(false);
@@ -788,6 +790,7 @@ describe('coordinator runtime protocol', () => {
         scope: 'scope',
         tabId: 'tab',
         livenessLockName: 'lock',
+        visible: true,
       }).ok
     ).toBe(false);
     expect(
@@ -828,10 +831,10 @@ describe('coordinator runtime protocol', () => {
     // The current versions moved past the unversioned name, so the lock
     // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v3.t11'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t11'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v3.t11'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t11'
     );
   });
 

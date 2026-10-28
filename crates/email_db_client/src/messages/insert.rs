@@ -25,6 +25,9 @@ pub async fn insert_message_with_tx(
     // 2. backfilling messages (metadata gets updated once after all messages complete)
     update_thread_metadata: bool,
 ) -> anyhow::Result<()> {
+    if let Some(provider_thread_id) = message.provider_thread_id.as_deref() {
+        threads::provider_identity::lock_provider_thread(tx, link_id, provider_thread_id).await?;
+    }
     let message_db_id = insert_db_message(
         tx,
         message,
@@ -52,9 +55,7 @@ pub async fn insert_message_with_tx(
         .await?;
     }
 
-    if !message.attachments.is_empty() {
-        provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
-    }
+    provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
 
     if update_thread_metadata {
         threads::update::update_thread_metadata(tx, thread_db_id, link_id).await?;

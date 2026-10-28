@@ -44,14 +44,27 @@ export function routePhoneToMobileSignup(event: MouseEvent) {
   window.location.href = MOBILE_SIGNUP_HREF;
 }
 
+function readOnboardingFlowStep(): string | null {
+  // Resolve each store inside the try: reading `window.localStorage` itself
+  // throws when the browser blocks it.
+  for (const storage of [() => localStorage, () => sessionStorage]) {
+    try {
+      const value = storage().getItem('onboarding-flow-step');
+      if (value !== null) return value;
+    } catch {
+      // This store can be blocked; the other may still hold the step.
+    }
+  }
+  return null;
+}
+
 /** Full document navigation keeps the app and marketing CSS independent. */
 export function journeyHref() {
   if (typeof window === 'undefined') return '/app/signup';
   if (isPhoneBrowser()) return MOBILE_SIGNUP_HREF;
+  const raw = readOnboardingFlowStep();
   try {
-    const active = JSON.parse(
-      sessionStorage.getItem('onboarding-flow-step') ?? 'null'
-    );
+    const active = JSON.parse(raw ?? 'null');
     if (active?.user && active?.step) return '/app/onboarding';
   } catch {
     // An old or unavailable storage record must not prevent navigation.

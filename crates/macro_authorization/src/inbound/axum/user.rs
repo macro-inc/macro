@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use ::axum::{
     extract::{FromRef, FromRequestParts, Query},
     http::{header, request::Parts},
@@ -135,13 +138,20 @@ where
     Svc: MacroAuthorizationService,
 {
     let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
-    let user_context = authorization
+    let identity = authorization
         .service
-        .authorize(token)
+        .authorize_identity(token)
         .await
         .map_err(authorization_rejection)?;
 
-    authenticated_user(user_context)
+    let mut user = authenticated_user(model_user::UserContext {
+        user_id: identity.user_id,
+        fusion_user_id: identity.fusion_user_id,
+        organization_id: identity.organization_id,
+        permissions: identity.permissions,
+    })?;
+    user.agent_id = identity.agent_id;
+    Ok(user)
 }
 
 fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAuthorizationRejection {

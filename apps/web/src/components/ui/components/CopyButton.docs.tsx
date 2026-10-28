@@ -1,5 +1,5 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import CopyIcon from '@phosphor/copy.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { For } from 'solid-js';
 import { CopyButton } from './CopyButton';
 

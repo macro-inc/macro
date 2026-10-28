@@ -5,9 +5,9 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg?component-solid';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
+import { markdownToSearchText } from '@macro-inc/lexical-core/utils/parsers';
 import { cn, Hotkey } from '@ui';
 import {
   $getRoot,
@@ -35,11 +35,10 @@ interface SoupSearchbarProps {
   initialValue?: string;
 }
 
+// Both variants draw the shared SearchBar pill; they differ only in emphasis.
 const variantStyles: Record<SearchbarVariant, string> = {
-  filled:
-    'bg-ink/5 text-ink-muted hover:bg-ink/7 hover:text-ink border-edge-muted focus-within:bg-ink/7 focus-within:text-ink focus-within:border-accent',
-  secondary:
-    'bg-surface text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent',
+  filled: 'text-ink-muted focus-within:text-ink',
+  secondary: 'text-ink-muted hover:text-ink focus-within:text-ink',
 };
 
 export const SoupSearchbar = (props: SoupSearchbarProps) => {
@@ -108,10 +107,12 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
 
   createEffect(() => setSearchPaused(menuIsOpen()));
 
+  // Mention chips flatten to the text the index holds for them (a user's
+  // email), not their display name, or a mention-only message never matches.
   createEffect(
     on(latestMarkdown, (markdown) => {
       if (menuIsOpen()) return;
-      setSearchText(markdownToPlainText(markdown).trim());
+      setSearchText(markdownToSearchText(markdown).trim());
     })
   );
 
@@ -170,7 +171,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
     >
       <div
         class={cn(
-          'group w-full relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
+          'group w-full relative flex items-center gap-1.5 rounded-full h-8 mobile:h-9 px-3 mobile:min-w-35 border border-edge-button bg-control not-touch:elevated text-sm focus-within:ring-2 focus-within:ring-edge-muted',
           variantStyles[props.variant ?? 'secondary']
         )}
       >

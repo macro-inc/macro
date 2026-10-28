@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_scheduled_messages SET processing = true,updated_at = now()\n            WHERE message_id = $1 AND link_id = $2 AND NOT sent AND NOT processing AND send_time <= now()\n                AND (actor_id = $3 OR actor_id IS NULL) RETURNING message_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c4377a8688452b5b4c2dcf1dd621c83d2aa85472979f3f286737e999d05c4fc0"
+}

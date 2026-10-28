@@ -2,8 +2,8 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { messageSendMotion } from '@core/util/message-send-motion';
-import PencilIcon from '@phosphor/note-pencil.svg';
-import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
+import QuoteIcon from '@icon/system/bold/arrow-elbow-down-right-bold.svg?component-solid';
+import PencilIcon from '@icon/system/regular/note-pencil.svg';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { Button, UserMessageBubble } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';

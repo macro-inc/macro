@@ -549,12 +549,36 @@ pub struct CreateMarkdownDocumentRequest {
     pub skip_history: bool,
 }
 
+/// Request for a backend-initialized native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentRequest {
+    /// Canvas name.
+    pub document_name: String,
+    /// Optional parent project.
+    pub project_id: Option<uuid::Uuid>,
+}
+
 /// Response for creating a markdown document.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMarkdownDocumentResponse {
     /// The document ID of the created markdown document
+    pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
+}
+
+/// Response for creating a native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentResponse {
+    /// The document ID of the created native Canvas
     pub document_id: String,
     /// Metadata for the created document
     pub document_metadata: DocumentResponseMetadata,

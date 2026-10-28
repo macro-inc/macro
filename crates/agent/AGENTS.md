@@ -20,6 +20,10 @@ and usage metering.
 - `src/completion.rs`: one-shot, non-looping completions (no tools).
 - `src/structured_output.rs`: prompted JSON generation with offline schema
   preflight and result validation; external schema references are rejected.
+- `src/tool_media.rs`: promotes explicit top-level `modelMedia` results to
+  bounded native PNG blocks for both tool adapters and history replay; nested
+  content stays JSON and remote image URLs are rejected. Keep the public JSON
+  envelope in streamed results/history while excluding pixels from model text.
 
 ## Scope
 
@@ -51,7 +55,16 @@ and usage metering.
 
 - `rig-core`/`rig-agent` are pinned exact versions (not workspace deps);
   bump both together and check `test-utils` feature compatibility.
+- `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls
+  (native Anthropic/OpenAI); call it after `with_model`. Tools and
+  `complete*` still use the deployment's keys.
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md` · Skill: `upgrade-model`
+
+Canvas native image results remain native through tool output and history replay.
+Compatible Chat Completions provider requests omit those unsupported tool images
+with an explicit explanation; they never stringify encoded pixels into prompts.
+Model-request telemetry records native image counts without requiring content
+capture; image pixels remain excluded by genai_telemetry.

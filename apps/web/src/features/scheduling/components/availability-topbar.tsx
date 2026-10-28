@@ -1,5 +1,5 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Info from '@phosphor/info.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Info from '@icon/system/regular/info.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 

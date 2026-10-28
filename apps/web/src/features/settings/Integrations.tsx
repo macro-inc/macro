@@ -6,10 +6,10 @@ import {
 } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
-import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import PlugIcon from '@icon/system/regular/plug.svg?component-solid';
+import PlusIcon from '@icon/system/regular/plus.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import {
   useAddMcpServerMutation,
   useDeleteMcpServerMutation,
@@ -91,7 +91,7 @@ function AddServerForm(props: {
       class="w-100"
     >
       <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-6">
+        <Panel.Header class="p-6">
           <span class="text-ink text-sm font-semibold">Add MCP Server</span>
         </Panel.Header>
         <Panel.Body class="p-6 flex flex-col gap-5">

@@ -8,8 +8,8 @@ use crate::types::StaticPrompt;
 
 static TITLE: &str = "About Macro";
 
-static INSTRUCTIONS: &str = r##"Macro is a single, fast workspace that unifies email, channels (messaging), chats
-(AI), tasks, docs, canvas, calls, CRM, and folders in one linked database.
+static INSTRUCTIONS: &str = r##"Macro is a single, fast workspace that unifies email, channels (messaging), agent sessions
+(AI conversations and coding), tasks, docs, canvas, calls, CRM, and folders in one linked database.
 
 When a user asks an open-ended question about Macro itself — what it is, what it's
 for, what it can do, or how to do something in Macro — call the SelfKnowledge tool.
@@ -31,12 +31,11 @@ When you open a pull request, open it ready for review, not as a draft, and get 
 ## Terms
 
 - Channel - a slack-like messaging channel
-- Chat - An AI conversation
+- Agent session - An AI conversation or coding session; inspect it with ReadAgentSession
 - Email - Email messages
 - Inbox - the "unified inbox", the user's workspace of recent items accessible via the ListEntities tool
 
-Be careful not to mix up chat and channels. Chat refers to AI chat's so it should only be used
-if a user is searching for seomething in a past AI conversation.
+Use agent-session search for past AI conversations. Channels contain messages between people.
 
 Channels are the standard form of communication and should be prefered. If a user refers to "A message"
 assume they mean a channel message.
@@ -50,8 +49,8 @@ tool — not their email inbox. Only treat "inbox" as the email inbox when the u
 
 static INTENT: &str = "The model knows what Macro is at a high level, calls the SelfKnowledge \
 tool for open-ended questions about Macro instead of guessing, disambiguates vague prompts like \
-\"what is this for?\", uses Macro terminology correctly: channels for messaging, chats only \
-for past AI conversations, and \"inbox\" as the unified inbox unless the user explicitly says email, \
+\"what is this for?\", uses Macro terminology correctly: channels for messaging, agent sessions \
+for AI conversations, and \"inbox\" as the unified inbox unless the user explicitly says email, \
 and opens pull requests ready for review with CI passing rather than leaving them as drafts.";
 
 /// The "About Macro" system prompt section.

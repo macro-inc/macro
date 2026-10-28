@@ -32,8 +32,8 @@ startup loudly.
 
 ## Service URLs
 
-- Service-to-service URLs are typed in `crates/macro_service_urls`
-  (`service_url!` with `local`/`dev`/`prod`), chosen by `ENVIRONMENT`. Call
+- Stable service URLs and public OAuth/callback/app origins are typed in
+  `crates/macro_service_urls` (`service_url!` with `local`/`dev`/`prod`), chosen by `ENVIRONMENT`. Call
   `XServiceUrl::new()`. Never declare a `FOO_SERVICE_URL` env var or match on
   `Environment` to build a URL. Queue names follow the same pattern in
   `crates/macro_queues`.
@@ -42,9 +42,16 @@ startup loudly.
   `xtask_local`'s `local_env.rs`; `local` defaults are host ports and do not
   work inside Docker.
 - The URL table is hand-copied. A new or changed service URL updates every copy:
-  `macro_service_urls`, `infra/packages/shared/src/service_urls.ts`,
-  `apps/web/src/lib/core/constant/servers.ts`, `packages/sdk/src/config.ts`, and
-  any `wrangler` `[env.*.vars]` that call it.
+  `macro_service_urls` and `infra/packages/shared/src/service_urls.ts`, plus each
+  consuming runtime (`apps/web/src/lib/core/constant/servers.ts`,
+  `packages/sdk/src/config.ts`, and worker `[env.*.vars]`). Do not add unused
+  public OAuth identities to API transport maps.
+- Keep registered public OAuth identities separate from internal gateway API
+  routes. Do not store stable URLs in Doppler; reserve it for secrets and
+  infrastructure-generated addresses (such as preview DNS and SSH hosts).
+- When removing required Doppler URL fields, retain their existing values until
+  the deployed rollback baseline no longer requires them; migrate consumers to
+  typed URLs before deleting compatibility resources.
 
 ## Other runtimes
 

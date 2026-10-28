@@ -7,7 +7,11 @@
 import type { ImportEntityEntityId } from './importEntityEntityId';
 import type { ImportEntityEntityType } from './importEntityEntityType';
 import type { ImportEntityLastError } from './importEntityLastError';
+import type { ImportEntityParentId } from './importEntityParentId';
+import type { ImportEntityReviewId } from './importEntityReviewId';
 import type { ImportEntityTeamId } from './importEntityTeamId';
+import type { ImportEntityWaitingOn } from './importEntityWaitingOn';
+import type { ImportKind } from './importKind';
 import type { ImportSource } from './importSource';
 import type { ImportStatus } from './importStatus';
 import type { Initiator } from './initiator';
@@ -29,11 +33,19 @@ export interface ImportEntity {
   id: string;
   /** Where it was first staged from. */
   initiator: Initiator;
+  /** What the item is in its source system. */
+  kind: ImportKind;
   /** Failure detail from the last import attempt, when one failed. */
   last_error?: ImportEntityLastError;
   /** Per-source metadata (shape depends on `source`; see
 [`LinearIssueMeta`], [`NotionDocMeta`], [`SlackChannelMeta`]). */
   metadata: unknown;
+  /** The import row this item was imported under (a subpage's parent page,
+a row's database), when it was imported as part of a tree. */
+  parent_id?: ImportEntityParentId;
+  /** The agent session review that approved importing this item, when it
+came from one. */
+  review_id?: ImportEntityReviewId;
   /** The external system the item comes from. */
   source: ImportSource;
   /** Where the row is in its lifecycle. */
@@ -46,4 +58,8 @@ export interface ImportEntity {
 are visible with their owner's id, so clients can say "created by a
 teammate". */
   user_id: string;
+  /** The teammate's row this one waits on: that teammate is writing the
+same object for the team, and this row links to their copy once it
+is imported. */
+  waiting_on?: ImportEntityWaitingOn;
 }

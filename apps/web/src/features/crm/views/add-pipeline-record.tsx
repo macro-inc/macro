@@ -1,9 +1,9 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import TableIcon from '@phosphor/table.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import TableIcon from '@icon/system/regular/table.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import {
   Button,

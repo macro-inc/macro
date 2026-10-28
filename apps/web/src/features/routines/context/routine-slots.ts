@@ -6,6 +6,7 @@ import type { HistoryMetadata } from './history';
 export type RoutineEditorSlots = {
   PromptEditor: Component<{
     initialValue: string;
+    disabled?: boolean;
     onChange(value: string): void;
   }>;
   ExecutionPicker: Component<{

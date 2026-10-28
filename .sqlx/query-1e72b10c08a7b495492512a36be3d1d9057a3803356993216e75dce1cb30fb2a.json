@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT q.link_id,q.generation,q.provider_id FROM email_message_reconciliation q\n                JOIN email_links l ON l.id = q.link_id\n                WHERE q.generation = l.sync_generation AND l.is_sync_active AND l.provider = 'OUTLOOK'\n                    AND q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until < now())\n                ORDER BY q.is_import,q.available_at,q.link_id,q.provider_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED\n            )\n            UPDATE email_message_reconciliation q SET lease_id = $1, lease_until = now() + interval '3 minutes', attempts = attempts + 1\n            FROM candidate c,email_links l\n            WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id\n            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_import",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "attempts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1e72b10c08a7b495492512a36be3d1d9057a3803356993216e75dce1cb30fb2a"
+}

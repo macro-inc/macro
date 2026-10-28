@@ -34,6 +34,7 @@ outbound = [
   "dep:entity_registry_db_utils",
   "dep:model-entity",
   "dep:reqwest",
+  "dep:macro_tower_layers",
   "dep:macro_authorization",
   "dep:sqlx",
   "dep:share_permission_db_utils",
@@ -88,6 +89,7 @@ macro_user_id = { path = "../macro_user_id" }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
 reqwest = { workspace = true, optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 uuid = { workspace = true }
 sqlx = { workspace = true, features = ["json"], optional = true }
 chrono = { workspace = true }

@@ -8,18 +8,18 @@
 
 import type { PictureRecolor, ShapeOutline } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Checkerboard from '@icon/system/regular/checkerboard.svg';
+import CropIcon from '@icon/system/regular/crop.svg';
+import ImagesIcon from '@icon/system/regular/images.svg';
+import Palette from '@icon/system/regular/palette.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import Sun from '@icon/system/regular/sun.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Checkerboard from '@phosphor/checkerboard.svg';
-import CropIcon from '@phosphor/crop.svg';
-import ImagesIcon from '@phosphor/images.svg';
-import Palette from '@phosphor/palette.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import Stack from '@phosphor/stack.svg';
-import Sun from '@phosphor/sun.svg';
 import { cn } from '@ui';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
@@ -404,7 +404,7 @@ function CropButton(props: { crop: CropMode }) {
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
-            class="z-action-menu rounded-xl border border-edge bg-menu p-2 text-ink text-xs shadow-xl outline-none"
+            class="menu-surface z-action-menu p-2 text-xs outline-none"
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <div class="flex w-44 flex-col">

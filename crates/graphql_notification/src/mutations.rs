@@ -181,6 +181,11 @@ where
     S: NotificationMutationService,
 {
     /// Update authenticated user-owned notifications and return authoritative rows.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(notification_count = input.notification_ids.len())
+    )]
     async fn update_notifications(
         &self,
         ctx: &Context<'_>,
@@ -202,6 +207,11 @@ where
     }
 
     /// Update all notifications associated with the requested entities for the authenticated user.
+    #[tracing::instrument(
+        skip_all,
+        err(Debug),
+        fields(entity_count = input.entities.len())
+    )]
     async fn update_notifications_for_entity(
         &self,
         ctx: &Context<'_>,

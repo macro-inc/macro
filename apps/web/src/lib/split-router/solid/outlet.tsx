@@ -1,7 +1,11 @@
+import { perfMark } from '@app/observability/perf-marks';
 import {
   type Component,
+  createEffect,
   createMemo,
   type JSX,
+  on,
+  onMount,
   Show,
   Suspense,
   useContext,
@@ -43,6 +47,16 @@ function RouteOutlet(props: { fallback?: OutletFallback }) {
     { equals: (left, right) => left?.key === right?.key }
   );
 
+  createEffect(
+    on(match, (resolved) => {
+      if (resolved)
+        perfMark('route.matched', {
+          route: resolved.key,
+          depth: resolved.depth,
+        });
+    })
+  );
+
   const context: PaneContextValue = {
     pane: parent.pane,
     entry: parent.entry,
@@ -65,10 +79,17 @@ function RouteOutlet(props: { fallback?: OutletFallback }) {
               </Suspense>
             )}
           </Show>
+          <RouteMounted route={resolved.key} />
         </PaneContext.Provider>
       )}
     </Show>
   );
+}
+
+/** Marks when a matched route's component tree has been created and attached. */
+function RouteMounted(props: { route: string }) {
+  onMount(() => perfMark('route.mounted', { route: props.route }));
+  return null;
 }
 
 /**

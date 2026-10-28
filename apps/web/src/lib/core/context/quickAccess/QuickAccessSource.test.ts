@@ -71,6 +71,11 @@ const mocks = vi.hoisted(() => ({
     >
   >,
 }));
+vi.mock('@core/context/user', () => ({
+  useIsAuthenticated: () => () => true,
+  useUserId: () => () => 'viewer',
+}));
+
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
   enableDatabases: {},
@@ -178,9 +183,6 @@ vi.mock('@queries/soup/quick-access-snippets', () => ({
 vi.mock('@queries/soup/recently-viewed', () => ({
   useRecentlyViewedSoupQuery: () =>
     mocks.queries['recently-viewed']?.() ?? { data: [], isSuccess: true },
-}));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: () => ({ data: undefined }),
 }));
 vi.mock('@queries/storage/databases', () => ({
   useDatabasesQuery: () => ({ data: mocks.databases, isSuccess: true }),

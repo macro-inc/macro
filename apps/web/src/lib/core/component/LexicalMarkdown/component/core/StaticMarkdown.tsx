@@ -5,7 +5,7 @@
 
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
-import type { LinkNode } from '@lexical/link';
+import { $isAutoLinkNode, type LinkNode } from '@lexical/link';
 import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
@@ -350,7 +350,8 @@ function eraseRenderableElement<T extends ElementNode>(
 }
 
 const Text: TypedRenderableEntity<TextNode> = {
-  guard: (node: LexicalNode): node is TextNode => node.__type === 'text',
+  guard: (node: LexicalNode): node is TextNode =>
+    node.__type === 'text' || node.__type === 'unlinked-text',
   render: (props) => {
     return (
       <span class={getTextClassName(props.node, props.theme)}>
@@ -875,16 +876,21 @@ const HorizontalRule: TypedRenderableEntity<HorizontalRuleNode> = {
 };
 
 const Link: TypedRenderableElement<LinkNode> = {
-  guard: (node: LexicalNode): node is LinkNode => node.__type === 'link',
-  render: (props) => (
-    <LinkWithPreview
-      url={props.node.__url}
-      class={props.theme.link}
-      title={props.node.__title ?? props.node.__url}
-    >
-      {props.children}
-    </LinkWithPreview>
-  ),
+  guard: (node: LexicalNode): node is LinkNode =>
+    node.__type === 'link' || node.__type === 'autolink',
+  render: (props) => {
+    if ($isAutoLinkNode(props.node) && props.node.getIsUnlinked())
+      return props.children;
+    return (
+      <LinkWithPreview
+        url={props.node.__url}
+        class={props.theme.link}
+        title={props.node.__title ?? props.node.__url}
+      >
+        {props.children}
+      </LinkWithPreview>
+    );
+  },
 };
 
 const Mark: TypedRenderableElement<MarkNode> = {
@@ -1118,23 +1124,34 @@ function Document(
     theme: EditorThemeClasses;
     rootRef?: (ref: HTMLDivElement) => void;
     singleLine?: boolean;
+    inert?: boolean;
   } & StaticRenderOptions
 ): JSX.Element {
+  // Read while the parsed editor state is active, before rendering decorators.
+  const accessibleText = props.inert
+    ? props.rootNode.getTextContent()
+    : undefined;
   return (
-    <div
-      class={cn(
-        'markdown-content',
-        props.theme.root,
-        'wrap-break-word max-w-full'
-      )}
-      ref={props.rootRef}
-    >
-      <MapRender
-        children={props.rootNode.getChildren()}
-        theme={props.theme}
-        lazy={props.lazy}
-      />
-    </div>
+    <>
+      <Show when={props.inert}>
+        <span class="sr-only">{accessibleText}</span>
+      </Show>
+      <div
+        class={cn(
+          'markdown-content',
+          props.theme.root,
+          'wrap-break-word max-w-full'
+        )}
+        ref={props.rootRef}
+        inert={props.inert}
+      >
+        <MapRender
+          children={props.rootNode.getChildren()}
+          theme={props.theme}
+          lazy={props.lazy}
+        />
+      </div>
+    </>
   );
 }
 
@@ -1179,6 +1196,8 @@ export function StaticMarkdown(props: {
   target?: 'internal' | 'external' | 'both';
   singleLine?: boolean;
   lazy?: boolean;
+  /** Disable preview interactions while exposing a plain-text equivalent to assistive technology. */
+  inert?: boolean;
 }) {
   let {
     editor: contextEditor,
@@ -1272,6 +1291,7 @@ export function StaticMarkdown(props: {
         theme: mergedTheme(),
         lazy: lazy(),
         rootRef: props.rootRef,
+        inert: props.inert,
       });
     });
   });

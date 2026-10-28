@@ -8,6 +8,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { NodeInfo, Rect } from '@core/fig-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Tabs } from '@kobalte/core/tabs';
+import { Telemetry } from '@macro-inc/observability';
 import {
   createEffect,
   createSignal,
@@ -108,6 +109,20 @@ export function FigViewer() {
       : undefined,
     online: collab ? () => collab.status() === 'connected' : undefined,
   });
+  /**
+   * Edits whose engine reads (hit tests, layer rows) run before the editor's
+   * queue, which is where edit failures are otherwise reported.
+   */
+  const runEdit = async (work: Promise<unknown>) => {
+    try {
+      await work;
+    } catch (error) {
+      Telemetry.error(error, { surface: 'fig-viewer' });
+      context.notifyError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  };
 
   const review = createFigReview({
     context,
@@ -155,7 +170,7 @@ export function FigViewer() {
   let focusSearch: (() => void) | undefined;
 
   onMount(() => {
-    fireAndForget(viewer.openPage(0), 'block-fig');
+    fireAndForget(viewer.openPage(0), 'fig-viewer');
     if (document.activeElement === document.body)
       root.focus({ preventScroll: true });
   });
@@ -189,9 +204,11 @@ export function FigViewer() {
   // it is edited.
   const fonts = createFontRegistry({ engine, source: context.fonts });
   createEffect(
-    on(viewer.editsSettled, () => fireAndForget(fonts.refresh(), 'block-fig'), {
-      defer: true,
-    })
+    on(
+      viewer.editsSettled,
+      () => fireAndForget(fonts.refresh(), 'fig-viewer'),
+      { defer: true }
+    )
   );
   let mixedRequest = 0;
   const loadMixed = async (ids: string[], request: number) => {
@@ -214,7 +231,7 @@ export function FigViewer() {
             selected.map((s) => s.id),
             request
           ),
-          'block-fig'
+          'fig-viewer'
         );
     })
   );
@@ -243,7 +260,7 @@ export function FigViewer() {
         : patch;
     const text = info()?.text;
     if (!text || (!patch.fontFamily && !patch.fontStyle)) {
-      fireAndForget(editor.setProps(ranged, what), 'block-fig');
+      fireAndForget(editor.setProps(ranged, what), 'fig-viewer');
       return;
     }
     const style = rangeStyle(text, range?.start ?? 0, range?.end ?? 0);
@@ -261,7 +278,7 @@ export function FigViewer() {
         await editor.setProps(ranged, what);
         await fonts.refresh();
       })(),
-      'block-fig'
+      'fig-viewer'
     );
   };
 
@@ -318,7 +335,7 @@ export function FigViewer() {
         [{ op: 'set', ids: [page.id], props: { fills: [{ color: hex }] } }],
         gestureKey('page-color', live)
       ),
-      'block-fig'
+      'fig-viewer'
     );
   };
 
@@ -402,7 +419,7 @@ export function FigViewer() {
 
   const openStep = (step: 1 | -1) => {
     const next = stepPage(viewer.pages, viewer.page(), step);
-    if (next !== undefined) fireAndForget(viewer.openPage(next), 'block-fig');
+    if (next !== undefined) fireAndForget(viewer.openPage(next), 'fig-viewer');
   };
 
   /**
@@ -421,7 +438,7 @@ export function FigViewer() {
           { opacity: (first.digit * 10 + digit) / 100 },
           first.key
         ),
-        'block-fig'
+        'fig-viewer'
       );
       return;
     }
@@ -429,7 +446,7 @@ export function FigViewer() {
     typedOpacity = { digit, at: now, key };
     fireAndForget(
       editor.setProps({ opacity: digit === 0 ? 1 : digit / 10 }, key),
-      'block-fig'
+      'fig-viewer'
     );
   };
 
@@ -446,10 +463,12 @@ export function FigViewer() {
       const v = viewer.viewport();
       const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
       fireAndForget(
-        viewer
-          .containerAt(at)
-          .then((parent) => editor.importImages(files, at, parent)),
-        'block-fig'
+        runEdit(
+          viewer
+            .containerAt(at)
+            .then((parent) => editor.importImages(files, at, parent))
+        ),
+        'fig-viewer'
       );
     };
     input.click();
@@ -468,7 +487,7 @@ export function FigViewer() {
       .with('previous-frame', () => viewer.stepFrame(-1))
       .with('next-page', () => openStep(1))
       .with('previous-page', () => openStep(-1))
-      .with('select-all', () => fireAndForget(viewer.selectAll(), 'block-fig'))
+      .with('select-all', () => fireAndForget(viewer.selectAll(), 'fig-viewer'))
       .with('escape', () => {
         if (showShortcuts()) setShowShortcuts(false);
         else if (viewer.tool() !== 'move' && viewer.tool() !== 'hand')
@@ -477,13 +496,13 @@ export function FigViewer() {
       })
       .with('select-parent', () => viewer.selectParent())
       .with('select-children', () =>
-        fireAndForget(viewer.selectChildren(), 'block-fig')
+        fireAndForget(viewer.selectChildren(), 'fig-viewer')
       )
       .with('next-sibling', () =>
-        fireAndForget(viewer.selectSibling(1), 'block-fig')
+        fireAndForget(viewer.selectSibling(1), 'fig-viewer')
       )
       .with('previous-sibling', () =>
-        fireAndForget(viewer.selectSibling(-1), 'block-fig')
+        fireAndForget(viewer.selectSibling(-1), 'fig-viewer')
       )
       .with('toggle-ui', () => viewer.setUiHidden((h) => !h))
       .with('toggle-outline', () => viewer.setOutlineView((o) => !o))
@@ -499,9 +518,9 @@ export function FigViewer() {
         viewer.setDesignOpen((o) => !o);
       })
       .with('collapse-layers', () => viewer.collapseLayers())
-      .with('copy-png', () => fireAndForget(copyPng(), 'block-fig'))
+      .with('copy-png', () => fireAndForget(copyPng(), 'fig-viewer'))
       .with('export', () =>
-        fireAndForget(handoff.exportSelection(), 'block-fig')
+        fireAndForget(handoff.exportSelection(), 'fig-viewer')
       )
       .with('find', () => {
         viewer.setUiHidden(false);
@@ -538,105 +557,107 @@ export function FigViewer() {
       .with('place-image', () => placeImage())
       .with('undo', () => {
         editor.endVectorEdit();
-        fireAndForget(editor.undo(), 'block-fig');
+        fireAndForget(editor.undo(), 'fig-viewer');
       })
       .with('redo', () => {
         editor.endVectorEdit();
-        fireAndForget(editor.redo(), 'block-fig');
+        fireAndForget(editor.redo(), 'fig-viewer');
       })
       .with('delete', () =>
-        fireAndForget(editor.deleteSelection(), 'block-fig')
+        fireAndForget(editor.deleteSelection(), 'fig-viewer')
       )
       .with('duplicate', () =>
-        fireAndForget(editor.duplicateSelection(), 'block-fig')
+        fireAndForget(editor.duplicateSelection(), 'fig-viewer')
       )
       .with('copy', () => editor.copy())
-      .with('cut', () => fireAndForget(editor.cut(), 'block-fig'))
-      .with('paste', () => fireAndForget(editor.paste(), 'block-fig'))
+      .with('cut', () => fireAndForget(editor.cut(), 'fig-viewer'))
+      .with('paste', () => fireAndForget(runEdit(editor.paste()), 'fig-viewer'))
       .with('paste-replace', () =>
-        fireAndForget(editor.pasteToReplace(), 'block-fig')
+        fireAndForget(runEdit(editor.pasteToReplace()), 'fig-viewer')
       )
-      .with('group', () => fireAndForget(editor.group(), 'block-fig'))
-      .with('ungroup', () => fireAndForget(editor.ungroup(), 'block-fig'))
+      .with('group', () => fireAndForget(editor.group(), 'fig-viewer'))
+      .with('ungroup', () => fireAndForget(editor.ungroup(), 'fig-viewer'))
       .with('frame-selection', () =>
-        fireAndForget(editor.group(true), 'block-fig')
+        fireAndForget(editor.group(true), 'fig-viewer')
       )
       .with('add-auto-layout', () =>
-        fireAndForget(editor.addAutoLayout(), 'block-fig')
+        fireAndForget(editor.addAutoLayout(), 'fig-viewer')
       )
       .with('create-component', () =>
-        fireAndForget(editor.createComponent(), 'block-fig')
+        fireAndForget(editor.createComponent(), 'fig-viewer')
       )
       .with('detach-instance', () =>
-        fireAndForget(editor.detachInstance(), 'block-fig')
+        fireAndForget(editor.detachInstance(), 'fig-viewer')
       )
       .with('remove-auto-layout', () =>
-        fireAndForget(editor.removeAutoLayout(), 'block-fig')
+        fireAndForget(editor.removeAutoLayout(), 'fig-viewer')
       )
       .with('boolean-union', () =>
-        fireAndForget(editor.booleanOp('UNION'), 'block-fig')
+        fireAndForget(editor.booleanOp('UNION'), 'fig-viewer')
       )
       .with('boolean-subtract', () =>
-        fireAndForget(editor.booleanOp('SUBTRACT'), 'block-fig')
+        fireAndForget(editor.booleanOp('SUBTRACT'), 'fig-viewer')
       )
       .with('boolean-intersect', () =>
-        fireAndForget(editor.booleanOp('INTERSECT'), 'block-fig')
+        fireAndForget(editor.booleanOp('INTERSECT'), 'fig-viewer')
       )
       .with('boolean-exclude', () =>
-        fireAndForget(editor.booleanOp('XOR'), 'block-fig')
+        fireAndForget(editor.booleanOp('XOR'), 'fig-viewer')
       )
-      .with('flatten', () => fireAndForget(editor.flatten(), 'block-fig'))
+      .with('flatten', () => fireAndForget(editor.flatten(), 'fig-viewer'))
       .with('bring-forward', () =>
-        fireAndForget(editor.arrange('forward'), 'block-fig')
+        fireAndForget(editor.arrange('forward'), 'fig-viewer')
       )
       .with('send-backward', () =>
-        fireAndForget(editor.arrange('backward'), 'block-fig')
+        fireAndForget(editor.arrange('backward'), 'fig-viewer')
       )
       .with('bring-to-front', () =>
-        fireAndForget(editor.arrange('front'), 'block-fig')
+        fireAndForget(editor.arrange('front'), 'fig-viewer')
       )
       .with('send-to-back', () =>
-        fireAndForget(editor.arrange('back'), 'block-fig')
+        fireAndForget(editor.arrange('back'), 'fig-viewer')
       )
       .with('toggle-visible', () => {
         const visible = info()?.visible ?? true;
-        fireAndForget(editor.setProps({ visible: !visible }), 'block-fig');
+        fireAndForget(editor.setProps({ visible: !visible }), 'fig-viewer');
       })
       .with('toggle-locked', () => {
-        fireAndForget(editor.toggleLocked(), 'block-fig');
+        fireAndForget(editor.toggleLocked(), 'fig-viewer');
       })
       .with('flip-horizontal', () =>
-        fireAndForget(editor.flip(false), 'block-fig')
+        fireAndForget(editor.flip(false), 'fig-viewer')
       )
       .with('flip-vertical', () =>
-        fireAndForget(editor.flip(true), 'block-fig')
+        fireAndForget(editor.flip(true), 'fig-viewer')
       )
       .with('rename', () => viewer.requestRename())
       .with('align-left', () =>
-        fireAndForget(editor.align('left'), 'block-fig')
+        fireAndForget(runEdit(editor.align('left')), 'fig-viewer')
       )
       .with('align-center', () =>
-        fireAndForget(editor.align('center'), 'block-fig')
+        fireAndForget(runEdit(editor.align('center')), 'fig-viewer')
       )
       .with('align-right', () =>
-        fireAndForget(editor.align('right'), 'block-fig')
+        fireAndForget(runEdit(editor.align('right')), 'fig-viewer')
       )
-      .with('align-top', () => fireAndForget(editor.align('top'), 'block-fig'))
+      .with('align-top', () =>
+        fireAndForget(runEdit(editor.align('top')), 'fig-viewer')
+      )
       .with('align-middle', () =>
-        fireAndForget(editor.align('middle'), 'block-fig')
+        fireAndForget(runEdit(editor.align('middle')), 'fig-viewer')
       )
       .with('align-bottom', () =>
-        fireAndForget(editor.align('bottom'), 'block-fig')
+        fireAndForget(runEdit(editor.align('bottom')), 'fig-viewer')
       )
       .with('distribute-horizontal', () =>
-        fireAndForget(editor.distribute('horizontal'), 'block-fig')
+        fireAndForget(editor.distribute('horizontal'), 'fig-viewer')
       )
       .with('distribute-vertical', () =>
-        fireAndForget(editor.distribute('vertical'), 'block-fig')
+        fireAndForget(editor.distribute('vertical'), 'fig-viewer')
       )
       .with('swap-fill-stroke', () => {
         const i = info();
-        if (i) fireAndForget(editor.swapFillStroke(i), 'block-fig');
+        if (i) fireAndForget(editor.swapFillStroke(i), 'fig-viewer');
       })
       .with(
         'opacity-0',
@@ -651,21 +672,25 @@ export function FigViewer() {
         'opacity-9',
         (a) => typeOpacity(Number(a.slice('opacity-'.length)))
       )
-      .with('nudge-left', () => fireAndForget(editor.nudge(-1, 0), 'block-fig'))
-      .with('nudge-right', () => fireAndForget(editor.nudge(1, 0), 'block-fig'))
-      .with('nudge-up', () => fireAndForget(editor.nudge(0, -1), 'block-fig'))
-      .with('nudge-down', () => fireAndForget(editor.nudge(0, 1), 'block-fig'))
+      .with('nudge-left', () =>
+        fireAndForget(editor.nudge(-1, 0), 'fig-viewer')
+      )
+      .with('nudge-right', () =>
+        fireAndForget(editor.nudge(1, 0), 'fig-viewer')
+      )
+      .with('nudge-up', () => fireAndForget(editor.nudge(0, -1), 'fig-viewer'))
+      .with('nudge-down', () => fireAndForget(editor.nudge(0, 1), 'fig-viewer'))
       .with('nudge-left-10', () =>
-        fireAndForget(editor.nudge(-10, 0), 'block-fig')
+        fireAndForget(editor.nudge(-10, 0), 'fig-viewer')
       )
       .with('nudge-right-10', () =>
-        fireAndForget(editor.nudge(10, 0), 'block-fig')
+        fireAndForget(editor.nudge(10, 0), 'fig-viewer')
       )
       .with('nudge-up-10', () =>
-        fireAndForget(editor.nudge(0, -10), 'block-fig')
+        fireAndForget(editor.nudge(0, -10), 'fig-viewer')
       )
       .with('nudge-down-10', () =>
-        fireAndForget(editor.nudge(0, 10), 'block-fig')
+        fireAndForget(editor.nudge(0, 10), 'fig-viewer')
       )
       .exhaustive();
 
@@ -696,7 +721,7 @@ export function FigViewer() {
     const finish = e.key === 'Enter' || e.key === 'Escape';
     if (editor.penPath()) {
       if (!finish) return false;
-      fireAndForget(editor.penFinish(false), 'block-fig');
+      fireAndForget(runEdit(editor.penFinish(false)), 'fig-viewer');
       return true;
     }
     const edit = editor.vectorEdit();
@@ -711,7 +736,7 @@ export function FigViewer() {
     ) {
       fireAndForget(
         editor.setVectorNetwork(deleteVertex(edit.network, edit.selected)),
-        'block-fig'
+        'fig-viewer'
       );
       return true;
     }
@@ -763,7 +788,7 @@ export function FigViewer() {
         if (following()) setFollowing(undefined);
         return;
       }
-      fireAndForget(showPeerView(peer), 'block-fig');
+      fireAndForget(showPeerView(peer), 'fig-viewer');
     })
   );
   /** Panning, zooming, or clicking the canvas stops following. */
@@ -855,7 +880,7 @@ export function FigViewer() {
     if (resolved === 'edit-text') setTextEditing(info()?.id);
     else if (resolved === 'edit-vector') {
       const id = info()?.id;
-      if (id) fireAndForget(editor.editVector(id), 'block-fig');
+      if (id) fireAndForget(runEdit(editor.editVector(id)), 'fig-viewer');
     } else run(resolved);
   };
 
@@ -900,8 +925,10 @@ export function FigViewer() {
     if (files.length === 0) {
       // Layers copied here, in another file, or in Figma.
       fireAndForget(
-        editor.paste(e.clipboardData?.getData('text/html') || undefined),
-        'block-fig'
+        runEdit(
+          editor.paste(e.clipboardData?.getData('text/html') || undefined)
+        ),
+        'fig-viewer'
       );
       return;
     }
@@ -909,10 +936,12 @@ export function FigViewer() {
     const v = viewer.viewport();
     const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
     fireAndForget(
-      viewer
-        .containerAt(at)
-        .then((parent) => editor.importImages(files, at, parent)),
-      'block-fig'
+      runEdit(
+        viewer
+          .containerAt(at)
+          .then((parent) => editor.importImages(files, at, parent))
+      ),
+      'fig-viewer'
     );
   };
 
@@ -1024,7 +1053,7 @@ export function FigViewer() {
                 zoomItems={zoomItems()}
                 onRun={run}
                 onExportFramesPdf={() =>
-                  fireAndForget(handoff.exportFramesPdf(), 'block-fig')
+                  fireAndForget(handoff.exportFramesPdf(), 'fig-viewer')
                 }
               />
               <span
@@ -1119,7 +1148,7 @@ export function FigViewer() {
               onDrop: (data, at, parent) =>
                 fireAndForget(
                   libraries.dropAsset(data, at, parent),
-                  'block-fig'
+                  'fig-viewer'
                 ),
             }
           }
@@ -1173,7 +1202,7 @@ export function FigViewer() {
               fonts={fonts.missing()}
               canUseLocal={fonts.canUseLocalFonts()}
               onUseLocal={() =>
-                fireAndForget(fonts.useLocalFonts(), 'block-fig')
+                fireAndForget(fonts.useLocalFonts(), 'fig-viewer')
               }
             />
           </Show>
@@ -1198,7 +1227,7 @@ export function FigViewer() {
             >
               <PresentButton
                 mac={IS_MAC}
-                onPresent={() => fireAndForget(review.present(), 'block-fig')}
+                onPresent={() => fireAndForget(review.present(), 'fig-viewer')}
               />
               <ViewerZoom
                 label={zoomLabel(viewer.camera().zoom)}
@@ -1285,7 +1314,7 @@ export function FigViewer() {
                   <PresentButton
                     mac={IS_MAC}
                     onPresent={() =>
-                      fireAndForget(review.present(), 'block-fig')
+                      fireAndForget(review.present(), 'fig-viewer')
                     }
                   />
                   <PanelToggle
@@ -1319,7 +1348,9 @@ export function FigViewer() {
               <>
                 <PresentButton
                   mac={IS_MAC}
-                  onPresent={() => fireAndForget(review.present(), 'block-fig')}
+                  onPresent={() =>
+                    fireAndForget(review.present(), 'fig-viewer')
+                  }
                 />
                 <PanelToggle
                   side="right"
@@ -1349,11 +1380,12 @@ export function FigViewer() {
                 : undefined,
               preview: fonts.preview,
               onFontsOpen: () =>
-                fireAndForget(fonts.loadCatalog(), 'block-fig'),
+                fireAndForget(fonts.loadCatalog(), 'fig-viewer'),
             }}
             onAlign={
               editor.enabled()
-                ? (how) => fireAndForget(editor.align(how), 'block-fig')
+                ? (how) =>
+                    fireAndForget(runEdit(editor.align(how)), 'fig-viewer')
                 : undefined
             }
             onFlip={
@@ -1370,11 +1402,11 @@ export function FigViewer() {
             onPageColor={editor.enabled() ? setPageColor : undefined}
             swatches={swatches()}
             mixed={mixed()}
-            onPickerOpen={() => fireAndForget(loadSwatches(), 'block-fig')}
+            onPickerOpen={() => fireAndForget(loadSwatches(), 'fig-viewer')}
             onAddImage={editor.enabled() ? addImage : undefined}
             onAddAutoLayout={
               editor.enabled()
-                ? () => fireAndForget(editor.addAutoLayout(), 'block-fig')
+                ? () => fireAndForget(editor.addAutoLayout(), 'fig-viewer')
                 : undefined
             }
             selectionCount={viewer.selected().length}
@@ -1394,12 +1426,12 @@ export function FigViewer() {
                     onExport={(settings) =>
                       fireAndForget(
                         handoff.exportSelection(settings),
-                        'block-fig'
+                        'fig-viewer'
                       )
                     }
                     preview={handoff.preview}
-                    onCopyPng={() => fireAndForget(copyPng(), 'block-fig')}
-                    onCopySvg={() => fireAndForget(copySvg(), 'block-fig')}
+                    onCopyPng={() => fireAndForget(copyPng(), 'fig-viewer')}
+                    onCopySvg={() => fireAndForget(copySvg(), 'fig-viewer')}
                   />
                 )}
               </Show>
@@ -1423,7 +1455,7 @@ export function FigViewer() {
                   }
                   swatches={swatches()}
                   onPickerOpen={() =>
-                    fireAndForget(loadSwatches(), 'block-fig')
+                    fireAndForget(loadSwatches(), 'fig-viewer')
                   }
                 />
               </Show>
@@ -1436,10 +1468,10 @@ export function FigViewer() {
                     design={designSystem.info()}
                     assets={handoff.assets()}
                     onCopy={(text) =>
-                      fireAndForget(copyText(text), 'block-fig')
+                      fireAndForget(copyText(text), 'fig-viewer')
                     }
                     onDownload={(id, s) =>
-                      fireAndForget(handoff.downloadAsset(id, s), 'block-fig')
+                      fireAndForget(handoff.downloadAsset(id, s), 'fig-viewer')
                     }
                   />
                 )}
@@ -1447,17 +1479,17 @@ export function FigViewer() {
             }
             onBoolean={
               editor.enabled()
-                ? (op) => fireAndForget(editor.booleanOp(op), 'block-fig')
+                ? (op) => fireAndForget(editor.booleanOp(op), 'fig-viewer')
                 : undefined
             }
-            onFlatten={() => fireAndForget(editor.flatten(), 'block-fig')}
+            onFlatten={() => fireAndForget(editor.flatten(), 'fig-viewer')}
             onCreateComponent={
               editor.enabled() &&
               !viewer.selected().some((node) => node.id.startsWith('I'))
-                ? () => fireAndForget(editor.createComponent(), 'block-fig')
+                ? () => fireAndForget(editor.createComponent(), 'fig-viewer')
                 : undefined
             }
-            onCopyText={(text) => fireAndForget(copyText(text), 'block-fig')}
+            onCopyText={(text) => fireAndForget(copyText(text), 'fig-viewer')}
             onTabChange={review.setPanelTab}
             prototype={
               <PrototypePanel
@@ -1472,13 +1504,13 @@ export function FigViewer() {
                     ? (id, index, edited) =>
                         fireAndForget(
                           review.setInteraction(id, index, edited),
-                          'block-fig'
+                          'fig-viewer'
                         )
                     : undefined
                 }
                 onFlowStart={editor.enabled() ? review.setFlowStart : undefined}
                 onPresent={(frame) =>
-                  fireAndForget(review.present(frame), 'block-fig')
+                  fireAndForget(review.present(frame), 'fig-viewer')
                 }
               />
             }
@@ -1501,7 +1533,7 @@ export function FigViewer() {
           onTool={(tool) => {
             review.comments?.setActive(false);
             if (editor.penPath())
-              fireAndForget(editor.penFinish(), 'block-fig');
+              fireAndForget(runEdit(editor.penFinish()), 'fig-viewer');
             viewer.setTool(tool);
           }}
           editable={editor.enabled()}

@@ -11,7 +11,7 @@
 export interface ResyncResponse {
   /** True when a backfill was already running and this call was a no-op. */
   already_in_progress: boolean;
-  /** The backfill job driving the (re-)sync. Either the freshly enqueued job or
+  /** Opaque ID of the backfill job or provider sync stream driving the resync.
 the one already in progress. */
   backfill_job_id: string;
 }

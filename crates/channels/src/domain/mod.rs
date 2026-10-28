@@ -1,3 +1,5 @@
+/// Requests to join a private or team channel.
+pub mod access_requests;
 /// Event-to-activity mappings for this domain.
 pub mod activity;
 #[cfg(feature = "ports")]

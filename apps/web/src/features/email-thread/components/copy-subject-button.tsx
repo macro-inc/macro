@@ -1,5 +1,5 @@
 import { isPlaceholderSubject } from '@app/features/email-compose/core/subject-text';
-import CopyIcon from '@phosphor/copy.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';

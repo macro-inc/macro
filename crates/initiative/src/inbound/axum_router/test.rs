@@ -299,6 +299,20 @@ impl InitiativeService for FakeInitiativeService {
         Err(InitiativeError::NotFound)
     }
 
+    async fn read(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<crate::domain::reads::InitiativeRead, InitiativeError> {
+        Err(InitiativeError::NotFound)
+    }
+
+    async fn summarize(
+        &self,
+        _read: &crate::domain::reads::InitiativeRead,
+    ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
+        Err(InitiativeError::NotFound)
+    }
+
     async fn create_attributed(
         &self,
         user_id: &MacroUserIdStr<'_>,

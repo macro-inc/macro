@@ -31,6 +31,7 @@ use roles_and_permissions::domain::{
     port::UserRolesAndPermissionsService,
 };
 
+use super::invite_reminders::{InviteReminderReport, InviteReminderSender};
 use crate::domain::{
     contacts_enqueuer::ContactsEnqueuer,
     crm_enqueuer::{CrmEnqueuer, NoOpCrmEnqueuer},
@@ -55,17 +56,18 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, PatchTeamRequest, PatchTeamUserRole,
-        RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan,
-        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteSnapshot,
-        TeamMember, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
-        TryJoinTeamByDomainError,
+        AcceptedTeamInvite, CustomerError, DueInviteReminder, JoinTeamDirectlyError,
+        PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError, RemoveUserFromAllTeamsError,
+        RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamInviteSnapshot, TeamMember,
+        TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::TeamRepository,
 };
 
 mod delete_team;
+mod invite_link;
 
 use delete_team::{Journal, RecordingOwnedEntityCleanup, Step};
 
@@ -115,6 +117,7 @@ struct MockTeamRepository {
     fail_invite_users_to_team: bool,
     invite_users_to_team_calls: Arc<Mutex<usize>>,
     new_invite_emails: Option<Vec<String>>,
+    pending_team_invites: Vec<TeamInviteDetails>,
     invite_by_id: Option<TeamInvite<'static>>,
     delete_invite_calls: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid)>>>,
     fail_delete_invite: bool,
@@ -137,7 +140,14 @@ struct MockTeamRepository {
     team_ids: Vec<uuid::Uuid>,
     reject_owner: bool,
     user_teams: Vec<Team>,
+    /// What `get_user_teams` returns once `add_user_to_team` has run, to model
+    /// a membership created concurrently.
+    user_teams_after_add: Option<Vec<Team>>,
     journal: Journal,
+    invite_link: Arc<Mutex<Option<TeamInviteLinkToken>>>,
+    invite_link_team: Option<TeamInviteLinkTeam>,
+    /// What `claim_due_invite_reminders` hands out, once.
+    due_invite_reminders: Arc<Mutex<Vec<DueInviteReminder>>>,
 }
 
 impl MockTeamRepository {
@@ -194,6 +204,7 @@ impl MockTeamRepository {
             fail_invite_users_to_team: false,
             invite_users_to_team_calls: Arc::new(Mutex::new(0)),
             new_invite_emails: None,
+            pending_team_invites: Vec::new(),
             invite_by_id: None,
             delete_invite_calls: Arc::new(Mutex::new(Vec::new())),
             fail_delete_invite: false,
@@ -216,7 +227,11 @@ impl MockTeamRepository {
             team_ids: Vec::new(),
             reject_owner: false,
             user_teams: Vec::new(),
+            user_teams_after_add: None,
             journal: Journal::default(),
+            invite_link: Arc::new(Mutex::new(None)),
+            invite_link_team: None,
+            due_invite_reminders: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -438,6 +453,16 @@ impl TeamRepository for MockTeamRepository {
             .unwrap()
             .push(invite_ids.to_vec());
         async { Ok(()) }
+    }
+
+    fn claim_due_invite_reminders(
+        &self,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<DueInviteReminder>, TeamError>> + Send {
+        let mut due = self.due_invite_reminders.lock().unwrap();
+        let take = due.len().min(usize::try_from(limit).unwrap_or(0));
+        let claimed: Vec<_> = due.drain(..take).collect();
+        async move { Ok(claimed) }
     }
 
     fn remove_user_from_team(
@@ -662,7 +687,10 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Team>, TeamError>> + Send {
-        let teams = self.user_teams.clone();
+        let teams = match &self.user_teams_after_add {
+            Some(teams) if *self.add_user_to_team_calls.lock().unwrap() > 0 => teams.clone(),
+            _ => self.user_teams.clone(),
+        };
         async move { Ok(teams) }
     }
 
@@ -677,7 +705,8 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<TeamInviteDetails>, TeamError>> + Send {
-        async { unimplemented!() }
+        let invites = self.pending_team_invites.clone();
+        async move { Ok(invites) }
     }
 
     fn get_team_name(
@@ -883,6 +912,41 @@ impl TeamRepository for MockTeamRepository {
         team_ids.sort();
         team_ids.truncate(limit as usize);
         async move { Ok(team_ids) }
+    }
+
+    fn get_team_invite_link(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkToken>, TeamError>> + Send {
+        let token = *self.invite_link.lock().unwrap();
+        async move { Ok(token) }
+    }
+
+    fn set_team_invite_link(
+        &self,
+        _: &uuid::Uuid,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        *self.invite_link.lock().unwrap() = Some(*token);
+        async { Ok(()) }
+    }
+
+    fn delete_team_invite_link(
+        &self,
+        _: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        *self.invite_link.lock().unwrap() = None;
+        async { Ok(()) }
+    }
+
+    fn get_team_by_invite_link(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<Option<TeamInviteLinkTeam>, TeamError>> + Send {
+        let team = (*self.invite_link.lock().unwrap() == Some(*token))
+            .then(|| self.invite_link_team.clone())
+            .flatten();
+        async move { Ok(team) }
     }
 }
 
@@ -1215,6 +1279,14 @@ impl ChannelService for RecordingChannelService {
     ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
     {
         async move { unimplemented!("not needed for team service tests") }
+    }
+
+    async fn get_user_display_names(
+        &self,
+        _user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<std::collections::HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr>
+    {
+        Ok(std::collections::HashMap::new())
     }
 
     fn create_channel(
@@ -3185,6 +3257,7 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
     assert_eq!(*invitation_persistence_calls.lock().unwrap(), 1);
     assert_eq!(notification_ingress.call_count.load(Ordering::SeqCst), 1);
     assert_eq!(*mark_sent_calls.lock().unwrap(), vec![vec![invite_id]]);
+    assert_eq!(invitee_plans_sent(&notification_ingress), ["premium"]);
 
     let events = analytics_events.lock().unwrap();
     assert_eq!(events.len(), 1);
@@ -3202,6 +3275,101 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
         }
         event => panic!("unexpected event: {event:?}"),
     }
+}
+
+/// The plan each sent invite email promised, in send order.
+fn invitee_plans_sent(notification_ingress: &MockNotificationIngress) -> Vec<serde_json::Value> {
+    notification_ingress
+        .recorded_requests
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|request| request["req"]["notification"]["content"]["inviteePlan"].clone())
+        .collect()
+}
+
+/// Invites one member to a team in the given billing state and returns the
+/// plans the invite emails promised.
+async fn invitee_plans_for_team(
+    in_good_standing: bool,
+    team_subscription_id: Option<&str>,
+    customer_repo: MockCustomerRepository,
+) -> Vec<serde_json::Value> {
+    let team_id = uuid::Uuid::from_u128(7100);
+    let invite_id = uuid::Uuid::from_u128(7101);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mut team_repo = MockTeamRepository::new(
+        vec![make_invite("member@example.com", invite_id, team_id)],
+        "Acme",
+        Arc::new(Mutex::new(Vec::new())),
+    )
+    .with_team(Team::new(
+        team_id,
+        "Acme".to_string(),
+        "acme".to_string(),
+        owner_id.clone().into_owned(),
+        false,
+        false,
+    ));
+    team_repo.team_payment_status = in_good_standing;
+    team_repo.team_subscription_id = team_subscription_id.map(|id| id.parse().unwrap());
+    team_repo.stripe_customer_id = Some("cus_invitee_plan".parse().unwrap());
+
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invites = vec![
+        Email::parse_from_str("member@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
+    service
+        .invite_users_to_team(
+            test_team_receipt::<MemberTeamRole>(team_id, &owner_id),
+            invites,
+        )
+        .await
+        .unwrap();
+
+    invitee_plans_sent(&notification_ingress)
+}
+
+#[tokio::test]
+async fn invite_email_offers_pro_from_a_team_with_a_subscription() {
+    let plans = invitee_plans_for_team(true, Some("sub_paying"), Default::default()).await;
+    assert_eq!(plans, ["premium"]);
+}
+
+#[tokio::test]
+async fn invite_email_offers_no_pro_from_a_team_without_a_subscription() {
+    // In good standing but unbilled: `join_team` grants a free membership.
+    let plans = invitee_plans_for_team(true, None, Default::default()).await;
+    assert_eq!(plans, ["free"]);
+}
+
+#[tokio::test]
+async fn invite_email_offers_pro_once_the_owners_subscription_is_linked() {
+    let plans = invitee_plans_for_team(false, None, Default::default()).await;
+    assert_eq!(plans, ["premium"]);
+}
+
+#[tokio::test]
+async fn invite_email_offers_no_pro_when_the_owner_has_no_active_subscription() {
+    let customer_repo = MockCustomerRepository {
+        no_active_subscription: true,
+        ..Default::default()
+    };
+    let plans = invitee_plans_for_team(false, None, customer_repo).await;
+    assert_eq!(plans, ["free"]);
 }
 
 #[tokio::test]
@@ -3248,6 +3416,62 @@ async fn invite_users_to_team_blocked_for_member_when_non_admin_invites_disabled
         error,
         InviteUsersToTeamError::NonAdminInvitesDisabled
     ));
+    assert_eq!(*invitation_persistence_calls.lock().unwrap(), 0);
+    assert!(mark_sent_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn invite_users_to_team_caps_new_invites_per_day() {
+    let team_id = uuid::Uuid::from_u128(6140);
+    let invite_id = uuid::Uuid::from_u128(6141);
+    let invited_by = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(
+        vec![make_invite("new@example.com", invite_id, team_id)],
+        "Busy Team",
+        mark_sent_calls.clone(),
+    );
+    let recent = |n: u128, created_at| TeamInviteDetails {
+        id: uuid::Uuid::from_u128(7000 + n),
+        email: format!("invitee{n}@example.com"),
+        team_id,
+        team_role: TeamRole::Member,
+        invited_by: "macro|owner@example.com".to_string(),
+        created_at,
+        last_sent_at: created_at,
+    };
+    let now = chrono::Utc::now();
+    // A day-old invite no longer counts toward today's limit.
+    team_repo.pending_team_invites = (0..MAX_TEAM_INVITES_PER_DAY as u128)
+        .map(|n| recent(n, now))
+        .chain([recent(999, now - chrono::Duration::days(2))])
+        .collect();
+    let invitation_persistence_calls = team_repo.invite_users_to_team_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invite_emails = vec![
+        Email::parse_from_str("new@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let error = service
+        .invite_users_to_team(
+            test_team_receipt::<MemberTeamRole>(team_id, &invited_by),
+            non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, InviteUsersToTeamError::TooManyEmails));
     assert_eq!(*invitation_persistence_calls.lock().unwrap(), 0);
     assert!(mark_sent_calls.lock().unwrap().is_empty());
 }
@@ -6244,7 +6468,7 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
 
     assert!(matches!(
         err,
-        TryJoinTeamByDomainError::JoinTeamError(JoinTeamError::AddRolesToUserError(_))
+        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::AddRolesToUserError(_))
     ));
     // The seat increment happened, was rolled back, and the membership
     // itself was removed again.
@@ -6287,7 +6511,7 @@ async fn try_join_team_by_domain_rolls_back_membership_when_billing_lookup_fails
 
         assert!(matches!(
             error,
-            TryJoinTeamByDomainError::TeamError(TeamError::StorageLayerError(_))
+            JoinTeamDirectlyError::TeamError(TeamError::StorageLayerError(_))
         ));
         assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
         assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
@@ -6461,7 +6685,7 @@ async fn try_join_team_by_domain_enterprise_rolls_back_membership_when_roles_fai
 
     assert!(matches!(
         error,
-        TryJoinTeamByDomainError::JoinTeamError(JoinTeamError::AddRolesToUserError(_))
+        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::AddRolesToUserError(_))
     ));
     assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
@@ -6508,7 +6732,7 @@ async fn try_join_team_by_domain_enterprise_rolls_back_roles_when_channels_fail(
 
     assert!(matches!(
         error,
-        TryJoinTeamByDomainError::JoinTeamError(JoinTeamError::TeamError(_))
+        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::TeamError(_))
     ));
     assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
@@ -7166,7 +7390,7 @@ async fn try_join_team_by_domain_enterprise_status_read_precedes_membership_muta
 
     assert!(matches!(
         error,
-        TryJoinTeamByDomainError::TeamError(TeamError::StorageLayerError(_))
+        JoinTeamDirectlyError::TeamError(TeamError::StorageLayerError(_))
     ));
     assert_eq!(
         *team_repository
@@ -8160,4 +8384,169 @@ async fn failed_member_removal_preserves_the_pending_downgrade() {
             .unwrap();
         assert_eq!(pending.plan, SeatPlan::Premium, "{failure:?}");
     }
+}
+
+// -- Invite reminders --
+
+fn due_reminder(invite: u128, reminder_number: u8) -> DueInviteReminder {
+    DueInviteReminder {
+        team_invite_id: uuid::Uuid::from_u128(invite),
+        team_id: uuid::Uuid::from_u128(8000),
+        team_name: "Acme".to_string(),
+        email: format!("invitee{invite}@example.com"),
+        invited_by: "macro|owner@example.com".to_string(),
+        reminder_number,
+        enterprise: false,
+        paying: true,
+        has_subscription: true,
+    }
+}
+
+fn build_reminder_service(
+    due: Vec<DueInviteReminder>,
+    fail_indices: HashSet<usize>,
+) -> (impl InviteReminderSender, Arc<MockNotificationIngress>) {
+    let team_repo = MockTeamRepository::new(Vec::new(), "Acme", Arc::new(Mutex::new(Vec::new())));
+    *team_repo.due_invite_reminders.lock().unwrap() = due;
+    let notification_ingress = Arc::new(MockNotificationIngress::new(fail_indices));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+    (service, notification_ingress)
+}
+
+/// Each claimed invite gets one reminder email, marked as a reminder and
+/// written by the original inviter, with no in-app notification.
+#[tokio::test]
+async fn invite_reminders_email_each_claimed_invite() {
+    let (service, notification_ingress) =
+        build_reminder_service(vec![due_reminder(1, 1), due_reminder(2, 2)], HashSet::new());
+
+    let report = service.send_due_invite_reminders().await.unwrap();
+
+    assert_eq!(
+        report,
+        InviteReminderReport {
+            claimed: 2,
+            sent: 2,
+            failed: 0
+        }
+    );
+    let requests = notification_ingress.recorded_requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    for (request, invite) in requests.iter().zip([1u128, 2]) {
+        let content = &request["req"]["notification"]["content"];
+        assert_eq!(content["reminder"], true);
+        assert_eq!(content["teamName"], "Acme");
+        assert_eq!(
+            content["teamInviteId"],
+            uuid::Uuid::from_u128(invite).to_string()
+        );
+        assert_eq!(request["req"]["sender_id"], "macro|owner@example.com");
+        assert_eq!(
+            request["req"]["recipient_ids"],
+            serde_json::json!([format!("macro|invitee{invite}@example.com")])
+        );
+        assert!(!request["build_email"].is_null());
+        assert_eq!(request["send_conn_gateway"], false);
+    }
+}
+
+/// Redelivering the same reminder reuses its notification id, while the
+/// next reminder for that invite gets a new one.
+#[tokio::test]
+async fn invite_reminder_notification_ids_are_stable_per_reminder() {
+    let (service, notification_ingress) = build_reminder_service(
+        vec![due_reminder(1, 1), due_reminder(1, 1), due_reminder(1, 2)],
+        HashSet::new(),
+    );
+
+    service.send_due_invite_reminders().await.unwrap();
+
+    let ids: Vec<_> = notification_ingress
+        .recorded_requests
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|request| request["uuid_to_write"].clone())
+        .collect();
+    assert_eq!(ids[0], ids[1]);
+    assert_ne!(ids[0], ids[2]);
+}
+
+/// A failed send is counted and does not stop the rest of the batch.
+#[tokio::test]
+async fn invite_reminders_keep_going_after_a_failed_send() {
+    let (service, notification_ingress) = build_reminder_service(
+        vec![due_reminder(1, 1), due_reminder(2, 1), due_reminder(3, 1)],
+        HashSet::from([1]),
+    );
+
+    let report = service.send_due_invite_reminders().await.unwrap();
+
+    assert_eq!(
+        report,
+        InviteReminderReport {
+            claimed: 3,
+            sent: 2,
+            failed: 1
+        }
+    );
+    assert_eq!(
+        notification_ingress.recorded_requests.lock().unwrap().len(),
+        3
+    );
+}
+
+/// A sweep with nothing due sends nothing.
+#[tokio::test]
+async fn invite_reminders_with_nothing_due_send_nothing() {
+    let (service, notification_ingress) = build_reminder_service(Vec::new(), HashSet::new());
+
+    let report = service.send_due_invite_reminders().await.unwrap();
+
+    assert_eq!(report, InviteReminderReport::default());
+    assert!(
+        notification_ingress
+            .recorded_requests
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+/// The reminder promises Pro only when joining grants it, like the invite.
+#[tokio::test]
+async fn invite_reminders_promise_what_joining_grants() {
+    let cases = [
+        // (enterprise, paying, has_subscription, plan)
+        (true, false, false, "premium"),
+        (false, true, true, "premium"),
+        (false, true, false, "free"),
+        (false, false, false, "free"),
+    ];
+    let due = cases
+        .iter()
+        .zip(1u128..)
+        .map(
+            |(&(enterprise, paying, has_subscription, _), invite)| DueInviteReminder {
+                enterprise,
+                paying,
+                has_subscription,
+                ..due_reminder(invite, 1)
+            },
+        )
+        .collect();
+    let (service, notification_ingress) = build_reminder_service(due, HashSet::new());
+
+    service.send_due_invite_reminders().await.unwrap();
+
+    let expected: Vec<_> = cases.iter().map(|case| serde_json::json!(case.3)).collect();
+    assert_eq!(invitee_plans_sent(&notification_ingress), expected);
 }

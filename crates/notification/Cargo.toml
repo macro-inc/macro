@@ -23,7 +23,11 @@ axum = [
   "schema",
 ]
 clear_ios_push = []
+default = ["kafka"]
 docs = ["dep:aquamarine"]
+# The Kafka publishers and consumer. Off for crates that only need the
+# notification ports, so librdkafka stays out of the self-hosted `macrod`.
+kafka = ["dep:kafka_util", "dep:rdkafka", "macro_event_broker/outbound"]
 redis-tests = []
 schema = ["dep:utoipa", "macro_user_id/schema", "notification_state/schema"]
 
@@ -44,13 +48,13 @@ futures = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 itertools = { workspace = true }
-kafka_util = { path = "../kafka_util" }
+kafka_util = { path = "../kafka_util", optional = true }
 last_online_tracker = { path = "../last_online_tracker" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
 macro_env = { path = "../macro_env" }
-macro_event_broker = { path = "../macro_event_broker" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id = { path = "../macro_user_id" }
@@ -61,7 +65,7 @@ model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
 notification_state = { path = "../notification_state", features = ["postgres"] }
 rate_limit = { path = "../rate_limit" }
-rdkafka = { workspace = true }
+rdkafka = { workspace = true, optional = true }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",

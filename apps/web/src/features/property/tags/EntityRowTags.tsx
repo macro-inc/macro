@@ -1,8 +1,8 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';

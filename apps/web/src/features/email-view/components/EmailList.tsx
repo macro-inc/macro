@@ -1,3 +1,4 @@
+import { QueuedSendStatus } from '../../email-compose/queued-send-status';
 import '@entity/composed/ListEntity.css';
 import { type ListActivation, useListInteractions } from '@app/components/list';
 import { CommandState } from '@app/features/command/state';
@@ -19,7 +20,9 @@ import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -29,10 +32,10 @@ import {
   ListLayoutProvider,
   type WithNotification,
 } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -167,6 +170,7 @@ export function EmailList(props: EmailListProps) {
     });
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  createScrollTopFade(viewport);
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
@@ -330,6 +334,8 @@ export function EmailList(props: EmailListProps) {
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
     condition: listHasKeyboard,
+    extraFavoriteHotkey: { hotkey: 's', hotkeyToken: TOKENS.email.star },
+    extraMuteHotkey: { hotkey: 'shift+m', hotkeyToken: TOKENS.email.mute },
   });
 
   useEmailListHotkeys({
@@ -506,6 +512,9 @@ export function EmailList(props: EmailListProps) {
         tabIndex={0}
         class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none [--color-list-highlighted:var(--color-active)]"
       >
+        <Show when={state.tab === 'drafts'}>
+          <QueuedSendStatus inboxIds={state.inboxIds} />
+        </Show>
         <PullToRefresh
           scrollContainer={pullScrollContainer}
           onRefresh={pullRefresh}
@@ -556,6 +565,7 @@ export function EmailList(props: EmailListProps) {
               >
                 <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                   <SpinnerIcon
+                    aria-hidden={false}
                     aria-label="Loading email"
                     class="size-5 animate-spin"
                   />

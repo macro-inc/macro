@@ -1278,6 +1278,7 @@ fn prompted_by(prompter: Option<MacroUserIdStr<'static>>) -> StubSessions {
         unreachable!("granting grants");
     };
     grant.prompter = Some(crate::domain::model::TurnPrompter {
+        kind: agent_session::domain::model::PrompterKind::User,
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: prompter,
     });
@@ -1519,3 +1520,5 @@ async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
     assert!(service.forward.was_called());
     assert!(service.approvals.held.lock().unwrap().is_empty());
 }
+
+mod actor;

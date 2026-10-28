@@ -33,6 +33,23 @@ class IncomingCallTest {
         context.getSharedPreferences("macro_push", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
+    @Test fun unchangedParticipantsAreNotReemittedToJs() {
+        // JS answers each identities event by resending every display name; repeats once flooded the bridge until the app crashed.
+        val sent = mutableListOf<String>()
+        fun channel(id: Long) = app.tauri.plugin.Channel(id, { sent.add(it) }, com.fasterxml.jackson.databind.ObjectMapper())
+        try {
+            instrumentation.runOnMainSync {
+                Calls.watch("participants", channel(1))
+                Calls.publish(); Calls.publish()
+            }
+            assertEquals(1, sent.size)
+            instrumentation.runOnMainSync { Calls.watch("participants", channel(2)); Calls.publish() }
+            assertEquals("A reloaded WebView must receive the current identities", 2, sent.size)
+        } finally {
+            instrumentation.runOnMainSync { Calls.unwatch() }
+        }
+    }
+
     private fun data(id: String, recipient: String = "call-test-user") = mapOf(
         "recipientId" to recipient,
         "payload" to JSONObject().apply {

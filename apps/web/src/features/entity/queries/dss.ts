@@ -32,6 +32,7 @@ import {
 } from '@queries/soup/graphql/optimistic-deletions';
 import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
+import { permanentlyDeleteEntity } from '@queries/storage/entity-mutations';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { useMutation } from '@tanstack/solid-query';
@@ -126,6 +127,10 @@ export function createBulkDeleteDssItemsMutation() {
           return true;
         }
         if (e.type === 'call') {
+          if (isFeatureEnabled(enableGraphqlSoup)) {
+            await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
+            return true;
+          }
           return throwOnErr(() =>
             callServiceClient.deleteCallRecord(e.id)
           ).then(() => true);

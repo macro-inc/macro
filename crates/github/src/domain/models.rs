@@ -31,7 +31,8 @@ pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
 };
 pub use link::{
-    GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubLinkStatus, GithubUserInfo,
+    GithubAccessToken, GithubExchangeTokenResponse, GithubGrantLinkOutcome, GithubLink,
+    GithubLinkStatus, GithubUserInfo,
 };
 pub use repository::{GithubRepository, PullRequestIndexPage, PullRequestIndexRequest};
 pub use sync::{
@@ -53,6 +54,9 @@ pub enum GithubError {
     /// The Github link token has expired and the user must reauthenticate.
     #[error("reauthentication required")]
     ReauthenticationRequired,
+    /// Reconnect must use the currently linked GitHub account.
+    #[error("disconnect the current GitHub account before linking a different account")]
+    AccountMismatch,
     /// No refresh token was provided in the token exchange
     #[error("no refresh token provided in token exchange")]
     NoRefreshTokenProvided,

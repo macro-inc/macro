@@ -84,7 +84,7 @@ export function PaintSwatch(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-modal flex flex-col gap-2 rounded-xl border border-edge-muted bg-menu p-3 text-xs shadow-xl outline-none"
+            class="menu-surface z-modal flex flex-col gap-2 p-3 text-xs outline-none"
             aria-label={props.label}
             onKeyDown={(e: KeyboardEvent) => {
               if (!e.metaKey && !e.ctrlKey) e.stopPropagation();

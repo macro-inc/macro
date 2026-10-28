@@ -43,6 +43,10 @@ events to the `macro.properties` Kafka topic.
   `README.md`'s event table.
 - Add a query: `src/outbound/<concern>_queries.rs` → its sibling `_test.rs`.
 
+## Tool contracts
+
+- AI property/tag adapters omit legacy chat targets; this does not change persisted property entity types.
+
 ## Checks
 
 - `cargo test -p properties` (`SQLX_OFFLINE` unset; requires local MacroDB).

@@ -3,14 +3,18 @@ use mail_builder::headers::address::Address;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::message::MessageToSend;
 
+#[cfg(feature = "ports")]
+use super::AccessToken;
 use super::EmailApiError;
 
 #[cfg(test)]
 mod test;
 
 /// Provider-neutral content and threading metadata for a message send.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SendRequest {
+    /// Stable RFC 5322 Message-ID without angle brackets, for delivery recovery.
+    pub message_id: Option<String>,
     /// Message content prepared by the email service.
     pub message: MessageToSend,
     /// Sender shown in the message's `From` header.
@@ -31,6 +35,11 @@ impl SendRequest {
             .bcc(contacts_to_address_list(self.message.bcc.as_deref()))
             .subject(&self.message.subject);
 
+        if let Some(message_id) = &self.message_id {
+            validate_message_id(message_id)?;
+            builder = builder.message_id(message_id.as_str());
+        }
+
         if let Some(parent_message_id) = &self.parent_message_id {
             builder = builder.in_reply_to(parent_message_id.as_str());
         }
@@ -47,11 +56,23 @@ impl SendRequest {
             for attachment in attachments {
                 // Borrow the attachment buffers: cloning them would double
                 // peak memory for large-attachment sends.
-                builder = builder.attachment(
-                    attachment.content_type.as_str(),
-                    attachment.file_name.as_str(),
-                    &attachment.data[..],
-                );
+                builder = if attachment.is_inline {
+                    builder.inline(
+                        attachment.content_type.as_str(),
+                        attachment.content_id.as_deref().ok_or_else(|| {
+                            EmailApiError::Permanent {
+                                message: "Inline attachment requires a Content-ID".into(),
+                            }
+                        })?,
+                        &attachment.data[..],
+                    )
+                } else {
+                    builder.attachment(
+                        attachment.content_type.as_str(),
+                        attachment.file_name.as_str(),
+                        &attachment.data[..],
+                    )
+                };
             }
         }
 
@@ -61,6 +82,29 @@ impl SendRequest {
                 message: format!("failed to build MIME message: {error}"),
             })
     }
+}
+
+/// Locally prepared delivery. Tokens and message contents cannot be logged via
+/// `Debug`, and callers cannot construct it without completing preparation.
+#[cfg(feature = "ports")]
+pub struct PreparedSendMessage {
+    pub(crate) access_token: AccessToken,
+    pub(crate) mime: Vec<u8>,
+    pub(crate) provider_thread_id: Option<String>,
+}
+
+pub(crate) fn validate_message_id(message_id: &str) -> Result<(), EmailApiError> {
+    let valid = message_id.split_once('@').is_some_and(|(local, domain)| {
+        !local.is_empty() && !domain.is_empty() && !domain.contains('@')
+    }) && message_id.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric() || matches!(byte, b'@' | b'.' | b'-' | b'_' | b'+')
+    });
+    if !valid {
+        return Err(EmailApiError::Permanent {
+            message: "invalid stable email Message-ID".to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn contact_to_address(contact: &ContactInfo) -> Address<'_> {

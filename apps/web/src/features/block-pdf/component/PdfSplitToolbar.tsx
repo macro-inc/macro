@@ -3,7 +3,7 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { ENABLE_PDF_MARKUP } from '@core/constant/featureFlags';
-import Tabs from '@phosphor/tabs.svg';
+import Tabs from '@icon/system/regular/tabs.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';

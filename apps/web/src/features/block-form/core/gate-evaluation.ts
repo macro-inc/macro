@@ -54,7 +54,7 @@ export function presentValue(
       { type: 'date' },
       (scalar) => scalar
     )
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function conditionPasses(
@@ -80,7 +80,7 @@ function conditionPasses(
           { type: 'rows' },
           () => undefined
         )
-        .exhaustive();
+        .exhaustive(() => undefined);
       if (!texts) return false;
       const needle = expected.toLowerCase();
       const haystacks = texts.map((text) => text.toLowerCase());
@@ -96,7 +96,7 @@ function conditionPasses(
           haystacks.some((text) => text.startsWith(needle))
         )
         .with('endsWith', () => haystacks.some((text) => text.endsWith(needle)))
-        .exhaustive();
+        .exhaustive(() => false);
     })
     .with({ kind: 'number' }, ({ operator, value: expected }) => {
       if (value.type !== 'number') return false;
@@ -108,7 +108,7 @@ function conditionPasses(
         .with('greaterThanOrEqual', () => actual >= expected)
         .with('lessThan', () => actual < expected)
         .with('lessThanOrEqual', () => actual <= expected)
-        .exhaustive();
+        .exhaustive(() => false);
     })
     .with({ kind: 'date' }, ({ operator, value: expected }) => {
       if (value.type !== 'date') return false;
@@ -120,7 +120,7 @@ function conditionPasses(
         .with('after', () => actual > bound)
         .with('onOrBefore', () => actual <= bound)
         .with('onOrAfter', () => actual >= bound)
-        .exhaustive();
+        .exhaustive(() => false);
     })
     .with(
       { kind: 'checkbox' },
@@ -148,11 +148,11 @@ function conditionPasses(
           { type: 'options' },
           () => undefined
         )
-        .exhaustive();
+        .exhaustive(() => undefined);
       if (!held) return false;
       return setPasses(operator, held, entities);
     })
-    .exhaustive();
+    .exhaustive(() => false);
 }
 
 function setPasses(
@@ -165,5 +165,5 @@ function setPasses(
     .with('isAnyOf', 'hasAny', () => expected.some(holds))
     .with('isNoneOf', 'hasNone', () => !expected.some(holds))
     .with('hasAll', () => expected.every(holds))
-    .exhaustive();
+    .exhaustive(() => false);
 }

@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   joinRequested: false,
 }));
 
+const analytics = vi.hoisted(() => ({ pageView: vi.fn(), track: vi.fn() }));
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => analytics,
+}));
 vi.mock('@channel/Channel/ChannelSurface', () => ({
   ChannelSurface: (props: {
     targetRequest?: ChannelTargetRequest;
@@ -118,12 +122,25 @@ const messageRequests = () =>
   );
 
 beforeEach(() => {
+  analytics.track.mockClear();
   mocks.requests.length = 0;
   mocks.joinRequested = false;
 });
 afterEach(cleanup);
 
 describe('channel detail navigation', () => {
+  it('counts one open per channel shown', async () => {
+    const view = render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>
+    ));
+    await navigate({ message: 'message-1' });
+
+    expect(analytics.track.mock.calls).toEqual([
+      ['open_entity', { entityType: 'channel', entityId: CHANNEL_ID }],
+    ]);
+    view.unmount();
+  });
+
   it('measures tab content against the height left after channel chrome', () => {
     const view = render(() => (
       <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>

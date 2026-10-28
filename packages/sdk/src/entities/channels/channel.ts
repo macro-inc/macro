@@ -1,4 +1,5 @@
 import type {
+  ActivityType,
   ChannelType,
   GetChannelAttachmentsResponses,
   GetChannelParticipantsResponses,
@@ -9,11 +10,20 @@ import type {
 import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { AgentConversation } from '../agent-sessions/conversation';
 import { PropertiedEntity } from '../entity';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { entitySearch } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
+import { ChannelAccessRequest } from './access-request';
+import { ChannelActivity } from './activity';
 import { Message } from './message';
+import type { ChannelPicture } from './picture';
 import { postToChannel } from './post';
 import type { Thread } from './thread';
 
@@ -30,6 +40,59 @@ export type ChannelAttachment =
  * A channel.
  */
 export class Channel extends PropertiedEntity<ChannelDetail> {
+  /** Record a view or interaction in this channel. */
+  async recordActivity(type: ActivityType): Promise<ChannelActivity> {
+    return new ChannelActivity(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.postActivity({
+          body: { activity_type: type, channel_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /** Set an uploaded profile picture, or clear it. */
+  async setPicture(picture?: ChannelPicture): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setChannelPicture({
+        path: { channel_id: this.id },
+        body: { profile_picture_id: picture?.id ?? null },
+      }),
+    );
+  }
+
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'channel', entity: this },
+      id,
+    );
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<Message>) {
+    return timeline(
+      this.client,
+      { type: 'channel', entity: this },
+      (record) => Message.from(this.client, this.id, record),
+      selection,
+    );
+  }
+
+  /** Conversations maintained by agents in this channel. */
+  async agentConversations(): Promise<AgentConversation[]> {
+    return unwrap(
+      await this.client.agentHarness.listAgentConversations({
+        path: { channel_id: this.id },
+      }),
+    ).conversations.map(
+      (record) => new AgentConversation(this.client, this, record),
+    );
+  }
+
   /** Favorites identify channels as `channel`. */
   readonly entityType = 'channel';
 
@@ -192,6 +255,55 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       }),
     );
     return join_code;
+  }
+
+  /**
+   * The current user's latest request to join this channel, whether the
+   * channel accepts requests, and when they may ask again after a denial or
+   * withdrawal. Works without access to the channel.
+   */
+  async myAccessRequest(): Promise<{
+    request?: ChannelAccessRequest;
+    canRequest: boolean;
+    retryAfter?: string;
+  }> {
+    const state = unwrap(
+      await this.client.storage.getMyChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
+    return {
+      request: state.request
+        ? ChannelAccessRequest.from(this.client, this, state.request)
+        : undefined,
+      canRequest: state.can_request,
+      retryAfter: state.retry_after ?? undefined,
+    };
+  }
+
+  /**
+   * Ask this private or team channel's participants to let the current user
+   * join. Asking again while a request is pending returns that request.
+   */
+  async requestAccess(): Promise<ChannelAccessRequest> {
+    return ChannelAccessRequest.from(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.requestChannelAccess({
+          path: { channel_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /** Withdraw the current user's pending request to join this channel. */
+  async cancelAccessRequest(): Promise<void> {
+    unwrap(
+      await this.client.storage.cancelChannelAccessRequest({
+        path: { channel_id: this.id },
+      }),
+    );
   }
 
   /** Leave the channel as the current user. */

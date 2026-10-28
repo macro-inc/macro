@@ -496,14 +496,24 @@ fn external_runtime_uses_host_reachable_urls_with_the_existing_session_credentia
         "http://agent-harness-service:8102",
     )
     .with_external_base_url(Some("http://localhost:28102/".into()));
-    let sandbox = egress(&[]);
+    let mut sandbox = egress(&["datadog"]);
+    let custom = listing("https://wiki.example.com/mcp", "Wiki");
+    let custom_path = format!("/mcp-custom/{}", custom.key);
+    sandbox.custom_servers.push(custom);
     let servers = provisioner.external_mcp_servers(&sandbox);
-    assert_eq!(servers.len(), 2);
-    for (server, path) in servers.iter().zip(["/mcp/internal", "/mcp-preview"]) {
+    assert_eq!(servers.len(), 5);
+    for (server, (name, path)) in servers.iter().zip([
+        ("macro", "/mcp-macro"),
+        ("macro_internal", "/mcp/internal"),
+        ("macro-preview", "/mcp-preview"),
+        ("datadog", "/mcp/datadog"),
+        ("Wiki", custom_path.as_str()),
+    ]) {
         let McpServer::Http(server) = server else {
             panic!("expected HTTP MCP");
         };
         assert_eq!(server.url, format!("http://localhost:28102{path}"));
+        assert_eq!(server.name, name);
         assert_eq!(server.headers[0].value, sandbox.authorization_header());
     }
     assert_eq!(sandbox.base_url, "https://egress.macro.com");

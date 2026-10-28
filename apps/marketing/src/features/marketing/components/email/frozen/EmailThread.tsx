@@ -6,6 +6,7 @@ import Link from '@phosphor/link.svg';
 import Users from '@phosphor/users-three.svg';
 import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
+import { demoMailAccounts } from '../../../core/demo-email';
 import { homepagePeople } from '../../../core/homepage-demo-people';
 import type { DemoEmail } from '../email-fixtures';
 import { EmailAvatar } from './EmailAvatar';
@@ -20,6 +21,7 @@ export function EmailThread(props: {
   sharing?: boolean;
   onReply?: () => void;
   hideHeader?: boolean;
+  hideSubject?: boolean;
   hideReply?: boolean;
   replyContent?: JSX.Element;
   participants?: JSX.Element;
@@ -64,9 +66,11 @@ export function EmailThread(props: {
         </div>
       </Show>
       <div class="mail-thread-body">
-        <h3 class="block w-full max-w-full min-w-0 text-pretty font-semibold tracking-tight text-ink leading-snug text-2xl mb-6">
-          {props.email.subject}
-        </h3>
+        <Show when={!props.hideSubject}>
+          <h3 class="block w-full max-w-full min-w-0 text-pretty font-semibold tracking-tight text-ink leading-snug text-2xl mb-6">
+            {props.email.subject}
+          </h3>
+        </Show>
         {props.participants}
         <MessageCard
           messageId={props.email.id}
@@ -74,13 +78,13 @@ export function EmailThread(props: {
           allowHover={false}
           isTouch={false}
         >
-          <div class="flex flex-col min-w-0 gap-2 overflow-hidden">
+          <div class="mail-message-content flex flex-col min-w-0 gap-2 overflow-hidden">
             <div class="flex items-center min-h-6 gap-2">
               <EmailAvatar name={sender()} />
               <div class="flex flex-row w-full min-w-0 flex-1 items-center gap-2 text-sm">
                 <div class="flex flex-row items-center gap-1.5 min-w-0 flex-1">
                   <span class="text-ink font-medium truncate">{sender()}</span>
-                  <span class="text-ink-extra-muted/60 shrink-0">
+                  <span class="mail-message-recipient text-ink-extra-muted/60 shrink-0">
                     to {sent() ? props.email.sender : 'me'}
                   </span>
                   <Button
@@ -114,7 +118,10 @@ export function EmailThread(props: {
               <div class="py-3 border-y border-ink-muted/8 text-xs text-ink-muted">
                 From: {sender()}
                 <br />
-                To: {sent() ? props.email.sender : 'Jacob <jacob@macro.com>'}
+                To:{' '}
+                {sent()
+                  ? props.email.sender
+                  : `Jacob <${demoMailAccounts.find((account) => account.id === props.email.account)?.label}>`}
               </div>
             </Show>
             <div class="mail-message-text text-base text-ink pr-4">

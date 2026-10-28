@@ -118,10 +118,7 @@ where
         if let Some(url) = &self.external_base_url {
             external.base_url = url.clone();
         }
-        vec![
-            external.internal_mcp_server(),
-            external.preview_mcp_server(),
-        ]
+        external.acp_servers()
     }
 
     #[tracing::instrument(err, skip(self), fields(%session, %owner))]

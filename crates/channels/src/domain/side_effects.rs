@@ -1,9 +1,11 @@
 //! Domain policies for channel side effects.
 
 use crate::domain::{
+    access_requests::ChannelAccessRequest,
     broker_events::{
-        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMacroEvent,
-        ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
+        ChannelAccessRequestedMetadata, ChannelCreatedMetadata, ChannelDeletedMetadata,
+        ChannelMacroEvent, ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata,
+        ChannelUpdatedMetadata,
     },
     events::ChannelEvent,
     mention_events::{EntityRef, MentionMacroEvent, MentionMetadata},
@@ -22,6 +24,8 @@ use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
 use std::collections::HashSet;
 use tracing::Instrument as _;
 use uuid::Uuid;
+
+mod dm_email;
 
 /// Parse a mention entity id in the canonical `bot|<uuid>` principal form.
 fn mention_bot_id(entity_id: &str) -> Option<BotId> {
@@ -48,6 +52,15 @@ pub enum ChannelRealtimeEffect {
         recipients: Vec<MacroUserIdStr<'static>>,
         /// Channel whose picture changed.
         channel_id: Uuid,
+    },
+    /// Refresh a request to join after it was made or answered.
+    AccessRequestChanged {
+        /// Participants and the requester.
+        recipients: Vec<MacroUserIdStr<'static>>,
+        /// Channel the request is for.
+        channel_id: Uuid,
+        /// The changed attempt.
+        request_id: Uuid,
     },
 }
 
@@ -206,8 +219,28 @@ pub enum ChannelNotificationEffect {
         /// Users that should receive the notification.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
     },
+    /// Someone asked to join a channel.
+    AccessRequested {
+        /// The new attempt.
+        request: ChannelAccessRequest,
+        /// Optional requester profile picture URL.
+        sender_profile_picture_url: Option<String>,
+        /// Channel display metadata.
+        metadata: ChannelMetadata,
+        /// Participants who may answer it.
+        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+    },
+    /// A request to join was answered or withdrawn; its notifications are done.
+    AccessRequestResolved {
+        /// The resolved attempt, which is also its notification id.
+        request_id: Uuid,
+        /// Participants who were notified about it.
+        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+    },
     /// Participants were invited to a channel.
     Invite {
+        /// Stable identity for a DM email; ordinary invitations have no message key.
+        message_id: Option<Uuid>,
         /// Channel receiving participants.
         channel_id: Uuid,
         /// User that invited the participants.
@@ -236,6 +269,7 @@ pub struct ChannelSideEffectService<C, R, N, K, B = NoopMacroEventBroker> {
 }
 
 struct InviteNotificationRequest {
+    message_id: Option<Uuid>,
     channel_id: Uuid,
     invited_by_user_id: MacroUserIdStr<'static>,
     recipient_user_ids: Vec<MacroUserIdStr<'static>>,
@@ -416,6 +450,37 @@ where
                 }
             }
             ChannelEvent::ParticipantJoined { .. } => {}
+            ChannelEvent::AccessRequested {
+                request,
+                participant_user_ids,
+                metadata,
+            } => {
+                self.publish_access_request_change(&request, &participant_user_ids)
+                    .await;
+                let sender_profile_picture_url = self
+                    .context
+                    .get_sender_profile_picture_url(request.requester_id.clone())
+                    .await;
+                self.send_notification(ChannelNotificationEffect::AccessRequested {
+                    request,
+                    sender_profile_picture_url,
+                    metadata,
+                    recipient_ids: participant_user_ids.into_iter().collect(),
+                })
+                .await;
+            }
+            ChannelEvent::AccessRequestResolved {
+                request,
+                participant_user_ids,
+            } => {
+                self.publish_access_request_change(&request, &participant_user_ids)
+                    .await;
+                self.send_notification(ChannelNotificationEffect::AccessRequestResolved {
+                    request_id: request.id,
+                    recipient_ids: participant_user_ids.into_iter().collect(),
+                })
+                .await;
+            }
         }
 
         if let Some(users) = contact_sync_users
@@ -466,6 +531,28 @@ where
         self.context.get_bot_sender_profile(bot_id).await
     }
 
+    /// Tell participants and the requester to refresh a request to join.
+    async fn publish_access_request_change(
+        &self,
+        request: &ChannelAccessRequest,
+        participant_user_ids: &[MacroUserIdStr<'static>],
+    ) {
+        let mut recipients = participant_user_ids.to_vec();
+        recipients.push(request.requester_id.clone());
+        if let Err(error) = self
+            .realtime
+            .publish(ChannelRealtimeEffect::AccessRequestChanged {
+                recipients,
+                channel_id: request.channel_id,
+                request_id: request.id,
+            })
+            .await
+        {
+            let error: anyhow::Error = error.into();
+            tracing::error!(error=?error, "unable to publish channel access request change");
+        }
+    }
+
     async fn send_notification(&self, effect: ChannelNotificationEffect) {
         if let Err(err) = self.notifications.send(effect).await {
             let err: anyhow::Error = err.into();
@@ -507,7 +594,7 @@ where
         } else {
             return;
         };
-        let context = match self
+        let mut context = match self
             .build_posted_message_context(
                 channel_id,
                 metadata,
@@ -524,6 +611,11 @@ where
                 return;
             }
         };
+
+        if notification_policy == PostMessageNotificationPolicy::Default {
+            self.send_unregistered_dm_email(channel_id, &message, &mut context)
+                .await;
+        }
 
         self.send_user_mention_notifications(channel_id, &message, has_attachments, &context)
             .await;
@@ -786,6 +878,8 @@ where
             }
         };
         self.send_invite_notification(InviteNotificationRequest {
+            message_id: (context.metadata.channel_type == ChannelType::DirectMessage)
+                .then_some(message.id),
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -843,6 +937,7 @@ where
         };
 
         self.send_invite_notification(InviteNotificationRequest {
+            message_id: None,
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -856,6 +951,7 @@ where
 
     async fn send_invite_notification(&self, req: InviteNotificationRequest) {
         let InviteNotificationRequest {
+            message_id,
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -870,6 +966,7 @@ where
                 .partition(|id| existing_user_ids.contains(id.as_ref()));
 
         self.send_notification(ChannelNotificationEffect::Invite {
+            message_id,
             channel_id,
             invited_by_user_id,
             registered_recipient_ids,
@@ -1055,9 +1152,18 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 removed_user_ids: removed_user_ids.clone(),
             },
         )],
-        ChannelEvent::EntityMentionCreated { .. } | ChannelEvent::EntityMentionDeleted { .. } => {
-            Vec::new()
+        ChannelEvent::AccessRequested { request, .. } => {
+            vec![ChannelMacroEvent::access_requested(
+                ChannelAccessRequestedMetadata {
+                    channel_id: request.channel_id,
+                    request_id: request.id,
+                    requester_id: request.requester_id.clone(),
+                },
+            )]
         }
+        ChannelEvent::EntityMentionCreated { .. }
+        | ChannelEvent::EntityMentionDeleted { .. }
+        | ChannelEvent::AccessRequestResolved { .. } => Vec::new(),
     }
 }
 

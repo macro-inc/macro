@@ -1,5 +1,5 @@
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
-import TaskIcon from '@phosphor/list-checks.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
 export function EmailTaskButton(props: { onClick: () => void }) {
   return (
     <HeaderActionButton

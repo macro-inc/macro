@@ -139,7 +139,7 @@ pub struct AgentSummary {
     pub bot: BotSummary,
     /// Instructions the agent works under, whole. New sessions snapshot them.
     pub instructions: String,
-    /// Harness slug: `in-memory`, `cursor`, `claude-cloud`, or `macrod`.
+    /// Harness slug: `in-memory`, `cursor`, or `macrod`.
     pub harness: String,
     /// Registered harness the agent runs on when `harness` is `macrod`.
     pub harness_id: Option<Uuid>,

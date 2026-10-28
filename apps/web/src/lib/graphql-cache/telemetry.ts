@@ -129,7 +129,15 @@ export const CACHE_OWNER_EVENTS = [
   'activated',
   'graceful-drain-started',
   'graceful-drain-completed',
+  'visibility-handoff-started',
+  'visibility-handoff-blocked',
+  'visibility-handoff-completed',
+  'park-started',
+  'parked',
+  'unpark-started',
+  'unpark-completed',
   'navigation-departure',
+  'coordinator-restarted',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
@@ -530,7 +538,7 @@ export function operationCategoryForRequest(
       'inspect-mutations',
       () => 'lifecycle' as const
     )
-    .exhaustive();
+    .exhaustive(() => 'lifecycle' as const);
 }
 
 export function isStorageTransactionRequest(

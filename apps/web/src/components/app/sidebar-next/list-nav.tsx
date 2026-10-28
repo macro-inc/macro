@@ -11,7 +11,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
+import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';

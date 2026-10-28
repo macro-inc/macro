@@ -2,7 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableReminders } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
 import { useEmailFollowupQuery } from '@queries/reminders/email-followup';
 import { Button } from '@ui';
 import { Show } from 'solid-js';

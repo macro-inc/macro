@@ -19,7 +19,7 @@ pub use edges::{
     SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader, agent_session_log_loader,
 };
 pub use graphql_activity::{
-    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
+    ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader, ActivityFeedScope,
     ActivityOverviewInput, ActivityPortReader, ActivityReader, EntityActivityLoader,
     GraphqlActivityAction, GraphqlActivityDay, GraphqlActivityEntityRank, GraphqlActivityEvent,
     GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader, SoupActivityEdgeReader,
@@ -35,13 +35,13 @@ pub use graphql_email::{
     DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailContentKey, EmailContentLoad,
     EmailContentLoader, EmailMutationService, EmailServiceEmailContentReader,
     EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
-    EmailThreadMetadataLoader, GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings,
-    GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus,
-    MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader, SaveEmailDraftContactInput,
-    SaveEmailDraftInput, SaveEmailDraftPayload, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
-    SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,
-    UpdateEmailThreadLabelInput, email_content_loader, email_thread_mail_projection_loader,
-    email_thread_metadata_loader,
+    EmailThreadMetadataLoader, EmailThreadUnavailable, GraphqlEmailLabel, GraphqlEmailLink,
+    GraphqlEmailLinkSettings, GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery,
+    GraphqlEmailSyncStatus, MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader,
+    SaveEmailDraftContactInput, SaveEmailDraftInput, SaveEmailDraftPayload,
+    SoupEmailContentEdgeReader, SoupEmailEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
+    SoupEmailThreadMetadataEdgeReader, UpdateEmailThreadLabelInput, email_content_loader,
+    email_thread_mail_projection_loader, email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,

@@ -27,6 +27,8 @@
     "call-kit:allow-set-call-drawer-theme",
     "call-kit:allow-set-participant-display-name",
     "call-kit:allow-switch-camera",
+    "call-kit:allow-can-use-full-screen-intent",
+    "call-kit:allow-open-full-screen-intent-settings",
     "network-status:allow-watch-status"
   ]
 }

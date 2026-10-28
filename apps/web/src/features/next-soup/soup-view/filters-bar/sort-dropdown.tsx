@@ -3,8 +3,8 @@ import type {
   SystemSortOption,
 } from '@app/features/next-soup/soup-view/sort-options';
 import { TOKENS } from '@core/hotkey/tokens';
-import SortIcon from '@phosphor/sort-ascending.svg';
-import { Dropdown, SingleSelectCheck, Tooltip } from '@ui';
+import SortIcon from '@icon/system/regular/sort-ascending.svg';
+import { Dropdown, SingleSelectCheck } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
 interface SortDropdownProps {
@@ -29,12 +29,14 @@ export const SortDropdown: Component<SortDropdownProps> = (props) => {
       onOpenChange={props.onOpenChange}
       placement="bottom-start"
     >
-      <Tooltip label="Sort" hotkey={TOKENS.soup.sort}>
-        <Dropdown.Trigger depth={2} class="bg-surface">
-          <SortIcon />
-          <span>Sort</span>
-        </Dropdown.Trigger>
-      </Tooltip>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        label="Sort"
+        hotkey={TOKENS.soup.sort}
+      >
+        <SortIcon />
+      </Dropdown.Trigger>
       <Dropdown.Content>
         <Dropdown.Group>
           <For each={options()}>

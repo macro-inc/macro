@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                link.id AS link_id,\n                link.email_address::text AS \"email_address!\",\n                link.provider::text AS \"provider!\",\n                ARRAY(\n                    SELECT calendar.provider_calendar_id\n                    FROM calendar_accounts account\n                    JOIN calendars calendar ON calendar.account_id = account.id\n                    WHERE account.email_link_id = link.id\n                      AND account.sync_status <> 'disabled'\n                      AND NOT calendar.is_deleted\n                      AND calendar.access_role IN ('owner', 'writer')\n                ) AS \"writable_calendar_ids!\"\n            FROM email_links link\n            WHERE link.macro_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "writable_calendar_ids!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "662d6d7de2b8ad270d128647bc46d1ea423d1991e14273f9fb7b92f41285ddc1"
+}

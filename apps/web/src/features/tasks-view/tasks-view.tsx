@@ -7,6 +7,7 @@ import { projectDetailRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import {
@@ -16,11 +17,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import {
-  TasksHeader,
-  TasksTopBar,
-  TaskViewBreadcrumbItem,
-} from './components/TasksHeader';
+import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
 import { TasksMobileTabs } from './components/TasksMobileTabs';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TasksContent, TasksLoading } from './tasks-content';
@@ -87,7 +84,7 @@ function ImportLinearAction() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, projectsEnabled } = useTasksView();
+  const { state, setState, projectsEnabled } = useTasksView();
   const navigate = useNavigate();
   const layout = useSplitLayout();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
@@ -96,10 +93,7 @@ function TasksViewRoot() {
 
   const taskList = () => (
     <>
-      <TasksTopBar />
-      <ViewShell.Header>
-        <TasksHeader onSearchEscape={() => listElement()?.focus()} />
-      </ViewShell.Header>
+      <TasksHeader onSearchEscape={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content>
         <TasksContent ref={setListElement} />
@@ -127,11 +121,16 @@ function TasksViewRoot() {
                     when={state.tab === 'projects' && projectsEnabled()}
                     fallback={taskList()}
                   >
-                    <TasksTopBar />
-                    <div class="hidden @max-[720px]/view-shell:block">
-                      <TasksMobileTabs />
-                    </div>
+                    <Show when={isTouchDevice()}>
+                      <div class="hidden @max-[720px]/view-shell:block">
+                        <TasksMobileTabs />
+                      </div>
+                    </Show>
                     <ProjectsTab
+                      search={{
+                        value: () => state.search,
+                        onChange: (search) => setState('search', search),
+                      }}
                       onOpen={(id, event, newSplit) => {
                         if (
                           newSplit ||

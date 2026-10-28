@@ -2,7 +2,7 @@
 //! over the Macro product toolset.
 //!
 //! Consumption mirrors the scheduled-action executor
-//! (`services/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
+//! (`crates/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
 //! the full static toolset, the agent's name and handle, the agent-session
 //! preamble, the static Macro prompt (immediately before any session
 //! instructions), and the owner's memory, with usage recorded per turn
@@ -24,7 +24,7 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart, SystemPrompt};
-use ai_tools::user_tool_review::user_tool_finisher;
+use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
@@ -38,6 +38,7 @@ use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tracing::Instrument as _;
 
+use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
@@ -59,6 +60,8 @@ const PART_BUFFER: usize = 256;
 
 const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__PresentReview",
+    "mcp__macro_internal__GetReview",
+    "mcp__macro_internal__DecideReview",
     "mcp__macro_internal__ExecuteCode",
     "mcp__macro_internal__DescribeCodeTools",
 ];
@@ -75,6 +78,7 @@ pub struct RigTurnEngine {
     native_tools: Arc<NativeTools>,
     code_mode_tools: Arc<NativeTools>,
     tool_mode: Arc<dyn ToolModeSelector>,
+    auto_model: Arc<dyn AutoModelSelector>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -97,6 +101,10 @@ impl RigTurnEngine {
                 true,
             )),
             tool_mode: Arc::new(StandardTools),
+            auto_model: match &tool_context.cognition_tool_context.service {
+                Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
+                None => Arc::new(DefaultAutoModel),
+            },
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -128,6 +136,7 @@ struct GatedToolSet<Context> {
     gate: Arc<dyn NativeToolGate>,
     session: agent_session::domain::model::AgentSessionId,
     awaiting: Arc<crate::domain::engine::AwaitingUser>,
+    reviewed_tools: Vec<String>,
 }
 
 impl<Context> AiToolSet<Context> for GatedToolSet<Context>
@@ -142,32 +151,60 @@ where
         json: &'a serde_json::Value,
     ) -> ai_toolset::ToolCallFuture<'a> {
         Box::pin(async move {
-            if !UNGATED_NATIVE_TOOLS.contains(&tool_name)
+            let mut request_context = request_context;
+            let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
                 && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
-                && let NativeToolVerdict::Refuse(reason) = {
-                    // A call held for the owner is the turn waiting on a
-                    // person, not hanging: the idle timeout leaves it be.
-                    let _waiting = self.awaiting.begin();
+                && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
+            let arguments = if native {
+                let _waiting = self.awaiting.begin();
+                let verdict = if self.reviewed_tools.iter().any(|name| name == tool_name) {
+                    NativeToolVerdict::Run
+                } else {
                     self.gate.check(self.session, tool_name, json).await
+                };
+                match verdict {
+                    NativeToolVerdict::RunAs(user) => request_context.user_id = user,
+                    NativeToolVerdict::Run => {}
+                    NativeToolVerdict::Refuse(reason) => {
+                        return Ok(Err(ai_toolset::ToolCallError {
+                            internal_error: anyhow::anyhow!("{tool_name} was not approved"),
+                            description: reason,
+                        }));
+                    }
                 }
-            {
-                return Ok(Err(ai_toolset::ToolCallError {
-                    internal_error: anyhow::anyhow!("{tool_name} was not approved"),
-                    description: reason,
-                }));
-            }
+                match ai_toolset::actor::ToolActor::take(json) {
+                    Ok((_, arguments)) => arguments,
+                    Err(error) => {
+                        return Ok(Err(ai_toolset::ToolCallError {
+                            description: error.to_string(),
+                            internal_error: error.into(),
+                        }));
+                    }
+                }
+            } else {
+                json.clone()
+            };
             self.tools
-                .dispatch_tool_call(context, request_context, tool_name, json)
+                .dispatch_tool_call(context, request_context, tool_name, &arguments)
                 .await
         })
     }
 
     fn request_schemas(&self) -> Option<Vec<ai_toolset::RequestSchema>> {
-        self.tools.request_schemas()
+        self.tools.request_schemas().map(|mut tools| {
+            for tool in &mut tools {
+                add_native_actor_schema(&tool.name, &mut tool.schema);
+            }
+            tools
+        })
     }
 
     fn searchable_catalog(&self) -> Vec<ai_toolset::SearchableTool> {
-        self.tools.searchable_catalog()
+        let mut tools = self.tools.searchable_catalog();
+        for tool in &mut tools {
+            add_native_actor_schema(&tool.name, &mut tool.schema);
+        }
+        tools
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {
@@ -176,6 +213,16 @@ where
 
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ai_toolset::ToolInfo> {
         self.tools.routing_description(tool_name)
+    }
+}
+
+fn add_native_actor_schema(name: &str, schema: &mut schemars::Schema) {
+    if !UNGATED_NATIVE_TOOLS.contains(&name)
+        && !name.starts_with(mcp_select::MANGLED_PREFIX)
+        && agent_egress::domain::approval::spends_owner_access("macro", name)
+        && let Some(schema) = schema.as_object_mut()
+    {
+        ai_toolset::actor::add_actor_schema(schema);
     }
 }
 
@@ -272,11 +319,17 @@ impl TurnEngine for RigTurnEngine {
         let native_tools = Arc::clone(&self.native_tools);
         let code_mode_tools = Arc::clone(&self.code_mode_tools);
         let tool_mode = Arc::clone(&self.tool_mode);
+        let auto_model = Arc::clone(&self.auto_model);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
         tokio::spawn(
             agent::MeteringContext::carry(metering, async move {
+                let mut request = request;
+                let Some(model) = select_auto_model(auto_model.as_ref(), &request).await else {
+                    return;
+                };
+                request.model = model;
                 let Some(selected) = select_tool_mode(tool_mode.as_ref(), &request).await else {
                     return;
                 };
@@ -320,6 +373,32 @@ async fn forward_turn_result(
         });
     if let Err(error) = result {
         let _ = parts.send(Err(error)).await;
+    }
+}
+
+// Auto is a picker entry, not a routable id: the turn's prompt decides the
+// model it runs on. Every other id passes through.
+async fn select_auto_model(
+    selector: &dyn AutoModelSelector,
+    request: &TurnRequest,
+) -> Option<String> {
+    if request.model != crate::domain::models::AUTO_MODEL {
+        return Some(request.model.clone());
+    }
+    let Owner::User(owner) = &request.owner else {
+        return Some(crate::domain::models::resolve(&request.model).to_owned());
+    };
+    let prompt = request
+        .messages
+        .iter()
+        .rev()
+        .find(|message| message.role == agent::types::Role::User)
+        .and_then(|message| message.content.user_message_text())
+        .unwrap_or_default();
+    tokio::select! {
+        biased;
+        _ = request.cancel.cancelled() => None,
+        model = selector.select(owner, &prompt) => Some(model.to_owned()),
     }
 }
 
@@ -372,6 +451,7 @@ async fn drive_turn(
         cancel,
         user_input,
         reviewer,
+        agent_key,
     } = request;
     let started = tokio::time::Instant::now();
 
@@ -394,6 +474,13 @@ async fn drive_turn(
     // reads no memory, offers the model no tools, and is read, not shown, so
     // no opening line races it.
     let summarizing = purpose == crate::domain::engine::TurnPurpose::Summary;
+    if let Some(key) = &agent_key
+        && agent_api_keys::domain::ModelProvider::of_model(&model) != Some(key.key.provider())
+    {
+        return Err(AgentError::Other(anyhow::anyhow!(
+            "the agent's API key does not serve {model}"
+        )));
+    }
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
@@ -420,7 +507,9 @@ async fn drive_turn(
         )
     };
     // A closed receiver has no verdict, and the turn's own stream follows.
-    let mut opening_line = if summarizing {
+    // The opening line runs on Macro's own fast model, so a turn the agent's
+    // key pays for goes without one.
+    let mut opening_line = if summarizing || agent_key.is_some() {
         mpsc::channel(1).1
     } else {
         opener_span.in_scope(|| {
@@ -506,19 +595,64 @@ async fn drive_turn(
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
         .with_genai_telemetry(false);
+    // Only the loop's own model calls run on the agent's key, so only they are
+    // recorded against it; tools keep `usage_ctx`, since they call models on
+    // Macro's keys.
+    let loop_usage = match agent_key {
+        Some(key) => {
+            agent_loop = agent_loop.with_provider_api_key(key.key.expose())?;
+            usage_ctx.with_agent_api_key(key.bot_id)
+        }
+        None => usage_ctx,
+    };
+    let mut reviewed_tools = Vec::new();
     if let Some(reviewer) = reviewer.filter(|_| !summarizing) {
-        agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
-            Arc::clone(&toolset),
-            tool_context.clone(),
-            owner,
-            reviewer,
-            cancel.clone(),
-        ));
+        reviewed_tools = toolset.user_tools.keys().cloned().collect();
+        let tools = Arc::clone(&toolset);
+        let context = tool_context.clone();
+        let gate = Arc::clone(&gate);
+        let cancel = cancel.clone();
+        let awaiting = Arc::clone(&awaiting);
+        agent_loop = agent_loop.with_user_tool_finisher(Arc::new(move |mut call: agent::PendingUserTool| {
+            let tools = Arc::clone(&tools);
+            let context = context.clone();
+            let gate = Arc::clone(&gate);
+            let cancel = cancel.clone();
+            let reviewer = Arc::clone(&reviewer);
+            let awaiting = Arc::clone(&awaiting);
+            Box::pin(async move {
+                if !tools.user_tools.contains_key(&call.tool_name) { return None; }
+                let (actor, arguments) = match ai_toolset::actor::ToolActor::take(&call.args) {
+                    Ok(selection) => selection,
+                    Err(error) => return Some(agent::FinishedUserTool::Error(error.to_string())),
+                };
+                let authorize_cancel = cancel.clone();
+                let authorize: UserToolAuthorizer = Arc::new(move |name, mut args| {
+                    let gate = Arc::clone(&gate);
+                    let cancel = authorize_cancel.clone();
+                    let awaiting = Arc::clone(&awaiting);
+                    Box::pin(async move {
+                        args[ai_toolset::actor::ACTING_AS] = serde_json::to_value(actor).map_err(|error| ReviewError::Failed(error.to_string()))?;
+                        let _waiting = awaiting.begin();
+                        let verdict = tokio::select! {
+                            biased;
+                            _ = cancel.cancelled() => return Err(ReviewError::Failed("The turn was cancelled; nothing was done.".into())),
+                            verdict = gate.check(session_id, &name, &args) => verdict,
+                        };
+                        match verdict {
+                            NativeToolVerdict::RunAs(user) => Ok(user),
+                            NativeToolVerdict::Refuse(reason) => Err(ReviewError::Failed(reason)),
+                            NativeToolVerdict::Run => Err(ReviewError::Failed("Could not resolve the tool actor.".into())),
+                        }
+                    })
+                });
+                call.args = arguments;
+                authorized_user_tool_finisher(tools, context, reviewer, cancel, authorize)(call).await
+            })
+        }));
     }
-    // Macro's own tools spend the owner's access in-process, so they ask the
-    // gate a turn somebody else prompted must pass - the one the egress
-    // proxy applies to every MCP server. Remote MCP tools already pass
-    // through that proxy and are not asked twice.
+    // Native tools use the actor gate unless the installed finisher authorizes
+    // their final reviewed arguments. Remote MCP tools use the egress gate.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
@@ -536,9 +670,10 @@ async fn drive_turn(
         gate,
         session: session_id,
         awaiting,
+        reviewed_tools,
     });
     let session = agent_loop
-        .session(toolset, Arc::new(tool_context), system_prompt, usage_ctx)
+        .session(toolset, Arc::new(tool_context), system_prompt, loop_usage)
         .await;
     let (mut session, loop_cancel) = session.cancellable();
 

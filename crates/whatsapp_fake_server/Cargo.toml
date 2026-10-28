@@ -1,0 +1,32 @@
+[package]
+edition = "2024"
+name = "whatsapp_fake_server"
+publish = false
+version = "0.1.0"
+description = "Test support: a fake WhatsApp server and fake phones that speak the real protocol, for testing the whatsmeow port and the session service without WhatsApp."
+
+[dependencies]
+aes-gcm = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+hmac = { workspace = true }
+nom = { workspace = true }
+prost = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+tokio-tungstenite = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+whatsmeow = { path = "../whatsmeow", features = ["testing"] }
+whatsmeow_signal = { path = "../whatsmeow_signal" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

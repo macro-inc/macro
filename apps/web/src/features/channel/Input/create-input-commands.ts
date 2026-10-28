@@ -1,3 +1,4 @@
+import { hapticImpact } from '@core/mobile/haptics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { Accessor } from 'solid-js';
@@ -44,6 +45,7 @@ export function createInputCommands(
 
       const current = deps.snapshot();
       if (!hasSendableInputContent(current)) return false;
+      hapticImpact('light');
       deps.setIsSending(true);
       try {
         await deps.callbacks.onSend(current);

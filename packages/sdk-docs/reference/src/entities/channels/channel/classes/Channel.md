@@ -36,6 +36,18 @@ Add users to the channel.
 
 ***
 
+### agentConversations()
+
+> **agentConversations**(): `Promise`\<[`AgentConversation`](../../../agent-sessions/conversation/classes/AgentConversation.md)[]\>
+
+Conversations maintained by agents in this channel.
+
+#### Returns
+
+`Promise`\<[`AgentConversation`](../../../agent-sessions/conversation/classes/AgentConversation.md)[]\>
+
+***
+
 ### attachments()
 
 > **attachments**(`opts?`): `AsyncGenerator`\<[`ApiChannelAttachment`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelAttachment.md)\>
@@ -53,6 +65,18 @@ The attachments posted in this channel, auto-paginated.
 #### Returns
 
 `AsyncGenerator`\<[`ApiChannelAttachment`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelAttachment.md)\>
+
+***
+
+### cancelAccessRequest()
+
+> **cancelAccessRequest**(): `Promise`\<`void`\>
+
+Withdraw the current user's pending request to join this channel.
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ***
 
@@ -202,6 +226,38 @@ first, auto-paginated. Use it to catch up after a disconnect.
 
 ***
 
+### messageThreadById()
+
+> **messageThreadById**(`id`): [`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+A shared message thread scoped to this resource.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `id` | `string` |
+
+#### Returns
+
+[`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+***
+
+### myAccessRequest()
+
+> **myAccessRequest**(): `Promise`\<\{ `canRequest`: `boolean`; `request?`: [`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md); `retryAfter?`: `string`; \}\>
+
+The current user's latest request to join this channel, whether the
+channel accepts requests, and when they may ask again after a denial or
+withdrawal. Works without access to the channel.
+
+#### Returns
+
+`Promise`\<\{ `canRequest`: `boolean`; `request?`: [`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md); `retryAfter?`: `string`; \}\>
+
+***
+
 ### participants()
 
 > **participants**(): `Promise`\<[`ApiChannelParticipant`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelParticipant.md)[]\>
@@ -211,6 +267,22 @@ The channel's members, with their roles and join times.
 #### Returns
 
 `Promise`\<[`ApiChannelParticipant`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelParticipant.md)[]\>
+
+***
+
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`permission`](../../../entity/classes/PropertiedEntity.md#permission)
 
 ***
 
@@ -253,6 +325,24 @@ This entity's reference for bulk property operations.
 
 ***
 
+### recordActivity()
+
+> **recordActivity**(`type`): `Promise`\<[`ChannelActivity`](../../activity/classes/ChannelActivity.md)\>
+
+Record a view or interaction in this channel.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `type` | [`ActivityType`](../../../../../generated/storage/types.gen/type-aliases/ActivityType.md) |
+
+#### Returns
+
+`Promise`\<[`ChannelActivity`](../../activity/classes/ChannelActivity.md)\>
+
+***
+
 ### removeParticipants()
 
 > **removeParticipants**(`users`): `Promise`\<`void`\>
@@ -289,6 +379,19 @@ Rename the channel.
 
 ***
 
+### requestAccess()
+
+> **requestAccess**(): `Promise`\<[`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md)\>
+
+Ask this private or team channel's participants to let the current user
+join. Asking again while a request is pending returns that request.
+
+#### Returns
+
+`Promise`\<[`ChannelAccessRequest`](../../access-request/classes/ChannelAccessRequest.md)\>
+
+***
+
 ### send()
 
 > **send**(`body`, `opts?`): `Promise`\<[`Message`](../../message/classes/Message.md)\>
@@ -309,6 +412,24 @@ Works with a channel webhook token as well as a normal one — see
 #### Returns
 
 `Promise`\<[`Message`](../../message/classes/Message.md)\>
+
+***
+
+### setPicture()
+
+> **setPicture**(`picture?`): `Promise`\<`void`\>
+
+Set an uploaded profile picture, or clear it.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `picture?` | [`ChannelPicture`](../../picture/classes/ChannelPicture.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ***
 
@@ -333,6 +454,24 @@ value when `value` is omitted.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`setProperty`](../../../entity/classes/PropertiedEntity.md#setproperty)
+
+***
+
+### timelinePage()
+
+> **timelinePage**(`selection?`): `Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`Message`](../../message/classes/Message.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
+
+A mixed message and activity timeline page.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `selection?` | [`TimelineOptions`](../../../messages/thread/interfaces/TimelineOptions.md)\<[`Message`](../../message/classes/Message.md)\> |
+
+#### Returns
+
+`Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`Message`](../../message/classes/Message.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
 
 ***
 

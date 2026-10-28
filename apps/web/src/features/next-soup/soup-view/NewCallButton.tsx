@@ -2,11 +2,12 @@ import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { NewMeetingButton } from '@channel/Call/NewMeetingButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import XIcon from '@phosphor/x.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -15,7 +16,7 @@ import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
-export function NewCallButton() {
+export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
@@ -85,6 +86,9 @@ export function NewCallButton() {
   return (
     <>
       <NewMeetingButton
+        presentation={
+          isTouchDevice() ? undefined : (props.presentation ?? 'toolbar')
+        }
         onChannelCall={() => setIsOpen(true)}
         onInstantCall={() => navigate('/meet/new')}
       />

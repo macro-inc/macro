@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    m.parent_entity_type             AS \"parent_entity_type!\",\n                    m.parent_entity_id               AS \"parent_entity_id!\",\n                    m.id                             AS \"message_id!: uuid::Uuid\",\n                    m.thread_id                      AS \"thread_id?: uuid::Uuid\",\n                    m.sender_id                      AS \"sender_id!\",\n                    m.content                        AS \"message_content!\",\n                    m.created_at                     AS \"message_created_at!: chrono::DateTime<chrono::Utc>\",\n                    r.created_at                     AS \"attachment_created_at!: chrono::DateTime<chrono::Utc>\"\n                FROM (\n                    -- The CASE keeps non-message source ids out of the uuid cast.\n                    SELECT CASE WHEN em.source_entity_type = 'message' THEN em.source_entity_id::uuid END AS message_id,\n                           em.created_at\n                    FROM comms_entity_mentions em\n                    WHERE em.source_entity_type = 'message'\n                      AND em.entity_type = ANY($1)\n                      AND em.entity_id  = $2\n                    UNION ALL\n                    SELECT a.message_id, a.created_at\n                    FROM comms_attachments a\n                    WHERE a.entity_type = ANY($1)\n                      AND a.entity_id  = $2\n                ) r\n                JOIN comms_messages m ON m.id = r.message_id\n                WHERE m.parent_entity_type <> 'channel'\n                  AND m.deleted_at IS NULL\n                ORDER BY r.created_at DESC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "parent_entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_entity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id!: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id?: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "sender_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_created_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "attachment_created_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8f5015cb22c06c61a396bdd620f30a63ace46f3b0044f5f4c032a1cbf77559eb"
+}

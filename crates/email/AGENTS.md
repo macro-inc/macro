@@ -20,7 +20,8 @@ tools — hexagonal, heavily feature-gated.
 ## Scope
 
 - Owns: email/thread domain logic, scheduled delivery, reminders/followups,
-  calendar invitation extraction and resolution.
+  calendar invitation extraction and resolution, and adding a forwarded
+  event (`METHOD:PUBLISH`) to the viewer's calendar (`domain/invitation_import.rs`).
 - Not here: raw provider API calls → `email_api_client`; HTML
   parsing/sanitization → `email_utils`; SQLx queries over email tables →
   `email_db_client`.
@@ -49,14 +50,32 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
-- Forwarded-attachment registration and delivery authorize the authenticated caller
-  in `domain/forwarded_attachments.rs`; recheck source access after scheduled delays.
+- Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
+- Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
+- Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
+
+- Forwarded attachments register through `domain/draft_attachments.rs` and resolve
+  bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
+  source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
+- Saved invitation snapshots are JSONB and never re-extracted. `recurrence`
+  is `None` on snapshots saved before it was recorded, where a series looks
+  like a single event, so those cannot be added to a calendar.
 - The feature matrix (`ports`/`inbound`/`outbound`/`http_client`/`s3`/
   `gmail_token`/`ai_tools`/`attachment`/`calendar_invitations`/`axum`) gates
   most modules; check `Cargo.toml`'s `[features]` block for which one a new
   dependency belongs under before wiring it in.
 - `domain/ports.rs` defines the traits adapters implement — call through the
   domain service, never an outbound adapter directly from another crate.
+- Sender discovery authorizes the inbox first. Gmail aliases use the sender
+  provider; Outlook exposes its verified primary address without a Gmail lookup.
+- Outlook links have no system label rows. Move a thread in or out of the inbox
+  through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
+  `email_message_mailbox_facts`, never from labels.
+- Outlook organization commands only run in their link's current
+  `sync_generation`. Anything that bumps it must rebind unfinished commands as
+  `pending`, since claims skip `confirming` ones while those still block later
+  commands, as reconnect (`email_service` `mailbox_init.rs`) and `rebind_work` in
+  `outbound/mailbox_pg/lifecycle.rs` do; thread operations omit older generations.
 
 ## Related
 

@@ -13,6 +13,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import EmptyStateFolderGraphic from '@design/empty-state-folder.svg';
@@ -22,8 +23,8 @@ import {
   ListEntity,
   ListLayoutProvider,
 } from '@entity';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
 import {
@@ -81,6 +82,7 @@ export function DriveList() {
   const [grid, setGrid] = createSignal<HTMLDivElement>();
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  createScrollTopFade(viewport);
 
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
 
@@ -305,6 +307,7 @@ export function DriveList() {
                   class="grid min-h-0 flex-1 place-items-center text-ink-muted"
                 >
                   <SpinnerIcon
+                    aria-hidden={false}
                     aria-label="Loading files"
                     class="size-5 animate-spin"
                   />

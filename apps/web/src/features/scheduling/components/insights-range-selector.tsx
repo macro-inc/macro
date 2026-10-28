@@ -1,7 +1,7 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, DatePicker, Dropdown } from '@ui';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { insightPresetRange, insightRangeError } from '../core/insights';

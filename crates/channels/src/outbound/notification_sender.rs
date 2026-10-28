@@ -7,13 +7,18 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::{
-    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
-    ChannelMessageSendMetadata, ChannelReplyMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, NotificationDocumentSubType,
+    ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
+    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
+    CommonChannelMetadata, DocumentMentionMetadata, NotificationDocumentSubType,
 };
 use model_owner::Owner;
 use notification_hex::domain::{
-    models::SendNotificationRequestBuilder, service::NotificationIngress,
+    models::{
+        SendNotificationRequestBuilder,
+        request::{NotificationStatus, UpdateNotificationsRequest},
+    },
+    ports::NotificationWithdrawal,
+    service::{NotificationIngress, NotificationReader},
 };
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
@@ -22,15 +27,113 @@ use uuid::Uuid;
 mod test;
 
 /// Notification ingress adapter for channel notification effects.
-#[derive(Clone)]
-pub struct NotificationChannelSender<I> {
+pub struct NotificationChannelSender<I, C = UnavailableNotificationCompletion> {
     ingress: Arc<I>,
+    completion: C,
+}
+
+impl<I, C: Clone> Clone for NotificationChannelSender<I, C> {
+    fn clone(&self) -> Self {
+        Self {
+            ingress: self.ingress.clone(),
+            completion: self.completion.clone(),
+        }
+    }
 }
 
 impl<I> NotificationChannelSender<I> {
     /// Create a notification sender adapter.
     pub fn new(ingress: Arc<I>) -> Self {
-        Self { ingress }
+        Self {
+            ingress,
+            completion: UnavailableNotificationCompletion,
+        }
+    }
+}
+
+impl<I, C> NotificationChannelSender<I, C> {
+    /// Complete notifications whose workflow was resolved, such as a request to join.
+    pub fn with_completion<C2: CompleteNotifications>(
+        self,
+        completion: C2,
+    ) -> NotificationChannelSender<I, C2> {
+        NotificationChannelSender {
+            ingress: self.ingress,
+            completion,
+        }
+    }
+}
+
+/// Marks a resolved workflow's notification done for everyone who received it.
+pub trait CompleteNotifications: Clone + Send + Sync + 'static {
+    /// Complete one notification for each recipient, including delayed deliveries.
+    fn complete(
+        &self,
+        notification_id: Uuid,
+        recipients: HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Fail-closed completion for contexts that never resolve channel workflows.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UnavailableNotificationCompletion;
+
+impl CompleteNotifications for UnavailableNotificationCompletion {
+    async fn complete(
+        &self,
+        _notification_id: Uuid,
+        _recipients: HashSet<MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("notification completion is not configured")
+    }
+}
+
+/// Withdraws a notification so delayed deliveries are dropped, then marks it
+/// done for each recipient.
+pub struct NotificationReaderCompletion<N, W> {
+    reader: Arc<N>,
+    withdrawal: Arc<W>,
+}
+
+impl<N, W> NotificationReaderCompletion<N, W> {
+    /// Complete through the notification reader and withdrawal adapters.
+    pub fn new(reader: Arc<N>, withdrawal: Arc<W>) -> Self {
+        Self { reader, withdrawal }
+    }
+}
+
+impl<N, W> Clone for NotificationReaderCompletion<N, W> {
+    fn clone(&self) -> Self {
+        Self {
+            reader: self.reader.clone(),
+            withdrawal: self.withdrawal.clone(),
+        }
+    }
+}
+
+impl<N: NotificationReader, W: NotificationWithdrawal> CompleteNotifications
+    for NotificationReaderCompletion<N, W>
+{
+    async fn complete(
+        &self,
+        notification_id: Uuid,
+        recipients: HashSet<MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<()> {
+        self.withdrawal
+            .withdraw(notification_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        for user_id in recipients {
+            self.reader
+                .update_notifications(UpdateNotificationsRequest {
+                    user_id,
+                    notification_ids: &[notification_id],
+                    status: NotificationStatus::Done(true),
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        }
+        Ok(())
     }
 }
 
@@ -51,6 +154,7 @@ fn to_common_metadata(metadata: ChannelMetadata) -> CommonChannelMetadata {
 }
 
 struct InviteNotificationDelivery {
+    message_id: Option<Uuid>,
     channel_id: Uuid,
     invited_by_user_id: MacroUserIdStr<'static>,
     registered_recipient_ids: HashSet<MacroUserIdStr<'static>>,
@@ -65,6 +169,7 @@ async fn send_invite_notifications(
     delivery: InviteNotificationDelivery,
 ) -> anyhow::Result<()> {
     let InviteNotificationDelivery {
+        message_id,
         channel_id,
         invited_by_user_id,
         registered_recipient_ids,
@@ -74,6 +179,8 @@ async fn send_invite_notifications(
         common,
     } = delivery;
     let notification = ChannelInviteMetadata {
+        message_id,
+        email_recipient: None,
         invited_by: invited_by_user_id.clone(),
         channel_name: common.channel_name,
         is_direct_message: matches!(
@@ -97,18 +204,34 @@ async fn send_invite_notifications(
             .with_apns()
             .with_conn_gateway(),
         ),
-        ingress.send_notification(
-            SendNotificationRequestBuilder {
-                notification_entity: model_entity::EntityType::Channel
-                    .with_entity_string(channel_id.to_string()),
-                secondary_notification_entity: None,
-                notification,
-                sender_id: Some(invited_by_user_id.clone()),
-                recipient_ids: unregistered_recipient_ids,
+        async {
+            let mut result = Ok(());
+            for recipient in unregistered_recipient_ids {
+                let mut email_notification = notification.clone();
+                if email_notification.is_direct_message && message_id.is_some() {
+                    email_notification.email_recipient = Some(recipient.clone());
+                }
+                if let Err(error) = ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: None,
+                            notification: email_notification,
+                            sender_id: Some(invited_by_user_id.clone()),
+                            recipient_ids: HashSet::from([recipient]),
+                        }
+                        .into_request()
+                        .with_email(),
+                    )
+                    .await
+                {
+                    tracing::error!(error=?error, %channel_id, "unable to queue recipient invite email");
+                    result = Err(error);
+                }
             }
-            .into_request()
-            .with_email(),
-        )
+            result
+        }
     )
     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
@@ -135,9 +258,10 @@ fn to_channel_mention_metadata(mention: ChannelMentionNotification) -> ChannelMe
     }
 }
 
-impl<I> ChannelNotificationSender for NotificationChannelSender<I>
+impl<I, C> ChannelNotificationSender for NotificationChannelSender<I, C>
 where
     I: NotificationIngress + 'static,
+    C: CompleteNotifications,
 {
     type Err = anyhow::Error;
 
@@ -336,6 +460,7 @@ where
                     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             }
             ChannelNotificationEffect::Invite {
+                message_id,
                 channel_id,
                 invited_by_user_id,
                 registered_recipient_ids,
@@ -347,6 +472,7 @@ where
                 send_invite_notifications(
                     &*self.ingress,
                     InviteNotificationDelivery {
+                        message_id,
                         channel_id,
                         invited_by_user_id,
                         registered_recipient_ids,
@@ -357,6 +483,41 @@ where
                     },
                 )
                 .await?;
+            }
+            ChannelNotificationEffect::AccessRequested {
+                request,
+                sender_profile_picture_url,
+                metadata,
+                recipient_ids,
+            } => {
+                // The attempt id is the notification id, so resolving the
+                // attempt can complete it for every participant.
+                self.ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(request.channel_id.to_string()),
+                            secondary_notification_entity: None,
+                            notification: ChannelAccessRequestedMetadata {
+                                request_id: request.id,
+                                common: to_common_metadata(metadata),
+                                sender_profile_picture_url,
+                            },
+                            sender_id: Some(request.requester_id),
+                            recipient_ids,
+                        }
+                        .into_request_with_id(request.id)
+                        .with_apns()
+                        .with_conn_gateway(),
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            }
+            ChannelNotificationEffect::AccessRequestResolved {
+                request_id,
+                recipient_ids,
+            } => {
+                self.completion.complete(request_id, recipient_ids).await?;
             }
         }
 

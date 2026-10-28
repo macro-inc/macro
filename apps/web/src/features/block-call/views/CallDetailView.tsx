@@ -1,6 +1,8 @@
 import { ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createSearchParams } from '@app/lib/split-router';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -9,8 +11,8 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useCallRecordQuery } from '@queries/call/call';
 import {
   hasSoupEntity,
@@ -75,12 +77,15 @@ export function CallDetailActions(props: {
   }));
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-1">
+    <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
       <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
-        <Button variant="outline" size="sm" onClick={callAgain}>
-          <PhoneCallIcon class="size-4" />
-          Call Again
-        </Button>
+        <HeaderActionGroup label="Call actions">
+          <HeaderActionButton
+            label="Call Again"
+            icon={<PhoneCallIcon class="size-3.5 touch:size-4" />}
+            onClick={callAgain}
+          />
+        </HeaderActionGroup>
       </Show>
       <SidePanel.HeaderActionsOutlet />
       <ShareTrigger
@@ -160,6 +165,7 @@ export function CallDetailContent(props: {
             <Match when={props.query.status === 'pending'}>
               <div class="grid size-full place-items-center text-ink-muted">
                 <SpinnerIcon
+                  aria-hidden={false}
                   aria-label="Loading call recording"
                   class="size-5 animate-spin"
                 />
@@ -189,6 +195,7 @@ export function CallDetailContent(props: {
             fallback={
               <div class="grid size-full place-items-center text-ink-muted">
                 <SpinnerIcon
+                  aria-hidden={false}
                   aria-label="Loading call recording"
                   class="size-5 animate-spin"
                 />

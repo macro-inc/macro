@@ -1,8 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableInboxNotifiedSort } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { registerChannelNotificationRefresh } from '@queries/channel/register-notification-refresh';
+import { queryReadyGate } from '@queries/gate';
 import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
@@ -28,7 +30,9 @@ export function useHomeUnreadQuery(
   // page rather than silently changing its order/bounds or building an invalid
   // GraphQL input. Disabled queries must not compile an unsupported AST either.
   const notifiedSort = useFeatureFlag(enableInboxNotifiedSort);
-  const enabled = () => graphqlEnabled() && !notifiedSort().enabled;
+  const userId = useUserId();
+  const enabled = () =>
+    graphqlEnabled() && !notifiedSort().enabled && Boolean(userId());
   const legacy = useHomeEntitiesQuery(
     { tab: 'signal', facets: { read: ['unread'] } },
     { enabled: () => !enabled() }
@@ -80,8 +84,8 @@ export function useHomeUnreadQuery(
 
   return () => {
     if (!enabled()) {
-      if (legacy.query.isLoading) return false;
-      return legacy.hasUnreadEntity(legacy.query.data?.entities ?? []);
+      if (!queryReadyGate(legacy.query)) return false;
+      return legacy.hasUnreadEntity(legacy.query.data.entities);
     }
     return hasHomeUnreadWitness(
       items(),

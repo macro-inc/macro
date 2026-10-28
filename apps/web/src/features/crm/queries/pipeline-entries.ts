@@ -20,6 +20,7 @@ import type {
   PipelineEntryRecord,
 } from '../core/pipeline-entry';
 import type { CrmRecordDependencies } from './dependencies';
+import { trackPipelineEntryWrites } from './pipeline-data';
 
 /** What the record's pipeline cards read and write through. */
 export type PipelineEntriesDependencies = {
@@ -37,7 +38,7 @@ function optionLabel(option: GraphqlCell['column']['options'][number]): string {
     .with({ __typename: 'GraphqlNumberPropertyOptionValue' }, (value) =>
       String(value.numberValue)
     )
-    .exhaustive();
+    .exhaustive(() => '');
 }
 
 function entryColumn(column: GraphqlCell['column']): DatabaseViewColumn {
@@ -92,7 +93,7 @@ export function entryCellValue(cell: GraphqlCell): DatabaseCellValue {
         })
       )
     )
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 export function toPipelineEntry(
@@ -172,6 +173,8 @@ export function createPipelineEntriesQuery(
 export function savePipelineEntryCell(
   storage: PipelineEntriesDependencies['storage'],
   entry: PipelineEntry,
+  /** Whose record page the entry is edited from. */
+  recordType: PipelineEntryRecord['type'],
   cell: PipelineEntryCell,
   value: DatabaseCellValue,
   createOptions: boolean
@@ -183,7 +186,15 @@ export function savePipelineEntryCell(
       applyOps: (batch) =>
         storage
           .applyCrmPipelineOps(entry.pipeline.id, batch)
-          .mapErr(([error]) => error),
+          .mapErr(([error]) => error)
+          .map((applied) => {
+            trackPipelineEntryWrites(
+              { id: entry.pipeline.id, recordType },
+              'record',
+              batch.ops
+            );
+            return applied;
+          }),
     },
     { kind: 'cell', rowId: entry.rowId, columnId: cell.column.id, value },
     createOptions

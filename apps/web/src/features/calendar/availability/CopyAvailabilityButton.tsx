@@ -1,5 +1,5 @@
 import { CALENDAR_TOUR } from '@app/features/calendar-view/tour';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
+import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import { Button, type ButtonSize, useImperativeDialog } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { Show } from 'solid-js';

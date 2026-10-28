@@ -21,8 +21,8 @@ import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckIcon from '@phosphor/check.svg?component-solid';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import {
   blockNameToItemType,
   itemTypeToReferenceEntityType,
@@ -570,9 +570,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               }
             >
               <div class="shrink-0 pr-2 flex items-center gap-2">
-                <Show when={selectedOptions().length > 0}>
-                  <span class="text-sm text-ink-extra-muted">can</span>
-                </Show>
                 <ShareOptions
                   editPermissionEnabled={props.editPermissionEnabled}
                   allowedAccessLevels={props.allowedAccessLevels}

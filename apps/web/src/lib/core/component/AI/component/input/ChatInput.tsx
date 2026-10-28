@@ -26,13 +26,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
+import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
-import PaperclipIcon from '@phosphor/paperclip.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
@@ -211,6 +212,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       };
       props.editor.controls.clear();
       attachments.setAttached([]);
+      hapticImpact('light');
       props.onSend(sendInput);
     }
   );
@@ -292,7 +294,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
       class={cn(
-        'touch:size-7.5 [&_svg]:stroke-[4px]',
+        'touch:size-7.5',
         isTouchDevice() &&
           'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'

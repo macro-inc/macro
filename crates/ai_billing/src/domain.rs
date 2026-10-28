@@ -2,6 +2,7 @@
 //! the billing service, and the reconciliation sweep.
 
 pub mod admission;
+pub mod credit_grant;
 pub mod financial;
 pub mod ledger;
 pub mod models;
@@ -17,6 +18,7 @@ pub use admission::{
     AdmissionFuture, AiAdmissionError, AiAdmissionService, BillingAdmissionService,
     DisabledAiAdmissionService,
 };
+pub use credit_grant::{CreditGrant, CreditGrantRepo, CreditGrantService, GrantTarget};
 pub use ledger::{
     ReloadState, SettlementPlan, SettlementPolicy, SettlementState, plan_reload, plan_settlement,
 };

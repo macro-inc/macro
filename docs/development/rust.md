@@ -68,6 +68,10 @@ query metadata. If a test reports missing SQLx cache data, follow the
 [database troubleshooting workflow](database.md#troubleshooting);
 do not enable offline mode to work around it.
 
+CI limits Cargo to two concurrent build jobs for tests because linking several
+large service test binaries can exhaust runner memory. Nextest's test worker
+count is configured separately; the build limit does not reduce test coverage.
+
 Keep tests in a sibling `test.rs` (CS-49). For example, `src/user.rs` declares:
 
 ```rust

@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import ExclamationIcon from '@phosphor-icons/core/regular/exclamation-mark.svg?component-solid';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { createSignal, Show } from 'solid-js';
 import type {
   EmailDraftStorage,
@@ -18,6 +18,11 @@ function RecoveryEditor() {
   const editor = createEmailEditor();
   const state = createEmailComposer({
     drafts: {
+      transferDraft: async () => ({
+        draftId: 'moved-draft',
+        threadId: 'moved-thread',
+        attachments: [],
+      }),
       readDraft: async () => undefined,
       watchDrafts: (callback) => {
         changed = callback;
@@ -40,6 +45,7 @@ function RecoveryEditor() {
     attachmentStorage: {
       uploadAttachments: async () => {},
       addForwardedAttachments: async () => {},
+      completeAttachment: async () => {},
       removeAttachment: async () => {},
       removeForwardedAttachment: async () => {},
     },
@@ -76,6 +82,7 @@ function RecoveryEditor() {
         },
       },
       blockingNotice: async () => {},
+      confirm: async () => false,
       reportError: () => {},
     },
     accounts: {
@@ -87,6 +94,7 @@ function RecoveryEditor() {
       primaryId: () => 'inbox',
     },
     connectivity: { looksOffline: () => false },
+    editorFiles: { uploadDocuments: async () => [], makePublic: () => {} },
     viewerEmail: () => 'me@example.com',
     hasPaidAccess: () => true,
     recipients: () => [],

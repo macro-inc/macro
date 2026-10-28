@@ -58,7 +58,7 @@ use sqlx::PgPool;
 use tokio_util::task::TaskTracker;
 
 use crate::account_link_state::AccountLinkStateKey;
-use crate::microsoft_token_cipher::MicrosoftTokenCipher;
+use crate::domain::microsoft::MicrosoftAuth;
 use crate::service::signup_policy::SignupPolicy;
 use cursor_api_key::cipher::CursorApiKeyCipher;
 
@@ -151,14 +151,36 @@ pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServ
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
+pub(crate) type AgentApiKeysType = agent_api_keys::domain::AgentKeyService<
+    agent_api_keys::outbound::PgAgentKeyRepo,
+    agent_api_keys::outbound::KmsAgentKeyCipher<cursor_api_key::cipher::AwsKmsCiphertexts>,
+    agent_api_keys::outbound::EntitlementKeyPlans<
+        ai_billing::outbound::RolesTeamsEntitlementSource<
+            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            teams::outbound::team_repo::TeamRepositoryImpl,
+        >,
+    >,
+>;
+
+pub(crate) type BotsServiceType = bots::domain::service::BotServiceImpl<
+    bots::outbound::pg_bots_repo::PgBotsRepo,
+    AuthenticationEventBroker,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
+    pub inbox_connections:
+        Arc<email::domain::inbox_entitlement::InboxConnectionService<email::outbound::EmailPgRepo>>,
     pub github_link_service: Arc<GithubLinkServiceType>,
     pub auth_client: Arc<fusionauth::FusionAuthClient>,
-    pub microsoft_token_cipher: Option<Arc<dyn MicrosoftTokenCipher>>,
+    pub microsoft_auth: Option<Arc<dyn MicrosoftAuth>>,
     /// Encrypts users' Cursor API keys.
     pub cursor_api_key_cipher: Arc<dyn CursorApiKeyCipher>,
+    /// Agents' own Anthropic and OpenAI API keys.
+    pub agent_api_keys: Arc<AgentApiKeysType>,
+    /// Who may change an agent, for its API key.
+    pub bots: Arc<BotsServiceType>,
     /// Owner-bound Codex OAuth lifecycle and cloud target settings.
     pub codex_connection: Option<Arc<dyn codex_connection::domain::ConnectionService>>,
     pub macro_cache_client: Arc<MacroCache>,

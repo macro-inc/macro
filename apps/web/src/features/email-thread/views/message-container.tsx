@@ -57,7 +57,7 @@ export function MessageContainer(props: MessageContainerProps) {
       context.drafts.initialDraftsSettled()
   );
 
-  // Touch replies live in a drawer, so a saved one would otherwise be invisible.
+  // Touch replies open full screen, so a saved one would otherwise be invisible.
   const touchDraft = () =>
     isTouchDevice() && context.permissions().isOwner ? draftChild() : undefined;
 
@@ -101,6 +101,7 @@ export function MessageContainer(props: MessageContainerProps) {
       message={props.message}
       renderInvitation={rendering.renderInvitation}
       renderAvatar={rendering.renderAvatar}
+      renderOperation={rendering.renderOperation}
       viewerEmail={threadContext.viewerEmail()}
       isTouch={threadContext.isTouch()}
       isPersonal={isPersonalMessage(
@@ -130,6 +131,7 @@ export function MessageContainer(props: MessageContainerProps) {
       }}
       onFocus={scrollFocusedCardIntoView}
       onOpenAttachment={rendering.openAttachment}
+      onDownloadAttachment={rendering.downloadAttachment}
       onReply={
         context.permissions().isOwner
           ? (replyType) =>

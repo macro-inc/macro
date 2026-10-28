@@ -1,12 +1,17 @@
+import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CalendarEvent as CalendarEventEntity } from '@service-calendar/generated/schemas/calendarEvent';
+import type { CalendarGuestInputBody } from '@service-calendar/generated/schemas/calendarGuestInputBody';
+import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
 import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
 import type { UpdateCalendarEventRequest } from '@service-calendar/generated/schemas/updateCalendarEventRequest';
 import {
   type CalendarDeletionScope,
+  type CalendarInviteScope,
   type CalendarRsvpScope,
   type CalendarUpdateScope,
   emailClient,
@@ -18,9 +23,11 @@ import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
 import { answeringGraphqlCalendarHost } from './graphql/flag';
 import {
+  CalendarMutationError,
   committedEvent,
   executeGraphqlCreate,
   executeGraphqlDelete,
+  executeGraphqlInviteGuests,
   executeGraphqlRsvp,
   executeGraphqlUpdate,
 } from './graphql/mutations';
@@ -323,12 +330,189 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
             },
           };
         },
+        onSuccess: (_data, args) => {
+          analytics.track('calendar_event_rsvp', {
+            response: args.response,
+            scope: args.scope ?? (args.recurrenceId ? 'this_event' : 'all'),
+          });
+        },
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args, context) => {
           context?.release();
           if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 1) {
             return;
           }
+          fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
+          invalidateCalendarEventPreviews(args.eventId);
+          return invalidateCalendarOccurrences();
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+export interface InviteCalendarEventGuestsArgs {
+  eventId: string;
+  /** Calendar whose copy the invitation goes through. Omit for the canonical copy. */
+  calendarId?: string;
+  guests: CalendarGuestInputBody[];
+  /** How much of a recurring series gains the guests; defaults to all of it. */
+  scope?: CalendarInviteScope;
+  /** Original-start key of the occurrence a scoped invitation targets. */
+  recurrenceId?: string;
+  /** Cache key of the occurrence, for the optimistic update. */
+  occurrenceKey?: string;
+}
+
+/** The cached item with invited guests appended as unanswered. */
+function withInvitedGuests(
+  item: CalendarOccurrenceItem,
+  guests: readonly CalendarGuestInputBody[]
+): CalendarOccurrenceItem {
+  const present = new Set(
+    item.event.attendees.map((attendee) => attendee.email.toLowerCase())
+  );
+  const added = guests.filter(
+    (guest) => !present.has(guest.email.toLowerCase())
+  );
+  if (added.length === 0) return item;
+  return {
+    ...item,
+    event: {
+      ...item.event,
+      attendees: [
+        ...item.event.attendees,
+        ...added.map((guest) => ({
+          email: guest.email,
+          responseStatus: 'needs_action' as const,
+          isOrganizer: false,
+          isOptional: guest.optional ?? false,
+          isSelf: false,
+        })),
+      ],
+    },
+  };
+}
+
+function hasCalendarMutationCode(
+  error: unknown,
+  code: CalendarMutationErrorCode
+): boolean {
+  return (
+    thrownResultErrorHasCode(error, code) ||
+    (error instanceof CalendarMutationError && error.code === code)
+  );
+}
+
+/** Whether a write failed because the organizer does not let the viewer invite guests. */
+export function isGuestInviteRefused(error: unknown): boolean {
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guests_cannot_invite
+  );
+}
+
+/** Whether an invitation failed because the organizer hides the guest list from the viewer. */
+export function isGuestListHiddenRefusal(error: unknown): boolean {
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guest_list_hidden
+  );
+}
+
+/** Whether a write failed because the organizer does not let the viewer change the event. */
+export function isGuestEditRefused(error: unknown): boolean {
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guests_cannot_modify
+  );
+}
+
+/**
+ * Whether an invitation reached the provider, or waits in the durable queue
+ * until the cache reconnects.
+ */
+export type InviteCalendarEventGuestsOutcome = 'sent' | 'queued';
+
+type InviteCallbacks = MutationCallbacks<
+  InviteCalendarEventGuestsOutcome,
+  Error,
+  InviteCalendarEventGuestsArgs,
+  CalendarMutationContext
+>;
+
+async function inviteCalendarEventGuests(
+  args: InviteCalendarEventGuestsArgs
+): Promise<InviteCalendarEventGuestsOutcome> {
+  return Telemetry.span('calendar.invite_guests', async (span) => {
+    const host = answeringGraphqlCalendarHost();
+    span.setAttr('calendar.event_id', args.eventId);
+    span.setAttr('calendar.invite.guest_count', args.guests.length);
+    span.setAttr('calendar.invite.scope', args.scope ?? 'all');
+    span.setAttr(
+      'calendar.invite.one_occurrence',
+      args.recurrenceId !== undefined
+    );
+    span.setAttr('calendar.transport', host ? 'graphql' : 'rest');
+    try {
+      if (host) {
+        const outcome = await executeGraphqlInviteGuests(host, args);
+        const result = outcome.kind === 'queued' ? 'queued' : 'sent';
+        span.setAttr('calendar.invite.outcome', result);
+        return result;
+      }
+      await throwOnErr(() =>
+        emailClient.inviteCalendarEventGuests(args.eventId, {
+          calendarId: args.calendarId,
+          guests: args.guests,
+          scope: args.scope,
+          recurrenceId: args.recurrenceId,
+        })
+      );
+      span.setAttr('calendar.invite.outcome', 'sent');
+      return 'sent';
+    } catch (error) {
+      const refused =
+        isGuestInviteRefused(error) || isGuestListHiddenRefusal(error);
+      span.setAttr('calendar.invite.outcome', refused ? 'refused' : 'failed');
+      // Provider messages can quote addresses; record only the category.
+      span.error(
+        refused ? 'Guest invitation refused' : 'Guest invitation failed'
+      );
+      throw error;
+    }
+  });
+}
+
+/**
+ * Adds guests without replacing the guest list, so a guest the organizer
+ * lets invite can use it. The new guests show at once as unanswered on the
+ * occurrences the scope covers.
+ */
+export function useInviteCalendarEventGuestsMutation(
+  callbacks?: InviteCallbacks
+) {
+  return useMutation(() => ({
+    mutationFn: inviteCalendarEventGuests,
+    ...withCallbacks<
+      InviteCalendarEventGuestsOutcome,
+      Error,
+      InviteCalendarEventGuestsArgs,
+      CalendarMutationContext
+    >(
+      {
+        onMutate: (args) =>
+          patchOccurrenceCaches(
+            patchEventItems(args.eventId, (item) =>
+              args.scope === 'this_event' &&
+              item.occurrence.occurrenceKey !== args.occurrenceKey
+                ? item
+                : withInvitedGuests(item, args.guests)
+            )
+          ),
+        onError: (_error, _args, context) => context?.rollback(),
+        onSettled: (_data, _error, args) => {
           fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
           invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
@@ -538,6 +722,9 @@ function applyEventPatch(
   const event = patchesCanonical
     ? applyCopyPatch(item.event, patch)
     : { ...item.event };
+  if (patch.guestPolicy && patchesCanonical) {
+    event.guestPolicy = patch.guestPolicy;
+  }
   if (sources.length > 0) {
     event.sources = sources.map((copy) =>
       copy.calendarId === targetCalendarId ? applyCopyPatch(copy, patch) : copy
@@ -632,6 +819,15 @@ export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
     },
     ...withCallbacks<CalendarEventEntity, Error, CreateCalendarEventRequest>(
       {
+        onSuccess: (event, args) => {
+          analytics.track('calendar_event_created', {
+            eventId: event.id,
+            attendees: args.attendees?.length ?? 0,
+            recurring: (args.recurrenceLines?.length ?? 0) > 0,
+            macroCall: args.macroCall === true,
+            conference: args.conference != null,
+          });
+        },
         onSettled: () => invalidateCalendarOccurrences(),
       },
       callbacks

@@ -45,6 +45,7 @@ impl JwtValidator for ValidToken {
     fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         match jwt {
             "valid" => Ok(ValidatedIdentity {
+                agent_id: None,
                 user_id: USER.to_string(),
                 fusion_user_id: "fusion-ops-router".to_string(),
                 organization_id: None,

@@ -33,7 +33,11 @@ export function SenderIcon(props: SenderIconProps) {
     >
       {!props.hidden && (
         <Show
-          when={botSender()}
+          when={
+            message().guest_name
+              ? { name: message().guest_name, avatar_url: null }
+              : botSender()
+          }
           fallback={<UserIcon id={message().sender_id} size="fill" />}
         >
           {(bot) => (

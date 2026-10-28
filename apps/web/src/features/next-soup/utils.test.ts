@@ -1617,7 +1617,7 @@ describe('getChannelEntityTarget', () => {
     expect(getChannelEntityTarget(entity)).toEqual({
       kind: 'message',
       messageId: 'notif-msg',
-      threadId: undefined,
+      threadId: 'notif-msg',
     });
   });
 
@@ -2058,9 +2058,9 @@ describe('getChannelEntityTarget', () => {
       } else {
         expect(search).toMatchObject({
           messageId: ['message'],
+          threadId: ['message'],
           seek: [expect.any(String)],
         });
-        expect(search?.threadId).toBeUndefined();
       }
       expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
         parentNotification,
@@ -2115,7 +2115,7 @@ describe('getChannelEntityTarget', () => {
     expect(getChannelEntityTarget(entity)).toEqual({
       kind: 'message',
       messageId: 'unread-older-msg',
-      threadId: undefined,
+      threadId: 'unread-older-msg',
     });
   });
 
@@ -2319,6 +2319,30 @@ describe('getDocumentCommentTarget', () => {
     expect(goToLocationFromParams).toHaveBeenCalledWith({
       comment_id: 'comment-1',
     });
+  });
+
+  it('opens the document itself on touch, where the thread covers it', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      documentRow([commentNotification('n1', 'comment-1')]),
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'md', id: 'doc-1', params: undefined },
+      expect.objectContaining({ activate: true })
+    );
+    expect(goToLocationFromParams).not.toHaveBeenCalled();
   });
 
   it('carries the comment through the Inbox preview route', () => {

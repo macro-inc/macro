@@ -18,17 +18,17 @@ import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
+import CheckIcon from '@icon/system/regular/check.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import {
   Combobox,
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Avatar, cn, Layer } from '@ui';
 import * as EmailValidator from 'email-validator';
@@ -978,7 +978,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   inputRef()?.focus({ preventScroll: true });
                 }
               }}
-              class="z-modal-content translate-y-1 rounded-xl p-1.5 glass bg-menu-glass menu-open-animation text-sm [--color-surface:var(--color-menu)]"
+              class="menu-surface z-modal-content translate-y-1 p-1.5 menu-open-animation text-sm"
             >
               <Combobox.Listbox
                 ref={setListboxRef}

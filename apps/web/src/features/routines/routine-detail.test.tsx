@@ -72,8 +72,9 @@ vi.mock('./routine-triggers', () => ({
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({
-  DEFAULT_MODEL: 'claude-sonnet-4-6',
+  defaultModelForPlan: () => 'claude-sonnet-4-6',
 }));
+vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
 vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: () => 'New routine',
 }));
@@ -142,12 +143,14 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
 vi.mock('./routine-prompt-editor', () => ({
   RoutinePromptEditor: (props: {
     initialValue: string;
+    disabled?: boolean;
     onChange: (value: string) => void;
   }) => {
     mocks.changePrompt = props.onChange;
     return (
       <textarea
         aria-label="Instructions"
+        disabled={props.disabled}
         value={props.initialValue}
         onInput={(event) => props.onChange(event.currentTarget.value)}
       />
@@ -267,6 +270,7 @@ const cron: ScheduledAction = {
     prompt: '',
   },
   enabled: true,
+  run_visibility: 'unlisted',
   configuration_revision: 1,
   created_at: '2026-09-22T12:00:00Z',
   updated_at: '2026-09-22T12:00:00Z',
@@ -282,6 +286,14 @@ let setStatus: Setter<string>;
 let setActivationPending: Setter<boolean>;
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   mocks.update.mockReset().mockResolvedValue(cron);
   mocks.writeClipboardData.mockReset().mockResolvedValue(true);
   vi.useFakeTimers();
@@ -304,6 +316,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 const agentTarget: RoutineTarget = {
@@ -353,6 +366,22 @@ function deferredSave(): {
 }
 
 describe('routine execution target autosave', () => {
+  it('shows another owner’s routine without edit, run, or history controls', () => {
+    setSchedules([{ ...cron, owner: 'macro|someone-else@example.com' }]);
+    render(() => <Routine />);
+    expect(screen.getByLabelText('Instructions')).toHaveProperty(
+      'disabled',
+      true
+    );
+    expect(screen.queryByRole('button', { name: 'Run now' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Routine actions' })
+    ).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Run History' })).toBeNull();
+    mocks.changePrompt('Changed');
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it('copies the current prompt, including unsaved edits, from the run menu', async () => {
     render(() => <Routine />);
     mocks.changePrompt('Use my latest instructions');
@@ -752,6 +781,7 @@ describe('routine editor triggers', () => {
           user_prompt: 'New instructions',
           prompt: '',
         },
+        run_visibility: 'unlisted',
       },
     });
     openActions();
@@ -764,6 +794,7 @@ describe('routine editor triggers', () => {
       enabled: true,
       task: cron.task,
       trigger: cron.trigger,
+      run_visibility: 'unlisted',
     });
     await vi.advanceTimersByTimeAsync(300);
     fireEvent.click(screen.getByText('Run now'));
@@ -776,6 +807,25 @@ describe('routine editor triggers', () => {
       { type: 'chat', id: 'chat-id' },
       { activate: true, preferNewSplit: false }
     );
+  });
+
+  it('saves whether the routine’s runs show in Home and Agents', async () => {
+    render(() => <Routine />);
+    const visibility = screen.getByRole('button', { name: 'Runs hidden' });
+    visibility.focus();
+    fireEvent.keyDown(visibility, { key: 'Enter' });
+    fireEvent.keyDown(
+      await screen.findByRole('menuitemradio', { name: 'Show runs' }),
+      { key: 'Enter' }
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: cron.task,
+        run_visibility: 'listed',
+      }),
+    });
   });
 
   it('cancels pending saves when the editor unmounts', async () => {

@@ -25,7 +25,9 @@ impl AgentLoopResponder {
             agent_loop: AgentLoop::new(tool_context.recorder.clone()),
             tool_context: Arc::new(tool_context),
             toolset: tools.toolset,
-            system_prompt: format!("{}{}", prompt::channel_mention::PROMPT, tools.prompt),
+            // The channel rules go last so they are the freshest instructions the
+            // model reads; ahead of the tool prompt they were often ignored.
+            system_prompt: format!("{}\n{}", tools.prompt, prompt::channel_mention::PROMPT),
         }
     }
 }

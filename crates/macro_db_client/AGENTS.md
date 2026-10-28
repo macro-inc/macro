@@ -21,6 +21,16 @@ queries used across Rust services.
 - Not here: domain logic, authorization decisions, or caching built on top of
   these queries — those live in the owning domain crate/service that calls in.
 
+`agent_session_notification` is an additive leased outbox owned by
+`agent_session`. Review adapters use its transaction-aware producer port;
+notification frames have their own log direction. Session deletion cascades
+outbox rows, and migrations retain compatibility with prior table writers.
+
+The agent-session notification migration backfills legacy review outcomes and
+bridges old-producer writes during rollout; keep that bridge until legacy
+review producers have retired. Encode empty legacy item lists as JSON arrays so
+the typed notification reader can decode them.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -47,11 +57,30 @@ queries used across Rust services.
 - After schema or query changes: `nix develop --command just prepare_db` from
   the repo root, then commit the regenerated root `.sqlx/`.
 
+`agent_external_replies` stores external runtime reply destinations and outcomes;
+its queries and recovery policy belong to `agent_harness`. Its creation time is
+stable across retries, and `announced` records successful pending-message posts.
+The additive migrations are compatible with older service binaries; session
+deletion cascades its rows.
+
+`agent_preview_*` stores preview-specific ownership, credential hashes and
+watchers; its queries and policy belong to `agent_preview`. Leases have a bounded
+TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
+unreferenced replicas. These additive tables do not change agent-session claims.
+
 ## Gotchas
 
+- `calendar_event_notes` and `calendar_note_event_visible` are shared by calendar
+  note reads and document authorization; keep both consumers on the same policy.
+  The additive migration must precede their service rollout. See
+  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
+- Keep concurrent index migrations to one statement with `-- no-transaction`;
+  build replacement indexes before dropping old constraints, and validate large
+  table checks in a later transaction. See the Outlook rollout notes in
+  `docs/design/outlook-email-support.md` for failure recovery and deployment order.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
 
@@ -59,3 +88,16 @@ queries used across Rust services.
 
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md` ·
   Docs: `docs/development/database.md` · Skill: `dump-schema`
+
+Email send migrations add `email_messages.draft_generation` and attempt handle/inbox
+fences. Deploy the additive migrations and all generation-aware writers before
+enabling the independent email outbox; old writers do not enforce these fences.
+
+`preserve_deleted_email_send_delivery` defers active-send deletion before compacting
+content. Bypass retention for inboxes marked `deleting_at` and direct inbox
+cascades; other parent cascades must not destroy unresolved delivery state. Deferred markers retain provider identity and
+draft generation so Undo/resend cannot inherit an old deletion.
+
+The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
+and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
+and kind constraints expand without rewriting existing rows and validate separately.

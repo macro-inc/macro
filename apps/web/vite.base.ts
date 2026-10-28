@@ -10,7 +10,9 @@ import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
+import { devCompression } from './scripts/dev-compression';
 import { devHttps } from './scripts/dev-https';
+import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
@@ -318,6 +320,8 @@ export const createAppViteConfig = (): UserConfigFn => {
       },
       plugins: [
         devHttps(),
+        devCompression(),
+        devExternalSourcemaps(),
         hostedDevProxy(),
         // solidDevtools({ autoname: true }),
         pureGeneratedZodSchemas(),
@@ -368,6 +372,8 @@ export const createAppViteConfig = (): UserConfigFn => {
         rollupOptions: {
           input: {
             app: resolve(__dirname, 'index.html'),
+            pipedreamConnect: resolve(__dirname, 'pipedream-connect.html'),
+            canvasRender: resolve(__dirname, 'canvas-render.html'),
           },
           // KaTeX and PDF.js are now reachable through lazy boundaries. Let
           // Rollup place them naturally; forcing lazy code into named chunks
@@ -449,8 +455,6 @@ export const createAppViteConfig = (): UserConfigFn => {
         ...localDevServer(process.env),
         cors: true,
         watch: {
-          usePolling: true,
-          interval: 100,
           ignored: /(^|[\\/])target([\\/]|$)/,
         },
         fs: {

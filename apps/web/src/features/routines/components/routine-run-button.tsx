@@ -1,7 +1,7 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import PauseIcon from '@phosphor/pause.svg';
-import PlayIcon from '@phosphor/play.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import PauseIcon from '@icon/system/regular/pause.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
 import { Button, ButtonGroup, Dropdown } from '@ui';
 import { Show } from 'solid-js';
 
@@ -17,16 +17,11 @@ export function RoutineRunButton(props: {
 }) {
   return (
     <Dropdown placement="bottom-end">
-      <ButtonGroup
-        variant="ghost"
-        size="sm"
-        depth={2}
-        class="rounded-full border border-edge-muted"
-      >
+      <ButtonGroup variant="outline" size="sm" depth={2} label="Run routine">
         <Button
+          variant="ghost"
           disabled={props.runDisabled}
           onClick={props.onRun}
-          class="bg-transparent hover:bg-ink/[0.04]"
         >
           <PlayIcon class="size-3" />
           Run now
@@ -34,8 +29,8 @@ export function RoutineRunButton(props: {
         <ButtonGroup.Divider />
         <Dropdown.Trigger
           variant="ghost"
+          size="icon-sm"
           aria-label="Run options"
-          class="bg-transparent p-1 hover:bg-ink/[0.04]"
         >
           <CaretDownIcon class="size-3.5" />
         </Dropdown.Trigger>

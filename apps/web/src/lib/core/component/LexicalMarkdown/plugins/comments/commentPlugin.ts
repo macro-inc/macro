@@ -19,7 +19,9 @@ import {
   $isRangeSelection,
   $isTextNode,
   $nodesOfType,
+  CLICK_COMMAND,
   COMMAND_PRIORITY_EDITOR,
+  COMMAND_PRIORITY_LOW,
   createCommand,
   type LexicalEditor,
   type LexicalNode,
@@ -160,6 +162,29 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     }
   };
 
+  const $selectMarksAtCaret = () => {
+    const selection = $getSelection();
+    if (selection === null) return;
+    let hasActiveIds = false;
+    let newActiveIds: string[] | undefined;
+
+    if ($isRangeSelection(selection)) {
+      const markIds = $getMarkIdsAtCaret(
+        selection.anchor.getNode(),
+        selection.anchor.offset
+      );
+      if (markIds != null) {
+        newActiveIds = markIds;
+        hasActiveIds = true;
+      }
+    }
+
+    if (!hasActiveIds) {
+      ops.setActiveIds([]);
+    }
+    markSelected(newActiveIds);
+  };
+
   return mergeRegister(
     registerNestedElementResolver<CommentNode>(
       editor,
@@ -201,29 +226,19 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     }),
 
     editor.registerUpdateListener(({ editorState }) => {
-      editorState.read(() => {
-        const selection = $getSelection();
-        if (selection === null) return;
-        let hasActiveIds = false;
-        let newActiveIds: string[] | undefined;
-
-        if ($isRangeSelection(selection)) {
-          const markIds = $getMarkIdsAtCaret(
-            selection.anchor.getNode(),
-            selection.anchor.offset
-          );
-          if (markIds != null) {
-            newActiveIds = markIds;
-            hasActiveIds = true;
-          }
-        }
-
-        if (!hasActiveIds) {
-          ops.setActiveIds([]);
-        }
-        markSelected(newActiveIds);
-      });
+      editorState.read($selectMarksAtCaret);
     }),
+
+    // A click selects the comments at the caret even when the caret did not
+    // move, such as returning to text whose thread was closed from outside.
+    editor.registerCommand(
+      CLICK_COMMAND,
+      () => {
+        $selectMarksAtCaret();
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    ),
 
     editor.registerCommand(
       CREATE_DRAFT_COMMENT_COMMAND,

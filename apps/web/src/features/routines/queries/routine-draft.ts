@@ -18,7 +18,7 @@ import type {
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
-import type { ScheduleDraft } from '../core/draft';
+import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
 import {
   type RoutineTarget,
   routineAgentIdSchema,
@@ -43,6 +43,15 @@ function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
   if (schedule.kind !== 'Agent') return undefined;
   const result = agentTaskSchema.safeParse(schedule.task);
   return result.success ? result.data : undefined;
+}
+
+/** Whether a routine runs an agent or a bare model; undefined when its task is unreadable. */
+export function routineTargetKind(
+  schedule: ScheduledAction
+): RoutineTarget['kind'] | undefined {
+  const task = getAgentTask(schedule);
+  if (!task) return undefined;
+  return task.agent ? 'agent' : 'model';
 }
 
 function targetFromTask(task: RoutineTask): RoutineTarget {
@@ -84,6 +93,7 @@ export function draftFromSchedule(
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
+    runVisibility: schedule.run_visibility,
     timezone: trigger?.timezone,
     triggers,
     ...(trigger ? onceFromCron(trigger.schedule, trigger.timezone) : {}),
@@ -120,6 +130,7 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
     kind: 'Agent',
     task: buildAgentTask(draft),
     enabled: draft.enabled ?? true,
+    run_visibility: draft.runVisibility ?? DEFAULT_RUN_VISIBILITY,
   };
 }
 
@@ -145,6 +156,7 @@ export function draftToUpdateBody(
     if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
     task = editedTask;
   }
+  const runVisibility = draft.runVisibility ?? previous.run_visibility;
 
   // Preserve API-written cron expressions and raw task data when not edited.
   if (draft.triggers)
@@ -163,6 +175,7 @@ export function draftToUpdateBody(
           : serializeTriggers(draft.triggers),
       kind: previous.kind,
       task,
+      run_visibility: runVisibility,
     };
   if (!trigger) return;
   const parsed = parseCron(trigger.schedule);
@@ -185,6 +198,7 @@ export function draftToUpdateBody(
       : trigger,
     kind: previous.kind,
     task,
+    run_visibility: runVisibility,
   };
 }
 
@@ -199,6 +213,7 @@ export function scheduleToDuplicateBody(
     name: `${schedule.name} copy`,
     trigger,
     task: schedule.task,
+    run_visibility: schedule.run_visibility,
   };
 }
 

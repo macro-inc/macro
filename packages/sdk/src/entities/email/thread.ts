@@ -1,13 +1,24 @@
 import type {
   ApiContactInfo,
   ApiDraftContactInfo,
+  CalendarInvitation,
   GetThreadResponses,
+  MailboxOperation,
+  UpdateThreadStateRequest,
 } from '../../../generated/email/types.gen';
+import type { EmailFollowupCommand } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Calendar } from '../calendar/calendar';
+import { CalendarEvent } from '../calendar/event';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import { entitySearch } from '../search';
+import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 import { EmailAttachment } from './attachment';
 import type { Label } from './label';
 import { Link } from './link';
@@ -36,6 +47,88 @@ export interface ReplyEmailOptions {
  * up to the first 100 messages) loads lazily on first field access.
  */
 export class EmailThread extends PropertiedEntity<ThreadDetail> {
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'email_thread', this);
+
+  /** Read follow-up state for this thread. */
+  async followup() {
+    return unwrap(
+      await this.client.storage.getEmailFollowup({
+        path: { thread_id: this.id },
+      }),
+    );
+  }
+
+  /** Set or remove a follow-up using a persisted operation id and revision. */
+  async setFollowup(command: EmailFollowupCommand) {
+    return unwrap(
+      await this.client.storage.setEmailFollowup({
+        path: { thread_id: this.id },
+        body: command,
+      }),
+    );
+  }
+
+  /** Calendar invitations resolved from this thread's messages. */
+  async calendarInvitations() {
+    return unwrap(
+      await this.client.email.getThreadCalendarInvitations({
+        path: { thread_id: this.id },
+      }),
+    );
+  }
+
+  /** Add a shared event one of this thread's messages carries (a published
+   * `.ics`, such as one sent with Forward by email) to one of the
+   * requester's Google calendars, and return a handle to the synced
+   * snapshot. The event is read from the saved message, never from the
+   * caller, and lands the way {@link CalendarEvent.addToCalendar} adds a
+   * channel-shared one: the meeting's iCalendar UID and organizer, only the
+   * requester as a guest, no join link, nobody notified. Refused with
+   * `invalid_input` for an invitation, which is answered from the calendar
+   * instead, `already_on_calendar` when the meeting is already on one of
+   * their calendars, whichever calendar is named (it cannot be added to
+   * another of theirs either), and `copy_refused` when Google will not
+   * import it. */
+  async addEventToCalendar(
+    message: EmailMessage,
+    invitation: CalendarInvitation,
+    options: { calendar?: Calendar } = {},
+  ): Promise<CalendarEvent> {
+    const record = unwrap(
+      await this.client.email.copyThreadCalendarInvitation({
+        path: {
+          thread_id: this.id,
+          message_id: message.id,
+          invitation_id: invitation.id,
+        },
+        body: { calendarId: options.calendar?.id },
+      }),
+    );
+    return CalendarEvent.fromRecord(this.client, record);
+  }
+
+  /** Change project membership or share permissions for this thread. */
+  async update(options: {
+    project?: Project | null;
+    sharePermission?: SharePermissionOptions;
+  }): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editThreadV2({
+        path: { thread_id: this.id },
+        body: {
+          projectId:
+            options.project === undefined
+              ? undefined
+              : (options.project?.id ?? null),
+          sharePermission: options.sharePermission
+            ? sharePermissionBody(options.sharePermission)
+            : undefined,
+        },
+      }),
+    );
+  }
+
   /** Favorites identify email threads as `email_thread`. */
   readonly entityType = 'email_thread';
 
@@ -171,6 +264,20 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
         path: { id: this.id },
         body: { value: archived },
       }),
+    );
+  }
+
+  /** Update provider-neutral read, trash, spam, or star state. */
+  async updateState(request: UpdateThreadStateRequest): Promise<void> {
+    await this.mutate((c) =>
+      c.email.updateThreadState({ path: { id: this.id }, body: request }),
+    );
+  }
+
+  /** Read pending or failed mailbox changes without initiating a retry. */
+  async operations(): Promise<MailboxOperation[]> {
+    return unwrap(
+      await this.client.email.threadOperations({ path: { id: this.id } }),
     );
   }
 

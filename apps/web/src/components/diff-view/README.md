@@ -30,7 +30,7 @@ disclosure button, the status letter and `text-xs` path (directory in
 an opaque `bg-surface` with `hover:overlay-hover`, so diff text never shows through
 the sticky row on hover. Hovering the header highlights the row but does not toggle
 it; only the disclosure and path controls toggle collapse. Toolbar parts use
-standard `Button` and `SegmentedControl` sizes, and backgrounds come from the
+standard `Button` and `Tabs` sizes, and backgrounds come from the
 card's depth.
 
 The host composes the rest:

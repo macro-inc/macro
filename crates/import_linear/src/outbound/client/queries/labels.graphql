@@ -1,0 +1,6 @@
+query ImportLabels($id: String!, $after: String) {
+  issue(id: $id) { labels(first: 50, after: $after) {
+    nodes { name }
+    pageInfo { hasNextPage endCursor }
+  } }
+}

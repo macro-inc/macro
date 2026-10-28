@@ -220,9 +220,7 @@ function CloudExternalUrlPoll(props: {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) ||
-      isCodexBotId(session.botId) ||
-      session.harness === 'claude-cloud'
+    return isCursorBotId(session.botId) || isCodexBotId(session.botId)
       ? id
       : undefined;
   });

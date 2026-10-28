@@ -419,7 +419,7 @@ describe('ElicitationPart', () => {
       },
       attendees: [],
       recurrenceLines: [],
-      addGoogleMeet: false,
+      addConference: false,
       eventType: 'default',
     };
     const emptySchema = {

@@ -49,7 +49,11 @@ vi.mock('@core/component/AI/signal/globalAttachments', () => ({
 vi.mock('@core/context/team', () => ({
   TeamContextProvider: (props: { children: unknown }) => props.children,
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'test-user' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'test-user',
+  useUserInfo: () => () => ({ userId: 'test-user' }),
+  useIsAuthenticated: () => () => true,
+}));
 vi.mock('@core/orchestrator', () => ({
   createBlockOrchestrator: vi.fn(() => ({})),
 }));

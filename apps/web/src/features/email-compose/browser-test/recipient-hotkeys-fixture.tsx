@@ -30,11 +30,17 @@ const context: EmailComposeContext = {
       threadId: 'thread',
       inboxId: 'inbox',
     }),
+    transferDraft: async () => ({
+      draftId: 'transferred-draft',
+      threadId: 'transferred-thread',
+      attachments: [],
+    }),
     deleteDraft: async () => {},
     restoreDraft: async () => {},
   },
   attachmentStorage: {
     uploadAttachments: async () => {},
+    completeAttachment: async () => {},
     addForwardedAttachments: async () => {},
     removeAttachment: async () => {},
     removeForwardedAttachment: async () => {},
@@ -60,6 +66,7 @@ const context: EmailComposeContext = {
       dismiss: () => {},
     },
     blockingNotice: async () => {},
+    confirm: async () => false,
     reportError: () => {},
   },
   accounts: {
@@ -84,6 +91,7 @@ const context: EmailComposeContext = {
     readDroppedFiles: () => {},
     makePublic: () => {},
     uploadEditorFiles: () => {},
+    uploadDocuments: async () => [],
   },
   viewerEmail: () => 'me@example.com',
   recipients: () => [],
@@ -145,7 +153,6 @@ function NewEmail() {
         },
         isMobile: () => false,
         scheduleEnabled: false,
-        attachmentFailure: () => {},
       }}
     >
       <ComposeLayout />

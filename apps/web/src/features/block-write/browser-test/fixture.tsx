@@ -1,5 +1,6 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
+import { ThrownResultError } from '@core/util/result';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -16,6 +17,7 @@ import {
 } from '@macro-inc/collaboration/sync-service/source';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
 import type { MessageListItem } from '@service-storage/messages';
+import { QueryClient } from '@tanstack/solid-query';
 import type { LoroDoc } from 'loro-crdt';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -26,6 +28,7 @@ import ComplexMsa from '../core/fixtures/complex-msa.docx?url';
 import MutualNda from '../core/fixtures/mutual-nda.docx?url';
 import type { LocatedThread } from '../primitives/create-docx-comments';
 import type { DocxEditor } from '../primitives/create-docx-editor';
+import { docxOriginalQueryOptions } from '../queries/docx-original';
 import { createDocxSession } from '../queries/docx-session';
 import { DocxEditorView } from '../views/DocxEditorView';
 import { DocxMarginLayout } from '../views/DocxMarginLayout';
@@ -490,8 +493,20 @@ function LocalFixture() {
   const pair = params.get('local') === 'pair';
   const [docs, setDocs] = createSignal<LoroDoc[]>();
   const [editor, setEditor] = createSignal<DocxEditor>();
+  const client = new QueryClient();
+  onCleanup(() => client.clear());
   const seed = async () => {
-    const original = new Uint8Array(await (await fetch(fixture)).arrayBuffer());
+    const original = await client.fetchQuery(
+      docxOriginalQueryOptions(documentId, async () => {
+        const response = await fetch(fixture);
+        if (response.status === 409)
+          throw new ThrownResultError([
+            { code: 'CONFLICT', message: 'Document is still processing.' },
+          ]);
+        if (!response.ok) throw new Error('Unable to download fixture.');
+        return new Uint8Array(await response.arrayBuffer());
+      })
+    );
     const snapshot = await buildSeedSnapshot(original);
     const { LoroDoc } = await import('loro-crdt');
     const a = new LoroDoc();

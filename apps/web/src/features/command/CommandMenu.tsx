@@ -29,7 +29,7 @@ import { openExternalUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
-import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import {
@@ -781,13 +781,11 @@ export function CommandMenuInner(props: {
             when={isEntityActionMode()}
             fallback={
               <Tabs
-                list={categoryTabs()}
+                aria-label="Result categories"
+                size="sm"
+                options={categoryTabs()}
                 value={categoryFilter()}
-                onChange={(value) => {
-                  if (value) {
-                    CommandState.setCategoryFilter(value as CategoryFilter);
-                  }
-                }}
+                onChange={CommandState.setCategoryFilter}
               />
             }
           >

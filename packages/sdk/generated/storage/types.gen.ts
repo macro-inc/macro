@@ -415,6 +415,18 @@ export type AgentSessionLifecycleEvent = {
 };
 
 /**
+ * Who started an agent session. The string form is the
+ * `agent_session.source` column's.
+ */
+export type AgentSessionSource = 'user' | 'agent' | 'routine';
+
+/**
+ * Where an agent session is shown. The string form is the
+ * `agent_session.visibility` column's.
+ */
+export type AgentSessionVisibility = 'listed' | 'unlisted' | 'hidden';
+
+/**
  * An agent session typing through its bot.
  */
 export type AgentTyping = {
@@ -556,10 +568,51 @@ export type ApiAttachmentChannelReference = {
 };
 
 /**
+ * A reference to an attachment entity from a comment on a non-channel entity.
+ */
+export type ApiAttachmentCommentReference = {
+    /**
+     * When the mention or attachment row was created.
+     */
+    attachment_created_at: string;
+    /**
+     * Full message content (might be used for preview/snippet).
+     */
+    message_content: string;
+    /**
+     * When the message itself was created.
+     */
+    message_created_at: string;
+    /**
+     * Message that contains the reference.
+     */
+    message_id: string;
+    /**
+     * Id of the entity the comment belongs to.
+     */
+    parent_entity_id: string;
+    /**
+     * Stored type of the entity the comment belongs to
+     * (`document`, `initiative`, `crm_company`, `crm_contact`, or `call`).
+     */
+    parent_entity_type: string;
+    /**
+     * Sender of the message.
+     */
+    sender_id: string;
+    /**
+     * If the message belongs to a thread this is the parent id.
+     */
+    thread_id?: string | null;
+};
+
+/**
  * An attachment reference, tagged by source kind.
  */
 export type ApiAttachmentEntityReference = (ApiAttachmentChannelReference & {
     reference_type: 'channel';
+}) | (ApiAttachmentCommentReference & {
+    reference_type: 'comment';
 }) | (ApiAttachmentGenericReference & {
     reference_type: 'generic';
 });
@@ -1573,6 +1626,11 @@ export type CalendarEvent = {
      */
     eventType?: EventType;
     /**
+     * What the organizer lets guests do: the canonical copy's values, or
+     * Google's defaults for an event synced before the policy was modeled.
+     */
+    guestPolicy: GuestPolicy;
+    /**
      * RFC 5545 UID used to reconcile provider and email sources.
      */
     icalUid: string;
@@ -1584,6 +1642,12 @@ export type CalendarEvent = {
      * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
+    /**
+     * Whether this is a snapshot of a meeting shared with the owner, which
+     * Macro added to their calendar as a private copy: the meeting's changes
+     * never reach it, and nothing done to it reaches the meeting.
+     */
+    isSnapshot: boolean;
     /**
      * Optional physical or virtual location label.
      */
@@ -1641,6 +1705,12 @@ export type CalendarEvent = {
      * Entity update time.
      */
     updatedAt: string;
+    /**
+     * What the viewing requester may do with the event. Resolved only on
+     * the read path, alongside each attendee's `is_self`; nothing when no
+     * viewer is known. Source projections never store it.
+     */
+    viewerCan: ViewerCapabilities;
     /**
      * Event visibility.
      */
@@ -1734,6 +1804,71 @@ export type CalendarEventSourceContent = {
 };
 
 /**
+ * A channel member's request to be added as a guest of an event they see
+ * only through a channel share.
+ */
+export type CalendarJoinRequest = {
+    /**
+     * When the request was made.
+     */
+    createdAt: string;
+    /**
+     * The sharer's event entity that was shared with the channel.
+     */
+    eventId: string;
+    /**
+     * Request identifier.
+     */
+    id: string;
+    /**
+     * Address the sharer invites when accepting.
+     */
+    requesterEmail: string;
+    /**
+     * Macro user asking to join.
+     */
+    requesterId: string;
+    /**
+     * Where the request stands.
+     */
+    status: CalendarJoinRequestStatus;
+};
+
+/**
+ * HTTP error body returned by join-request endpoints.
+ */
+export type CalendarJoinRequestApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: CalendarJoinRequestErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+};
+
+/**
+ * Machine-readable join-request failure category.
+ */
+export type CalendarJoinRequestErrorCode = 'not_found' | 'already_on_calendar' | 'sharer_cannot_invite' | 'request_declined' | 'internal';
+
+/**
+ * Lifecycle of a request to be added as a guest of a shared event.
+ */
+export type CalendarJoinRequestStatus = 'pending' | 'accepted' | 'declined';
+
+/**
+ * Pending requests to join one event.
+ */
+export type CalendarJoinRequestsResponse = {
+    /**
+     * Oldest first.
+     */
+    requests: Array<CalendarJoinRequest>;
+};
+
+/**
  * Meeting-level fields shown in a calendar event mention preview, taken from
  * the requester's own projection of the meeting, or — when the requester has
  * none — from the mentioned projection a channel they belong to was given.
@@ -1744,6 +1879,12 @@ export type CalendarMentionEvent = {
      */
     attendeeCount: number;
     /**
+     * For a channel-shared preview, whether the person who shared it can
+     * add the requester as a guest. Always false for the requester's own
+     * copy.
+     */
+    canRequestToJoin?: boolean;
+    /**
      * Provider description, plain text or HTML, truncated for the preview.
      * Clients must sanitize it before rendering.
      */
@@ -1752,6 +1893,7 @@ export type CalendarMentionEvent = {
      * Whether the event repeats.
      */
     isRecurring: boolean;
+    joinRequestStatus?: null | CalendarJoinRequestStatus;
     /**
      * Location label, when set.
      */
@@ -1783,6 +1925,7 @@ export type CalendarMentionEvent = {
      * Entity update time of the previewed copy.
      */
     updatedAt: string;
+    viewerCopy?: null | CalendarMentionViewerCopy;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
      * from the mentioned id when the mention came from another attendee.
@@ -1843,6 +1986,13 @@ export type CalendarMentionPreviewRequestItem = {
 export type CalendarMentionPreviewResponse = {
     items: Array<CalendarMentionPreviewItem>;
 };
+
+/**
+ * How a requester holds a mentioned meeting on their own calendar, decided
+ * by the copy's own inbox, the way viewer capabilities decide organizer and
+ * guest.
+ */
+export type CalendarMentionViewerCopy = 'snapshot' | 'invitation' | 'event';
 
 /**
  * A materialized recurrence instance optimized for range queries.
@@ -1946,6 +2096,11 @@ export type CallFilters = {
 };
 
 /**
+ * Supported call and transcript providers. Add variants as integrations grow.
+ */
+export type CallProvider = 'macro' | 'granola';
+
+/**
  * Full record of a call, unifying rows from `calls` (active) and
  * `call_records` (archived) into a single response shape.
  */
@@ -2012,15 +2167,16 @@ export type CallRecord = {
      */
     recordingUrl?: string | null;
     /**
-     * The RTC room name.
+     * The RTC room name. `None` for imported calls, which never had a room.
      */
-    roomName: string;
+    roomName?: string | null;
     /**
      * Whether the call is shared with the creator's team. While the call is
      * live this is the pending toggle applied at archive; afterwards it
      * mirrors `team_share_access_level`.
      */
     shareWithTeam: boolean;
+    source?: null | CallRecordSource;
     /**
      * When the call started (created_at for active, started_at for archived).
      */
@@ -2127,6 +2283,20 @@ export type CallRecordPreviewData = {
      * When the call started (created_at for active, started_at for archived).
      */
     startedAt: string;
+};
+
+/**
+ * Where an imported call came from.
+ */
+export type CallRecordSource = {
+    /**
+     * Link to the call in the provider's app, if it has one.
+     */
+    externalUrl?: string | null;
+    /**
+     * Provider that supplied the call.
+     */
+    provider: CallProvider;
 };
 
 /**
@@ -2436,6 +2606,81 @@ export type Channel = {
      * Update timestamp.
      */
     updated_at: string;
+};
+
+/**
+ * A participant's answer to a pending request.
+ */
+export type ChannelAccessDecision = 'approve' | 'deny';
+
+/**
+ * One attempt to join a channel. Attempts are never reused, so each timeline
+ * entry keeps showing the outcome of the attempt it announced.
+ */
+export type ChannelAccessRequest = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * When the requester asked.
+     */
+    created_at: string;
+    /**
+     * Attempt id.
+     */
+    id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
+    /**
+     * When the attempt stopped being pending.
+     */
+    resolved_at?: string | null;
+    resolved_by?: null | MacroUserIdStr;
+    /**
+     * Current outcome.
+     */
+    status: ChannelAccessRequestStatus;
+};
+
+/**
+ * A requester's view of their access to a channel they cannot read.
+ */
+export type ChannelAccessRequestState = {
+    /**
+     * Whether this channel accepts requests.
+     */
+    can_request: boolean;
+    request?: null | ChannelAccessRequest;
+    /**
+     * Earliest time the caller may ask again, while they must wait.
+     */
+    retry_after?: string | null;
+};
+
+/**
+ * Outcome of one attempt to join.
+ */
+export type ChannelAccessRequestStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
+
+/**
+ * Metadata for [`ChannelTopicEvent::AccessRequested`].
+ */
+export type ChannelAccessRequestedMetadata = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * The attempt; channel participants read its current outcome by id.
+     */
+    request_id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
 };
 
 /**
@@ -2843,6 +3088,12 @@ export type ChannelTopicEvent = {
      * Participants were removed from a channel (admin removal or self-leave).
      */
     metadata: ChannelParticipantRemovedMetadata;
+} | {
+    event_type: 'channel.access_requested';
+    /**
+     * Someone outside a channel asked to join it.
+     */
+    metadata: ChannelAccessRequestedMetadata;
 };
 
 /**
@@ -3285,6 +3536,11 @@ export type ColumnDetail = {
 };
 
 /**
+ * Identifier of a column placement within a table.
+ */
+export type ColumnId = string;
+
+/**
  * A type a column can have.
  */
 export type ColumnKind = {
@@ -3438,18 +3694,12 @@ export type CompleteUploads = {
 /**
  * The conferencing system backing an event's join URL.
  *
- * Macro generates only Google Meet conferences, so this distinguishes one it
- * created from a third party's — Zoom and friends arriving as `addOn`
- * conference data, or a legacy classic Hangout. Clients use it to label the
- * conference and to tell whether the Meet toggle reflects a Macro-managed
- * conference.
- *
- * It does not gate mutation. An explicit request replaces or detaches any
- * conference, third-party included, exactly as deleting the event would;
- * what protects a conference is that omitting the field leaves it untouched,
- * so an unrelated edit never disturbs it.
+ * Calendars can create Google Meet or Microsoft Teams according to their
+ * capabilities. Imported third-party conferences are labeled separately.
+ * Omitting a conference change preserves the current conference; explicit
+ * changes still require provider and calendar capability validation.
  */
-export type ConferenceProvider = 'google_meet' | 'other';
+export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 
 /**
  * How a group's conditions combine.
@@ -3748,6 +3998,38 @@ export type CreateBulkDocumentResponseData = {
      * Indicates if the document was created successfully
      */
     success: boolean;
+};
+
+/**
+ * Request for a backend-initialized native Canvas.
+ */
+export type CreateCanvasDocumentRequest = {
+    /**
+     * Canvas name.
+     */
+    documentName: string;
+    /**
+     * Optional parent project.
+     */
+    projectId?: string | null;
+};
+
+/**
+ * Response for creating a native Canvas.
+ */
+export type CreateCanvasDocumentResponse = {
+    /**
+     * The document ID of the created native Canvas
+     */
+    documentId: string;
+    /**
+     * Metadata for the created document
+     */
+    documentMetadata: DocumentResponseMetadata;
+    /**
+     * A pre-generated permission token that you can use for SS
+     */
+    token: string;
 };
 
 /**
@@ -4866,6 +5148,12 @@ export type DatabaseDetail = {
 };
 
 /**
+ * Identifier of reusable database storage. Its optional Macro entity uses
+ * the same identity, so existing routes and grants keep their IDs.
+ */
+export type DatabaseId = string;
+
+/**
  * One write to a database: its tables, columns, options, rows or views,
  * grouped by the resource it changes. A request's ops apply in order and
  * together, or not at all, and every op names a table of the database the
@@ -4927,6 +5215,23 @@ export type DatabaseOp = {
      * Every table, in its new order.
      */
     order: Array<string>;
+};
+
+/**
+ * One SQL statement with an optional default database and optimistic write guards.
+ */
+export type DatabaseQueryRequest = {
+    /**
+     * Expected version for each table a subsequent statement writes.
+     */
+    baseVersions?: {
+        [key: string]: TableVersion;
+    };
+    databaseId?: null | DatabaseId;
+    /**
+     * One supported SQL statement. Writes execute once, without automatic retries.
+     */
+    sql: string;
 };
 
 /**
@@ -6693,6 +6998,11 @@ export type Form = {
      */
     id: string;
     /**
+     * Whether Drive leaves it, and the database behind it, out of its
+     * listings, as for a channel poll.
+     */
+    isHiddenInDrive: boolean;
+    /**
      * Its display name. A standalone form follows the database it created;
      * a form attached to an existing table has its own name.
      */
@@ -7031,6 +7341,11 @@ export type FormSectionDetail = {
  * Where a new form's responses go.
  */
 export type FormSource = {
+    /**
+     * Keep the form, and the database made for it, out of Drive, as
+     * for a channel poll.
+     */
+    isHiddenInDrive?: boolean;
     kind: 'new';
 } | {
     /**
@@ -7917,6 +8232,60 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
 
 /**
+ * Guest-safe message projection: no account identities, attachments, or entity grants.
+ */
+export type GuestChatMessage = {
+    /**
+     * Message body.
+     */
+    content: string;
+    /**
+     * Creation time.
+     */
+    created_at: string;
+    /**
+     * Whether the author is a guest.
+     */
+    guest: boolean;
+    /**
+     * Persisted message identity.
+     */
+    id: string;
+    /**
+     * Whether this session authored the message.
+     */
+    is_you: boolean;
+    /**
+     * Display-only author name.
+     */
+    name: string;
+};
+
+/**
+ * Messages in the call's one discussion, oldest first.
+ */
+export type GuestChatPage = {
+    /**
+     * Visible, nondeleted messages.
+     */
+    messages: Array<GuestChatMessage>;
+};
+
+/**
+ * Guests may send text only; attribution and parent are server-owned.
+ */
+export type GuestChatPost = {
+    /**
+     * Text to append to the call discussion.
+     */
+    content: string;
+    /**
+     * UUIDv7 used to deduplicate retries, including the first message.
+     */
+    id: string;
+};
+
+/**
  * A non-account guest of a single call session.
  *
  * The id doubles as the guest's RTC participant identity, so identities are
@@ -7934,6 +8303,25 @@ export type GuestJoinRequest = {
      * Guest's name, displayed to everyone in the room.
      */
     displayName: string;
+};
+
+/**
+ * The switches an organizer sets on an event to bound what its guests may
+ * do. Google omits a switch from the payload while it holds its default.
+ */
+export type GuestPolicy = {
+    /**
+     * Whether guests may invite others.
+     */
+    canInviteOthers: boolean;
+    /**
+     * Whether guests may change the event, including its guest list.
+     */
+    canModify: boolean;
+    /**
+     * Whether guests may see the guest list.
+     */
+    canSeeOtherGuests: boolean;
 };
 
 /**
@@ -8821,7 +9209,8 @@ export type MeetingPreparation = {
 };
 
 /**
- * A bearer capability that grants access only to a meeting's RTC room.
+ * An invitation capability for joining a meeting's RTC room. Chat additionally
+ * requires the resulting participant credential and current guest membership.
  */
 export type MeetingToken = string;
 
@@ -8860,6 +9249,10 @@ export type Message = {
      * Last content edit, if any.
      */
     edited_at?: string | null;
+    /**
+     * Display name of a verified call guest, retained after the call ends.
+     */
+    guest_name?: string | null;
     /**
      * Message UUID.
      */
@@ -9861,6 +10254,11 @@ export type OpResult = {
 export type Operator = 'add' | 'subtract' | 'multiply' | 'divide';
 
 /**
+ * Identifier of an option of a select or tag column.
+ */
+export type OptionId = string;
+
+/**
  * A select option, by its id or by its label.
  */
 export type OptionRef = {
@@ -10836,6 +11234,16 @@ export type RequestedLayout = {
 };
 
 /**
+ * Body of a participant's answer.
+ */
+export type ResolveChannelAccessRequest = {
+    /**
+     * The answer.
+     */
+    decision: ChannelAccessDecision;
+};
+
+/**
  * Owner's decision; omission of a granted level means deny.
  */
 export type ResolveRequest = {
@@ -10871,6 +11279,46 @@ export type ResponseSummary = {
      * Responses saved.
      */
     submitted: number;
+};
+
+/**
+ * One result column, with what its cells mean.
+ */
+export type ResultColumn = {
+    /**
+     * What its cells hold.
+     */
+    kind: SqlOutcomeKind;
+    /**
+     * The name or alias the statement gave it.
+     */
+    name: string;
+    /**
+     * For a select column, its options: its cells hold their ids.
+     */
+    options?: Array<SqlSelectOption>;
+    relatedTable?: null | TableId;
+    target?: null | SqlEntityKind;
+};
+
+/**
+ * A `SELECT`'s rows, as the engine's typed cells.
+ */
+export type ResultSet = {
+    /**
+     * The columns, in select-list order.
+     */
+    columns: Array<ResultColumn>;
+    /**
+     * For a row-shaped result, the id of the row behind each result row;
+     * empty for an aggregate.
+     */
+    rowIds: Array<RowId>;
+    /**
+     * One cell per column per row; `null` is an empty cell.
+     */
+    rows: Array<Array<null | SqlCell>>;
+    sourceTable?: null | TableId;
 };
 
 /**
@@ -11226,6 +11674,11 @@ export type SessionIdentity = {
      * User-facing session name at the time of the event.
      */
     session_name: string;
+    /**
+     * Who started the session. Events from before it was recorded say
+     * nothing and read as a person.
+     */
+    source?: SessionSource;
 };
 
 /**
@@ -11294,6 +11747,12 @@ export type SessionSettledMetadata = {
     identity: SessionIdentity;
     last_turn?: null | TurnSummary;
 };
+
+/**
+ * Who started a session. Stored on the session and carried by its lifecycle
+ * events, so lists and notifications can treat unattended runs differently.
+ */
+export type SessionSource = 'user' | 'agent' | 'routine';
 
 /**
  * The session's live actor is gone: idle teardown, transport loss, or crash.
@@ -11688,6 +12147,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     repoUrl?: string | null;
     /**
+     * Who started the session
+     */
+    source?: AgentSessionSource;
+    /**
      * The session's last known status.
      *
      * `no_messages` until the first system event arrives, `disconnected` if
@@ -11711,6 +12174,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The time the session was last viewed by the requesting user
      */
     viewedAt?: string | null;
+    /**
+     * Where the session is shown
+     */
+    visibility?: AgentSessionVisibility;
     /**
      * Last captured working branch, when the runtime has reported one.
      */
@@ -13004,6 +13471,196 @@ export type SourceIdentity = {
 };
 
 /**
+ * A cell as fetched. An absent cell is `NULL`; an absent multi-valued cell
+ * is the empty set.
+ */
+export type SqlCell = {
+    type: 'text';
+    /**
+     * Text or link.
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * A number.
+     */
+    value: number;
+} | {
+    type: 'bool';
+    /**
+     * A checkbox.
+     */
+    value: boolean;
+} | {
+    type: 'date';
+    /**
+     * A date-time.
+     */
+    value: string;
+} | {
+    type: 'options';
+    /**
+     * The selected option ids; one for single-select columns.
+     */
+    value: Array<OptionId>;
+} | {
+    type: 'entities';
+    /**
+     * The referenced entity ids; one for single-valued columns.
+     */
+    value: Array<string>;
+} | {
+    type: 'row';
+    /**
+     * A table row's own id, the `row_id` column.
+     */
+    value: RowId;
+};
+
+/**
+ * What an entity column's references point at: a kind of Macro entity, or
+ * the rows of another table for a relation.
+ *
+ * Spelled as the properties system spells entity types (`USER`,
+ * `DATABASE_ROW`), on the wire and in SQL, where it parses
+ * case-insensitively.
+ */
+export type SqlEntityKind = 'USER' | 'DOCUMENT' | 'TASK' | 'COMPANY' | 'CONTACT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'PROJECT' | 'THREAD' | 'CALENDAR_EVENT' | 'INITIATIVE' | 'DATABASE_ROW';
+
+/**
+ * The answer to one statement.
+ */
+export type SqlOutcome = {
+    /**
+     * How many rows a write changed.
+     */
+    changesApplied: number;
+    /**
+     * The rows an `INSERT` created, in statement order.
+     */
+    insertedRowIds: Array<RowId>;
+    /**
+     * The new version of every table written.
+     */
+    newVersions: {
+        [key: string]: TableVersion;
+    };
+    /**
+     * The version of every table read, for a follow-up write to guard on.
+     */
+    readVersions: {
+        [key: string]: TableVersion;
+    };
+    result?: null | ResultSet;
+    /**
+     * What kind of statement ran, and what it wrote.
+     */
+    statement: SqlStatement;
+    /**
+     * Owning database of each visible table referenced by this outcome.
+     */
+    tableDatabases: {
+        [key: string]: DatabaseId;
+    };
+    /**
+     * Every table the statement read, when any read hit the engine's row
+     * cap: the engine reports the cap per statement, so aggregates over any
+     * of them may be partial.
+     */
+    truncatedTables: Array<string>;
+};
+
+/**
+ * The value kind of a result column.
+ */
+export type SqlOutcomeKind = 'text' | 'number' | 'boolean' | 'date' | 'select' | 'entity' | 'row';
+
+/**
+ * One option of a select column.
+ */
+export type SqlSelectOption = {
+    /**
+     * The option id.
+     */
+    id: OptionId;
+    /**
+     * The label users type in SQL.
+     */
+    label: string;
+};
+
+/**
+ * The statement that ran: a read, or the table (and for a type change, the
+ * column) it wrote.
+ */
+export type SqlStatement = {
+    /**
+     * Owning database.
+     */
+    databaseId: DatabaseId;
+    kind: 'schema';
+    /**
+     * What changed and how to read the resulting schema.
+     */
+    summary: string;
+} | {
+    kind: 'select';
+} | {
+    kind: 'insert';
+    /**
+     * The table written.
+     */
+    tableId: TableId;
+    /**
+     * Its name.
+     */
+    tableName: string;
+} | {
+    kind: 'update';
+    /**
+     * The table written.
+     */
+    tableId: TableId;
+    /**
+     * Its name.
+     */
+    tableName: string;
+} | {
+    kind: 'delete';
+    /**
+     * The table written.
+     */
+    tableId: TableId;
+    /**
+     * Its name.
+     */
+    tableName: string;
+} | {
+    /**
+     * The column placement; its id survives the change.
+     */
+    columnId: ColumnId;
+    /**
+     * The column's name.
+     */
+    columnName: string;
+    kind: 'alterColumnType';
+    /**
+     * The table.
+     */
+    tableId: TableId;
+    /**
+     * Its name.
+     */
+    tableName: string;
+    /**
+     * The type it became, as SQL spells it, e.g. `select[]`.
+     */
+    to: string;
+};
+
+/**
  * Starter result. A missing database means the user already started or removed it.
  */
 export type StarterDatabase = {
@@ -13394,6 +14051,11 @@ export type TableDetail = {
      */
     views: Array<DatabaseView>;
 };
+
+/**
+ * Identifier of one table (tab) within a database.
+ */
+export type TableId = string;
 
 /**
  * What happened to a table.
@@ -14739,6 +15401,37 @@ export type ViewResult = {
     positions: Array<CardPosition>;
 };
 
+/**
+ * What the viewing requester may do with an event.
+ */
+export type ViewerCapabilities = {
+    /**
+     * Change the event's details (title, time, description, conference).
+     */
+    editDetails: boolean;
+    /**
+     * Add guests.
+     */
+    inviteGuests: boolean;
+    /**
+     * Act as the event's organizer: replace its whole guest list and manage
+     * its conferencing.
+     */
+    organize: boolean;
+    /**
+     * Remove guests.
+     */
+    removeGuests: boolean;
+    /**
+     * Answer the invitation.
+     */
+    rsvp: boolean;
+    /**
+     * Change the event's guest policy, which only Google calendars have.
+     */
+    setGuestPolicy: boolean;
+};
+
 export type ViewsResponse = {
     excludedDefaultViews: Array<ExcludedDefaultView>;
     views: Array<View>;
@@ -15358,6 +16051,122 @@ export type ListTeamOutOfOfficeResponses = {
 
 export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
 
+export type EventIcsData = {
+    body?: never;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar-events/{event_id}/ics';
+};
+
+export type EventIcsErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Event not found or not visible to the requester
+     */
+    404: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type EventIcsResponses = {
+    /**
+     * The event as an iCalendar document
+     */
+    200: string;
+};
+
+export type EventIcsResponse = EventIcsResponses[keyof EventIcsResponses];
+
+export type ListJoinRequestsData = {
+    body?: never;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar-events/{event_id}/join-requests';
+};
+
+export type ListJoinRequestsErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Event not found or not editable by the requester
+     */
+    404: CalendarJoinRequestApiError;
+    /**
+     * Listing failed
+     */
+    500: CalendarJoinRequestApiError;
+};
+
+export type ListJoinRequestsError = ListJoinRequestsErrors[keyof ListJoinRequestsErrors];
+
+export type ListJoinRequestsResponses = {
+    /**
+     * Pending join requests, oldest first
+     */
+    200: CalendarJoinRequestsResponse;
+};
+
+export type ListJoinRequestsResponse = ListJoinRequestsResponses[keyof ListJoinRequestsResponses];
+
+export type RequestToJoinData = {
+    body?: never;
+    path: {
+        /**
+         * Shared calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/calendar-events/{event_id}/join-requests';
+};
+
+export type RequestToJoinErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Event not found or not shared with the requester
+     */
+    404: CalendarJoinRequestApiError;
+    /**
+     * Already on the requester's calendar, the sharer cannot add guests, or the sharer declined the requester's earlier request
+     */
+    409: CalendarJoinRequestApiError;
+    /**
+     * Join request failed
+     */
+    500: CalendarJoinRequestApiError;
+};
+
+export type RequestToJoinError = RequestToJoinErrors[keyof RequestToJoinErrors];
+
+export type RequestToJoinResponses = {
+    /**
+     * The requester's join request
+     */
+    200: CalendarJoinRequest;
+};
+
+export type RequestToJoinResponse = RequestToJoinResponses[keyof RequestToJoinResponses];
+
 export type GetActiveCallsData = {
     body?: never;
     path?: never;
@@ -15377,6 +16186,44 @@ export type GetActiveCallsResponses = {
 };
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
+
+export type GuestCallChatReadData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}';
+};
+
+export type GuestCallChatReadErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatReadResponses = {
+    200: GuestChatPage;
+};
+
+export type GuestCallChatReadResponse = GuestCallChatReadResponses[keyof GuestCallChatReadResponses];
+
+export type GuestCallChatPostData = {
+    body: GuestChatPost;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}';
+};
+
+export type GuestCallChatPostErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatPostResponses = {
+    200: GuestChatMessage;
+};
+
+export type GuestCallChatPostResponse = GuestCallChatPostResponses[keyof GuestCallChatPostResponses];
 
 export type MeetingLookupData = {
     body?: never;
@@ -16641,6 +17488,145 @@ export type PatchChannelResponses = {
 
 export type PatchChannelResponse = PatchChannelResponses[keyof PatchChannelResponses];
 
+export type CancelChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type CancelChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CancelChannelAccessRequestError = CancelChannelAccessRequestErrors[keyof CancelChannelAccessRequestErrors];
+
+export type CancelChannelAccessRequestResponses = {
+    200: unknown;
+};
+
+export type GetMyChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type GetMyChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyChannelAccessRequestError = GetMyChannelAccessRequestErrors[keyof GetMyChannelAccessRequestErrors];
+
+export type GetMyChannelAccessRequestResponses = {
+    200: ChannelAccessRequestState;
+};
+
+export type GetMyChannelAccessRequestResponse = GetMyChannelAccessRequestResponses[keyof GetMyChannelAccessRequestResponses];
+
+export type RequestChannelAccessData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type RequestChannelAccessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestChannelAccessError = RequestChannelAccessErrors[keyof RequestChannelAccessErrors];
+
+export type RequestChannelAccessResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type RequestChannelAccessResponse = RequestChannelAccessResponses[keyof RequestChannelAccessResponses];
+
+export type GetChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}';
+};
+
+export type GetChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelAccessRequestError = GetChannelAccessRequestErrors[keyof GetChannelAccessRequestErrors];
+
+export type GetChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type GetChannelAccessRequestResponse = GetChannelAccessRequestResponses[keyof GetChannelAccessRequestResponses];
+
+export type ResolveChannelAccessRequestData = {
+    body: ResolveChannelAccessRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}/resolve';
+};
+
+export type ResolveChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResolveChannelAccessRequestError = ResolveChannelAccessRequestErrors[keyof ResolveChannelAccessRequestErrors];
+
+export type ResolveChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type ResolveChannelAccessRequestResponse = ResolveChannelAccessRequestResponses[keyof ResolveChannelAccessRequestResponses];
+
 export type GetChannelAttachmentsData = {
     body?: never;
     path: {
@@ -17813,6 +18799,30 @@ export type GetDatabaseQueryResponses = {
 
 export type GetDatabaseQueryResponse = GetDatabaseQueryResponses[keyof GetDatabaseQueryResponses];
 
+export type QueryDatabasesData = {
+    body: DatabaseQueryRequest;
+    path?: never;
+    query?: never;
+    url: '/databases/query';
+};
+
+export type QueryDatabasesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type QueryDatabasesError = QueryDatabasesErrors[keyof QueryDatabasesErrors];
+
+export type QueryDatabasesResponses = {
+    200: SqlOutcome;
+};
+
+export type QueryDatabasesResponse = QueryDatabasesResponses[keyof QueryDatabasesResponses];
+
 export type EnsureStarterHandlerData = {
     body?: never;
     path?: never;
@@ -18092,6 +19102,7 @@ export type UpdateDatabasePermissionsErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
     404: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -18556,6 +19567,44 @@ export type CreateDocumentResponses = {
 };
 
 export type CreateDocumentResponse = CreateDocumentResponses[keyof CreateDocumentResponses];
+
+export type CreateCanvasHandlerData = {
+    body: CreateCanvasDocumentRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/create_canvas';
+};
+
+export type CreateCanvasHandlerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateCanvasHandlerError = CreateCanvasHandlerErrors[keyof CreateCanvasHandlerErrors];
+
+export type CreateCanvasHandlerResponses = {
+    /**
+     * Response for creating a native Canvas.
+     */
+    200: {
+        /**
+         * The document ID of the created native Canvas
+         */
+        documentId: string;
+        /**
+         * Metadata for the created document
+         */
+        documentMetadata: DocumentResponseMetadata;
+        /**
+         * A pre-generated permission token that you can use for SS
+         */
+        token: string;
+    };
+};
+
+export type CreateCanvasHandlerResponse = CreateCanvasHandlerResponses[keyof CreateCanvasHandlerResponses];
 
 export type CreateMarkdownHandlerData = {
     body: CreateMarkdownDocumentRequest;
@@ -19111,6 +20160,10 @@ export type ExportDocumentData = {
 export type ExportDocumentErrors = {
     401: GenericErrorResponse;
     404: GenericErrorResponse;
+    /**
+     * DOCX upload is still processing; retry the export.
+     */
+    409: ErrorResponse;
     500: GenericErrorResponse;
 };
 

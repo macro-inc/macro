@@ -13,7 +13,7 @@ import {
 } from '@core/hotkey/getCommands';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { HotkeyCommand } from '@core/hotkey/types';
+import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
 import type { TimestampedItem } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
 import type { CrmContactEntity } from '@entity';
@@ -39,6 +39,8 @@ type CommandItem = {
   data: HotkeyCommand;
   displayHotkey?: string;
   displayHotkeySequence?: DisplayHotkeyStep[];
+  /** Its keys run another command here, as Email's g t runs Sent. */
+  hideHotkey?: boolean;
 };
 
 /** Search item: triggers full-text search in the sidebar Search view */
@@ -83,6 +85,7 @@ export type PaginationControls = {
 export type CommandContactSource = PaginationControls & {
   contacts: Accessor<CrmContactEntity[]>;
   isLoading: Accessor<boolean>;
+  error: Accessor<Error | undefined>;
 };
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
@@ -152,6 +155,7 @@ function commandsToItems(
     displayHotkeySequence?: (
       command: CommandWithInfo
     ) => DisplayHotkeyStep[] | undefined;
+    hideHotkey?: (command: CommandWithInfo) => boolean;
   }
 ): CommandItem[] {
   const seen = new Set<string>();
@@ -188,6 +192,7 @@ function commandsToItems(
       data: command,
       displayHotkey: options?.displayHotkey?.(command),
       displayHotkeySequence: options?.displayHotkeySequence?.(command),
+      hideHotkey: options?.hideHotkey?.(command),
     };
   });
 
@@ -277,6 +282,18 @@ function useCommandsList(
     limitToCurrentScope: true,
     ignoreInputFocused: true,
   });
+  // The command each go-to letter runs: a focused view's letter (Email's g t
+  // Sent) runs before the app's, which then shows no keys.
+  const goToKeyOwners = new Map<ValidHotkey, CommandWithInfo>();
+  for (const command of [...goToCommands].sort(
+    (a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
+  )) {
+    for (const hotkey of command.hotkeys ?? []) {
+      if (!goToKeyOwners.has(hotkey)) goToKeyOwners.set(hotkey, command);
+    }
+  }
+  const ownGoToKey = (command: CommandWithInfo) =>
+    command.hotkeys?.find((key) => goToKeyOwners.get(key) === command);
 
   return createMemo(() => {
     projectsFlag();
@@ -319,11 +336,13 @@ function useCommandsList(
       ),
       ...availableItems(goToCommands, {
         displayHotkeySequence: (command) => {
-          const hotkey = command.hotkeys?.[0];
+          const hotkey = ownGoToKey(command);
           return hotkey
             ? [{ shortcut: GO_TO_LEADER_KEY }, { shortcut: hotkey }]
             : undefined;
         },
+        hideHotkey: (command) =>
+          Boolean(command.hotkeys?.length) && !ownGoToKey(command),
       }),
     ];
   });

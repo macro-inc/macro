@@ -302,7 +302,7 @@ async fn team_sources_require_current_membership_and_verified_source_entitlement
         2,
     );
     other.event.conference_url = Some("https://reader.example.com".into());
-    let CalendarEventSource::Google(source) = &mut other.source;
+    let source = other.source.details_mut();
     source.observed_access_role = Some("reader".to_owned());
     repo.upsert_event_fixture(other).await.unwrap();
     sqlx::query!(
@@ -361,6 +361,14 @@ async fn team_sources_require_current_membership_and_verified_source_entitlement
         .await
         .unwrap();
     assert_eq!(rows.len(), 4, "all synced source calendars are included");
+    assert_eq!(
+        team.sources(owner, july_2026_range(), &owners, None, 100)
+            .await
+            .unwrap()
+            .len(),
+        4,
+        "the owner's busy-only policy must not duplicate their own sources"
+    );
     sqlx::query!(
         "UPDATE calendars SET snapshot_normalization_version=0 WHERE account_id=$1",
         account

@@ -7,7 +7,8 @@ import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -59,6 +60,10 @@ type UseEntityActionHotkeysOptions = {
   enableDeleteHotkey?: boolean;
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** A second key for Favorite, such as Email's `s` star. */
+  extraFavoriteHotkey?: { hotkey: ValidHotkey; hotkeyToken: HotkeyToken };
+  /** A key for Mute, such as Email's `shift+m`. */
+  extraMuteHotkey?: { hotkey: ValidHotkey; hotkeyToken: HotkeyToken };
 };
 
 export const useEntityActionHotkeys = (
@@ -182,7 +187,10 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.markDone,
     scopeId,
     description: 'Mark done',
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      // A held key auto-repeats; each repeat would archive the next row under
+      // the cursor and refetch the list, so one press marks one selection.
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markDone.canExecute)) return false;
@@ -213,7 +221,8 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.markNotDone,
     scopeId,
     description: 'Mark as not done',
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markNotDone.canExecute)) return false;
@@ -292,7 +301,8 @@ export const useEntityActionHotkeys = (
       const count = getEntitiesForAction().length;
       return count > 1 ? 'Delete items' : 'Delete item';
     };
-    const runDelete = () => {
+    const runDelete = (event?: KeyboardEvent) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(deleteAction.canExecute)) return false;
@@ -376,10 +386,7 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
-  registerHotkey({
-    hotkey: ['opt+f'],
-    hotkeyToken: TOKENS.entity.action.favorite,
+  const favoriteCommand = {
     scopeId,
     description: () => {
       const entities = getEntitiesForAction();
@@ -404,9 +411,23 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(favoriteAction.canExecute);
     },
-    displayPriority: 10,
+    displayPriority: 10 as const,
     tags: [HotkeyTags.SelectionModification],
+  };
+  // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
+  registerHotkey({
+    hotkey: 'opt+f',
+    hotkeyToken: TOKENS.entity.action.favorite,
+    ...favoriteCommand,
   }).withGroup(group);
+  if (options.extraFavoriteHotkey) {
+    // Hidden so the command menu lists Favorite once.
+    registerHotkey({
+      ...options.extraFavoriteHotkey,
+      ...favoriteCommand,
+      hide: true,
+    }).withGroup(group);
+  }
 
   // Mute notifications (command menu only, no keybinding)
   registerHotkey({
@@ -429,8 +450,7 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  registerHotkey({
-    hotkeyToken: TOKENS.entity.action.mute,
+  const muteCommand = {
     scopeId,
     description: () => {
       const entities = getEntitiesForAction();
@@ -455,9 +475,21 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(muteAction.canExecute);
     },
-    displayPriority: 10,
+    displayPriority: 10 as const,
     tags: [HotkeyTags.SelectionModification],
+  };
+  registerHotkey({
+    hotkeyToken: TOKENS.entity.action.mute,
+    ...muteCommand,
   }).withGroup(group);
+  if (options.extraMuteHotkey) {
+    // Hidden so the command menu lists Mute once.
+    registerHotkey({
+      ...options.extraMuteHotkey,
+      ...muteCommand,
+      hide: true,
+    }).withGroup(group);
+  }
 
   // Copy - 'cmd+d'
   registerHotkey({

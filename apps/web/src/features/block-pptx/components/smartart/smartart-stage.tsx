@@ -9,8 +9,8 @@ import type {
   SmartArtNodeOutline,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { nodeBox, PROMPT } from '../../core/smartart';
 import type { SmartArtState } from '../../primitives/create-smart-art';

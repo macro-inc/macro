@@ -6,19 +6,28 @@ use item_filters::ast::initiative::InitiativeLiteral;
 use models_pagination::SimpleSortMethod;
 use system_properties::SystemPropertyKey;
 
-use super::{access_semi_join, sql_string_literal, top_needs_user_history};
+use super::{sql_string_literal, top_needs_user_history};
+use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 
 /// The initiative listing policy: explicit grants and the owner's team link.
 /// Public links do not enumerate otherwise undiscovered initiatives.
+///
+/// Both checks run per initiative against sources collected once into an
+/// array, so cost follows the initiative count. Joining `user_source_ids`
+/// instead scales with the caller's channels.
 pub(in crate::outbound::pg_soup_repo) fn initiative_access_clause() -> String {
     format!(
-        r#"({} OR EXISTS (
+        r#"(EXISTS (
+        SELECT 1 FROM entity_access ea
+        WHERE ea.entity_id = i.id AND ea.entity_type = 'initiative'
+        AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+        {PER_CANDIDATE}
+    ) OR EXISTS (
         SELECT 1 FROM "SharePermission" sp
         JOIN team_user owner_team ON owner_team.user_id = i.owner_user_id
         WHERE sp.id = i.share_permission_id AND sp."linkShare" = 'TEAM'
-        AND owner_team.team_id::text IN (SELECT source_id FROM user_source_ids)
-    ))"#,
-        access_semi_join("i.id::text", "initiative")
+        AND owner_team.team_id::text = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+    ))"#
     )
 }
 

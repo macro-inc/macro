@@ -81,7 +81,9 @@ export function createSharingSource(
             accessRequestsClient.setGrant(target, change.userId, change.level)
           )
         )
-        .exhaustive();
+        .exhaustive(() =>
+          Promise.reject(new Error(`Unknown access change: ${change.kind}`))
+        );
     },
     onSuccess: (_result, change) => {
       refreshSharedAccess(change.target);

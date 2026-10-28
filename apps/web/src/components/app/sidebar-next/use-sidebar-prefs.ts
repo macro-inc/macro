@@ -9,6 +9,7 @@ export const DEFAULT_HIDDEN_IDS = [
   'calls',
   'reviews',
   'booking-links',
+  'activity',
 ] as const;
 
 export type SidebarPrefs = {
@@ -19,7 +20,7 @@ export type SidebarPrefs = {
 };
 
 type StoredPrefs = {
-  version?: 1;
+  version?: 1 | 2;
   hidden?: string[];
   order?: string[];
 };
@@ -40,6 +41,10 @@ function loadPrefs(): SidebarPrefs {
       // Scheduling was previously More-only, before it became customizable.
       if (parsed.version === undefined && !hidden.includes('booking-links')) {
         hidden.push('booking-links');
+      }
+      // Activity joined the rail after version 1; start it in More.
+      if ((parsed.version ?? 0) < 2 && !hidden.includes('activity')) {
+        hidden.push('activity');
       }
       return {
         hidden: new Set(hidden),
@@ -69,7 +74,7 @@ function loadPrefs(): SidebarPrefs {
 function savePrefs(prefs: SidebarPrefs): void {
   try {
     const payload: StoredPrefs = {
-      version: 1,
+      version: 2,
       hidden: [...prefs.hidden].filter((id) => id !== 'home'),
       order: prefs.order,
     };

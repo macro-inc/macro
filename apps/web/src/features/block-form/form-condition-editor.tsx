@@ -70,7 +70,11 @@ export function toViewColumn(column: FormColumn): DatabaseViewColumn {
       isMultiSelect: true,
       relation: { databaseId: database, tableId: table },
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      ...base,
+      dataType: 'STRING',
+      isMultiSelect: false,
+    }));
 }
 
 /** Mounted once per open editor; its props are read live, so its draft survives saves. */

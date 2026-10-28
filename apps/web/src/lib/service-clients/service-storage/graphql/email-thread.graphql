@@ -42,6 +42,8 @@ fragment EmailThreadPageFields on GraphqlSoupEmailThread {
 }
 
 fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
+  draftGeneration
+  operationStatus { state revision remoteVersion issue }
 	__typename
 	id
 	providerId
@@ -58,6 +60,7 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 	isDraft
 	hasAttachments
 	scheduledSendTime
+	scheduledSendStatus
 	from {
 		email
 		name
@@ -96,6 +99,7 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 		sizeBytes
 		sfsId
 		contentId
+		referenceUrl
 	}
 	attachmentsDraft {
 		__typename
@@ -106,6 +110,9 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 		sha
 		size
 		s3Key
+		uploadPending
+		contentId
+		isInline
 	}
 	attachmentsForwarded {
 		__typename

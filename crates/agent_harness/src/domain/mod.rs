@@ -1,9 +1,12 @@
+/// Continuing a session once its owner connects the app it waited on.
+pub mod app_connections;
 /// Fresh ACP capability discovery without creating an agent session.
 pub mod capability_discovery;
 pub mod conversation_turns;
 /// Agent conversations in channels: who may prompt them, and their sessions.
 pub mod conversations;
 pub mod error;
+pub mod external_replies;
 pub mod model;
 /// Which lifecycle facts become notifications for people, and for whom.
 pub mod notifications;
@@ -24,9 +27,6 @@ pub mod trigger_router;
 
 /// Per-owner hosted Codex runtime authorization.
 pub mod codex;
-
-/// Owner-bound Claude conversation lifecycle.
-pub mod claude;
 
 /// Compatible agent model discovery.
 pub mod model_load;

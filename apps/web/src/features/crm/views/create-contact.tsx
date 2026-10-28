@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import {

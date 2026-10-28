@@ -7,9 +7,9 @@
 
 import type { DeckOutline } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import FilePdf from '@phosphor/file-pdf.svg';
-import Printer from '@phosphor/printer.svg';
-import X from '@phosphor/x.svg';
+import FilePdf from '@icon/system/regular/file-pdf.svg';
+import Printer from '@icon/system/regular/printer.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { createSignal, For, Show } from 'solid-js';

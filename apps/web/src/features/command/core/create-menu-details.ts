@@ -35,7 +35,7 @@ export type CreateMenuDetails = {
   group: CreateMenuGroupId;
   /** One line under the title: what the thing actually is. */
   tagline: string;
-  /** A 10–20-word description for the detailed launcher. */
+  /** Two authored lines; the second is slightly shorter at desktop width. */
   details: string;
   /** Things people typically make with it. */
   examples: readonly string[];
@@ -51,147 +51,147 @@ const DETAILS: Record<string, CreateMenuDetails> = {
     group: 'docs',
     tagline: 'Rich-text doc, edited live together',
     details:
-      'A collaborative document for notes, specs and write-ups, with headings, tables, embeds, comments and AI editing.',
+      'Write notes, specs and ideas together in one place.\nAdd tables, embeds, comments and AI edits.',
     examples: ['Meeting notes', 'Product spec', 'Team wiki'],
   },
   Snippet: {
     group: 'docs',
     tagline: 'Reusable template for your writing',
     details:
-      'Save reusable templates, checklists and replies so you can quickly add familiar content to new documents.',
+      'Save templates, checklists and your go-to replies.\nReuse your familiar content in new documents.',
     examples: ['Doc template', 'Checklist', 'Canned reply'],
   },
   Code: {
     group: 'other',
     tagline: 'Code file with syntax highlighting',
     details:
-      'A standalone source file for scripts, queries and config, in whatever language you need.',
+      'Create a source file for scripts, queries or config.\nWrite in the language that best fits your work.',
     examples: ['Python script', 'SQL query', 'Config file'],
   },
   Folder: {
     group: 'organization',
     tagline: 'Keep related files together',
     details:
-      'Organize documents, files and other folders in one place, and share them together.',
+      'Keep related documents and files in one place.\nOrganize folders and share them together.',
     examples: ['Client files', 'Archive', 'Team drive'],
   },
   Canvas: {
     group: 'design',
     tagline: 'Whiteboard for diagrams and sketches',
     details:
-      'An infinite canvas for flowcharts, mind maps, architecture diagrams and freeform brainstorming.',
+      'Map out ideas on an infinite shared whiteboard.\nSketch flows, diagrams and connections.',
     examples: ['Flowchart', 'Mind map', 'Architecture diagram'],
   },
   Design: {
     group: 'design',
     tagline: 'Figma-compatible design editor',
     details:
-      'Create interface mockups and graphics with frames and vector shapes, then save your work as a Figma file.',
+      'Design interfaces and graphics with vector tools.\nBuild with frames and save as a Figma file.',
     examples: ['App mockup', 'Social graphic', 'Design system'],
   },
   Database: {
     group: 'data',
     tagline: 'Structured records in tables and boards',
     details:
-      'Organize structured records with custom fields, then explore them in tables and boards for trackers, inventories or customer lists.',
+      'Organize records with fields that fit your work.\nExplore your data in tables and boards.',
     examples: ['CRM', 'Content calendar', 'Inventory'],
   },
   Spreadsheet: {
     group: 'data',
     tagline: 'Excel-style workbook with formulas',
     details:
-      'A collaborative spreadsheet with formulas, multiple sheets and AI-assisted editing for models, budgets and analysis.',
+      'Build shared spreadsheets for budgets and models.\nUse formulas, multiple sheets and AI edits.',
     examples: ['Budget', 'Financial model', 'Tracker'],
   },
   Form: {
     group: 'data',
     tagline: 'Collect responses',
     details:
-      'Build a form to collect feedback, requests or survey answers, with every response saved into a database.',
+      'Collect feedback, requests and survey responses.\nSave every answer directly into your database.',
     examples: ['Survey', 'Intake form', 'Feedback'],
   },
   'Photoshop file': {
     group: 'design',
     tagline: 'Layered image editing',
     details:
-      'Create and edit layered images for photo edits, composites and graphics, then save your work as a Photoshop file.',
+      'Create layered images, photo edits and graphics.\nSave your work as a layered Photoshop file.',
     examples: ['Photo edit', 'Composite', 'Banner'],
   },
   'Illustrator file': {
     group: 'design',
     tagline: 'Vector artwork',
     details:
-      'Create scalable logos, icons and illustrations on artboards, then save your vector artwork as an Illustrator file.',
+      'Draw scalable logos, icons and vector illustrations.\nWork on artboards and save an Illustrator file.',
     examples: ['Logo', 'Illustration', 'Icon set'],
   },
   Email: {
     group: 'comms',
     tagline: 'Compose from your connected inbox',
     details:
-      'Write and send an email from your connected email account, with AI help drafting.',
+      'Write and send email from your connected inbox.\nDraft and refine each message with AI help.',
     examples: ['Follow-up', 'Intro', 'Update to a client'],
   },
   Message: {
     group: 'comms',
     tagline: 'Quick DM to a person or group',
     details:
-      'Send a direct message to one or more teammates without setting up a channel.',
+      'Start a direct conversation with your teammates.\nSend a quick note to one person or a group.',
     examples: ['Quick question', 'Heads-up', 'Group DM'],
   },
   Channel: {
     group: 'comms',
     tagline: 'Ongoing space for a team or topic',
     details:
-      'Keep a team, project or topic in one shared conversation, with threaded discussions and files everyone can find.',
+      'Give your team or project a shared conversation.\nKeep threads and files together in one place.',
     examples: ['#design', '#launch', '#support'],
   },
   Call: {
     group: 'comms',
     tagline: 'Start an audio or video call',
     details:
-      'Jump into a call right away and invite teammates or external guests.',
+      'Bring people together for an audio or video call.\nInvite teammates and guests to join you live.',
     examples: ['Quick sync', 'Pairing', 'Customer call'],
   },
   Task: {
     group: 'tasks',
     tagline: 'To-do with owner, status and due date',
     details:
-      'Capture a piece of work, assign it, set a due date and track it through to done.',
+      'Turn a piece of work into a task with a clear owner.\nSet a due date and follow it through to done.',
     examples: ['Bug', 'Follow-up', 'Review request'],
   },
   Project: {
     group: 'tasks',
     tagline: 'Group tasks toward a shared goal',
     details:
-      'Collect related tasks under one goal and follow their progress together.',
+      'Bring related tasks together around a shared goal.\nKeep track of progress across your project.',
     examples: ['Launch', 'Quarterly goal', 'Migration'],
   },
   Reminder: {
     group: 'tasks',
     tagline: 'Nudge yourself at a time you pick',
     details:
-      'Ask Macro to remind you about something later — no document or task required.',
+      'Set a reminder for something you want to revisit.\nChoose a time and let Macro bring it back.',
     examples: ['Call back', 'Check in Friday', 'Renew license'],
   },
   Agent: {
     group: 'ai',
     tagline: 'AI session that researches, writes and codes',
     details:
-      'Start a dedicated AI session to research a topic, draft content or work through a coding task.',
+      'Start an AI session to move your work forward.\nResearch a topic, draft content or write code.',
     examples: ['Research a topic', 'Draft a doc', 'Fix a bug'],
   },
   Routine: {
     group: 'ai',
     tagline: 'Run an agent on a schedule or trigger',
     details:
-      'Automations that run a model or agent on a schedule, or whenever something happens in Macro.',
+      'Put recurring work on a schedule or a trigger.\nLet an agent take care of it automatically.',
     examples: ['Daily digest', 'Triage inbox', 'Weekly report'],
   },
   Skill: {
     group: 'ai',
     tagline: 'Reusable instructions for agents',
     details:
-      'Give agents reusable instructions for a specific process, writing style or workflow so they can follow your preferred approach.',
+      'Give agents reusable instructions for your work.\nDefine a process, style or preferred approach.',
     examples: ['Brand voice', 'PR review', 'Report format'],
   },
 };
@@ -218,7 +218,7 @@ export function createMenuSearchText(item: CreatableBlock): string[] {
   const group = CREATE_MENU_GROUPS.find((g) => g.id === details.group);
   return [
     details.tagline,
-    details.details,
+    details.details.replace(/\n/g, ' '),
     ...details.examples,
     group?.label,
   ].filter((text): text is string => !!text);
@@ -250,13 +250,18 @@ export function groupCreateMenuItems(
   return sections.filter((section) => section.items.length > 0);
 }
 
-/** Recent choices appear first and remain available in their categories. */
+/**
+ * Recent choices appear first and leave their categories: the list shows no
+ * section headers, so a second copy would read as a duplicate.
+ */
 export function groupRecentCreateMenuItems(
   items: CreatableBlock[],
   recentItems: CreatableBlock[]
 ): CreateMenuSection[] {
   const recent = recentItems.filter((item) => items.includes(item));
-  const categories = groupCreateMenuItems(items);
+  const categories = groupCreateMenuItems(
+    items.filter((item) => !recent.includes(item))
+  );
   return recent.length
     ? [
         {

@@ -110,6 +110,9 @@ where
                 // Bounded by MAX_DRAFT_ATTACHMENTS_BYTES, well inside i32.
                 size: sourced.bytes.len() as i32,
                 s3_key,
+                upload_pending: false,
+                content_id: None,
+                is_inline: false,
             };
             self.repo
                 .insert_draft_attachment(link.id, &record)
@@ -128,7 +131,7 @@ where
         };
         if let Err(error) = self
             .email
-            .delete_draft_for_user(actor.clone(), draft.db_id)
+            .delete_draft_for_user(actor.clone(), draft.db_id, 0)
             .await
         {
             tracing::warn!(

@@ -1294,6 +1294,27 @@
           }
         }
       },
+      "CalendarEventJoinRequestMetadata": {
+        "type": "object",
+        "description": "A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.",
+        "required": ["requestId", "eventId", "title"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The shared calendar event entity the request is for."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request identity, answered from the event's details."
+          },
+          "title": {
+            "type": "string",
+            "description": "Event title when the request was made."
+          }
+        }
+      },
       "CalendarEventReminderMetadata": {
         "type": "object",
         "description": "A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.",
@@ -1351,6 +1372,30 @@
             "description": "Profile picture URL of the user who started the call, when available."
           }
         }
+      },
+      "ChannelAccessRequestedMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata",
+            "description": "Channel the requester asked to join."
+          },
+          {
+            "type": "object",
+            "required": ["requestId"],
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The attempt to join, which is also this notification's id."
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"],
+                "description": "Optional requester profile picture URL."
+              }
+            }
+          }
+        ],
+        "description": "A person asked to join a channel the recipient participates in."
       },
       "ChannelInviteMetadata": {
         "type": "object",
@@ -2266,6 +2311,14 @@
             "type": "string",
             "description": "The user who sent the invitation"
           },
+          "inviteePlan": {
+            "$ref": "#/components/schemas/InviteePlan",
+            "description": "What the invitee gets by joining, as the team stood when the invite was sent."
+          },
+          "reminder": {
+            "type": "boolean",
+            "description": "Whether this email reminds the invitee of an invite they have not answered."
+          },
           "role": {
             "type": ["string", "null"],
             "description": "Role/permission level in the team"
@@ -2289,6 +2342,11 @@
             "description": "The name of the team being invited to"
           }
         }
+      },
+      "InviteePlan": {
+        "type": "string",
+        "description": "What a team invitee gets by joining.",
+        "enum": ["free", "premium"]
       },
       "ItemSharedMetadata": {
         "type": "object",
@@ -2858,6 +2916,36 @@
                 "enum": ["channel_message_reaction"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A channel member asked to be added as a guest of an event the\nuser shared with the channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CalendarEventJoinRequestMetadata",
+                "description": "A channel member asked to be added as a guest of an event the\nuser shared with the channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["calendar_event_join_request"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone asked to join a channel the user participates in.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelAccessRequestedMetadata",
+                "description": "Someone asked to join a channel the user participates in."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_access_requested"]
+              }
+            }
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
@@ -2937,18 +3025,65 @@
       },
       "PushNotificationData": {
         "type": "object",
+        "description": "the value we send as the payload in the ios notification\nThis data is accessible to the client",
         "required": ["notificationId"],
         "properties": {
+          "navigation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PushNotificationNavigation",
+                "description": "Destination to open without fetching the notification record first."
+              }
+            ]
+          },
           "notificationId": {
             "type": "string",
             "format": "uuid",
             "description": "The id of the notification record (UserNotification.id)"
+          },
+          "recipientId": {
+            "type": ["string", "null"],
+            "description": "Account that owns the receiving device, set during per-recipient delivery."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"],
             "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
           }
         }
+      },
+      "PushNotificationNavigation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Open a channel at a specific message.",
+            "required": ["channelId", "messageId", "threadId", "type"],
+            "properties": {
+              "channelId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Channel containing the message."
+              },
+              "messageId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Message to highlight."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Root of the message's thread; null identifies a top-level message."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          }
+        ],
+        "description": "A destination carried by a push notification. Access is checked when opened."
       },
       "RealtimeNotif_TaggedContent_Value": {
         "allOf": [

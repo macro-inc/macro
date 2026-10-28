@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CloseIcon from '@icon/system/regular/x.svg?component-solid';
 import { Button, Hotkey, Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
@@ -21,7 +21,7 @@ export const EntitySelectionToolbarModal = (
     <ScopedPortal scope="split">
       <Layer depth={2}>
         <div class="absolute left-1/2 bottom-16 w-max max-w-[calc(100%-1rem)] -translate-x-1/2">
-          <div class="text-sm font-bold flex flex-wrap rounded-xl flex-row items-center gap-2 p-2 bg-surface border border-edge shadow-xl shadow-drop-shadow">
+          <div class="menu-surface text-sm font-bold flex flex-wrap flex-row items-center gap-2 p-2">
             <Button
               type="button"
               size="icon-sm"

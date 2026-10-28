@@ -2,28 +2,29 @@ import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
-import ChatsCircleIcon from '@phosphor/chats-circle.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FolderSimpleIcon from '@phosphor/folder-simple.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import HouseIcon from '@phosphor/house.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
-import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
-import CalendarCheckFillIcon from '@phosphor-fill/calendar-check-fill.svg';
-import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
-import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
-import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
-import GitPullRequestFillIcon from '@phosphor-fill/git-pull-request-fill.svg';
-import HouseFillIcon from '@phosphor-fill/house-fill.svg';
-import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
-import PhoneCallFillIcon from '@phosphor-fill/phone-call-fill.svg';
-import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
+import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
+import CalendarBlankFillIcon from '@icon/system/fill/calendar-blank-fill.svg';
+import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
+import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
+import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
+import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
+import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
+import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
+import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
+import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import HouseIcon from '@icon/system/regular/house.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import PulseIcon from '@icon/system/regular/pulse.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
 import type { NavIcon } from './nav-glyph';
 import type { SidebarPrefs } from './use-sidebar-prefs';
 
@@ -36,7 +37,7 @@ export type SidebarNextNavItem = Omit<SidebarItem, 'hotkeyToken'> & {
   /** Only destinations with a registered GoTo shortcut expose a key hint. */
   hotkeyToken?: SidebarItem['hotkeyToken'];
   icon: NavIcon;
-  /** Phosphor `fill` weight of `icon`, shown while the view is active. */
+  /** Matching active variant of `icon`, shown while the view is active. */
   iconActive: NavIcon;
 };
 
@@ -49,8 +50,7 @@ export type SidebarNextMenuItem = Omit<
 /**
  * SidebarRail's nav buttons, in default render order.
  *
- * Phosphor icons rather than the animated `wide-*` set: they are plain
- * `fill="currentColor"` SVGs, so the active button's `text-ink-muted` colours
+ * Original Macro icons inherit `currentColor`, so the active button's `text-ink-muted` colours
  * the glyph.
  *
  * Every destination is an existing view id, so the `hotkeyToken`s are the ones
@@ -149,11 +149,20 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     hotkeyToken: TOKENS.sidebar.goTo.reviews,
   },
   {
+    id: 'activity',
+    label: 'Activity',
+    href: '/activity',
+    icon: PulseIcon,
+    iconActive: PulseFillIcon,
+    hotkey: 'y',
+    hotkeyToken: TOKENS.sidebar.goTo.activity,
+  },
+  {
     id: 'booking-links',
     label: 'Scheduling',
     href: '/scheduling',
     icon: CalendarCheckIcon,
-    iconActive: CalendarCheckFillIcon,
+    iconActive: CalendarCheckIcon,
   },
 ] satisfies SidebarNextNavItem[];
 
@@ -164,6 +173,7 @@ export type NavItemGates = {
   showCustomers: boolean;
   showCalls: boolean;
   showReviews: boolean;
+  showActivity: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -178,6 +188,7 @@ export const isNavItemAvailable = (
   if (item.id === 'companies') return gates.showCustomers;
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
+  if (item.id === 'activity') return gates.showActivity;
   return true;
 };
 

@@ -22,6 +22,7 @@ import {
   useSolidRouterHistory,
 } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { createAppSplitRouterMiddleware } from '@components/app/split-layout/split-router/app-middleware';
 import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';
 import {
@@ -99,6 +100,9 @@ import {
   channelsSplitRoute,
   codersRoute,
   companiesRoute,
+  crmPipelineRecordRoute,
+  crmPipelineRoute,
+  crmRecordRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -393,13 +397,19 @@ export function AppRouterView() {
           <Route
             definition={channelDetailRoute}
             component={ChannelDetailRouteView}
+            loading={ChannelLoading}
           />
         </Route>
         <Route definition={callsRoute} component={CallsRouteView}>
           <Route definition={callsCallRoute} component={CallsCallDetail} />
         </Route>
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
-        <Route definition={companiesRoute} component={CompaniesRouteView} />
+        <Route definition={companiesRoute} component={CompaniesRouteView}>
+          <Route definition={crmPipelineRoute}>
+            <Route definition={crmPipelineRecordRoute} />
+          </Route>
+          <Route definition={crmRecordRoute} />
+        </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />
         <Route definition={prDetailRoute} component={PrDetailRouteView} />

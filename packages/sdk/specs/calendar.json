@@ -208,6 +208,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "inbox",
+            "in": "query",
+            "description": "Inbox address holding the copy this request deletes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -310,7 +319,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only or needs reauthorization",
+            "description": "Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting",
             "content": {
               "application/json": {
                 "schema": {
@@ -341,6 +350,433 @@
           },
           "503": {
             "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/copy": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Add a snapshot of an event shared with one of the requester's channels to\none of their Google calendars and return the synced snapshot. The\nsnapshot keeps the meeting's iCalendar UID and organizer, lists only the\nrequester as a guest, and carries no join link; nobody is notified.\nWhile the requester's request to join the event is pending or accepted,\nthe copy is refused with `join_request_open`: the meeting reaches their\ncalendar as the invitation, which a copy would otherwise take in.",
+        "operationId": "copy_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Shared calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The copy on the requester's calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The event cannot be copied, or the calendar is not a Google calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found or not shared with the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on the requester's calendar, a request to join it is pending or accepted, no writable calendar, or the provider refused the copy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/guests": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Add guests to a calendar event without touching anyone already invited,\nand return its synced entity. The organizer, and guests the organizer lets\ninvite others, may call it; Google emails the new guests.",
+        "operationId": "invite_calendar_event_guests",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCalendarEventGuestsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated calendar event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid guests or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, or the calendar needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event or occurrence not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The connected account neither organizes nor attends the event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/notes": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "List notes visible through this meeting occurrence.",
+        "operationId": "event_notes",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "occurrenceKey",
+            "in": "query",
+            "description": "Stable occurrence key returned by the calendar read API.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MeetingNote"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/notes/{document_id}": {
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Idempotently link a markdown document and its optional team audience.",
+        "operationId": "link_event_note",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "occurrenceKey",
+            "in": "query",
+            "description": "Stable occurrence key returned by the calendar read API.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "tags": ["calendar_events"],
+        "summary": "Remove this meeting's grant without deleting the document.",
+        "operationId": "unlink_event_note",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "occurrenceKey",
+            "in": "query",
+            "description": "Stable occurrence key returned by the calendar read API.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/events/{event_id}/provider-url": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Resolve an authorized event's provider link for Outlook-only actions.",
+        "operationId": "calendar_event_provider_url",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "calendarId",
+            "in": "query",
+            "description": "Exact calendar copy; defaults to the canonical copy.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "recurrenceId",
+            "in": "query",
+            "description": "Original-start key of one occurrence; omitted for the entire series.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEventProviderUrl"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/replacement": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Read and persist an organizer-only preview, without sending invitations.",
+        "operationId": "prepare_calendar_replacement",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareCalendarReplacementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarReplacementView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -394,7 +830,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only or needs reauthorization",
+            "description": "Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting",
             "content": {
               "application/json": {
                 "schema": {
@@ -448,6 +884,263 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/join-requests/{request_id}": {
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Answer a request to join an event the requester can change and return\nwhere it now stands. Accepting adds the guest through the invite path; an\nalready answered request is returned unchanged.",
+        "operationId": "respond_to_join_request",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Join request id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondToJoinRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The answered join request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only, the organizer doesn't let guests invite others, or the calendar needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request not found or its event cannot be changed by the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The provider rejected the new guest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meeting-notes/documents": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Suggest the caller's markdown documents and extra team audiences.",
+        "operationId": "note_documents",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Empty returns recent documents.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotePicker"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meeting-notes/documents/{document_id}/links": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "List a document's visible meeting links; owners also see unavailable grants.",
+        "operationId": "document_note_links",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentNoteLink"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/replacements/{operation_id}": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Read saved progress without performing a provider mutation.",
+        "operationId": "calendar_replacement_status",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarReplacementView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["calendar_events"],
+        "summary": "Discard a preview only if no confirmation has been recorded.",
+        "operationId": "discard_calendar_replacement",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/replacements/{operation_id}/confirm": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Explicitly confirm the saved preview, or resume the same confirmed operation.",
+        "operationId": "confirm_calendar_replacement",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarReplacementView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
                 }
               }
             }
@@ -619,6 +1312,55 @@
           }
         }
       },
+      "CalendarCapabilities": {
+        "type": "object",
+        "description": "Actual provider capabilities used by calendar editors.",
+        "required": [
+          "removeConference",
+          "autoDecline",
+          "emailReminders",
+          "customRecurrence",
+          "resetRsvp",
+          "guestPolicy"
+        ],
+        "properties": {
+          "autoDecline": {
+            "type": "boolean",
+            "description": "Whether event-level automatic invitation declines are supported."
+          },
+          "conferenceProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceProvider",
+                "description": "Meeting system available for new conferences, when any."
+              }
+            ]
+          },
+          "customRecurrence": {
+            "type": "boolean",
+            "description": "Whether arbitrary RFC 5545 recurrence properties can be written."
+          },
+          "emailReminders": {
+            "type": "boolean",
+            "description": "Whether email reminders are delivered by the provider or Macro."
+          },
+          "guestPolicy": {
+            "type": "boolean",
+            "description": "Whether the organizer can set what guests may do."
+          },
+          "removeConference": {
+            "type": "boolean",
+            "description": "Whether an existing conference can be detached."
+          },
+          "resetRsvp": {
+            "type": "boolean",
+            "description": "Whether an attendee can reset their RSVP to unanswered."
+          }
+        }
+      },
       "CalendarDeletionScopeParam": {
         "type": "string",
         "description": "How much of a recurring series a deletion removes.",
@@ -640,6 +1382,9 @@
           "sequence",
           "isReadOnly",
           "attendees",
+          "guestPolicy",
+          "isSnapshot",
+          "viewerCan",
           "createdAt",
           "updatedAt"
         ],
@@ -692,6 +1437,10 @@
             "$ref": "#/components/schemas/EventType",
             "description": "Provider event type. Skipped when it is the regular type so\nprojections stored before event types were modeled still compare\nequal."
           },
+          "guestPolicy": {
+            "$ref": "#/components/schemas/GuestPolicy",
+            "description": "What the organizer lets guests do: the canonical copy's values, or\nGoogle's defaults for an event synced before the policy was modeled."
+          },
           "icalUid": {
             "type": "string",
             "description": "RFC 5545 UID used to reconcile provider and email sources."
@@ -704,6 +1453,10 @@
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the canonical source's calendar prohibits editing it."
+          },
+          "isSnapshot": {
+            "type": "boolean",
+            "description": "Whether this is a snapshot of a meeting shared with the owner, which\nMacro added to their calendar as a private copy: the meeting's changes\nnever reach it, and nothing done to it reaches the meeting."
           },
           "location": {
             "type": ["string", "null"],
@@ -766,9 +1519,23 @@
             "format": "date-time",
             "description": "Entity update time."
           },
+          "viewerCan": {
+            "$ref": "#/components/schemas/ViewerCapabilities",
+            "description": "What the viewing requester may do with the event. Resolved only on\nthe read path, alongside each attendee's `is_self`; nothing when no\nviewer is known. Source projections never store it."
+          },
           "visibility": {
             "$ref": "#/components/schemas/EventVisibility",
             "description": "Event visibility."
+          }
+        }
+      },
+      "CalendarEventProviderUrl": {
+        "type": "object",
+        "description": "Provider-validated external event link.",
+        "properties": {
+          "url": {
+            "type": ["string", "null"],
+            "description": "None when the event no longer exists at its provider."
           }
         }
       },
@@ -832,6 +1599,163 @@
           }
         }
       },
+      "CalendarGuestInputBody": {
+        "type": "object",
+        "description": "A guest added to an event.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Guest email address."
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Whether attendance is optional."
+          }
+        }
+      },
+      "CalendarJoinRequest": {
+        "type": "object",
+        "description": "A channel member's request to be added as a guest of an event they see\nonly through a channel share.",
+        "required": [
+          "id",
+          "eventId",
+          "requesterId",
+          "requesterEmail",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made."
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The sharer's event entity that was shared with the channel."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request identifier."
+          },
+          "requesterEmail": {
+            "type": "string",
+            "description": "Address the sharer invites when accepting."
+          },
+          "requesterId": {
+            "type": "string",
+            "description": "Macro user asking to join."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+            "description": "Where the request stands."
+          }
+        }
+      },
+      "CalendarJoinRequestDecision": {
+        "type": "string",
+        "description": "How a sharer answers a request to join their event.",
+        "enum": ["accept", "decline"]
+      },
+      "CalendarJoinRequestStatus": {
+        "type": "string",
+        "description": "Lifecycle of a request to be added as a guest of a shared event.",
+        "enum": ["pending", "accepted", "declined"]
+      },
+      "CalendarMentionEvent": {
+        "type": "object",
+        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given.",
+        "required": [
+          "title",
+          "time",
+          "isRecurring",
+          "attendeeCount",
+          "updatedAt"
+        ],
+        "properties": {
+          "attendeeCount": {
+            "type": "integer",
+            "description": "Number of attendees on the previewed copy.",
+            "minimum": 0
+          },
+          "canRequestToJoin": {
+            "type": "boolean",
+            "description": "For a channel-shared preview, whether the person who shared it can\nadd the requester as a guest. Always false for the requester's own\ncopy."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering."
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "description": "Whether the event repeats."
+          },
+          "joinRequestStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+                "description": "For a channel-shared preview, the requester's request to join, if any."
+              }
+            ]
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location label, when set."
+          },
+          "occurrenceKey": {
+            "type": ["string", "null"],
+            "description": "Key of the previewed instance, absent when no occurrence is\nmaterialized."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Time of the previewed instance: the requested occurrence when it\nexists, else the next upcoming one, else the latest past one, else the\nseries start."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update time of the previewed copy."
+          },
+          "viewerCopy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarMentionViewerCopy",
+                "description": "How the requester holds the meeting through `viewer_event_id`; absent\nexactly when that is."
+              }
+            ]
+          },
+          "viewerEventId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
+          }
+        }
+      },
+      "CalendarMentionViewerCopy": {
+        "type": "string",
+        "description": "How a requester holds a mentioned meeting on their own calendar, decided\nby the copy's own inbox, the way viewer capabilities decide organizer and\nguest.",
+        "enum": ["snapshot", "invitation", "event"]
+      },
       "CalendarMutationApiError": {
         "type": "object",
         "description": "HTTP error body returned by calendar mutation endpoints.",
@@ -856,13 +1780,103 @@
           "read_only",
           "no_writable_calendar",
           "not_attendee",
+          "not_organizer",
+          "guests_cannot_invite",
+          "guest_list_hidden",
+          "guests_cannot_modify",
+          "already_on_calendar",
+          "join_request_open",
+          "copy_refused",
+          "snapshot",
           "invalid_input",
           "reauth_required",
           "provider_rejected",
           "retryable",
           "persist_failed",
-          "macro_call_failed"
+          "macro_call_failed",
+          "copy_choice_required"
         ]
+      },
+      "CalendarProvider": {
+        "type": "string",
+        "description": "Provider selected from the persisted calendar account and email binding.",
+        "enum": ["google", "outlook"]
+      },
+      "CalendarReplacementView": {
+        "type": "object",
+        "description": "Safe preview and recovery response; never exposes the opaque provider snapshot.",
+        "required": [
+          "operationId",
+          "status",
+          "title",
+          "time",
+          "attendeeCount",
+          "isSeries",
+          "removeConference",
+          "completedSteps",
+          "totalSteps"
+        ],
+        "properties": {
+          "attendeeCount": {
+            "type": "integer",
+            "description": "Guest count for cancellation and reinvitation confirmation.",
+            "minimum": 0
+          },
+          "completedSteps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of completed provider steps."
+          },
+          "event": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEvent",
+                "description": "Returned after the complete operation has been persisted."
+              }
+            ]
+          },
+          "isSeries": {
+            "type": "boolean",
+            "description": "Entire recurring series, including exceptions, is replaced."
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Use this identity when confirming or checking progress."
+          },
+          "providerUrl": {
+            "type": ["string", "null"],
+            "description": "Original event for manual review."
+          },
+          "removeConference": {
+            "type": "boolean",
+            "description": "The provider conference is removed."
+          },
+          "replacementUrl": {
+            "type": ["string", "null"],
+            "description": "New provider event, when creation was confirmed."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReplacementStatus",
+            "description": "Current durable state."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Frozen time."
+          },
+          "title": {
+            "type": "string",
+            "description": "Frozen title."
+          },
+          "totalSteps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of provider steps in this operation."
+          }
+        }
       },
       "CalendarRsvpScopeParam": {
         "type": "string",
@@ -877,12 +1891,23 @@
       "ConferenceChange": {
         "type": "string",
         "description": "A requested change to an event's conferencing. Omitting the field leaves\nthe existing conference untouched; only these values change it.",
-        "enum": ["google_meet", "none"]
+        "enum": ["provider_default", "microsoft_teams", "google_meet", "none"]
       },
       "ConferenceProvider": {
         "type": "string",
-        "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
-        "enum": ["google_meet", "other"]
+        "description": "The conferencing system backing an event's join URL.\n\nCalendars can create Google Meet or Microsoft Teams according to their\ncapabilities. Imported third-party conferences are labeled separately.\nOmitting a conference change preserves the current conference; explicit\nchanges still require provider and calendar capability validation.",
+        "enum": ["microsoft_teams", "google_meet", "other"]
+      },
+      "CopyCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body adding a shared event to the requester's calendar.",
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Google calendar to add the copy to; defaults to the requester's\nprimary inbox's primary calendar."
+          }
+        }
       },
       "CreateCalendarEventRequest": {
         "type": "object",
@@ -920,6 +1945,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Connected inbox whose primary calendar receives the event; defaults\nto the requester's primary inbox."
+          },
+          "guestPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GuestPolicy",
+                "description": "What guests may do; omit for Google's defaults (guests may invite\nothers and see the guest list, not modify the event). Google\ncalendars only."
+              }
+            ]
           },
           "idempotencyKey": {
             "type": ["string", "null"],
@@ -990,6 +2026,73 @@
               {
                 "$ref": "#/components/schemas/EventVisibility",
                 "description": "Event visibility."
+              }
+            ]
+          }
+        }
+      },
+      "DocumentNoteLink": {
+        "type": "object",
+        "description": "A visible meeting link, or an owner's durable grant they can no longer open.",
+        "required": [
+          "documentName",
+          "eventId",
+          "occurrenceKey",
+          "eventTitle",
+          "canViewMeeting"
+        ],
+        "properties": {
+          "canViewMeeting": {
+            "type": "boolean",
+            "description": "Whether the reader may resolve this exact meeting's details right now."
+          },
+          "documentName": {
+            "type": "string",
+            "description": "Current name of the markdown document."
+          },
+          "event": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarMentionEvent",
+                "description": "Exact accessible calendar preview, resolved with this link's authorization snapshot."
+              }
+            ]
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Linked calendar copy."
+          },
+          "eventTitle": {
+            "type": "string",
+            "description": "Current title, or a safe placeholder when meeting details are unavailable."
+          },
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Original occurrence start, or `single` for a one-time meeting."
+          },
+          "team": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NoteTeam",
+                "description": "Independent optional team audience."
+              }
+            ]
+          },
+          "teamEvent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TeamCalendarItem",
+                "description": "Exact, sanitized team-calendar details when the meeting is shared through a team."
               }
             ]
           }
@@ -1108,6 +2211,74 @@
         "description": "Visibility of event details.",
         "enum": ["default", "public", "private", "confidential"]
       },
+      "GuestPolicy": {
+        "type": "object",
+        "description": "The switches an organizer sets on an event to bound what its guests may\ndo. Google omits a switch from the payload while it holds its default.",
+        "required": ["canModify", "canInviteOthers", "canSeeOtherGuests"],
+        "properties": {
+          "canInviteOthers": {
+            "type": "boolean",
+            "description": "Whether guests may invite others."
+          },
+          "canModify": {
+            "type": "boolean",
+            "description": "Whether guests may change the event, including its guest list."
+          },
+          "canSeeOtherGuests": {
+            "type": "boolean",
+            "description": "Whether guests may see the guest list."
+          }
+        }
+      },
+      "InviteCalendarEventGuestsRequest": {
+        "type": "object",
+        "description": "Request body adding guests to an event without touching anyone already\ninvited.",
+        "required": ["guests"],
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar whose copy of the event is written, for an event synced from\nmore than one calendar. Omit to write the canonical copy."
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarGuestInputBody"
+            },
+            "description": "Guests to add; anyone already on the event is skipped."
+          },
+          "inbox": {
+            "type": ["string", "null"],
+            "description": "Inbox address holding the copy this request changes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it."
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Original-start key of the occurrence the guests are added to."
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarUpdateScopeParam",
+                "description": "How much of a recurring series gains the guests. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole event or series. An explicit\n`this_event` scope requires `recurrenceId`."
+              }
+            ]
+          }
+        }
+      },
+      "LinkNoteRequest": {
+        "type": "object",
+        "description": "Optional additional view access for one team.",
+        "properties": {
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Null means the meeting audience only."
+          }
+        }
+      },
       "ListCalendarsResponse": {
         "type": "object",
         "description": "Calendars visible to the requester across connected and delegated inboxes.",
@@ -1119,6 +2290,88 @@
               "$ref": "#/components/schemas/VisibleCalendar"
             },
             "description": "Primaries and writable calendars first."
+          }
+        }
+      },
+      "MeetingNote": {
+        "type": "object",
+        "description": "One linked document and the extra access this link grants.",
+        "required": ["documentId", "name", "canManage"],
+        "properties": {
+          "canManage": {
+            "type": "boolean",
+            "description": "Whether this viewer can change this document's sharing."
+          },
+          "documentId": {
+            "type": "string",
+            "description": "Markdown document identity."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current document name."
+          },
+          "team": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NoteTeam",
+                "description": "Optional extra team view grant."
+              }
+            ]
+          }
+        }
+      },
+      "NoteDocument": {
+        "type": "object",
+        "description": "A document available in the note picker.",
+        "required": ["documentId", "name"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "Markdown document identity."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current document name, never a copied title."
+          }
+        }
+      },
+      "NotePicker": {
+        "type": "object",
+        "description": "Picker results; only documents whose owner is the caller are suggested.",
+        "required": ["documents", "teams"],
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteDocument"
+            },
+            "description": "At most 30 matching markdown documents, most recently updated first."
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteTeam"
+            },
+            "description": "Teams the caller currently belongs to."
+          }
+        }
+      },
+      "NoteTeam": {
+        "type": "object",
+        "description": "An additional team audience, separate from the meeting's audience.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team identity."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
           }
         }
       },
@@ -1142,6 +2395,26 @@
           "declineMessage": {
             "type": ["string", "null"],
             "description": "Message returned to organizers whose invitations are auto-declined."
+          }
+        }
+      },
+      "PrepareCalendarReplacementRequest": {
+        "type": "object",
+        "description": "A read-only preview request. Confirmation uses the returned operation identity.",
+        "required": ["removeConference"],
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exact calendar copy; defaults to canonical."
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Original-start key; omitted to replace the entire series."
+          },
+          "removeConference": {
+            "type": "boolean",
+            "description": "Omit the provider conference in the replacement."
           }
         }
       },
@@ -1185,6 +2458,22 @@
         ],
         "description": "Realtime signal that a connected inbox's calendar projection changed."
       },
+      "ReplacementStatus": {
+        "type": "string",
+        "description": "User-visible workflow state.",
+        "enum": ["needs_confirmation", "in_progress", "complete"]
+      },
+      "RespondToJoinRequestRequest": {
+        "type": "object",
+        "description": "Request body answering a join request.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/CalendarJoinRequestDecision",
+            "description": "The sharer's answer."
+          }
+        }
+      },
       "RsvpCalendarEventRequest": {
         "type": "object",
         "description": "Request body setting the requester's RSVP on an event.",
@@ -1201,7 +2490,7 @@
           },
           "respondingEmail": {
             "type": ["string", "null"],
-            "description": "The owned connected address whose attendance is changed. Validated by the domain."
+            "description": "The owned connected address whose attendance is changed. Validated by the domain.\nOmit to answer as the inbox the addressed copy syncs through."
           },
           "response": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",
@@ -1219,6 +2508,110 @@
             ]
           }
         }
+      },
+      "TeamCalendarContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No provider or event metadata.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["busy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Explicitly authorized source content.",
+            "required": ["details", "kind"],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/TeamCalendarDetails",
+                "description": "Detail projection."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["details"]
+              }
+            }
+          }
+        ],
+        "description": "Disjoint busy/detail shapes prevent new event fields leaking by default."
+      },
+      "TeamCalendarDetails": {
+        "type": "object",
+        "description": "Safe details from a single authorized source.",
+        "required": ["title", "attendees", "calendarName"],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendee"
+            },
+            "description": "Attendees; self flags are relative to the requesting viewer."
+          },
+          "calendarName": {
+            "type": "string",
+            "description": "Source calendar name, shown only with details."
+          },
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Join URL, if supplied by this source."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Body, if supplied by this source."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location, if supplied by this source."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer address from this source."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer name from this source."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          }
+        }
+      },
+      "TeamCalendarItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TeamCalendarContent",
+            "description": "Authorized content variant."
+          },
+          {
+            "type": "object",
+            "required": ["id", "ownerId", "time", "contributesToAvailability"],
+            "properties": {
+              "contributesToAvailability": {
+                "type": "boolean",
+                "description": "Whether this occurrence blocks the sharer's personal availability.\nA subscribed calendar's block can be shared without occupying the sharer."
+              },
+              "id": {
+                "type": "string",
+                "description": "Stable opaque projection identity, never an event entity id."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The person sharing access to the source."
+              },
+              "time": {
+                "$ref": "#/components/schemas/EventTime",
+                "description": "Occurrence interval."
+              }
+            }
+          }
+        ],
+        "description": "A read-only team calendar occurrence."
       },
       "TeamCalendarSharing": {
         "type": "string",
@@ -1266,6 +2659,21 @@
           "description": {
             "type": ["string", "null"],
             "description": "Replacement description; an empty string clears it."
+          },
+          "guestPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GuestPolicy",
+                "description": "Replacement guest policy; only the organizer of a Google event may\nchange it, for the whole event or series. Omit to leave it untouched."
+              }
+            ]
+          },
+          "inbox": {
+            "type": ["string", "null"],
+            "description": "Inbox address holding the copy this request changes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it."
           },
           "location": {
             "type": ["string", "null"],
@@ -1354,10 +2762,50 @@
           }
         }
       },
+      "ViewerCapabilities": {
+        "type": "object",
+        "description": "What the viewing requester may do with an event.",
+        "required": [
+          "editDetails",
+          "inviteGuests",
+          "removeGuests",
+          "setGuestPolicy",
+          "rsvp",
+          "organize"
+        ],
+        "properties": {
+          "editDetails": {
+            "type": "boolean",
+            "description": "Change the event's details (title, time, description, conference)."
+          },
+          "inviteGuests": {
+            "type": "boolean",
+            "description": "Add guests."
+          },
+          "organize": {
+            "type": "boolean",
+            "description": "Act as the event's organizer: replace its whole guest list and manage\nits conferencing."
+          },
+          "removeGuests": {
+            "type": "boolean",
+            "description": "Remove guests."
+          },
+          "rsvp": {
+            "type": "boolean",
+            "description": "Answer the invitation."
+          },
+          "setGuestPolicy": {
+            "type": "boolean",
+            "description": "Change the event's guest policy, which only Google calendars have."
+          }
+        }
+      },
       "VisibleCalendar": {
         "type": "object",
         "description": "A calendar visible to a requester, listed for pickers and filters.",
         "required": [
+          "provider",
+          "capabilities",
           "id",
           "emailLinkId",
           "emailAddress",
@@ -1368,6 +2816,10 @@
           "defaultReminders"
         ],
         "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/CalendarCapabilities",
+            "description": "Provider features available on this actual calendar."
+          },
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
@@ -1408,6 +2860,10 @@
           "name": {
             "type": "string",
             "description": "Provider display name."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/CalendarProvider",
+            "description": "Calendar provider, for display and reconnect routing."
           },
           "syncError": {
             "type": ["string", "null"],

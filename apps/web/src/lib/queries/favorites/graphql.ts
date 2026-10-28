@@ -30,7 +30,7 @@ import {
 } from '@service-storage/graphql-favorites';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
-import { onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { FavoriteMutationCallbacks } from './mutation';
 
 type GraphqlReorderFavoritesArgs = { favorites: SetFavoriteArgs[] };
@@ -103,7 +103,8 @@ function activeFavoritesCacheTargets(
 
 /** Creates the live urql-solid favorites query. */
 export function createGraphqlFavoritesQuery(
-  filter?: ListFavoritesParams
+  filter?: ListFavoritesParams,
+  enabled: Accessor<boolean> = () => true
 ): GraphqlFavoritesQuery {
   const variables = favoritesQueryVariables(filter);
   const query = createUrqlQuery<
@@ -112,6 +113,7 @@ export function createGraphqlFavoritesQuery(
     FavoritesList
   >(() => ({
     query: FavoritesDocument,
+    enabled: enabled(),
     client: getGraphqlSoupClient(),
     variables,
     requestPolicy: 'cache-and-network',

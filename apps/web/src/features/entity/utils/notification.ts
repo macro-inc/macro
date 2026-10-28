@@ -25,6 +25,7 @@ const CHANNEL_NOTIFICATION_TYPES = [
   'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
+  'channel_access_requested',
 ] as const;
 
 export function notificationIsRead(notification: UnifiedNotification): boolean {
@@ -247,6 +248,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('entity_access_granted', () => 'granted access')
     .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
+    .with('channel_access_requested', () => 'asked to join')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
     .with('task_assigned', () => 'assigned')
@@ -270,11 +272,12 @@ export function getNotificationActionText(n: Notification): string {
     .with('call_started', () => 'called')
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
+    .with('calendar_event_join_request', () => 'asked to join')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
     .with('agent_session_mentioned', () => 'mentioned')
-    .exhaustive();
+    .exhaustive(() => 'notified');
 }
 
 export function extractMessageContent(notification: Notification): string {
@@ -342,10 +345,12 @@ export function extractMessageContent(notification: Notification): string {
         ''
     )
     .with({ tag: 'channel_invite' }, () => '')
+    .with({ tag: 'channel_access_requested' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
     .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? '')
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
+    .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .with(
       { tag: 'agent_session_settled' },
@@ -353,7 +358,7 @@ export function extractMessageContent(notification: Notification): string {
     )
     .with({ tag: 'agent_session_waiting_for_input' }, (m) => m.content.question)
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
-    .exhaustive();
+    .exhaustive(() => '');
 }
 
 /**

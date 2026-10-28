@@ -1,5 +1,5 @@
 import type { PaywallMessageMetadata } from '@core/constant/PaywallState';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { Button } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { BillingPlanCard } from '../../settings/components/billing-plan-card';

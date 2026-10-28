@@ -18,6 +18,14 @@ use crate::config::Config;
 pub type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 /// Calendar grant/watch service backing the push webhook.
 pub type CalendarGrantService = CalendarService<PgCalendarRepository>;
+/// Meeting-note links with current meeting and team audiences.
+pub type CalendarNotesService = calendar_events::domain::notes::MeetingNotes<
+    calendar_events::outbound::pg_notes::PgNoteRepository,
+>;
+/// Shared document permission boundary.
+pub type NoteAccessService = entity_access::domain::service::EntityAccessServiceImpl<
+    entity_access::outbound::PgAccessRepository,
+>;
 /// Team-sharing policy service with viewer refresh notifications.
 pub type CalendarTeamSvc = calendar_events::domain::team::CalendarTeamServiceImpl<
     calendar_events::outbound::pg_team::PgCalendarTeamRepository,
@@ -38,7 +46,10 @@ pub type SchedulingService = calendar_scheduling::domain::service::Service<
 /// User-initiated calendar mutation service.
 pub type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
-    GoogleCalendarClient<RedisCalendarRequestGate>,
+    calendar_events::domain::providers::CalendarProviders<
+        GoogleCalendarClient<RedisCalendarRequestGate>,
+        email_api_client::OutlookApiClientRepository,
+    >,
     CalendarTokenProviderAdapter,
     CalendarEventBroker,
     ConnectionGatewayCalendarRefresh,
@@ -53,6 +64,10 @@ pub struct ApiContext {
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     /// Calendar grant/watch service backing the push webhook.
     pub calendar_service: Arc<CalendarGrantService>,
+    /// Persistent meeting-note links.
+    pub calendar_notes: Arc<CalendarNotesService>,
+    /// Document ownership receipts required before sharing notes.
+    pub note_access: Arc<NoteAccessService>,
     /// User-initiated calendar mutation service.
     pub calendar_mutation_service: Arc<CalendarMutationSvc>,
     /// Read-only team-sharing preferences and personal availability inclusion.

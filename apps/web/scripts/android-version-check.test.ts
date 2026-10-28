@@ -151,6 +151,7 @@ describe('PR Android version enforcement', () => {
     'apps/web/tauri/src-tauri/icons/macos/Macro.icon/icon.json',
     'apps/web/tauri/src-tauri/tauri.macos.conf.json',
     'apps/web/tauri/src-tauri/src/linux_notification.rs',
+    'apps/web/tauri/src-tauri/README.md',
     'apps/web/tauri/desktop-release.json',
   ])('ignores the iOS/desktop-only path %s', (path) => {
     const base = git('rev-parse', 'HEAD');
@@ -201,4 +202,3 @@ describe('PR Android version enforcement', () => {
     expect(() => checkAndroidVersion({ cwd, base: 'missing-base' })).toThrow();
   });
 });
-

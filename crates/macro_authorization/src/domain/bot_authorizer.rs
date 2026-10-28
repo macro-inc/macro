@@ -153,6 +153,7 @@ where
 fn user_authentication(acting_user: ResolvedBotActingUser) -> MacroUserAuthentication {
     let user_id = acting_user.macro_user_id.as_ref().to_owned();
     MacroUserAuthentication {
+        agent_id: None,
         macro_user_id: acting_user.macro_user_id,
         user_context: UserContext {
             user_id,

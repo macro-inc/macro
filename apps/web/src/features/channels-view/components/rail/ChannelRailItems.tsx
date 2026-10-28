@@ -1,10 +1,8 @@
 import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
-import {
-  type EntityActionViewContext,
-  toEntityActionListState,
-} from '@app/features/next-soup/actions';
+import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { inlineWrappingMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
@@ -14,11 +12,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
-import AtIcon from '@phosphor/at.svg';
-import XIcon from '@phosphor/x.svg';
-import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
-import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
+import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
+import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import AtIcon from '@icon/system/regular/at.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
@@ -43,12 +41,6 @@ export type ChannelRailItemProps = {
   selected: boolean;
   focused: boolean;
   onActivate: (event: MouseEvent) => void;
-};
-
-export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
-  supportsMarkDone: false,
-  supportsOpenInNewSplit: false,
-  senderBucket: undefined,
 };
 
 /**
@@ -279,6 +271,7 @@ export function ConversationCard(props: ConversationCardProps) {
   return (
     <div
       id={props.id}
+      data-channel-conversation
       role="treeitem"
       tabIndex={-1}
       class={cn(

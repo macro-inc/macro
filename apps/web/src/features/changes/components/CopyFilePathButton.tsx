@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 

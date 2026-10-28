@@ -1,5 +1,5 @@
-import MinusIcon from '@phosphor/minus.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, cn } from '@ui';
 import { useGantt } from './gantt-context';
 import { ganttPixelsPerDay } from './gantt-date';

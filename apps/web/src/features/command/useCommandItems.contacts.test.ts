@@ -1,8 +1,10 @@
+import { searchQuickAccessItems } from '@core/context/quickAccess/entity-search';
 import type {
   Bucket,
   EntityItem,
   QuickAccessItem,
   QuickAccessList,
+  QuickAccessListOptions,
   UserItem,
 } from '@core/context/quickAccess/types';
 import type { CrmContactEntity } from '@entity';
@@ -34,24 +36,29 @@ vi.mock('@app/constants/hotkeys', () => ({
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
-    useList: (first: Bucket | { buckets: readonly Bucket[] }) => {
-      const key = typeof first === 'string' ? first : 'category';
-      const items = () => mocks.lists[key]?.() ?? [];
+    useList: (first: Bucket | QuickAccessListOptions) => {
+      const items = () => {
+        if (typeof first === 'string') return mocks.lists[first]?.() ?? [];
+        if (first.enabled && !first.enabled()) return [];
+        const buckets = Array.isArray(first.buckets) ? first.buckets : [];
+        return searchQuickAccessItems(
+          buckets.flatMap((bucket) => mocks.lists[bucket]?.() ?? []),
+          first.searchTerm?.() ?? ''
+        );
+      };
       return {
         items,
         totalCount: () => items().length,
         hasMore: () => false,
         isLoading: () => false,
         isLoadingMore: () => false,
+        error: () => undefined,
         loadMore: async () => {},
       } satisfies QuickAccessList;
     },
     usesRecordSelection: () => false,
     usesSearchProjection: () => false,
   }),
-}));
-vi.mock('@core/context/quickAccess/types', () => ({
-  exclude: () => ['dm', 'note'],
 }));
 vi.mock('@core/hotkey/getCommands', () => ({
   getActiveCommandsFromScope: () => [],
@@ -120,7 +127,7 @@ afterEach(() => {
   mocks.lists = {};
 });
 
-function setup(initialCategory: CategoryFilter = 'dms') {
+function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [query, setQuery] = createSignal('');
@@ -130,25 +137,30 @@ function setup(initialCategory: CategoryFilter = 'dms') {
     const [dms, setDms] = createSignal<EntityItem[]>([]);
     const [hasMore, setHasMore] = createSignal(false);
     const [loading, setLoading] = createSignal(false);
-    mocks.lists = { person: users, dm: dms, category: dms };
+    mocks.lists = { person: users, dm: dms };
     const discovery = {
       search: undefined as Accessor<string> | undefined,
       active: undefined as Accessor<boolean> | undefined,
       loadMore: vi.fn(async () => {}),
     };
+    const contactDiscovery = (
+      search: Accessor<string>,
+      active: Accessor<boolean>
+    ): CommandContactSource => {
+      discovery.search = search;
+      discovery.active = active;
+      return {
+        contacts: () => (active() ? contacts() : []),
+        isLoading: loading,
+        hasMore,
+        isLoadingMore: () => false,
+        error: () => undefined,
+        loadMore: discovery.loadMore,
+      };
+    };
     const result = useCommandItems(query, category, {
       searchActive: () => true,
-      contactDiscovery: (search, active): CommandContactSource => {
-        discovery.search = search;
-        discovery.active = active;
-        return {
-          contacts: () => (active() ? contacts() : []),
-          isLoading: loading,
-          hasMore,
-          isLoadingMore: () => false,
-          loadMore: discovery.loadMore,
-        };
-      },
+      contactDiscovery: crmEnabled ? contactDiscovery : undefined,
     });
     return {
       result,
@@ -166,6 +178,75 @@ function setup(initialCategory: CategoryFilter = 'dms') {
 }
 
 describe('command menu contact discovery', () => {
+  it.each(['all', 'dms'] as const)(
+    'finds a teammate without a DM or CRM contact in %s, including with CRM disabled',
+    (category) => {
+      const t = setup(category, false);
+      const gabriel = user('gabriel@macro.com', 'Gabriel Birman');
+      t.setUsers([gabriel, user('valentina@macro.com', 'Valentina')]);
+      expect(t.ids()).toEqual([]);
+
+      t.setQuery('Gabriel');
+      expect(t.ids()).toEqual([`search:${category}:Gabriel`, gabriel.id]);
+      t.setQuery('gabriel@macro.com');
+      expect(t.ids()).toEqual([
+        `search:${category}:gabriel@macro.com`,
+        gabriel.id,
+      ]);
+
+      t.setQuery('');
+      expect(t.ids()).toEqual([]);
+      t.setQuery('Gabriel');
+      t.setCategory('channels');
+      expect(t.ids()).not.toContain(gabriel.id);
+    }
+  );
+
+  it('keeps a teammate separate from group DMs and excludes the viewer', () => {
+    const t = setup('dms', false);
+    const gabriel = user('gabriel@macro.com', 'Gabriel Birman');
+    const viewer = user('viewer@macro.com', 'Gabriel Viewer');
+    const group = directMessage('group-gabriel', 'Gabriel group', gabriel.id);
+    if (group.data.type !== 'channel') throw new Error('Expected channel');
+    group.data.participantIds = [VIEWER, gabriel.id, 'macro|third@macro.com'];
+    t.setUsers([gabriel, viewer]);
+    t.setDms([group]);
+    t.setQuery('Gabriel');
+    expect(t.ids()).toContain(gabriel.id);
+    expect(t.ids()).toContain(group.id);
+    expect(t.ids()).not.toContain(viewer.id);
+  });
+
+  it.each(['all', 'dms'] as const)(
+    'replaces a matching person with their DM when it arrives in %s',
+    (category) => {
+      const t = setup(category);
+      const gabriel = user('gabriel@macro.com', 'Gabriel Birman');
+      t.setUsers([gabriel]);
+      t.setQuery('Gabriel');
+      t.setContacts([
+        contact('crm-gabriel', 'Gabriel External', 'gabriel@other.com'),
+      ]);
+      expect(t.ids()).toEqual([
+        `search:${category}:Gabriel`,
+        gabriel.id,
+        'crm-gabriel',
+      ]);
+
+      const dm = directMessage('dm-gabriel', 'Gabriel Birman', gabriel.id);
+      t.setDms([dm]);
+      expect(t.ids()).toEqual([
+        `search:${category}:Gabriel`,
+        dm.id,
+        'crm-gabriel',
+      ]);
+
+      t.setQuery('gabriel@macro.com');
+      t.setContacts([]);
+      expect(t.ids()).toEqual([`search:${category}:gabriel@macro.com`, dm.id]);
+    }
+  );
+
   it('lists contacts beyond the cached seed under People for a typed query', () => {
     const t = setup('dms');
     t.setContacts([
@@ -250,7 +331,6 @@ describe('command menu contact discovery', () => {
     const asher = user('asher@macro.com', 'Asher Smith');
     const dm = directMessage('dm-asher', 'Asher Smith', asher.id);
     // People already lists the conversation; only the CRM name matches.
-    mocks.lists.category = () => [dm];
     t.setUsers([asher]);
     t.setDms([dm]);
     t.setContacts([

@@ -53,7 +53,7 @@ export function HomeEmptyState() {
             label: 'Connect email',
             onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
           }}
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
+          documentationUrl={`${DOCS_BASE}/product/home`}
         />
       </Match>
 
@@ -69,7 +69,7 @@ export function HomeEmptyState() {
               Nothing to clear right now.
             </>
           }
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
+          documentationUrl={`${DOCS_BASE}/product/home`}
         />
       </Match>
 
@@ -78,7 +78,7 @@ export function HomeEmptyState() {
           graphic={EmptyStateInboxTrayGraphic}
           title="No activity yet"
           description="Your recent documents, sent emails, AI chats, and notifications will appear here."
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
+          documentationUrl={`${DOCS_BASE}/product/home`}
         />
       </Match>
     </Switch>

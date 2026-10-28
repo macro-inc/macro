@@ -79,6 +79,22 @@ entity's own detail, so there's nothing cached to invalidate.
 
 ***
 
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`FavoritableEntity`](FavoritableEntity.md).[`permission`](FavoritableEntity.md#permission)
+
+***
+
 ### properties()
 
 > **properties**(`opts?`): `Promise`\<[`EntityPropertyWithDefinition`](../../../../generated/properties/types.gen/type-aliases/EntityPropertyWithDefinition.md)[]\>

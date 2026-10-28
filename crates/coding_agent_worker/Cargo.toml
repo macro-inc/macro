@@ -63,6 +63,18 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true }
 
+# Stripe (agent_session -> ai_billing) reaches native-tls, which is OpenSSL on
+# Linux, and a musl build has no system OpenSSL to link: compile it in.
+[target.'cfg(target_env = "musl")'.dependencies]
+openssl-sys = { workspace = true, features = ["vendored"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+] }
+
 [dev-dependencies]
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }

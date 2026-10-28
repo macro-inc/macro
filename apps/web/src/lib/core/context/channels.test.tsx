@@ -17,7 +17,10 @@ vi.mock('@queries/channel/activity', () => ({
     data: [],
   }),
 }));
-vi.mock('./user', () => ({ useUserId: () => () => undefined }));
+vi.mock('./user', () => ({
+  useUserId: () => () => undefined,
+  useIsAuthenticated: () => () => true,
+}));
 
 import { ChannelsContextProvider, useChannelCanCall } from './channels';
 

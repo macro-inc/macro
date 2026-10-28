@@ -120,6 +120,19 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn insert_pending_domain(&self, _domain: &str) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn claim_pending_domains(
+        &self,
+        _limit: i64,
+        _max_attempts: i16,
+        _attempted_before: DateTime<Utc>,
+    ) -> Result<Vec<String>, CrmError> {
+        unimplemented!()
+    }
+
     async fn depopulate_contact(
         &self,
         _team_id: &uuid::Uuid,

@@ -5,12 +5,13 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+genai_telemetry = { path = "../genai_telemetry" }
 ai_billing = { path = "../ai_billing" }
-claude_cloud_agents = { path = "../claude_cloud_agents" }
 async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
 codex_connection = { path = "../codex_connection" }
 agent = { path = "../agent" }
+agent_api_keys = { path = "../agent_api_keys" }
 agent-client-protocol = { workspace = true }
 # The session-token claim shape and its signing, so the harness and the proxy
 # cannot disagree about what a token says.

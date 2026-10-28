@@ -22,6 +22,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -31,9 +32,9 @@ import {
 } from '@entity';
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -195,6 +196,7 @@ export function TaskList(props: TaskListProps) {
       activeTab: state.tab,
     });
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  createScrollTopFade(viewport);
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
 

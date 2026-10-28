@@ -1,6 +1,6 @@
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { TextField } from '@kobalte/core/text-field';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { Button, cn, Hotkey, Surface } from '@ui';
 import type { JSX, JSXElement } from 'solid-js';
@@ -67,8 +67,8 @@ export function SearchBar(props: SearchBarProps) {
       depth={2}
       hideBorder
       class={cn(
-        'w-full min-w-0 rounded-full border border-edge-button bg-control text-ink has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-edge-muted',
-        local.size === 'sm' ? 'h-8' : 'h-10',
+        'w-full min-w-0 rounded-full border border-edge-button bg-control not-touch:elevated text-ink has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-edge-muted',
+        local.size === 'sm' ? 'h-8' : 'h-[var(--view-search-height,2.5rem)]',
         local.class
       )}
       data-search-bar=""
@@ -114,7 +114,11 @@ export function SearchBar(props: SearchBarProps) {
               class="pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden whitespace-nowrap text-sm text-ink-placeholder group-focus-within:hidden"
             >
               <span class="truncate">{inputProps.placeholder}</span>
-              <Hotkey shortcut={local.hotkey} theme="subtle" class="shrink-0" />
+              <Hotkey
+                shortcut={local.hotkey}
+                theme="subtle"
+                class="shrink-0 touch:hidden"
+              />
             </div>
           </Show>
         </div>
@@ -123,7 +127,7 @@ export function SearchBar(props: SearchBarProps) {
             <Hotkey
               shortcut={hotkey()}
               theme="subtle"
-              class="shrink-0 group-focus-within:hidden"
+              class="shrink-0 group-focus-within:hidden touch:hidden"
             />
           )}
         </Show>

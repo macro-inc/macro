@@ -1,5 +1,5 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { createSignal, Show } from 'solid-js';

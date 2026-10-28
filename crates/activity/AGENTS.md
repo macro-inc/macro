@@ -32,6 +32,11 @@ distribution.
 
 - Depends on: `macro_event_broker`, `macro_event_topics`, `channel_sender`,
   `model-entity`, `model_owner`.
+- `teammate_feed` (`src/outbound/pg_activity_repo/team_feed.sql`) reads other
+  domains' tables to decide in SQL which teammate rows the viewer may see:
+  `team_user`, `entity_access`, `comms_channel_participants`, `email_links`,
+  `macro_user_links`, `email_threads`, and `call_entities`. It mirrors
+  `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
   `work_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
@@ -40,7 +45,8 @@ distribution.
 
 - Add a new activity source in a domain: implement `DomainActivity` for the
   domain's event type → map it in the domain crate's own consumer → register
-  the topic in the hosting service's composition root.
+  the topic in the hosting service's composition root. A new entity type stays
+  out of the team feed until `team_feed.sql` gets a visibility case for it.
 - Add a feed/timeline query: `src/domain/timeline.rs` or
   `src/domain/overview.rs` → `src/domain/ports.rs` → `src/outbound/pg_activity_repo.rs`.
 

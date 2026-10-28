@@ -8,8 +8,9 @@ use calendar_events::domain::{
     },
     meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
     models::{
-        AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventPatch,
-        ConferenceChange, EventTime, EventVisibility, OutOfOfficeAutoDeclineMode, VisibleCalendar,
+        AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
+        CalendarEventPatch, ConferenceChange, EventTime, EventVisibility,
+        OutOfOfficeAutoDeclineMode, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMacroCallService, CalendarMutationError,
@@ -42,6 +43,12 @@ enum Call {
         AttendeeResponseStatus,
         CalendarRsvpScope,
         Option<String>,
+    ),
+    Invite(
+        Uuid,
+        Option<Uuid>,
+        Vec<CalendarAttendeeInput>,
+        CalendarUpdateScope,
     ),
 }
 
@@ -124,6 +131,40 @@ impl CalendarMutationService for FakeMutations {
             Call::Rsvp(event_id, calendar_id, response, scope, responding_email),
         )?;
         Ok(series_event())
+    }
+
+    async fn invite_guests(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        guests: Vec<CalendarAttendeeInput>,
+        scope: CalendarUpdateScope,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        self.record(
+            requester_id,
+            Call::Invite(event_id, calendar_id, guests, scope),
+        )?;
+        Ok(series_event())
+    }
+
+    async fn copy_shared_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        unreachable!("GraphQL has no copy mutation")
+    }
+
+    async fn respond_to_join_request(
+        &self,
+        _requester_id: &str,
+        _request_id: Uuid,
+        _accept: bool,
+    ) -> Result<calendar_events::domain::join_requests::CalendarJoinRequest, CalendarMutationError>
+    {
+        unreachable!("GraphQL has no join requests")
     }
 
     async fn disconnect_calendar(
@@ -320,6 +361,69 @@ async fn create_maps_the_input_and_answers_with_the_committed_event() {
         *committed.reads.lock().unwrap(),
         vec![(VIEWER.to_owned(), EVENT_ID)]
     );
+}
+
+#[tokio::test]
+async fn create_and_update_forward_conference_changes_without_losing_calendar_selection() {
+    let calendar = Uuid::from_u128(0xca);
+    let cases = [
+        (
+            "conference: MICROSOFT_TEAMS",
+            Some(ConferenceChange::MicrosoftTeams),
+        ),
+        (
+            "conference: GOOGLE_MEET",
+            Some(ConferenceChange::GoogleMeet),
+        ),
+        ("conference: NONE", Some(ConferenceChange::Removed)),
+        ("conference: null", None),
+        ("", None),
+    ];
+    for (conference, expected) in cases {
+        let mutations = Arc::new(FakeMutations::default());
+        let committed = Arc::new(FakeCommitted {
+            change: Some(committed_change()),
+            ..Default::default()
+        });
+        let response = execute(
+            Arc::clone(&mutations),
+            committed,
+            &format!(r#"mutation {{
+                createCalendarEvent(input: {{
+                    calendarId: "{calendar}", emailLinkId: "{LINK_ID}", title: "Meeting",
+                    time: {{ timed: {{ startsAt: "2026-10-06T15:00:00Z", endsAt: "2026-10-06T15:30:00Z" }} }},
+                    {conference}
+                }}) {{ event {{ id }} }}
+                updateCalendarEvent(input: {{
+                    eventId: "{EVENT_ID}", calendarId: "{calendar}", {conference}
+                }}) {{ event {{ id }} }}
+            }}"#),
+            true,
+        ).await;
+
+        assert!(
+            response.errors.is_empty(),
+            "{conference}: {:?}",
+            response.errors
+        );
+        let calls = mutations.calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        let (viewer, Call::Create(link_id, calendar_id, draft)) = &calls[0] else {
+            panic!("expected a create");
+        };
+        assert_eq!(viewer, VIEWER);
+        assert_eq!(*link_id, Some(LINK_ID));
+        assert_eq!(*calendar_id, Some(calendar));
+        assert_eq!(draft.conference, expected);
+        let (viewer, Call::Update(event_id, calendar_id, patch, scope)) = &calls[1] else {
+            panic!("expected an update");
+        };
+        assert_eq!(viewer, VIEWER);
+        assert_eq!(*event_id, EVENT_ID);
+        assert_eq!(*calendar_id, Some(calendar));
+        assert_eq!(*scope, CalendarUpdateScope::All);
+        assert_eq!(patch.conference, expected);
+    }
 }
 
 #[tokio::test]
@@ -618,6 +722,66 @@ async fn an_rsvp_maps_its_response_and_ignores_an_occurrence_on_a_series_scope()
 }
 
 #[tokio::test]
+async fn an_invite_maps_its_guests_and_needs_an_occurrence_for_this_event() {
+    let mutations = Arc::new(FakeMutations::default());
+
+    let response = execute(
+        Arc::clone(&mutations),
+        Arc::new(FakeCommitted {
+            change: Some(committed_change()),
+            ..Default::default()
+        }),
+        &format!(
+            r#"mutation {{ inviteCalendarEventGuests(input: {{
+                eventId: "{EVENT_ID}", scope: THIS_EVENT, recurrenceId: "r1",
+                guests: [{{ email: "ada@example.com" }}, {{ email: "bo@example.com", optional: true }}]
+            }}) {{ event {{ id }} }} }}"#
+        ),
+        true,
+    )
+    .await;
+    let unscoped = execute(
+        Arc::clone(&mutations),
+        Arc::new(FakeCommitted::default()),
+        &format!(
+            r#"mutation {{ inviteCalendarEventGuests(input: {{
+                eventId: "{EVENT_ID}", scope: THIS_EVENT, guests: [{{ email: "ada@example.com" }}]
+            }}) {{ event {{ id }} }} }}"#
+        ),
+        true,
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        mutations.calls.lock().unwrap().as_slice(),
+        [(
+            VIEWER.to_owned(),
+            Call::Invite(
+                EVENT_ID,
+                None,
+                vec![
+                    CalendarAttendeeInput {
+                        email: "ada@example.com".to_owned(),
+                        is_optional: false,
+                        response_status: None,
+                    },
+                    CalendarAttendeeInput {
+                        email: "bo@example.com".to_owned(),
+                        is_optional: true,
+                        response_status: None,
+                    },
+                ],
+                CalendarUpdateScope::ThisEvent {
+                    recurrence_id: "r1".to_owned()
+                },
+            )
+        )]
+    );
+    assert_eq!(error_extensions(&unscoped).1, Value::from("invalid_input"));
+}
+
+#[tokio::test]
 async fn every_failure_carries_its_rest_code_and_hides_provider_details() {
     let cases = [
         (CalendarMutationError::NotFound, "not_found", false),
@@ -633,6 +797,32 @@ async fn every_failure_carries_its_rest_code_and_hides_provider_details() {
             false,
         ),
         (CalendarMutationError::NotAttendee, "not_attendee", false),
+        (CalendarMutationError::NotOrganizer, "not_organizer", false),
+        (
+            CalendarMutationError::GuestsCannotInvite,
+            "guests_cannot_invite",
+            false,
+        ),
+        (
+            CalendarMutationError::GuestListHidden,
+            "guest_list_hidden",
+            false,
+        ),
+        (
+            CalendarMutationError::GuestsCannotModify,
+            "guests_cannot_modify",
+            false,
+        ),
+        (
+            CalendarMutationError::AlreadyOnCalendar,
+            "already_on_calendar",
+            false,
+        ),
+        (
+            CalendarMutationError::JoinRequestOpen,
+            "join_request_open",
+            false,
+        ),
         (
             CalendarMutationError::InvalidInput("end before start".to_owned()),
             "invalid_input",

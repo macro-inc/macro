@@ -381,7 +381,36 @@ export type GroupMentionItem = {
 };
 
 /**
- * MentionItem = QuickAccessItem + Date + Group.
+ * Booking link mention item for sharing scheduling links.
+ */
+export type BookingLinkMentionItem = {
+  kind: 'bookingLink';
+  id: string;
+  data: {
+    profileId: string;
+    slug: string;
+    title: string;
+    durationMinutes: number;
+    owner: string;
+  };
+};
+
+/** A calendar event found by unified search, mentioned the way Copy event copies it. */
+export type CalendarEventMentionItem = {
+  kind: 'calendarEvent';
+  id: string;
+  data: {
+    eventId: string;
+    title: string;
+    /** Pins one instance of a recurring series; absent for a single event. */
+    occurrenceKey?: string;
+    /** When the mentioned instance starts, for the menu row. */
+    when?: string;
+  };
+};
+
+/**
+ * MentionItem = QuickAccessItem + Date + Group + BookingLink + CalendarEvent.
  * Used in MentionsMenu to unify all mentionable item types.
  */
 export type AgentSessionMentionItem = Omit<
@@ -393,7 +422,9 @@ export type MentionItem =
   | QuickAccessItem
   | DateMentionItem
   | GroupMentionItem
-  | AgentSessionMentionItem;
+  | AgentSessionMentionItem
+  | BookingLinkMentionItem
+  | CalendarEventMentionItem;
 
 /**
  * Type guard for DateMentionItem.

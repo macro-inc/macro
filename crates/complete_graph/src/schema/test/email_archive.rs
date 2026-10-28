@@ -1,6 +1,27 @@
 use super::*;
 
 #[tokio::test]
+async fn thread_read_repository_errors_are_masked_before_soup_lookup() {
+    let harness = harness();
+    *harness.email_service.thread_read_fails.lock().unwrap() = true;
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ emailThread(input: {{threadId: "{}"}}) {{id}} }} }}"#,
+            Uuid::from_u128(44),
+        ))
+        .await;
+    assert_eq!(response.errors.len(), 1);
+    let error = &response.errors[0];
+    assert_eq!(error.message, "email draft mutation failed");
+    assert_eq!(
+        error.extensions.as_ref().unwrap().get("code"),
+        Some(&async_graphql::Value::from("INTERNAL"))
+    );
+    assert!(!format!("{response:?}").contains("private repository diagnostic"));
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn ordinary_email_queries_use_the_replica_while_mutations_reload_from_primary() {
     let harness = harness();
     let id = Uuid::from_u128(44);

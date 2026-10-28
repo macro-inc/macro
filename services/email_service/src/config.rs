@@ -22,6 +22,15 @@ env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Admit new Outlook mailboxes; reconnects remain available while paused.
+    #[macro_config_default(false)]
+    pub outlook_connections_enabled: bool,
+    /// Pause Outlook discovery, incremental import, contacts and subscriptions.
+    #[macro_config_default(false)]
+    pub outlook_sync_enabled: bool,
+    /// Pause new provider writes; send outcome reconciliation always continues.
+    #[macro_config_default(false)]
+    pub outlook_writes_enabled: bool,
     /// The connection URL for the macrodb instance this application should use.
     /// For deployed applications, this is a secret stored in AWS Secrets Manager.
     pub macro_db_url: MacroDbUrl,

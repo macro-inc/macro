@@ -64,11 +64,11 @@ use channel_labels::inbound::axum_router::{
     CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
 };
 use channels::inbound::axum_router::{
-    ApiActivity, ApiAttachmentChannelReference, ApiAttachmentEntityReference,
-    ApiAttachmentGenericReference, ApiChannelAttachment, ApiChannelAttachmentsPage,
-    ApiChannelDetail, ApiChannelParticipant, ApiParticipantRole, CreateEntityMentionRequest,
-    CreateEntityMentionResponse, DeleteEntityMentionResponse, GetAttachmentReferencesResponse,
-    PostActivityRequest,
+    ApiActivity, ApiAttachmentChannelReference, ApiAttachmentCommentReference,
+    ApiAttachmentEntityReference, ApiAttachmentGenericReference, ApiChannelAttachment,
+    ApiChannelAttachmentsPage, ApiChannelDetail, ApiChannelParticipant, ApiParticipantRole,
+    CreateEntityMentionRequest, CreateEntityMentionResponse, DeleteEntityMentionResponse,
+    GetAttachmentReferencesResponse, PostActivityRequest,
 };
 use collab_surface::domain::models::SurfaceState;
 use collab_surface::inbound::axum_router::{
@@ -217,6 +217,9 @@ use utoipa::OpenApi;
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
+        calendar_events::inbound::axum_router::event_ics,
+        calendar_events::inbound::join_request_router::request_to_join,
+        calendar_events::inbound::join_request_router::list_join_requests,
         calendar_events::inbound::axum_router::list_team_out_of_office,
         calendar_events::inbound::team_router::list_team_calendar,
 
@@ -233,6 +236,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_document_by_team_slug::get_document_by_team_slug_handler,
         documents::get_document_version::handler,
         documents_hex::inbound::axum_router::create_document::create_document_handler,
+        documents_hex::inbound::axum_router::create_canvas::create_canvas_handler,
         documents_hex::inbound::axum_router::create_markdown::create_markdown_handler,
         documents_hex::inbound::axum_router::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
@@ -293,6 +297,8 @@ use utoipa::OpenApi;
 
         // messages (channels and documents)
         messages::inbound::axum_router::timeline,
+        messages::inbound::guest_chat::read,
+        messages::inbound::guest_chat::post,
         messages::inbound::axum_router::timeline_entries,
         messages::inbound::axum_router::create,
         messages::inbound::axum_router::get_message,
@@ -326,6 +332,11 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::delete_mention_handler,
         channels::inbound::axum_router::get_attachment_references_handler,
         channels::inbound::axum_router::get_activity_handler,
+        channels::inbound::axum_router::access_requests::my_access_request_handler,
+        channels::inbound::axum_router::access_requests::request_access_handler,
+        channels::inbound::axum_router::access_requests::cancel_access_request_handler,
+        channels::inbound::axum_router::access_requests::get_access_request_handler,
+        channels::inbound::axum_router::access_requests::resolve_access_request_handler,
         channels::inbound::axum_router::post_activity_handler,
 
         // harnesses
@@ -461,6 +472,7 @@ use utoipa::OpenApi;
         initiative::inbound::axum_router::update::update_initiative_handler,
         initiative::inbound::axum_router::delete::delete_initiative_handler,
         // databases
+        databases_sql::inbound::axum_router::query_databases_handler,
         databases::inbound::axum_router::list_databases_handler,
         databases::inbound::starter_router::ensure_starter_handler,
         databases::inbound::axum_router::create_database_handler,
@@ -564,6 +576,8 @@ use utoipa::OpenApi;
             CreateDocumentRequest,
             CreateDocumentResponse,
             CreateDocumentResponseData, // Create document
+            documents_hex::domain::models::CreateCanvasDocumentRequest,
+            documents_hex::domain::models::CreateCanvasDocumentResponse,
             documents_hex::domain::models::CreateMarkdownDocumentRequest,
             documents_hex::domain::models::CreateMarkdownDocumentResponse,
             documents_hex::domain::models::CreateTaskRequest,
@@ -636,6 +650,11 @@ use utoipa::OpenApi;
             calendar_events::domain::team::TeamCalendarSharing,
             calendar_events::domain::team::TeamCalendarCoverage,
             calendar_events::domain::models::CalendarMentionEvent,
+            calendar_events::domain::join_requests::CalendarJoinRequest,
+            calendar_events::domain::join_requests::CalendarJoinRequestStatus,
+            calendar_events::inbound::join_request_router::CalendarJoinRequestsResponse,
+            calendar_events::inbound::join_request_router::CalendarJoinRequestApiError,
+            calendar_events::inbound::join_request_router::CalendarJoinRequestErrorCode,
             calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
             SoupApiItem,
@@ -830,6 +849,7 @@ use utoipa::OpenApi;
             GetAttachmentReferencesResponse,
             ApiAttachmentEntityReference,
             ApiAttachmentChannelReference,
+            ApiAttachmentCommentReference,
             ApiAttachmentGenericReference,
             channels::domain::models::ChannelType,
             channels::domain::models::GetOrCreateAction,
@@ -841,6 +861,11 @@ use utoipa::OpenApi;
             channels::domain::models::GetOrCreateChannelResponse,
             channels::domain::models::PatchChannelRequest,
             channels::domain::models::AddParticipantsRequest,
+            channels::domain::access_requests::ChannelAccessRequest,
+            channels::domain::access_requests::ChannelAccessRequestStatus,
+            channels::domain::access_requests::ChannelAccessRequestState,
+            channels::domain::access_requests::ChannelAccessDecision,
+            channels::domain::access_requests::ResolveChannelAccessRequest,
             channels::domain::models::RemoveParticipantsRequest,
             channels::domain::models::GetBatchChannelPreviewRequest,
             channels::domain::models::GetBatchChannelPreviewResponse,

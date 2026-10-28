@@ -39,6 +39,10 @@ soft delete/restore/purge, and bulk upload into a project tree.
 - Add an AI tool: `src/inbound/toolset.rs` → the `ai_tools` feature gate in
   `Cargo.toml`.
 
+## Tool contracts
+
+- AI project tools omit legacy chat targets and results; agent-session lifecycle and sharing belong to `agent_session`.
+
 ## Checks
 
 - `cargo test -p projects` (`SQLX_OFFLINE` unset; requires local MacroDB).

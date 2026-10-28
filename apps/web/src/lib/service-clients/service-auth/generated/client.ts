@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentApiKey,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -17,6 +18,7 @@ import type {
   CodexLoginStart,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
+  CreatedTeamInviteLinkResponse,
   CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
@@ -25,6 +27,8 @@ import type {
   CreditCheckoutResponse,
   CursorApiKeyStatus,
   CursorModelsResponse,
+  EmailConnectionProviders,
+  EmailConnectionProvidersParams,
   EmptyResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
@@ -51,6 +55,7 @@ import type {
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
   InviteToTeamRequest,
+  JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
@@ -72,6 +77,7 @@ import type {
   PostGetNamesRequestBody,
   ProfilePictures,
   PublicGtmInviteLink,
+  PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureParams,
@@ -88,6 +94,9 @@ import type {
   StripeSessionResponse,
   SubscriptionStatus,
   Team,
+  TeamInviteLinkResponse,
+  TeamInviteLinkTeam,
+  TeamInviteLinkTokenRequest,
   TeamInvitesResponse,
   TeamMember,
   TeamWithMembers,
@@ -104,6 +113,200 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+/**
+ * @summary The agent's API key, if it has one, and whether its plan allows one.
+ */
+export type getAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type getAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getAgentApiKeyResponseSuccess = getAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type getAgentApiKeyResponseError = (
+  | getAgentApiKeyResponse401
+  | getAgentApiKeyResponse403
+  | getAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type getAgentApiKeyResponse =
+  | getAgentApiKeyResponseSuccess
+  | getAgentApiKeyResponseError;
+
+export const getGetAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const getAgentApiKey = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<getAgentApiKeyResponse> => {
+  const res = await fetch(getGetAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentApiKeyResponse;
+};
+
+/**
+ * @summary Registers or replaces the agent's API key, for its model's provider.
+Only in-memory agents on an Anthropic or OpenAI model, on a paid plan.
+ */
+export type putAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type putAgentApiKeyResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type putAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putAgentApiKeyResponseSuccess = putAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type putAgentApiKeyResponseError = (
+  | putAgentApiKeyResponse400
+  | putAgentApiKeyResponse401
+  | putAgentApiKeyResponse403
+  | putAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type putAgentApiKeyResponse =
+  | putAgentApiKeyResponseSuccess
+  | putAgentApiKeyResponseError;
+
+export const getPutAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const putAgentApiKey = async (
+  agentId: string,
+  putAgentApiKeyRequest: PutAgentApiKeyRequest,
+  options?: RequestInit
+): Promise<putAgentApiKeyResponse> => {
+  const res = await fetch(getPutAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putAgentApiKeyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentApiKeyResponse;
+};
+
+/**
+ * @summary Forgets the agent's API key. Does not revoke it at the provider; succeeds
+when there was none.
+ */
+export type deleteAgentApiKeyResponse200 = {
+  data: AgentApiKey;
+  status: 200;
+};
+
+export type deleteAgentApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type deleteAgentApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteAgentApiKeyResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteAgentApiKeyResponseSuccess = deleteAgentApiKeyResponse200 & {
+  headers: Headers;
+};
+export type deleteAgentApiKeyResponseError = (
+  | deleteAgentApiKeyResponse401
+  | deleteAgentApiKeyResponse403
+  | deleteAgentApiKeyResponse404
+) & {
+  headers: Headers;
+};
+
+export type deleteAgentApiKeyResponse =
+  | deleteAgentApiKeyResponseSuccess
+  | deleteAgentApiKeyResponseError;
+
+export const getDeleteAgentApiKeyUrl = (agentId: string) => {
+  return `/agents/${agentId}/api-key`;
+};
+
+export const deleteAgentApiKey = async (
+  agentId: string,
+  options?: RequestInit
+): Promise<deleteAgentApiKeyResponse> => {
+  const res = await fetch(getDeleteAgentApiKeyUrl(agentId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteAgentApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteAgentApiKeyResponse;
+};
 
 /**
  * @summary Turn automatic credit reloads on with the given
@@ -2216,6 +2419,68 @@ export const createInProgressLink = async (
   } as createInProgressLinkResponse;
 };
 
+export type emailConnectionProvidersResponse200 = {
+  data: EmailConnectionProviders;
+  status: 200;
+};
+
+export type emailConnectionProvidersResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type emailConnectionProvidersResponseSuccess =
+  emailConnectionProvidersResponse200 & {
+    headers: Headers;
+  };
+export type emailConnectionProvidersResponseError =
+  emailConnectionProvidersResponse400 & {
+    headers: Headers;
+  };
+
+export type emailConnectionProvidersResponse =
+  | emailConnectionProvidersResponseSuccess
+  | emailConnectionProvidersResponseError;
+
+export const getEmailConnectionProvidersUrl = (
+  params?: EmailConnectionProvidersParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/link/email/providers?${stringifiedParams}`
+    : `/link/email/providers`;
+};
+
+export const emailConnectionProviders = async (
+  params?: EmailConnectionProvidersParams,
+  options?: RequestInit
+): Promise<emailConnectionProvidersResponse> => {
+  const res = await fetch(getEmailConnectionProvidersUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: emailConnectionProvidersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as emailConnectionProvidersResponse;
+};
+
 /**
  * @summary Initiates a link for a user
  */
@@ -2596,6 +2861,11 @@ export type initOutlookLinkResponse401 = {
   status: 401;
 };
 
+export type initOutlookLinkResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
 export type initOutlookLinkResponse404 = {
   data: ErrorResponse;
   status: 404;
@@ -2617,6 +2887,7 @@ export type initOutlookLinkResponseSuccess = initOutlookLinkResponse200 & {
 export type initOutlookLinkResponseError = (
   | initOutlookLinkResponse400
   | initOutlookLinkResponse401
+  | initOutlookLinkResponse402
   | initOutlookLinkResponse404
   | initOutlookLinkResponse429
   | initOutlookLinkResponse500
@@ -3298,6 +3569,11 @@ export type oauth2CallbackResponse200 = {
   status: 200;
 };
 
+export type oauth2CallbackResponse303 = {
+  data: void;
+  status: 303;
+};
+
 export type oauth2CallbackResponse304 = {
   data: ErrorResponse;
   status: 304;
@@ -3327,6 +3603,7 @@ export type oauth2CallbackResponseSuccess = oauth2CallbackResponse200 & {
   headers: Headers;
 };
 export type oauth2CallbackResponseError = (
+  | oauth2CallbackResponse303
   | oauth2CallbackResponse304
   | oauth2CallbackResponse307
   | oauth2CallbackResponse400
@@ -4201,6 +4478,333 @@ export const inviteToTeam = async (
     status: res.status,
     headers: res.headers,
   } as inviteToTeamResponse;
+};
+
+/**
+ * @summary Gets the team's invite link. Anyone who may invite people to the team may
+see it.
+ */
+export type getTeamInviteLinkResponse200 = {
+  data: TeamInviteLinkResponse;
+  status: 200;
+};
+
+export type getTeamInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamInviteLinkResponseSuccess = getTeamInviteLinkResponse200 & {
+  headers: Headers;
+};
+export type getTeamInviteLinkResponseError = (
+  | getTeamInviteLinkResponse401
+  | getTeamInviteLinkResponse403
+  | getTeamInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamInviteLinkResponse =
+  | getTeamInviteLinkResponseSuccess
+  | getTeamInviteLinkResponseError;
+
+export const getGetTeamInviteLinkUrl = () => {
+  return `/team/invite-link`;
+};
+
+export const getTeamInviteLink = async (
+  options?: RequestInit
+): Promise<getTeamInviteLinkResponse> => {
+  const res = await fetch(getGetTeamInviteLinkUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamInviteLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamInviteLinkResponse;
+};
+
+/**
+ * @summary Creates the team's invite link, replacing any existing one. Anyone who may
+invite people may create the first link; replacing one requires a team
+admin or owner.
+ */
+export type createTeamInviteLinkResponse201 = {
+  data: CreatedTeamInviteLinkResponse;
+  status: 201;
+};
+
+export type createTeamInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createTeamInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createTeamInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamInviteLinkResponseSuccess =
+  createTeamInviteLinkResponse201 & {
+    headers: Headers;
+  };
+export type createTeamInviteLinkResponseError = (
+  | createTeamInviteLinkResponse401
+  | createTeamInviteLinkResponse403
+  | createTeamInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type createTeamInviteLinkResponse =
+  | createTeamInviteLinkResponseSuccess
+  | createTeamInviteLinkResponseError;
+
+export const getCreateTeamInviteLinkUrl = () => {
+  return `/team/invite-link`;
+};
+
+export const createTeamInviteLink = async (
+  options?: RequestInit
+): Promise<createTeamInviteLinkResponse> => {
+  const res = await fetch(getCreateTeamInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createTeamInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamInviteLinkResponse;
+};
+
+/**
+ * @summary Turns off the team's invite link. Requires a team admin or owner.
+ */
+export type deleteTeamInviteLinkResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteTeamInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteTeamInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamInviteLinkResponseSuccess =
+  deleteTeamInviteLinkResponse204 & {
+    headers: Headers;
+  };
+export type deleteTeamInviteLinkResponseError = (
+  | deleteTeamInviteLinkResponse401
+  | deleteTeamInviteLinkResponse403
+  | deleteTeamInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamInviteLinkResponse =
+  | deleteTeamInviteLinkResponseSuccess
+  | deleteTeamInviteLinkResponseError;
+
+export const getDeleteTeamInviteLinkUrl = () => {
+  return `/team/invite-link`;
+};
+
+export const deleteTeamInviteLink = async (
+  options?: RequestInit
+): Promise<deleteTeamInviteLinkResponse> => {
+  const res = await fetch(getDeleteTeamInviteLinkUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamInviteLinkResponse;
+};
+
+/**
+ * @summary Joins the team an invite link belongs to.
+ */
+export type joinTeamByInviteLinkResponse200 = {
+  data: JoinTeamByInviteLinkResponse;
+  status: 200;
+};
+
+export type joinTeamByInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type joinTeamByInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type joinTeamByInviteLinkResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type joinTeamByInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type joinTeamByInviteLinkResponseSuccess =
+  joinTeamByInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type joinTeamByInviteLinkResponseError = (
+  | joinTeamByInviteLinkResponse401
+  | joinTeamByInviteLinkResponse404
+  | joinTeamByInviteLinkResponse409
+  | joinTeamByInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type joinTeamByInviteLinkResponse =
+  | joinTeamByInviteLinkResponseSuccess
+  | joinTeamByInviteLinkResponseError;
+
+export const getJoinTeamByInviteLinkUrl = () => {
+  return `/team/invite-link/join`;
+};
+
+export const joinTeamByInviteLink = async (
+  teamInviteLinkTokenRequest: TeamInviteLinkTokenRequest,
+  options?: RequestInit
+): Promise<joinTeamByInviteLinkResponse> => {
+  const res = await fetch(getJoinTeamByInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(teamInviteLinkTokenRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: joinTeamByInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as joinTeamByInviteLinkResponse;
+};
+
+/**
+ * @summary Gets the team an invite link joins, so the user can see it before joining.
+ */
+export type getTeamByInviteLinkResponse200 = {
+  data: TeamInviteLinkTeam;
+  status: 200;
+};
+
+export type getTeamByInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamByInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamByInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamByInviteLinkResponseSuccess =
+  getTeamByInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type getTeamByInviteLinkResponseError = (
+  | getTeamByInviteLinkResponse401
+  | getTeamByInviteLinkResponse404
+  | getTeamByInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamByInviteLinkResponse =
+  | getTeamByInviteLinkResponseSuccess
+  | getTeamByInviteLinkResponseError;
+
+export const getGetTeamByInviteLinkUrl = () => {
+  return `/team/invite-link/team`;
+};
+
+export const getTeamByInviteLink = async (
+  teamInviteLinkTokenRequest: TeamInviteLinkTokenRequest,
+  options?: RequestInit
+): Promise<getTeamByInviteLinkResponse> => {
+  const res = await fetch(getGetTeamByInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(teamInviteLinkTokenRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamByInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamByInviteLinkResponse;
 };
 
 /**

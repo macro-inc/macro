@@ -705,3 +705,84 @@ async fn cancelling_a_guard_holder_releases_the_subscription_for_another_instanc
         .unwrap()
         .unwrap();
 }
+
+/// Lists the customer's subscriptions with the given statuses and returns the
+/// one a team would bill through.
+async fn subscription_for_customer(
+    pool: sqlx::PgPool,
+    statuses: &[(&str, stripe::SubscriptionStatus)],
+) -> Result<stripe::SubscriptionId, CustomerError> {
+    let server = MockServer::start().await;
+    let list = stripe::List {
+        data: statuses
+            .iter()
+            .map(|(id, status)| stripe::Subscription {
+                id: id.parse().unwrap(),
+                status: status.clone(),
+                ..subscription()
+            })
+            .collect::<Vec<_>>(),
+        has_more: false,
+        total_count: None,
+        url: "/v1/subscriptions".into(),
+    };
+    Mock::given(method("GET"))
+        .and(path("/v1/subscriptions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response(&list)))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let customer = "cus_test".parse().unwrap();
+    let found = repo(&server, pool)
+        .get_subscription_id_for_customer(&customer)
+        .await;
+    let requests = server.received_requests().await.unwrap();
+    let query = requests[0].url.query().unwrap_or_default().to_owned();
+    assert!(query.contains("customer=cus_test"), "{query}");
+    assert!(
+        !query.contains("status="),
+        "lists every uncanceled status: {query}"
+    );
+    found
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_trialing_subscription_is_linked_when_none_is_active(pool: sqlx::PgPool) {
+    let found = subscription_for_customer(
+        pool,
+        &[
+            ("sub_past_due", stripe::SubscriptionStatus::PastDue),
+            ("sub_trial", stripe::SubscriptionStatus::Trialing),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(found.as_str(), "sub_trial");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_active_subscription_wins_over_a_trial(pool: sqlx::PgPool) {
+    let found = subscription_for_customer(
+        pool,
+        &[
+            ("sub_trial", stripe::SubscriptionStatus::Trialing),
+            ("sub_active", stripe::SubscriptionStatus::Active),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(found.as_str(), "sub_active");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unpaid_or_incomplete_subscriptions_are_not_linked(pool: sqlx::PgPool) {
+    let found = subscription_for_customer(
+        pool,
+        &[
+            ("sub_unpaid", stripe::SubscriptionStatus::Unpaid),
+            ("sub_incomplete", stripe::SubscriptionStatus::Incomplete),
+        ],
+    )
+    .await;
+    assert!(matches!(found, Err(CustomerError::SubscriptionNotActive)));
+}

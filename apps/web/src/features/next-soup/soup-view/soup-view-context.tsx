@@ -795,6 +795,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   });
 
   const search = createSearchState({
+    surface: () => activeListView() ?? 'soup',
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
@@ -1139,6 +1140,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const groupQueries = createGroupedSoupQueries({
+    groupedPaging: () => itemsQuery.groupedPaging,
     initialPage: createMemo(() => {
       if (itemsSource().isPlaceholderData()) return;
 

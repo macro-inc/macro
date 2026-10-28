@@ -30,6 +30,8 @@ use super::{ElicitationOutcome, PermissionOutcome};
 #[cfg(test)]
 mod test;
 
+mod code_execution;
+
 /// Longest detail a row keeps, in characters.
 const DETAIL_MAX_CHARS: usize = 80;
 
@@ -255,26 +257,27 @@ fn slice<'a>(parts: &'a [MessagePart], segment: &Segment) -> &'a [MessagePart] {
 fn activity_rows(parts: &[MessagePart], closed: bool) -> Vec<ActivityRow> {
     parts
         .iter()
-        .filter_map(|part| match part {
+        .flat_map(|part| match part {
             MessagePart::ToolUse {
                 id,
                 name,
                 status,
                 detail,
-            } => Some(tool_row(id.0.clone(), name, *status, detail, closed)),
+            } => code_execution::rows(&id.0, name, detail, closed)
+                .unwrap_or_else(|| vec![tool_row(id.0.clone(), name, *status, detail, closed)]),
             MessagePart::Plan { entries } => {
                 let done = entries
                     .iter()
                     .filter(|entry| entry.status == PlanEntryStatus::Completed)
                     .count();
-                Some(ActivityRow {
+                vec![ActivityRow {
                     id: "plan".to_owned(),
                     label: "Updated the plan".to_owned(),
                     detail: Some(format!("{done}/{} done", entries.len())),
                     status: ActivityStatus::Completed,
-                })
+                }]
             }
-            _ => None,
+            _ => Vec::new(),
         })
         .collect()
 }

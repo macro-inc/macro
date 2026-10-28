@@ -1,4 +1,13 @@
 @import "tailwindcss";
+@import "./components/icon/system/icon-styles.css";
+
+@font-face {
+  font-family: 'Roboto Slab Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./features/onboarding/assets/roboto-slab-variable.woff2') format('woff2');
+}
 
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
 @source inline("z-{popup-viewer,viewer-definition-lookup}");
@@ -72,7 +81,8 @@
   /* Glass chrome, ported from the marketing site's hero CTA ring
      (solid-site `.home-hero-cta-bar`). The look is four things layered on a
      translucent surface: a backdrop blur, a bright inner top edge, a dark
-     inner bottom edge, and a 135deg specular rim.
+     inner bottom edge, and a diagonal specular rim. Touch surfaces use only
+     the diagonal reflections with short, dimmer opposing corners.
 
      Split in two so the size scale and the theme stay independent:
 
@@ -86,6 +96,7 @@
        inherited light-mode value, so they must never name a color or a
        strength directly — palette lives here, and only here. */
   --glass-tint: var(--color-content-1);
+  --glass-press-tint: var(--color-content-1);
   --glass-shade-color: var(--color-surface-0);
   --glass-shadow-alpha: 0.55;
   --glass-highlight-base: 6%;
@@ -93,10 +104,16 @@
   --glass-rim-strong-base: 13.5%;
   --glass-rim-soft-base: 9%;
   --glass-rim-shade-base: 0%;
-  /* Mobile chrome has a continuous rim with two diagonal reflections. */
+  --glass-rim-gap-ratio: 0;
+  --glass-desktop-outline: rgb(0 0 0 / 0.4);
+  --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
+  --glass-desktop-top-edge: rgb(255 255 255 / 0.12);
+  /* Dark desktop glass separates by its outline; light adds a cast shadow. */
+  --glass-desktop-cast-alpha: 0;
+  --elevated-control-scale: 0.4;
+  /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
   --island-rim-strong: 28%;
   --island-rim-soft: 12%;
-  --island-rim-faint: 4%;
 
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
@@ -115,6 +132,7 @@
    shared, so every size scales the same way in both themes. */
 html[data-theme-light='true'] {
   --glass-tint: white;
+  --glass-press-tint: white;
   --glass-shade-color: var(--color-content-0);
   --glass-shadow-alpha: 0.28;
   --glass-highlight-base: 55%;
@@ -123,9 +141,17 @@ html[data-theme-light='true'] {
   --glass-rim-soft-base: 30%;
   /* A faint ink rim keeps white reflections legible on pale surfaces. */
   --glass-rim-shade-base: 7%;
+  /* Keep quiet corners close to the highlight instead of exposing a dark rim. */
+  --glass-rim-gap-ratio: 0.85;
+  --glass-desktop-outline: var(--color-edge-frame);
+  --glass-desktop-inner-edge: rgb(255 255 255 / 0.6);
+  --glass-desktop-top-edge: rgb(255 255 255 / 0.9);
+  /* A fine outline alone vanishes on near-white content: keep the glass cast
+     shadow, and give controls a full 1px edge like a bordered input. */
+  --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
+  --elevated-control-scale: 1;
   --island-rim-strong: 75%;
   --island-rim-soft: 40%;
-  --island-rim-faint: 16%;
 }
 
 html[data-platform='ios'],
@@ -380,11 +406,11 @@ body.tauri-ios {
   --default-ring-width: var(--app-ring-width);
 
   /* Input tokens: the only raw colors stored by a VNext theme. */
-  --color-surface-0: oklch(0.17 0 0);
-  --color-surface-1: oklch(0.1949 0 0);
-  --color-surface-2: oklch(0.2115 0 0);
-  --color-surface-3: oklch(0.2281 0 0);
-  --color-surface-4: oklch(0.2447 0 0);
+  --color-surface-0: #0e0e0e;
+  --color-surface-1: #121212;
+  --color-surface-2: color-mix(in oklch, var(--color-surface-0) 95%, var(--color-content-0));
+  --color-surface-3: color-mix(in oklch, var(--color-surface-0) 93%, var(--color-content-0));
+  --color-surface-4: color-mix(in oklch, var(--color-surface-0) 91%, var(--color-content-0));
   --color-content-0: oklch(1 0 0);
   --color-content-1: oklch(0.83 0 0);
   --color-content-2: oklch(0.75 0 0);
@@ -423,6 +449,7 @@ body.tauri-ios {
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
   --color-control: var(--color-surface-2);
+  --color-control-raised: color-mix(in oklch, var(--color-surface-2) 95%, var(--color-content-0));
   --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
   --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
   --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
@@ -660,6 +687,7 @@ body.tauri-ios {
 
   /* Soft drop shadow for floating menus/popovers (use the `shadow-menu` utility). */
   --shadow-menu: 0 8px 24px -16px rgb(0 0 0 / 0.24), 0 2px 8px -6px rgb(0 0 0 / 0.18);
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 0.12);
 
   /* Shared label column width for side-panel two-column grids so labels line
      up across sub-panels (Details, Properties, ...). Consumers should use
@@ -721,6 +749,17 @@ html[data-theme-light='false'] {
   --color-composer: var(--color-surface-4);
 }
 
+/* Desktop floating surfaces use a close contact shadow rather than the longer
+   touch shadow. */
+html:not([data-touch-device='true']) {
+  --shadow-menu: 0 2px 6px -3px rgb(0 0 0 / 0.12), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+html[data-theme-light='true']:not([data-touch-device='true']) {
+  --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
+}
+
 /* Right-side header actions share a quiet, hover-only background. Touch header
    islands own their controls' chrome (the compose island's filled send button,
    say), so the flattening stops at an island boundary. */
@@ -740,8 +779,8 @@ html[data-theme-light='false'] {
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  /* Dark mode uses glass; light mode keeps its ring and cast shadow. */
-  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink dark-mode:glass light-mode:ring light-mode:ring-edge/70 light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+  /* Both themes share the diagonal rim; light mode keeps a soft cast shadow. */
+  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink glass light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
 
   --glass-blur: 18px;
   --glass-saturate: 1.5;
@@ -752,16 +791,15 @@ html[data-theme-light='false'] {
       var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  /* A quiet continuous edge, with broad reflections at the upper-left and
-     lower-right. Unlike desktop glass, the rim never disappears entirely
-     between the highlights. Glass owns the rim's geometry and mask. */
+  /* Keep a bright rim around most of the shape, with short soft gaps at the
+     top-right and bottom-left, including wide pills. Glass owns the mask. */
   --glass-rim-background: linear-gradient(
-    135deg,
+    to bottom right,
     color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 18%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 42%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 58%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 82%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 42%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 49%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 51%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 58%,
     color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
   );
 }
@@ -771,15 +809,17 @@ html[data-theme-light='false'] {
    length). Shape and background come from the consumer, so this composes with
    any radius — the rim inherits it — and with variants (`mobile:glass`).
 
-   Desktop glass uses the marketing site's hero-ring geometry. Consumers can
-   override --glass-rim-background to customize the rim without owning its
-   pseudo-element. The palette stays in :root; the gradient reads those tokens. */
+   Desktop surfaces use a fine dark outline, a faint inner edge, and a brighter
+   top edge with the small ambient shadow. Touch keeps its specular treatment.
+   Consumers can override the rim without owning its pseudo-element. */
 @utility glass {
   --glass-rim-background: linear-gradient(
-    135deg,
+    to bottom right,
     color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-strong-base) * var(--glass-scale)), transparent) 0%,
-    transparent 24%,
-    transparent 76%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 42%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale) * var(--glass-rim-gap-ratio)), transparent) 49%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale) * var(--glass-rim-gap-ratio)), transparent) 51%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 58%,
     color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 100%
   );
   position: relative;
@@ -793,14 +833,16 @@ html[data-theme-light='false'] {
      which Chrome ignores: the glass loses its blur in production builds while
      still looking right in dev. */
   --glass-backdrop: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  &:where(html:not([data-touch-device="true"]) *) {
-    --glass-backdrop: none;
-  }
   --glass-shadow:
     inset 0 1px 0 color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
     inset 0 -1px 0 color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
     0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
       oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+  @variant touch {
+    --glass-shadow:
+      0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
+        oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+  }
   backdrop-filter: var(--glass-backdrop);
   box-shadow: var(--glass-shadow);
 
@@ -829,29 +871,50 @@ html[data-theme-light='false'] {
   --glass-shadow-y: 14px;
   --glass-shadow-blur: 32px;
   --glass-shadow-spread: -22px;
+
+  &:where(html:not([data-touch-device="true"]) *) {
+    @apply elevation-shadow;
+    --elevation-scale: 0.6;
+    --elevation-ambient-shadow: var(--shadow-menu),
+      0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
+        oklch(0 0 0 / calc(var(--glass-desktop-cast-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+    --glass-backdrop: none;
+    --glass-rim-background: none;
+    --glass-rim-shade-base: 0%;
+    --glass-shadow: var(--shadow-elevated);
+  }
+}
+
+/* Resolve the shared material on its host so local scale changes affect every
+   edge together. Compact controls use a gentler edge in dark mode only. */
+@utility elevation-shadow {
+  --shadow-elevated:
+    0 0 0 calc(1px * var(--elevation-scale, 1)) color-mix(in srgb, var(--glass-desktop-outline) calc(100% * var(--elevation-scale, 1)), transparent),
+    inset 0 calc(1px * var(--elevation-scale, 1)) 0 color-mix(in srgb, var(--glass-desktop-top-edge) calc(100% * var(--elevation-scale, 1)), transparent),
+    inset 0 0 0 calc(1px * var(--elevation-scale, 1)) color-mix(in srgb, var(--glass-desktop-inner-edge) calc(100% * var(--elevation-scale, 1)), transparent),
+    var(--elevation-ambient-shadow, var(--shadow-menu));
+}
+
+/* One frame for elevated controls; geometry and fill stay with the component.
+   Use the not-touch variant so mobile keeps its existing surface treatment.
+   Tailwind's shadow utility composes this with focus and validation rings. */
+@utility elevated {
+  @apply elevation-shadow border-transparent shadow-(--shadow-elevated);
+  --elevation-scale: var(--elevated-control-scale);
+  --elevation-ambient-shadow: var(--shadow-control);
 }
 
 /* Strip the glass under a variant (e.g. a container query collapsing a pill
    to a bare icon, where a rim would chip it). Variant-prefixed utilities sort
    after plain ones, so `@max-2xl/u-list:glass-none` beats a plain `glass`. */
-/* The scrim behind floating dialogs (cmd+k, create, task compose, confirm).
-   Three quiet layers instead of one flat dim: a tenth of black so the page
-   steps back; a wide top-lit wash that mixes the theme accent in at
-   single-digit strength, so the dimmed page warms toward the brand instead of
-   going gray — like room light through tinted glass; and a whisper of
-   backdrop blur with a nudge of saturation, so what's behind reads as depth
-   rather than as competing detail. The accent wash lives in background-image
-   so a heavier coat (bg-modal-overlay) can replace the base color while
-   keeping the sheen. Standard backdrop-filter only — Lightning CSS adds the
-   -webkit- prefix itself (see the note in `glass`). */
+/* The scrim behind floating dialogs (cmd+k, create, task compose, confirm):
+   a tenth of black so the page steps back, and a whisper of backdrop blur with
+   a nudge of saturation so what's behind reads as depth rather than competing
+   detail. No accent tint; a heavier coat (bg-modal-overlay) replaces the base
+   color. Standard backdrop-filter only — Lightning CSS adds the -webkit-
+   prefix itself (see the note in `glass`). */
 @utility scrim-glass {
   background-color: oklch(0 0 0 / 0.1);
-  background-image: radial-gradient(
-    120% 90% at 50% -12%,
-    color-mix(in oklch, var(--color-accent) 6%, transparent) 0%,
-    color-mix(in oklch, var(--color-accent) 2%, transparent) 40%,
-    transparent 68%
-  );
   backdrop-filter: blur(2px) saturate(1.05);
 }
 
@@ -894,25 +957,40 @@ html[data-theme-light='false'] {
   }
 }
 
-/* The channel/compose input: the same glass, but the tight menu shadow
-   swaps for a wide, faint ambient one (a la the ChatGPT composer) so the
-   input reads as floating over the conversation rather than popped out of it.
-   Light themes keep the same geometry at a much lower scale so the halo
-   doesn't dominate pale surfaces. */
+/* Touch composers retain their wider ambient shadow. Desktop shares the
+   restrained frame and shadow of other floating surfaces. */
 @utility glass-input {
   @apply glass;
   --glass-shadow-y: 10px;
   --glass-shadow-blur: 40px;
   --glass-shadow-spread: -8px;
   --glass-shadow-scale: 0.5;
+
+  @variant not-touch {
+    --color-control: var(--color-control-raised);
+    --color-input: var(--color-control-raised);
+    --color-input-focus: var(--color-control-raised);
+  }
 }
 
-/* Shared menu appearance: an opaque menu fill with the glass rim, inset
-   top/bottom highlights, and cast shadow, so menus read as raised in both
-   themes. */
+/* Shared menu appearance: a fine beveled edge and compact shadow on desktop,
+   with the existing glass treatment on touch. */
 @utility menu-surface {
   @apply glass relative min-h-0 rounded-xl bg-menu text-ink;
   --color-surface: var(--color-menu);
+
+  @variant not-touch {
+    --color-control: var(--color-control-raised);
+    --color-input: var(--color-control-raised);
+    --color-input-focus: var(--color-control-raised);
+  }
+}
+
+/* Shared light-surface edge and ambient shadow from the homepage composer. */
+@utility composer-shadow {
+  box-shadow: 0 0 0 1px var(--color-drop-shadow),
+    0 2px 8px 0 var(--color-drop-shadow),
+    0 4px 80px 8px color-mix(in srgb, var(--color-drop-shadow) 60%, transparent);
 }
 
 /* Shared dialog appearance; composers retain their original glass. */
@@ -988,11 +1066,13 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   initial-value: 0px;
 }
 
-/* Persistent paint layers belong to the material, including native controls.
+/* Native iOS press paint layers belong to the material, including channel inputs.
    ::before paints the live fill, shadow and tap-centered sheen; ::after keeps
    the glass rim. No child nodes, computed-style snapshots or release cleanup.
    Keep this scope in sync with glassPress.ts's surface selection. */
-html[data-touch-device='true'] :is(
+html[data-platform='ios'][data-touch-device='true'] :is(
+  [data-glass-input],
+  [data-input] [data-composer-collapsed],
   [data-mobile-dock-island],
   [data-header-island],
   [data-slot='button-group'].glass,
@@ -1021,12 +1101,12 @@ html[data-touch-device='true'] :is(
     position: absolute;
     z-index: -1;
     pointer-events: none;
-    background-color: var(--glass-fill);
+    background-color: color-mix(in oklch, var(--glass-press-tint) calc(8% * var(--press-light)), var(--glass-fill));
     background-image: radial-gradient(
       circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
       at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
-      color-mix(in oklch, var(--glass-tint) calc(12% * var(--press-light)), transparent),
-      color-mix(in oklch, var(--glass-tint) calc(5% * var(--press-light)), transparent) 45%,
+      color-mix(in oklch, var(--glass-press-tint) calc(28% * var(--press-light)), transparent),
+      color-mix(in oklch, var(--glass-press-tint) calc(12% * var(--press-light)), transparent) 45%,
       transparent 100%
     );
     backdrop-filter: var(--glass-backdrop, none);
@@ -1059,7 +1139,7 @@ html[data-touch-device='true'] :is(
       --press-expansion: var(--press-outset);
 
       & svg {
-        scale: 1.08;
+        scale: 1.18;
       }
     }
     &[data-glass-press]::before {
@@ -1206,9 +1286,12 @@ html[data-touch-device='true'] :is(
   }
 }
 
-.skeleton-shimmer {
-  position: relative;
-  overflow: hidden;
+/* Components layer, so placement utilities such as `absolute` still win. */
+@layer components {
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
 }
 
 .skeleton-shimmer::after {
@@ -1456,7 +1539,8 @@ a {
 /* Shared text-field styling so inputs look the same across every settings tab.
    Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
 @utility settings-input {
-  @apply h-9 px-3 rounded-full border border-edge-frame bg-control text-base text-ink outline-none transition-colors duration-120 motion-reduce:transition-none;
+  /* Matches a md `Input` on desktop; touch keeps its taller field. */
+  @apply h-9 not-touch:h-8 px-3 rounded-full border border-edge-frame bg-control not-touch:elevated text-base text-ink outline-none transition-colors duration-120 motion-reduce:transition-none;
   &:is(textarea) {
     @apply rounded-xl;
   }
@@ -1718,6 +1802,7 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
 
 /* Immediate touch feedback for mobile soup entity rows */
 [data-soup-entity].touch-highlight [data-swipe-content],
+[data-soup-entity].touch-highlight [data-channel-conversation],
 [data-soup-entity].touch-highlight .soup-list-entity {
   background-color: var(--color-hover);
   transition: none;
@@ -1728,11 +1813,10 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
 }
 
 input[type="time"]::-webkit-calendar-picker-indicator {
-  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
-  -webkit-mask: var(--icon) no-repeat;
+  -webkit-mask: url("./components/icon/system/regular/clock.svg") no-repeat;
   background-color: currentColor;
   -webkit-mask-size: 100% 100%;
-  mask: var(--icon) no-repeat;
+  mask: url("./components/icon/system/regular/clock.svg") no-repeat;
   background-image: none;
   mask-size: 100% 100%;
   color: inherit;

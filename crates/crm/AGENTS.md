@@ -57,6 +57,12 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- Company names/logos live in the global `crm_domain_directory`. Only the
+  email pubsub workers carry a real `CompanyMetadataResolver`; every other
+  binary uses `NoOpCompanyMetadataResolver`, which leaves a pending entry
+  (NULL `enriched_at`) that `CrmServiceImpl::enrich_pending_domains` resolves
+  later with bounded retries. Never store an empty entry for a domain no
+  resolver answered for: resolved entries are permanent.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

@@ -8,7 +8,10 @@ import {
 } from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
-import { safeConferenceUrl } from '@app/features/calendar/utils/conference-link';
+import {
+  conferenceJoinUrl,
+  safeConferenceUrl,
+} from '@app/features/calendar/utils/conference-link';
 import {
   calendarMacroCallUrl,
   macroCallUrl,
@@ -23,19 +26,18 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search.svg';
 import type { EntityData, WithSearch } from '@entity';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import QuotesIcon from '@icon/system/regular/quotes.svg';
+import RepeatIcon from '@icon/system/regular/repeat.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import QuotesIcon from '@phosphor/quotes.svg';
-import RepeatIcon from '@phosphor/repeat.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
-import XIcon from '@phosphor/x.svg';
 import {
   useCalendarMentionPreviewQuery,
   useCalendarSearchPreviewsQuery,
 } from '@queries/calendar/mention-preview';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import type { EntityFilters } from '@service-search/generated/models';
 import { Button, cn, EmptyStatePanel, Layer } from '@ui';
 import {
   createEffect,
@@ -47,6 +49,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { CALENDAR_ONLY_SEARCH_FILTERS } from '../calendar-only-search-filters';
 import { createCalendarRange } from '../calendar-range';
 import {
   eventTimeFromOccurrenceKey,
@@ -62,25 +65,6 @@ type CalendarSearchResult = WithSearch<
 >;
 type EventTime = NonNullable<CalendarSearchResult['time']>;
 
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-
-/**
- * Restrict unified search to calendar events: every other searchable type has
- * a NIL id in its primary field, which the search service reads as "exclude
- * this type", while calendar events carry no id filter and so are the only
- * matches. This mirrors what the Search view's Calendar type produces.
- */
-const CALENDAR_ONLY_FILTERS: EntityFilters = {
-  document_filters: { document_ids: [NIL_UUID] },
-  email_filters: { email_thread_ids: [NIL_UUID] },
-  channel_filters: { channel_ids: [NIL_UUID] },
-  channel_thread_filters: { thread_ids: [NIL_UUID] },
-  chat_filters: { chat_ids: [NIL_UUID] },
-  project_filters: { project_ids: [NIL_UUID] },
-  call_filters: { call_ids: [NIL_UUID] },
-  foreign_entity_filters: { ids: [NIL_UUID] },
-};
-
 const searchEventKey = (eventId: string, occurrenceKey?: string) =>
   JSON.stringify([eventId, occurrenceKey ?? null]);
 
@@ -92,6 +76,7 @@ type CalendarMeetingLink = {
 
 type CalendarSearchEventDetails = {
   conferenceUrl?: string;
+  accountEmail?: string;
   description?: string;
   location?: string;
 };
@@ -246,6 +231,7 @@ function CalendarEventPreviewContent(props: {
           </span>
           <Show when={props.event.isRecurring}>
             <RepeatIcon
+              aria-hidden={false}
               class="size-3 shrink-0 text-ink-muted"
               aria-label="Repeats"
             />
@@ -386,7 +372,7 @@ function CalendarSearchControl(props: {
           match_type: selected.matchType,
           query: debouncedQuery(),
           filters: {
-            ...CALENDAR_ONLY_FILTERS,
+            ...CALENDAR_ONLY_SEARCH_FILTERS,
             calendar_event_filters:
               selected.statuses.length ||
               selected.organizers.length ||
@@ -478,6 +464,7 @@ function CalendarSearchControl(props: {
       });
       byOccurrence.set(searchEventKey(event.eventId, event.occurrenceKey), {
         conferenceUrl: event.conferenceUrl,
+        accountEmail: event.calendar.emailAddress,
         description: event.description,
         location: event.location,
       });
@@ -685,21 +672,24 @@ function CalendarSearchControl(props: {
           </Popover.Trigger>
         }
       >
-        <div class="relative h-10 min-w-0 w-full flex-1">
-          <Popover.Anchor as="div" class="h-10 w-full">
+        <div class="relative h-[var(--view-search-height,2.5rem)] min-w-0 w-full flex-1">
+          <Popover.Anchor
+            as="div"
+            class="h-[var(--view-search-height,2.5rem)] w-full"
+          >
             <Show when={props.expanded === false}>
               <Button
                 ref={searchButton}
                 type="button"
-                variant="ghost"
-                size="icon-lg"
+                variant="outline"
+                size="icon-md"
                 label="Search events"
                 hotkey={TOKENS.calendar.search}
                 aria-expanded="false"
                 aria-haspopup="dialog"
                 onClick={props.onExpand}
               >
-                <SearchIcon class="size-5" />
+                <SearchIcon class="size-4" />
               </Button>
             </Show>
             {/* Keep the input mounted while its width animates; inert removes collapsed controls from keyboard navigation. */}
@@ -782,7 +772,7 @@ function CalendarSearchControl(props: {
           >
             <div
               class={cn(
-                'max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl glass bg-menu-glass text-ink transition-[translate] duration-200 ease-out motion-reduce:transition-none',
+                'menu-surface max-w-[calc(100vw-2rem)] overflow-hidden transition-[translate] duration-200 ease-out motion-reduce:transition-none',
                 props.inline ? 'w-[var(--kb-popper-anchor-width)]' : 'w-80'
               )}
               classList={{
@@ -922,7 +912,13 @@ function CalendarSearchControl(props: {
                                             : 'bg-hover text-ink not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:text-ink'
                                         )}
                                         onClick={() =>
-                                          openExternalUrl(link().url)
+                                          openExternalUrl(
+                                            conferenceJoinUrl(
+                                              link().url,
+                                              detailsForEvent(event)
+                                                ?.accountEmail
+                                            )
+                                          )
                                         }
                                       >
                                         <VideoCameraIcon class="size-3.5" />

@@ -16,8 +16,8 @@ import {
 import type { HotkeyGroup } from '@core/hotkey/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import type { NotificationSource } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
   type NotificationEntityRef,
   toNotificationEntityRef,

@@ -201,7 +201,9 @@ export function createGraphqlRowSource({
         .with({ type: 'groupSoup' }, () =>
           errAsync(fetchFailure('a grouped query is read as bins, not pages'))
         )
-        .exhaustive(),
+        .exhaustive(() =>
+          errAsync(fetchFailure('an unknown query has no pages'))
+        ),
     bins: (query, step) =>
       match(query)
         .returnType<ResultAsync<Bin[], DatabaseSqlFetchFailure>>()
@@ -211,7 +213,9 @@ export function createGraphqlRowSource({
         .with({ type: P.union('soup', 'people') }, () =>
           errAsync(fetchFailure('only a grouped query has bins'))
         )
-        .exhaustive(),
+        .exhaustive(() =>
+          errAsync(fetchFailure('only a grouped query has bins'))
+        ),
   };
 }
 
@@ -288,10 +292,15 @@ function propertiesExpression(propf: Propf): GraphqlFilterPropertiesExpr {
         value: match(v)
           .with({ so: P.string }, ({ so }) => ({ selectOption: so }))
           .with({ er: P.string }, ({ er }) => ({ entityRef: er }))
-          .exhaustive(),
+          .exhaustive(() => ({ entityRef: NIL_UUID })),
       },
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      literal: {
+        propertyDefinitionId: NIL_UUID,
+        value: { entityRef: NIL_UUID },
+      },
+    }));
 }
 
 /** A balanced OR keeps a long list inside the filter depth limit. */
@@ -474,7 +483,7 @@ function cell(
 ): Cell | undefined {
   if (!value) return undefined;
   return match(value)
-    .returnType<Cell>()
+    .returnType<Cell | undefined>()
     .with({ __typename: 'GraphqlBooleanPropertyValue' }, ({ boolValue }) => ({
       type: 'bool',
       value: boolValue,
@@ -509,7 +518,7 @@ function cell(
       type: 'text',
       value: urls.join(' '),
     }))
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function groupBins(

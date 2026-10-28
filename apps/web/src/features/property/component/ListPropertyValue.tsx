@@ -1,4 +1,4 @@
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyType } from '@property/types';

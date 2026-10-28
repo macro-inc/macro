@@ -84,6 +84,11 @@ fn rewrites_embedded_asset_uris() {
         rewrite_uri("https://tauri.localhost/app/login"),
         "https://tauri.localhost/login"
     );
+    #[cfg(feature = "cef")]
+    assert_eq!(
+        rewrite_uri("http://tauri.localhost/app/login"),
+        "http://tauri.localhost/login"
+    );
     assert_eq!(
         rewrite_uri("tauri://localhost/app?cache=1"),
         "tauri://localhost/?cache=1"

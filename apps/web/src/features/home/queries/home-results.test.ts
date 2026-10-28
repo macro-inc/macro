@@ -84,6 +84,25 @@ describe('home sort method per tab', () => {
   });
 });
 
+describe('home channel thread scope', () => {
+  const NIL = '00000000-0000-0000-0000-000000000000';
+
+  it("scopes Signal's channel threads to the viewer", () => {
+    const body = JSON.stringify(
+      buildHomeQuery({ ...context, tab: 'signal' }).body.cthf
+    );
+    expect(body).toContain('{"Participant":"macro|alice@example.com"}');
+  });
+
+  it('matches no channel threads before the viewer is known', () => {
+    const body = JSON.stringify(
+      buildHomeQuery({ ...context, userId: undefined, tab: 'signal' }).body.cthf
+    );
+    expect(body).not.toContain('"Participant"');
+    expect(body).toContain(`{"ThreadId":"${NIL}"}`);
+  });
+});
+
 describe('home date buckets', () => {
   it('buckets a notified row by its notification on the notification tabs', () => {
     const signal = { tab: 'signal' as const, capabilities };

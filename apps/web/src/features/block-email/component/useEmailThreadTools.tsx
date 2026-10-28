@@ -26,16 +26,16 @@ import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
-import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import ProhibitIcon from '@phosphor/prohibit.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import NoiseIcon from '@phosphor/waveform.svg';
-import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
+import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import ProhibitIcon from '@icon/system/regular/prohibit.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 
@@ -112,7 +112,10 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       return;
     }
     if (props.listNavigation) {
-      props.listNavigation.markDone(emailCtx.archiveThread);
+      fireAndForget(
+        props.listNavigation.markDone(emailCtx.archiveThread),
+        'email-thread-tools'
+      );
       return;
     }
     // Prefer the active Mark done command so it drives soup navigation and
@@ -261,6 +264,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       icon: TrashIcon,
       action: trashThread,
       condition: isOwnThread,
+      hotkeyToken: TOKENS.email.trash,
     },
     {
       group: 'sender',
@@ -308,6 +312,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   ];
 
   return {
+    openShare,
     isInvite,
     emailEntity,
     permissions: () => getPermissions(emailCtx.thread()?.access_level),

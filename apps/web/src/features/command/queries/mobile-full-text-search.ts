@@ -11,7 +11,8 @@ export function createMobileFullTextSearch(
   text: Accessor<string>,
   category: Accessor<EntitySearchCategory>
 ) {
-  return createSearchState({
+  const search = createSearchState({
+    surface: () => 'mobile_search',
     text,
     disableLocalSearch: () => true,
     enabled: () => category() !== 'projects' && !!text().trim(),
@@ -25,4 +26,10 @@ export function createMobileFullTextSearch(
         search
       ),
   });
+  return {
+    ...search,
+    isSettling: () =>
+      search.isSettling() ||
+      (search.searchQuery.isEnabled && search.searchQuery.isPending),
+  };
 }

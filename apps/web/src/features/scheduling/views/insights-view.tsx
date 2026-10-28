@@ -12,11 +12,13 @@ export function InsightsView(props: {
   members: SchedulingMember[];
   timeZone: string;
   scopeSelector?: JSX.Element;
+  headerTitle?: JSX.Element;
 }) {
   const state = createInsightsState(props.source, props.timeZone);
   onMount(() => fireAndForget(state.load(), 'scheduling'));
   return (
     <InsightsPanel
+      headerTitle={props.headerTitle}
       scopeSelector={props.scopeSelector}
       bookings={state.bookings()}
       events={props.events}

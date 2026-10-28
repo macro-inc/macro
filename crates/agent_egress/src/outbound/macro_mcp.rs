@@ -254,6 +254,17 @@ impl MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
     ) -> Result<String, EgressError> {
+        self.mint_for_agent(owner, lifetime_seconds, None).await
+    }
+
+    /// Mint an owner credential with signed agent attribution for SDK messages.
+    #[tracing::instrument(skip_all, err, fields(?agent_id))]
+    pub async fn mint_for_agent(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+        agent_id: Option<macro_uuid::Uuid>,
+    ) -> Result<String, EgressError> {
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
                 "invalid token lifetime"
@@ -293,6 +304,7 @@ impl MacroApiTokenSigner {
             issuer: self.issuer.clone(),
             private_key: self.private_key.clone(),
             expiry_seconds: lifetime_seconds,
+            agent_id,
         })
         .map_err(|error| {
             EgressError::Internal(rootcause::report!(

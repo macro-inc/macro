@@ -1,5 +1,5 @@
 ---
-title: "CRM"
+title: "Customers"
 icon: "building"
 description: "Contact and company records built automatically from your team's email."
 ---
@@ -42,18 +42,12 @@ Every company and contact record has its own discussion thread. The CRM discussi
 
 ### Board and list views
 
-The board is the default view when you open **Customers**: every company appears as a card in the column for its current stage, and you drag a card to a new column to move it through your pipeline. Each column header is a stage:
+On desktop, the board is the default view when you open **Customers** (<kbd>g</kbd> \+ <kbd>o</kbd>): every company appears as a card in the column for its current stage, and you drag a card to a new column to move it through your pipeline. Each column header is a stage:
 
 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '1.625rem', margin: '1rem 0' }}>
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#9ca3af" size={10} /> <strong>Lead</strong></div>
 
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#4ade80" size={10} /> <strong>Qualified</strong></div>
-
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#a78bfa" size={10} /> <strong>Demo</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#fbbf24" size={10} /> <strong>Trial</strong></div>
-
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#fb923c" size={10} /> <strong>Negotiation</strong></div>
 
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="solid" color="#34d399" size={10} /> <strong>Customer</strong></div>
 
@@ -61,6 +55,8 @@ The board is the default view when you open **Customers**: every company appears
 
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle" iconType="regular" color="#9ca3af" size={10} /> <span><strong>No stage</strong>, for companies that haven't been placed in your pipeline yet</span></div>
 </div>
+
+Older records may still carry the retired **Qualified**, **Trial**, or **Negotiation** stages; you can still filter by them.
 
 While records create themselves, stages are all manual: Macro doesn't yet know where a company lies in your pipeline and relies on you to distinguish your leads from your customers by setting each record's stage. New records start in **No stage** until someone on your team places them.
 

@@ -3,8 +3,8 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import MacroLogo from '@core/component/MacroLogo';
 import { isMobile } from '@core/mobile/isMobile';
 import LogoIcon from '@icon/macro-logo.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CloseIcon from '@phosphor/x.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { Button, Dialog, Hotkey } from '@ui';
 import { type Component, createSignal, Match, Show, Switch } from 'solid-js';
@@ -322,9 +322,9 @@ export function InteractiveOnboardingModal(
         e.preventDefault();
         globalSplitManager()?.returnFocus();
       }}
-      class="w-[min(1600px,calc(100vw-32px))] h-[min(900px,calc(100vh-32px))] max-w-none rounded-xl bg-surface shadow-2xl"
+      class="w-[min(1600px,calc(100vw-32px))] h-[min(900px,calc(100vh-32px))] max-w-none"
     >
-      <div class="relative size-full overflow-hidden rounded-xl flex flex-col">
+      <div class="relative size-full overflow-hidden rounded-[inherit] flex flex-col">
         <Show when={open()}>
           <InteractiveOnboarding
             onDismiss={() => setOpen(false)}

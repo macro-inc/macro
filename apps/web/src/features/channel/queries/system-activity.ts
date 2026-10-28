@@ -29,6 +29,13 @@ export function decodeSystemActivity(event: TimelineActivity): SystemActivity {
   ) {
     action = { kind: 'call_ended', durationMs: fields.duration_ms };
   }
+  if (
+    event.action === 'access_requested' &&
+    'request_id' in fields &&
+    typeof fields.request_id === 'string'
+  ) {
+    action = { kind: 'access_requested', requestId: fields.request_id };
+  }
   return {
     id: event.id,
     actorId: event.actor_id,

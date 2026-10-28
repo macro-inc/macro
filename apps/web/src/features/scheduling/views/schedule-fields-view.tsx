@@ -1,11 +1,11 @@
-import ArrowsClockwise from '@phosphor/arrows-clockwise.svg';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import ArrowLeft from '@phosphor/caret-left.svg';
-import ArrowRight from '@phosphor/caret-right.svg';
-import Globe from '@phosphor/globe.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowsClockwise from '@icon/system/regular/arrows-clockwise.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import ArrowLeft from '@icon/system/regular/caret-left.svg';
+import ArrowRight from '@icon/system/regular/caret-right.svg';
+import Globe from '@icon/system/regular/globe.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, Tabs } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { getDefaultCalendarTimeFormat } from '../../calendar/utils/time-format';
@@ -204,14 +204,12 @@ export function ScheduleFields(props: {
           </div>
           <Tabs
             aria-label="Time format"
-            list={[
+            options={[
               { value: '12h', label: '12h' },
               { value: '24h', label: '24h' },
             ]}
             value={timeFormat()}
-            onChange={(value) => {
-              if (value === '12h' || value === '24h') setTimeFormat(value);
-            }}
+            onChange={setTimeFormat}
           />
         </div>
       </header>

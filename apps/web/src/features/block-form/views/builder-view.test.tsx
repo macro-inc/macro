@@ -712,10 +712,10 @@ describe('BuilderView', () => {
   it('says respondents still see the last valid version while the layout can’t be published', () => {
     const { shared } = mount();
     shared.setPublicationError(
-      'Screener “Eligibility” checks a question asked after it.'
+      'Gate “Eligibility” checks a question asked after it.'
     );
     expect(screen.getByRole('alert').textContent).toBe(
-      'Respondents still see the last valid version of this form. Screener “Eligibility” checks a question asked after it.'
+      'Respondents still see the last valid version of this form. Gate “Eligibility” checks a question asked after it.'
     );
     shared.setPublicationError(undefined);
     expect(screen.queryByRole('alert')).toBeNull();

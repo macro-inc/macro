@@ -28,23 +28,23 @@ import {
 } from '@entity';
 import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg?component-solid';
+import AtIcon from '@icon/system/regular/at.svg?component-solid';
+import BellSimpleIcon from '@icon/system/regular/bell-simple.svg?component-solid';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg?component-solid';
+import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
+import ChatTextIcon from '@icon/system/regular/chat-text.svg?component-solid';
+import FilesIcon from '@icon/system/regular/files.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
+import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
+import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
+import SmileyIcon from '@icon/system/regular/smiley.svg?component-solid';
+import AgentIcon from '@icon/system/regular/sparkle.svg?component-solid';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
 import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
-import FilesIcon from '@phosphor/files.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
-import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
-import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
-import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
-import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
-import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
-import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
-import SmileyIcon from '@phosphor-icons/core/regular/smiley.svg?component-solid';
-import AgentIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
-import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -253,6 +253,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'entity_access_requested',
       'entity_access_granted',
       'channel_invite',
+      'channel_access_requested',
       'invite_to_team',
       () => () => <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     )
@@ -269,6 +270,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('calendar_event_join_request', () => () => (
+      <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with(
       'github_pr_status_changed',
@@ -296,10 +300,12 @@ function ActionBubble(props: { tag: NotificationTag }) {
   );
 }
 
-function GithubStatusIcon(props: { status?: string }) {
+function GithubStatusIcon(props: { status?: string; draft?: boolean }) {
+  const isDraft = () => props.draft === true && props.status === 'open';
   const statusClass = () => {
     if (props.status === 'merged') return 'text-note';
     if (props.status === 'closed') return 'text-failure';
+    if (isDraft()) return 'text-ink-muted';
     if (props.status === 'open') return 'text-success';
     return undefined;
   };
@@ -587,6 +593,7 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
  */
 function CardClampedMarkdown(props: {
   text?: string;
+  inert?: boolean;
   /** Inline run rendered ahead of the text (e.g. a sender label or
    * attachment paperclip); wraps and clamps as part of the same lines. */
   prefix?: JSX.Element;
@@ -600,6 +607,7 @@ function CardClampedMarkdown(props: {
             markdown={value()}
             singleLine
             theme={inlineWrappingMarkdownTheme}
+            inert={props.inert}
           />
         )}
       </Show>
@@ -706,6 +714,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       title={text().title}
     >
       <CardClampedMarkdown
+        inert
         text={text().content}
         prefix={
           <>
@@ -751,7 +760,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
-      <CardClampedMarkdown text={text().content} />
+      <CardClampedMarkdown inert text={text().content} />
     </BaseCard>
   );
 }
@@ -904,6 +913,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                       <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
                     </Show>
                     <StaticMarkdown
+                      inert
                       markdown={context()}
                       singleLine
                       theme={unifiedListMarkdownTheme}
@@ -929,6 +939,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
                       <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
                     </Show>
                     <StaticMarkdown
+                      inert
                       markdown={value()}
                       singleLine
                       theme={
@@ -1299,6 +1310,11 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
     return props.item.entity.metadata.status;
   });
 
+  const isDraft = createMemo(() => {
+    if (!isGithubPrEntity(props.item.entity)) return false;
+    return props.item.entity.metadata.draft === true;
+  });
+
   const text = createMemo(() => {
     const entity = props.item.entity;
 
@@ -1355,7 +1371,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
             />
           }
         >
-          <GithubStatusIcon status={status()} />
+          <GithubStatusIcon status={status()} draft={isDraft()} />
         </Show>
       }
       title={text().title}
@@ -1468,11 +1484,21 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 }
 
 /**
- * A calendar event row exists because its alarm fired: the event title leads,
- * the occurrence's date sits on the second line, and its local time on the
- * third — three lines tall, matching the other inbox layouts.
+ * A calendar event row exists because its alarm fired or someone asked to
+ * join it: the event title leads, then who asked when they did, then the
+ * occurrence's date, and its local time on an alarm — three lines tall,
+ * matching the other inbox layouts.
  */
 export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
+  const senderName = createSenderDisplayName(
+    () => props.item.notification?.sender_id ?? undefined
+  );
+  const joinRequest = () =>
+    props.item.notification?.notification_metadata.tag ===
+    'calendar_event_join_request'
+      ? buildActionLabel({ sender: senderName(), action: 'asked to join' })
+      : undefined;
+
   const occurrence = () => {
     const meta = props.item.notification?.notification_metadata;
     if (meta?.tag === 'calendar_event_reminder') {
@@ -1507,13 +1533,19 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
       icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
       title={props.item.entity.name || '(No title)'}
     >
+      <Show when={joinRequest()}>
+        {(value) => (
+          <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
+        )}
+      </Show>
+
       <Show when={datePreview()}>
         {(value) => (
           <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
         )}
       </Show>
 
-      <Show when={timePreview()}>
+      <Show when={!joinRequest() && timePreview()}>
         {(value) => (
           <InboxCard.Content class="truncate">{value()}</InboxCard.Content>
         )}

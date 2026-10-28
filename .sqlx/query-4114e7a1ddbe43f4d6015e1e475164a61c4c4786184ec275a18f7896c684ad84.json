@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_usage\n            SET price_per_million_in = e.price_per_million_in,\n                price_per_million_out = e.price_per_million_out,\n                price_per_million_cache_read = e.price_per_million_cache_read,\n                price_per_million_cache_write = e.price_per_million_cache_write,\n                price_per_audio_minute = e.price_per_audio_minute,\n                total = CASE\n                    WHEN (ai_usage.audio_seconds IS NULL) <> (e.price_per_audio_minute IS NULL) THEN NULL\n                    WHEN ai_usage.cache_read_input_tokens > 0 AND e.price_per_million_cache_read IS NULL THEN NULL\n                    WHEN ai_usage.cache_write_input_tokens > 0 AND e.price_per_million_cache_write IS NULL THEN NULL\n                    ELSE (ai_usage.input_tokens::real / 1000000.0::real) * e.price_per_million_in\n                      + (ai_usage.output_tokens::real / 1000000.0::real) * e.price_per_million_out\n                      + (ai_usage.cache_read_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_read, 0)\n                      + (ai_usage.cache_write_input_tokens::real / 1000000.0::real) * COALESCE(e.price_per_million_cache_write, 0)\n                      + (COALESCE(ai_usage.audio_seconds, 0) / 60.0 * COALESCE(e.price_per_audio_minute, 0))::real\n                END\n            FROM ai_effective_pricing e\n            WHERE ai_usage.model = $1 AND e.model = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4114e7a1ddbe43f4d6015e1e475164a61c4c4786184ec275a18f7896c684ad84"
+}

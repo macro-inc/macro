@@ -22,8 +22,9 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import { useItemRawName } from '@queries/preview';
 import { Button } from '@ui';
 import { createComputed, type JSX, Match, Show, Switch } from 'solid-js';
 import { FileDetailLoadGate } from '../components/FileDetail';
@@ -51,6 +52,7 @@ export function MarkdownDetailBodyState(props: {
       <Switch
         fallback={
           <SpinnerIcon
+            aria-hidden={false}
             aria-label={`Loading ${entityLabel()}`}
             class="size-5 animate-spin"
           />
@@ -85,6 +87,14 @@ function MarkdownDetailContent(props: {
   const state = createMarkdownDocumentState();
   createMarkdownRouteNavigation(() => props.documentId, state.params.navigate);
 
+  // Subscribe to live name updates so the title updates when another person renames it.
+  const liveName = useItemRawName(() => ({
+    id: props.documentId,
+    type: 'document',
+  }));
+  const persistedName = () =>
+    liveName() ?? props.data.metadata.documentName ?? '';
+
   // Mention chips and notifications aim an open document at a comment or node
   // through its block handle; without one the click only activates the view.
   createComputed(() => {
@@ -101,7 +111,7 @@ function MarkdownDetailContent(props: {
       state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}
-      persistedName={props.data.metadata.documentName}
+      persistedName={persistedName()}
       fallbackName={props.fallbackName}
     >
       <ModalsProvider>
@@ -141,6 +151,7 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="md"
       label={props.kind === 'task' ? 'task' : 'document'}
       load={loadMarkdownDocument}
     >

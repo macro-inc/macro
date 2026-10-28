@@ -1,7 +1,7 @@
+import ImageIcon from '@icon/system/regular/image.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Popover } from '@kobalte/core/popover';
-import ImageIcon from '@phosphor/image.svg';
-import LinkIcon from '@phosphor/link.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { createSignal, ErrorBoundary, Show, Suspense } from 'solid-js';
 import { CanvasInsertRadialMenu } from '../components/insert-radial-menu';

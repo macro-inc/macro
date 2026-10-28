@@ -67,6 +67,7 @@ fn posted(
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
         content: content.into(),
         created_at: at(minute),

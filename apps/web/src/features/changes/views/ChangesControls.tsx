@@ -4,6 +4,7 @@
  * Agent-only actions require the explicit note-sending capability.
  */
 
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { createSignal, Show } from 'solid-js';
 import { ChangesReadyCard } from '../components/ChangesReadyCard';
 import { ChangesToggleButton } from '../components/ChangesToggleButton';
@@ -16,10 +17,12 @@ export function ChangesToggle() {
   const { available, layout } = controller;
   return (
     <Show when={available()}>
-      <ChangesToggleButton
-        open={layout.changesVisible()}
-        onToggle={layout.toggle}
-      />
+      <HeaderActionGroup label="Changes view">
+        <ChangesToggleButton
+          open={layout.changesVisible()}
+          onToggle={layout.toggle}
+        />
+      </HeaderActionGroup>
     </Show>
   );
 }

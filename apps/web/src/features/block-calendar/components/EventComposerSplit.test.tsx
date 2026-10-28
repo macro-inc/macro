@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
   useQuickCallsFlag: () => () => mocks.flag(),
 }));
+vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
+  useCalendarGuestInvitesFlag: () => () => false,
+}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
     handle: { close: vi.fn(), setDisplayName: vi.fn() },
@@ -18,6 +21,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 }));
 vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [() => {}],
+}));
+vi.mock('@app/features/calendar/hooks/use-synced-calendar-event', () => ({
+  useSyncedCalendarEvent: () => () => undefined,
 }));
 vi.mock('@app/features/calendar/hooks/use-event-editor', () => ({
   useEventEditor: () => ({

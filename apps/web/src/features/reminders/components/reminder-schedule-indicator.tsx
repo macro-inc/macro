@@ -1,5 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ClockIcon from '@phosphor/clock.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import { Button, Tooltip } from '@ui';
 import { createSignal } from 'solid-js';
 

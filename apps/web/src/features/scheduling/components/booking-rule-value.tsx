@@ -1,5 +1,5 @@
-import { Button, Select } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Select, Tabs } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
 import type { BookingValueUnit } from '../core/booking-units';
 import { BookingValueInput } from './booking-value-input';
 
@@ -16,46 +16,24 @@ export function BookingPresets(props: {
   onCustom: () => void;
 }) {
   return (
-    <div
-      role="group"
+    <Tabs
       aria-label={`${props.label} presets`}
-      class={`flex flex-wrap ${props.compact ? 'gap-1' : 'gap-1.5'}`}
-    >
-      <For each={props.presets}>
-        {(preset) => (
-          <Button
-            type="button"
-            size={props.compact ? 'sm' : 'md'}
-            variant="ghost"
-            disabled={props.disabled}
-            aria-pressed={!props.custom && props.value === preset.value}
-            class={`rounded-full border ${props.compact ? 'h-6 px-2 text-[11px]' : 'px-4'} ${
-              !props.custom && props.value === preset.value
-                ? 'border-accent/40 bg-accent/10 text-accent not-touch:not-disabled:hover:text-accent'
-                : 'border-edge-muted text-ink-muted not-touch:not-disabled:hover:text-ink-muted'
-            }`}
-            onClick={() => props.onChange(preset.value)}
-          >
-            {preset.label}
-          </Button>
-        )}
-      </For>
-      <Button
-        type="button"
-        size={props.compact ? 'sm' : 'md'}
-        variant="ghost"
-        disabled={props.disabled}
-        aria-pressed={props.custom}
-        class={`rounded-full border ${props.compact ? 'h-6 px-2 text-[11px]' : 'px-4'} ${
-          props.custom
-            ? 'border-accent/40 bg-accent/10 text-accent not-touch:not-disabled:hover:text-accent'
-            : 'border-edge-muted text-ink-muted not-touch:not-disabled:hover:text-ink-muted'
-        }`}
-        onClick={props.onCustom}
-      >
-        Custom
-      </Button>
-    </div>
+      size={props.compact ? 'sm' : 'md'}
+      wrap
+      disabled={props.disabled}
+      options={[
+        ...props.presets.map((preset) => ({
+          value: String(preset.value),
+          label: preset.label,
+        })),
+        { value: 'custom', label: 'Custom' },
+      ]}
+      value={props.custom ? 'custom' : String(props.value)}
+      onChange={(value) => {
+        if (value === 'custom') props.onCustom();
+        else props.onChange(Number(value));
+      }}
+    />
   );
 }
 

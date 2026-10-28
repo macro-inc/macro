@@ -1,4 +1,5 @@
 pub mod activity;
+pub(crate) mod cloudfront;
 pub mod conn_gateway;
 #[cfg(feature = "delete_document_worker")]
 pub mod delete_document_worker;

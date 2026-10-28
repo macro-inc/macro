@@ -3,8 +3,8 @@ import { SidePanel } from '@components/app/side-panel';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { enableTaskDuplicates } from '@core/constant/featureFlags';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import { queryReadyGate } from '@queries/gate';
 import {
   useDismissTaskDuplicatesMutation,

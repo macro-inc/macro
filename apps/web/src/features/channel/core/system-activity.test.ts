@@ -38,6 +38,13 @@ it('describes completed calls, renames, and self membership changes', () => {
       'Teo'
     )
   ).toBe('joined the channel');
+  expect(
+    decodeSystemActivity({
+      ...event,
+      action: 'access_requested',
+      payload: { request_id: 'request-1' },
+    }).action
+  ).toEqual({ kind: 'access_requested', requestId: 'request-1' });
 });
 
 it('formats durations and tolerates malformed future activity', () => {

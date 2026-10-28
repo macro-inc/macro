@@ -76,19 +76,8 @@ jobs:
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
         bun-version: '1.3.13'
-    - id: android-version
-      name: Require an Android version bump for native changes
-      run: |
-        set -euo pipefail
-        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
-        echo "Comparing the merge result with its base ${base:0:10}"
-        git fetch -q --depth=1 origin "$base"
-        bun scripts/android-version-check.mjs "$base"
-      shell: bash
-      working-directory: apps/web
     - id: labels
       name: Read the PR's current labels
-      if: steps.android-version.outputs.changed == 'true'
       run: |
         set -euo pipefail
         labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels --jq '[.labels[].name] | join(",")')
@@ -103,6 +92,17 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
+    - id: android-version
+      name: Require an Android version bump for native changes
+      if: steps.labels.outputs.skip != 'true'
+      run: |
+        set -euo pipefail
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+        echo "Comparing the merge result with its base ${base:0:10}"
+        git fetch -q --depth=1 origin "$base"
+        bun scripts/android-version-check.mjs "$base"
+      shell: bash
+      working-directory: apps/web
     - id: auth
       name: Authenticate to Google Play
       if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
@@ -175,8 +175,8 @@ jobs:
         GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
       working-directory: apps/web
     - name: Skipped via label
-      if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip == 'true'
-      run: echo "Android native changes detected, but the skip-android-update label says they don't break the native/web contract — skipping the Play release gate."
+      if: steps.labels.outputs.skip == 'true'
+      run: echo "The skip-android-update label says this PR's Android native changes don't break the native/web contract — skipping the version bump and Play release gate."
   typescript:
     needs:
     - path-check
@@ -501,9 +501,10 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
     steps:
-    - name: Checkout Repo
+    - id: checkout
+      name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
     - id: native-filter
       name: Detect native iOS changes
@@ -518,8 +519,22 @@ jobs:
             - '!apps/web/tauri/**/android_*/**'
             - '!apps/web/tauri/**/android.*'
             - '!apps/web/tauri/**/*.android.*'
+            - '!apps/web/tauri/**/macos/**'
+            - '!apps/web/tauri/**/macos_*'
+            - '!apps/web/tauri/**/macos_*/**'
+            - '!apps/web/tauri/**/macos.*'
+            - '!apps/web/tauri/**/*.macos.*'
+            - '!apps/web/tauri/**/linux_*'
+            - '!apps/web/tauri/**/linux_*/**'
+            - '!apps/web/tauri/**/desktop/**'
+            - '!apps/web/tauri/**/desktop-*'
+            - '!apps/web/tauri/**/desktop-*/**'
+            - '!apps/web/tauri/**/desktop_*'
+            - '!apps/web/tauri/**/desktop_*/**'
+            - '!apps/web/tauri/**/desktop.*'
             - '!apps/web/tauri/desktop-release.json'
             - '!apps/web/tauri/.helix/**'
+            - '!apps/web/tauri/**/*.md'
     - id: cache-wasm
       name: Detect a client cache wasm version bump
       run: |
@@ -559,18 +574,21 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
-    - name: Setup Bun
+    - id: bun
+      name: Setup Bun
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       with:
         bun-version: '1.3.13'
-    - name: Verify iOS release numbers were bumped
+    - id: bump
+      name: Verify iOS release numbers were bumped
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
       run: bun scripts/ios-verify-native-bump.mjs
       env:
         BASE_REF: ${{ steps.cache-wasm.outputs.base_sha }}
       working-directory: apps/web
-    - name: Fetch App Store Connect credentials from Doppler
+    - id: credentials
+      name: Fetch App Store Connect credentials from Doppler
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
       run: |
         set -euo pipefail
@@ -635,29 +653,35 @@ jobs:
       shell: bash
       env:
         DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
-    - name: Require the App Store release to be live
+    - id: live
+      name: Require the App Store release to be live
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
       run: |
         # --- native tree ------------------------------------------------------------
         # Hash identifying "the iOS native code" at a commit: every tracked blob under
-        # apps/web/tauri except the paths that never reach the iOS binary. Android-only
-        # code is recognised by Tauri's naming convention — a path component that is
-        # `android`, starts with `android_` / `android.`, or contains `.android.`
-        # (the android_* plugins, every android/ directory, android.rs / android.json,
-        # android_tls.rs, tauri.android.conf.json; the Rust ones are all behind
-        # cfg(target_os = "android")) — plus the desktop updater manifest and editor
-        # config. Plus one thing outside that tree: the version of the client cache
-        # wasm package (crates/client/cache-wasm/Cargo.toml). The app compiles the
-        # cache crates natively, and the team bumps that version when a cache change
-        # must ship, so the bump — not every edit under crates/client — is the native
-        # signal. The release stamps uploaded builds with the hash, the merge gate
-        # compares the live build's stamp against the merge result's, and the drift /
-        # head guards compare commits with it. Must match nativeTreeHash() in
+        # apps/web/tauri except the paths that never reach the iOS binary, recognised
+        # by the same naming convention the Android gate uses (android-native.mjs,
+        # which excludes iOS/macOS/linux/windows/apple/desktop-named paths): a path
+        # component that is `android`, `macos`, `linux`, `windows` or `desktop`,
+        # starts with that name plus `_`, `.` or `-`, or an extension-style
+        # `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the android_*
+        # plugins, tauri.android.conf.json and tauri.macos.conf.json, desktop_update
+        # and the desktop_* modules, linux_notification, the macos icons; the Rust
+        # ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
+        # updater manifest, editor config and Markdown docs. `apple`/`ios` paths
+        # stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
+        # version of the client cache wasm package
+        # (crates/client/cache-wasm/Cargo.toml). The app compiles the cache crates
+        # natively, and the team bumps that version when a cache change must ship, so
+        # the bump — not every edit under crates/client — is the native signal. The
+        # release stamps uploaded builds with the hash, the merge gate compares the
+        # live build's stamp against the merge result's, and the drift / head guards
+        # compare commits with it. Must match nativeTreeHash() in
         # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
         # detection (web_app_check_main/ios_native_check.rs).
         NATIVE_TREE_PATH=apps/web/tauri
         CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-        export NATIVE_TREE_EXCLUDE='(^|/)android([_./]|$)|\.android\.|^desktop-release\.json$|^\.helix/'
+        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
         # native_tree_hash <commit>: prints the hash, fails if the path is missing.
         # (--full-tree: ls-tree otherwise narrows its output to the current directory,
@@ -680,13 +704,14 @@ jobs:
 
         # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
         # PR head, GitHub's test merge commit, the pre-push head) available to
-        # native_tree_hash. Checkouts here don't persist credentials, so authenticate
-        # the way actions/checkout does. Fails if the commit is unreachable (a
-        # force-pushed-away head).
+        # native_tree_hash. Some callers persist actions/checkout credentials; clear
+        # inherited headers before adding ours so Git sends Authorization exactly once.
+        # Fails if the commit is unreachable (a force-pushed-away head).
         native_tree_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+          git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }
         # ----------------------------------------------------------------------------
@@ -737,6 +762,99 @@ jobs:
     - name: Skipped via label
       if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip == 'true'
       run: echo "Native iOS changes detected, but the skip-ios-update label says they don't break the native/web contract — skipping the App Store release gate."
+    - name: Update iOS gate status on the PR
+      if: '!cancelled() && github.event.pull_request.head.repo.full_name == github.repository'
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        script: |
+          const marker = '<!-- ios-native-check-status -->';
+          const steps = JSON.parse(process.env.IOS_GATE_STEPS);
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+          // A rerun uses the original event. Never replace the current head's status
+          // with an older commit's result, or create comments after the PR has closed.
+          if (pr.state !== 'open' || pr.head.sha !== context.payload.pull_request.head.sha) return;
+
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            owner, repo, issue_number, per_page: 100,
+          });
+          const existing = comments.find((comment) =>
+            comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker));
+          const native = steps['native-filter']?.outputs?.ios_native === 'true'
+            || steps['cache-wasm']?.outputs?.bumped === 'true';
+          const detectionComplete = steps['native-filter']?.outcome === 'success'
+            && steps['cache-wasm']?.outcome === 'success';
+          const failed = Object.entries(steps).filter(([, step]) => step.outcome === 'failure');
+          if (!native && failed.length === 0 && !existing) return;
+
+          const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`;
+          const guideUrl = `${context.serverUrl}/${owner}/${repo}/blob/${pr.head.sha}/apps/web/docs/ios-releases.md`;
+          const release = steps.live?.outputs?.gate_result
+            ? JSON.parse(steps.live.outputs.gate_result) : null;
+          const labels = pr.labels.map((label) => label.name);
+          const lines = [marker];
+          if (failed.length && !release) {
+            const names = {
+              checkout: 'Checkout Repo',
+              bun: 'Setup Bun',
+              'native-filter': 'Detect native iOS changes',
+              'cache-wasm': 'Detect a client cache wasm version bump',
+              labels: "Read the PR's labels",
+              bump: 'Verify iOS release numbers were bumped',
+              credentials: 'Fetch App Store Connect credentials',
+              live: 'Fetch the merge result and check App Store status',
+            };
+            lines.push('### iOS release check could not complete', '',
+              `Failed step: **${failed.map(([id]) => names[id] ?? id).join(', ')}**.`, '',
+              `See the [workflow logs](${runUrl}) for the error, fix it, then rerun the check.`,
+              'This failure does not establish whether the App Store release is live.');
+          } else if (!native && detectionComplete) {
+            lines.push('### iOS release not required', '', 'This PR no longer changes native iOS code.');
+          } else if (steps.labels?.outputs?.skip === 'true') {
+            lines.push('### iOS release gate bypassed', '',
+              'The `skip-ios-update` label bypasses this check. App Store availability has not been verified.');
+          } else if (release) {
+            const name = `iOS ${release.version} (build ${release.build})`;
+            if (release.kind === 'live') {
+              lines.push(`### ${name} is live and verified`, '',
+                'The App Store build matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+            } else {
+              lines.push(`### ${name} must be live before this PR can merge`, '', release.reason);
+              if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
+              if (release.kind === 'waiting') {
+                lines.push('', release.state === 'PENDING_DEVELOPER_RELEASE'
+                  ? 'Release the approved version in App Store Connect.'
+                  : 'Wait for Apple to approve and make the release available.');
+              } else if (release.kind === 'mismatch') {
+                lines.push('', 'Bump the release numbers, commit, push, then remove and re-add `ios-update` to release the current native code. Use `--no-min` for a release that does not need a higher native build floor.');
+              } else {
+                lines.push('', labels.includes('ios-update')
+                  ? 'The `ios-update` label is already present. Follow the **iOS App Store Release** run; if it failed, fix the reported problem, then remove and re-add the label to retry. Resolve any rejection or metadata issue in App Store Connect first.'
+                  : 'Once the other checks pass and the PR is ready, add **`ios-update`** to build, upload, and submit it for App Review.');
+              }
+              lines.push('', 'After release, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
+            }
+            lines.push('', `The next prod web deploy will use minimum supported iOS build **${release.floor}**, as committed in this PR.`,
+              '', `[App Store Connect](${release.distributionUrl})`);
+          } else {
+            // No structured result means verification never completed; never infer an
+            // Apple state from an exit code or unstructured log text.
+            lines.push('### iOS release status unavailable', '',
+              `The check produced no App Store result. Inspect the [workflow logs](${runUrl}) and rerun it.`);
+          }
+          lines.push('', `[Workflow run](${runUrl}) · [Release guide](${guideUrl})`);
+          const body = lines.join('\n');
+          await core.summary.addRaw(body.replace(`${marker}\n`, '')).write();
+          if (existing) {
+            if (existing.body !== body) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            }
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+      env:
+        IOS_GATE_STEPS: ${{ toJSON(steps) }}
   status-check:
     needs:
     - path-check

@@ -2,6 +2,7 @@ import type { EventApi } from '@fullcalendar/core';
 import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { CalendarEvent } from '../types';
 import { formatLocalDate, isTimedPointEvent } from './calendar-date';
+import { guestEditsRestricted } from './event-guest-editing';
 
 interface FullCalendarEventRange {
   allDay: boolean;
@@ -31,12 +32,25 @@ export function calendarEventRenderIds(
     : [calendarEventRenderId(event)];
 }
 
+/** Whether the viewer may delete an occurrence from their calendar. */
+export function canDeleteCalendarEvent(event: CalendarEvent) {
+  return !event.teamProjection && !event.isReadOnly && !event.isCancelled;
+}
+
+/**
+ * Whether an occurrence opens in the event composer. A snapshot of a shared
+ * meeting does not: it keeps the organizer's details, and a composer that
+ * could change only its reminders reads as editing the meeting itself.
+ */
+export function canEditCalendarEvent(event: CalendarEvent) {
+  return canDeleteCalendarEvent(event) && !event.isSnapshot;
+}
+
 /** Whether an occurrence can safely be moved or resized from the calendar. */
 export function canEditCalendarEventTime(event: CalendarEvent) {
   return (
-    !event.teamProjection &&
-    !event.isReadOnly &&
-    !event.isCancelled &&
+    canEditCalendarEvent(event) &&
+    !guestEditsRestricted(event) &&
     !isTimedPointEvent(event) &&
     event.recurrenceLines.length === 0 &&
     event.recurrenceId === undefined

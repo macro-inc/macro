@@ -1,6 +1,6 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Show } from 'solid-js';

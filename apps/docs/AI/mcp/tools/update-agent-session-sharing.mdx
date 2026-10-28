@@ -1,0 +1,19 @@
+---
+title: UpdateAgentSessionSharing
+description: >-
+  Change an agent session's link, team, or channel sharing as its owner.
+---
+
+# UpdateAgentSessionSharing
+
+Change an agent session's link, team, or channel sharing as its owner. Omitted settings remain unchanged; off revokes that grant. Requires an explicit user request to change sharing. Private persona conversations cannot be shared. Returns the resulting settings.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sessionId` | string | Yes | Session UUID. |
+| `linkScope` | `"off"` \| `"public"` \| `"team"` | No | Who the item's share link admits: public (anyone with the link), team (the owner's team members with the link), or off to disable link sharing. |
+| `linkAccess` | `"off"` \| `"view"` \| `"comment"` \| `"edit"` | No | Permission granted by an enabled share link. Off resets it to the default level. |
+| `teamAccess` | `"off"` \| `"view"` \| `"comment"` \| `"edit"` | No | Access for everyone on the owner's team; off removes it. |
+| `channels` | SessionSharingChannel[] | No | Individual channel grants to set or remove; other channel grants stay unchanged. |

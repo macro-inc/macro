@@ -19,6 +19,7 @@ import {
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import { GUEST_EDITS_RESTRICTED } from '@app/features/calendar/utils/event-guest-editing';
 import {
   type CalendarEventTimeChange,
   calendarEventTimeFromFullCalendar,
@@ -38,7 +39,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
-import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isGuestEditRefused,
+  useUpdateCalendarEventMutation,
+} from '@queries/calendar/mutations';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -316,6 +320,10 @@ export function Page(props: {
       {
         onError: (error) => {
           change.revert();
+          if (isGuestEditRefused(error)) {
+            toast.failure(GUEST_EDITS_RESTRICTED);
+            return;
+          }
           toast.failure('Failed to update event', {
             subtext: error.message,
           });

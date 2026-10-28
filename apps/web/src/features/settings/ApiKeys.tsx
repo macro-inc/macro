@@ -3,11 +3,11 @@ import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { formatRelativeTimestamp } from '@entity';
-import KeyIcon from '@phosphor/key.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
+import KeyIcon from '@icon/system/regular/key.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   MAX_USER_API_KEYS,
   normalizeUserApiKeyName,
@@ -202,19 +202,21 @@ function ApiKeyRow(props: {
           Created {formatRelativeTimestamp(props.keyInfo.createdAt)}
         </div>
       </div>
-      <Tooltip label="Delete key">
-        <button
-          type="button"
-          aria-label={`Delete ${props.keyInfo.name}`}
-          class="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-extra-muted outline-none hover:bg-failure/10 hover:text-failure focus-visible:border focus-visible:border-failure disabled:opacity-30"
-          disabled={props.deleting}
-          onClick={props.onDelete}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        label={`Delete ${props.keyInfo.name}`}
+        tooltip="Delete key"
+        disabled={props.deleting}
+        onClick={props.onDelete}
+      >
+        <Show
+          when={props.deleting}
+          fallback={<TrashIcon class="size-3.5 touch:size-4" />}
         >
-          <Show when={props.deleting} fallback={<TrashIcon class="size-4" />}>
-            <SpinnerIcon class="size-4 animate-spin" />
-          </Show>
-        </button>
-      </Tooltip>
+          <SpinnerIcon class="animate-spin" />
+        </Show>
+      </Button>
     </div>
   );
 }

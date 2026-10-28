@@ -1,11 +1,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import PencilIcon from '@phosphor/pencil-line.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import WebhookIcon from '@phosphor/webhooks-logo.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { ImportTable } from '@service-storage/generated/schemas/importTable';

@@ -8,6 +8,7 @@
 
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { RunVisibility } from './runVisibility';
 import type { ScheduledActionClaimed } from './scheduledActionClaimed';
 import type { ScheduledActionEventActivatedAt } from './scheduledActionEventActivatedAt';
 import type { ScheduledActionId } from './scheduledActionId';
@@ -34,6 +35,8 @@ type no longer says so: the principal string on the wire and in the
 `owner` column is the same, and a bot- or team-owned row decodes
 rather than failing to parse. */
   owner: string;
+  /** Whether the action's runs are listed in Home and the Agents list. */
+  run_visibility: RunVisibility;
   task: ScheduledActionTask;
   trigger: ActionTrigger;
   updated_at: string;

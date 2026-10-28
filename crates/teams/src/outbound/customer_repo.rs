@@ -699,22 +699,38 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         customer_id: &stripe::CustomerId,
     ) -> Result<stripe::SubscriptionId, CustomerError> {
+        // Stripe's `active` filter excludes `trialing`, so list every
+        // uncanceled subscription and choose here. A trial grants Pro like
+        // an active subscription, and a team created during the trial must
+        // link it.
         let mut params = stripe::ListSubscriptions::new();
         params.customer = Some(customer_id.clone());
-        params.status = Some(stripe::SubscriptionStatusFilter::Active);
-        params.limit = Some(1);
+        params.limit = Some(MAX_SUBSCRIPTIONS_PER_CUSTOMER);
 
         let subscriptions = stripe::Subscription::list(&self.client, &params)
             .await
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
-        subscriptions
-            .data
-            .into_iter()
-            .next()
-            .map(|sub| sub.id)
-            .ok_or(CustomerError::SubscriptionNotActive)
+        paying_subscription(subscriptions.data).ok_or(CustomerError::SubscriptionNotActive)
     }
+}
+
+/// Customers hold one live subscription; the cap only bounds the listing.
+const MAX_SUBSCRIPTIONS_PER_CUSTOMER: u64 = 100;
+
+/// The subscription a team should bill through: an active one, else a trial.
+fn paying_subscription(subscriptions: Vec<stripe::Subscription>) -> Option<stripe::SubscriptionId> {
+    let mut trialing = None;
+    for subscription in subscriptions {
+        match subscription.status {
+            stripe::SubscriptionStatus::Active => return Some(subscription.id),
+            stripe::SubscriptionStatus::Trialing => {
+                trialing.get_or_insert(subscription.id);
+            }
+            _ => {}
+        }
+    }
+    trialing
 }
 
 const OWNED_KEY: &str = "macro_plan_schedule";

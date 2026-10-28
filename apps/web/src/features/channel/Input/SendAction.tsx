@@ -38,10 +38,9 @@ export function SendAction(props: SendActionProps) {
       hidden={isMobile() && isBlockedByEmptyInput()}
       // Full-frame mobile/tablet: pill rounding to match the dock/accessory islands.
       class={cn('touch:rounded-full', local.class)}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        fireAndForget(commands.send(), 'channel-input');
-      }}
+      onPointerDown={(event) => event.preventDefault()}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => fireAndForget(commands.send(), 'channel-input')}
       {...rest}
     />
   );

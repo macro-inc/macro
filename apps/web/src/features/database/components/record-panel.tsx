@@ -1,9 +1,9 @@
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import EyeSlashIcon from '@phosphor/eye-slash.svg';
-import RowsIcon from '@phosphor/rows.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
+import RowsIcon from '@icon/system/regular/rows.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, buttonClasses } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';

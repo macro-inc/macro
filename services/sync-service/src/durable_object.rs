@@ -18,7 +18,6 @@ use worker::{
 };
 
 use crate::{
-    ai_peer::is_ai_peer,
     auth::{AccessLevel, TokenFrom, WriteAccess, decode_jwt, socket_access},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
@@ -52,6 +51,7 @@ const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 mod document_api;
 mod document_delete;
 mod document_effects;
+mod peer_ids;
 mod surface_api;
 pub(crate) mod surface_migration;
 
@@ -236,7 +236,7 @@ impl<'a> Wsm<'a> {
         }
         Ok(())
     }
-    pub async fn get_peer_ids(&mut self) -> Result<Vec<u64>> {
+    pub async fn get_peer_ids(&mut self, include_ai: bool) -> Result<Vec<u64>> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
@@ -245,10 +245,7 @@ impl<'a> Wsm<'a> {
             .lock("Wsm::get_peer_ids get")
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
-            .peer_ids
-            .iter()
-            .cloned()
-            .collect())
+            .active_peer_ids(include_ai))
     }
 
     pub async fn edit_attribution(&mut self) -> Result<Option<DocumentAttribution>> {
@@ -555,19 +552,14 @@ impl DocumentSyncSession {
     }
 
     /// Active peer ids. With `include_ai = false`, AI editors (peer ids from the
-    /// reserved AI block) are filtered out so callers see only human collaborators.
+    /// reserved AI block or signed agent actors) are filtered out.
     async fn active_peer_ids_handler(&self, include_ai: bool) -> Result<Response> {
         if !self.state.get_websockets().is_empty() {
             self.validate_surface_sockets(None).await?;
         }
         let mut peer_ids: BTreeSet<u64> = BTreeSet::new();
         for ws in self.get_websockets() {
-            let new_peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
-            peer_ids.extend(
-                new_peer_ids
-                    .into_iter()
-                    .filter(|&p| include_ai || !is_ai_peer(p)),
-            );
+            peer_ids.extend(Wsm::new(self, &ws).get_peer_ids(include_ai).await?);
         }
         let str_ids = peer_ids
             .into_iter()
@@ -824,14 +816,8 @@ impl DocumentSyncSession {
         }
     }
 
-    /// Check if provided document_id exists.
-    /// 1. is self.document_id set, or is document_id in do::kv
-    /// 2. does snapshot exist with document_id?
+    /// A connected room identity does not imply initialized collaborative content.
     async fn exists(&self, document_id: &str) -> Result<bool> {
-        if let Ok(Some(_)) = self.try_document_id().await {
-            return Ok(true);
-        }
-        // self.session_storage would not be set because it requires self.document_id be set
         let snapshot_storage =
             get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
 
@@ -1063,14 +1049,21 @@ impl DurableObject for DocumentSyncSession {
             trace.remote_parent = %remote_parent,
         );
 
+        // Log the failure inside the span and the scope: the scope flushes
+        // telemetry when it ends, and a log buffered after it is only exported
+        // if a later request on the same isolate happens to flush it.
         let res = worker_rs_otel::scope(
             &self.env,
             &self.state,
-            self.inner_fetch(req).instrument(span),
+            async {
+                self.inner_fetch(req)
+                    .await
+                    .context("DurableObject::fetch error")
+            }
+            .instrument(span),
         )
         .await;
-        res.context("DurableObject::fetch error")?
-            .with_cors(&cors(set_allow_origin.as_deref()))
+        res?.with_cors(&cors(set_allow_origin.as_deref()))
     }
 
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
@@ -1260,7 +1253,7 @@ impl DurableObject for DocumentSyncSession {
                 return Ok(());
             }
             self.validate_surface_sockets(None).await?;
-            let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
+            let peer_ids = Wsm::new(self, &ws).get_peer_ids(true).await?;
             for peer_id in peer_ids {
                 self.awareness.delete(&peer_id.to_string());
                 let update = self.awareness.encode(&peer_id.to_string());

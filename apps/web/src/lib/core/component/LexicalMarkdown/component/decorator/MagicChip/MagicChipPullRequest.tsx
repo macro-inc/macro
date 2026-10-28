@@ -7,8 +7,8 @@ import {
 } from '@app/features/block-pr/util/prKey';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import { Button, buttonClasses } from '@ui';
 import { type Component, createMemo, Show } from 'solid-js';
@@ -61,6 +61,8 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
     const value = metadata()[key];
     return typeof value === 'number' ? value : undefined;
   };
+  const isDraft = () =>
+    metadata().draft === true && metadata().status === 'open';
   const content = () => (
     <>
       <Show
@@ -70,8 +72,9 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
             aria-hidden="true"
             class="size-3.5"
             classList={{
-              'text-success': metadata().status === 'open',
+              'text-success': metadata().status === 'open' && !isDraft(),
               'text-failure': metadata().status === 'closed',
+              'text-ink-muted': isDraft(),
             }}
           />
         }

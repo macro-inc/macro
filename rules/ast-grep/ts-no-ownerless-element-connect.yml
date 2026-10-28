@@ -1,0 +1,26 @@
+id: ts-no-ownerless-element-connect
+language: typescript
+# Twin of tsx-no-ownerless-element-connect — ast-grep rules are
+# single-language, and `typescript` only scans .ts files.
+severity: error
+message: Import onElementConnect from @core/util/onElementConnect, which runs the callback under the caller's Solid owner.
+note: |-
+  Rule FE-59 in .agents/rules/web/solid.md. A ref runs before its element is
+  attached, so the @solid-primitives/lifecycle version almost always calls back
+  from a ResizeObserver with no owner: onCleanup there never runs, and
+  computations created there are never disposed.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/core/util/onElementConnect.ts
+rule:
+  kind: import_specifier
+  has:
+    field: name
+    regex: ^onElementConnect$
+  inside:
+    kind: import_statement
+    stopBy: end
+    has:
+      field: source
+      regex: ^['"]@solid-primitives/lifecycle['"]$

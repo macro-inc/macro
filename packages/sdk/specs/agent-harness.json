@@ -956,6 +956,91 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/app-connections": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Continue the session now that its owner connected an app it asked for.",
+        "description": "The harness produces an `app.connected` system event, which the transcript\nshows as no prompt; it starts a turn once the session is idle.",
+        "operationId": "report_agent_session_app_connected",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppConnectedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The session continues once it is idle"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the session's owner, or no edit access",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The session is archived",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The owner has not connected that app",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/archived": {
       "put": {
         "tags": ["agent-sessions"],
@@ -1453,6 +1538,68 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AgentSessionLogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/log/folded": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "One agent session's history folded into renderable messages: the same\nfold the web client runs over [`get_agent_session_log_handler`]'s frames.",
+        "description": "For readers that do not run the fold themselves, such as SDK programs and\nagents reading another session's history.",
+        "operationId": "get_agent_session_folded_log",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionFoldedLogResponse"
                 }
               }
             }
@@ -2534,137 +2681,6 @@
           }
         }
       }
-    },
-    "/claude-auth": {
-      "get": {
-        "tags": ["claude-auth"],
-        "summary": "Read connection status for the authenticated user only.",
-        "operationId": "status",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": ["claude-auth"],
-        "summary": "Forget only the authenticated user's grant and cancel pending consent.",
-        "operationId": "disconnect",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmptyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Disconnected"
-          },
-          "403": {
-            "description": "Disabled"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/claude-auth/complete": {
-      "post": {
-        "tags": ["claude-auth"],
-        "summary": "Exchange one code; never return access or refresh tokens.",
-        "operationId": "complete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompleteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Connected"
-          },
-          "400": {
-            "description": "Invalid code"
-          },
-          "409": {
-            "description": "Expired or replayed"
-          },
-          "502": {
-            "description": "Provider failed"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/claude-auth/start": {
-      "post": {
-        "tags": ["claude-auth"],
-        "summary": "Create an expiring PKCE challenge for the authenticated user.",
-        "operationId": "start",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmptyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StartResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Disabled"
-          },
-          "429": {
-            "description": "Too many attempts"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
     }
   },
   "components": {
@@ -3204,6 +3220,24 @@
           }
         }
       },
+      "AgentSessionFoldedLogResponse": {
+        "type": "object",
+        "description": "Response body for one session's folded log.",
+        "required": ["bot", "messages"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/SessionBot",
+            "description": "The agent whose messages these are; it sent every agent message."
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The conversation, oldest first: prompts, replies, tool calls and their\nresults, plans, permission requests and how each turn ended. Each\nelement is a `FoldedMessage` from the fold's TypeScript contract,\nwhich the SDK exports; the schema is opaque here because those types\nare described with specta rather than utoipa."
+          }
+        }
+      },
       "AgentSessionLogEntryDto": {
         "allOf": [
           {
@@ -3582,6 +3616,28 @@
           }
         }
       },
+      "AppConnectedRequest": {
+        "type": "object",
+        "description": "Request body for reporting a connected app.",
+        "required": ["appSlug"],
+        "properties": {
+          "actionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentActionId",
+                "description": "Names the report, so a retried one wakes the session once."
+              }
+            ]
+          },
+          "appSlug": {
+            "type": "string",
+            "description": "The Pipedream app slug the owner connected, e.g. `notion`."
+          }
+        }
+      },
       "BotId": {
         "type": "string"
       },
@@ -3781,22 +3837,6 @@
           }
         }
       },
-      "CompleteRequest": {
-        "type": "object",
-        "description": "One-time manual code. Deliberately does not implement Debug.",
-        "required": ["attemptId", "code"],
-        "properties": {
-          "attemptId": {
-            "type": "string",
-            "description": "Server-issued handle; never an owner selected by the caller."
-          },
-          "code": {
-            "type": "string",
-            "description": "Claude's complete code#state string, not an access token."
-          }
-        },
-        "additionalProperties": false
-      },
       "ControlRequest": {
         "allOf": [
           {
@@ -3932,7 +3972,7 @@
           "drafts": {
             "type": "array",
             "items": {},
-            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}.\nCreating any review only presents these drafts; the user acts separately."
+            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}. Import: exactly one draft {source: \"notion\" | \"linear\" | \"jira\"},\npresenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.\nCreating any review only presents these drafts; the user acts separately."
           },
           "executionId": {
             "oneOf": [
@@ -3996,6 +4036,11 @@
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
           }
         }
+      },
+      "DecisionVia": {
+        "type": "string",
+        "description": "Surface of a review decision.",
+        "enum": ["card", "chat", "inbox"]
       },
       "DiscoverAgentCapabilitiesRequest": {
         "type": "object",
@@ -4139,11 +4184,6 @@
         ],
         "description": "The JSON-RPC id of an agent's `elicitation/create` request, carried whole\nso the answer echoes exactly what the agent sent.\n\nAgents pick these, not us: Claude Code counts from `0`, others use\nstrings. `null` is not a legal id for a request that expects a response,\nso it is not representable here."
       },
-      "EmptyRequest": {
-        "type": "object",
-        "description": "A JSON body is required on writes, including start/disconnect (no form-based CSRF).",
-        "additionalProperties": false
-      },
       "ExecutionActivity": {
         "type": "object",
         "description": "A bounded SDK operation observed during execution; not an authorization or write receipt.",
@@ -4175,6 +4215,17 @@
         "description": "Durable source and final outcome, with historical bridge calls when present.\nThe full journal is not included in the model's tool result.",
         "required": ["executionId", "source", "status", "calls"],
         "properties": {
+          "actingAs": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolActor",
+                "description": "Account choice bound to this saved execution; absent on historical records."
+              }
+            ]
+          },
           "activity": {
             "type": "array",
             "items": {
@@ -4211,6 +4262,11 @@
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",
             "description": "Overall execution state."
+          },
+          "turnId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Original turn, preventing another requester from replaying a saved result."
           }
         }
       },
@@ -4303,7 +4359,7 @@
       "LogDirectionDto": {
         "type": "string",
         "description": "Which way a logged frame travelled, mirroring [`Message`]'s discriminant.",
-        "enum": ["to_server", "to_runtime"]
+        "enum": ["notification", "to_server", "to_runtime"]
       },
       "LogFrameDto": {
         "type": "object",
@@ -4423,7 +4479,7 @@
       "ModelHarnessDto": {
         "type": "string",
         "description": "Harness names accepted by the model discovery endpoint.",
-        "enum": ["in-memory", "cursor", "claude-cloud", "macrod"]
+        "enum": ["in-memory", "cursor", "macrod"]
       },
       "PermissionAnswer": {
         "oneOf": [
@@ -4795,6 +4851,34 @@
         ],
         "description": "One atomic user decision against the displayed revision."
       },
+      "ReviewDecisionContext": {
+        "type": "object",
+        "description": "Facts about the most recent account-holder decision.",
+        "required": ["by", "via", "revision", "items"],
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "Authenticated account holder."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Items selected by this decision."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Revision claimed by this batch, used in notification deduplication."
+          },
+          "via": {
+            "$ref": "#/components/schemas/DecisionVia",
+            "description": "Entry surface."
+          }
+        }
+      },
       "ReviewId": {
         "type": "string",
         "format": "uuid",
@@ -4807,6 +4891,10 @@
         "properties": {
           "draft": {
             "description": "Validated arguments for the existing composer/action."
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "Whether the account holder edited this draft before deciding."
           },
           "error": {
             "type": ["string", "null"],
@@ -4828,13 +4916,13 @@
       },
       "ReviewItemStatus": {
         "type": "string",
-        "description": "A review item never retries an ambiguous external result automatically.",
+        "description": "Review item state, shared with notification consumers.",
         "enum": ["pending", "submitting", "completed", "dismissed", "unknown"]
       },
       "ReviewKind": {
         "type": "string",
         "description": "The component and action used to finish a review.",
-        "enum": ["email", "calendar"]
+        "enum": ["email", "calendar", "import"]
       },
       "ReviewRecord": {
         "type": "object",
@@ -4849,6 +4937,21 @@
           "items"
         ],
         "properties": {
+          "actingUser": {
+            "type": ["string", "null"],
+            "description": "Account whose email/calendar the drafts use; historical records use the session owner."
+          },
+          "decision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewDecisionContext",
+                "description": "Current batch's authenticated decision, preserved for interrupted work."
+              }
+            ]
+          },
           "executionId": {
             "oneOf": [
               {
@@ -4874,16 +4977,6 @@
           "kind": {
             "$ref": "#/components/schemas/ReviewKind",
             "description": "Component kind."
-          },
-          "notificationAttemptAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Most recent delivery claim, allowing retry after a replica stops."
-          },
-          "notificationId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "Stable queued-action identity until the outcome has reached the session.\nA failed notification may be retried without repeating external actions."
           },
           "presentedAt": {
             "type": ["integer", "null"],
@@ -5111,45 +5204,10 @@
           }
         }
       },
-      "StartResponse": {
-        "type": "object",
-        "description": "Public PKCE challenge and attempt handle; contains no verifier or provider tokens.",
-        "required": ["attemptId", "authorizationUrl", "expiresIn"],
-        "properties": {
-          "attemptId": {
-            "type": "string",
-            "description": "Opaque owner-bound attempt handle."
-          },
-          "authorizationUrl": {
-            "type": "string",
-            "description": "Claude-hosted consent page."
-          },
-          "expiresIn": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Attempt lifetime in seconds.",
-            "minimum": 0
-          }
-        }
-      },
-      "StatusResponse": {
-        "type": "object",
-        "description": "Safe connection metadata.",
-        "required": ["enabled", "connected", "ephemeral"],
-        "properties": {
-          "connected": {
-            "type": "boolean",
-            "description": "Whether the authenticated Macro user has connected."
-          },
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether this deployment supports browser connection."
-          },
-          "ephemeral": {
-            "type": "boolean",
-            "description": "Whether reconnecting after service restart is required."
-          }
-        }
+      "ToolActor": {
+        "type": "string",
+        "description": "Which authenticated participant's access a tool call requests.",
+        "enum": ["requester", "owner"]
       },
       "ToolApprovalAnswerDto": {
         "type": "string",

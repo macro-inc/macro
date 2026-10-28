@@ -189,3 +189,18 @@ pub trait ToolApprovalAnnouncer: Send + Sync + 'static {
     /// A held call was resolved.
     fn resolved(&self, approval: &ToolApproval) -> impl Future<Output = ()> + Send;
 }
+
+/// An independently authenticated MCP exchange. Implementations must never reuse
+/// an upstream session opened with another account's credentials.
+// Object-safe because the composition root supplies an Arc<dyn ActorMcpTransport>.
+#[async_trait::async_trait]
+pub trait ActorMcpTransport: Send + Sync {
+    /// List tools or call a tool, returning the MCP result payload.
+    async fn exchange(
+        &self,
+        session: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        upstream: UpstreamCall,
+        request: serde_json::Value,
+    ) -> Result<serde_json::Value, EgressError>;
+}

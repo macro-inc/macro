@@ -1,0 +1,362 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::Duration;
+
+use anyhow::Result;
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::{Uuid, generate_uuid_v7};
+use model_owner::Owner;
+use serde_json::json;
+use tokio::sync::Semaphore;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+
+use super::{PgPollingDispatcher, PgPollingDispatcherLifecycle};
+use crate::domain::event_runs::ConfigurationRevision;
+use crate::domain::event_trigger::ActionTrigger;
+use crate::domain::models::{
+    ActionExecutionRecord, ActionKind, InProgressExecution, RunVisibility, Schedule,
+    ScheduledAction,
+};
+use crate::domain::ports::{
+    ScheduledActionDispatcher, ScheduledActionExecutor, ScheduledActionRepo,
+};
+
+struct FakeRepository {
+    candidates: Vec<ScheduledAction>,
+    cancellation_token: Option<CancellationToken>,
+    poll_started: Semaphore,
+}
+
+impl FakeRepository {
+    fn returning(candidates: Vec<ScheduledAction>) -> Self {
+        Self {
+            candidates,
+            cancellation_token: None,
+            poll_started: Semaphore::new(0),
+        }
+    }
+
+    fn cancelling_before_return(
+        candidates: Vec<ScheduledAction>,
+        cancellation_token: CancellationToken,
+    ) -> Self {
+        Self {
+            candidates,
+            cancellation_token: Some(cancellation_token),
+            poll_started: Semaphore::new(0),
+        }
+    }
+
+    async fn wait_for_poll(&self) {
+        self.poll_started
+            .acquire()
+            .await
+            .expect("poll semaphore should remain open")
+            .forget();
+    }
+}
+
+impl ScheduledActionRepo for FakeRepository {
+    async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+        Ok(action)
+    }
+
+    async fn get_owned_actions(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<ScheduledAction>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_actions_by_ids(&self, _ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_action(&self, _id: &Uuid) -> Result<Option<ScheduledAction>> {
+        Ok(None)
+    }
+
+    async fn get_next_unclaimed_actions(&self, _limit: i64) -> Result<Vec<ScheduledAction>> {
+        self.poll_started.add_permits(1);
+        if let Some(cancellation_token) = &self.cancellation_token {
+            cancellation_token.cancel();
+        }
+        Ok(self.candidates.clone())
+    }
+
+    async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+        Ok(action)
+    }
+
+    async fn delete_action(&self, _id: &Uuid) -> Result<()> {
+        Ok(())
+    }
+
+    async fn claim_action(
+        &self,
+        _id: &Uuid,
+        _revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<crate::domain::event_runs::ClaimToken> {
+        Ok(crate::domain::event_runs::ClaimToken::generate())
+    }
+
+    async fn release_action(
+        &self,
+        _id: &Uuid,
+        _token: crate::domain::event_runs::ClaimToken,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn create_execution_record(&self, _record: ActionExecutionRecord) -> Result<()> {
+        Ok(())
+    }
+
+    async fn get_execution_records(&self, _action_id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
+        Ok(Vec::new())
+    }
+
+    async fn update_next_run_at(&self, _id: &Uuid) -> Result<()> {
+        Ok(())
+    }
+
+    async fn update_last_executed(&self, _id: &Uuid, _executed_at: DateTime<Utc>) -> Result<()> {
+        Ok(())
+    }
+}
+
+struct RecordingExecutor {
+    execution_count: Arc<AtomicUsize>,
+}
+
+impl ScheduledActionExecutor for RecordingExecutor {
+    async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
+        self.execution_count.fetch_add(1, Ordering::SeqCst);
+        Ok(InProgressExecution {
+            action_id: action.id.expect("test action should have an id"),
+            chat_id: None,
+            resource: None,
+        })
+    }
+}
+
+struct GatedExecutor {
+    execution_count: Arc<AtomicUsize>,
+    first_execution_started: Arc<Semaphore>,
+    release_first_execution: Arc<Semaphore>,
+    first_execution_finished: Arc<AtomicBool>,
+}
+
+impl ScheduledActionExecutor for GatedExecutor {
+    async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
+        let execution_index = self.execution_count.fetch_add(1, Ordering::SeqCst);
+        if execution_index == 0 {
+            self.first_execution_started.add_permits(1);
+            self.release_first_execution
+                .acquire()
+                .await
+                .expect("execution semaphore should remain open")
+                .forget();
+            self.first_execution_finished.store(true, Ordering::SeqCst);
+        }
+
+        Ok(InProgressExecution {
+            action_id: action.id.expect("test action should have an id"),
+            chat_id: None,
+            resource: None,
+        })
+    }
+}
+
+fn due_action() -> ScheduledAction {
+    let now = Utc::now();
+    ScheduledAction {
+        id: Some(generate_uuid_v7()),
+        owner: Owner::from_principal_str("macro|polling-dispatcher@test.com")
+            .expect("test owner should be valid"),
+        name: "test action".to_string(),
+        trigger: ActionTrigger::Cron {
+            schedule: Schedule::from_cron("0 * * * * *".to_string())
+                .expect("test schedule should be valid"),
+            timezone: chrono_tz::UTC,
+        },
+        kind: ActionKind::Agent,
+        created_at: now,
+        updated_at: now,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
+        task: json!({}),
+        claimed: None,
+        next_run_at: Some(now - ChronoDuration::seconds(1)),
+        enabled: true,
+        run_visibility: RunVisibility::Unlisted,
+    }
+}
+
+fn lifecycle() -> (CancellationToken, TaskTracker, PgPollingDispatcherLifecycle) {
+    let cancellation_token = CancellationToken::new();
+    let tracker = TaskTracker::new();
+    let lifecycle = PgPollingDispatcherLifecycle::new(cancellation_token.clone(), tracker.clone());
+    (cancellation_token, tracker, lifecycle)
+}
+
+async fn wait_for_tracker(tracker: &TaskTracker) {
+    tokio::time::timeout(Duration::from_secs(1), tracker.wait())
+        .await
+        .expect("dispatcher tasks should stop after cancellation");
+}
+
+#[tokio::test]
+async fn cancellation_interrupts_polling_delay_and_dispatch_event_drain() {
+    let repository = Arc::new(FakeRepository::returning(Vec::new()));
+    let executor = RecordingExecutor {
+        execution_count: Arc::new(AtomicUsize::new(0)),
+    };
+    let (cancellation_token, tracker, lifecycle) = lifecycle();
+    let dispatcher =
+        PgPollingDispatcher::new(Arc::clone(&repository), executor).with_lifecycle(lifecycle);
+
+    let (_dispatch_tx, _execution_rx) = dispatcher.begin_dispatch_loop();
+    repository.wait_for_poll().await;
+
+    cancellation_token.cancel();
+    tracker.close();
+    wait_for_tracker(&tracker).await;
+}
+
+#[tokio::test]
+async fn cancellation_during_repository_poll_prevents_candidate_execution() {
+    let (cancellation_token, tracker, lifecycle) = lifecycle();
+    let repository = Arc::new(FakeRepository::cancelling_before_return(
+        vec![due_action()],
+        cancellation_token.clone(),
+    ));
+    let execution_count = Arc::new(AtomicUsize::new(0));
+    let executor = RecordingExecutor {
+        execution_count: Arc::clone(&execution_count),
+    };
+    let dispatcher = PgPollingDispatcher::new(repository, executor).with_lifecycle(lifecycle);
+
+    let (_dispatch_tx, _execution_rx) = dispatcher.begin_dispatch_loop();
+    tracker.close();
+    wait_for_tracker(&tracker).await;
+
+    assert_eq!(execution_count.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn cancellation_allows_started_execution_to_finish_without_starting_another() {
+    let repository = Arc::new(FakeRepository::returning(vec![due_action(), due_action()]));
+    let execution_count = Arc::new(AtomicUsize::new(0));
+    let first_execution_started = Arc::new(Semaphore::new(0));
+    let release_first_execution = Arc::new(Semaphore::new(0));
+    let first_execution_finished = Arc::new(AtomicBool::new(false));
+    let executor = GatedExecutor {
+        execution_count: Arc::clone(&execution_count),
+        first_execution_started: Arc::clone(&first_execution_started),
+        release_first_execution: Arc::clone(&release_first_execution),
+        first_execution_finished: Arc::clone(&first_execution_finished),
+    };
+    let (cancellation_token, tracker, lifecycle) = lifecycle();
+    let dispatcher = PgPollingDispatcher::new(repository, executor).with_lifecycle(lifecycle);
+
+    let (_dispatch_tx, _execution_rx) = dispatcher.begin_dispatch_loop();
+    first_execution_started
+        .acquire()
+        .await
+        .expect("execution semaphore should remain open")
+        .forget();
+
+    cancellation_token.cancel();
+    tracker.close();
+    let wait = tracker.wait();
+    tokio::pin!(wait);
+    tokio::select! {
+        () = &mut wait => panic!("tracker should wait for the in-flight execution"),
+        () = tokio::task::yield_now() => {}
+    }
+
+    release_first_execution.add_permits(1);
+    wait.await;
+
+    assert!(first_execution_finished.load(Ordering::SeqCst));
+    assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn only_enabled_due_schedules_including_mixed_triggers_reach_executor() {
+    let mut event = due_action();
+    event.trigger = serde_json::from_value(json!({
+        "type": "events", "filters": [{"events": ["document.created"]}]
+    }))
+    .unwrap();
+    event.next_run_at = None;
+    event.event_activated_at = Some(Utc::now());
+    let mut disabled = due_action();
+    disabled.enabled = false;
+    let mut missing_next_run = due_action();
+    missing_next_run.next_run_at = None;
+    let mut due = due_action();
+    due.trigger = serde_json::from_value(json!({"type":"multiple", "triggers":[
+        {"type":"cron", "schedule":"* * * * * *", "timezone":"UTC"},
+        {"type":"events", "filters":[{"events":["document.created"]}]}
+    ]}))
+    .unwrap();
+    let due_id = due.id.unwrap();
+    let mut future = due_action();
+    future.next_run_at = Some(Utc::now() + ChronoDuration::hours(1));
+    let repository = Arc::new(FakeRepository::returning(vec![
+        event,
+        disabled,
+        missing_next_run,
+        due,
+        future,
+    ]));
+    let execution_count = Arc::new(AtomicUsize::new(0));
+    let executor = RecordingExecutor {
+        execution_count: Arc::clone(&execution_count),
+    };
+    let (cancellation_token, tracker, lifecycle) = lifecycle();
+    let dispatcher = PgPollingDispatcher::new(repository, executor).with_lifecycle(lifecycle);
+    let (_dispatch_tx, mut execution_rx) = dispatcher.begin_dispatch_loop();
+    let execution = tokio::time::timeout(Duration::from_secs(1), execution_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(execution.action_id, due_id);
+    cancellation_token.cancel();
+    tracker.close();
+    wait_for_tracker(&tracker).await;
+    assert_eq!(execution_count.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn startup_gate_waits_for_http_and_can_be_cancelled_before_it_listens() {
+    let (listening, ready) = tokio::sync::watch::channel(false);
+    let cancellation = CancellationToken::new();
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let stop = cancellation.clone();
+    let waiting = tokio::spawn(async move {
+        entered.send(()).unwrap();
+        super::wait_until_ready(Some(ready), &stop).await
+    });
+    started.await.unwrap();
+    assert!(!waiting.is_finished());
+    listening.send_replace(true);
+    assert!(waiting.await.unwrap());
+
+    let (_listening, ready) = tokio::sync::watch::channel(false);
+    let (entered, started) = tokio::sync::oneshot::channel();
+    let stop = cancellation.clone();
+    let waiting = tokio::spawn(async move {
+        entered.send(()).unwrap();
+        super::wait_until_ready(Some(ready), &stop).await
+    });
+    started.await.unwrap();
+    assert!(!waiting.is_finished());
+    cancellation.cancel();
+    assert!(!waiting.await.unwrap());
+}

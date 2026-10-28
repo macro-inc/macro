@@ -42,13 +42,16 @@ byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 chacha20 = { version = "0.10", default-features = false, features = ["legacy", "rng", "zeroize"] }
 chrono = { version = "0.4", features = ["serde"] }
-cipher = { version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
+cipher-9fbad63c4bcf4a8f = { package = "cipher", version = "0.4", default-features = false, features = ["block-padding", "std"] }
+cipher-d8f496e17d97b5cb = { package = "cipher", version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 ctutils = { version = "0.4", default-features = false, features = ["subtle"] }
-derive_more = { version = "2", features = ["add", "add_assign", "display", "from"] }
+curve25519-dalek-164d15cefe24d7eb = { package = "curve25519-dalek", version = "4", default-features = false, features = ["alloc", "digest", "precomputed-tables", "zeroize"] }
+curve25519-dalek-cdf1610d3e1514e9 = { package = "curve25519-dalek", version = "5", features = ["rand_core"] }
+derive_more = { version = "2", features = ["add", "add_assign", "display", "from", "into", "try_from"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
 digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid", "rand_core", "zeroize"] }
 doppleganger = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
@@ -70,7 +73,9 @@ futures-task = { version = "0.3" }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
+getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng", "wasm_js"] }
+hashbrown-3575ec1268b04181 = { package = "hashbrown", version = "0.15" }
 hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", features = ["raw"] }
 hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
@@ -81,7 +86,8 @@ hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
-inout = { version = "0.2", default-features = false, features = ["block-padding"] }
+inout-6f8ce4dd05d13bba = { package = "inout", version = "0.2", default-features = false, features = ["block-padding"] }
+inout-c65f7effa3be6d31 = { package = "inout", version = "0.1", default-features = false, features = ["std"] }
 insta = { version = "1", features = ["glob", "json"] }
 itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
 itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
@@ -89,6 +95,7 @@ lazy_static = { version = "1", default-features = false, features = ["spin_no_st
 libc = { version = "0.2", features = ["extra_traits"] }
 libz-sys = { version = "1", features = ["static"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
+md-5 = { version = "0.10" }
 memchr = { version = "2" }
 mime_guess = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
@@ -114,7 +121,8 @@ rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex = { version = "1" }
+regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
@@ -194,16 +202,20 @@ bytes = { version = "1", features = ["serde"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 chacha20 = { version = "0.10", default-features = false, features = ["legacy", "rng", "zeroize"] }
 chrono = { version = "0.4", features = ["serde"] }
-cipher = { version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
+cipher-9fbad63c4bcf4a8f = { package = "cipher", version = "0.4", default-features = false, features = ["block-padding", "std"] }
+cipher-d8f496e17d97b5cb = { package = "cipher", version = "0.5", default-features = false, features = ["block-padding", "rand_core", "stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
 crypto-bigint = { version = "0.5", features = ["generic-array", "zeroize"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 ctutils = { version = "0.4", default-features = false, features = ["subtle"] }
-derive_more = { version = "2", features = ["add", "add_assign", "display", "from"] }
-derive_more-impl = { version = "2", features = ["add", "add_assign", "display", "from"] }
+curve25519-dalek-164d15cefe24d7eb = { package = "curve25519-dalek", version = "4", default-features = false, features = ["alloc", "digest", "precomputed-tables", "zeroize"] }
+curve25519-dalek-cdf1610d3e1514e9 = { package = "curve25519-dalek", version = "5", features = ["rand_core"] }
+derive_more = { version = "2", features = ["add", "add_assign", "display", "from", "into", "try_from"] }
+derive_more-impl = { version = "2", features = ["add", "add_assign", "display", "from", "into", "try_from"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
 digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid", "rand_core", "zeroize"] }
+displaydoc = { version = "0.2" }
 doppleganger = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 doppleganger-core = { version = "0.5", default-features = false, features = ["chrono", "uuid"] }
 either = { version = "1", features = ["serde", "use_std"] }
@@ -223,7 +235,9 @@ futures-task = { version = "0.3" }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
+getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng", "wasm_js"] }
+hashbrown-3575ec1268b04181 = { package = "hashbrown", version = "0.15" }
 hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", features = ["raw"] }
 hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
@@ -234,7 +248,8 @@ hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
-inout = { version = "0.2", default-features = false, features = ["block-padding"] }
+inout-6f8ce4dd05d13bba = { package = "inout", version = "0.2", default-features = false, features = ["block-padding"] }
+inout-c65f7effa3be6d31 = { package = "inout", version = "0.1", default-features = false, features = ["std"] }
 insta = { version = "1", features = ["glob", "json"] }
 itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
 itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
@@ -242,6 +257,7 @@ lazy_static = { version = "1", default-features = false, features = ["spin_no_st
 libc = { version = "0.2", features = ["extra_traits"] }
 libz-sys = { version = "1", features = ["static"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
+md-5 = { version = "0.10" }
 memchr = { version = "2" }
 mime_guess = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
@@ -269,7 +285,8 @@ rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
+regex = { version = "1" }
+regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
@@ -337,6 +354,7 @@ mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "mman"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
+petgraph = { version = "0.8", default-features = false, features = ["std"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
@@ -360,6 +378,7 @@ mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "mman"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
+petgraph = { version = "0.8", default-features = false, features = ["std"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }

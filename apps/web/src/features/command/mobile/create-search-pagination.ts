@@ -7,6 +7,7 @@ export function createSearchPagination<T>(options: {
   items: Accessor<readonly T[]>;
   container: Accessor<HTMLElement | undefined>;
   remaining: Accessor<number | undefined>;
+  enabled: Accessor<boolean>;
   hasMore: Accessor<boolean>;
   busy: Accessor<boolean>;
   loadMore: () => Promise<unknown>;
@@ -19,7 +20,8 @@ export function createSearchPagination<T>(options: {
   });
 
   const loadNearEnd = (automatic = false) => {
-    if (disposed || !options.hasMore() || options.busy()) return;
+    if (disposed || !options.enabled() || !options.hasMore() || options.busy())
+      return;
     const remaining = options.remaining();
     if (remaining === undefined || remaining > 44 * 3) return;
     const page = options.items();
@@ -40,7 +42,10 @@ export function createSearchPagination<T>(options: {
   };
   createResizeObserver(options.container, scheduleCheck);
   createEffect(
-    on([options.items, options.hasMore, options.busy], scheduleCheck)
+    on(
+      [options.items, options.hasMore, options.busy, options.enabled],
+      scheduleCheck
+    )
   );
   return () => loadNearEnd();
 }

@@ -9,6 +9,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
+import type { Span } from '@macro-inc/observability';
 import {
   fetchActiveCall,
   invalidateActiveCallQueries,
@@ -40,6 +41,7 @@ import {
   stopPrejoinTracks,
 } from './CallSessionController';
 import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
+import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
@@ -1195,11 +1197,21 @@ function createCallState() {
     targetRoom: Room,
     source: keyof CallPrejoinTracks,
     prejoinTrack: MediaStreamTrack | undefined,
-    enableDevice: () => Promise<unknown>
+    enableDevice: () => Promise<unknown>,
+    mediaSpan?: Span
   ) {
+    const callId = store.activeCallId;
     if (prejoinTrack?.readyState === 'live') {
       try {
-        await publishPrejoinTrack(targetRoom, source, prejoinTrack);
+        await traceCallMedia(
+          'publish_prejoin',
+          {
+            'call.id': callId ?? undefined,
+            'call.media.device': source,
+          },
+          () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+          mediaSpan
+        );
         return;
       } catch (e) {
         console.error(`failed to publish prejoin ${source} track`, e);
@@ -1208,13 +1220,22 @@ function createCallState() {
       }
     }
     prejoinTrack?.stop();
-    await enableDevice();
+    await traceCallMedia(
+      'enable',
+      {
+        'call.id': callId ?? undefined,
+        'call.media.device': source,
+      },
+      enableDevice,
+      mediaSpan
+    );
   }
 
   async function finishLocalMediaSetup(
     targetRoom: Room,
     setupVersion: number,
-    prejoinTracks?: CallPrejoinTracks
+    prejoinTracks?: CallPrejoinTracks,
+    mediaSpan?: Span
   ) {
     // Each step claims its track; anything left unclaimed is stopped.
     const unclaimed = { ...prejoinTracks };
@@ -1224,7 +1245,7 @@ function createCallState() {
       return track;
     };
     try {
-      await setUpLocalMedia(targetRoom, setupVersion, claim);
+      await setUpLocalMedia(targetRoom, setupVersion, claim, mediaSpan);
     } finally {
       stopPrejoinTracks(unclaimed);
     }
@@ -1233,7 +1254,8 @@ function createCallState() {
   async function setUpLocalMedia(
     targetRoom: Room,
     setupVersion: number,
-    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined
+    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined,
+    mediaSpan?: Span
   ) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
@@ -1250,7 +1272,8 @@ function createCallState() {
             targetRoom.localParticipant.setMicrophoneEnabled(
               true,
               currentMicrophoneCaptureOptions(store.activeAudioInputDeviceId)
-            )
+            ),
+          mediaSpan
         );
       }
     } catch (e) {
@@ -1276,8 +1299,12 @@ function createCallState() {
 
     if (!store.isVideoMuted) {
       try {
-        await enablePrejoinOrDevice(targetRoom, 'camera', claim('camera'), () =>
-          enableInitialCamera(targetRoom)
+        await enablePrejoinOrDevice(
+          targetRoom,
+          'camera',
+          claim('camera'),
+          () => enableInitialCamera(targetRoom),
+          mediaSpan
         );
         if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
         if (store.isVideoMuted) {
@@ -1422,16 +1449,33 @@ function createCallState() {
     const newMuted = !store.isAudioMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setMicrophoneEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setMicrophoneEnabled(false)
+        );
       } else {
         // Re-enable the mic. When the muted publication survived
         // (stopMicTrackOnMute is false) this only unmutes and the capture
         // options are ignored; they matter when the track was stopped and
         // must be recreated (e.g. after a device unplug).
         const deviceId = store.activeAudioInputDeviceId;
-        await r.localParticipant.setMicrophoneEnabled(
-          true,
-          currentMicrophoneCaptureOptions(deviceId)
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'microphone',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setMicrophoneEnabled(
+              true,
+              currentMicrophoneCaptureOptions(deviceId)
+            )
         );
         // The mic track may have changed — re-apply the selected audio processing.
         await ensureNoiseSuppressionOnMicTrack(r);
@@ -1455,14 +1499,31 @@ function createCallState() {
     const newMuted = !store.isVideoMuted;
     try {
       if (newMuted) {
-        await r.localParticipant.setCameraEnabled(false);
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': false,
+          },
+          () => r.localParticipant.setCameraEnabled(false)
+        );
         // Track is gone — drop our processor ref so the next enable starts clean.
         setBlurProcessor(null);
       } else {
         const deviceId = store.activeVideoInputDeviceId;
-        await r.localParticipant.setCameraEnabled(
-          true,
-          deviceId ? { deviceId: { exact: deviceId } } : undefined
+        await traceCallMedia(
+          'toggle',
+          {
+            'call.id': store.activeCallId ?? undefined,
+            'call.media.device': 'camera',
+            'call.media.enabled': true,
+          },
+          () =>
+            r.localParticipant.setCameraEnabled(
+              true,
+              deviceId ? { deviceId: { exact: deviceId } } : undefined
+            )
         );
         // Read the actual device the browser chose so the dropdown is accurate
         const camPub = r.localParticipant.getTrackPublication(

@@ -41,7 +41,15 @@ cleanup, and backfill.
 - `cargo test -p email_db_client` (`SQLX_OFFLINE` unset; requires local
   MacroDB — `just setup_macrodb`).
 
+Parsed message responses expose the draft generation captured in the same SQL snapshot as their content.
+
 ## Gotchas
+
+- Message deletion may return `Deferred` while an accepted send owns the row; reconcile retained deletions under the message lock and compare both provider identity and draft generation.
+- Resolve provider deletions with `get_simple_message_by_provider_and_link_for_update` inside the deletion transaction; retain the message lock through cleanup and deletion so Send completion or Undo cannot invalidate the snapshot.
+
+- Scheduled delivery and durable Send share `email_draft_provider_attachment_ids`
+  for native/forwarded identities, honoring removals and copied-upload deduplication.
 
 - Forwarded-attachment delivery reads preserve `source_link_id` from the original
   message; the destination draft inbox is only the query access scope.

@@ -2,12 +2,12 @@ import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloseIcon from '@phosphor/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Dialog, Input, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 function parseEmails(raw: string): string[] {
@@ -135,11 +135,12 @@ export const InviteModal = () => {
                   Or share your personal referral link:
                 </p>
                 <div class="flex items-stretch gap-2">
-                  <input
+                  <Input
+                    size="sm"
                     type="text"
                     readOnly
                     value={url()}
-                    class="flex-1 px-3 py-1.5 text-xs border border-edge-muted rounded-xs bg-surface text-ink/70 outline-none select-all"
+                    class="flex-1 select-all text-ink-muted"
                     onClick={(e) => e.currentTarget.select()}
                   />
                   <Button

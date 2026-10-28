@@ -20,6 +20,12 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   call sites.
 - Add a co-located `*.docs.tsx` gallery page and focused `*.test.tsx` coverage
   for every ported component.
+- A primitive owns its look on desktop and touch. Expose role and size props
+  (`variant`, `size`, `fullWidth`, `iconOnly`) and typed values, not class hooks
+  into its parts (`itemClass`, `labelClass`); `class` places the root.
+- Before adding a control, check the roles in
+  [`design-system.md`](design-system.md); extend the component for that role
+  instead of adding a second one.
 - Keep `Input` a thin native control. Use `InputGroup` for icons, clear actions,
   inline Buttons, and shared ButtonGroup framing instead of adding composition
   props to `Input`.

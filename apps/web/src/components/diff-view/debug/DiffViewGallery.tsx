@@ -3,9 +3,9 @@
  * them, over example changes. Registered as the `diff-view-ui` component.
  */
 
-import CopyIcon from '@phosphor/copy.svg';
-import FileIcon from '@phosphor/file.svg';
-import { Button, SegmentedControl } from '@ui';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import { Button, Tabs } from '@ui';
 import { FileTree } from '@ui/components/FileTree';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { DiffCounts } from '../DiffCounts';
@@ -131,7 +131,8 @@ function LargeChangesetDemo() {
   const changes = createMemo(() => generatedChanges(Number(count())));
   return (
     <>
-      <SegmentedControl
+      <Tabs
+        touch="segmented"
         size="sm"
         aria-label="Files"
         value={count()}

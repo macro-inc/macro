@@ -52,6 +52,10 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import {
+  type DatabaseGridHost,
+  trackQueryRuns,
+} from '../primitives/track-query-runs';
 import { createColumnCasts } from '../queries/column-casts';
 import {
   addDatabaseColumnOptions,
@@ -76,6 +80,8 @@ export type DatabaseGridProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
   databaseId: string;
+  /** Where the grid is shown, for analytics. */
+  host: DatabaseGridHost;
   table: TableDetail;
   canEdit: boolean;
   /** The view on screen: a stored one, or the table's own All records. */
@@ -188,6 +194,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     targets: linkTargets,
     onTableChanged: (listener) =>
       useDatabaseTableChanges((change) => listener(change.tableId)),
+  });
+  trackQueryRuns({
+    databaseId,
+    tableId: props.tableId,
+    host: props.host,
+    view: () => props.view,
   });
   const source = withRelationLabels(
     createDatabaseRowsSource({

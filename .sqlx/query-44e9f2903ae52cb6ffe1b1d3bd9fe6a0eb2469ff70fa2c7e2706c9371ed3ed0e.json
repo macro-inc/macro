@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.sync_generation FROM email_links l WHERE l.id=$1 AND l.is_sync_active AND l.disconnect_requested_at IS NULL\n        AND (l.macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2)) FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "44e9f2903ae52cb6ffe1b1d3bd9fe6a0eb2469ff70fa2c7e2706c9371ed3ed0e"
+}

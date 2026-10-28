@@ -35,6 +35,21 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity?.overview).not.toContain('# Child');
   });
 
+  it('omits legacy namespaces without removing adjacent current session methods', () => {
+    const pages = fixturePages();
+    pages.set(
+      'src/macro/classes/Macro.md',
+      '# Macro\n### chats\n[Chats](../../entities/chats/namespace/classes/Chats.md)\n### agentSessions\nCurrent sessions\n### workspace\nLegacy feed'
+    );
+    const docs = packageEntityDocs(pages, { example: 'An example.' });
+    const core = docs.find((doc) => doc.name === 'core');
+    expect(core?.documentation).toContain(
+      '### agentSessions\nCurrent sessions'
+    );
+    expect(core?.documentation).not.toContain('### chats');
+    expect(core?.documentation).not.toContain('Legacy feed');
+  });
+
   it('fails generation on a missing referenced contract or missing namespace', () => {
     const pages = fixturePages();
     pages.delete('generated/example/types.gen/type-aliases/Child.md');
@@ -107,15 +122,33 @@ describe('TypeDoc documentation packaging', () => {
     expect(
       docs.find((doc) => doc.name === 'documents')?.documentation
     ).toContain('content()');
-    const workspace = docs.find((doc) => doc.name === 'workspace');
-    expect(workspace?.documentation).toContain('WorkspaceNamespace');
-    expect(workspace?.documentation).toContain('WorkspacePageOptions');
-    expect(workspace?.documentation).toContain('ApiEntityFilterAst');
-    expect(workspace?.overview).toContain('page()');
-    expect(workspace?.overview).toContain('list()');
-    expect(workspace?.overview).toContain('# Type Alias: WorkspaceType');
-    expect(workspace?.overview).toContain('calendar_event');
-    expect(workspace?.overview).toContain('ai_chat');
+    expect(docs.some((doc) => ['chats', 'workspace'].includes(doc.name))).toBe(
+      false
+    );
+    const core = docs.find((doc) => doc.name === 'core');
+    expect(core?.documentation).not.toMatch(/^### (chats|workspace)\b/m);
+    expect(core?.documentation).toContain('`agentSessions`');
+    expect(core?.documentation).not.toContain('property-chats');
+    expect(core?.documentation).not.toContain('property-workspace');
+    expect(docs.length).toBeLessThanOrEqual(32);
+    expect(
+      docs.find((doc) => doc.name === 'routines')?.documentation
+    ).toContain('RoutineOptions');
+    expect(docs.find((doc) => doc.name === 'agents')?.documentation).toContain(
+      'HarnessNamespace'
+    );
+    expect(docs.find((doc) => doc.name === 'apiKeys')?.documentation).toContain(
+      'UserApiKey'
+    );
+    expect(
+      docs.find((doc) => doc.name === 'entityMentions')?.overview
+    ).toContain('EntityMentionNamespace');
+    expect(
+      docs.find((doc) => doc.name === 'githubPullRequests')?.documentation
+    ).toContain('PullRequestChangeset');
+    expect(docs.find((doc) => doc.name === 'core')?.documentation).toContain(
+      'SharePermissionOptions'
+    );
     for (const doc of docs) {
       expect(doc.overview.length).toBeGreaterThan(0);
       expect(Buffer.byteLength(doc.overview)).toBeLessThan(16 * 1024);

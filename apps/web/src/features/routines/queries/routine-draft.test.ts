@@ -33,6 +33,7 @@ const cron: ScheduledAction = {
     prompt: '',
   },
   enabled: true,
+  run_visibility: 'unlisted',
   created_at: '2026-09-22T12:00:00Z',
   updated_at: '2026-09-22T12:00:00Z',
   configuration_revision: 1,
@@ -151,6 +152,7 @@ describe('routine execution payloads', () => {
         trigger: action.trigger,
         kind: action.kind,
         task: action.task,
+        run_visibility: action.run_visibility,
       });
       expect(JSON.stringify(body?.task)).toBe(before);
       expect(body?.task).toBe(action.task);
@@ -314,6 +316,7 @@ describe('cron routine payloads', () => {
         kind: 'Agent',
         task: cron.task,
         trigger: cron.trigger,
+        run_visibility: 'unlisted',
       });
     }
   );
@@ -325,6 +328,7 @@ describe('cron routine payloads', () => {
       kind: 'Agent',
       task: cron.task,
       trigger: cron.trigger,
+      run_visibility: 'unlisted',
     });
   });
 
@@ -412,5 +416,39 @@ describe('one-off routines', () => {
     expect(
       validateRoutineDraft({ ...draft(), timezone: 'Mars/Olympus' })
     ).toContain('valid time zone');
+  });
+});
+
+describe('run visibility', () => {
+  it('creates routines whose runs are hidden unless shown', () => {
+    expect(draftToCreateBody(draft())).toMatchObject({
+      run_visibility: 'unlisted',
+    });
+    expect(
+      draftToCreateBody({ ...draft(), runVisibility: 'listed' })
+    ).toMatchObject({ run_visibility: 'listed' });
+  });
+
+  it('loads, changes, and duplicates the setting', () => {
+    const shown: ScheduledAction = { ...cron, run_visibility: 'listed' };
+    const loaded = loadedDraft(shown);
+    expect(loaded.runVisibility).toBe('listed');
+    expect(draftToUpdateBody(loaded, shown)).toMatchObject({
+      run_visibility: 'listed',
+    });
+    expect(
+      draftToUpdateBody({ ...loaded, runVisibility: 'unlisted' }, shown)
+    ).toMatchObject({ run_visibility: 'unlisted' });
+    expect(scheduleToDuplicateBody(shown)).toMatchObject({
+      run_visibility: 'listed',
+    });
+  });
+
+  it('keeps the stored setting for a draft saved before it existed', () => {
+    const shown: ScheduledAction = { ...cron, run_visibility: 'listed' };
+    const { runVisibility: _, ...older } = loadedDraft(shown);
+    expect(draftToUpdateBody(older, shown)).toMatchObject({
+      run_visibility: 'listed',
+    });
   });
 });

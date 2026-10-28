@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { registerActivityRevalidator } from '../activity/push-registry';
 import { registerActiveGraphqlPreviewQuery } from '../preview/active-queries';
 import { registerActiveGraphqlSoupQuery } from '../soup/graphql/active-queries';
+import { soupKeys } from '../soup/keys';
 import { databasesKeys } from '../storage/keys';
 import { refreshSharedAccess } from './requests';
 
@@ -33,7 +34,7 @@ afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
 });
 
-it('refreshes mounted lists for newly visible documents and removes revoked rows and previews', () => {
+it('refreshes mounted lists for newly visible documents and removes revoked rows and previews', async () => {
   let granted = false;
   const rows: string[] = [];
   let preview = 'Private document';
@@ -68,7 +69,8 @@ it('refreshes mounted lists for newly visible documents and removes revoked rows
   expect(activity).toHaveBeenLastCalledWith(new Set(['document']));
   granted = false;
   refreshSharedAccess({ entityType: 'document', entityId: 'document' });
-  expect(rows).toEqual([]);
+  // The list refresh coalesces behind the one still in flight and follows it.
+  await vi.waitFor(() => expect(rows).toEqual([]));
   expect(preview).toBe('No access');
   expect(mocks.lists).toHaveBeenCalledTimes(2);
 });
@@ -97,5 +99,12 @@ it('refreshes folder descendants and the database discovery list after sharing c
   });
   expect(mocks.invalidate).toHaveBeenCalledWith({
     queryKey: databasesKeys.detail('database').queryKey,
+  });
+});
+
+it('drops cached search answers, which only a new search filters by current access', () => {
+  refreshSharedAccess({ entityType: 'document', entityId: 'document' });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: soupKeys.search._def,
   });
 });

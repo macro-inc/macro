@@ -1,4 +1,4 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Dropdown } from '@ui';
 import { For } from 'solid-js';
 import type { AccessLevel } from '../core/types';

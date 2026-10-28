@@ -17,6 +17,7 @@ fn user_id() -> MacroUserIdStr<'static> {
 
 fn user() -> MacroUserAuthentication {
     MacroUserAuthentication {
+        agent_id: None,
         macro_user_id: user_id(),
         user_context: Default::default(),
     }

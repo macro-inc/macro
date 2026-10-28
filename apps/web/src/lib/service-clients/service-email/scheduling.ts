@@ -75,9 +75,14 @@ export const schedulingClient = {
       `${host}/public/bookings/${encodeURIComponent(id)}`,
       { headers: { Authorization: `Bearer ${token}` } }
     ),
-  replacementSlots: (id: string, token: string, date: string) =>
+  replacementSlots: (
+    id: string,
+    token: string,
+    date: string,
+    timeZone: string
+  ) =>
     safeFetch<{ slots: { startsAt: string; endsAt: string }[] }>(
-      `${host}/public/bookings/${encodeURIComponent(id)}/slots?date=${encodeURIComponent(date)}`,
+      `${host}/public/bookings/${encodeURIComponent(id)}/slots?date=${encodeURIComponent(date)}&timeZone=${encodeURIComponent(timeZone)}`,
       { headers: { Authorization: `Bearer ${token}` } }
     ),
   reschedule: (id: string, token: string, startsAt: string) =>

@@ -143,6 +143,7 @@ pub(super) fn authenticated_user(
         })?;
 
     Ok(MacroUserAuthentication {
+        agent_id: None,
         macro_user_id,
         user_context,
     })

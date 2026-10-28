@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,$2,$3,false)\n            ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa147c83c17fcf6650b8dd9c1e700a7d76dfee2d2a347b3c7e8d1c8b1e3ad414"
+}

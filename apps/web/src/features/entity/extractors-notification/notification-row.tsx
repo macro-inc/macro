@@ -3,9 +3,9 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import type { NotificationType } from '@core/types';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { openNotification, type UnifiedNotification } from '@notifications';
-import CheckIcon from '@phosphor/check.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import { Layout } from '../core/Layout';
@@ -83,6 +83,11 @@ function NotificationRowContent(props: {
       <Match when={tag() === 'channel_invite'}>
         <span class="text-xs text-ink-muted/80 italic">
           to join the channel
+        </span>
+      </Match>
+      <Match when={tag() === 'channel_access_requested'}>
+        <span class="text-xs text-ink-muted/80 italic">
+          approve or deny it in the channel
         </span>
       </Match>
       <Match when={tag() === 'invite_to_team'}>

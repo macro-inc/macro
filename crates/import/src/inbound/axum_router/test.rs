@@ -2,13 +2,14 @@ use super::*;
 use ai_billing::{AiAdmissionError, DenyReason};
 use axum::{body::Body, http::Request};
 use macro_authorization::{InternalIdentityClaims, MacroAuthorizationError};
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
 use rootcause::Report;
 use std::sync::Mutex;
 use tower::ServiceExt;
 
-use crate::domain::{models::Initiator, ports::Result};
+use crate::domain::ports::Result;
 
 const TEST_USER: &str = "macro|test@example.com";
 
@@ -43,6 +44,58 @@ impl MacroAuthorizationService for FakeAuthorization {
 struct FakeImportService {
     calls: Mutex<Vec<(MacroUserIdStr<'static>, ImportSource)>>,
     outcome: Mutex<Option<Result<bool>>>,
+    cancels: Mutex<Vec<MacroUserIdStr<'static>>>,
+}
+
+impl NotionWorkspaceImporter for FakeImportService {
+    async fn prepare_notion_import(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _scope: import_notion::domain::model::ImportScope,
+        _sharing: Option<crate::domain::models::NotionSharing>,
+        _wait: std::time::Duration,
+    ) -> Result<NotionImportReport> {
+        unimplemented!("routes never plan")
+    }
+
+    async fn notion_import_report(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+    ) -> Result<NotionImportReport> {
+        let cancelled = !self.cancels.lock().unwrap().is_empty();
+        Ok(NotionImportReport {
+            status: Some(if cancelled {
+                crate::domain::models::RunStatus::Dismissed
+            } else {
+                crate::domain::models::RunStatus::Importing
+            }),
+            imported: 3,
+            ..NotionImportReport::default()
+        })
+    }
+
+    async fn attach_notion_review(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _review_id: Uuid,
+        _session_id: agent_session::domain::model::AgentSessionId,
+    ) -> Result<u64> {
+        unimplemented!("routes never attach reviews")
+    }
+
+    async fn start_notion_write(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        _review_id: Uuid,
+        _choices: crate::domain::models::NotionWriteChoices,
+    ) -> Result<NotionImportReport> {
+        unimplemented!("routes never write")
+    }
+
+    async fn cancel_notion_import(&self, user: &MacroUserIdStr<'static>) -> Result<bool> {
+        self.cancels.lock().unwrap().push(user.clone());
+        Ok(true)
+    }
 }
 
 impl ImportService for FakeImportService {
@@ -59,31 +112,6 @@ impl ImportService for FakeImportService {
         unimplemented!("discovery must not read state")
     }
 
-    async fn start_gather(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _source: ImportSource,
-        _auto_import: bool,
-    ) -> Result<bool> {
-        unimplemented!("discovery must not start an onboarding gather")
-    }
-
-    async fn retry_gather(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _source: ImportSource,
-    ) -> Result<bool> {
-        unimplemented!("discovery must not retry a gather")
-    }
-
-    async fn dismiss_run(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _source: ImportSource,
-    ) -> Result<()> {
-        unimplemented!()
-    }
-
     async fn run_import(
         &self,
         _user: MacroUserIdStr<'static>,
@@ -92,28 +120,13 @@ impl ImportService for FakeImportService {
     ) -> Result<RunImportOutcome> {
         unimplemented!("discovery must not import candidates")
     }
-
-    async fn discard_staged_by_initiator(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _initiator: Initiator,
-    ) -> Result<u64> {
-        unimplemented!()
-    }
-
-    async fn delete_staged_by_initiator(
-        &self,
-        _user: MacroUserIdStr<'static>,
-        _initiator: Initiator,
-    ) -> Result<u64> {
-        unimplemented!()
-    }
 }
 
 fn discovery_router(outcome: Result<bool>) -> (Router, Arc<FakeImportService>) {
     let service = Arc::new(FakeImportService {
         calls: Mutex::new(Vec::new()),
         outcome: Mutex::new(Some(outcome)),
+        cancels: Mutex::new(Vec::new()),
     });
     let router = import_router(ImportRouterState {
         service: service.clone(),
@@ -249,4 +262,119 @@ async fn admission_failures_use_shared_http_contract() {
 fn other_errors_remain_internal() {
     let response = error_response(ImportError::Other(anyhow::anyhow!("private diagnostic")));
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_it_stopped() {
+    let (router, service) = discovery_router(Ok(true));
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/import/notion/cancel")
+                .header("authorization", "Bearer valid")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        service.cancels.lock().unwrap().as_slice(),
+        [MacroUserIdStr::parse_from_str(TEST_USER)
+            .unwrap()
+            .into_owned()]
+    );
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let report: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(report["status"], "dismissed");
+    assert_eq!(report["imported"], 3);
+}
+
+impl WorkspaceImporter for FakeImportService {
+    async fn prepare_workspace_import(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Option<crate::domain::models::NotionSharing>,
+        _: std::time::Duration,
+    ) -> Result<NotionImportReport> {
+        unreachable!("routes do not plan")
+    }
+    async fn workspace_import_report(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> Result<NotionImportReport> {
+        self.calls.lock().unwrap().push((user.clone(), source));
+        self.notion_import_report(user).await
+    }
+    async fn attach_workspace_review(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: agent_session::domain::model::AgentSessionId,
+    ) -> Result<u64> {
+        unreachable!()
+    }
+    async fn start_workspace_write(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: ImportSource,
+        _: Uuid,
+        _: crate::domain::models::NotionWriteChoices,
+    ) -> Result<NotionImportReport> {
+        unreachable!()
+    }
+    async fn cancel_workspace_import(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> Result<bool> {
+        self.calls.lock().unwrap().push((user.clone(), source));
+        self.cancel_notion_import(user).await
+    }
+}
+
+#[tokio::test]
+async fn workspace_routes_authorize_and_forward_the_exact_source() {
+    for source in ["notion", "linear", "jira"] {
+        for (method, suffix, expected_calls) in [("GET", "", 1), ("POST", "/cancel", 2)] {
+            let (router, service) = discovery_router(Ok(true));
+            let response = router
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(format!("/import/workspaces/{source}{suffix}"))
+                        .header("authorization", "Bearer valid")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let calls = service.calls.lock().unwrap();
+            assert_eq!(calls.len(), expected_calls);
+            assert!(calls.iter().all(
+                |(user, forwarded)| user.as_ref() == TEST_USER && forwarded.as_ref() == source
+            ));
+            let (router, service) = discovery_router(Ok(true));
+            let response = router
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(format!("/import/workspaces/{source}{suffix}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            assert!(service.calls.lock().unwrap().is_empty());
+        }
+    }
 }

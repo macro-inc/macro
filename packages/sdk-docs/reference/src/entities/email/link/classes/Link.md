@@ -1,6 +1,6 @@
 # Class: Link
 
-An email link: a connected inbox (e.g. a Gmail account) that threads and
+An email link: a connected inbox (e.g. Gmail or Outlook) that threads and
 messages sync through. A free-to-construct handle, resolved from the
 caller's connected links.
 
@@ -18,10 +18,22 @@ caller's connected links.
 | <a id="property-issyncactive"></a> `isSyncActive` | `readonly` | () => `Promise`\<`boolean`\> | Whether syncing is currently active for this inbox. | - |
 | <a id="property-needsreauth"></a> `needsReauth` | `readonly` | () => `Promise`\<`boolean`\> | Whether the inbox needs to be re-authenticated. | - |
 | <a id="property-photourl"></a> `photoUrl` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | The inbox's avatar URL, if any. | - |
-| <a id="property-provider"></a> `provider` | `readonly` | () => `Promise`\<`"GMAIL"`\> | The email provider (e.g. `GMAIL`). | - |
+| <a id="property-provider"></a> `provider` | `readonly` | () => `Promise`\<[`UserProvider`](../../../../../generated/email/types.gen/type-aliases/UserProvider.md)\> | The email provider (e.g. `GMAIL` or `OUTLOOK`). | - |
 | <a id="property-syncstatus"></a> `syncStatus` | `readonly` | () => `Promise`\<[`SyncStatus`](../../../../../generated/email/types.gen/type-aliases/SyncStatus.md)\> | The inbox's sync status. | - |
 
 ## Methods
+
+### settingsOperations()
+
+> **settingsOperations**(): `Promise`\<[`MailboxSettingsOperation`](../../../../../generated/email/types.gen/type-aliases/MailboxSettingsOperation.md)[]\>
+
+Read category and sender-policy changes for this inbox.
+
+#### Returns
+
+`Promise`\<[`MailboxSettingsOperation`](../../../../../generated/email/types.gen/type-aliases/MailboxSettingsOperation.md)[]\>
+
+***
 
 ### toJSON()
 

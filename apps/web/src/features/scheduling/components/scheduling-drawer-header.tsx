@@ -1,5 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 
 export function SchedulingDrawerHeader(props: {

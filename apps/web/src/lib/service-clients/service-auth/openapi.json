@@ -10,6 +10,199 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agents/{agent_id}/api-key": {
+      "get": {
+        "tags": ["crate::api::agent_api_keys"],
+        "summary": "The agent's API key, if it has one, and whether its plan allows one.",
+        "operationId": "get_agent_api_key",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApiKey"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crate::api::agent_api_keys"],
+        "summary": "Registers or replaces the agent's API key, for its model's provider.\nOnly in-memory agents on an Anthropic or OpenAI model, on a paid plan.",
+        "operationId": "put_agent_api_key",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutAgentApiKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApiKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crate::api::agent_api_keys"],
+        "summary": "Forgets the agent's API key. Does not revoke it at the provider; succeeds\nwhen there was none.",
+        "operationId": "delete_agent_api_key",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentApiKey"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-billing/auto-reload": {
       "patch": {
         "tags": ["ai_billing"],
@@ -1768,6 +1961,45 @@
         }
       }
     },
+    "/link/email/providers": {
+      "get": {
+        "tags": ["link::outlook"],
+        "operationId": "email_connection_providers",
+        "parameters": [
+          {
+            "name": "original_url",
+            "in": "query",
+            "description": "**OPTIONAL**. Where the admin-consent flow returns to; required for `outlook_admin_consent_url`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailConnectionProviders"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/link/github": {
       "post": {
         "tags": ["link::github"],
@@ -1960,6 +2192,16 @@
             }
           },
           {
+            "name": "reconnect_link_id",
+            "in": "query",
+            "description": "Existing accessible Gmail inbox being reconnected; does not consume an additional inbox slot.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "scopes",
             "in": "query",
             "description": "**OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.",
@@ -2106,6 +2348,25 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "scopes",
+            "in": "query",
+            "description": "mail (default) or mail_and_calendar. Calendar requests obey the deployment calendar consent switch.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconnect_link_id",
+            "in": "query",
+            "description": "Existing accessible inbox being reconnected or granted calendar consent.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2130,6 +2391,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
             "description": "",
             "content": {
               "application/json": {
@@ -2774,6 +3045,9 @@
         "responses": {
           "200": {
             "description": ""
+          },
+          "303": {
+            "description": "Back to the app with link identifiers, an `email_link_error`, or an `email_link_notice`"
           },
           "304": {
             "description": "",
@@ -3482,6 +3756,270 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/invite-link": {
+      "get": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Gets the team's invite link. Anyone who may invite people to the team may\nsee it.",
+        "operationId": "get_team_invite_link",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInviteLinkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Creates the team's invite link, replacing any existing one. Anyone who may\ninvite people may create the first link; replacing one requires a team\nadmin or owner.",
+        "operationId": "create_team_invite_link",
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedTeamInviteLinkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Turns off the team's invite link. Requires a team admin or owner.",
+        "operationId": "delete_team_invite_link",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/invite-link/join": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Joins the team an invite link belongs to.",
+        "operationId": "join_team_by_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamInviteLinkTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinTeamByInviteLinkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/invite-link/team": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::invite_link"],
+        "summary": "Gets the team an invite link joins, so the user can see it before joining.",
+        "operationId": "get_team_by_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamInviteLinkTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInviteLinkTeam"
                 }
               }
             }
@@ -5097,6 +5635,33 @@
         "type": "string",
         "enum": ["A", "B"]
       },
+      "AgentApiKey": {
+        "type": "object",
+        "description": "An agent's API key, and whether its turns can run on it.",
+        "required": ["planAllows"],
+        "properties": {
+          "key": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SavedAgentApiKey",
+                "description": "The saved key, if any."
+              }
+            ]
+          },
+          "planAllows": {
+            "type": "boolean",
+            "description": "Whether the agent owner's plan includes API keys. A key saved before a\ndowngrade is still listed, and removable, but unused."
+          }
+        }
+      },
+      "AgentApiKeyProvider": {
+        "type": "string",
+        "description": "A provider an agent can bring its own key for.",
+        "enum": ["anthropic", "openai"]
+      },
       "AiBillingErrorBody": {
         "type": "object",
         "description": "Error response body.",
@@ -5489,6 +6054,17 @@
           }
         }
       },
+      "CreatedTeamInviteLinkResponse": {
+        "type": "object",
+        "description": "A newly created team invite link.",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/TeamInviteLinkToken",
+            "description": "The new link's token. Any previous link stops working."
+          }
+        }
+      },
       "CreditCheckoutRequestBody": {
         "type": "object",
         "description": "Request body for [`create_credit_checkout_handler`].",
@@ -5582,6 +6158,23 @@
           "overage_limit_reached",
           "overage_payment_failed"
         ]
+      },
+      "EmailConnectionProviders": {
+        "type": "object",
+        "description": "Actual deployment availability for the provider selector.",
+        "required": ["gmail", "outlook"],
+        "properties": {
+          "gmail": {
+            "type": "boolean"
+          },
+          "outlook": {
+            "type": "boolean"
+          },
+          "outlook_admin_consent_url": {
+            "type": ["string", "null"],
+            "description": "Where a Microsoft 365 administrator approves Macro for their whole\ndirectory. Present when Outlook is configured and the request named an\n`original_url` for the administrator's browser to return to."
+          }
+        }
       },
       "EmptyResponse": {
         "type": "object",
@@ -6470,6 +7063,22 @@
           }
         }
       },
+      "JoinTeamByInviteLinkResponse": {
+        "type": "object",
+        "description": "The result of opening a team invite link.",
+        "required": ["team_id", "already_member"],
+        "properties": {
+          "already_member": {
+            "type": "boolean",
+            "description": "True when the user was already on the team and nothing changed."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team the link joins."
+          }
+        }
+      },
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
@@ -6880,6 +7489,17 @@
           }
         }
       },
+      "PutAgentApiKeyRequest": {
+        "type": "object",
+        "description": "The key someone pasted.",
+        "required": ["apiKey"],
+        "properties": {
+          "apiKey": {
+            "type": "string",
+            "description": "An Anthropic (`sk-ant-…`) or OpenAI (`sk-…`) key, for the provider of\nthe agent's model."
+          }
+        }
+      },
       "PutCursorApiKeyRequest": {
         "type": "object",
         "description": "The key the user pasted.",
@@ -6932,6 +7552,22 @@
           "email": {
             "type": "string",
             "description": "The email address to resend the verification email to"
+          }
+        }
+      },
+      "SavedAgentApiKey": {
+        "type": "object",
+        "description": "The agent's saved key. Never includes the key.",
+        "required": ["provider", "updatedAt"],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/AgentApiKeyProvider",
+            "description": "The provider the key is for."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was last replaced."
           }
         }
       },
@@ -7176,6 +7812,54 @@
           "team_role": {
             "$ref": "#/components/schemas/TeamRole",
             "description": "The role being invited as"
+          }
+        }
+      },
+      "TeamInviteLinkResponse": {
+        "type": "object",
+        "description": "The caller's team invite link.",
+        "properties": {
+          "token": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TeamInviteLinkToken",
+                "description": "The link's token, or null when the team has no invite link."
+              }
+            ]
+          }
+        }
+      },
+      "TeamInviteLinkTeam": {
+        "type": "object",
+        "description": "The team an invite link joins, shown before the user accepts.",
+        "required": ["team_id", "team_name"],
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id of the team the link joins."
+          },
+          "team_name": {
+            "type": "string",
+            "description": "Name of the team the link joins."
+          }
+        }
+      },
+      "TeamInviteLinkToken": {
+        "type": "string",
+        "description": "The secret in a team's shareable invite link.\n\nAnyone signed in who holds the token can join the team, so it is a random\nvalue rather than a time-ordered id, and an admin resetting the link\nreplaces it."
+      },
+      "TeamInviteLinkTokenRequest": {
+        "type": "object",
+        "description": "Identifies an invite link. The token travels in the body, not the path, so\nrequest spans and access logs that record the path never see it.",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/TeamInviteLinkToken",
+            "description": "The invite link's token."
           }
         }
       },

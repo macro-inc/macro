@@ -2,7 +2,7 @@
 
 ## Pull requests — `/app/reviews/pr/<foreignEntityId>`
 
-Opening **Reviews** from the mobile dock's **More** drawer starts on **Pull
+Opening **Reviews** from the mobile dock or its **More** drawer starts on **Pull
 requests** (the **All** scope). Explicit review-tab links keep their selected
 scope; desktop's default scope remains **Involves me**.
 

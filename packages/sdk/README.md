@@ -186,7 +186,27 @@ Databases are collections of tables. Tables, columns, and views are parts of
 a database, not entities of their own, so they come back as handles that
 resolve through the database's schema.
 
-Every write to a database's schema or rows is an op sent to one endpoint,
+SQL is available through `database.query(sql)` or
+`macro.databases.query(sql, { database })`. The scoped database resolves
+unqualified names; joins can reach any other database the caller can view.
+Results contain discriminated cell values, typed source rows and table-version
+handles. SQL can also write; a statement executes once without automatic retries.
+
+```ts
+const database = macro.databases.byId('database-id');
+const result = await database.query('SELECT "Name" FROM "Guests"');
+console.log(result.result?.rows);
+await database.query(`UPDATE "Guests" SET "Status" = 'Going' WHERE "Name" = 'Sam'`, {
+  baseVersions: result.readVersions,
+});
+```
+
+`baseVersions` guards written tables atomically. Check `truncatedTables`:
+nonempty means a read hit the row cap and aggregates may be partial. SQL schemas
+are dynamic, so result cells use a generated tagged union rather than an inferred
+TypeScript interface for each table. The HTTP route is `POST /databases/query`.
+
+The SDK's schema methods write typed ops through one endpoint,
 `POST /databases/{id}/ops`. The methods below each send a one-op batch: the
 SDK mints the new table, column, and option ids (UUIDv7) itself and builds the
 handle it returns from the op's result.
@@ -333,6 +353,163 @@ await macro.channels
   .byId(channelId)
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
+
+### Routines
+
+Create scheduled or event-triggered agent tasks through `macro.routines`.
+Routine configuration takes typed agent and event resource handles:
+
+```ts
+const routine = await macro.routines.create({
+  name: 'Daily summary',
+  prompt: 'Summarize my open tasks.',
+  userPrompt: 'A daily task summary',
+  trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
+});
+await routine.setEnabled(false);
+const transcript = await routine.execute(); // Chat or AgentSession, if available
+const executions = await routine.history(); // Each retains its parent routine
+```
+
+Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
+`entities` takes typed references such as `{ type: 'document', entity: doc }`.
+Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
+`routine.update(options)` replaces task and trigger settings; `delete()` removes it.
+
+### Agents, conversations and hosts
+
+`macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes
+channel, team and host handles. Updates replace the configuration.
+`channel.agentConversations()` returns conversations with session and turn handles;
+`conversation.startFresh(session)` and `turn.retry(actionId)` expose explicit
+conversation controls. `session.toolApprovalById(id).answer(answer)` answers a
+permission request scoped to that session.
+
+`macro.harnesses.list/me/byId` manages agent hosts. `createPairing(options)` returns
+separate pairing and device handles plus a device secret. Approve through
+`pairing.approve(...)`, then `device.claim(deviceSecret)`; a pending claim returns
+`undefined`. Host tokens and device secrets are never stored in entity handles.
+Self-host operations (`me`, `agents`, `sessions`, `deleteSelf`) require the backend's
+host authentication; ordinary user or bot credentials do not grant those rights.
+
+### Drafts, filters and follow-ups
+
+```ts
+const inbox = (await macro.email.links())[0];
+const draft = await macro.email.createDraft({
+  subject: 'Follow-up',
+  to: [{ email: 'ada@example.com' }],
+  bodyHtml: '<p>Thanks for meeting.</p>',
+}, inbox);
+await draft.update({ subject: 'Follow-up notes', bodyText: 'Thanks for meeting.' });
+const upload = await draft.addAttachment({ fileName: 'notes.txt', sha, size });
+// Upload bytes to upload.uploadUrl, then verify before sending:
+await upload.attachment.complete();
+await draft.schedule('2026-11-01T09:00:00Z');
+await draft.unschedule();
+```
+
+HTML input is UTF-8 encoded for the wire contract. Draft writes retain the draft's
+inbox selection, including delegated inboxes. `update` replaces content; omitted
+recipients and body fields follow the server's replacement semantics.
+`draft.forwardAttachment(attachment)` returns a draft-scoped attachment handle.
+Use its `remove()` method to detach it. `email.scheduled({ inbox, pageSize })`
+automatically pages; breaking iteration stops further requests.
+
+`email.filters(inbox)` and `email.upsertFilter(options, inbox)` return filter handles
+with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
+`email.contacts()` returns the service's address/interaction buckets.
+`thread.calendarInvitations()` reads resolved invitations. `thread.followup()` and
+`thread.setFollowup(command)` expose revision-aware reminder state; commands require
+caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
+returns thread handles alongside reminder snapshots.
+
+### CRM pipelines and initiatives
+
+`macro.crm.pipelines.create/list/byId` returns pipeline handles. Rename, sharing,
+permissions and trash operations live on the pipeline. `pipeline.table()` returns
+its table handle, with column and row handles. `rows()` and `queryRows({ rows, query })`
+fetch through the pipeline's authorization boundary and auto-paginate.
+`pipeline.applyOps(ops, { baseVersions: [{ table, version }] })` accepts the generated
+atomic database operation contract, including batch-local UUIDs, like
+`Database.applyOps`. Table and column reads share a schema cache invalidated by
+successful batches. Call `row.refresh()` to reload a row after a batch changes it.
+
+`macro.initiatives.create/list/byId` groups tasks and members. Relations return user
+and task handles; `initiative.update({ name, members, sharePermission })` and
+`delete()` manage it.
+
+### Access requests and message threads
+
+Documents, chats, projects, initiatives, databases, calls, email threads and agent
+sessions expose `.access`. `access.state()` returns review rights, typed requests,
+and an optional continuation offset. `submit(level)`, `cancel(revision)`,
+`request.resolve(level)`, `direct()`, `grant(user, level)`, and `remove(user)` use
+server authorization and optimistic request revisions. Omit the level on
+`request.resolve()` to decline. Resolved request handles retain their result even
+after they leave the pending listing.
+
+New sharing updates use `SharePermissionOptions`: channel grants name a channel
+handle, operation (`add`, `replace`, `remove`) and optional access level.
+
+Channels, documents, CRM companies/contacts and calls expose
+`messageThreadById(id)` for thread resolution, anchor detachment and deletion.
+`timelinePage({ messages, around, cursor, limit })` returns a mixed timeline with
+seeded message handles and typed activity actors. Selectors must belong to the same
+parent. Cursors are opaque; pass the returned cursor on the next request.
+`channel.recordActivity(type)` records a view or interaction; `channels.activity()`
+reads activity handles. `ChannelPicture.byId(uploadId)` references an uploaded
+picture for `channel.setPicture(picture)`; omit it to clear the picture.
+
+### Meetings and calendar browsing
+
+`macro.meetings.create/list/active/lookup` returns meeting handles. `list()` contains
+the caller's newest 100 standalone meetings; use `lookup(invitationToken)` for
+channel meetings and other invitations. A seeded meeting retains its lookup token
+when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
+`inviteUsers(users)`, `invitePermissions` and `webUrl` live on the meeting.
+`call.meeting()` creates or reads its shareable meeting; calls also expose
+`editTranscript(assignments)` and `toggleTeamShare()`.
+
+`calendar.occurrences(viewport)` auto-paginates and seeds event handles.
+`calendar.teamPage(viewport)` includes the roster and an optional next cursor;
+`teamOutOfOffice(viewport)` reports `hasMore` when its bounded results are truncated.
+`availabilityCalendars`, `calendar.setContributesToAvailability`, `teamSharing` and
+`setTeamSharing` manage availability and sharing preferences.
+
+`calendar.noteDocuments(query)` suggests owned markdown and optional team handles.
+Use `event.linkNote(document, occurrence, { team })` to grant meeting viewers view
+access; omit `team` for meeting access only. One-time notes follow reschedules;
+recurring notes stay on the selected occurrence. `event.notes(occurrence)` returns
+`CalendarNote` handles with `setTeam(team?)` and `unlink()`. Existing editing and
+other document sharing stay unchanged. Owners can discover every durable grant
+through `document.meetingNotes()` and unlink it even when the meeting is unavailable.
+
+### Document lifecycle and other resources
+
+`documents.createUpload(options)` reserves a binary document and returns upload
+instructions. `document.prepareSave(parts)`, `save(options)` and `simpleSave()` expose
+the existing content lifecycle; upload bytes before committing. Version handles
+come from `document.version(number)`. PDF highlights and comment anchors are scoped
+handles from `anchors()` / `createHighlight(options)`, with kind-checked edits and
+deletion. `documents.byTeamSlug('ENG-42')` resolves a task reference.
+`sharePermissions`, `permissionsToken` and `documents.validatePermissionsToken`
+expose document access contracts.
+
+`macro.githubPullRequests.byId(foreignEntityId)` reads stored GitHub snapshots;
+`changes()` returns a changeset handle with `patch()`. `macro.entityMentions.create`
+takes typed source/target references and returns a deletable mention handle.
+`macro.unfurls.get(url)` and `bulk(urls)` read URL preview metadata.
+
+`macro.apiKeys.create(name)` returns `{ key, secret }`. Save the secret immediately;
+the handle only retains metadata. `list()` and `key.delete()` manage keys.
+`tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
+
+`chat.send({ content, model, attachments, toolset })` starts a generation and returns
+its chat, response message and cancellable stream handle. Use
+`generation.message.refresh()` after it changes; reading an unfinished response
+may report that it is not yet available. Tools can perform writes unless disabled.
+`macro.ai.usage({ from, until, users, features })` reads AI usage.
 
 # Events
 

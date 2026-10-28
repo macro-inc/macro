@@ -1,4 +1,4 @@
-/* Matches the homepage CRM pipeline cursor exactly; every demo reuses it. */
+/* Shared operating pointer; editor collaborators use the caret variant. */
 .demo-cursor {
   position: absolute;
   top: 0;
@@ -6,18 +6,22 @@
   z-index: 8;
   font-size: 20px;
   pointer-events: none;
-  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.4));
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.25));
+  transition: transform 520ms cubic-bezier(.25, .75, .25, 1);
 }
 
 .demo-cursor > svg {
   display: block;
-  width: 0.7em;
-  height: 0.7em;
+  width: 20px;
+  height: 23px;
   overflow: visible;
 }
 
 .demo-cursor > svg path {
-  fill: oklch(0.96 0 59);
+  fill: #151515;
+  stroke: #fff;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
 }
 
 .demo-cursor > span {
@@ -33,14 +37,27 @@
 }
 
 .demo-cursor[data-clicking='true'] > svg {
-  animation: demo-cursor-click 600ms ease both;
+  animation: demo-cursor-click 180ms ease both;
+  transform-origin: 1px 1px;
 }
 
 @keyframes demo-cursor-click {
   55% {
-    transform: scale(0.8);
+    transform: scale(0.92);
   }
 }
+
+.demo-cursor[data-caret='true'] { filter: none; transition: none; }
+.demo-cursor[data-caret='true'] > svg { display: none; }
+.demo-cursor[data-caret='true']::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 19px;
+  background: #9caeff;
+  bottom: 0;
+}
+.demo-cursor[data-caret='true'] > span { top: -38px; left: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .demo-cursor {

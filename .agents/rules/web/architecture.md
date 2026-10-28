@@ -26,8 +26,13 @@ Module layout, layering, and TypeScript conventions.
 - **FE-21** No `any` — proper types or `unknown` + type guards.
 - **FE-31** Never cast a string to `ItemType` — parse it with `stringToItemType`
   from `@service-storage/client`, the one owner of entity-type spellings (email
-  threads alone are stored as `email`, `thread`, and `email_thread`). Enforced
-  by ast-grep `ts-no-item-type-cast` + `tsx-no-item-type-cast`, CI error.
+  threads alone are stored as `email`, `thread`, and `email_thread`). The same
+  goes for a service's `EntityType`: each service has its own enum, so parse
+  with `parseEntityType` (properties) or type the source rather than casting
+  (`as EntityReference['entity_type']` let `AGENT_SESSION` crash the property
+  editor). Enforced by ast-grep `ts-no-item-type-cast` +
+  `tsx-no-item-type-cast` for `as ItemType`, `as EntityType`, and
+  `as EntityReference['entity_type']`, CI error.
 - **FE-33** New features and feature restructures use the [layered feature
   architecture](../../../docs/architecture/frontend-features.md), with
   `features/activity` as the reference. Use `core/` for pure feature types and
@@ -73,6 +78,16 @@ Module layout, layering, and TypeScript conventions.
   a `<Block>` wrapper merely to satisfy a missing dependency. If shared code
   needs an owner or other host capability, expose it through the owning surface
   context instead of borrowing `BlockContext`.
+- **FE-56** Tauri IPC promises (`invoke`, `listen`, `addPluginListener`,
+  `unregister`, and plugin wrappers) follow FE-13 in teardown too: native
+  resources are often already gone then, so the call rejects. `UnlistenFn` is
+  typed `() => void` but returns the unlisten IPC promise, which the floating
+  promise lint can't see, so start it with `fireAndForget(unlisten(), surface)`
+  or `fireAndForget(unlistenPromise.then((fn) => fn()), surface)`, never a bare
+  call. Channel `onmessage` handlers must never throw, because Tauri then
+  stalls every later message on that channel. Enforced by ast-grep
+  `ts-/tsx-tauri-ipc-promise-handled`, CI error, which also catches IPC chains
+  returned from an `onCleanup` arrow; unlisten calls still need review.
 
 ## TypeScript
 

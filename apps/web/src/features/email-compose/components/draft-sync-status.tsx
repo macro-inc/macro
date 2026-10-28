@@ -1,13 +1,8 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { Button } from '@ui';
+import { Show } from 'solid-js';
 import type { DraftSyncViewState } from '../core/local-draft';
 
-/** Durable recovery remains visible after remounting a failed draft. */
+/** In-composer banner for draft failures; saving itself stays silent. */
 export function DraftSyncStatus(props: {
   state?: DraftSyncViewState;
   busy: boolean;
@@ -15,66 +10,38 @@ export function DraftSyncStatus(props: {
   onRetry(): void;
   onKeepEditing(): void;
 }) {
-  const [showSaved, setShowSaved] = createSignal(false);
-  const savedVersion = createMemo(() =>
-    props.state?.failed || props.error ? undefined : props.state?.savedVersion
-  );
-  createEffect(() => {
-    if (!savedVersion()) {
-      setShowSaved(false);
-      return;
-    }
-    setShowSaved(true);
-    const timer = setTimeout(() => setShowSaved(false), 2_000);
-    onCleanup(() => clearTimeout(timer));
-  });
   return (
     <Show when={props.state}>
       {(state) => (
         <div
-          class="mr-2 flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-ink-muted"
-          role={state().failed || props.error ? 'alert' : 'status'}
-          title={
-            state().failed || props.error
-              ? (props.error ?? state().detail ?? state().message)
-              : undefined
-          }
+          class="flex flex-wrap items-center gap-2 border-b border-edge-muted p-3 text-sm"
+          role="alert"
         >
-          <Show
-            when={state().action || props.error}
-            fallback={
-              <span
-                class="transition-opacity duration-200 motion-reduce:transition-none"
-                classList={{ 'opacity-0': !showSaved() }}
-                aria-hidden={!showSaved()}
-              >
-                {state().message}
-              </span>
-            }
-          >
-            <button
-              type="button"
-              class="text-failure-ink underline disabled:opacity-50"
+          <div class="min-w-0 flex-1">
+            <p>{state().message}</p>
+            <Show when={props.error ?? state().detail}>
+              {(detail) => <p class="text-xs text-ink-muted">{detail()}</p>}
+            </Show>
+          </div>
+          <Show when={state().action || props.error}>
+            <Button
+              size="sm"
+              variant="outline"
               disabled={props.busy}
               onClick={props.onRetry}
             >
               {state().action === 'retry-discard' ? 'Retry discard' : 'Retry'}
-            </button>
+            </Button>
           </Show>
           <Show when={state().canKeepEditing}>
-            <button
-              type="button"
-              class="underline"
+            <Button
+              size="sm"
+              variant="outline"
               disabled={props.busy}
               onClick={props.onKeepEditing}
             >
               Keep editing
-            </button>
-          </Show>
-          <Show when={state().failed || props.error}>
-            <span class="sr-only">
-              {props.error ?? state().detail ?? state().message}
-            </span>
+            </Button>
           </Show>
         </div>
       )}

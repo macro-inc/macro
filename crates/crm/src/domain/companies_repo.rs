@@ -241,24 +241,26 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// case-insensitively. Returns `Ok(None)` when no row exists for
     /// the domain — the caller is expected to resolve via
     /// [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`]
-    /// and then [`upsert_domain_metadata`] before retrying.
+    /// and then [`upsert_domain_metadata`] (or, when the resolver is
+    /// unavailable, [`insert_pending_domain`]) before retrying.
     ///
     /// `Some(DomainMetadata { name: None, ... })` is distinct from
-    /// `None`: it means the domain has been looked up before and the
-    /// resolver returned nothing useful — the negative-cache entry
-    /// suppresses further resolver calls.
+    /// `None`: the domain already has an entry, either resolved to
+    /// nothing useful (the negative cache) or still pending for the
+    /// enrichment worker. Either way callers don't resolve it inline.
     ///
     /// [`upsert_domain_metadata`]: CompaniesRepository::upsert_domain_metadata
+    /// [`insert_pending_domain`]: CompaniesRepository::insert_pending_domain
     fn lookup_domain_metadata(
         &self,
         domain: &str,
     ) -> impl Future<Output = Result<Option<DomainMetadata>, CrmError>> + Send;
 
-    /// Insert `metadata` for `domain` into `crm_domain_directory` with
-    /// `ON CONFLICT (LOWER(domain)) DO NOTHING`. The directory is a
-    /// global, first-write-wins cache: a row for `domain` (whether
-    /// populated or all-NULL) is preserved as-is for the lifetime of
-    /// the table. `domain` is lower-cased before storage.
+    /// Store resolved `metadata` for `domain` in `crm_domain_directory`
+    /// and stamp it resolved. The directory is a global cache: a
+    /// resolved row (whether populated or all-NULL) is first-write-wins
+    /// and preserved as-is; a pending row is filled in. `domain` is
+    /// lower-cased before storage.
     ///
     /// Idempotent under concurrent calls — racing producers can both
     /// resolve the same domain and both call this method; the second
@@ -268,6 +270,30 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         domain: &str,
         metadata: &DomainMetadata,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Insert a pending `crm_domain_directory` row for `domain` (no
+    /// metadata, not resolved) unless the domain already has a row.
+    /// Read paths treat it like a negative-cache row; the enrichment
+    /// worker claims it through [`claim_pending_domains`].
+    ///
+    /// [`claim_pending_domains`]: CompaniesRepository::claim_pending_domains
+    fn insert_pending_domain(
+        &self,
+        domain: &str,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Claim up to `limit` pending `crm_domain_directory` rows whose
+    /// domain some team still tracks, with fewer than `max_attempts`
+    /// enrichment attempts and no attempt since `attempted_before`.
+    /// Claiming counts an attempt and stamps it now, so concurrent
+    /// workers skip the claimed rows until `attempted_before` passes
+    /// them. Returns the claimed domains.
+    fn claim_pending_domains(
+        &self,
+        limit: i64,
+        max_attempts: i16,
+        attempted_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<String>, CrmError>> + Send;
 
     /// Reverses [`populate_contact`] for one `(link_id, email)`: drops the
     /// matching `crm_contact_sources` row, then `crm_contacts` if no other

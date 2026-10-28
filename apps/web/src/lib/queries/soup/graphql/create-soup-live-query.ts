@@ -177,9 +177,14 @@ export function createSoupLiveQuery(
   let networkAuthorityInput: GraphqlSoupInput | undefined;
   let staleFallbackSpan: ReturnType<typeof Telemetry.span> | undefined;
 
-  const recordAuthority = (source: 'network' | 'local' | 'stale-fallback') => {
+  const recordAuthority = (
+    source: 'network' | 'failed-network' | 'local' | 'stale-fallback',
+    pageIndex?: number
+  ) => {
     const span = Telemetry.span('graphql_cache.soup_authority');
     span.setAttr('authority.source', source);
+    if (pageIndex !== undefined)
+      span.setAttr('authority.page_index', pageIndex);
     span.end();
   };
   const finishStaleFallback = (source: 'network' | 'local') => {
@@ -349,12 +354,20 @@ export function createSoupLiveQuery(
         : 'cache-and-network',
       keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
-        if (!result.data) return;
-        batch(() => {
-          setBaselineGeneration(cacheGeneration);
-          setBaselineInputKey(firstInputKey);
-        });
         const metadata = normalizedCacheResultMetadata(result);
+        if (result.data) {
+          batch(() => {
+            setBaselineGeneration(cacheGeneration);
+            setBaselineInputKey(firstInputKey);
+          });
+        }
+        if (result.error && metadata?.source === 'live-network') {
+          // The exchange keeps the rows already shown; a failed response's
+          // partial data claims no authority over them or the local rows.
+          recordAuthority('failed-network', page.pageIndex);
+          return;
+        }
+        if (!result.data) return;
         if (metadata?.source !== 'live-network') {
           // An affected/cache result already reflects local state. Its pending
           // network acknowledgement may no longer claim authority over it.
@@ -859,7 +872,13 @@ export function createSoupLiveQuery(
       const initial =
         'initial' in local.input ? local.input.initial : undefined;
       const host = getGraphqlSoupCacheHost();
-      if (!initial || !host || !isCachedMailView(initial.emailView)) return;
+      if (
+        !initial ||
+        !host ||
+        !isCachedMailView(initial.emailView) ||
+        initial.sortMethod === 'NOTIFIED_AT'
+      )
+        return;
       const mailView = initial.emailView;
       setFetchingMailPage(true);
       try {

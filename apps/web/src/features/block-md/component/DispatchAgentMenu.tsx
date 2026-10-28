@@ -6,15 +6,15 @@ import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
+import TerminalWindowIcon from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ZedIcon from '@icon/wide-zed-ide.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import { storageServiceClient } from '@service-storage/client';
 import type { MessageThread } from '@service-storage/messages';
@@ -335,7 +335,6 @@ export function DispatchAgentButton(
         variant="outline"
         size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
         depth={2}
-        class={props.showPrimaryLabel ? 'h-8' : undefined}
       >
         <Dynamic
           component={lastUsed().key === 'copy' ? CopyButton : Button}
@@ -356,8 +355,7 @@ export function DispatchAgentButton(
         <ButtonGroup.Divider />
         <Dropdown.Trigger
           variant="outline"
-          size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
-          class="px-2"
+          size={props.showPrimaryLabel ? 'icon-md' : 'icon-sm'}
           label="Agent options"
         >
           <CaretDown class="size-3.5!" />

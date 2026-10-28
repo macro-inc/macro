@@ -5,16 +5,15 @@ import {
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
-import { hapticImpact } from '@core/mobile/haptics';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import MessageIcon from '@phosphor/chat-circle.svg';
-import MoreIcon from '@phosphor/dots-three.svg';
-import EmailIcon from '@phosphor/envelope-simple.svg';
-import DocumentIcon from '@phosphor/file-text.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import CreateIcon from '@phosphor/plus.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import MessageIcon from '@icon/system/regular/chat-circle.svg';
+import MoreIcon from '@icon/system/regular/dots-three.svg';
+import EmailIcon from '@icon/system/regular/envelope-simple.svg';
+import DocumentIcon from '@icon/system/regular/file-text.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import CreateIcon from '@icon/system/regular/plus.svg';
 import { Show } from 'solid-js';
 import {
   MobileCreateMenu,
@@ -107,7 +106,6 @@ export function MobilePageCreateButton() {
                       ? 'New'
                       : `New ${action().label.toLowerCase()}`
                   }
-                  onPointerDown={() => hapticImpact('light')}
                   onClick={() => action().onSelect()}
                   class="relative flex h-(--mobile-chrome-button-size) shrink-0 items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
                 >

@@ -1,3 +1,4 @@
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 /**
  * The pptx block: app chrome (header, file menu, sharing) around the
  * presentation editor, wired to the worker engine and document storage.
@@ -37,7 +38,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -300,15 +301,17 @@ export default function PptxBlock(props: { share?: string }) {
         </SplitHeaderRight>
         <SplitHeaderRight>
           <div class="order-[999] flex items-center">
-            <ChatWithAgentButton
-              label="Ask Macro"
-              entity={{
-                type: 'document',
-                id: documentId,
-                name: name(),
-                fileType: 'pptx',
-              }}
-            />
+            <HeaderActionGroup label="Presentation actions">
+              <ChatWithAgentButton
+                label="Ask Macro"
+                entity={{
+                  type: 'document',
+                  id: documentId,
+                  name: name(),
+                  fileType: 'pptx',
+                }}
+              />
+            </HeaderActionGroup>
           </div>
         </SplitHeaderRight>
         <ResponsivePermissionsBadge />

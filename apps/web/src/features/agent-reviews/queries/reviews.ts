@@ -15,7 +15,6 @@ function options(session: string, review: string) {
     refetchInterval: (query) =>
       query.state.data &&
       (query.state.data.presentedAt == null ||
-        query.state.data.notificationId ||
         query.state.data.items.some(
           (item) => item.status === 'pending' || item.status === 'submitting'
         ))

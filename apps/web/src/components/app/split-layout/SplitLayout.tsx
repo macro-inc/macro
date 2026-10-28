@@ -1,19 +1,22 @@
+import { CreateContextProvider } from '@app/features/command/context/create-context';
 import { useSplitRouter } from '@app/lib/split-router';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { Resize } from '@core/component/Resize';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
-import { isPlatform } from '@core/util/platform';
 import {
   createEffect,
   createMemo,
   createSelector,
   For,
   onCleanup,
+  type ParentProps,
   Show,
   Suspense,
+  useContext,
 } from 'solid-js';
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitPanel } from './components/SplitPanel';
@@ -28,17 +31,37 @@ import {
 import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
 
-/** The app route's view: the split manager, and one panel per pane. */
-export function SplitLayout() {
+/** Own the layout and creation context above both app chrome and pane content. */
+export function SplitLayoutProvider(props: ParentProps) {
   const router = useSplitRouter();
   const blockOrchestrator = useGlobalBlockOrchestrator();
+  const userId = useUserId();
+  const authenticated = useIsAuthenticated();
 
   const splitManager = createSplitLayout(blockOrchestrator, {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,
     stacked: isNativeMobilePlatform,
+    sessionKey: () => (authenticated() === false ? undefined : userId()),
   });
+  createEffect(() => setGlobalSplitManager(splitManager));
+  onCleanup(() => setGlobalSplitManager(undefined));
+
+  return (
+    <SplitLayoutContext.Provider value={{ manager: splitManager }}>
+      <CreateContextProvider focusedPaneId={splitManager.activeSplitId}>
+        {props.children}
+      </CreateContextProvider>
+    </SplitLayoutContext.Provider>
+  );
+}
+
+/** The app route's view: one panel per pane in the owning layout. */
+export function SplitLayout() {
+  const layout = useContext(SplitLayoutContext);
+  if (!layout) throw new Error('SplitLayout requires SplitLayoutProvider');
+  const splitManager = layout.manager;
   const paneStack = isNativeMobilePlatform()
     ? createMobilePaneStack(splitManager)
     : undefined;
@@ -48,8 +71,7 @@ export function SplitLayout() {
   const panelRefs = new Map<SplitId, HTMLDivElement>();
 
   const splits = createMemo(splitManager.splits);
-  const useBentoLayout = () =>
-    !isTouchDevice() && (isPlatform('desktop') || splits().length > 1);
+  const useBentoLayout = () => !isTouchDevice();
 
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
@@ -71,11 +93,9 @@ export function SplitLayout() {
   const ids = createMemo(() => splits().map(({ id }) => id));
 
   createSplitFocusTracker({ splitManager, panelRefs, splits });
-  createEffect(() => setGlobalSplitManager(splitManager));
-  onCleanup(() => setGlobalSplitManager(undefined));
 
   return (
-    <SplitLayoutContext.Provider value={{ manager: splitManager }}>
+    <>
       <Show
         when={paneStack}
         fallback={
@@ -135,6 +155,6 @@ export function SplitLayout() {
           popover?.close();
         }}
       />
-    </SplitLayoutContext.Provider>
+    </>
   );
 }

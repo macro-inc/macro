@@ -45,6 +45,7 @@ impl ForwardedAttachmentRepo for Repo {
             (
                 self.source,
                 MessageAttachment {
+                    reference_url: None,
                     db_id: id,
                     provider_id: Some("provider-attachment".into()),
                     filename: Some("report.pdf".into()),

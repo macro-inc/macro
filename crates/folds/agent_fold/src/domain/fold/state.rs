@@ -162,6 +162,10 @@ pub(super) struct ToolPath {
 #[derive(Debug, Clone)]
 pub(super) struct Turn {
     pub(super) id: TurnId,
+    pub(super) notification: bool,
+    pub(super) noop_buffer: String,
+    pub(super) pending_thought: String,
+    pub(super) can_noop: bool,
     /// The prompt that opened this turn is speculative: on the wire, not yet
     /// in the log. Reads as [`TurnState::Starting`] until the agent answers.
     pub(super) prompt_pending: bool,
@@ -206,7 +210,8 @@ impl FoldState {
         // The one place the protocol is dispatched. Each arm names a frame
         // this fold understands; the rest are ignored on purpose.
         match &entry.content {
-            Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp)) => {
+            Message::ToRuntime(message @ ToRuntimeMessage::Acp(acp))
+            | Message::Notification(message @ ToRuntimeMessage::Acp(acp)) => {
                 // Before the control dispatch, which returns early for the
                 // set-model request whose response this correlates.
                 self.note_config_request(&acp.0);
@@ -428,7 +433,7 @@ impl FoldState {
             }
 
             // The wrapped protocol enums are `#[non_exhaustive]`.
-            Message::ToServer(_) | Message::ToRuntime(_) => Vec::new(),
+            Message::Notification(_) | Message::ToServer(_) | Message::ToRuntime(_) => Vec::new(),
         }
     }
 

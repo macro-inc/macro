@@ -82,5 +82,8 @@ export function hydrateDocumentEvent(
       metadata,
       document: Document.byId(client, metadata.document_id),
     }))
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('macro sdk: unknown document event', unknown);
+      return undefined;
+    });
 }

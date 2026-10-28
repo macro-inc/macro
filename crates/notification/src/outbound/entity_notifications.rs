@@ -101,7 +101,7 @@ pub(super) async fn get_filtered_entity_notifications(
                   AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
               ))
               AND (NOT $8::bool OR requested.entity_type <> 'channel' OR (
-                  n.notification_event_type = 'document_mention'
+                  n.notification_event_type IN ('document_mention', 'channel_access_requested')
                   OR (n.notification_event_type IN ('channel_message_send', 'channel_message_reply') AND (
                       -- Mention stacks consume the mention, not its duplicate send/reply.
                       EXISTS (

@@ -6,8 +6,10 @@ fn instant(value: &str) -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
-fn target() -> GoogleCalendarTarget {
-    GoogleCalendarTarget {
+fn target() -> ProviderCalendarTarget {
+    ProviderCalendarTarget {
+        binding: None,
+        provider: crate::domain::models::CalendarProvider::Google,
         observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|points@example.test".to_owned(),
         email_link_id: Uuid::now_v7(),
@@ -64,7 +66,7 @@ fn point_snapshot_preserves_source_and_exact_window_membership() {
     assert_eq!(snapshot.upserts.len(), events.len());
     assert_eq!(snapshot.observed_provider_event_ids.len(), events.len());
     for upsert in snapshot.upserts {
-        let CalendarEventSource::Google(source) = &upsert.source;
+        let source = upsert.source.details();
         assert_eq!(source.account_id, target.account_id);
         assert_eq!(source.calendar_id, target.calendar_id);
         assert_eq!(source.observed_access_role.as_deref(), Some("owner"));
@@ -181,8 +183,8 @@ async fn a_duration_becoming_a_point_is_an_upsert_with_the_same_provider_identit
     assert!(after.upserted_singles.contains("same-event"));
     let before = &before.upserts[0];
     let after = &after.upserts[0];
-    let CalendarEventSource::Google(before_source) = &before.source;
-    let CalendarEventSource::Google(after_source) = &after.source;
+    let before_source = before.source.details();
+    let after_source = after.source.details();
     assert_eq!(
         before_source.provider_event_id,
         after_source.provider_event_id
@@ -234,7 +236,9 @@ async fn reversed_timed_and_nonpositive_all_day_events_still_reject_whole_batche
         let result = client
             .apply_change_feed("unused", &target, vec![valid.clone(), invalid])
             .await;
-        assert!(matches!(result, Err(error) if error.kind() == GoogleProviderErrorKind::Transient));
+        assert!(
+            matches!(result, Err(error) if error.kind() == CalendarProviderErrorKind::Transient)
+        );
     }
 }
 

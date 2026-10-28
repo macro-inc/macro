@@ -128,3 +128,74 @@ async fn client_and_router_preserve_authority_and_all_management_workflows() {
     ));
     server.abort();
 }
+
+#[tokio::test]
+async fn public_replacements_forward_time_zone_and_preserve_legacy_dates() {
+    let service = Arc::new(TestService::new(
+        Arc::new(Memory::default()),
+        Arc::new(Calendar::default()),
+        Members,
+    ));
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    let record = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    let app = router(RouterState::new(
+        service,
+        MacroAuthorizationState::new(Arc::new(Identity)),
+    ));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!(
+        "http://{}/public/bookings/{}/slots",
+        listener.local_addr().unwrap(),
+        record.booking.id
+    );
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    let date = record.booking.starts_at.date_naive();
+    for (suffix, zone) in [
+        ("&timeZone=Asia%2FTokyo", chrono_tz::Asia::Tokyo),
+        (
+            "&timeZone=America%2FLos_Angeles",
+            chrono_tz::America::Los_Angeles,
+        ),
+        ("", chrono_tz::UTC),
+    ] {
+        let response = client
+            .get(format!("{url}?date={date}{suffix}"))
+            .bearer_auth(record.token)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let slots: Vec<Slot> = serde_json::from_value(response["slots"].clone()).unwrap();
+        assert!(!slots.is_empty());
+        assert!(
+            slots
+                .iter()
+                .all(|s| s.starts_at.with_timezone(&zone).date_naive() == date)
+        );
+    }
+    let invalid = client
+        .get(format!("{url}?date={date}&timeZone=not-a-zone"))
+        .bearer_auth(record.token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), reqwest::StatusCode::BAD_REQUEST);
+    let forbidden = client
+        .get(format!("{url}?date={date}&timeZone=Asia%2FTokyo"))
+        .bearer_auth(Uuid::new_v4())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(forbidden.status(), reqwest::StatusCode::NOT_FOUND);
+    server.abort();
+}

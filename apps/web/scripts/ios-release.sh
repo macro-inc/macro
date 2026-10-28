@@ -110,6 +110,26 @@ echo "Releasing $BUNDLE_ID $MARKETING_VERSION ($BUILD_NUMBER)"
 step "Preparing iOS project"
 just ios-prepare
 
+# The imported .p12 alone does not disable Xcode cloud signing. Download a
+# matching App Store profile for every target and explicitly select manual
+# export. Restore tracked project settings even if preparation/build fails.
+signing_backup=""
+restore_signing() {
+  if [[ -n "$signing_backup" ]]; then
+    cp "$signing_backup/project.pbxproj" tauri/src-tauri/gen/apple/app.xcodeproj/project.pbxproj
+    cp "$signing_backup/ExportOptions.plist" tauri/src-tauri/gen/apple/ExportOptions.plist
+    rm -rf "$signing_backup"
+    signing_backup=""
+  fi
+}
+if [[ -n "${APPLE_DISTRIBUTION_CERTIFICATE_PATH:-}" ]]; then
+  signing_backup="$(mktemp -d)"
+  cp tauri/src-tauri/gen/apple/app.xcodeproj/project.pbxproj "$signing_backup/project.pbxproj"
+  cp tauri/src-tauri/gen/apple/ExportOptions.plist "$signing_backup/ExportOptions.plist"
+  trap restore_signing EXIT
+  bun scripts/ios-app-store.mjs prepare-signing
+fi
+
 # Same split as ios-build.sh: the web/wasm build keeps its original toolchain,
 # Apple's tools take over only for the native build, and Tauri's build hook is
 # skipped because it has already run here.
@@ -122,6 +142,7 @@ step "Archiving and exporting IPA (this takes a while)"
 ios_activate_toolchain
 (\cd tauri/src-tauri && "$ios_cargo" tauri ios build --export-method app-store-connect --ci \
   --config '{"build":{"beforeBuildCommand":"","frontendDist":"../../dist"}}')
+restore_signing
 
 IPA="$(ls -t "$IPA_DIR"/*.ipa 2>/dev/null | head -1 || true)"
 [[ -n "$IPA" ]] || fail "No IPA found in $IPA_DIR after build."
