@@ -12,6 +12,8 @@ import { SelectionUniversalInput } from '../universal-input';
  */
 export function SelectionDraft(props: {
   offer: OfferedSelection;
+  /** Height the floating card has beside its text, once it has been placed. */
+  room?: number;
   onClose: () => void;
 }) {
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('selection-draft');
@@ -27,9 +29,17 @@ export function SelectionDraft(props: {
     },
   });
   let card: HTMLDivElement | undefined;
+  let quote: HTMLDivElement | undefined;
   // The chip the reader clicked is gone, so without this the card's keys —
   // Escape above all — would go to whatever held focus before it opened.
   onMount(() => card?.focus({ preventScroll: true }));
+  // The form scrolls inside whatever the quote leaves of the room beside the
+  // text, rather than running off the bottom of the window.
+  const fieldsHeight = () => {
+    const available = props.room;
+    if (available === undefined) return 'min(30rem, calc(100vh - 7rem))';
+    return `${Math.max(180, available - (quote?.offsetHeight ?? 0))}px`;
+  };
   const layout = (parts: InputLayoutParts) => (
     <div
       ref={(element) => {
@@ -42,7 +52,7 @@ export function SelectionDraft(props: {
         // The composer's panel surface is the page's own behind a dialog
         // overlay; floating over content it needs the menu surface instead.
         '--color-panel': 'var(--color-menu)',
-        '--universal-input-max-height': 'min(30rem, calc(100vh - 7rem))',
+        '--universal-input-max-height': fieldsHeight(),
         '--universal-input-body-overflow': 'auto',
       }}
     >
@@ -61,7 +71,10 @@ export function SelectionDraft(props: {
       intent={props.offer.intent}
       layout={layout}
       editor={
-        <div class="flex shrink-0 items-start gap-2 rounded-t-2xl border border-edge bg-panel px-5 py-3 sm:px-6">
+        <div
+          ref={quote}
+          class="flex shrink-0 items-start gap-2 rounded-t-2xl border border-edge bg-panel px-5 py-3 sm:px-6"
+        >
           <blockquote class="line-clamp-2 min-w-0 flex-1 border-ink-extra-muted border-l-2 pl-2 text-ink-muted text-xs">
             {props.offer.text}
           </blockquote>

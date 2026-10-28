@@ -27,6 +27,13 @@ const SelectionDraft = lazyNamed(
 type OpenDraft = OfferedSelection & { anchor: Range };
 
 /**
+ * What the card wants once its fields arrive. It opens near-empty, so without
+ * this it would take whichever side fits an empty card and then grow past the
+ * viewport.
+ */
+const CARD_HEIGHT = 520;
+
+/**
  * Offers the shape Universal Input recognizes in selected text, on every
  * surface that opted in with `data-selection-offer`. The offer arrives as a
  * chip beside the selection and opens into the ordinary draft form.
@@ -36,6 +43,7 @@ export function SelectionOffer() {
   onCleanup(inference.dispose);
   const selection = createSelectionOffer({ classify: inference.classify });
   const [draft, setDraft] = createSignal<OpenDraft>();
+  const [room, setRoom] = createSignal<number>();
 
   const close = () => {
     setDraft(undefined);
@@ -99,11 +107,12 @@ export function SelectionOffer() {
                 selection: undefined,
                 anchor: open().anchor,
                 reactiveOnContainer: open().container,
-                floatingOptions: { placement: 'bottom-start' },
+                fullHeight: CARD_HEIGHT,
+                onAvailableHeight: setRoom,
               }}
             >
               <Suspense>
-                <SelectionDraft offer={open()} onClose={close} />
+                <SelectionDraft offer={open()} room={room()} onClose={close} />
               </Suspense>
             </div>
           </ScopedPortal>
