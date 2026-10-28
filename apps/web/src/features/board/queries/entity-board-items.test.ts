@@ -111,6 +111,41 @@ describe('toBoardItem', () => {
     ]);
   });
 
+  it('keeps a message unread when its notification repeats it', () => {
+    const item = toBoardItem(
+      withNotifications(
+        {
+          ...launch,
+          latestMessage: {
+            messageId: 'm2',
+            content: 'Pricing page is live',
+            senderId: ANA,
+            createdAt: new Date(NOW - 5 * 60_000).toISOString(),
+            mentions: [],
+          },
+        },
+        [
+          // Notifications land a moment after the message they announce.
+          notification('n2', 4, {
+            tag: 'channel_message_send',
+            content: {
+              channelType: 'public',
+              messageId: 'm2',
+              messageContent: 'Pricing page is live',
+            },
+          }),
+        ]
+      ),
+      resolvers
+    );
+
+    expect(item?.messages).toHaveLength(1);
+    expect(item?.messages[0]).toMatchObject({
+      text: 'Pricing page is live',
+      unread: true,
+    });
+  });
+
   it('settles read notifications and drops done ones', () => {
     const item = toBoardItem(
       withNotifications(launch, [

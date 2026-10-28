@@ -124,19 +124,25 @@ function notificationMessage(
   };
 }
 
-/** Newest messages last, without repeats of the same words from the same person. */
+/**
+ * Newest messages last, without repeats of the same words from the same
+ * person. A repeat (a message and its notification) keeps the first copy,
+ * unread if either copy is.
+ */
 function conversation(messages: (BoardMessage | undefined)[]): BoardMessage[] {
-  const seen = new Set<string>();
-  return messages
+  const kept = new Map<string, BoardMessage>();
+  const ordered = messages
     .filter((message): message is BoardMessage => message !== undefined)
-    .sort((a, b) => a.at - b.at)
-    .filter((message) => {
-      const key = `${message.author?.id ?? ''}:${message.text}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(-MAX_ITEM_MESSAGES);
+    .sort((a, b) => a.at - b.at);
+  for (const message of ordered) {
+    const key = `${message.author?.id ?? ''}:${message.text}`;
+    const first = kept.get(key);
+    kept.set(
+      key,
+      first ? { ...first, unread: first.unread || message.unread } : message
+    );
+  }
+  return [...kept.values()].slice(-MAX_ITEM_MESSAGES);
 }
 
 function participantsOf(messages: BoardMessage[]): BoardAuthor[] {
