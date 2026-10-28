@@ -12,7 +12,7 @@ fn registered_kinds_round_trip_and_match_check_spellings() {
         (RegisteredEntityType::Chat, "chat"),
         (RegisteredEntityType::AgentSession, "agent_session"),
         (RegisteredEntityType::ScheduledAction, "scheduled_action"),
-        (RegisteredEntityType::WhatsAppGroup, "whatsapp_group"),
+        (RegisteredEntityType::ExternalChat, "external_chat"),
     ];
     assert_eq!(
         RegisteredEntityType::ALL,
@@ -22,7 +22,7 @@ fn registered_kinds_round_trip_and_match_check_spellings() {
             RegisteredEntityType::Chat,
             RegisteredEntityType::AgentSession,
             RegisteredEntityType::ScheduledAction,
-            RegisteredEntityType::WhatsAppGroup,
+            RegisteredEntityType::ExternalChat,
         ]
     );
     for (kind, spelling) in expected {
@@ -71,7 +71,7 @@ fn registered_kinds_serialize_as_their_entity_type_spelling() {
             RegisteredEntityType::ScheduledAction,
             r#""scheduled_action""#,
         ),
-        (RegisteredEntityType::WhatsAppGroup, r#""whatsapp_group""#),
+        (RegisteredEntityType::ExternalChat, r#""external_chat""#),
     ];
     for (kind, json) in expected {
         assert_eq!(serde_json::to_string(&kind).unwrap(), json);

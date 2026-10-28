@@ -4565,15 +4565,38 @@ enum GraphqlEntityType {
 	"""
 	FORM
 	"""
-	Independently shared WhatsApp group.
+	Independently shared external chat.
 	"""
-	WHATSAPP_GROUP
+	EXTERNAL_CHAT
+	"""
+	Schema-only stub for clients released with this value before external
+	chats replaced WhatsApp groups. Never returned; rejected as input.
+	"""
+	WHATSAPP_GROUP @deprecated(reason: "Use EXTERNAL_CHAT. Never returned; rejected as input. Remove after 2026-11-30.")
 }
 
 """
 The mutually exclusive time shape of an event or occurrence.
 """
 union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime
+
+"""
+Metadata for a message in an independently shared external chat.
+"""
+type GraphqlExternalChatMessageMetadata {
+	"""
+	The messaging service the chat lives in (`whatsapp`).
+	"""
+	provider: String!
+	"""
+	Display name of the chat.
+	"""
+	chatName: String!
+	"""
+	Message to open within the chat.
+	"""
+	messageId: ID!
+}
 
 """
 GraphQL fields for an ordered favorite.
@@ -5845,7 +5868,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlWhatsappGroupMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlWhatsappGroupMessageMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -9528,7 +9551,9 @@ type GraphqlUser {
 }
 
 """
-Metadata for a message in an independently shared WhatsApp group.
+A removed WhatsApp group message notification. Never returned; external
+chat messages use `GraphqlExternalChatMessageMetadata`. Remove after
+2026-11-30.
 """
 type GraphqlWhatsappGroupMessageMetadata {
 	"""

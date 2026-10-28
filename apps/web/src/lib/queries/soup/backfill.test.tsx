@@ -30,6 +30,11 @@ const graphqlMocks = vi.hoisted(() => ({
   hydrateGraphqlSoup: vi.fn(),
 }));
 
+const mailAccounts = vi.hoisted(() => vi.fn());
+vi.mock('../email/mail-accounts', () => ({
+  useMailAccountsQuery: mailAccounts,
+}));
+
 const leaderMocks = vi.hoisted(() => ({
   createTabLeaderSignal: vi.fn(),
 }));
@@ -1054,4 +1059,32 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
     expect(fetchSignals[1]?.aborted).toBe(true);
   });
+});
+
+it('warms sender metadata before paged backfill and pauses it without identity or leadership', () => {
+  const [user, setUser] = createSignal<string>();
+  const [leader, setLeader] = createSignal(true);
+  const [enabled, setEnabled] = createSignal(true);
+  featureFlagMocks.useFeatureFlag.mockReturnValue(() => ({
+    enabled: enabled(),
+  }));
+  leaderMocks.createTabLeaderSignal.mockReturnValue(leader);
+  mailAccounts.mockClear();
+  const rendered = render(() => {
+    useSoupBackfills(user);
+    return null;
+  });
+  try {
+    const active = mailAccounts.mock.calls[0][0];
+    expect(active()).toBe(false);
+    setUser('owner');
+    expect(active()).toBe(true);
+    setLeader(false);
+    expect(active()).toBe(false);
+    setLeader(true);
+    setEnabled(false);
+    expect(active()).toBe(false);
+  } finally {
+    rendered.unmount();
+  }
 });

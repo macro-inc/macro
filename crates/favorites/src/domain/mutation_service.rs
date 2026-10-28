@@ -98,7 +98,7 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::ForeignEntity
         | EntityType::CrmCompany
         | EntityType::CrmContact
-        | EntityType::WhatsAppGroup
+        | EntityType::ExternalChat
         | EntityType::AgentSession => Ok(()),
         EntityType::User
         | EntityType::Team

@@ -51,7 +51,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 - **FE-64** Keep one selected state: desktop view tabs share one rounded track with an inset selected pill; a selected tab and a pressed button share
   the pressed fill; the inset selected pill has a subtle edge and shadow, while unselected options sit within the shared outer frame. No
   accent text, underlines, or bespoke tints for selection on desktop. The one
-  exception is the agent composer's Chat/Code switch: `Tabs variant="track"`,
+  exception is the agent composer's Auto/Chat/Code switch: `Tabs variant="track"`,
   a raised pill sliding along the composer tray's track.
 - **FE-65** Components own their touch treatment. Never branch on
   `isTouchDevice()` to choose a tab component or variant; set `Tabs`' `touch`

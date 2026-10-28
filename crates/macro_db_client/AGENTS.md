@@ -89,7 +89,7 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   from resurrecting deleted definitions. Use a fresh disposable database when
   checking replacement branch migrations.
 
-- The unmerged WhatsApp migrations define standalone group/message/reaction/attachment/read storage; domain queries live in `whatsapp_linked`.
+- External chats (`external_chat*` tables: chats, people, messages, attachments, reactions, poll votes, read state) are provider-neutral; WhatsApp keeps its account, pairing, roster, chat list, membership, alias, observation, receipt and send tables (`whatsapp_*`). Domain queries live in `external_chat` (generic tables) and `whatsapp_linked` (`whatsapp_*` tables and ingest).
 
 ## Related
 

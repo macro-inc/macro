@@ -14,8 +14,6 @@ export function ConnectCard(props: {
   reconnect: boolean;
   /** This is the phone that would have to scan the code. */
   phone: boolean;
-  /** Pairing is switched off on the server. */
-  unavailable: boolean;
   pending: boolean;
   onConnect: () => void;
 }) {
@@ -45,10 +43,7 @@ export function ConnectCard(props: {
           <Button
             type="button"
             variant="strong"
-            disabled={props.unavailable || props.pending}
-            tooltip={
-              props.unavailable ? 'Linking WhatsApp is turned off' : undefined
-            }
+            disabled={props.pending}
             onClick={props.onConnect}
           >
             {props.reconnect ? 'Reconnect' : 'Connect'}

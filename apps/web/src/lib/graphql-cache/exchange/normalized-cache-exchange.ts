@@ -36,7 +36,7 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
@@ -110,6 +110,7 @@ import {
   withOptimisticMutationDisposition,
 } from './optimistic';
 import { queryShape } from './query-shape';
+import { runSubscriptionCacheEffects } from './subscription-cache-trace';
 
 /** Server writes acknowledged since this query left for the network. */
 const QUERY_MUTATION_VERSION_CONTEXT_KEY =
@@ -1234,7 +1235,8 @@ export function normalizedCacheExchange(
       async function applyOperationCacheEffects(
         op: Operation,
         effects: CacheEffect[],
-        isCurrent: () => boolean = () => true
+        isCurrent: () => boolean = () => true,
+        span?: Span
       ): Promise<boolean> {
         let applied = true;
         for (const effect of effects) {
@@ -1252,6 +1254,7 @@ export function normalizedCacheExchange(
             }
           } catch (error) {
             applied = false;
+            span?.error('Subscription cache effect failed');
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
             options.onCacheError?.(error, op);
@@ -1412,14 +1415,18 @@ export function normalizedCacheExchange(
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
           const generation = subscriptionGenerations.get(op.key);
-          const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(
-              op,
-              operationCacheEffects(result.data),
-              () =>
-                generation !== undefined &&
-                subscriptionGenerations.get(op.key) === generation
-            )
+          const effects = runSubscriptionCacheEffects(
+            result,
+            previousEffects,
+            (span) =>
+              applyOperationCacheEffects(
+                op,
+                operationCacheEffects(result.data),
+                () =>
+                  generation !== undefined &&
+                  subscriptionGenerations.get(op.key) === generation,
+                span
+              )
           );
           subscriptionEffectChains.set(op.key, effects);
           try {

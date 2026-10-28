@@ -27,6 +27,7 @@ async fn cached_keys<S: PredicateIndexStorage>(
         PageRequest {
             view: view.into(),
             cursor: None,
+            through: None,
         },
     )
     .await
