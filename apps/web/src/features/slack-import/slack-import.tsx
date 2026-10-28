@@ -1,5 +1,8 @@
 import { hideImportPromotion } from '@app/features/connector-import/primitives/promotion';
-import { IntegrationRow } from '@app/features/settings/primitives';
+import {
+  IntegrationRow,
+  SettingsSurface,
+} from '@app/features/settings/primitives';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -50,12 +53,14 @@ export function SlackImport(props: Props): JSX.Element {
               // A host-supplied trigger lives elsewhere (the Chat rail card);
               // only the Settings row has a loading placeholder.
               props.trigger ? null : (
-                <IntegrationRow
-                  icon={<SlackIcon />}
-                  title="Slack"
-                  description="Loading Slack import…"
-                  muted
-                />
+                <SettingsSurface>
+                  <IntegrationRow
+                    icon={<SlackIcon />}
+                    title="Slack export"
+                    description="Loading Slack import…"
+                    muted
+                  />
+                </SettingsSurface>
               )
             }
           >

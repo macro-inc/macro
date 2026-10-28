@@ -225,15 +225,15 @@ const SETTINGS: Setting[] = [
     keywords: 'access public private permission',
   },
   {
-    tab: 'Team Connections',
+    tab: 'Connected',
     title: 'Team GitHub connection',
-    target: 'Connections',
-    keywords: 'repository app install integration',
+    target: 'Accounts',
+    keywords: 'repository app install integration team',
   },
   {
-    tab: 'Team Connections',
+    tab: 'Connected',
     title: 'Import from Slack',
-    target: 'Connections',
+    target: 'Accounts',
     keywords: 'slack export channels messages history team',
   },
   {

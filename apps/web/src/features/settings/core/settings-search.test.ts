@@ -88,9 +88,9 @@ describe('individual settings search', () => {
       target: 'pending-invites',
     });
   });
-  it('finds team connections apart from personal integrations', () => {
-    expect(search('slack import')[0].tab).toBe('Team Connections');
-    expect(search('team github')[0].tab).toBe('Team Connections');
+  it('finds team connections on Integrations', () => {
+    expect(search('slack import')[0].tab).toBe('Connected');
+    expect(search('team github')[0].tab).toBe('Connected');
   });
   it('has no results for empty or unrelated queries', () => {
     expect(search('  ')).toEqual([]);
