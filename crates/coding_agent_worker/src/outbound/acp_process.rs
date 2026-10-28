@@ -98,6 +98,19 @@ impl AcpProcess {
         self
     }
 
+    /// Observe every line crossing the child's stdin and stdout, plus its
+    /// stderr. Exceptionally long stderr lines are truncated. The bridge taps
+    /// lines in its own relay ([`RunningAgent::attach`]).
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_debug<Callback>(mut self, callback: Callback) -> Self
+    where
+        Callback: Fn(&str, LineDirection) + Send + Sync + 'static,
+    {
+        self.debug_callback = Some(Arc::new(callback));
+        self
+    }
+
     fn spawn(&self) -> Result<SpawnedChild, Error> {
         let mut command = std::process::Command::new(crate::executable::launchable(&self.command));
         command
