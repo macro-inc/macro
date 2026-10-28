@@ -634,6 +634,9 @@ Command K and mobile Search. When enabled, the composer is available immediately
 there is no Settings page, account-domain restriction, or saved opt-out.
 Development/local builds enable the flag by default. Use
 `VITE_ENABLE_UNIVERSAL_INPUT` for a local override; deployed builds follow PostHog.
+The channel composer offers the same forms from an uninvited pill rather than a
+menu the user opened; see
+[creating something else from a channel draft](channels.md#creating-something-else-from-a-channel-draft).
 
 Command K’s Lexical input supports rich text and **@** mentions; there are no formatting
 or mention instruction cues and no Suggestions list beneath it.

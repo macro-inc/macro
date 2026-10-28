@@ -23,7 +23,7 @@ const editorMocks = vi.hoisted(() => ({
   focus: vi.fn(),
   mentionUsers: undefined as (() => IUser[]) | undefined,
   emitChange: undefined as ((markdown: string) => void) | undefined,
-  onEnter: undefined as (() => boolean) | undefined,
+  onEnter: undefined as ((event: KeyboardEvent) => boolean) | undefined,
   inlineMenuOpen: false,
   onEscape: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
   ignoredActions: [] as string[],
@@ -293,7 +293,7 @@ vi.mock(
           editorMocks.emitChange = handler;
           return builder;
         },
-        onEnter: (handler: () => boolean) => {
+        onEnter: (handler: (event: KeyboardEvent) => boolean) => {
           editorMocks.onEnter = handler;
           return builder;
         },
@@ -436,7 +436,7 @@ describe('Input slots', () => {
       true
     );
     await handle?.send();
-    editorMocks.onEnter?.();
+    editorMocks.onEnter?.(new KeyboardEvent('keydown', { key: 'Enter' }));
     expect(onSend).not.toHaveBeenCalled();
     expect(editorMocks.clear).not.toHaveBeenCalled();
 

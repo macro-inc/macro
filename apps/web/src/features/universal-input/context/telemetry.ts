@@ -1,6 +1,8 @@
 import type { InputFailure } from '../core/failure';
 import type { Field, Intent } from '../core/input';
 
+/** Where a draft is being written; every observation is attributed to one. */
+export type InputSurface = 'command-menu' | 'mobile-search' | 'channel';
 export type InputPhase = 'classify' | 'extract';
 export type InputOperation = 'submit' | 'save-email-draft';
 export type QueueObservation =
@@ -46,3 +48,16 @@ export type InputObservation = { draftId: string } & (
       outcome: 'submitted' | 'saved' | 'cleared' | 'abandoned';
     }
 );
+
+/**
+ * An uninvited guess offered beside a host's own input, before any Universal
+ * Input draft exists. Whether an offer is taken is the only measure of whether
+ * it was worth interrupting for.
+ */
+export type SuggestionObservation =
+  | { event: 'offered'; intent: Intent; score: number }
+  | {
+      event: 'retired';
+      intent: Intent;
+      outcome: 'accepted' | 'dismissed' | 'replaced' | 'abandoned';
+    };

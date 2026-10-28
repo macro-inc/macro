@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { shouldUseUniversalInput } from './universal-input-mode';
+import { isInferable, shouldUseUniversalInput } from './inferable';
 
 it.each([
   ['investor update', false],
@@ -11,6 +11,7 @@ it.each([
   ['   investor update   ', false],
 ])('chooses the input mode for %s', (text, expected) => {
   expect(shouldUseUniversalInput(text)).toBe(expected);
+  expect(isInferable(text)).toBe(expected);
 });
 
 it('keeps a shorter edited draft in composer mode until cleared', () => {

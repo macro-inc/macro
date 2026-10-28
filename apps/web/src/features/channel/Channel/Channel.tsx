@@ -1085,6 +1085,7 @@ export function Channel(props: ChannelProps) {
                               <ChannelInput
                                 autofocus={props.autofocus}
                                 collapsible
+                                universalInput
                                 input={{
                                   mode: 'channel',
                                   id: `channel-input-${props.channelId}`,

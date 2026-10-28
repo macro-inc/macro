@@ -4,6 +4,7 @@ import type {
   SplitContent,
 } from '@components/app/split-layout/layoutManager';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import type { PromptSubmitSurface } from '@core/agent-session/prompt-telemetry';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import {
   ChatInputProvider,
@@ -18,6 +19,7 @@ import { openEntityInSplitFromUnifiedList } from '../next-soup/utils';
 import { createInputActions } from './actions';
 import { DraftEditor } from './components/draft-editor';
 import type { InputSession } from './context/input-session';
+import type { InputSurface } from './context/telemetry';
 import { emptyDraft, fieldsSchema } from './core/input';
 import { createInferenceSource } from './inference';
 import {
@@ -34,11 +36,12 @@ function InputContent(props: {
   navigate: (content: SplitContent) => void;
   session: InputSession;
   referredFrom: ReferredFrom;
+  surface: InputSurface;
+  submitSurface: PromptSubmitSurface;
 }) {
   const session = props.session;
   const chat = useChatInputContext();
-  const surface =
-    props.referredFrom === 'search' ? 'mobile-search' : 'command-menu';
+  const surface = props.surface;
   const telemetry = createInputTelemetry(surface);
   onCleanup(telemetry.dispose);
   const [state, setState] = createSignal<UniversalInputController>();
@@ -60,7 +63,7 @@ function InputContent(props: {
     {
       navigate: props.navigate,
       onNoteTagsChange: (value) => state()?.edit('noteTags', value),
-      submitSurface: 'other',
+      submitSurface: props.submitSurface,
       referredFrom: props.referredFrom,
     }
   );
@@ -72,7 +75,11 @@ function InputContent(props: {
   onCleanup(inference.dispose);
   const controller = createUniversalInput({
     ...inference,
-    initialDraft: { ...emptyDraft(), text: session.text },
+    initialDraft: {
+      ...emptyDraft(),
+      text: session.text,
+      intent: session.intent,
+    },
     ...actions,
     observe: telemetry.observe,
     submit: (input) => telemetry.run(() => actions.submit(input)),
@@ -87,7 +94,17 @@ function InputContent(props: {
   setState(controller);
   createEffect(controller.observeReady);
   createEffect(() => session.onSendingChange?.(controller.sending()));
-  onCleanup(() => session.onSendingChange?.(false));
+  session.captureControls?.({
+    submit: controller.submit,
+    ready: () =>
+      !controller.sending() &&
+      !controller.pending() &&
+      !controller.validation(),
+  });
+  onCleanup(() => {
+    session.onSendingChange?.(false);
+    session.captureControls?.(undefined);
+  });
   createEffect(
     on(
       () => session.text,
@@ -158,6 +175,8 @@ function InputContent(props: {
 function UniversalInputSession(props: {
   session: InputSession;
   referredFrom: ReferredFrom;
+  surface: InputSurface;
+  submitSurface: PromptSubmitSurface;
 }) {
   const userId = useUserId();
   const { openWithSplit } = useSplitLayout();
@@ -169,6 +188,8 @@ function UniversalInputSession(props: {
             userId={id}
             session={props.session}
             referredFrom={props.referredFrom}
+            surface={props.surface}
+            submitSurface={props.submitSurface}
             navigate={(content) => {
               props.session.onNavigate();
               openWithSplit(content, { referredFrom: props.referredFrom });
@@ -182,10 +203,39 @@ function UniversalInputSession(props: {
 
 /** A transient Command K session with host-owned navigation. */
 export function CommandUniversalInput(props: InputSession) {
-  return <UniversalInputSession session={props} referredFrom="kommand-menu" />;
+  return (
+    <UniversalInputSession
+      session={props}
+      referredFrom="kommand-menu"
+      surface="command-menu"
+      submitSurface="other"
+    />
+  );
 }
 
 /** Mobile Search keeps its dock editor mounted while forms load above it. */
 export function MobileUniversalInput(props: InputSession) {
-  return <UniversalInputSession session={props} referredFrom="search" />;
+  return (
+    <UniversalInputSession
+      session={props}
+      referredFrom="search"
+      surface="mobile-search"
+      submitSurface="other"
+    />
+  );
+}
+
+/**
+ * A channel composer promoting its own draft, with the message editor still
+ * mounted below the form and still able to send the draft as a message.
+ */
+export function ChannelUniversalInput(props: InputSession) {
+  return (
+    <UniversalInputSession
+      session={props}
+      referredFrom="channels"
+      surface="channel"
+      submitSurface="other"
+    />
+  );
 }

@@ -50,9 +50,9 @@ import {
   Switch,
 } from 'solid-js';
 import type { InputLayoutParts } from '../universal-input/context/capabilities';
+import { shouldUseUniversalInput } from '../universal-input/core/inferable';
 import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
 import { defaultCommandResultIndex } from './core/default-result-index';
-import { shouldUseUniversalInput } from './core/universal-input-mode';
 import { createCommandResultOpener } from './open-command-result';
 import { trackCommandUsage } from './recency';
 import { CommandState } from './state';

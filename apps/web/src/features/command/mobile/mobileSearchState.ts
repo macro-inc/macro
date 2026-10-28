@@ -1,7 +1,7 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, batch, createSignal } from 'solid-js';
-import { shouldUseUniversalInput } from '../core/universal-input-mode';
+import { shouldUseUniversalInput } from '../../universal-input/core/inferable';
 import type { EntitySearchCategory } from '../queries/entity-search';
 
 export type MobileSearchSnapshot = {

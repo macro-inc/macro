@@ -31,6 +31,16 @@ export const actionLabels: Record<Intent, string> = {
   calendar: 'Create event',
   message: 'Send message',
 };
+/** Asked, not announced: an unprompted guess offers a type rather than switching to it. */
+export const suggestionLabels: Record<Intent, string> = {
+  ai: 'Asking Macro?',
+  search: 'Searching?',
+  email: 'Sending an email?',
+  note: 'Writing a note?',
+  task: 'Creating a task?',
+  calendar: 'Scheduling an event?',
+  message: 'Sending a message?',
+};
 export const fieldsSchema = z.object({
   title: z.string().default(''),
   body: z.string().default(''),

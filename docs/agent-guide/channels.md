@@ -587,6 +587,37 @@ The Magic Chip that streams the agent's reply stays inside the message column: l
 thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
 thread past the chat's right edge.
 
+## Creating something else from a channel draft
+
+PostHog **enable-channel-universal-input**, on top of **enable-universal-input**,
+offers [Universal Input](navigation.md#universal-input-in-command-k-and-mobile-search)
+beside the channel composer; `VITE_ENABLE_CHANNEL_UNIVERSAL_INPUT` overrides it
+locally. Only the top-level channel composer opts in: message editing, thread
+replies, call chat, and external (WhatsApp) composers are unchanged.
+
+Type a draft that reads as something other than a message — "remind me to send
+the investor deck tomorrow" — and pause. A pill appears above the composer
+naming the recognized type (**Creating a task?**, **Scheduling an event?**,
+**Sending an email?**, **Writing a note?**) with a **TAB** hint and a dismiss
+**×**. Only those four types are ever offered: the classifier choosing `message`
+is what the composer already does, and search and AI have their own entry points.
+A draft shorter than three words or 24 characters is never classified, and the
+request waits for a pause in typing rather than firing per keystroke.
+
+**Tab** or clicking the pill opens the Universal Input form above the composer,
+already on the offered type, so it fills in fields rather than re-deciding what
+the draft is. Tab does nothing special when no pill is showing — it still indents
+lists — and Shift+Tab always outdents. The message editor keeps the caret and the
+draft throughout: clicking the pill must not move focus or collapse the composer
+on mobile.
+
+While the form is open, **⌘/Ctrl+Enter** (the shortcut the form's button
+advertises) creates the draft as that type and clears the composer; plain
+**Enter** still sends it as a message, which closes the form because the draft is
+gone. **Escape** or **Back to message** closes the form and leaves the draft
+where it was. Dismissing a pill, or closing the form, stops further offers until
+the composer is emptied.
+
 ## Message scrolling and navigation
 
 Thread rails end at the last reply avatar when there is no inline composer or

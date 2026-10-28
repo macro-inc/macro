@@ -27,6 +27,11 @@ It exercises the real resize solver, scroll container, and Lexical layout primit
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
+The channel composer's draft round trip and its Universal Input type offer have
+backend-free browser regressions:
+`bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
+See that directory's `README.md` for the provider and route-stubbing gotchas.
+
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,
@@ -247,6 +252,7 @@ the user's newest account for that app from the last fifteen minutes.
 - Name Home thread rows from their latest scoped notification, including document mentions and reactions; use the thread author only when no notification exists. Document rows whose newest outstanding notification is a comment, and calendar event rows whose newest is a join request, say who did it (`row-notification.ts`).
 - Use `ChannelTitleIcon` for conversation breadcrumbs so DMs retain participant or agent avatars and named channels retain their pictures; suppress avatar actions inside breadcrumb buttons.
 - Normalize thread-only conversation URLs in `channelsSearch` before Home, Chat, or touch views derive their message target.
+- Host Universal Input through `features/universal-input/context/input-session.ts`; a host keeps its own editor (`editor={null}`), hands over the text it already has, and drives the form through `captureControls`. Offer a type beside a host's own input with `createIntentSuggestion`, leaving out what that input already does: the channel composer never offers `message`. Opt a `ChannelInput` in with `universalInput`, and keep hosts that only carry messages (editing, thread replies, external groups) out of it. See `docs/agent-guide/channels.md` at the repository root.
 - Mobile dock search owns transient category/mode state in `features/command/mobile`; reuse the shared entity source and explicit full-text adapter rather than overlaying the dock query on view tabs or saved facets. See `docs/agent-guide/search.md` at the repository root.
 - Include known Macro users in typed All/People name searches without requiring a DM or CRM contact; resolve a matching person to their existing one-to-one DM while preserving name/email matching.
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.

@@ -1,6 +1,18 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throttle } from '@solid-primitives/scheduled';
+import { debounce, throttle } from '@solid-primitives/scheduled';
 import type { QueueObservation } from '../context/telemetry';
+
+/**
+ * How a burst of changes reaches the network. `throttle` answers a draft the
+ * reader is already waiting on; `debounce` waits for typing to pause, which is
+ * what an uninvited prediction should do.
+ */
+export type InferencePace = {
+  strategy: 'throttle' | 'debounce';
+  delayMs: number;
+};
+
+const DEFAULT_PACE: InferencePace = { strategy: 'throttle', delayMs: 200 };
 
 /** One request in flight; queued work always reads the newest eligible snapshot. */
 export function createInferenceQueue<T>(options: {
@@ -8,6 +20,7 @@ export function createInferenceQueue<T>(options: {
   key: (input: T) => string;
   run: (input: T) => Promise<void>;
   observe?: (observation: QueueObservation) => void;
+  pace?: InferencePace;
 }) {
   let running = false;
   let queued = false;
@@ -43,7 +56,11 @@ export function createInferenceQueue<T>(options: {
       }
     }
   };
-  const schedule = throttle(() => fireAndForget(run(), 'universal-input'), 200);
+  const pace = options.pace ?? DEFAULT_PACE;
+  const schedule = (pace.strategy === 'debounce' ? debounce : throttle)(
+    () => fireAndForget(run(), 'universal-input'),
+    pace.delayMs
+  );
   const clear = () => {
     if (requests) options.observe?.({ action: 'cleared', count: requests });
     requests = 0;

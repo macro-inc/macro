@@ -44,6 +44,8 @@ import {
   $getSelection,
   $isRangeSelection,
   $isTextNode,
+  COMMAND_PRIORITY_CRITICAL,
+  KEY_TAB_COMMAND,
   type LexicalEditor,
 } from 'lexical';
 import {
@@ -62,6 +64,7 @@ import {
 } from '../../dictation/components/dictation-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
 import type { DictationController } from '../../dictation/core/types';
+import { useChannelUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
@@ -71,11 +74,13 @@ import {
   ComposerAddMenu,
   type ComposerAddMenuGroup,
 } from './ComposerAddMenu';
+import { ComposerIntent } from './ComposerIntent';
 import {
   channelComposerActions,
   createConfiguredChannelMarkdownEditor,
 } from './configured-markdown-editor';
 import { createCollapsedInputState } from './create-collapsed-input-state';
+import { createComposerIntent } from './create-composer-intent';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
 import type {
@@ -156,6 +161,13 @@ export type ChannelInputProps = InputCallbacks & {
   /** Dismiss the host after Escape has closed inline menus or dictation. */
   onEscape?: () => void;
   onReady?: (handle: InputHandle) => void;
+  /**
+   * Recognize what the draft is really for and offer to create it instead of
+   * sending it, above the composer. Off by default: every draft on a composer
+   * that opts in is classified, and hosts that only carry messages — a message
+   * being edited, a WhatsApp group — have nothing to offer.
+   */
+  universalInput?: boolean;
   /** Offers "Start a call" in the add menu; omitted where a call can't start. */
   onStartCall?: () => void;
   /** A call is live in the channel, so the add menu offers to join it. */
@@ -292,6 +304,13 @@ export function ChannelInput(props: ChannelInputProps) {
     attachFiles: (files) => inputState.commands.attachFiles(files),
   });
 
+  const composerIntent = props.universalInput
+    ? createComposerIntent({
+        text: () => inputState.view().value ?? '',
+        enabled: useChannelUniversalInputEnabled(),
+      })
+    : undefined;
+
   const isCollapsed = () =>
     !!props.collapsible && collapsedInput.isCollapsed() && !dictation.active();
 
@@ -396,7 +415,11 @@ export function ChannelInput(props: ChannelInputProps) {
       mentionsTracker.onMentionRemove(mention);
     },
     onChange,
-    onEnter: () => {
+    onEnter: (event) => {
+      // The form above the composer advertises ⌘/Ctrl+↵, so that chord runs it
+      // instead of sending the draft as a message.
+      if ((event.metaKey || event.ctrlKey) && composerIntent?.submit())
+        return true;
       if (isTouchDevice()) return false;
       typingTracker.stop();
       fireAndForget(commands.send(), 'channel-input');
@@ -413,6 +436,22 @@ export function ChannelInput(props: ChannelInputProps) {
     },
     onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
   });
+  // Tab only means "take the offer" while one is showing; otherwise it falls
+  // through to the list indentation the composer has always had.
+  if (composerIntent)
+    markdownEditor.use((editor) =>
+      editor.registerCommand(
+        KEY_TAB_COMMAND,
+        (event: KeyboardEvent) => {
+          if (event.shiftKey || markdownEditor.controls.isInlineMenuOpen())
+            return false;
+          if (!composerIntent.open()) return false;
+          event.preventDefault();
+          return true;
+        },
+        COMMAND_PRIORITY_CRITICAL
+      )
+    );
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
   const composerDictation = createComposerDictation(lexicalEditor);
@@ -738,6 +777,10 @@ export function ChannelInput(props: ChannelInputProps) {
       }
       // Block upstream escape handlers when ESC should close inline menus.
       if (markdownEditor.controls.isInlineMenuOpen()) return true;
+      if (composerIntent?.isOpen()) {
+        composerIntent.close();
+        return true;
+      }
       if (!props.onEscape) return false;
       props.onEscape();
       return true;
@@ -836,6 +879,18 @@ export function ChannelInput(props: ChannelInputProps) {
         open={addDrawerOpen()}
         onOpenChange={setAddDrawerOpen}
       />
+      <Show when={composerIntent}>
+        {(intent) => (
+          <ComposerIntent
+            state={intent()}
+            text={inputState.view().value ?? ''}
+            onSubmitted={() => {
+              mentionsTracker.setMentions([]);
+              clearComposer();
+            }}
+          />
+        )}
+      </Show>
       {/* File picker opened from the add menu, collapsed or not. */}
       <input
         ref={collapsedInput.setFilePickerRef}
@@ -878,6 +933,9 @@ export function ChannelInput(props: ChannelInputProps) {
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
           if (dictation.active()) return;
+          // The form above the composer is a sibling of this surface; filling
+          // it in must not collapse the editor it is reading from.
+          if (composerIntent?.isOpen()) return;
           collapsedInput.collapse();
         }}
         // `ComposerSurface` stretches itself; a bare div would take its

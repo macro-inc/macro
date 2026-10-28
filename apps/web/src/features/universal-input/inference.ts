@@ -6,7 +6,7 @@ import {
   TASK_STATUS_OPTIONS,
 } from '../next-soup/core/search-options';
 import type { InputCapabilities } from './context/capabilities';
-import type { InputPhase } from './context/telemetry';
+import type { InputPhase, InputSurface } from './context/telemetry';
 import { type InputFailure, InputInferenceError } from './core/failure';
 import type { Intent } from './core/input';
 import { suggestionsSchema } from './core/input';
@@ -16,7 +16,7 @@ export function createInferenceSource(
   properties: () => Promise<
     { name: string; options: string[] }[]
   > = async () => [],
-  surface: 'command-menu' | 'mobile-search' = 'command-menu',
+  surface: InputSurface = 'command-menu',
   parent?: () => Span | undefined
 ): Pick<InputCapabilities, 'classify' | 'extract'> & { dispose(): void } {
   const active = new Set<Span>();

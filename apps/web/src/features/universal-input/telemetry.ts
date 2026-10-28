@@ -1,5 +1,9 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
-import type { InputObservation } from './context/telemetry';
+import type {
+  InputObservation,
+  InputSurface,
+  SuggestionObservation,
+} from './context/telemetry';
 import type { Field, Intent } from './core/input';
 
 type DraftTrace = {
@@ -28,9 +32,7 @@ type DraftTrace = {
 };
 
 /** App wiring for metadata-only draft traces; state primitives receive only observe(). */
-export function createInputTelemetry(
-  surface: 'command-menu' | 'mobile-search'
-) {
+export function createInputTelemetry(surface: InputSurface) {
   const drafts = new Map<string, DraftTrace>();
   let disposed = false;
   let activeId: string | undefined;
@@ -247,6 +249,37 @@ export function createInputTelemetry(
       const draft = activeId ? drafts.get(activeId) : undefined;
       const span = draft?.submission ?? draft?.span;
       return span ? span.run(operation) : operation();
+    },
+  };
+}
+
+/**
+ * One span per offer made beside a host's own input. Its outcome says whether
+ * interrupting was worth it; the draft it opens traces itself from there.
+ */
+export function createSuggestionTelemetry(surface: InputSurface) {
+  let offer: { span: Span; offered: number } | undefined;
+  const observe = (event: SuggestionObservation) => {
+    if (event.event === 'offered') {
+      offer?.span.end();
+      const span = Telemetry.span('universal_input.suggestion');
+      span.setAttr('input.surface', surface);
+      span.setAttr('input.intent', event.intent);
+      span.setAttr('input.score', event.score);
+      offer = { span, offered: performance.now() };
+      return;
+    }
+    if (!offer) return;
+    offer.span.setAttr('input.outcome', event.outcome);
+    offer.span.setAttr('input.offered_ms', performance.now() - offer.offered);
+    offer.span.end();
+    offer = undefined;
+  };
+  return {
+    observe,
+    dispose() {
+      offer?.span.end();
+      offer = undefined;
     },
   };
 }

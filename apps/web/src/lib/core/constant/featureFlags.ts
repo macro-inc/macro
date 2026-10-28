@@ -799,6 +799,17 @@ export const enableUniversalInput = defineFlag({
   default: DEV_MODE_ENV || import.meta.env.DEV || undefined,
 });
 
+/**
+ * Offers a recognized type beside the channel composer. Rolled out separately
+ * from Command K because every channel draft is classified, not just the ones
+ * typed into a menu the user opened on purpose.
+ */
+export const enableChannelUniversalInput = defineFlag({
+  key: 'enable-channel-universal-input',
+  env: 'ENABLE_CHANNEL_UNIVERSAL_INPUT',
+  default: DEV_MODE_ENV || import.meta.env.DEV || undefined,
+});
+
 // Private conversations with agent personas. On in dev; there is no PostHog
 // flag. Override with VITE_ENABLE_AGENT_DMS.
 export const ENABLE_AGENT_DMS = defineFlag({
