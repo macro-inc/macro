@@ -17,7 +17,7 @@ type LabelProps = ComponentProps<typeof KobalteCheckbox.Label>;
 
 const CheckboxSizeContext = createContext<() => CheckboxSize>(() => 'md');
 const checkboxVariants = createVariants(
-  'inline-grid shrink-0 place-items-center rounded border border-border-primary bg-transparent text-accent-contrast data-checked:border-accent data-checked:bg-accent data-indeterminate:border-accent data-indeterminate:bg-accent',
+  'inline-grid shrink-0 place-items-center rounded border border-border-primary bg-transparent text-button-primary-ink data-checked:border-accent data-checked:bg-accent data-indeterminate:border-accent data-indeterminate:bg-accent',
   {
     size: {
       sm: 'size-3.5',
