@@ -73,6 +73,22 @@ test('opens a conversation in a modal and returns focus to it', async ({
   );
 });
 
+test('a modal closed before it animates in lets go of the board', async ({
+  page,
+}) => {
+  await openBoard(page);
+  // Open and close in one task, before the browser paints the modal.
+  await card(page, 'general').evaluate((node) => {
+    if (node instanceof HTMLElement) node.click();
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+  });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.scrim-glass')).toHaveCount(0);
+  await expect(page.locator('body')).not.toHaveCSS('pointer-events', 'none');
+});
+
 test('a line on a person card opens its conversation and gets focus back', async ({
   page,
 }) => {
@@ -116,6 +132,25 @@ test('moves a card by hand, remembers it, and tidies it back', async ({
     .poll(async () => (await card(page, 'general').boundingBox())?.x)
     .toBeCloseTo(before.x, 0);
   await expect(page.getByRole('button', { name: 'Tidy up' })).toBeDisabled();
+});
+
+test('Escape cancels a drag, and letting go does not open the card', async ({
+  page,
+}) => {
+  await openBoard(page);
+  const before = await restingBox(card(page, 'general'));
+  if (!before) throw new Error('general is not on the board');
+  const press = { x: before.x + 60, y: before.y + 20 };
+  await page.mouse.move(press.x, press.y);
+  await page.mouse.down();
+  await page.mouse.move(press.x + 120, press.y + 60, { steps: 6 });
+  await page.keyboard.press('Escape');
+  // Still holding the button; wait past the next task, then let go.
+  await page.waitForTimeout(100);
+  await page.mouse.up();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const after = await restingBox(card(page, 'general'));
+  expect(Math.round((after?.x ?? 0) - before.x)).toBe(0);
 });
 
 test('a closed card stays away until something new happens in it', async ({

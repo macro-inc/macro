@@ -151,7 +151,11 @@ function Fixture() {
   };
 
   const arrive = () => {
-    const { key, message } = arrivingMessage(now(), arrivals++);
+    // A minute passes per arrival, so an item closed after one arrival
+    // reopens on the next.
+    const at = now() + 60_000;
+    setNow(at);
+    const { key, message } = arrivingMessage(at, arrivals++);
     setItems((previous) =>
       previous.map((item) =>
         item.key === key
