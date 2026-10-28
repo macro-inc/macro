@@ -5,8 +5,12 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type {
+  Bucket,
+  ItemForBucket,
+  ItemsForBuckets,
   QuickAccessContextValue,
   QuickAccessList,
+  QuickAccessListOptions,
 } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
 import { syncServiceClient } from '@service-sync/client';
@@ -31,30 +35,42 @@ const doc = buildLargeDoc(
   sessionCount,
   Math.floor(Date.now() / 1000) - sessionCount * 4500
 );
-const snapshot = doc.export({ mode: 'snapshot' });
+const snapshot = new Uint8Array(doc.export({ mode: 'snapshot' }));
 const latest = doc.toJSON();
 
 syncServiceClient.getSnapshot = async () => ok(snapshot);
 syncServiceClient.getDocumentMetadata = async () =>
   ok({
-    peers: ['1', '2', '3'].map((peer) => ({
+    peers: [1, 2, 3].map((peer) => ({
       peer_id: peer,
       user_id: `macro|author${peer}@example.com`,
     })),
   });
 
 // The preview's mention menu reads Quick Access; nothing is mentionable here.
-const emptyList: QuickAccessList = {
-  items: () => [],
-  totalCount: () => 0,
-  hasMore: () => false,
-  isLoading: () => false,
-  isLoadingMore: () => false,
-  error: () => undefined,
-  loadMore: async () => {},
-};
+function useList(): QuickAccessList;
+function useList<B extends Bucket>(
+  bucket: B
+): QuickAccessList<ItemForBucket<B>>;
+function useList<B extends Bucket[]>(
+  ...buckets: B
+): QuickAccessList<ItemsForBuckets<B>>;
+function useList<const B extends readonly Bucket[]>(
+  options: QuickAccessListOptions<B>
+): QuickAccessList<ItemForBucket<B[number]>>;
+function useList(): QuickAccessList {
+  return {
+    items: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    error: () => undefined,
+    loadMore: async () => {},
+  };
+}
 const quickAccess: QuickAccessContextValue = {
-  useList: () => emptyList,
+  useList,
   usesRecordSelection: () => false,
   usesSearchProjection: () => false,
   isLoading: () => false,
