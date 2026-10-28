@@ -1,7 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import CaretDown from '@phosphor/caret-down.svg';
-import Database from '@phosphor/database.svg';
-import Plus from '@phosphor/plus.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Database from '@icon/system/regular/database.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { QuestionTypeId } from '../../core/question-types';
@@ -147,7 +147,7 @@ export function HiddenColumns(props: {
                   </span>
                   <span class="text-xs text-ink-muted">{column.label}</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => props.onAdd(column.id)}
                   >
@@ -184,7 +184,7 @@ export function ConversionNotice(props: {
         answer that fits, and the current column keeps all of them.
       </p>
       <div class="flex gap-2">
-        <Button size="sm" variant="strong" onClick={props.onConvert}>
+        <Button size="sm" variant="secondary" onClick={props.onConvert}>
           Convert into a new question
         </Button>
         <Button size="sm" variant="ghost" onClick={props.onDismiss}>

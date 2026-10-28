@@ -511,7 +511,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
                   <Show when={canRetrySender()}>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       disabled={uiDisabled()}
                       onClick={retrySender}
                     >

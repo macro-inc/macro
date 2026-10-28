@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{McpServerRecord, OAuthClientMetadata},
+    models::{MacroUserIdStr, McpServerRecord, OAuthClientMetadata},
     ports::{McpServerStore, OAuthClient},
 };
 use axum::{
@@ -20,12 +20,25 @@ use utoipa::{IntoParams, ToSchema};
 #[cfg(test)]
 mod test;
 
+/// Hook invoked after an OAuth flow completes and the credentials are saved.
+/// Hosts use this to react to a connection the moment it exists (e.g. record
+/// analytics); implementations must be quick or spawn.
+pub type McpAuthCompletedHook = Arc<
+    dyn Fn(McpServerRecord) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync,
+>;
+
+/// Hook invoked after a user removes a server they had added, with the record
+/// as it was before removal. Implementations must be quick or spawn.
+pub type McpServerRemovedHook = McpAuthCompletedHook;
+
 /// Shared state for the MCP router.
 pub struct McpRouterState<S, O, Auth> {
     store: Arc<S>,
     oauth: Arc<O>,
     authorization_state: MacroAuthorizationState<Auth>,
     client_metadata: OAuthClientMetadata,
+    on_auth_completed: Option<McpAuthCompletedHook>,
+    on_server_removed: Option<McpServerRemovedHook>,
 }
 
 impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
@@ -35,6 +48,8 @@ impl<S, O, Auth> Clone for McpRouterState<S, O, Auth> {
             oauth: self.oauth.clone(),
             authorization_state: self.authorization_state.clone(),
             client_metadata: self.client_metadata.clone(),
+            on_auth_completed: self.on_auth_completed.clone(),
+            on_server_removed: self.on_server_removed.clone(),
         }
     }
 }
@@ -64,7 +79,23 @@ where
             oauth: Arc::new(oauth),
             authorization_state,
             client_metadata,
+            on_auth_completed: None,
+            on_server_removed: None,
         }
+    }
+
+    /// Invoke `hook` whenever an OAuth flow completes (see
+    /// [`McpAuthCompletedHook`]).
+    pub fn with_auth_completed_hook(mut self, hook: McpAuthCompletedHook) -> Self {
+        self.on_auth_completed = Some(hook);
+        self
+    }
+
+    /// Invoke `hook` whenever a user removes a server (see
+    /// [`McpServerRemovedHook`]).
+    pub fn with_server_removed_hook(mut self, hook: McpServerRemovedHook) -> Self {
+        self.on_server_removed = Some(hook);
+        self
     }
 
     /// Access the underlying server store.
@@ -402,13 +433,49 @@ where
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
-    state
-        .store
-        .delete(&user.macro_user_id, &params.url)
+    remove_server(
+        state.store.as_ref(),
+        state.on_server_removed.as_ref(),
+        &user.macro_user_id,
+        &params.url,
+    )
+    .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Deletes a user's server, then passes the removed record to `on_removed`.
+///
+/// The record is read only when there is a hook, so a plain delete does no
+/// extra read or decryption. A record that can't be read (e.g. credentials
+/// that no longer decrypt) never blocks the delete: the hook is skipped
+/// instead. Deleting an unknown URL stays a quiet no-op.
+async fn remove_server<S>(
+    store: &S,
+    on_removed: Option<&McpServerRemovedHook>,
+    user_id: &MacroUserIdStr<'static>,
+    server_url: &str,
+) -> anyhow::Result<()>
+where
+    S: McpServerStore,
+    anyhow::Error: From<S::Err>,
+{
+    let removed = match on_removed {
+        Some(_) => store.load(user_id, server_url).await.unwrap_or_else(|error| {
+            tracing::warn!(error = ?error, "could not read MCP server before removal; skipping the removal hook");
+            None
+        }),
+        None => None,
+    };
+    store
+        .delete(user_id, server_url)
         .await
         .map_err(anyhow::Error::from)?;
 
-    Ok(StatusCode::NO_CONTENT)
+    if let (Some(record), Some(hook)) = (removed, on_removed) {
+        hook(record).await;
+    }
+    Ok(())
 }
 
 #[utoipa::path(
@@ -512,10 +579,14 @@ where
 {
     let (code, csrf_state) = parse_callback_params(params)?;
 
-    state
+    let record = state
         .oauth
         .exchange_authorization_code(&code, &csrf_state)
         .await?;
+
+    if let Some(hook) = &state.on_auth_completed {
+        hook(record).await;
+    }
 
     Ok("Authorization successful. You can close this tab.".to_string())
 }

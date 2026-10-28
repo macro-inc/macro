@@ -468,6 +468,22 @@ export type ArchiveThreadRequest = {
     value: boolean;
 };
 
+export type ArchiveThreadsRequest = {
+    thread_ids: Array<string>;
+    value: boolean;
+};
+
+export type ArchiveThreadsResponse = {
+    /**
+     * Threads left unchanged because they could not be updated.
+     */
+    failed_thread_ids: Array<string>;
+    /**
+     * Threads whose archived status now matches the request.
+     */
+    updated_thread_ids: Array<string>;
+};
+
 /**
  * Attachments of a message, as sent to us by the provider.
  */
@@ -868,6 +884,12 @@ export type CalendarInvitation = {
      */
     method: InvitationMethod;
     organizer?: null | InvitationParticipant;
+    /**
+     * Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event.
+     * `None` on snapshots saved before recurrence was recorded, where a
+     * series cannot be told apart from a single event.
+     */
+    recurrence?: Array<string> | null;
     recurrence_id?: null | InvitationDateTime;
     /**
      * Original recurrence identifier spelling and parameters.
@@ -891,6 +913,25 @@ export type CalendarInvitation = {
      */
     uid: string;
 };
+
+/**
+ * HTTP error body returned by calendar mutation endpoints.
+ */
+export type CalendarMutationApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: CalendarMutationErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+};
+
+/**
+ * Machine-readable failure category for calendar mutations.
+ */
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required';
 
 /**
  * A materialized recurrence instance optimized for range queries.
@@ -956,6 +997,17 @@ export type ContactInfoLegacy = {
 
 export type ContactInfoWithInteraction = ContactInfoLegacy & {
     last_interaction: string;
+};
+
+/**
+ * Request body adding a shared event to the requester's calendar.
+ */
+export type CopyCalendarEventRequest = {
+    /**
+     * Google calendar to add the copy to; defaults to the requester's
+     * primary inbox's primary calendar.
+     */
+    calendarId?: string | null;
 };
 
 /**
@@ -1100,6 +1152,68 @@ export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_lo
  * Visibility of event details.
  */
 export type EventVisibility = 'default' | 'public' | 'private' | 'confidential';
+
+/**
+ * A refused or failed forward.
+ */
+export type ForwardCalendarEventError = {
+    /**
+     * What went wrong.
+     */
+    code: ForwardCalendarEventErrorCode;
+    /**
+     * A message fit to show the user.
+     */
+    message: string;
+};
+
+/**
+ * Why a forward was not sent.
+ */
+export type ForwardCalendarEventErrorCode = 'not_found' | 'invalid_recipients' | 'inbox_unavailable' | 'send_failed';
+
+/**
+ * One person a forwarded invitation goes to.
+ */
+export type ForwardCalendarEventRecipient = {
+    /**
+     * Their email address.
+     */
+    email: string;
+    /**
+     * Their display name.
+     */
+    name?: string | null;
+};
+
+/**
+ * Who a forwarded invitation goes to, and what its email says.
+ */
+export type ForwardCalendarEventRequest = {
+    /**
+     * The email's plain-text body. Without one, it names the event and
+     * says the recipient won't be on the organizer's guest list.
+     */
+    bodyText?: string | null;
+    /**
+     * The people it goes to, at most 50.
+     */
+    to: Array<ForwardCalendarEventRecipient>;
+};
+
+/**
+ * The email the forward queued.
+ */
+export type ForwardCalendarEventResponse = {
+    /**
+     * The sent message.
+     */
+    messageId: string;
+    /**
+     * Its thread.
+     */
+    threadId: string;
+};
 
 /**
  * The response returned from the get backfill job endpoint
@@ -2064,6 +2178,52 @@ export type GetBackfillGmailResponses = {
 
 export type GetBackfillGmailResponse = GetBackfillGmailResponses[keyof GetBackfillGmailResponses];
 
+export type ForwardCalendarEventData = {
+    body: ForwardCalendarEventRequest;
+    path: {
+        /**
+         * The viewer's copy of the event
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/email/calendar-events/{event_id}/forward';
+};
+
+export type ForwardCalendarEventErrors = {
+    /**
+     * No, too many, or invalid recipients
+     */
+    400: ForwardCalendarEventError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * The inbox holding the copy cannot send for the viewer
+     */
+    403: ForwardCalendarEventError;
+    /**
+     * No such event on one of the viewer's own inboxes
+     */
+    404: ForwardCalendarEventError;
+    /**
+     * The email could not be sent
+     */
+    502: ForwardCalendarEventError;
+};
+
+export type ForwardCalendarEventError2 = ForwardCalendarEventErrors[keyof ForwardCalendarEventErrors];
+
+export type ForwardCalendarEventResponses = {
+    /**
+     * The email is queued to send
+     */
+    202: ForwardCalendarEventResponse;
+};
+
+export type ForwardCalendarEventResponse2 = ForwardCalendarEventResponses[keyof ForwardCalendarEventResponses];
+
 export type ListContactsData = {
     body?: never;
     path?: never;
@@ -3006,6 +3166,27 @@ export type DisableSyncResponses = {
 
 export type DisableSyncResponse = DisableSyncResponses[keyof DisableSyncResponses];
 
+export type ArchiveThreadsData = {
+    body: ArchiveThreadsRequest;
+    path?: never;
+    query?: never;
+    url: '/email/threads/archived';
+};
+
+export type ArchiveThreadsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ArchiveThreadsError = ArchiveThreadsErrors[keyof ArchiveThreadsErrors];
+
+export type ArchiveThreadsResponses = {
+    200: ArchiveThreadsResponse;
+};
+
+export type ArchiveThreadsResponse2 = ArchiveThreadsResponses[keyof ArchiveThreadsResponses];
+
 export type PreviewsInboxCursorData = {
     body?: never;
     path: {
@@ -3283,6 +3464,64 @@ export type GetThreadCalendarInvitationsResponses = {
 };
 
 export type GetThreadCalendarInvitationsResponse = GetThreadCalendarInvitationsResponses[keyof GetThreadCalendarInvitationsResponses];
+
+export type CopyThreadCalendarInvitationData = {
+    body: CopyCalendarEventRequest;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+        /**
+         * Message carrying the event
+         */
+        message_id: string;
+        /**
+         * Saved event within the message
+         */
+        invitation_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy';
+};
+
+export type CopyThreadCalendarInvitationErrors = {
+    /**
+     * The saved event cannot be added, or the calendar is not a Google calendar
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * No such saved event in the thread
+     */
+    404: CalendarMutationApiError;
+    /**
+     * Already on the viewer's calendar, no writable calendar, or the provider refused the copy
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type CopyThreadCalendarInvitationError = CopyThreadCalendarInvitationErrors[keyof CopyThreadCalendarInvitationErrors];
+
+export type CopyThreadCalendarInvitationResponses = {
+    /**
+     * The copy on the viewer's calendar
+     */
+    201: CalendarEvent;
+};
+
+export type CopyThreadCalendarInvitationResponse = CopyThreadCalendarInvitationResponses[keyof CopyThreadCalendarInvitationResponses];
 
 export type UpdateThreadProjectData = {
     body: UpdateThreadProjectRequest;

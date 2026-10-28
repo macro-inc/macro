@@ -21,7 +21,7 @@ for (const viewport of [
         })),
       });
       await page.evaluate(() =>
-        sessionStorage.setItem(
+        localStorage.setItem(
           'onboarding-flow-step',
           JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
         )

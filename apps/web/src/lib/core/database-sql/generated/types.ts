@@ -75,6 +75,8 @@ export type Cell =
   | { type: 'bool'; value: boolean }
   /**  A date-time. */
   | { type: 'date'; value: string }
+  /**  A span from one date-time to another. */
+  | { type: 'dateRange'; value: DateRange }
   /**  The selected option ids; one for single-select columns. */
   | { type: 'options'; value: OptionId[] }
   /**  The referenced entity ids; one for single-valued columns. */
@@ -95,6 +97,8 @@ export type CellValue =
   | { type: 'boolean'; value: boolean }
   /**  A date-time. */
   | { type: 'date'; value: string }
+  /**  A span of time; its end may not come before its start. */
+  | { type: 'date_range'; value: DateRange }
   /**  Complete http or https URLs; at most one for a single-valued column. */
   | { type: 'link'; value: string[] }
   /**
@@ -256,6 +260,8 @@ export type ColumnKind =
   | { kind: 'boolean' }
   /**  A date-time. */
   | { kind: 'date' }
+  /**  A span from one date-time to another. */
+  | { kind: 'dateRange' }
   /**  A URL. */
   | { kind: 'link' }
   /**  One or more of a fixed set of options. */
@@ -337,6 +343,8 @@ export type DataType =
   | 'BOOLEAN'
   /**  A date-time. */
   | 'DATE'
+  /**  A span from one date-time to another. */
+  | 'DATE_RANGE'
   /**  A URL. */
   | 'LINK'
   /**  Text options. */
@@ -463,6 +471,35 @@ export type DateOperator =
   | 'onOrAfter';
 
 /**
+ *  A span of time from `start` to `end`, both included. A write whose end
+ *  comes before its start is refused.
+ */
+export type DateRange = {
+  /**  Where it starts. */
+  start: string;
+  /**  Where it ends; never before the start. */
+  end: string;
+};
+
+/**
+ *  How a date-range cell stands to a day: the whole day starting at the
+ *  test's date-time, so a range from 1 PM to 5 PM contains its day.
+ */
+export type DateRangeOperator =
+  /**  The range overlaps the day. */
+  | 'contains'
+  /**  The range does not overlap the day, an empty cell included. */
+  | 'doesNotContain'
+  /**  The range ends before the day starts. */
+  | 'endsBefore'
+  /**  The range ends on the day or after. */
+  | 'endsOnOrAfter'
+  /**  The range starts after the day ends. */
+  | 'startsAfter'
+  /**  The range starts on the day or before. */
+  | 'startsOnOrBefore';
+
+/**
  *  A failure as it crosses the wasm boundary: the typed error, and the words
  *  the engine would give an agent for it.
  */
@@ -580,6 +617,14 @@ export type FilterTest =
       /**  How the cell compares. */
       operator: DateOperator;
       /**  The date-time compared against. */
+      value: string;
+    }
+  /**  A date-range column. */
+  | {
+      kind: 'dateRange';
+      /**  How the cell's range stands to the day. */
+      operator: DateRangeOperator;
+      /**  The start of the day compared against. */
       value: string;
     }
   /**  A checkbox column. An unchecked box and an empty cell are the same. */
@@ -865,6 +910,8 @@ export type OpColumnKind =
   | { type: 'boolean' }
   /**  A date-time. */
   | { type: 'date' }
+  /**  A span from one date-time to another. */
+  | { type: 'date_range' }
   /**  A URL. */
   | { type: 'link' }
   /**  Text options. */
@@ -1119,6 +1166,8 @@ export type OutcomeKind =
   | 'boolean'
   /**  A date-time. */
   | 'date'
+  /**  A span from one date-time to another. */
+  | 'dateRange'
   /**  Select option ids; the caller labels them from the catalog. */
   | 'select'
   /**  Entity ids; the caller hydrates them. */
@@ -1228,7 +1277,10 @@ export type Request = {
   limit: number;
 };
 
-/**  A layout as an op asks for it: a board may leave its card title out. */
+/**
+ *  A layout as an op asks for it: a board or timeline may leave its title
+ *  out.
+ */
 export type RequestedLayout =
   /**  A grid with a row per row. */
   | {
@@ -1261,6 +1313,26 @@ export type RequestedLayout =
       cardFields: ColumnId[];
       /**  Whether a lane with no cards is hidden. */
       hideEmptyLanes: boolean;
+    }
+  /**  Bars on a calendar, one per row, spanning its date-range cell. */
+  | {
+      kind: 'timeline';
+      /**  The date-range column whose cells are the bars. */
+      range: ColumnId;
+      /**
+       *  The column a bar is labelled by. Left out, a timeline keeps the
+       *  title it has, and a new timeline takes the table's first column.
+       */
+      title?: ColumnId | null;
+      /**
+       *  The single-select or single-person column grouping the bars, if
+       *  any.
+       */
+      groupBy?: ColumnId | null;
+      /**  The columns a bar shows after its title, in order. */
+      barFields?: ColumnId[];
+      /**  The select or tag column whose options color the bars, if any. */
+      colorBy?: ColumnId | null;
     };
 
 /**  Why a statement could not be bound to the catalog. */
@@ -2038,6 +2110,8 @@ export type ValueKind =
   | 'number'
   /**  Date-times. */
   | 'date'
+  /**  Spans of time. */
+  | 'dateRange'
   /**  Checkboxes. */
   | 'checkbox'
   /**  Options of a select or tag column. */
@@ -2156,6 +2230,29 @@ export type ViewLayout =
       cardFields: ColumnId[];
       /**  Whether a lane with no cards is hidden. */
       hideEmptyLanes: boolean;
+    }
+  /**
+   *  Bars on a calendar, one per row, spanning its date-range cell. Rows
+   *  with an empty range are listed apart as undated.
+   */
+  | {
+      kind: 'timeline';
+      /**  The date-range column whose cells are the bars. */
+      range: ColumnId;
+      /**
+       *  The column a bar is labelled by, of any type. Removing it labels
+       *  the bars by the table's first remaining column.
+       */
+      title: ColumnId;
+      /**
+       *  The single-select or single-person column whose values group the
+       *  bars, if any; moving a bar to another group sets this column.
+       */
+      groupBy?: ColumnId | null;
+      /**  The columns a bar shows after its title, in order. */
+      barFields?: ColumnId[];
+      /**  The select or tag column whose options color the bars, if any. */
+      colorBy?: ColumnId | null;
     };
 
 /**  A view's place among its table's views. */
@@ -2229,6 +2326,18 @@ export type ViewProblem =
     }
   /**  A lane is listed twice. */
   | { kind: 'repeatedLane' }
+  /**  A timeline spans a column that is not a date range. */
+  | {
+      kind: 'timelineCannotSpan';
+      /**  The column's name. */
+      column: string;
+    }
+  /**  A timeline is colored by a column whose values have no colors. */
+  | {
+      kind: 'timelineCannotColorBy';
+      /**  The column's name. */
+      column: string;
+    }
   /**  A board was asked of a view laid out as a table. */
   | { kind: 'notABoard' }
   /**

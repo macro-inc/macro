@@ -1,4 +1,4 @@
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Dropdown } from '@ui/components/Dropdown';
 import { createMemo, createSignal, For, Show } from 'solid-js';

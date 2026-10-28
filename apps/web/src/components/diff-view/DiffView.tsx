@@ -7,9 +7,9 @@
  */
 
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
-import ArrowsInIcon from '@phosphor/arrows-in.svg';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import ArrowsInIcon from '@icon/system/regular/arrows-in.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, Card, cn, Tabs } from '@ui';
@@ -361,7 +361,7 @@ function CollapseButton() {
     >
       <CaretRightIcon
         class={cn(
-          'transition-transform duration-100 motion-reduce:transition-none',
+          'size-3.5 shrink-0 transition-transform duration-100 motion-reduce:transition-none',
           !collapsed() && 'rotate-90'
         )}
       />
@@ -422,9 +422,9 @@ function CollapseAll(props: { iconOnly?: boolean }) {
   const { collapse } = useDiffView();
   return (
     <Button
+      aria-label={collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}
       variant="ghost"
       size={props.iconOnly ? 'icon-sm' : 'sm'}
-      label={collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}
       tooltip={
         collapse.anyExpanded()
           ? 'Hide every diff, keeping just the file headers'
@@ -432,7 +432,11 @@ function CollapseAll(props: { iconOnly?: boolean }) {
       }
       onClick={() => collapse.toggleAll()}
     >
-      {collapse.anyExpanded() ? <ArrowsInIcon /> : <ArrowsOutIcon />}
+      {collapse.anyExpanded() ? (
+        <ArrowsInIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      ) : (
+        <ArrowsOutIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      )}
       <Show when={!props.iconOnly}>
         <span>{collapse.anyExpanded() ? 'Collapse all' : 'Expand all'}</span>
       </Show>

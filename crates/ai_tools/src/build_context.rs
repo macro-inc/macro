@@ -401,6 +401,7 @@ pub async fn build_tool_service_context_from_env(
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
+    .with_word_document_files(Arc::new(document_files.clone()))
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
@@ -560,26 +561,34 @@ pub async fn build_tool_service_context_from_env(
     let admission =
         ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
     let pipedream_client = crate::mcp_app_catalog::pipedream_client_from_env()?;
-    let import_tool_context = if let Some(secret_name) = maybe_env
+    let native_servers = match maybe_env
         .mcp_credentials_key_secret_name
         .as_ref()
         .and_then(|key| key.value())
     {
-        let mcp_credentials_key = secretsmanager_client
-            .get_maybe_secret_value(environment, secret_name)
-            .await
-            .context("failed to load MCP credentials encryption key")?;
-        let mcp_encryption_key =
-            mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
-                .context("invalid MCP credentials encryption key")?;
+        Some(secret_name) => {
+            let mcp_credentials_key = secretsmanager_client
+                .get_maybe_secret_value(environment, secret_name)
+                .await
+                .context("failed to load MCP credentials encryption key")?;
+            let mcp_encryption_key =
+                mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
+                    .context("invalid MCP credentials encryption key")?;
+            Some(Arc::new(
+                mcp_client::outbound::pg_server_repo::PgServerRepo::new(
+                    pool.clone(),
+                    mcp_encryption_key,
+                ),
+            ))
+        }
+        None => None,
+    };
+    let import_tool_context = if let Some(native_servers) = &native_servers {
         let pipedream_connections = Arc::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
         );
         let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
-            Arc::new(mcp_client::outbound::pg_server_repo::PgServerRepo::new(
-                pool.clone(),
-                mcp_encryption_key,
-            )),
+            native_servers.clone(),
             pipedream_connections.clone(),
             Arc::new(pipedream_client.clone()),
         ));
@@ -600,6 +609,7 @@ pub async fn build_tool_service_context_from_env(
                             properties_service.clone(),
                         ),
                     team_repository: crate::tool_context::build_team_repository(pool.clone()),
+                    initiative_service: initiative_tool_context.service.clone(),
                     project_service: project_tool_context.service.clone(),
                     databases_service: databases_tool_context.service.clone(),
                     document_service: document_tool_context.service.clone(),
@@ -609,9 +619,23 @@ pub async fn build_tool_service_context_from_env(
             .with_slack_source(Arc::new(
                 import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector),
             ))
+            .with_tracker_connections(
+                Arc::new(
+                    import_linear::outbound::client::PipedreamLinearConnections::new(
+                        pipedream_connections.clone(),
+                        pipedream_client.clone(),
+                    ),
+                ),
+                Arc::new(
+                    import_jira::outbound::client::PipedreamJiraConnections::new(
+                        pipedream_connections.clone(),
+                        pipedream_client.clone(),
+                    ),
+                ),
+            )
             .with_notion_connections(Arc::new(
                 import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                    pipedream_connections,
+                    pipedream_connections.clone(),
                     pipedream_client.clone(),
                 ),
             ))
@@ -630,6 +654,7 @@ pub async fn build_tool_service_context_from_env(
         connector_tool_context: crate::tool_context::build_connector_tool_context(
             pool.clone(),
             pipedream_client.clone(),
+            native_servers,
         ),
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,

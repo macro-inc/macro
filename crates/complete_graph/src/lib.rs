@@ -9,6 +9,7 @@
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
 mod realtime;
+mod saved_view;
 /// Complete schema types and construction helpers.
 mod schema;
 #[cfg(test)]
@@ -35,13 +36,13 @@ pub use graphql_email::{
     DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailContentKey, EmailContentLoad,
     EmailContentLoader, EmailMutationService, EmailServiceEmailContentReader,
     EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
-    EmailThreadMetadataLoader, GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings,
-    GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus,
-    MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader, SaveEmailDraftContactInput,
-    SaveEmailDraftInput, SaveEmailDraftPayload, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
-    SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,
-    UpdateEmailThreadLabelInput, email_content_loader, email_thread_mail_projection_loader,
-    email_thread_metadata_loader,
+    EmailThreadMetadataLoader, EmailThreadUnavailable, GraphqlEmailLabel, GraphqlEmailLink,
+    GraphqlEmailLinkSettings, GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery,
+    GraphqlEmailSyncStatus, MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader,
+    SaveEmailDraftContactInput, SaveEmailDraftInput, SaveEmailDraftPayload,
+    SoupEmailContentEdgeReader, SoupEmailEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
+    SoupEmailThreadMetadataEdgeReader, UpdateEmailThreadLabelInput, email_content_loader,
+    email_thread_mail_projection_loader, email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,

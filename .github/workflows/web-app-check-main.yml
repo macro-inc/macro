@@ -16,6 +16,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
+      i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -62,6 +63,12 @@ jobs:
             - 'packages/sdk/**'
             - 'apps/docs/**'
             - '.github/actions/setup-reqs-web/**'
+          i18n_changed:
+            - 'apps/web/src/lib/i18n/**'
+            - 'apps/web/src/lib/core/component/ContextMenu.tsx'
+            - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'
+            - 'apps/web/src/components/ui/components/Dropdown.tsx'
+            - 'apps/web/src/features/settings/**'
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -395,6 +402,12 @@ jobs:
       working-directory: apps/web
     - name: Sign-up Browser Tests
       run: just test-signup-browser
+      working-directory: apps/web
+    - name: Interface Language Browser Tests
+      if: needs.path-check.outputs.i18n_changed == 'true'
+      run: |-
+        bunx playwright install-deps chromium
+        just test-i18n-browser
       working-directory: apps/web
     - name: Teardown Nix
       if: always()

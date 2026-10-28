@@ -7,6 +7,7 @@ import {
   useCreateAction,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
+import { type TranslationKey, t } from '@app/lib/i18n';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -17,8 +18,8 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
@@ -41,17 +42,23 @@ type CreateOption = {
 
 const IMPORT_FILE_OPTION: CreateOption = {
   id: 'import-file',
-  label: 'Import file',
+  get label() {
+    return t('create.importFile');
+  },
 };
 const IMPORT_FOLDER_OPTION: CreateOption = {
   id: 'import-folder',
-  label: 'Import folder',
+  get label() {
+    return t('create.importFolder');
+  },
 };
 // Companies aren't blocks, so the Customers view gets a bespoke option
 // that opens the create-company modal instead of a create action.
 const CREATE_COMPANY_OPTION: CreateOption = {
   id: 'create-company',
-  label: 'Company',
+  get label() {
+    return t('create.companyLabel');
+  },
 };
 
 /**
@@ -59,18 +66,18 @@ const CREATE_COMPANY_OPTION: CreateOption = {
  * (and thus aren't in CREATABLE_BLOCKS) but still need a create entry in
  * specific list views.
  */
-const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, string>> = {
-  routine: 'Routine',
+const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, TranslationKey>> = {
+  routine: 'create.routineLabel',
 };
 
-const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
-  agents: 'Agent',
-  channels: 'Channel',
-  companies: 'Company',
-  documents: 'New',
-  folders: 'Folder',
-  mail: 'Email',
-  tasks: 'Task',
+const VIEW_CREATE_LABELS: Partial<Record<ListView, TranslationKey>> = {
+  agents: 'create.agentLabel',
+  channels: 'create.channelLabel',
+  companies: 'create.companyLabel',
+  documents: 'create.new',
+  folders: 'create.folderLabel',
+  mail: 'create.emailLabel',
+  tasks: 'create.taskLabel',
 };
 
 function getViewCreateOptions(
@@ -88,7 +95,7 @@ function getViewCreateOptions(
       return [{ id: block.blockName, label: block.label }];
     }
     const viewOnlyLabel = VIEW_ONLY_BLOCK_LABELS[name];
-    if (viewOnlyLabel) return [{ id: name, label: viewOnlyLabel }];
+    if (viewOnlyLabel) return [{ id: name, label: t(viewOnlyLabel) }];
     return [];
   });
   if (view === 'documents') {
@@ -152,8 +159,8 @@ export const SoupViewCreateButton = () => {
   });
   const createLabel = createMemo(() => {
     const view = createView();
-    if (!view) return 'Create';
-    return VIEW_CREATE_LABELS[view] ?? 'Create';
+    const label = view ? VIEW_CREATE_LABELS[view] : undefined;
+    return t(label ?? 'create.create');
   });
 
   const handleSelect = (option: CreateOption) => {

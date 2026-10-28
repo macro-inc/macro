@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT thread_id\n        FROM email_messages\n        WHERE id = ANY($1) AND link_id = $2\n        ORDER BY thread_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6ba7d71306b4979b2b7fa8b4ecf525f4549e9f9facdfa9c7a59f90ca3facc4f0"
+}

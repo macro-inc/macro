@@ -1,4 +1,5 @@
 import {
+  ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type CachePush,
   type CacheRequest,
   type CacheResponse,
@@ -6,6 +7,10 @@ import {
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
 } from '../protocol';
+import {
+  CacheChangeBatch,
+  type CoalescedCacheChange,
+} from './cache-change-batch';
 import type {
   DatabaseAction,
   DatabaseActionProof,
@@ -17,6 +22,7 @@ import type {
 
 export type CoordinatorState =
   | { kind: 'waiting-for-tab'; nextDatabaseAction: DatabaseAction }
+  | { kind: 'parked'; nextDatabaseAction: DatabaseAction }
   | {
       kind: 'activating';
       tabId: string;
@@ -74,7 +80,7 @@ export type CoordinatorAction =
       request: CacheRequest;
     }
   | { kind: 'deliver-response'; tabId: string; response: CacheResponse }
-  | { kind: 'broadcast-push'; push: CachePush }
+  | { kind: 'broadcast-push'; push: CachePush; coalescedCount?: number }
   | {
       kind: 'reject-request';
       tabId: string;
@@ -82,7 +88,14 @@ export type CoordinatorAction =
       error: string;
       errorCode?: CacheResponseErrorCode;
     }
-  | { kind: 'drain-owner'; tabId: string; ownerEpoch: OwnerEpoch }
+  | {
+      kind: 'drain-owner';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+      handoff?: true;
+    }
+  | { kind: 'release-owner'; tabId: string; ownerEpoch: OwnerEpoch }
+  | { kind: 'handoff-pending'; ownerEpoch: OwnerEpoch }
   | { kind: 'close-engine-route'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'drop-tab'; tabId: string }
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
@@ -130,6 +143,15 @@ const STORAGE_BUSY_REASON =
 const SUPERSEDED_REASON =
   'a newer version of the app took over the local cache';
 
+/** Known outcomes must survive a caller leaving while storage is parked. */
+function isMutationSettlement(request: CacheRequest): boolean {
+  return (
+    request.kind === 'commit-optimistic-write' ||
+    request.kind === 'rollback-optimistic-write' ||
+    request.kind === 'defer-optimistic-write'
+  );
+}
+
 /** Pure election, epoch, routing, drain, and abrupt-loss state machine. */
 export class CoordinatorCore {
   private stateValue: CoordinatorState = {
@@ -138,6 +160,7 @@ export class CoordinatorCore {
   };
   private readonly tabs: string[] = [];
   private readonly retiringTabs = new Set<string>();
+  private readonly visibleTabs = new Set<string>();
   /** Tabs told the database is unavailable, with the reason they were given;
    * their pages stay uncached. */
   private readonly unavailableTabs = new Map<string, string>();
@@ -145,6 +168,7 @@ export class CoordinatorCore {
   private supersededReason: string | undefined;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
+  private readonly cacheChanges = new CacheChangeBatch();
   private currentEpoch = 0;
   private nextRouteId = 1;
   private staleMessageDrops = 0;
@@ -172,14 +196,20 @@ export class CoordinatorCore {
     };
   }
 
+  /** Visibility of eligible consumers, not merely the page owning an engine. */
+  get hasVisibleTab(): boolean {
+    return this.chooseCandidate() !== undefined;
+  }
+
   /** Whether a newer app build took the database over. */
   get superseded(): boolean {
     return this.supersededReason !== undefined;
   }
 
-  registerTab(tabId: string): CoordinatorAction[] {
+  registerTab(tabId: string, visible = true): CoordinatorAction[] {
     if (this.tabs.includes(tabId)) return [];
     this.tabs.push(tabId);
+    if (visible) this.visibleTabs.add(tabId);
     if (this.supersededReason !== undefined) {
       // A page of this build loaded after the handover, as after a rollback
       // or from stale HTML. Reloading could land on this build again, so it
@@ -212,8 +242,25 @@ export class CoordinatorCore {
         },
       ];
     }
-    if (this.stateValue.kind !== 'waiting-for-tab') return [];
+    if (
+      this.stateValue.kind !== 'waiting-for-tab' &&
+      this.stateValue.kind !== 'parked'
+    )
+      return this.handoffIfNeeded();
     return this.activateNext(this.stateValue.nextDatabaseAction);
+  }
+
+  setTabVisibility(tabId: string, visible: boolean): CoordinatorAction[] {
+    if (!this.tabs.includes(tabId)) return [];
+    if (visible) this.visibleTabs.add(tabId);
+    else this.visibleTabs.delete(tabId);
+    if (
+      this.stateValue.kind === 'parked' ||
+      this.stateValue.kind === 'waiting-for-tab'
+    ) {
+      return this.activateNext(this.stateValue.nextDatabaseAction);
+    }
+    return this.handoffIfNeeded();
   }
 
   request(tabId: string, request: CacheRequest): CoordinatorAction[] {
@@ -365,9 +412,17 @@ export class CoordinatorCore {
         openOutcome: ready.openOutcome,
       });
     }
+    // A hidden engine may have reset storage before it immediately drains.
+    // Notify hosts of that outcome, but leave queued work for its successor.
+    const handoff = this.handoffIfNeeded();
+    if (handoff.length > 0) return [...actions, ...handoff];
     while (this.queuedRequests.length > 0) {
       const queued = this.queuedRequests.shift();
-      if (queued && this.tabs.includes(queued.tabId)) {
+      if (
+        queued &&
+        (this.tabs.includes(queued.tabId) ||
+          isMutationSettlement(queued.request))
+      ) {
         actions.push(this.route(queued, this.stateValue));
       }
     }
@@ -389,20 +444,46 @@ export class CoordinatorCore {
     }
 
     this.inFlight.delete(routeId);
-    return [
-      {
+    const actions = this.broadcastCacheChanges(
+      this.cacheChanges.requestCompleted(this.inFlight.size === 0)
+    );
+    if (this.tabs.includes(request.tabId)) {
+      actions.push({
         kind: 'deliver-response',
         tabId: request.tabId,
         response: { ...response, id: request.request.id },
-      },
-    ];
+      });
+    }
+    return actions;
   }
 
   enginePush(ownerEpoch: OwnerEpoch, push: CachePush): CoordinatorAction[] {
     if (!this.acceptsEngineMessages(ownerEpoch)) {
       return [this.dropStale(ownerEpoch, undefined, 'stale-epoch')];
     }
-    return [{ kind: 'broadcast-push', push }];
+    if (push.kind !== 'cache-changed' && push.kind !== 'cache-hydrated') {
+      return [{ kind: 'broadcast-push', push }];
+    }
+    // The engine's local queue can look empty between MessagePort deliveries.
+    // Only the coordinator knows how much accepted work remains in transit.
+    this.cacheChanges.add(push);
+    if (
+      this.inFlight.size <= 1 ||
+      (push.kind === 'cache-changed' && push.reset)
+    ) {
+      return this.broadcastCacheChanges(this.cacheChanges.flush());
+    }
+    return [];
+  }
+
+  private broadcastCacheChanges(
+    changes: CoalescedCacheChange[]
+  ): CoordinatorAction[] {
+    return changes.map(({ push, count }) => ({
+      kind: 'broadcast-push',
+      push,
+      ...(count > 1 ? { coalescedCount: count } : {}),
+    }));
   }
 
   beginGracefulDeparture(
@@ -411,7 +492,7 @@ export class CoordinatorCore {
   ): CoordinatorAction[] {
     const state = this.stateValue;
     if (
-      state.kind !== 'active' ||
+      (state.kind !== 'active' && state.kind !== 'draining') ||
       state.tabId !== tabId ||
       state.ownerEpoch !== ownerEpoch
     ) {
@@ -420,6 +501,8 @@ export class CoordinatorCore {
       );
     }
     this.retiringTabs.add(tabId);
+    // An explicit disposal may join an already-running visibility handoff.
+    if (state.kind === 'draining') return [];
     this.stateValue = { kind: 'draining', tabId, ownerEpoch };
     return [{ kind: 'drain-owner', tabId, ownerEpoch }];
   }
@@ -440,12 +523,15 @@ export class CoordinatorCore {
       ownerEpoch,
       'engine drained before delivering its response'
     );
-    this.removeTabRecord(tabId);
-    this.retiringTabs.delete(tabId);
-    actions.push(
-      { kind: 'close-engine-route', tabId, ownerEpoch },
-      { kind: 'retire-tab', tabId, ownerEpoch }
-    );
+    actions.push({ kind: 'close-engine-route', tabId, ownerEpoch });
+    if (this.retiringTabs.delete(tabId)) {
+      this.removeTabRecord(tabId);
+      actions.push({ kind: 'retire-tab', tabId, ownerEpoch });
+    } else {
+      // The engine closed storage, not the page. Its host and subscriptions
+      // remain connected and the usual replacement broadcast refreshes them.
+      actions.push({ kind: 'release-owner', tabId, ownerEpoch });
+    }
     this.stateValue = {
       kind: 'waiting-for-tab',
       nextDatabaseAction: 'open-existing',
@@ -475,17 +561,23 @@ export class CoordinatorCore {
     const { kind } = this.stateValue;
     if (
       this.supersededReason !== undefined ||
-      (kind !== 'active' && kind !== 'waiting-for-tab' && kind !== 'failed')
+      (kind !== 'active' &&
+        kind !== 'waiting-for-tab' &&
+        kind !== 'parked' &&
+        kind !== 'failed')
     ) {
       return [];
     }
     const reason = SUPERSEDED_REASON;
     this.supersededReason = reason;
-    const actions: CoordinatorAction[] = this.queuedRequests
-      .splice(0)
-      .map(({ tabId, request }) =>
-        this.rejectUnavailable(tabId, request.id, reason)
-      );
+    const actions: CoordinatorAction[] = [
+      ...this.broadcastCacheChanges(this.cacheChanges.flush()),
+      ...this.queuedRequests
+        .splice(0)
+        .map(({ tabId, request }) =>
+          this.rejectUnavailable(tabId, request.id, reason)
+        ),
+    ];
     for (const tabId of this.tabs) this.unavailableTabs.set(tabId, reason);
     actions.push({ kind: 'broadcast-cache-superseded', reason });
     this.assertInvariants();
@@ -508,6 +600,7 @@ export class CoordinatorCore {
     };
     this.assertInvariants();
     return [
+      ...this.broadcastCacheChanges(this.cacheChanges.flush()),
       {
         kind: 'terminal-failure',
         error: reason,
@@ -576,6 +669,9 @@ export class CoordinatorCore {
     }
     this.removeTabRecord(tabId);
     this.retiringTabs.delete(tabId);
+    if (this.inFlight.size === 0) {
+      actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
+    }
     this.assertInvariants();
     return actions;
   }
@@ -586,7 +682,7 @@ export class CoordinatorCore {
     const candidate = this.chooseCandidate(state.previousTabId);
     if (!candidate) {
       this.stateValue = {
-        kind: 'waiting-for-tab',
+        kind: this.eligibleTabs().length > 0 ? 'parked' : 'waiting-for-tab',
         nextDatabaseAction: state.databaseAction,
       };
       return [];
@@ -662,12 +758,20 @@ export class CoordinatorCore {
     error: string,
     errorCode?: CacheResponseErrorCode
   ): CoordinatorAction[] {
-    const actions: CoordinatorAction[] = [];
+    // Never carry a committed hint into another engine's revision space.
+    const actions = this.broadcastCacheChanges(this.cacheChanges.flush());
     for (const [routeId, request] of this.inFlight) {
       if (request.ownerEpoch !== ownerEpoch) continue;
       this.inFlight.delete(routeId);
+      // Fencing an engine does not undo a durable enqueue. Even a planned
+      // reset has not erased it yet, so a missing reply must never cause
+      // the caller to retry or forward the mutation directly to the API.
+      const requestErrorCode =
+        request.request.kind === 'enqueue-optimistic-mutation'
+          ? ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE
+          : errorCode;
       actions.push(
-        this.reject(request.tabId, request.request.id, error, errorCode)
+        this.reject(request.tabId, request.request.id, error, requestErrorCode)
       );
     }
     return actions;
@@ -677,7 +781,7 @@ export class CoordinatorCore {
     const candidate = this.chooseCandidate();
     if (!candidate) {
       this.stateValue = {
-        kind: 'waiting-for-tab',
+        kind: this.eligibleTabs().length > 0 ? 'parked' : 'waiting-for-tab',
         nextDatabaseAction: databaseAction,
       };
       return [];
@@ -700,12 +804,40 @@ export class CoordinatorCore {
     ];
   }
 
-  private chooseCandidate(avoid?: string): string | undefined {
-    const eligible = this.tabs.filter(
+  private handoffIfNeeded(): CoordinatorAction[] {
+    const state = this.stateValue;
+    if (
+      (state.kind !== 'active' && state.kind !== 'activating') ||
+      this.visibleTabs.has(state.tabId)
+    )
+      return [];
+    // Start draining on the last visible page's exit, not after a hidden
+    // worker has had time to suspend. Startup still finishes before draining.
+    if (state.kind === 'activating')
+      return [{ kind: 'handoff-pending', ownerEpoch: state.ownerEpoch }];
+    this.stateValue = { ...state, kind: 'draining' };
+    return [
+      {
+        kind: 'drain-owner',
+        tabId: state.tabId,
+        ownerEpoch: state.ownerEpoch,
+        handoff: true,
+      },
+    ];
+  }
+
+  private eligibleTabs(): string[] {
+    return this.tabs.filter(
       (tabId) =>
         !this.retiringTabs.has(tabId) && !this.unavailableTabs.has(tabId)
     );
-    return eligible.find((tabId) => tabId !== avoid) ?? eligible[0];
+  }
+
+  private chooseCandidate(avoid?: string): string | undefined {
+    const visible = this.eligibleTabs().filter((tabId) =>
+      this.visibleTabs.has(tabId)
+    );
+    return visible.find((tabId) => tabId !== avoid) ?? visible[0];
   }
 
   private route(
@@ -735,8 +867,10 @@ export class CoordinatorCore {
     const index = this.tabs.indexOf(tabId);
     if (index >= 0) this.tabs.splice(index, 1);
     this.unavailableTabs.delete(tabId);
+    this.visibleTabs.delete(tabId);
     for (let index = this.queuedRequests.length - 1; index >= 0; index -= 1) {
-      if (this.queuedRequests[index]?.tabId === tabId) {
+      const queued = this.queuedRequests[index];
+      if (queued?.tabId === tabId && !isMutationSettlement(queued.request)) {
         this.queuedRequests.splice(index, 1);
       }
     }

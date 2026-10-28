@@ -24,7 +24,7 @@ pub(super) const UNTITLED_DATABASE: &str = "Untitled database";
 
 /// One object in the plan's tree.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct Node {
+pub(in crate::domain::service) struct Node {
     /// The object's id.
     pub id: NotionId,
     /// A page or a data source.
@@ -41,7 +41,7 @@ pub(super) struct Node {
 
 /// The objects in scope, parents before children.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub(super) struct PlanTree {
+pub(in crate::domain::service) struct PlanTree {
     /// Every node, in breadth-first order from the roots.
     pub nodes: Vec<Node>,
 }

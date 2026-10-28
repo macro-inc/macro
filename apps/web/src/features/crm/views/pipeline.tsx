@@ -1,12 +1,13 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import PencilIcon from '@phosphor/pencil-line.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
@@ -114,9 +115,9 @@ export function PipelineView(props: {
           <Show
             when={canEdit()}
             fallback={
-              <h1 class="min-w-0 truncate px-1 text-sm font-semibold">
+              <ViewSidebar.Title caret={false} class="px-1">
                 {props.pipeline.name}
-              </h1>
+              </ViewSidebar.Title>
             }
           >
             <span ref={title} class="flex min-w-0 px-1">
@@ -146,33 +147,35 @@ export function PipelineView(props: {
                 <DotsThreeIcon class="size-4" />
               </Dropdown.Trigger>
               <Dropdown.Content class="min-w-44">
-                <Show when={canEdit()}>
-                  <Dropdown.Item onSelect={() => queueMicrotask(editTitle)}>
-                    <PencilIcon class="size-4" />
-                    Rename
-                  </Dropdown.Item>
-                </Show>
-                <Show when={transfer}>
-                  <Dropdown.Item
-                    disabled={exporter?.pending()}
-                    onSelect={() => fireAndForget(exportCsv(), 'crm')}
-                  >
-                    <DownloadIcon class="size-4" />
-                    Export CSV
-                  </Dropdown.Item>
+                <Dropdown.Group>
                   <Show when={canEdit()}>
-                    <Dropdown.Item onSelect={() => setImporting(true)}>
-                      <UploadIcon class="size-4" />
-                      Import CSV
+                    <Dropdown.Item onSelect={() => queueMicrotask(editTitle)}>
+                      <PencilIcon class="size-4" />
+                      Rename
                     </Dropdown.Item>
                   </Show>
-                </Show>
-                <Show when={isOwner()}>
-                  <Dropdown.Item onSelect={() => setDeleting(true)}>
-                    <TrashIcon class="size-4" />
-                    Trash pipeline
-                  </Dropdown.Item>
-                </Show>
+                  <Show when={transfer}>
+                    <Dropdown.Item
+                      disabled={exporter?.pending()}
+                      onSelect={() => fireAndForget(exportCsv(), 'crm')}
+                    >
+                      <DownloadIcon class="size-4" />
+                      Export CSV
+                    </Dropdown.Item>
+                    <Show when={canEdit()}>
+                      <Dropdown.Item onSelect={() => setImporting(true)}>
+                        <UploadIcon class="size-4" />
+                        Import CSV
+                      </Dropdown.Item>
+                    </Show>
+                  </Show>
+                  <Show when={isOwner()}>
+                    <Dropdown.Item onSelect={() => setDeleting(true)}>
+                      <TrashIcon class="size-4" />
+                      Trash pipeline
+                    </Dropdown.Item>
+                  </Show>
+                </Dropdown.Group>
               </Dropdown.Content>
             </Dropdown>
           </Show>
@@ -197,9 +200,10 @@ export function PipelineView(props: {
         actions={
           <Show when={isTouchDevice()}>
             <Button
+              aria-label="Pipeline actions"
+              tooltip="Pipeline actions"
               variant="ghost"
               size="icon-md"
-              label="Pipeline actions"
               onClick={openActions}
             >
               <DotsThreeIcon class="size-4" />
@@ -250,7 +254,7 @@ export function PipelineView(props: {
                   </label>
                   <Button
                     type="submit"
-                    variant="outline"
+                    variant="secondary"
                     disabled={
                       pending() ||
                       !name().trim() ||

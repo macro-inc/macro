@@ -1,100 +1,16 @@
 use crate::util::redis::RedisClient;
-use models_email::gmail::operations::GmailApiOperation;
 use redis::Script;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
-
-pub struct RateLimitArgs {
-    pub user_id: Uuid,
-    pub operation: GmailApiOperation,
-    pub is_backfill: bool,
-}
-
-impl RedisClient {
-    /// Checks if a Gmail API operation is rate-limited and returns the status.
-    /// Uses a 60-second sliding window implemented via a Lua script for efficiency and atomicity.
-    /// Using a Lua script provides several benefits: simpler logic compared to raw Redis commands, connection pooling
-    /// via async multiplexed connections rather than dedicated connections, reduced network round trips,
-    /// and guaranteed atomic execution. If anything goes wrong, return false and hope for the best
-    ///
-    /// # Arguments
-    /// * `user_id` - UUID of the user to check rate limiting for
-    /// * `operation` - The Gmail API operation to check rate limiting for
-    ///
-    /// # Returns
-    /// Returns `true` if the operation should be rate limited (blocked), `false` otherwise.
-    ///
-    pub async fn is_rate_limited(&self, args: RateLimitArgs) -> bool {
-        let RateLimitArgs {
-            user_id,
-            operation,
-            is_backfill,
-        } = args;
-        // If we're backfilling, use a lower rate limit than if we are not. This is to allow some room
-        // for normal inbox operations while backfill is occurring.
-        let rate_limit_units = if is_backfill {
-            self.rate_limit_units_backfill
-        } else {
-            self.rate_limit_units
-        };
-
-        let cost = operation.cost();
-        let mut con = match self.inner.get_multiplexed_async_connection().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to get Redis connection for rate limiting user_id {}: {}",
-                    user_id,
-                    e
-                );
-                return false;
-            }
-        };
-
-        let lua_script = get_rate_limit_script_with_usage();
-
-        let redis_key = format!("gmail-ratelimit:log:{}", user_id);
-        let now_micros = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_micros() as u64;
-        let member_id = format!("{}:{}", cost, Uuid::new_v4());
-
-        let script = Script::new(lua_script);
-
-        let (is_limited, _current_units): (i32, u32) = match script
-            .key(&redis_key)
-            .arg(rate_limit_units)
-            .arg(self.rate_limit_secs * 1_000_000)
-            .arg(now_micros)
-            .arg(cost)
-            .arg(&member_id)
-            .invoke_async(&mut con)
-            .await
-        {
-            Ok(res) => res,
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to execute rate limit script for user_id {}: {}",
-                    user_id.to_string(),
-                    e
-                );
-                return false;
-            }
-        };
-
-        is_limited == 1
-    }
-}
 
 /// Google Calendar's per-user quota is 600 queries per minute; cap our
 /// background sync at half of it so interactive calendar features keep room.
 const CALENDAR_RATE_LIMIT_QUERIES: u32 = 300;
 
 impl RedisClient {
-    /// Checks if a Google Calendar API request is rate-limited, using the
-    /// same atomic sliding-window Lua script as the Gmail limiter but with a
-    /// calendar-specific key and Calendar's flat one-query-per-request cost.
+    /// Checks if a Google Calendar API request is rate-limited, using an
+    /// atomic sliding-window Lua script with a calendar-specific key and
+    /// Calendar's flat one-query-per-request cost.
     pub async fn is_calendar_rate_limited(&self, email_link_id: Uuid) -> bool {
         let mut con = match self.inner.get_multiplexed_async_connection().await {
             Ok(conn) => conn,

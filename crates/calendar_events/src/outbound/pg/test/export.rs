@@ -55,11 +55,11 @@ async fn event_export_resolves_own_copies_before_channel_shares(pool: PgPool) {
         &[author_id, attendee_id, member_id, former_id],
     )
     .await;
-    sqlx::query(
+    sqlx::query!(
         "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        former_id,
     )
-    .bind(channel_id)
-    .bind(former_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -114,11 +114,13 @@ async fn event_export_resolves_own_copies_before_channel_shares(pool: PgPool) {
         );
     }
 
-    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
-        .bind(shared_event_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
+        shared_event_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert_eq!(
         repo.event_export(member_id, shared_event_id).await.unwrap(),
         None

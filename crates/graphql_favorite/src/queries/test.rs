@@ -86,8 +86,12 @@ impl QueryRoot {
         filter: Option<FavoritesFilterInput>,
     ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
         let user_id = MacroUserIdStr::parse_from_str(USER_ID).expect("valid user id");
-        resolve_favorites::<RecordingReader>(ctx, &user_id, filter.unwrap_or_default().into_model())
-            .await
+        resolve_favorites::<RecordingReader>(
+            ctx,
+            &user_id,
+            filter.unwrap_or_default().into_model()?,
+        )
+        .await
     }
 }
 

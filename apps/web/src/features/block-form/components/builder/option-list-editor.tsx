@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import Palette from '@icon/system/regular/palette.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import Palette from '@phosphor/palette.svg';
-import X from '@phosphor/x.svg';
 import { ColorSwatches } from '@property/tags/components/color-swatches';
 import { Key } from '@solid-primitives/keyed';
 import { TagDot } from '@ui';

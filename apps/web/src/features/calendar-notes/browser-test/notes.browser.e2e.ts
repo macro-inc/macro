@@ -38,30 +38,37 @@ test('full-detail team viewers can link and open notes without provider actions'
   await expect(notes).toHaveCount(0);
 });
 
-test('a note tooltip does not block selecting a neighboring document', async ({
+test('long note titles keep their options accessible without horizontal scrolling', async ({
   page,
-  isMobile,
 }) => {
-  test.skip(isMobile, 'Touch devices do not show hover tooltips');
   await page.goto('/');
   await page
     .getByRole('button', { name: 'Link existing', exact: true })
     .click();
   const dialog = page.getByRole('dialog', { name: 'Link meeting notes' });
-  await dialog
-    .getByRole('button', { name: 'Weekly product sync', exact: true })
-    .hover();
-  await expect(page.getByRole('tooltip', { includeHidden: true })).toHaveText(
-    'Weekly product sync'
-  );
-  await dialog
-    .getByRole('button', { name: 'Q4 product roadmap', exact: true })
-    .click();
+  const title =
+    'Agent: offers to add a meeting to another calendar after the organizer updates a recurring event';
+  await dialog.getByRole('button', { name: title, exact: true }).click();
   await dialog.getByRole('button', { name: 'Link note', exact: true }).click();
   await expect(dialog).not.toBeVisible();
+  const notes = page.getByRole('region', { name: 'Meeting notes' });
+  expect(await notes.evaluate((element) => element.scrollWidth)).toBe(
+    await notes.evaluate((element) => element.clientWidth)
+  );
+  const options = notes.getByRole('button', {
+    name: `Options for ${title}`,
+    exact: true,
+  });
+  await expect(options).toBeInViewport({ ratio: 1 });
+  await options.click();
+  await page.getByRole('menuitem', { name: 'Unlink from meeting' }).click();
+  await page
+    .getByRole('dialog', { name: 'Unlink meeting notes?' })
+    .getByRole('button', { name: 'Unlink note', exact: true })
+    .click();
   await expect(
-    page.getByRole('button', { name: 'Open Q4 product roadmap', exact: true })
-  ).toBeVisible();
+    notes.getByRole('button', { name: `Open ${title}` })
+  ).toHaveCount(0);
 });
 
 test('create and open multiple notes with meeting access and no team sharing', async ({
@@ -171,7 +178,7 @@ test('link a note, optionally share with a team, open it, and unlink it', async 
     .getByRole('button', { name: 'Link existing', exact: true })
     .click();
   const dialog = page.getByRole('dialog', {
-    name: /Link meeting notes|Note access|Unlink meeting notes/,
+    name: /Link meeting notes|Unlink meeting notes/,
   });
   await expect(
     dialog.getByRole('button', { name: 'Link note', exact: true })
@@ -194,10 +201,15 @@ test('link a note, optionally share with a team, open it, and unlink it', async 
   await page
     .getByRole('button', { name: 'Options for Weekly product sync' })
     .click();
-  await page.getByRole('menuitem', { name: 'Manage access' }).click();
-  await dialog.getByText('Also share with Macro').click();
-  await dialog.getByRole('button', { name: 'Save access' }).click();
-  await expect(dialog).not.toBeVisible();
+  await page.getByRole('menuitem', { name: 'Share', exact: true }).click();
+  const share = page.getByRole('dialog', {
+    name: 'Share: Weekly product sync',
+    exact: true,
+  });
+  await share.getByText('Also share with Macro').click();
+  await expect(share.getByRole('checkbox')).toBeChecked();
+  await share.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(share).not.toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Meeting notes' })
   ).toContainText('Also shared with Macro');
@@ -238,7 +250,7 @@ test('a failed link preserves the selected document and sharing choice for retry
     .getByRole('button', { name: 'Link existing', exact: true })
     .click();
   const dialog = page.getByRole('dialog', {
-    name: /Link meeting notes|Note access|Unlink meeting notes/,
+    name: /Link meeting notes|Unlink meeting notes/,
   });
   await dialog
     .getByRole('button', { name: 'Weekly product sync', exact: true })
@@ -275,7 +287,7 @@ test('removing a note during an open options menu does not block event dismissal
     .getByRole('button', { name: 'Options for Weekly product sync' })
     .click();
   await expect(
-    page.getByRole('menuitem', { name: 'Manage access' })
+    page.getByRole('menuitem', { name: 'Share', exact: true })
   ).toBeVisible();
   await page.evaluate(() =>
     document.dispatchEvent(
@@ -283,7 +295,7 @@ test('removing a note during an open options menu does not block event dismissal
     )
   );
   await expect(
-    page.getByRole('menuitem', { name: 'Manage access' })
+    page.getByRole('menuitem', { name: 'Share', exact: true })
   ).not.toBeVisible();
   await page.keyboard.press('Escape');
   await expect(
@@ -355,7 +367,7 @@ test('search, dismiss, and reopen reset the unfinished choice', async ({
   });
   await trigger.click();
   const dialog = page.getByRole('dialog', {
-    name: /Link meeting notes|Note access|Unlink meeting notes/,
+    name: /Link meeting notes|Unlink meeting notes/,
   });
   await dialog.getByRole('textbox').fill('no matching note');
   await expect(dialog.getByText('No notes match this name.')).toBeVisible();

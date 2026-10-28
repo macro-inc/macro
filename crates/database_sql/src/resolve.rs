@@ -24,7 +24,7 @@ use crate::catalog::{Catalog, Table, TableSource};
 use crate::parse::{self, Statement};
 use models_databases::ColumnKind as OpColumnKind;
 use models_databases::cast::{Cast, CastKind, Contents, cast};
-use models_databases::{OptionId, TableId};
+use models_databases::{DateRange, OptionId, TableId};
 
 pub use crate::parse::{AggregateFunction, ComparisonOperator, Direction, JoinKind};
 
@@ -239,6 +239,9 @@ pub enum Value {
     Bool(bool),
     /// A date-time, parsed from an ISO 8601 date or date-time literal.
     Date(DateTime<Utc>),
+    /// A span of time being written, parsed from an ISO 8601 interval
+    /// literal, `'2026-09-01/2026-09-05'`.
+    DateRange(DateRange),
     /// A select option, resolved from its label.
     Option(OptionId),
     /// An entity id such as `macro|sam@example.com`.
@@ -263,8 +266,9 @@ pub struct Order {
 pub enum OrderKey {
     /// A column key, selected or not.
     Column(Uuid),
-    /// A 0-based index into the select list; positional keys and aggregates
-    /// both resolve to this.
+    /// A 0-based index into the select list of a grouped or aggregate query;
+    /// its positional, alias, and aggregate keys resolve to this. A row
+    /// query's positions and aliases resolve to the column they select.
     Item(usize),
 }
 

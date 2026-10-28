@@ -25,6 +25,8 @@ import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
 export const agentHarnessExcluded = [
+  'classify', // Command K inference is app-internal.
+  'extract', // Command K inference is app-internal.
   'loadAgentModelsHandler',
   'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
@@ -83,6 +85,8 @@ export const authExcluded = [
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
   'getUserInvites',
+  // The interface language is an app setting, not SDK surface.
+  'getUserLanguage',
   'getUserLinkExists',
   'getUserName',
   'getUserNames',
@@ -118,6 +122,7 @@ export const authExcluded = [
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
+  'putUserLanguage',
   'putUserName',
   'redeemGtmInviteLink',
   'refresh',
@@ -131,6 +136,7 @@ export const authExcluded = [
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
+  'setGithubPullRequestState',
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
@@ -171,15 +177,19 @@ export const cognitionExcluded = [
   'healthHandler',
   'listMcpServers',
   'listPipedreamMcpConnections',
+  'listPipedreamMcpOverlays',
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
+  'recoverPipedreamMcpConnection',
   'rejectToolCall',
   // Channel discovery shares the app-only import workflow below.
   'discoverHandler',
   'runImportHandler',
-  // The Notion import report and cancel back the in-chat import review card.
+  // Workspace reports and cancel routes back the in-chat import review card.
   'notionReportHandler',
   'cancelNotionHandler',
+  'cancelWorkspaceHandler',
+  'workspaceReportHandler',
   'getStateHandler',
   'getStateHandler2',
   'completeHandler',
@@ -230,7 +240,11 @@ export const emailExcluded = [
   'resyncLink',
 ] as const satisfies readonly (keyof EmailSdk)[];
 
-export const emailBacklog = [] as const satisfies readonly (keyof EmailSdk)[];
+export const emailBacklog = [
+  // Belongs on CalendarEvent beside inviteGuests; the first release keeps
+  // forwarding to the app's own surfaces, since the SDK also reaches agents.
+  'forwardCalendarEvent',
+] as const satisfies readonly (keyof EmailSdk)[];
 
 export const notificationExcluded = [
   'bulkGetTypedNotificationsByEventItemIds',
@@ -382,6 +396,12 @@ export const storageExcluded = [
   'uploadFolderHandler',
   'upsertHistoryHandler',
   'upsertUserDocumentViewLocation',
+  // WhatsApp pairing, passkey handoff, and rollout configuration belong to the app session.
+  'whatsappCancelPairing',
+  'whatsappConnect',
+  'whatsappDisconnect',
+  'whatsappPairing',
+  'whatsappPasskey',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog =

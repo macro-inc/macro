@@ -20,6 +20,8 @@ import { GridCell } from './grid-cell';
 vi.mock('@property/utils/focus', () => ({
   useSearchInputFocus: (input: () => HTMLElement | undefined) =>
     setTimeout(() => input()?.focus(), 100),
+  useAutoFocus: (element: () => HTMLElement | undefined) =>
+    setTimeout(() => element()?.focus(), 100),
 }));
 vi.mock('../../../lib/core/user/index', () => ({
   tryMacroId: (id: string) => (id.startsWith('macro|') ? id : undefined),

@@ -6,7 +6,11 @@ use worker::{Env, Error, Headers, Method, Request, RequestInit, Response, Result
 
 use crate::{
     auth::is_internal,
-    constants::header_names::{AUTHORIZATION, MACRO_INTERNAL_AUTH_KEY_HEADER_KEY},
+    constants::{
+        USER_PEER_D1_BINDING,
+        header_names::{AUTHORIZATION, MACRO_INTERNAL_AUTH_KEY_HEADER_KEY},
+    },
+    d1::copy_user_mappings,
     durable_object::{CopyDocumentRequest, GetSnapshotRequest, response, status_codes},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
@@ -178,6 +182,11 @@ pub async fn copy_handler(env: Env, mut req: Request, document_id: &str) -> Resu
             .context("Failed to serialize new snapshot")?;
         buf
     };
+
+    // The copy keeps the source's history, so it keeps its authors too. Copied
+    // before initializing, which maps every still-unmapped peer to the system.
+    let db = env.d1(USER_PEER_D1_BINDING)?;
+    copy_user_mappings(&db, document_id, &new_document_id).await?;
 
     let initialize_path = format!("/document/{}/initialize", new_document_id);
     let ss_res = do_helper(&env, init_body, &initialize_path, &req, &new_document_id).await?;

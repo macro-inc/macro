@@ -1,5 +1,5 @@
-import FunctionIcon from '@phosphor/function.svg';
-import LinkIcon from '@phosphor/link-simple.svg';
+import FunctionIcon from '@icon/system/regular/function.svg';
+import LinkIcon from '@icon/system/regular/link-simple.svg';
 import { PropertyDataTypeIcon } from '@property/utils/PropertyDataTypeIcon';
 import { DataType } from '@service-properties/generated/schemas/dataType';
 import { Show } from 'solid-js';

@@ -61,6 +61,7 @@ impl<Sessions: RoutineSessions, Events: RoutineEventReader> ScheduledAgentRunner
                     owner: identity.owner.clone(),
                     bot_id,
                     model: model.map(|model| model.as_str().to_owned()),
+                    mcp_servers: task.mcp_servers.clone(),
                 },
                 session_id: identity.session_id,
                 source: SessionSource::Routine,

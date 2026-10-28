@@ -1,7 +1,7 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import type { CollectionNode } from '@kobalte/core';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
 import { createSignal } from 'solid-js';
 import { Select } from './Select';
 

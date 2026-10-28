@@ -76,7 +76,7 @@ pub(crate) fn notion_markdown(markdown: &str, links: &NotionLinks) -> NotionMark
 /// A document or task the import names by id that exists already was made
 /// by an interrupted earlier attempt: it stands, as the starter documents'
 /// retries treat it.
-fn already_created(created: anyhow::Result<String>, id: Uuid) -> anyhow::Result<String> {
+pub(crate) fn already_created(created: anyhow::Result<String>, id: Uuid) -> anyhow::Result<String> {
     match created {
         Err(error)
             if matches!(
@@ -109,6 +109,38 @@ fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
 }
 
 impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
+    async fn create_tracker_project(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        shared: bool,
+    ) -> anyhow::Result<Uuid> {
+        self.create_tracker_project_impl(user, id, name, markdown, shared)
+            .await
+    }
+    async fn create_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        name: &str,
+        markdown: &str,
+        properties: &ImportedTaskProperties,
+        shared: bool,
+    ) -> anyhow::Result<String> {
+        self.create_tracker_task_impl(user, id, name, markdown, properties, shared)
+            .await
+    }
+    async fn link_tracker_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        relations: &import::domain::ports::TrackerTaskRelations,
+    ) -> anyhow::Result<()> {
+        self.link_tracker_task_impl(user, id, relations).await
+    }
+
     #[tracing::instrument(skip(self, user, name), err)]
     async fn create_folder(
         &self,

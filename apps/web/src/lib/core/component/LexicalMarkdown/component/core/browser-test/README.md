@@ -20,3 +20,15 @@ not authenticated app navigation or a VoiceOver session.
 
 Screenshots from the verified fixture: [desktop](proof/desktop.png) and
 [phone](proof/mobile.png).
+
+## Message links
+
+`links.browser.e2e.ts` mounts the production Markdown parser, renderer, composer,
+and link menu over the original App Store message. It checks pointer/keyboard
+navigation, encoded URLs, Markdown punctuation, literal code, and Remove link →
+save → reopen on desktop, tablet touch, and phone touch. Network requests outside
+the local fixture are intercepted. Run just this case by adding
+`links.browser.e2e.ts` to the command above.
+
+Screenshots: [desktop](proof/autolinks-desktop.png) and
+[phone](proof/autolinks-mobile.png).

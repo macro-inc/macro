@@ -58,10 +58,12 @@
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
       # `static_assets/schema.graphql` that `cache-core`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and bundled public SDK/Handlebars runtime.
+      # for the Deno bootstrap and bundled public SDK/Handlebars runtime;
+      # `.proto` for the protobuf files the `whatsmeow_proto` and
+      # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
@@ -428,6 +430,11 @@
           packageName = "unfurl_service";
           binaries = [ "unfurl_service" ];
         }
+        {
+          serviceName = "whatsapp-session-service";
+          packageName = "whatsapp_session_service";
+          binaries = [ "whatsapp_session_service" ];
+        }
       ];
 
       localStackBinaryDefinitions = [
@@ -558,6 +565,7 @@
         "notification-service"
         "static-file-service"
         "unfurl-service"
+        "whatsapp-session-service"
       ];
 
       localStackBinaries = pkgs.buildEnv {

@@ -172,6 +172,8 @@ export type ChannelsRailContext = {
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id'], event?: MouseEvent) => void;
+  /** Warm a channel row's messages on the press that may open it. */
+  prefetchRow: (rowId: ChannelRailRow['id'], event: PointerEvent) => void;
   registerScrollRef: (
     group: ChannelsRailSection | 'threads',
     element: HTMLDivElement

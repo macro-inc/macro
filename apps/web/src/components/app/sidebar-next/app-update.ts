@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { pendingWebUpdate } from '@core/util/reloadForNewerBuild';
 import { useTauri } from '@macro/tauri';
@@ -18,36 +19,66 @@ export type AppUpdate = {
 
 type UpdateCopy = Pick<AppUpdate, 'title' | 'description' | 'actionLabel'>;
 
-/** What the popover says for each kind of update, by client. */
+/**
+ * What the popover says for each kind of update, by client. Getters, so the
+ * copy follows the interface language; `useAppUpdate` spreads them inside its
+ * memo, which re-runs when the language changes.
+ */
 export const UPDATE_COPY = {
   web: {
-    title: 'New version available',
-    description: 'A new version of Macro is ready. Reload the page to use it.',
-    actionLabel: 'Reload',
+    get title() {
+      return t('nav.updateNewVersionTitle');
+    },
+    get description() {
+      return t('nav.updateWebDescription');
+    },
+    get actionLabel() {
+      return t('nav.updateReload');
+    },
   },
   webFailedLoad: {
-    title: 'New version available',
-    description:
-      "Part of Macro couldn't load because a new version is out. Reload the page to use it.",
-    actionLabel: 'Reload',
+    get title() {
+      return t('nav.updateNewVersionTitle');
+    },
+    get description() {
+      return t('nav.updateWebFailedLoadDescription');
+    },
+    get actionLabel() {
+      return t('nav.updateReload');
+    },
   },
   bundle: {
-    title: 'Update ready',
-    description:
-      'A new version of the Macro desktop app has downloaded. Update to start using it.',
-    actionLabel: 'Update',
+    get title() {
+      return t('nav.updateReadyTitle');
+    },
+    get description() {
+      return t('nav.updateBundleDescription');
+    },
+    get actionLabel() {
+      return t('nav.updateAction');
+    },
   },
   native: {
-    title: 'Desktop app update ready',
-    description:
-      'Restart Macro to install it, or keep working and it installs when you quit.',
-    actionLabel: 'Restart and update',
+    get title() {
+      return t('nav.updateDesktopReadyTitle');
+    },
+    get description() {
+      return t('nav.updateNativeDescription');
+    },
+    get actionLabel() {
+      return t('nav.updateRestartAndUpdate');
+    },
   },
   nativePreparing: {
-    title: 'Desktop app update ready',
-    description:
-      'Saving your work before Macro restarts to install the update.',
-    actionLabel: 'Preparing to restart…',
+    get title() {
+      return t('nav.updateDesktopReadyTitle');
+    },
+    get description() {
+      return t('nav.updateNativePreparingDescription');
+    },
+    get actionLabel() {
+      return t('nav.updatePreparingRestart');
+    },
   },
 } satisfies Record<string, UpdateCopy>;
 

@@ -1,7 +1,8 @@
 mod backfill_attachment;
-mod backfill_message;
+pub(in crate::pubsub) mod backfill_message;
 mod backfill_thread;
 pub(crate) mod db_error;
+mod deferral;
 mod depopulate_crm_contact;
 mod depopulate_crm_for_user;
 pub(crate) mod email_api_error;
@@ -15,3 +16,4 @@ mod process;
 mod seed_sent_contact;
 mod update_metadata;
 pub mod worker;
+mod write_slot;

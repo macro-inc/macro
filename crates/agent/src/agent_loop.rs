@@ -9,6 +9,7 @@ use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
@@ -24,15 +25,19 @@ const DEFAULT_MAX_TURNS: usize = 200;
 const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// A session's system prompt, optionally split where the part every session
-/// of the agent repeats byte for byte ends.
+/// of the agent repeats byte for byte ends, with an optional tail that
+/// changes every turn.
 ///
 /// Anthropic caches the shared part apart from the per-session rest
 /// (instructions, memory), so a session reads the shared part back even when
-/// its rest is new. Other providers receive the two joined.
+/// its rest is new. The turn's part comes last, after anything the loop adds
+/// (the model id, connected integrations), so a change to it costs only what
+/// follows it. Other providers receive the parts joined.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SystemPrompt {
     shared: Option<String>,
     rest: String,
+    turn: String,
 }
 
 impl SystemPrompt {
@@ -42,7 +47,15 @@ impl SystemPrompt {
         Self {
             shared: Some(shared.into()),
             rest: rest.into(),
+            turn: String::new(),
         }
+    }
+
+    /// This prompt with `turn`, the part only this turn sends, at its end.
+    #[must_use]
+    pub fn with_turn(mut self, turn: impl Into<String>) -> Self {
+        self.turn = turn.into();
+        self
     }
 
     /// The shared part, when the prompt is split.
@@ -50,9 +63,9 @@ impl SystemPrompt {
         self.shared.as_deref()
     }
 
-    /// The per-session part, or the whole prompt when it is not split.
-    pub fn rest(&self) -> &str {
-        &self.rest
+    /// Everything after the shared part: the session's own, then the turn's.
+    pub fn rest(&self) -> String {
+        format!("{}{}", self.rest, self.turn)
     }
 
     /// The whole prompt as one string.
@@ -69,16 +82,21 @@ impl std::fmt::Display for SystemPrompt {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "{}{}",
+            "{}{}{}",
             self.shared.as_deref().unwrap_or_default(),
-            self.rest
+            self.rest,
+            self.turn
         )
     }
 }
 
 impl From<String> for SystemPrompt {
     fn from(rest: String) -> Self {
-        Self { shared: None, rest }
+        Self {
+            shared: None,
+            rest,
+            turn: String::new(),
+        }
     }
 }
 
@@ -110,6 +128,7 @@ pub struct AgentLoop {
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
+    result_limit: Option<ToolResultLimit>,
     /// The conversation (session) sessions belong to, for telemetry.
     conversation_id: Option<String>,
     /// The agent name spans carry; defaults to the usage context's feature.
@@ -140,6 +159,7 @@ impl AgentLoop {
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
             user_tool_finisher: None,
+            result_limit: None,
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
@@ -185,6 +205,14 @@ impl AgentLoop {
     /// mid-turn wants.
     pub fn with_user_tool_finisher(mut self, finisher: UserToolFinisher) -> Self {
         self.user_tool_finisher = Some(finisher);
+        self
+    }
+
+    /// Cut tool results too long for the model to read whole, keeping them in
+    /// `limit`. The host must offer [`crate::ReadToolResult`] over the same
+    /// `limit`, which the note on a cut result tells the model to call.
+    pub fn with_tool_result_limit(mut self, limit: ToolResultLimit) -> Self {
+        self.result_limit = Some(limit);
         self
     }
 
@@ -467,6 +495,7 @@ impl AgentLoop {
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,

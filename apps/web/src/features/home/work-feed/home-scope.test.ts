@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { homeWorkFeedScope } from './home-scope';
+import { homeWorkFeedPageState, homeWorkFeedScope } from './home-scope';
 
 const everything = { calendar: true, foreignEntities: true, snippets: false };
 
@@ -26,8 +26,35 @@ describe('homeWorkFeedScope', () => {
 
   it('maps type filters to item kinds', () => {
     expect(homeWorkFeedScope(['tasks', 'channels'], everything)?.types).toEqual(
-      ['document', 'channel', 'channel_thread']
+      ['task', 'channel', 'channel_thread']
     );
+    expect(homeWorkFeedScope(['documents'], everything)?.types).toEqual([
+      'document',
+    ]);
+  });
+
+  it('leaves documents out when only the Documents filter is off', () => {
+    const allButDocuments = [
+      'tasks',
+      'email',
+      'channels',
+      'agents',
+      'projects',
+      'github',
+      'calendar',
+    ];
+    expect(homeWorkFeedScope(allButDocuments, everything)?.types).not.toEqual(
+      []
+    );
+    expect(homeWorkFeedScope(allButDocuments, everything)?.types).not.toContain(
+      'document'
+    );
+  });
+
+  it('narrows pages by the read filter', () => {
+    expect(homeWorkFeedPageState(['unread'])).toBe('unseen');
+    expect(homeWorkFeedPageState(['read'])).toBe('seen');
+    expect(homeWorkFeedPageState(undefined)).toBeUndefined();
   });
 
   it('has no scope when the filters leave nothing to show', () => {

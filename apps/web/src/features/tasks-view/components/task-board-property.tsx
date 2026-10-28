@@ -1,8 +1,8 @@
 import { UserIcon } from '@core/component/UserIcon';
-import CalendarIcon from '@phosphor/calendar.svg';
-import EmptyIcon from '@phosphor/circle-dashed.svg';
-import ProjectIcon from '@phosphor/stack.svg';
-import UsersIcon from '@phosphor/users.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import EmptyIcon from '@icon/system/regular/circle-dashed.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Property } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import type { PropertySaveFn } from '@property/core/context';

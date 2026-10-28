@@ -22,10 +22,12 @@ pub use github_pull_requests::domain::models::{
     GithubPullRequestLabel, GithubPullRequestMerge, GithubPullRequestMergeability,
     GithubPullRequestMergeabilityEntry, GithubPullRequestMergeabilityRequest,
     GithubPullRequestMergeabilityResponse, GithubPullRequestNumber, GithubPullRequestRef,
-    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestStatus,
-    GithubPullRequestUpdateRejection, GithubPullRequestUser, GithubRepositoryMergeSettings,
-    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
-    SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse, latest_reviews,
+    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestState,
+    GithubPullRequestStatus, GithubPullRequestUpdateRejection, GithubPullRequestUser,
+    GithubRepositoryMergeSettings, GithubStateOutcome, MergeGithubPullRequestRequest,
+    MergeGithubPullRequestResponse, SetGithubPullRequestDraftRequest,
+    SetGithubPullRequestDraftResponse, SetGithubPullRequestStateRequest,
+    SetGithubPullRequestStateResponse, latest_reviews,
 };
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,

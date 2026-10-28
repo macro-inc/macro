@@ -9,20 +9,22 @@ use futures::{FutureExt, Stream, StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::domain::models::{ImportKind, NotionDecision, NotionSharing, NotionTaskFields};
+use crate::domain::models::{
+    ImportKind, ImportSource, NotionDecision, NotionSharing, NotionTaskFields,
+};
 
 #[cfg(test)]
 mod test;
 
 /// Objects per decision-model call.
-pub(super) const TRIAGE_BATCH: usize = 40;
+pub(in crate::domain::service) const TRIAGE_BATCH: usize = 40;
 /// Decision-model calls in flight at once.
-pub(super) const TRIAGE_CONCURRENCY: usize = 4;
+pub(in crate::domain::service) const TRIAGE_CONCURRENCY: usize = 4;
 
 /// One object, as the decision model sees it.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct TriageItem {
+pub(in crate::domain::service) struct TriageItem {
     /// The object's Notion id; the model answers by it.
     pub key: String,
     /// `page` or `data_source`.
@@ -41,7 +43,7 @@ pub(super) struct TriageItem {
 /// What the decision model sees of a data source.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct TriageTable {
+pub(in crate::domain::service) struct TriageTable {
     /// Column names with their Notion types, such as `Status (status)`.
     pub columns: Vec<String>,
     /// Rows counted.
@@ -53,7 +55,7 @@ pub(super) struct TriageTable {
 /// The decision model's answer for one object.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct Verdict {
+pub(in crate::domain::service) struct Verdict {
     /// The object's key, echoed back.
     pub key: String,
     /// What to do with it.
@@ -78,13 +80,13 @@ struct TriageOutput {
     verdicts: Vec<Verdict>,
 }
 
-pub(super) const TRIAGE_SYSTEM: &str = include_str!("triage_system.md");
+pub(in crate::domain::service) const TRIAGE_SYSTEM: &str = include_str!("triage_system.md");
 /// Added to [`TRIAGE_SYSTEM`] when the model also decides sharing.
-pub(super) const TRIAGE_SHARING: &str = include_str!("triage_sharing.md");
+pub(in crate::domain::service) const TRIAGE_SHARING: &str = include_str!("triage_sharing.md");
 
 /// The system prompt: sharing is the model's to decide only when the user
 /// left it to the model.
-pub(super) fn triage_system(sharing: NotionSharing) -> String {
+pub(in crate::domain::service) fn triage_system(sharing: NotionSharing) -> String {
     match sharing {
         NotionSharing::Ai => format!("{TRIAGE_SYSTEM}\n{TRIAGE_SHARING}"),
         NotionSharing::Team | NotionSharing::Personal => TRIAGE_SYSTEM.to_string(),
@@ -93,7 +95,7 @@ pub(super) fn triage_system(sharing: NotionSharing) -> String {
 
 /// The schema every decision-model answer is validated against; with
 /// sharing left to the model, every verdict also says whether to share.
-pub(super) fn triage_schema(sharing: NotionSharing) -> DynamicSchema {
+pub(in crate::domain::service) fn triage_schema(sharing: NotionSharing) -> DynamicSchema {
     let mut schema = verdicts_schema();
     if sharing == NotionSharing::Ai {
         let verdict = &mut schema["properties"]["verdicts"]["items"];
@@ -143,7 +145,7 @@ fn verdicts_schema() -> serde_json::Value {
 
 /// The verdict an object gets when the decision model gave none: bring it
 /// over as it is, which loses nothing.
-pub(super) fn default_verdict(item: &TriageItem, reason: &str) -> Verdict {
+pub(in crate::domain::service) fn default_verdict(item: &TriageItem, reason: &str) -> Verdict {
     Verdict {
         key: item.key.clone(),
         decision: NotionDecision::Copy,
@@ -159,8 +161,9 @@ pub(super) fn default_verdict(item: &TriageItem, reason: &str) -> Verdict {
 /// batch the model fails on (or answers badly) falls back to
 /// [`default_verdict`] for its items, so planning never fails because the
 /// model did.
-pub(super) fn decide<'a, Admit, AdmitFuture>(
+pub(in crate::domain::service) fn decide<'a, Admit, AdmitFuture>(
     items: &'a [TriageItem],
+    source: ImportSource,
     sharing: NotionSharing,
     admit: Admit,
     recorder: &'a dyn ai_usage::UsageRecorder,
@@ -177,7 +180,7 @@ where
             let usage = usage.clone();
             async move {
                 let outcome = match admitted.await {
-                    Ok(()) => decide_batch(batch, sharing, recorder, usage, model).await,
+                    Ok(()) => decide_batch(batch, source, sharing, recorder, usage, model).await,
                     Err(error) => Err(error),
                 };
                 match outcome {
@@ -200,19 +203,32 @@ where
 
 async fn decide_batch(
     batch: &[TriageItem],
+    source: ImportSource,
     sharing: NotionSharing,
     recorder: &dyn ai_usage::UsageRecorder,
     usage: ai_usage::UsageContext,
     model: agent::PredefinedModel,
 ) -> anyhow::Result<Vec<Verdict>> {
     let prompt = format!(
-        "Decide what to do with each of these {} Notion objects.\n\n```json\n{}\n```",
+        "Decide what to do with each of these {} workspace objects.\n\n```json\n{}\n```",
         batch.len(),
         serde_json::to_string_pretty(batch)?
     );
     let value = dynamic_structured_completion(
         model,
-        &triage_system(sharing),
+        &if source == ImportSource::Notion {
+            triage_system(sharing)
+        } else {
+            format!(
+                "{}\n{}",
+                include_str!("triage_tracker.md"),
+                if sharing == NotionSharing::Ai {
+                    TRIAGE_SHARING
+                } else {
+                    ""
+                }
+            )
+        },
         vec![Message::user(prompt)],
         triage_schema(sharing),
         recorder,
@@ -226,7 +242,7 @@ async fn decide_batch(
 
 /// Keep verdicts for keys in the batch, apply rules the model cannot
 /// override, and give anything the model skipped the default.
-pub(super) fn fill_missing(
+pub(in crate::domain::service) fn fill_missing(
     batch: &[TriageItem],
     verdicts: Vec<Verdict>,
 ) -> HashMap<String, Verdict> {

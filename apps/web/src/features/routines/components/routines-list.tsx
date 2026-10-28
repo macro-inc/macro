@@ -5,7 +5,7 @@ import {
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
@@ -59,7 +59,7 @@ export function RoutinesList(props: {
                 class="max-w-md flex-1"
                 hotkey="cmd+f"
               />
-              <Button variant="outline" onClick={props.onCreate}>
+              <Button variant="secondary" onClick={props.onCreate}>
                 Create Routine
               </Button>
             </div>
@@ -100,9 +100,12 @@ export function RoutinesList(props: {
         aria-label="Routines"
         aria-busy={props.loading}
         tabIndex={-1}
-        class="min-h-0 min-w-0 flex-1 overflow-auto outline-none"
+        class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto outline-none"
       >
-        <div role="rowgroup" class="sticky top-0 z-1 min-w-[748px] bg-panel">
+        <div
+          role="rowgroup"
+          class="sticky top-0 z-1 min-w-[748px] bg-panel @max-[760px]/routines:hidden"
+        >
           <RoutineRowLayout
             role="row"
             class="text-xs font-medium text-ink-extra-muted"
@@ -116,7 +119,10 @@ export function RoutinesList(props: {
             </span>
           </RoutineRowLayout>
         </div>
-        <div role="rowgroup" class="min-w-[748px]">
+        <div
+          role="rowgroup"
+          class="min-w-[748px] @max-[760px]/routines:min-w-0"
+        >
           <For each={filtered()}>
             {(row) => (
               <RoutineListRow

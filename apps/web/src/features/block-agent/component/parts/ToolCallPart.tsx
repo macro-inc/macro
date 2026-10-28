@@ -130,7 +130,8 @@ export function ToolCallPart(props: {
               props.part.name.kind === 'mcp' &&
               (props.part.name.server === 'macro' ||
                 (props.part.name.server === 'macro_internal' &&
-                  props.part.name.tool === 'DescribeCodeTools')) &&
+                  (props.part.name.tool === 'DescribeCodeTools' ||
+                    props.part.name.tool === 'ReadCodeDocs'))) &&
               hasToolRenderer(props.part.name.tool)
             }
             fallback={<ExchangeToolCall detail={detail()} common={common()} />}

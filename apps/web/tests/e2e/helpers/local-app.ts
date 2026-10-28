@@ -62,7 +62,7 @@ export async function createDocument(page: Page): Promise<string> {
 
 /** Opens the side panel if hidden, then expands the named accordion section. */
 export async function openSidePanelSection(page: Page, title: string) {
-  const show = page.getByRole('button', { name: 'Show Side Panel' });
+  const show = page.getByRole('button', { name: 'Show details', exact: true });
   const trigger = page.getByRole('button', { name: title, exact: true });
   await expect(show.or(trigger).first()).toBeVisible({ timeout: 30_000 });
   if (await show.isVisible()) {

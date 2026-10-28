@@ -5,7 +5,7 @@ import {
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { ProjectTaskSearch } from '../components/project-task-search';
@@ -83,7 +83,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           <TasksControls />
           {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button variant="outline" onClick={() => props.onCreateTask?.()}>
+            <Button variant="secondary" onClick={() => props.onCreateTask?.()}>
               <PlusIcon class="size-4" />
               New task
             </Button>
@@ -96,7 +96,11 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           class="flex items-center gap-3 px-3 pb-2 text-sm text-ink-muted"
         >
           Some tasks could not be loaded.
-          <Button size="sm" onClick={() => source.retryPagination?.()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => source.retryPagination?.()}
+          >
             Try again
           </Button>
         </div>

@@ -1,11 +1,11 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Popover } from '@kobalte/core/popover';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import {
   DropdownSearchInput,
@@ -68,7 +68,7 @@ function nextDisplayOrder(options: PropertyOptionResponse[]): number {
 
 const MAX_LIST_HEIGHT = 192;
 const tagActionButtonClass =
-  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [&_:where(svg)]:size-3.5';
+  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100';
 
 export type TagPickerSourceProps =
   | { docTags: DocTags; createDocTags?: never }
@@ -930,7 +930,6 @@ function TagPickerRow(props: {
               type="button"
               variant="ghost"
               size="icon-sm"
-              noTouchResize
               tooltip="View tagged items"
               aria-label={`View all items with tag ${label()}`}
               class={tagActionButtonClass}
@@ -950,7 +949,6 @@ function TagPickerRow(props: {
               type="button"
               variant="ghost"
               size="icon-sm"
-              noTouchResize
               tooltip="Edit tag"
               aria-label={`Edit ${label()}`}
               class={tagActionButtonClass}

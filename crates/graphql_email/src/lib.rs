@@ -17,10 +17,10 @@ mod user_query;
 pub use loaders::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
     EmailServiceEmailContentReader, EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader,
-    EmailThreadMetadataLoad, EmailThreadMetadataLoader, NoOpSoupEmailContentEdgeReader,
-    SoupEmailContentEdgeReader, SoupEmailEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
-    SoupEmailThreadMetadataEdgeReader, email_content_loader, email_thread_mail_projection_loader,
-    email_thread_metadata_loader,
+    EmailThreadMetadataLoad, EmailThreadMetadataLoader, EmailThreadUnavailable,
+    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,
+    email_content_loader, email_thread_mail_projection_loader, email_thread_metadata_loader,
 };
 pub use mutation::{
     DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailMutationService,

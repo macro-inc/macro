@@ -70,6 +70,12 @@ vi.mock('./queries/routines', () => ({
 vi.mock('./routine-triggers', () => ({
   RoutineTriggers: () => <div>Triggers</div>,
 }));
+vi.mock('./routine-template', () => ({
+  RoutineTemplatePage: (props: { scheduleId: string }) => (
+    <div>Template for {props.scheduleId}</div>
+  ),
+  openShareTemplateDialog: vi.fn(),
+}));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({
   defaultModelForPlan: () => 'claude-sonnet-4-6',
@@ -156,6 +162,10 @@ vi.mock('./routine-prompt-editor', () => ({
       />
     );
   },
+}));
+vi.mock('./routine-apps', () => ({
+  RoutineApps: () => null,
+  createRoutineConnectedApps: () => () => new Set(),
 }));
 vi.mock('./routine-execution-picker', () => ({
   RoutineExecutionPicker: (props: {
@@ -366,13 +376,11 @@ function deferredSave(): {
 }
 
 describe('routine execution target autosave', () => {
-  it('shows another owner’s routine without edit, run, or history controls', () => {
+  it('shows another owner’s routine as its template, without its controls', () => {
     setSchedules([{ ...cron, owner: 'macro|someone-else@example.com' }]);
     render(() => <Routine />);
-    expect(screen.getByLabelText('Instructions')).toHaveProperty(
-      'disabled',
-      true
-    );
+    expect(screen.getByText('Template for routine-id')).toBeTruthy();
+    expect(screen.queryByLabelText('Instructions')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Run now' })).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Routine actions' })

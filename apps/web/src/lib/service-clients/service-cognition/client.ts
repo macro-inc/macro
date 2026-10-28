@@ -25,6 +25,7 @@ import type { GetChatsForAttachmentResponse } from './generated/schemas/getChats
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
+import type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 import type { ProjectionStateResponse } from './generated/schemas/projectionStateResponse';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
@@ -94,8 +95,13 @@ export type PipedreamCompleteRequest = {
   account_id: string;
   server_name?: string;
 };
+export type PipedreamRecoverRequest = {
+  app_slug: string;
+  server_name?: string;
+};
 export type { PipedreamCatalogEntryResponse } from './generated/schemas/pipedreamCatalogEntryResponse';
 export type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
+export type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
 
 /** Error code for deployments where Pipedream MCP connect is not configured. */
 export const PIPEDREAM_DISABLED = 'PIPEDREAM_DISABLED' as const;
@@ -466,6 +472,19 @@ export const cognitionApiServiceClient = {
   },
 
   /**
+   * Register an account a Connect flow created but the Connect UI never
+   * reported. Fails with `NOT_FOUND` when there is none.
+   */
+  async recoverPipedreamConnection(args: PipedreamRecoverRequest) {
+    return (
+      await dcsFetch<PipedreamConnectionResponse>(`/pipedream/mcp/recover`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  /**
    * Browse or search Pipedream apps in popularity order, including their
    * category labels for grouping.
    */
@@ -486,6 +505,18 @@ export const cognitionApiServiceClient = {
           method: 'GET',
         }
       )
+    ).map((result) => result);
+  },
+
+  /**
+   * Catalog apps that connect through their own MCP server instead of
+   * Pipedream; connect them with `startMcpAuth` against `server_url`.
+   */
+  async listPipedreamOverlays() {
+    return (
+      await dcsFetch<PipedreamOverlayResponse[]>(`/pipedream/mcp/overlays`, {
+        method: 'GET',
+      })
     ).map((result) => result);
   },
 

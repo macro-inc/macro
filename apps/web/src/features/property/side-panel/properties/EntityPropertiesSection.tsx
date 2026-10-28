@@ -6,11 +6,11 @@ import { HoverCard } from '@core/component/HoverCard';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import Plus from '@phosphor/plus.svg';
-import PushPinIcon from '@phosphor/push-pin.svg';
-import PushPinSlashIcon from '@phosphor/push-pin-slash.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import DeleteIcon from '@phosphor/x.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import PushPinIcon from '@icon/system/regular/push-pin.svg';
+import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
@@ -419,7 +419,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                 filteredProperties().length > 0 && 'mt-2'
               )}
             >
-              <AddPropertyButton class="m-px gap-1.5" />
+              <AddPropertyButton size="xs" class="m-px gap-1.5" />
             </div>
           </Show>
           <Modals />
@@ -463,6 +463,11 @@ function propertyFromPendingDefinition(
       value: null,
     }))
     .with('DATE', () => ({ ...base, valueType: 'DATE' as const, value: null }))
+    .with('DATE_RANGE', () => ({
+      ...base,
+      valueType: 'DATE_RANGE' as const,
+      value: null,
+    }))
     .with('SELECT_STRING', () => ({
       ...base,
       valueType: 'SELECT_STRING' as const,
@@ -876,7 +881,6 @@ function NonUserEntityValue(props: { property: Property }) {
           <Button
             type="button"
             variant="ghost"
-            depth={0}
             size="icon-sm"
             aria-label={`Add ${props.property.displayName}`}
             onClick={(event) => {
@@ -960,7 +964,6 @@ function EntityCollectionPropertyBody(props: {
             <Button
               type="button"
               variant="ghost"
-              depth={0}
               size="icon-sm"
               class="size-5"
               aria-label={`Add ${props.property.displayName}`}
@@ -1063,6 +1066,7 @@ function NonUserEntityChip(props: {
         <Show when={props.canEdit && props.onRemove}>
           <div class="border-l border-edge-muted" />
           <Button
+            variant="ghost"
             type="button"
             size="icon-sm"
             class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
@@ -1072,7 +1076,7 @@ function NonUserEntityChip(props: {
             }}
             aria-label={`Remove ${name()}`}
           >
-            <DeleteIcon />
+            <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </div>

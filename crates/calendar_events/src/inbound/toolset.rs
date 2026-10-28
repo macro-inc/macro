@@ -643,7 +643,11 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
                 .to_string()
         }
         CalendarMutationError::AlreadyOnCalendar => {
-            "This event is already on one of the user's calendars.".to_string()
+            "The user already has this meeting on one of their calendars, so nothing was \
+             added. It cannot be added to another of their calendars either: a copy is refused \
+             on every calendar while they hold the meeting. Tell the user it is already on \
+             their calendar, and do not offer another calendar."
+                .to_string()
         }
         CalendarMutationError::JoinRequestOpen => {
             "The user has asked the person who shared this event to add them as a guest, and \

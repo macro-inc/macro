@@ -388,6 +388,90 @@
         }
       }
     },
+    "/email/calendar-events/{event_id}/forward": {
+      "post": {
+        "tags": ["email"],
+        "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name: the event's iCalendar file (`METHOD:PUBLISH`, no\nattendees, no join link), sent from the inbox that holds the viewer's\ncopy, with the usual undo delay. Recipients can add the event to their\nown calendar; they are not added to the guest list and the organizer is\nnot told.",
+        "operationId": "forward_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "The viewer's copy of the event",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForwardCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The email is queued to send",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No, too many, or invalid recipients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The inbox holding the copy cannot send for the viewer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such event on one of the viewer's own inboxes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The email could not be sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardCalendarEventError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/contacts": {
       "get": {
         "tags": ["Contacts"],
@@ -2811,6 +2895,65 @@
         }
       }
     },
+    "/email/threads/archived": {
+      "patch": {
+        "tags": ["Threads"],
+        "summary": "Change the archived status of up to 100 threads, sending one provider\nwrite per inbox. A thread that can't change is reported, not fatal.",
+        "operationId": "archive_threads",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveThreadsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveThreadsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/threads/previews/cursor/{view}": {
       "get": {
         "tags": ["Previews"],
@@ -3450,6 +3593,119 @@
           },
           "403": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy": {
+      "post": {
+        "tags": ["email"],
+        "summary": "Add a shared event saved from one of the thread's messages to one of the\nviewer's Google calendars, the way Add to calendar adds a channel-shared\nevent: a snapshot under the meeting's iCalendar UID and organizer, with the\nviewer as its only guest and no join link. Nobody is notified. Only a\npublished event file (`METHOD:PUBLISH`) can be added; an invitation is\nanswered from the calendar it reached.",
+        "operationId": "copy_thread_calendar_invitation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Authorized email thread",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "Message carrying the event",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invitation_id",
+            "in": "path",
+            "description": "Saved event within the message",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The copy on the viewer's calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The saved event cannot be added, or the calendar is not a Google calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such saved event in the thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on the viewer's calendar, no writable calendar, or the provider refused the copy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -4624,6 +4880,44 @@
           }
         }
       },
+      "ArchiveThreadsRequest": {
+        "type": "object",
+        "required": ["thread_ids", "value"],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "value": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ArchiveThreadsResponse": {
+        "type": "object",
+        "required": ["updated_thread_ids", "failed_thread_ids"],
+        "properties": {
+          "failed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Threads left unchanged because they could not be updated."
+          },
+          "updated_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Threads whose archived status now matches the request."
+          }
+        }
+      },
       "Attachment": {
         "type": "object",
         "description": "Attachments of a message, as sent to us by the provider.",
@@ -5160,6 +5454,13 @@
               }
             ]
           },
+          "recurrence": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event.\n`None` on snapshots saved before recurrence was recorded, where a\nseries cannot be told apart from a single event."
+          },
           "recurrence_id": {
             "oneOf": [
               {
@@ -5205,6 +5506,47 @@
             "description": "iCalendar UID; never a Google provider event ID."
           }
         }
+      },
+      "CalendarMutationApiError": {
+        "type": "object",
+        "description": "HTTP error body returned by calendar mutation endpoints.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/CalendarMutationErrorCode",
+            "description": "Machine-readable failure category."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable failure description."
+          }
+        }
+      },
+      "CalendarMutationErrorCode": {
+        "type": "string",
+        "description": "Machine-readable failure category for calendar mutations.",
+        "enum": [
+          "not_found",
+          "occurrence_not_found",
+          "read_only",
+          "no_writable_calendar",
+          "not_attendee",
+          "not_organizer",
+          "guests_cannot_invite",
+          "guest_list_hidden",
+          "guests_cannot_modify",
+          "already_on_calendar",
+          "join_request_open",
+          "copy_refused",
+          "snapshot",
+          "invalid_input",
+          "reauth_required",
+          "provider_rejected",
+          "retryable",
+          "persist_failed",
+          "macro_call_failed",
+          "copy_choice_required"
+        ]
       },
       "CalendarOccurrence": {
         "type": "object",
@@ -5324,6 +5666,17 @@
             }
           }
         ]
+      },
+      "CopyCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body adding a shared event to the requester's calendar.",
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Google calendar to add the copy to; defaults to the requester's\nprimary inbox's primary calendar."
+          }
+        }
       },
       "CreateDraftRequest": {
         "type": "object",
@@ -5499,6 +5852,81 @@
         "type": "string",
         "description": "Visibility of event details.",
         "enum": ["default", "public", "private", "confidential"]
+      },
+      "ForwardCalendarEventError": {
+        "type": "object",
+        "description": "A refused or failed forward.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ForwardCalendarEventErrorCode",
+            "description": "What went wrong."
+          },
+          "message": {
+            "type": "string",
+            "description": "A message fit to show the user."
+          }
+        }
+      },
+      "ForwardCalendarEventErrorCode": {
+        "type": "string",
+        "description": "Why a forward was not sent.",
+        "enum": [
+          "not_found",
+          "invalid_recipients",
+          "inbox_unavailable",
+          "send_failed"
+        ]
+      },
+      "ForwardCalendarEventRecipient": {
+        "type": "object",
+        "description": "One person a forwarded invitation goes to.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Their email address."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Their display name."
+          }
+        }
+      },
+      "ForwardCalendarEventRequest": {
+        "type": "object",
+        "description": "Who a forwarded invitation goes to, and what its email says.",
+        "required": ["to"],
+        "properties": {
+          "bodyText": {
+            "type": ["string", "null"],
+            "description": "The email's plain-text body. Without one, it names the event and\nsays the recipient won't be on the organizer's guest list."
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForwardCalendarEventRecipient"
+            },
+            "description": "The people it goes to, at most 50."
+          }
+        }
+      },
+      "ForwardCalendarEventResponse": {
+        "type": "object",
+        "description": "The email the forward queued.",
+        "required": ["messageId", "threadId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The sent message."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Its thread."
+          }
+        }
       },
       "GetActiveBackfillJobResponse": {
         "type": "object",

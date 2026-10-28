@@ -5,10 +5,10 @@ import {
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
@@ -202,6 +202,7 @@ export function RailListLoading() {
   return (
     <div class="grid min-h-20 place-items-center text-ink-muted">
       <SpinnerIcon
+        aria-hidden={false}
         aria-label="Loading conversations"
         class="size-4 animate-spin"
       />
@@ -261,7 +262,7 @@ export function RailListError(props: {
     >
       <span>Couldn’t load conversations.</span>
       <Button
-        variant="outline"
+        variant="secondary"
         size="xs"
         onClick={() => fireAndForget(props.retry(), 'channels-view')}
       >
@@ -276,7 +277,7 @@ export function CreateRailAction(props: {
   onClick: () => void;
 }) {
   return (
-    <ViewSidebar.Control label={props.label} onClick={props.onClick}>
+    <ViewSidebar.Control aria-label={props.label} onClick={props.onClick}>
       <PlusIcon class="size-3.5" />
     </ViewSidebar.Control>
   );

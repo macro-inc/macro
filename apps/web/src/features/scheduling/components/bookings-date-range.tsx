@@ -1,7 +1,7 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
-import Calendar from '@phosphor/calendar-blank.svg';
-import CaretDown from '@phosphor/caret-down.svg';
 import { Button, DatePicker, selectTriggerClasses } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { Field } from './fields';
@@ -106,7 +106,7 @@ export function BookingsDateRange(props: {
             Cancel
           </MobileDrawer.Close>
         </Show>
-        <Button type="submit" variant="strong" size="md">
+        <Button type="submit" variant="secondary" size="md">
           Apply dates
         </Button>
       </div>

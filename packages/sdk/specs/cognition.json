@@ -1286,6 +1286,64 @@
         }
       }
     },
+    "/import/workspaces/{source}": {
+      "get": {
+        "tags": ["import"],
+        "summary": "Report progress for one reviewed workspace source.",
+        "operationId": "workspace_report_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/import/workspaces/{source}/cancel": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Cancel this source's plan or write, keeping completed entities.",
+        "operationId": "cancel_workspace_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/mcp/servers": {
       "get": {
         "tags": ["mcp"],
@@ -1827,7 +1885,7 @@
       "post": {
         "tags": ["pipedream-mcp"],
         "summary": "Register a connected account reported by the Pipedream Connect UI.",
-        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything.",
+        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything. An overlaid app is\nrefused with 409: it connects through its own MCP server instead.",
         "operationId": "complete_pipedream_mcp_connection",
         "requestBody": {
           "content": {
@@ -1861,6 +1919,16 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -2021,6 +2089,129 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipedream/mcp/overlays": {
+      "get": {
+        "tags": ["pipedream-mcp"],
+        "summary": "List the catalog apps that connect through their own MCP server.",
+        "description": "Clients connect these with the native MCP OAuth flow against\n`server_url`; Pipedream refuses to complete a connection for them.",
+        "operationId": "list_pipedream_mcp_overlays",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipedreamOverlayResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipedream/mcp/recover": {
+      "post": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Register an account a Connect flow created but the Connect UI never\nreported.",
+        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.\nAn overlaid app is refused with 409, as in [`complete_connection`].",
+        "operationId": "recover_pipedream_mcp_connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipedreamRecoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
             "description": "",
             "content": {
               "application/json": {
@@ -2374,6 +2565,7 @@
           "import",
           "agent_session",
           "agent_repository_choice",
+          "agent_mode_choice",
           "dictation",
           "image_generation"
         ]
@@ -3334,7 +3526,8 @@
           "initiative",
           "database",
           "database_row",
-          "form"
+          "form",
+          "external_chat"
         ]
       },
       "ErrorBody": {
@@ -4053,6 +4246,9 @@
           "database",
           "data_source",
           "row",
+          "jira_issue",
+          "jira_project",
+          "jira_epic",
           "channel"
         ]
       },
@@ -4099,7 +4295,7 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "notion", "slack"]
+        "enum": ["linear", "jira", "notion", "slack"]
       },
       "ImportState": {
         "type": "object",
@@ -4453,6 +4649,12 @@
             "description": "Plan objects already imported.",
             "minimum": 0
           },
+          "issues": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tracker issues in the plan.",
+            "minimum": 0
+          },
           "onTeam": {
             "type": "boolean",
             "description": "Whether the user is on a team. Without one, everything the import\nwrites stays visible only to them."
@@ -4461,6 +4663,12 @@
             "type": "integer",
             "format": "int32",
             "description": "Pages in the plan.",
+            "minimum": 0
+          },
+          "projects": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tracker groups written as Macro projects.",
             "minimum": 0
           },
           "reviewId": {
@@ -4525,6 +4733,13 @@
             "format": "int32",
             "description": "Plan objects waiting for a teammate who is writing the same object\nfor the team; they link to the teammate's copy once it is written.",
             "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Provider items skipped because they were unreadable, or optional features unavailable."
           },
           "writing": {
             "type": "integer",
@@ -4832,6 +5047,36 @@
           "server_name": {
             "type": "string",
             "description": "Human-readable display name."
+          }
+        }
+      },
+      "PipedreamOverlayResponse": {
+        "type": "object",
+        "description": "A catalog app that connects through its own MCP server instead of\nPipedream.",
+        "required": ["app_slug", "server_url"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app name slug, as it appears in the catalog."
+          },
+          "server_url": {
+            "type": "string",
+            "description": "The MCP server to authorize with the native MCP OAuth flow."
+          }
+        }
+      },
+      "PipedreamRecoverRequest": {
+        "type": "object",
+        "description": "Request body for recovering a connect flow whose result the Connect UI\nnever reported.",
+        "required": ["app_slug"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "The Pipedream app the flow was connecting, by name slug."
+          },
+          "server_name": {
+            "type": ["string", "null"],
+            "description": "Optional display name for the connector, as for completion."
           }
         }
       },
