@@ -68,7 +68,7 @@ Macro Mail is inspired by Superhuman's keyboard-first interface with a few key a
 2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.
 3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.
 
-![A Macro team test email with current email actions and details sidebar](.github/readme/email-thread.jpg)
+![A Macro team test email with the email navigation sidebar open](.github/readme/email-thread.jpg)
 
 4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.
 5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.
@@ -139,7 +139,7 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 **Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!
 
-![Macro CRM company list grouped into Lead and Demo stages](.github/readme/crm-board.jpg)
+![Macro Sales pipeline board grouped by stage with its navigation sidebar open](.github/readme/crm-board.jpg)
 
 We haven't innovated on the core idea of CRM other than what you read in the above paragraph. None of this should be that interesting:
 
@@ -161,7 +161,7 @@ Since Macro has the team context in a single database, it is uniquely positioned
 
 Team memory comes in quite handy. For example, I took a screenshot of some features I'd written in a paper notepad and asked the agent to create tickets and assign to the appropriate engineer which it did perfectly without any runtime tool use.
 
-![A completed Macro coding-agent session with tool calls, audit results, and a merged pull request](.github/readme/agents-task-handoff.jpg)
+![A Macro coding-agent session with tool calls, a successful audit, and a pull request](.github/readme/agents-task-handoff.jpg)
 
 Memory isn't supposed to encompass everything. Macro also has a tool/MCP surface with near 100% coverage of the things you can do in Macro's UI, so that your agents aren't limited in what they can do like they are in most SaaS. There are also no rate limits on MCP.
 
