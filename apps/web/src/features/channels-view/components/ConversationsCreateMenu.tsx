@@ -1,56 +1,35 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
-import { runCreateAction } from '@app/features/command/Launcher';
-import { openNewChannelModal } from '@channel/CreateChannelModal';
-import ChatCircleIcon from '@icon/system/regular/chat-circle.svg';
-import HashIcon from '@icon/system/regular/hash.svg';
+import { t } from '@app/lib/i18n';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { Dropdown } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import { Show } from 'solid-js';
+import { CHANNELS_TOUR } from '../tour';
+import { openNewConversationDialog } from './NewConversationDialog';
 
-/** Channel and direct-message creation in the Chat navigation. */
+/** One entry point for finding or starting channels and direct messages. */
 export function ConversationsCreateMenu(props: {
   presentation?: 'sidebar' | 'toolbar';
 }) {
   return (
-    <Dropdown
-      placement={
-        props.presentation === 'sidebar' ? 'bottom-start' : 'bottom-end'
+    <Show
+      when={props.presentation}
+      fallback={
+        <ViewSidebar.Control
+          aria-label={t('channelSections.newConversation')}
+          tooltip={t('channelSections.newConversation')}
+          onClick={openNewConversationDialog}
+        >
+          <PlusIcon class="size-3.5" />
+        </ViewSidebar.Control>
       }
     >
-      <Show
-        when={props.presentation}
-        fallback={
-          <Dropdown.Trigger
-            aria-label="Create channel or direct message"
-            tooltip="Create channel or direct message"
-            as={ViewSidebar.Control}
-            variant="ghost"
-            size="icon-sm"
-          >
-            <PlusIcon class="size-3.5" />
-          </Dropdown.Trigger>
-        }
-      >
-        <Dropdown.Trigger
-          as={ViewCreateButton}
-          presentation={props.presentation}
-          menu
-          aria-label="Create channel or direct message"
-        />
-      </Show>
-      <Dropdown.Content class="min-w-44">
-        <Dropdown.Group>
-          <Dropdown.Item onSelect={openNewChannelModal}>
-            <HashIcon class="size-3.5 shrink-0 text-ink-muted" />
-            <span>New channel</span>
-          </Dropdown.Item>
-          <Dropdown.Item onSelect={() => runCreateAction('channel')}>
-            <ChatCircleIcon class="size-3.5 shrink-0 text-ink-muted" />
-            <span>New direct message</span>
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
+      <ViewCreateButton
+        ref={tourTarget(CHANNELS_TOUR.create)}
+        presentation={props.presentation}
+        aria-label={t('channelSections.newConversation')}
+        onClick={openNewConversationDialog}
+      />
+    </Show>
   );
 }

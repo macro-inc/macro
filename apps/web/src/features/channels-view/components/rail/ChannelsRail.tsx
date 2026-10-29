@@ -4,10 +4,7 @@ import {
   listOwnedSlotName,
   useListInteractions,
 } from '@app/components/list';
-import {
-  useViewControlHotkeys,
-  useViewTabHotkeys,
-} from '@app/components/view-shell';
+import { useViewControlHotkeys } from '@app/components/view-shell';
 import {
   type ChannelPreviewSelection,
   channelPreviewSelection,
@@ -18,6 +15,7 @@ import {
 } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { prefetchLatestChannelMessages } from '@channel/queries/prefetch-channel-target';
 import {
@@ -31,6 +29,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { enableChannelTags } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity, WithNotification } from '@entity';
@@ -47,6 +46,7 @@ import {
 } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import { debounce } from '@solid-primitives/scheduled';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { confirmDialog } from '@ui';
@@ -81,6 +81,7 @@ import type {
 import {
   buildChannelRailRows,
   buildChannelSectionRows,
+  getChannelRailPaginationScope,
 } from './build-channel-rail-rows';
 import { promptLabelName } from './ChannelLabelNameDialog';
 import {
@@ -93,7 +94,6 @@ import {
   ChannelsRailProvider,
   domIdForRow,
   rowKeyForChannel,
-  rowKeyForFavorite,
   rowKeyForLabel,
   rowKeyForSection,
 } from './ChannelsRailContext';
@@ -106,23 +106,12 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
-const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
-  'favorites',
-  'team_channels',
-  'channels',
-  'direct_messages',
-];
 const LABEL_KEY_PREFIX = 'label:';
 const BROWSE_QUERY_SCOPES = [
   'team_channels',
   'channels',
   'direct_messages',
 ] as const;
-const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
-const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
-  ...CHANNEL_TAB_IDS,
-  'threads',
-];
 const DM_LOADING_PREVIEW_OFFSET = 80;
 
 export type ChannelsRailProps = {
@@ -134,6 +123,7 @@ export type ChannelsRailProps = {
 };
 
 export function ChannelsRail(props: ChannelsRailProps) {
+  const userId = useUserId();
   const channelTagsFlag = useFeatureFlag(enableChannelTags);
   const channelTagsEnabled = createMemo(() => channelTagsFlag().enabled);
   // The dialog manager closes entries when their owner is disposed. Give
@@ -334,31 +324,39 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const searchError = () => props.sources.search.error();
   const retrySearch = () => props.sources.search.refresh();
 
-  // Shared or private labels; channel membership is always viewer-relative.
   const labelsQuery = useChannelLabelsQuery();
-  const labels = createMemo<readonly ChannelLabel[]>(() =>
-    resolveChannelLabelMemberships(
-      channelTagsEnabled() && labelsQuery.isSuccess
+  const personalLabelsQuery = useChannelLabelsQuery('personal');
+  const sharedLabels = () =>
+    !labelsQuery.isPending && Boolean(labelsQuery.data?.teamId);
+  const labels = createMemo<readonly ChannelLabel[]>(() => {
+    if (!channelTagsEnabled()) return [];
+    const shared =
+      !labelsQuery.isPending && labelsQuery.data?.teamId
         ? labelsQuery.data.labels
-        : [],
-      channels()
-    )
-  );
-  const labelsAvailable = () => channelTagsEnabled() && labelsQuery.isSuccess;
+        : [];
+    const personal = !personalLabelsQuery.isPending
+      ? (personalLabelsQuery.data?.labels ?? [])
+      : [];
+    return resolveChannelLabelMemberships([...shared, ...personal], channels());
+  });
+  const labelsAvailable = () =>
+    channelTagsEnabled() &&
+    !labelsQuery.isPending &&
+    Boolean(labelsQuery.data) &&
+    !personalLabelsQuery.isPending &&
+    Boolean(personalLabelsQuery.data);
   const labelsUnavailableReason = () => {
-    if (labelsQuery.isSuccess) return '';
-    if (labelsQuery.isPending) return 'Loading labels…';
-    const error = labelsQuery.error;
+    if (labelsAvailable()) return '';
+    if (labelsQuery.isPending || personalLabelsQuery.isPending)
+      return t('channelSections.loading');
+    const error = labelsQuery.error ?? personalLabelsQuery.error;
     if (
       thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
       thrownResultErrorHasCode(error, 'FORBIDDEN')
     ) {
-      return 'You do not have access to these labels.';
+      return t('channelSections.noAccess');
     }
-    if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
-      return 'Channel labels are not available on this server yet.';
-    }
-    return 'Channel labels are unavailable right now.';
+    return t('channelSections.unavailable');
   };
 
   const favorites = createMemo(() => favoritesData()?.favorites ?? []);
@@ -468,6 +466,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       items: visibleRows,
       getKey: (row) => row.id,
       isSelectable: () => false,
+      isNavigable: (row) => row.kind !== 'status',
       initialFocusKey: visibleRows().find(
         (row) =>
           row.kind === 'conversation' &&
@@ -478,6 +477,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         previewAfterNavigation.clear();
         const openInNewSplit =
           metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+        if (item.kind === 'status') return;
 
         if (item.kind === 'all-threads') {
           setThreadsChannelId(undefined);
@@ -541,6 +541,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     scrollToIndex: (index, options) => {
       const row = list.items.at(index);
       if (!row) return;
+      if (!props.searchOpen && row.group !== 'direct_messages') {
+        virtualizers().team_channels?.scrollToIndex(index, options);
+        return;
+      }
 
       if (row.kind === 'conversation' || row.kind === 'label') {
         const virtualizer =
@@ -576,13 +580,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
-    // The Team channels section renders label headings between channels, so
-    // its indexes come from the rendered rows rather than the source.
     const rendered =
       scope === 'team_channels'
-        ? channelSectionRows().map((row) =>
-            row.kind === 'conversation' ? row.channel.id : undefined
-          )
+        ? visibleRows()
+            .filter((row) => row.group !== 'direct_messages')
+            .map((row) => {
+              if (row.kind === 'conversation') return row.channel.id;
+              if (row.kind === 'favorite') return row.favorite.entityId;
+              return undefined;
+            })
         : props.sources[scope].items().map((channel) => channel.id);
 
     const selectedIndex = rendered.indexOf(selectedChannel()?.id ?? '');
@@ -630,31 +636,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     });
   };
 
-  const scrollFavoritesToSelectedOrStart = () => {
-    const scrollRoot = sectionScrollRoots().favorites;
-    if (!scrollRoot?.isConnected) return;
-
-    scrollRoot.scrollTop = 0;
-
-    const favorite = favorites().find(
-      (item) =>
-        item.entityType === 'channel' && item.entityId === selectedChannel()?.id
-    );
-    if (!favorite) return;
-
-    const element = document.getElementById(
-      domIdForRow(listDomId, rowKeyForFavorite(favorite))
-    );
-    if (!element) return;
-
-    const elementBounds = element.getBoundingClientRect();
-    const scrollBounds = scrollRoot.getBoundingClientRect();
-
-    if (elementBounds.bottom > scrollBounds.bottom) {
-      scrollRoot.scrollTop += elementBounds.bottom - scrollBounds.bottom;
-    }
-  };
-
   createEffect(() => {
     if (!restoreListScroll()) return;
 
@@ -680,23 +661,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
       } else if (tab() === 'threads') {
         scrollThreadsToSelectedOrStart();
       } else {
-        scrollFavoritesToSelectedOrStart();
-        for (const scope of BROWSE_QUERY_SCOPES) {
-          scrollScopeToSelectedOrStart(scope);
-        }
+        scrollScopeToSelectedOrStart('team_channels');
+        scrollScopeToSelectedOrStart('direct_messages');
       }
       setRestoreListScroll(false);
     });
     onCleanup(() => cancelAnimationFrame(frame));
-  });
-
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: () =>
-      threadsEnabled() ? CHANNEL_TAB_IDS_WITH_THREADS : CHANNEL_TAB_IDS,
-    activeId: () => tab(),
-    setActiveId: selectTab,
   });
 
   useViewControlHotkeys({
@@ -726,21 +696,21 @@ export function ChannelsRail(props: ChannelsRailProps) {
           if (props.searchOpen) return true;
 
           const row = current?.item;
-          if (direction !== 1 || row?.kind !== 'conversation') return true;
-
-          const source = props.sources[row.scope];
-          const renderedCount =
-            row.scope === 'team_channels'
-              ? channelSectionRows().length
-              : source.items().length;
-          if (row.localIndex < renderedCount - 1) return true;
+          if (direction !== 1 || !row) return true;
+          const scope = getChannelRailPaginationScope(
+            row,
+            visibleRows(),
+            state.expandedGroups
+          );
+          if (!scope) return true;
+          const source = props.sources[scope];
 
           if (!source.isLoadingMore()) {
             if (!source.hasMore()) return true;
             fireAndForget(source.loadMore(), 'channels-view');
           }
 
-          if (row.scope === 'direct_messages') {
+          if (row.kind === 'conversation' && scope === 'direct_messages') {
             requestAnimationFrame(() => {
               const scrollRoot = sectionScrollRoots().direct_messages;
               const element = document.getElementById(
@@ -820,21 +790,22 @@ export function ChannelsRail(props: ChannelsRailProps) {
   );
 
   const jumpToSection = (offset: 1 | -1) => {
-    const currentGroup = list.focus.item()?.group;
-
-    const sections = CHANNEL_RAIL_SECTIONS.filter((section) =>
-      section === 'favorites' ? favorites().length > 0 : true
-    );
-
-    const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;
+    const headers = list.items
+      .all()
+      .filter((row) => row.kind === 'section' || row.kind === 'label');
+    const current = list.focus.item();
+    const currentKey =
+      current?.kind === 'conversation' && current.labelId
+        ? rowKeyForLabel(current.labelId)
+        : current?.group
+          ? rowKeyForSection(current.group)
+          : current?.id;
+    const currentIndex = headers.findIndex((row) => row.id === currentKey);
     const origin = currentIndex === -1 ? (offset === 1 ? -1 : 0) : currentIndex;
-    const nextIndex = (origin + offset + sections.length) % sections.length;
-    const nextGroup = sections[nextIndex];
-    if (!nextGroup) return false;
-
-    const result = list.focus.set(rowKeyForSection(nextGroup), {
-      reason: 'keyboard',
-    });
+    const nextIndex = (origin + offset + headers.length) % headers.length;
+    const next = headers[nextIndex];
+    if (!next) return false;
+    const result = list.focus.set(next.id, { reason: 'keyboard' });
     if (!result) return false;
 
     listRoot()?.focus({ preventScroll: true });
@@ -888,10 +859,20 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   // Explain shared versus private scope before creating or changing labels.
-  const createLabelMutation = useCreateChannelLabelMutation();
-  const renameLabelMutation = useRenameChannelLabelMutation();
-  const deleteLabelMutation = useDeleteChannelLabelMutation();
-  const setChannelLabelMutation = useSetChannelLabelMutation();
+  const mutations = {
+    personal: {
+      create: useCreateChannelLabelMutation('personal'),
+      rename: useRenameChannelLabelMutation('personal'),
+      delete: useDeleteChannelLabelMutation('personal'),
+      assign: useSetChannelLabelMutation('personal'),
+    },
+    team: {
+      create: useCreateChannelLabelMutation(),
+      rename: useRenameChannelLabelMutation(),
+      delete: useDeleteChannelLabelMutation(),
+      assign: useSetChannelLabelMutation(),
+    },
+  };
 
   const errorMessage = (error: unknown, fallback: string) => {
     if (
@@ -913,16 +894,25 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const canLabelChannelId = (channelId: string) =>
     canLabelChannel(labelChannelById(channelId));
 
-  const sharedLabels = () =>
-    labelsQuery.isSuccess && Boolean(labelsQuery.data.teamId);
-  const labelScopeDescription = () =>
-    sharedLabels()
-      ? 'Labels are shared with everyone on your team.'
-      : 'Labels are private to your account.';
+  const scopeForLabel = (label: ChannelLabel): ChannelLabelScopeSelection =>
+    label.teamId ? 'team' : 'personal';
+  const labelScopeDescription = (scope: ChannelLabelScopeSelection) =>
+    t(
+      scope === 'team'
+        ? 'channelSections.teamDescription'
+        : 'channelSections.personalDescription'
+    );
 
-  const createLabel = async (channelIds: string[]) => {
+  const createLabel = async (
+    channelIds: string[],
+    scope: ChannelLabelScopeSelection = 'personal'
+  ) => {
+    const actorId = userId();
     if (!channelTagsEnabled()) return;
-    if (!channelIds.every(canLabelChannelId)) return;
+    const canAdd = (id: string) =>
+      canLabelChannelId(id) &&
+      (scope === 'personal' || labelChannelById(id)?.channelType === 'team');
+    if (!channelIds.every(canAdd)) return;
     if (!labelsAvailable()) {
       toast.failure(labelsUnavailableReason());
       return;
@@ -939,25 +929,26 @@ export function ChannelsRail(props: ChannelsRailProps) {
           : '';
     const name = await promptLabelName(
       {
-        title: 'New label',
-        body: `${labelScopeDescription()}${grouping}`,
-        confirmLabel: 'Create label',
+        title: t('channelSections.newSection'),
+        body: `${labelScopeDescription(scope)}${grouping}`,
+        confirmLabel: t('channelSections.createSection'),
         onConfirm: async (name) => {
           if (!channelTagsEnabled())
             throw new Error('Channel tags are disabled.');
-          if (!channelIds.every(canLabelChannelId))
-            throw new Error('Only team channels can be added to labels.');
-          const created = await createLabelMutation.mutateAsync({
+          if (!channelIds.every(canAdd))
+            throw new Error(t('channelSections.ineligibleChannel'));
+          const created = await mutations[scope].create.mutateAsync({
             name,
             channelIds,
+            actorId,
           });
-          setGroupOpen('team_channels', true);
+          if (actorId !== userId()) return;
           setLabelOpen(created.id, true);
         },
       },
       { owner: labelDialogOwner() }
     );
-    if (!name) return;
+    if (!name || actorId !== userId()) return;
     toast.success(
       channelIds.length > 1
         ? `Grouped ${channelIds.length} channels under “${name}”`
@@ -965,7 +956,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     );
   };
 
-  const createSmartTag = async () => {
+  const createSmartTag = async (
+    scope: ChannelLabelScopeSelection = 'personal'
+  ) => {
+    const actorId = userId();
     if (!channelTagsEnabled()) return;
     if (!labelsAvailable()) {
       toast.failure(labelsUnavailableReason());
@@ -973,16 +967,18 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
     await promptSmartTag(
       {
-        scopeDescription: labelScopeDescription(),
+        scope,
+        scopeDescription: labelScopeDescription(scope),
         onConfirm: async (name, rule) => {
           if (!channelTagsEnabled())
             throw new Error('Channel tags are disabled.');
-          const created = await createLabelMutation.mutateAsync({
+          const created = await mutations[scope].create.mutateAsync({
             name,
             rule,
             channelIds: [],
+            actorId,
           });
-          setGroupOpen('team_channels', true);
+          if (actorId !== userId()) return;
           setLabelOpen(created.id, true);
           toast.success(`Created “${name}”`);
         },
@@ -992,19 +988,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const editSmartTag = async (label: ChannelLabel) => {
+    const actorId = userId();
     if (!channelTagsEnabled() || !label.rule) return;
     await promptSmartTag(
       {
-        scopeDescription: labelScopeDescription(),
+        scope: scopeForLabel(label),
+        scopeDescription: labelScopeDescription(scopeForLabel(label)),
         initial: { name: label.name, rule: label.rule },
         onConfirm: async (name, rule) => {
           if (!channelTagsEnabled())
             throw new Error('Channel tags are disabled.');
-          await renameLabelMutation.mutateAsync({
+          await mutations[scopeForLabel(label)].rename.mutateAsync({
             labelId: label.id,
             name,
             rule,
+            actorId,
           });
+          if (actorId !== userId()) return;
           toast.success(`Updated “${name}”`);
         },
       },
@@ -1013,67 +1013,97 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const renameLabel = async (label: ChannelLabel) => {
+    const actorId = userId();
     if (!channelTagsEnabled()) return;
     const name = await promptLabelName(
       {
-        title: 'Rename label',
-        body: labelScopeDescription(),
-        confirmLabel: 'Rename',
+        title: t('channelSections.renameSection'),
+        body: labelScopeDescription(scopeForLabel(label)),
+        confirmLabel: t('entityActions.rename'),
         initialValue: label.name,
         onConfirm: async (name) => {
           if (!channelTagsEnabled())
             throw new Error('Channel tags are disabled.');
-          await renameLabelMutation.mutateAsync({ labelId: label.id, name });
+          await mutations[scopeForLabel(label)].rename.mutateAsync({
+            labelId: label.id,
+            name,
+            actorId,
+          });
         },
       },
       { owner: labelDialogOwner() }
     );
-    if (!name || name === label.name) return;
+    if (!name || name === label.name || actorId !== userId()) return;
     toast.success(`Renamed to “${name}”`);
   };
 
   const deleteLabel = async (label: ChannelLabel) => {
+    const actorId = userId();
     if (!channelTagsEnabled()) return;
     const channelsText = label.rule
       ? 'Channels stop appearing in this smart label. Other labels are unchanged.'
       : label.channelCount === 0
         ? 'It has no channels in it.'
-        : label.channelCount === 1
-          ? 'Its 1 channel goes back to the Team channels list.'
-          : `Its ${label.channelCount} channels go back to the Team channels list.`;
+        : t('channelSections.conversationsRemain');
     const confirmed = await confirmDialog(
       {
         title: `Delete “${label.name}”?`,
-        body: `${labelScopeDescription()} ${channelsText} Nobody loses access to a channel.`,
-        confirmLabel: sharedLabels() ? 'Delete for everyone' : 'Delete label',
+        body: `${labelScopeDescription(scopeForLabel(label))} ${channelsText} Nobody loses access to a channel.`,
+        confirmLabel: label.teamId
+          ? t('channelSections.deleteForEveryone')
+          : t('channelSections.deleteSection'),
         cancelLabel: 'Cancel',
         tone: 'danger',
       },
       { owner: labelDialogOwner() }
     );
-    if (!confirmed || !channelTagsEnabled()) return;
+    if (!confirmed || !channelTagsEnabled() || userId() !== actorId) return;
     try {
-      await deleteLabelMutation.mutateAsync({ labelId: label.id });
+      await mutations[scopeForLabel(label)].delete.mutateAsync({
+        labelId: label.id,
+        actorId,
+      });
+      if (actorId !== userId()) return;
       toast.success(`Deleted “${label.name}”`);
     } catch (error) {
+      if (actorId !== userId()) return;
       toast.failure(errorMessage(error, 'Failed to delete label'));
     }
   };
 
-  const setChannelLabel = (channelId: string, labelId: string | undefined) => {
+  const setChannelLabel = (
+    channelId: string,
+    labelId: string | undefined,
+    fromLabelId?: string
+  ) => {
+    const actorId = userId();
     if (!channelTagsEnabled() || !canLabelChannelId(channelId)) return;
-    const from = labels().find(
-      (label) => !label.rule && label.channelIds.includes(channelId)
-    );
     const to = labelId
       ? labels().find((label) => label.id === labelId)
       : undefined;
+    const previous = fromLabelId
+      ? labels().find((label) => label.id === fromLabelId)
+      : undefined;
+    if (labelId && (!to || !canLabelChannel(labelChannelById(channelId), to)))
+      return;
+    const scope = to
+      ? scopeForLabel(to)
+      : previous
+        ? scopeForLabel(previous)
+        : 'personal';
+    const from = labels().find(
+      (label) =>
+        !label.rule &&
+        scopeForLabel(label) === scope &&
+        label.channelIds.includes(channelId)
+    );
     if (to?.rule || from?.id === labelId) return;
     if (labelId) setLabelOpen(labelId, true);
-    setChannelLabelMutation.mutate(
-      { channelId, labelId },
+    mutations[scope].assign.mutate(
+      { channelId, labelId, actorId },
       {
         onSuccess: () => {
+          if (actorId !== userId()) return;
           if (to) {
             toast.success(`Moved ${channelName(channelId)} to “${to.name}”`);
           } else if (from) {
@@ -1082,8 +1112,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
             );
           }
         },
-        onError: (error) =>
-          toast.failure(errorMessage(error, 'Failed to move channel')),
+        onError: (error) => {
+          if (actorId !== userId()) return;
+          toast.failure(errorMessage(error, 'Failed to move channel'));
+        },
       }
     );
   };
@@ -1141,6 +1173,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
       !canDropOnChannel(drag.channelId, drop.target.channelId)
     )
       return undefined;
+    if (drop.target.kind === 'label') {
+      const labelId = drop.target.labelId;
+      const label = labels().find((label) => label.id === labelId);
+      if (!label || !canLabelChannel(labelChannelById(drag.channelId), label))
+        return undefined;
+    }
     if (drop.target.kind === 'label' && drop.target.labelId === drag.labelId)
       return undefined;
     if (drop.target.kind === 'unlabelled' && !drag.labelId) return undefined;
@@ -1175,14 +1213,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
       return;
     }
     if (target.kind === 'unlabelled') {
-      if (drag.labelId) setChannelLabel(drag.channelId, undefined);
+      if (drag.labelId)
+        setChannelLabel(drag.channelId, undefined, drag.labelId);
       return;
     }
     if (!canDropOnChannel(drag.channelId, target.channelId)) return;
     // Dragging a labelled channel onto the plain list takes it out of its
     // label; dropping one plain channel on another starts a label with both.
     if (drag.labelId) {
-      setChannelLabel(drag.channelId, undefined);
+      setChannelLabel(drag.channelId, undefined, drag.labelId);
       return;
     }
     fireAndForget(
@@ -1225,11 +1264,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     labels,
     labelsAvailable,
     labelsUnavailableReason,
+    retryLabels: async () => {
+      await Promise.all([labelsQuery.refetch(), personalLabelsQuery.refetch()]);
+    },
     isLabelOpen,
     toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
     channelSectionRows,
     labelUnreadCount,
     createLabel,
+    canShareSections: () => sharedLabels(),
     createSmartTag,
     editSmartTag,
     renameLabel,

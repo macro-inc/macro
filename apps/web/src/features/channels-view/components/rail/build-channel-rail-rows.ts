@@ -2,6 +2,7 @@ import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
+import type { ChannelsSourceScope } from '../../queries';
 import type {
   ChannelsQueryScope,
   ChannelsRailSection,
@@ -28,10 +29,8 @@ const compareChannelName = (left: ChannelEntity, right: ChannelEntity) =>
   left.id.localeCompare(right.id);
 
 /**
- * Lay out the Team channels section: each label in saved order with the
- * channels the user can see in it (A→Z, the same for everyone), then the
- * channels in no label in the section's own sort. Empty labels stay visible as drop targets; a collapsed label hides its channels.
- *
+ * Lay out top-level custom sections with their visible channels in A→Z order.
+ * Ungrouped channels remain available to the primary sections.
  * Labelled channels come from `channelsById` because the paginated source
  * may not have reached them yet; anything unlabelled comes from `channels`
  * in source order.
@@ -50,7 +49,7 @@ export function buildChannelSectionRows(options: {
       .map((id) => options.channelsById.get(id))
       .filter(
         (channel): channel is ChannelEntity =>
-          channel !== undefined && canLabelChannel(channel)
+          channel !== undefined && canLabelChannel(channel, label)
       )
       .sort(compareChannelName);
 
@@ -126,46 +125,78 @@ export function buildChannelRailRows(
     }
   }
 
-  rows.push({
-    kind: 'section',
-    id: 'section:team_channels',
-    group: 'team_channels',
-  });
-  if (expandedGroups.team_channels) {
-    rows.push(
-      ...channelSectionRows.map(
-        (row, localIndex): ChannelRailRow =>
-          row.kind === 'label'
-            ? {
-                kind: 'label',
-                id: rowKeyForLabel(row.label.id),
-                group: 'team_channels',
-                localIndex,
-                label: row.label,
-              }
-            : {
-                kind: 'conversation',
-                id: rowKeyForChannel(row.channel.id, row.labelId),
-                group: 'team_channels',
-                scope: 'team_channels',
-                localIndex,
-                channel: row.channel,
-                labelId: row.labelId,
-              }
-      )
-    );
+  const labelledIds = new Set(
+    channelSectionRows.flatMap((row) =>
+      row.kind === 'conversation' && row.labelId ? [row.channel.id] : []
+    )
+  );
+  // Membership still hides channels when their section is collapsed.
+  for (const row of channelSectionRows) {
+    if (row.kind === 'label') {
+      for (const id of row.label.channelIds) labelledIds.add(id);
+    }
   }
 
-  for (const group of ['channels', 'direct_messages'] as const) {
+  for (const group of ['team_channels', 'channels'] as const) {
+    const channels = items[group].filter(
+      (channel) => !labelledIds.has(channel.id)
+    );
+    if (group === 'channels' && channels.length === 0) continue;
     rows.push({ kind: 'section', id: `section:${group}`, group });
     if (!expandedGroups[group]) continue;
+    for (const channel of channels) {
+      rows.push({
+        kind: 'conversation',
+        id: rowKeyForChannel(channel.id),
+        group,
+        scope: group,
+        localIndex: 0,
+        channel,
+      });
+    }
+    rows.push({ kind: 'status', id: `status:${group}`, group });
+  }
+
+  for (const row of channelSectionRows) {
+    if (row.kind === 'label') {
+      rows.push({
+        kind: 'label',
+        id: rowKeyForLabel(row.label.id),
+        group: 'team_channels',
+        localIndex: 0,
+        label: row.label,
+      });
+    } else if (row.labelId) {
+      rows.push({
+        kind: 'conversation',
+        id: rowKeyForChannel(row.channel.id, row.labelId),
+        group: 'team_channels',
+        scope: 'team_channels',
+        localIndex: 0,
+        channel: row.channel,
+        labelId: row.labelId,
+      });
+    }
+  }
+  // Every upper row shares one virtualizer and one scroll position.
+  rows.forEach((row, index) => {
+    if (row.kind === 'conversation' || row.kind === 'label')
+      row.localIndex = index;
+  });
+
+  rows.push({
+    kind: 'section',
+    id: 'section:direct_messages',
+    group: 'direct_messages',
+  });
+  if (expandedGroups.direct_messages) {
     rows.push(
-      ...items[group].map(
+      ...items.direct_messages.map(
         (channel, localIndex): ChannelRailRow => ({
           kind: 'conversation',
           id: rowKeyForChannel(channel.id),
-          group,
-          scope: group,
+          group: 'direct_messages',
+          scope: 'direct_messages',
           localIndex,
           channel,
         })
@@ -174,4 +205,28 @@ export function buildChannelRailRows(
   }
 
   return rows;
+}
+
+/** Page at the rendered section boundary, not a source tail hidden by a label. */
+export function getChannelRailPaginationScope(
+  row: ChannelRailRow,
+  rows: readonly ChannelRailRow[],
+  expanded: Readonly<Record<ChannelsRailSection, boolean>>
+): ChannelsSourceScope | undefined {
+  if (row.kind === 'section') {
+    if (row.group === 'favorites' || !expanded[row.group]) return;
+    const hasVisibleChannels = rows.some(
+      (item) =>
+        item.kind === 'conversation' &&
+        !item.labelId &&
+        item.scope === row.group
+    );
+    return hasVisibleChannels ? undefined : row.group;
+  }
+  if (row.kind !== 'conversation' || row.labelId) return;
+  const last = rows.findLast(
+    (item) =>
+      item.kind === 'conversation' && !item.labelId && item.scope === row.scope
+  );
+  return last?.id === row.id ? row.scope : undefined;
 }

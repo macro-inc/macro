@@ -32,7 +32,6 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
-import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
@@ -115,38 +114,10 @@ function DesktopChannelsRail(props: {
   );
 }
 
-function DesktopChannelThreads(props: { sources: ChannelsSources }) {
-  const { threadsChannelId, setTab, setSelectedChannel } = useChannelsView();
-  const channelsById = createMemo(
-    () =>
-      new Map(
-        deduplicateChannels([
-          props.sources.threads.items(),
-          props.sources.team_channels.items(),
-          props.sources.channels.items(),
-          props.sources.direct_messages.items(),
-          props.sources.recents.items(),
-        ]).map((channel) => [channel.id, channel])
-      )
-  );
-
-  return (
-    <ChannelThreadsView
-      channelId={threadsChannelId()}
-      resolveChannel={(channelId) => channelsById().get(channelId)}
-      onOpenThread={(thread) => {
-        setTab('browse');
-        setSelectedChannel(thread);
-      }}
-    />
-  );
-}
-
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, tab, mobileLayout, selectedChannel, setAsideWidth } =
+  const { state, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
-  const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -154,9 +125,8 @@ function ChannelsViewRoot() {
       if (mobileLayout()) return scope === 'recents';
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
-      if (scope === 'recents') return tab() === 'recents';
-      if (scope === 'threads') return tab() === 'threads';
-      return tab() === 'browse';
+      if (scope === 'recents' || scope === 'threads') return false;
+      return true;
     },
     (group) => state.sortBy[group]
   );
@@ -175,10 +145,6 @@ function ChannelsViewRoot() {
                     asidePreferenceKey="channels"
                     // The empty state only points at the rail, so keep it open.
                     asideRequired={selectedChannel() === undefined}
-                    // Keep the tab out of asideRequired: every change to it
-                    // resets a narrow overlay, so switching tabs inside the
-                    // overlay would close it.
-                    asidePinned={threadsTab()}
                     aside={{
                       width: state.asideWidth,
                       preserveDuringResize: false,
@@ -206,41 +172,32 @@ function ChannelsViewRoot() {
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
                       <ViewTour tour={channelsTour} />
-                      <Show
-                        when={!threadsTab()}
-                        fallback={
-                          <DebugSuspense name="ChannelsView.threads">
-                            <DesktopChannelThreads sources={sources} />
-                          </DebugSuspense>
-                        }
-                      >
-                        <ChannelSourcesContext.Provider value={sources}>
-                          <DebugSuspense name="ChannelsView.outlet">
-                            <SplitRouter.Outlet
-                              fallback={() => (
-                                <>
-                                  <ViewShell.TopBar>
-                                    <ViewSidebar.Title caret={false}>
-                                      Chat
-                                    </ViewSidebar.Title>
-                                  </ViewShell.TopBar>
-                                  <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-                                    <div class="flex max-w-sm flex-col gap-2">
-                                      <h2 class="text-base font-semibold text-ink">
-                                        Select a conversation
-                                      </h2>
-                                      <p class="text-sm leading-5 text-ink-muted">
-                                        Choose a channel or person from the
-                                        sidebar to open the conversation here.
-                                      </p>
-                                    </div>
+                      <ChannelSourcesContext.Provider value={sources}>
+                        <DebugSuspense name="ChannelsView.outlet">
+                          <SplitRouter.Outlet
+                            fallback={() => (
+                              <>
+                                <ViewShell.TopBar>
+                                  <ViewSidebar.Title caret={false}>
+                                    Chat
+                                  </ViewSidebar.Title>
+                                </ViewShell.TopBar>
+                                <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                                  <div class="flex max-w-sm flex-col gap-2">
+                                    <h2 class="text-base font-semibold text-ink">
+                                      Select a conversation
+                                    </h2>
+                                    <p class="text-sm leading-5 text-ink-muted">
+                                      Choose a channel or person from the
+                                      sidebar to open the conversation here.
+                                    </p>
                                   </div>
-                                </>
-                              )}
-                            />
-                          </DebugSuspense>
-                        </ChannelSourcesContext.Provider>
-                      </Show>
+                                </div>
+                              </>
+                            )}
+                          />
+                        </DebugSuspense>
+                      </ChannelSourcesContext.Provider>
                     </ViewShell.Main>
                   </ViewShell.Root>
                 </div>

@@ -1,6 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
-import { openNewChannelModal } from '@channel/CreateChannelModal';
 import {
   ContextMenuContent,
   MenuItem,
@@ -14,7 +13,6 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ChecksIcon from '@icon/system/regular/checks.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
-import HashIcon from '@icon/system/regular/hash.svg';
 import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
@@ -123,6 +121,11 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
         }}
       >
         <span class="min-w-0 flex-1 truncate">{props.label.name}</span>
+        <Show when={props.label.teamId}>
+          <span class="text-xs text-ink-extra-muted">
+            {t('channelSections.sharedShort')}
+          </span>
+        </Show>
         <UnreadPill count={state().unreadCount} />
       </ViewSidebar.Item>
       <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2 items-center gap-0.5">
@@ -203,59 +206,55 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
   );
 }
 
-/** The Channels section's create action: a channel, or a label. */
+/** Personal and shared sections use the same channel-label storage. */
 export function ChannelsCreateMenu() {
   const rail = useChannelsRail();
-
   return (
-    <Show
-      when={rail.channelTagsEnabled() && rail.labelsAvailable()}
-      fallback={
-        <ViewSidebar.Control
-          aria-label="Create channel"
-          onClick={openNewChannelModal}
-        >
-          <PlusIcon class="size-3.5" />
-        </ViewSidebar.Control>
-      }
-    >
+    <Show when={rail.channelTagsEnabled() && rail.labelsAvailable()}>
       <Dropdown placement="bottom-end">
         <Dropdown.Trigger
-          aria-label="Create channel or label"
-          tooltip="Create channel or label"
+          aria-label={t('channelSections.newSection')}
+          tooltip={t('channelSections.newSection')}
           as={ViewSidebar.Control}
           variant="ghost"
           size="icon-sm"
         >
           <PlusIcon class="size-3.5" />
         </Dropdown.Trigger>
-        <Dropdown.Content
-          class="min-w-44"
-          onCloseAutoFocus={(event) => {
-            if (document.querySelector('[role="dialog"]'))
-              event.preventDefault();
-          }}
-        >
+        <Dropdown.Content class="min-w-48">
           <Dropdown.Group>
             <MenuRow
-              icon={HashIcon}
-              label={t('channelLabels.newChannel')}
-              onSelect={openNewChannelModal}
-            />
-            <MenuRow
               icon={TagIcon}
-              label={t('channelLabels.newLabel')}
+              label={t('channelSections.newPersonalSection')}
               onSelect={() =>
-                fireAndForget(rail.createLabel([]), 'channels-view')
+                fireAndForget(rail.createLabel([], 'personal'), 'channels-view')
               }
             />
+            <Show when={rail.canShareSections()}>
+              <MenuRow
+                icon={TagIcon}
+                label={t('channelSections.newTeamSection')}
+                onSelect={() =>
+                  fireAndForget(rail.createLabel([], 'team'), 'channels-view')
+                }
+              />
+            </Show>
             <MenuRow
               icon={FilterIcon}
-              label={t('channelLabels.newSmartLabel')}
+              label={t('channelSections.newSmartSection')}
               onSelect={() =>
                 fireAndForget(rail.createSmartTag(), 'channels-view')
               }
             />
+            <Show when={rail.canShareSections()}>
+              <MenuRow
+                icon={FilterIcon}
+                label={t('channelSections.newTeamSmartSection')}
+                onSelect={() =>
+                  fireAndForget(rail.createSmartTag('team'), 'channels-view')
+                }
+              />
+            </Show>
           </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
@@ -263,18 +262,19 @@ export function ChannelsCreateMenu() {
   );
 }
 
-/**
- * "Move to label" for a channel's context menu. Includes empty labels.
- */
+/** Moving a personal assignment never changes a shared assignment. */
 export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
-  const currentLabel = () =>
+  const labels = () =>
     rail
       .labels()
-      .find(
-        (label) => !label.rule && label.channelIds.includes(props.channel.id)
-      );
-
+      .filter((label) => !label.rule && canLabelChannel(props.channel, label));
+  const current = (shared: boolean) =>
+    labels().find(
+      (label) =>
+        Boolean(label.teamId) === shared &&
+        label.channelIds.includes(props.channel.id)
+    );
   return (
     <Show
       when={
@@ -283,59 +283,79 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
         rail.labelsAvailable()
       }
     >
-      <Show when={currentLabel()}>
+      <For
+        each={labels().filter((label) =>
+          label.channelIds.includes(props.channel.id)
+        )}
+      >
         {(label) => (
           <MenuItem
             icon={TagSimpleIcon}
-            text={t('channelLabels.ungroupFrom', { label: label().name })}
-            onClick={() => rail.setChannelLabel(props.channel.id, undefined)}
+            text={t('channelSections.removeFrom', { name: label.name })}
+            onClick={() =>
+              rail.setChannelLabel(props.channel.id, undefined, label.id)
+            }
           />
         )}
-      </Show>
+      </For>
       <ContextMenu.Sub>
-        <SubTrigger
-          icon={TagIcon}
-          text={
-            currentLabel()
-              ? t('channelLabels.moveToLabel')
-              : t('channelLabels.addToLabel')
-          }
-        />
+        <SubTrigger icon={TagIcon} text={t('channelSections.addToSection')} />
         <ContextMenuContent
           submenu
           class="min-w-56 max-w-[22rem] text-xs text-ink-muted"
         >
-          {/* Kobalte radio items only work inside a RadioGroup. */}
-          <ContextMenu.RadioGroup
-            value={currentLabel()?.id ?? ''}
-            onChange={(labelId) =>
-              rail.setChannelLabel(props.channel.id, labelId)
-            }
-          >
-            <For each={rail.labels().filter((label) => !label.rule)}>
-              {(label) => (
+          <For each={[false, true]}>
+            {(shared) => (
+              <Show
+                when={
+                  !shared ||
+                  (rail.canShareSections() &&
+                    props.channel.channelType === 'team')
+                }
+              >
+                <div class="px-2 py-1 text-xs text-ink-extra-muted">
+                  {shared
+                    ? t('channelSections.shared')
+                    : t('channelSections.personal')}
+                </div>
+                <ContextMenu.RadioGroup
+                  value={current(shared)?.id ?? ''}
+                  onChange={(labelId) =>
+                    rail.setChannelLabel(props.channel.id, labelId)
+                  }
+                >
+                  <For
+                    each={labels().filter(
+                      (label) => Boolean(label.teamId) === shared
+                    )}
+                  >
+                    {(label) => (
+                      <MenuItem
+                        selectorType="radio"
+                        value={label.id}
+                        groupValue={current(shared)?.id ?? ''}
+                        text={label.name}
+                      />
+                    )}
+                  </For>
+                </ContextMenu.RadioGroup>
                 <MenuItem
-                  selectorType="radio"
-                  value={label.id}
-                  groupValue={currentLabel()?.id ?? ''}
-                  text={label.name}
+                  icon={PlusIcon}
+                  text={t('channelSections.newSection')}
+                  onClick={() =>
+                    fireAndForget(
+                      rail.createLabel(
+                        [props.channel.id],
+                        shared ? 'team' : 'personal'
+                      ),
+                      'channels-view'
+                    )
+                  }
                 />
-              )}
-            </For>
-          </ContextMenu.RadioGroup>
-          <Show when={rail.labels().some((label) => !label.rule)}>
-            <MenuSeparator />
-          </Show>
-          <MenuItem
-            icon={PlusIcon}
-            text={t('channelLabels.newLabelEllipsis')}
-            onClick={() =>
-              fireAndForget(
-                rail.createLabel([props.channel.id]),
-                'channels-view'
-              )
-            }
-          />
+                <MenuSeparator />
+              </Show>
+            )}
+          </For>
         </ContextMenuContent>
       </ContextMenu.Sub>
     </Show>

@@ -34,6 +34,11 @@ export type ChannelRailRow =
       group: ChannelsRailSection;
     }
   | {
+      kind: 'status';
+      id: `status:${ChannelsGroup}`;
+      group: ChannelsGroup;
+    }
+  | {
       kind: 'favorite';
       id: `favorite:${string}`;
       group: 'favorites';
@@ -145,6 +150,7 @@ export type ChannelsRailContext = {
   labelsAvailable: Accessor<boolean>;
   /** Why labels are unavailable, for the create menu and refused drops. */
   labelsUnavailableReason: Accessor<string>;
+  retryLabels: () => Promise<void>;
   isLabelOpen: (labelId: string) => boolean;
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */
@@ -155,15 +161,22 @@ export type ChannelsRailContext = {
    * Create a label holding `channelIds`, after asking for a name in a dialog
    * that states the team-wide effect. Resolves once the request settles.
    */
-  createSmartTag: () => Promise<void>;
+  createSmartTag: (scope?: 'personal' | 'team') => Promise<void>;
   editSmartTag: (label: ChannelLabel) => Promise<void>;
-  createLabel: (channelIds: string[]) => Promise<void>;
-  /** Rename after asking for the new name in a dialog; applies to the whole team. */
+  createLabel: (
+    channelIds: string[],
+    scope?: 'personal' | 'team'
+  ) => Promise<void>;
+  canShareSections: Accessor<boolean>;
   renameLabel: (label: ChannelLabel) => Promise<void>;
   /** Delete after the user confirms; applies to the whole team. */
   deleteLabel: (label: ChannelLabel) => Promise<void>;
   /** Move a channel into a label, or out of any label (`undefined`). */
-  setChannelLabel: (channelId: string, labelId: string | undefined) => void;
+  setChannelLabel: (
+    channelId: string,
+    labelId: string | undefined,
+    fromLabelId?: string
+  ) => void;
   /** Where a dragged channel would land right now, for highlighting the whole target. */
   activeDropTarget: Accessor<ChannelLabelDropTarget | undefined>;
   /** Mark every unread notification in the label's visible channels read. */

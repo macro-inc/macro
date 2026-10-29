@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   favoriteId: undefined as string | undefined,

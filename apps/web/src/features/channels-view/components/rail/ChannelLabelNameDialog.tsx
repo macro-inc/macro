@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   Button,
@@ -81,10 +82,12 @@ function LabelNameDialog(
               </Dialog.Description>
             </div>
             <Input
-              aria-label="Label name"
+              aria-label={t('channelSections.sectionName')}
               readOnly={pending()}
               onFocus={(event) => event.currentTarget.select()}
-              placeholder={props.placeholder ?? 'Label name'}
+              placeholder={
+                props.placeholder ?? t('channelSections.sectionName')
+              }
               value={value()}
               maxLength={MAX_LABEL_NAME_LENGTH}
               onInput={(event) => setValue(event.currentTarget.value)}

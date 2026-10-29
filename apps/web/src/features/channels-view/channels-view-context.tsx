@@ -36,7 +36,6 @@ import type {
   ChannelsViewState,
   ChannelsViewStateOptions,
 } from './types';
-import { activeChannelsTab } from './utils';
 
 type ChannelsViewProviderProps = ContextProviderProps & {
   initialState?: ChannelsViewStateOptions;
@@ -219,7 +218,7 @@ export const [ChannelsViewProvider, useChannelsView] =
         mobileLayout,
         selectedChannel,
         threadsEnabled,
-        tab: () => activeChannelsTab(state.tab, threadsEnabled()),
+        tab: () => 'browse',
         threadsChannelId: () => state.threadsChannelId,
         setThreadsChannelId: (channelId) => {
           if (state.threadsChannelId === channelId) return;

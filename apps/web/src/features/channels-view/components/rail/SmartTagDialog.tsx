@@ -4,6 +4,7 @@ import HashIcon from '@icon/system/regular/hash.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { useSmartTagPreviewQuery } from '@queries/channel-labels/channel-labels';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
+import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import {
   Button,
   Dialog,
@@ -17,6 +18,7 @@ import { createSignal, For, Show } from 'solid-js';
 
 export type SmartTagDialogProps = {
   scopeDescription: string;
+  scope?: ChannelLabelScopeSelection;
   initial?: { name: string; rule: ChannelLabelRule };
   onConfirm: (name: string, rule: ChannelLabelRule) => Promise<void>;
 };
@@ -29,7 +31,7 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal('');
   const trimmedPattern = () => pattern().trim();
-  const preview = useSmartTagPreviewQuery(trimmedPattern);
+  const preview = useSmartTagPreviewQuery(trimmedPattern, props.scope);
   const data = () => (preview.isSuccess ? preview.data : undefined);
   const matches = () => data()?.channels ?? [];
   const totalCount = () => data()?.totalCount ?? 0;
@@ -115,7 +117,7 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
                 />
               </label>
               <Dialog.Description class="sr-only">
-                {props.scopeDescription} Matching team channels are grouped
+                {props.scopeDescription} Matching channels are grouped
                 automatically by name, ignoring capitalization.
               </Dialog.Description>
             </div>

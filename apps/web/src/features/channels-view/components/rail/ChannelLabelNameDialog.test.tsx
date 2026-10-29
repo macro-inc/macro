@@ -50,7 +50,7 @@ describe('label naming', () => {
       onConfirm,
     });
     const input = screen.getByRole('textbox', {
-      name: 'Label name',
+      name: 'Section name',
     }) as HTMLInputElement;
     fireEvent.input(input, { target: { value: '  My group  ' } });
     fireEvent.submit(input.closest('form')!);
@@ -83,7 +83,7 @@ describe('label naming', () => {
     expect(onConfirm).not.toHaveBeenCalled();
     const next = promptLabelName(props);
     const input = screen.getByRole('textbox', {
-      name: 'Label name',
+      name: 'Section name',
     }) as HTMLInputElement;
     expect(input.value).toBe('');
     fireEvent.input(input, { target: { value: 'Second group' } });

@@ -5,32 +5,32 @@ import { canLabelChannel } from './channel-label-eligibility';
 
 export function channelMatchesSmartTag(
   channel: ChannelEntity,
-  rule: ChannelLabelRule
+  rule: ChannelLabelRule,
+  label?: Pick<ChannelLabel, 'teamId'>
 ): boolean {
   return (
-    canLabelChannel(channel) &&
+    canLabelChannel(channel, label) &&
     rule.contains.length > 0 &&
     channel.name.toLowerCase().includes(rule.contains.toLowerCase())
   );
 }
 
-/** Keep unloaded server matches, exclude non-team channels, and reflect live names. */
+/** Preserve authorized server matches and reflect live names within each scope. */
 export function resolveChannelLabelMemberships(
   labels: readonly ChannelLabel[],
   channels: readonly ChannelEntity[]
 ): ChannelLabel[] {
   const loadedIds = new Set(channels.map((channel) => channel.id));
-  const ineligibleIds = new Set(
-    channels
-      .filter((channel) => !canLabelChannel(channel))
-      .map((channel) => channel.id)
+  const channelsById = new Map(
+    channels.map((channel) => [channel.id, channel])
   );
   return labels.map((label) => {
     const rule = label.rule;
     if (!rule) {
-      const channelIds = label.channelIds.filter(
-        (id) => !ineligibleIds.has(id)
-      );
+      const channelIds = label.channelIds.filter((id) => {
+        const channel = channelsById.get(id);
+        return !channel || canLabelChannel(channel, label);
+      });
       return channelIds.length === label.channelIds.length
         ? label
         : {
@@ -51,7 +51,7 @@ export function resolveChannelLabelMemberships(
           .filter(
             (channel) =>
               (!label.teamId || serverIds.has(channel.id)) &&
-              channelMatchesSmartTag(channel, rule)
+              channelMatchesSmartTag(channel, rule, label)
           )
           .map((channel) => channel.id),
       ]),
