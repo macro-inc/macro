@@ -112,17 +112,20 @@ function runStatement(
   statement: DatabaseSqlStatement,
   source: RowSource,
   capabilities: Pick<DatabaseSqlQueryCapabilities, 'open' | 'openView'>,
-  context: DatabaseSqlReadContext
+  context: DatabaseSqlReadContext,
+  signal?: AbortSignal
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
   if (statement.view)
     return runDatabaseView(catalog, statement.view, {
       source,
       context,
+      signal,
       ...(capabilities.openView ? { open: capabilities.openView } : {}),
     });
   return runDatabaseSql(catalog, statement.sql, {
     source,
     context,
+    signal,
     ...(capabilities.open ? { open: capabilities.open } : {}),
   });
 }
@@ -173,6 +176,7 @@ export function createDatabaseSqlQuery(
   const [error, setError] = createSignal<DatabaseSqlFailure>();
   const [loading, setLoading] = createSignal(false);
   let latest = 0;
+  let activeRead: AbortController | undefined;
   let cancelFrame: (() => void) | undefined;
   // The cache may not hold what an in-flight network read will bring, so a
   // cache change waits for it instead of answering from older rows.
@@ -189,6 +193,9 @@ export function createDatabaseSqlQuery(
     options: { reportFailure?: boolean; keepLoading?: boolean } = {}
   ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> => {
     const generation = ++latest;
+    activeRead?.abort();
+    const controller = new AbortController();
+    activeRead = controller;
     const querySpan = Telemetry.span('database_sql.query');
     querySpan.setAttr('database_sql.read_reason', reason);
     querySpan.setAttr('database_sql.request_policy', requestPolicy);
@@ -223,7 +230,8 @@ export function createDatabaseSqlQuery(
                 scope: current.scope,
                 requestPolicy,
                 reportFailure: options.reportFailure,
-              }
+              },
+              controller.signal
             )
           )
           .map((answer): DatabaseSqlRun => {
@@ -280,6 +288,7 @@ export function createDatabaseSqlQuery(
         );
         return result;
       } finally {
+        if (activeRead === controller) activeRead = undefined;
         querySpan.end();
       }
     };
@@ -325,6 +334,7 @@ export function createDatabaseSqlQuery(
       cancelFrame?.();
       baselines = new Map();
       latest += 1;
+      activeRead?.abort();
       setError(undefined);
       setLoading(false);
       if (!current) {
@@ -363,6 +373,7 @@ export function createDatabaseSqlQuery(
   onCleanup(() => {
     cancelFrame?.();
     latest += 1;
+    activeRead?.abort();
   });
 
   return {

@@ -5,6 +5,20 @@ Run the isolated stack with browser telemetry enabled, following
 throughout the audit; `run_local` startup and its quit command rebuild/remove
 instance data. Use the `r` hotkey to rebuild services without replacing data.
 
+For an optimized headless frontend, explicitly set `VITE_ENABLE_DATABASES=true`,
+`VITE_ENABLE_BROWSER_OTEL=true` and
+`VITE_OTEL_EXPORTER_URL=/i/otlp/v1/traces` when building. The static build does not
+inherit the interactive Vite server's tracing configuration. Before recording
+comparisons, verify that a database request carries `traceparent` and its browser
+and backend spans can be retrieved from the local collector.
+
+After a machine restart, follow the existing-instance recovery steps in the local
+running guide. Restore missing LocalStack resources with
+`cargo x localstack-provision --instance <name> --port-base <base>`, then start services
+that exited while their dependencies were unavailable. Check the collaboration
+gateway as well as Postgres and DSS: a stopped gateway can add seconds of DNS or
+connection retries to otherwise fast database writes.
+
 ```sh
 nix develop --command just run_local --no-doppler --instance database-profiling-audit --port-base 21000
 ```
@@ -22,7 +36,7 @@ From `apps/web`, measure without changing data:
 bun scripts/database-profile/measure.mjs \
   --url https://localhost:21009/app/database/UUID \
   --state /tmp/database-profile-auth.json \
-  --table Records --rows 1000 --entries 1000 \
+  --table Records --rows 500 --entries 1000 \
   --output /tmp/database-profile-1000 --repeats 3 \
   --chrome /path/to/google-chrome
 ```
@@ -31,10 +45,12 @@ Use the actual proxy URL printed by `run_local`. The harness accepts loopback
 URLs only, opens its own browser, and refuses to overwrite an output directory.
 Each repetition starts with a fresh context containing only the saved login
 state, then measures a warm reload in that same context. `--rows` is the number
-of saved rows expected in the selected view; the blank insertion row is excluded.
-`--entries` is the fixture's total stored row count. The engine currently caps
-reads at 20,000 rows, so a 100k database does **not** imply 100k rendered rows.
-Confirm the trace's `database_sql.truncated` attribute when interpreting results.
+of saved rows expected to be loaded initially; the blank insertion row is excluded.
+`--entries` is the fixture's total stored row count. Table views load a first
+page of at most 500 globally filtered and ordered records. Use `--rows 500
+--entries 100000` for a full 100k table. The harness distinguishes loaded rows
+from mounted rows in the virtual grid. Boards and arbitrary SQL retain the
+engine's 20,000-row cap; inspect `database_sql.truncated` for those reads.
 
 The JSON results include first complete grid and subsequent frame opportunity,
 long tasks, CDP script/layout/task counters, heap size, HTTP timing/bytes, and
@@ -62,6 +78,9 @@ latency. Exported profiles may contain application source URLs and fixture IDs.
 | `database_sql.compare` | Equality comparison of the new catalog/result with the prior answer |
 | `database_sql.publish` | Signal updates and synchronous downstream reactive work |
 | `database_sql.frame` | Time after a changed result is published until a rendering opportunity; cancelled/hidden/timeout outcomes are not ready frames |
+| `database.view_rows.read` | Authorized catalog, view compilation, cursor validation and ordered identity read |
+| `database.view_rows.pool.acquire` / `.select` | Primary connection acquisition and filtered/ordered PostgreSQL page selection |
+| `database.view.load_more` | Continuation fetch and publishing the extended table result |
 | `soup.pool.acquire` | Connection acquisition, with pool size and idle count at entry |
 | `soup.sql.fetch_decode` | Query construction, SQL round trip, row decoding and flat-row conversion, excluding connection acquisition |
 | `soup.rows.convert` | Grouped-row conversion after the SQL read |

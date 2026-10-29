@@ -6,13 +6,8 @@ export function isDirectMessage(channel: ChannelEntity) {
   return channel.channelType === 'direct_message';
 }
 
-export function isTeamChannel(channel: ChannelEntity) {
-  return channel.channelType === 'team';
-}
-
 export function channelGroup(channel: ChannelEntity): ChannelsGroup {
-  if (isDirectMessage(channel)) return 'direct_messages';
-  return isTeamChannel(channel) ? 'team_channels' : 'channels';
+  return isDirectMessage(channel) ? 'direct_messages' : 'channels';
 }
 
 export function channelHasMessages(channel: ChannelEntity) {

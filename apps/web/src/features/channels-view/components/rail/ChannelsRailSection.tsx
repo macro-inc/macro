@@ -24,8 +24,6 @@ import {
 import { useOffscreenActivity } from './hooks/useOffscreenActivity';
 
 const LOADING_SKELETON_ROWS = [0, 1, 2];
-/** Height a collapsed section keeps: its header row, in px. */
-export const COLLAPSED_SECTION_HEIGHT = 32;
 const SectionContainerContext = createContext<() => HTMLElement | undefined>();
 
 function SectionScrollArea(props: {
@@ -101,26 +99,23 @@ function SectionScrollArea(props: {
 /**
  * How an open section claims height in its flex column.
  *
- * - `share`: natural height, shrinkable, capped by `maxHeight` — the even
- *   split of the column its caller computes from how many siblings are open.
- *   Without a cap one long list squeezes its siblings down to nothing.
- * - `fill`: grows into whatever the column has left. Give it to the
- *   bottom-most open section only, so no slack is left under the list.
+ * - `half`: natural height, capped at half the column after reserving the
+ *   section gap. Keep two `half` sections in a column of their own so neither
+ *   shrinks when the other expands.
+ * - `fill`: grows into whatever the column has left.
  * - `content`: natural height, never shrunk below it, capped at a third of
  *   the column so a long list still leaves room for its siblings.
  */
-type CollapsibleSectionSizing = 'share' | 'fill' | 'content';
+type CollapsibleSectionSizing = 'half' | 'fill' | 'content';
 
 function CollapsibleSectionRoot(props: {
   open: boolean;
   sizing?: CollapsibleSectionSizing;
-  /** CSS length capping a `share` section, e.g. `calc(100% / 3)`. */
-  maxHeight?: string;
   class?: string;
   children: JSX.Element;
 }) {
   let sectionRef: HTMLElement | undefined;
-  const sizing = () => props.sizing ?? 'share';
+  const sizing = () => props.sizing ?? 'half';
 
   return (
     <SectionContainerContext.Provider value={() => sectionRef}>
@@ -130,15 +125,12 @@ function CollapsibleSectionRoot(props: {
           'group/sidebar-section flex min-h-0 flex-col gap-(--sidebar-section-content-gap)',
           !props.open && 'shrink-0',
           props.open && sizing() === 'fill' && 'flex-1',
-          props.open && sizing() === 'share' && 'shrink',
+          props.open &&
+            sizing() === 'half' &&
+            'shrink max-h-[calc((100%-var(--sidebar-section-gap))/2)]',
           props.open && sizing() === 'content' && 'shrink-0 max-h-1/3',
           props.class
         )}
-        style={
-          props.open && sizing() === 'share' && props.maxHeight
-            ? { 'max-height': props.maxHeight }
-            : undefined
-        }
       >
         {props.children}
       </section>
@@ -184,7 +176,7 @@ function CollapsibleSectionContent(props: {
     <CollapseTransition
       open={props.open}
       container={container}
-      collapsedSize={COLLAPSED_SECTION_HEIGHT}
+      collapsedSize={32}
     >
       <SectionScrollArea
         contentRef={props.contentRef}

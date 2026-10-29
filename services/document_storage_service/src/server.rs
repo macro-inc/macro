@@ -2182,6 +2182,18 @@ pub async fn run() -> anyhow::Result<()> {
                 entity_access_service.as_ref().clone(),
             ),
         ),
+        graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
+            databases_sql::view_rows::DatabaseViewRows::new(
+                databases_service.clone(),
+                databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
+            ),
+            entity_access_service.clone(),
+            graphql_soup::soup_item_loader(
+                primary_entity_soup.clone(),
+                Arc::new(email_service.clone()),
+                entity_access_service.as_ref().clone(),
+            ),
+        ),
         graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader(
             graphql_soup::soup_item_loader_with_team_access(
                 primary_entity_soup,

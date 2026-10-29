@@ -12,8 +12,9 @@ export function createHeldGridRows(options: {
   knownRows: Accessor<DatabaseRow[]>;
 }) {
   const [editingRowId, setEditingRowId] = createSignal<string>();
+  const currentRows = createMemo(options.rows);
   const rows = createMemo<DatabaseRow[]>((shownBefore) => {
-    const current = options.rows();
+    const current = currentRows();
     const held = editingRowId();
     const index = shownBefore.findIndex((row) => row.rowId === held);
     if (

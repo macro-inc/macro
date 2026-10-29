@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT t.database_id, t.id\n            FROM database_columns c\n            JOIN database_tables t ON t.id = c.table_id\n            JOIN database_entities d ON d.database_id = t.database_id\n            WHERE c.config ->> 'kind' = 'derived' AND d.trashed_at IS NULL\n            ORDER BY t.database_id, t.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "0460937ee4ee99d89d628fd32e584e3cf855f0fc4f4603cf0fb79b5c03ec1eaa"
+}

@@ -26,7 +26,7 @@ where
                 Write::InsertRows { table_id, .. } => {
                     (*table_id, Some(inserted.iter().copied().collect()))
                 }
-                Write::UpdateRows { table_id, rows } => {
+                Write::UpdateRows { table_id, rows, .. } => {
                     (*table_id, Some(rows.iter().map(|(row, _)| *row).collect()))
                 }
                 Write::MoveCard { table_id, row, .. } => (*table_id, Some(BTreeSet::from([*row]))),

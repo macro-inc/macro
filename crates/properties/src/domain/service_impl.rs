@@ -57,6 +57,16 @@ use helpers::{
     extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
 };
 
+// Database cells must commit with their table version and change journal.
+fn require_generic_property_target(entity_type: AccessEntityType) -> Result<(), PropertiesErr> {
+    if entity_type == AccessEntityType::DatabaseRow {
+        return Err(PropertiesErr::Validation(
+            "Database row properties must be edited through database operations".into(),
+        ));
+    }
+    Ok(())
+}
+
 struct PublishedEventActors {
     actor: Option<Actor<'static>>,
     on_behalf_of: Option<MacroUserIdStr<'static>>,
@@ -628,6 +638,7 @@ where
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
         let entity_type = subject.storage_entity_type;
@@ -858,6 +869,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let property_definition = self
             .repository
             .get_property_definition(property_definition_id)
@@ -922,6 +934,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let mutation = self
             .repository
@@ -960,6 +973,7 @@ where
         access: &EditReceipt,
         updates: Vec<EntityPropertyOptionUpdate>,
     ) -> Result<Vec<EntityPropertyOptionSelection>, PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_type = subject.storage_entity_type;
 
@@ -1083,6 +1097,15 @@ where
         let mut outcomes: Vec<Option<EntityOptionUpdateOutcome>> =
             (0..subjects.len()).map(|_| None).collect();
         for index in order {
+            if let Err(error) = require_generic_property_target(access[index].entity_type()) {
+                outcomes[index] = Some(EntityOptionUpdateOutcome::Failed {
+                    message: match error {
+                        PropertiesErr::Validation(message) => message,
+                        other => other.to_string(),
+                    },
+                });
+                continue;
+            }
             let subject = &subjects[index];
             let entity_id = subject.canonical_key.entity_id.as_str();
             let entity_type = subject.storage_entity_type;
@@ -1864,6 +1887,7 @@ where
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
     async fn delete_entity_properties(&self, access: &EditReceipt) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_reference =
             EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
@@ -1912,6 +1936,7 @@ where
         access: &EditReceipt,
         entity_property_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let property_info = self
             .repository
             .lookup_entity_property(entity_property_id)

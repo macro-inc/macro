@@ -2,6 +2,7 @@ import '@app/index.css';
 import type { SortKey } from '@core/database-sql/generated/types';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
+import type { DatabaseTableControls } from '../../database/components/database-table';
 import { GridCell } from '../../database/components/grid-cell';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { moveBeside } from '../../database/core/move-beside';
@@ -11,6 +12,7 @@ import { DatabaseTableView } from '../../database/views/database-table-view';
 
 // Real grid and editors; records and saved layout are local to this browser fixture.
 function TableFixture() {
+  let controls: DatabaseTableControls | undefined;
   const [columns, setColumns] = createSignal<DatabaseViewColumn[]>([
     {
       id: 'name',
@@ -96,8 +98,34 @@ function TableFixture() {
         <output aria-label="Resize saves">{resizeSaves()}</output>
         <output aria-label="Writes">{writes()}</output>
         <output aria-label="Sort">{JSON.stringify(sort())}</output>
+        <button
+          onClick={() =>
+            setRows(
+              Array.from({ length: 1000 }, (_, index) => ({
+                rowId: `row-${index}`,
+                cells: {
+                  name: `Record ${index}`,
+                  notes: '',
+                  status: 'Open',
+                  amount: index,
+                },
+              }))
+            )
+          }
+        >
+          Load 1000 records
+        </button>
+        <button onClick={() => controls?.editCell('row-999', 'name')}>
+          Edit last record
+        </button>
+        <button onClick={() => controls?.editCell('row-0', 'name')}>
+          Edit first record
+        </button>
       </div>
       <DatabaseTableView
+        controlsRef={(value) => {
+          controls = value;
+        }}
         name="Tasks"
         rows={rows()}
         columns={columns()}

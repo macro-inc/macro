@@ -28,7 +28,7 @@ const compareChannelName = (left: ChannelEntity, right: ChannelEntity) =>
   left.id.localeCompare(right.id);
 
 /**
- * Lay out the Team channels section: each label in saved order with the
+ * Lay out the Channels section: each label in saved order with the
  * channels the user can see in it (A→Z, the same for everyone), then the
  * channels in no label in the section's own sort. Empty labels stay visible as drop targets; a collapsed label hides its channels.
  *
@@ -128,10 +128,10 @@ export function buildChannelRailRows(
 
   rows.push({
     kind: 'section',
-    id: 'section:team_channels',
-    group: 'team_channels',
+    id: 'section:channels',
+    group: 'channels',
   });
-  if (expandedGroups.team_channels) {
+  if (expandedGroups.channels) {
     rows.push(
       ...channelSectionRows.map(
         (row, localIndex): ChannelRailRow =>
@@ -139,15 +139,15 @@ export function buildChannelRailRows(
             ? {
                 kind: 'label',
                 id: rowKeyForLabel(row.label.id),
-                group: 'team_channels',
+                group: 'channels',
                 localIndex,
                 label: row.label,
               }
             : {
                 kind: 'conversation',
                 id: rowKeyForChannel(row.channel.id, row.labelId),
-                group: 'team_channels',
-                scope: 'team_channels',
+                group: 'channels',
+                scope: 'channels',
                 localIndex,
                 channel: row.channel,
                 labelId: row.labelId,
@@ -156,16 +156,19 @@ export function buildChannelRailRows(
     );
   }
 
-  for (const group of ['channels', 'direct_messages'] as const) {
-    rows.push({ kind: 'section', id: `section:${group}`, group });
-    if (!expandedGroups[group]) continue;
+  rows.push({
+    kind: 'section',
+    id: 'section:direct_messages',
+    group: 'direct_messages',
+  });
+  if (expandedGroups.direct_messages) {
     rows.push(
-      ...items[group].map(
+      ...items.direct_messages.map(
         (channel, localIndex): ChannelRailRow => ({
           kind: 'conversation',
-          id: rowKeyForChannel(channel.id),
-          group,
-          scope: group,
+          id: `channel:${channel.id}`,
+          group: 'direct_messages',
+          scope: 'direct_messages',
           localIndex,
           channel,
         })

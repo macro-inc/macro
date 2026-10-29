@@ -1,0 +1,24 @@
+[package]
+name = "graphql_databases"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true, features = ["dataloader", "chrono"] }
+chrono = { workspace = true }
+databases = { path = "../databases", features = ["ports", "view_rows"] }
+databases_sql = { path = "../databases_sql" }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+futures = { workspace = true }
+graphql_common = { path = "../graphql_common" }
+graphql_soup = { path = "../graphql_soup" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+models_databases = { path = "../models_databases" }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

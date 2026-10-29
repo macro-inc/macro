@@ -78,7 +78,6 @@ import {
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
-  COLLAPSED_SECTION_HEIGHT,
   CollapsibleSection,
   CreateRailAction,
   RailListError,
@@ -86,7 +85,6 @@ import {
   RailListLoadingMore,
 } from './ChannelsRailSection';
 import {
-  CHANNEL_LIST_GROUPS,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
@@ -124,13 +122,6 @@ type GroupConfig = {
 };
 
 const GROUPS: GroupConfig[] = [
-  {
-    group: 'team_channels',
-    label: 'Team channels',
-    emptyLabel: 'No team channels',
-    createLabel: 'Create channel',
-    onCreate: openNewChannelModal,
-  },
   {
     group: 'channels',
     label: 'Channels',
@@ -258,7 +249,7 @@ function ChannelOption(props: {
   rowId?: ChannelRailRow['id'];
   /** Nest under a label heading, with the branch rail. */
   labelId?: string;
-  /** Make a team-channel row draggable between labels (Team channels section only). */
+  /** Make a team-channel row draggable between labels (Channels section only). */
   draggable?: boolean;
 }) {
   const rail = useChannelsRail();
@@ -578,7 +569,7 @@ const channelRowOf = (row: ChannelSectionRow) =>
   row.kind === 'conversation' ? row : undefined;
 
 /**
- * The Team channels section body: an optional "new label" draft, then one
+ * The Channels section body: an optional "new label" draft, then one
  * virtualized list of label headings and channels. Dropping a dragged channel
  * on the list itself, outside any row, takes it out of its label.
  */
@@ -691,11 +682,7 @@ function ChannelHeadingDropTarget(props: { element: HTMLElement }) {
   return null;
 }
 
-function ExpandedGroupSection(props: {
-  config: GroupConfig;
-  /** The share of the column this section may claim while open. */
-  maxHeight: string;
-}) {
+function ExpandedGroupSection(props: { config: GroupConfig }) {
   // A conditional expression as `ref` is dropped by the Solid compiler, so
   // the target is chosen inside the callback.
   const createTarget = tourTarget(CHANNELS_TOUR.create);
@@ -714,15 +701,14 @@ function ExpandedGroupSection(props: {
   return (
     <CollapsibleSection.Root
       open={section().open}
-      sizing={section().fillAvailable ? 'fill' : 'share'}
-      maxHeight={props.maxHeight}
+      sizing={section().fillAvailable ? 'fill' : 'half'}
     >
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
         class={cn(
           rail.channelTagsEnabled() &&
-            props.config.group === 'team_channels' &&
+            props.config.group === 'channels' &&
             rail.activeDropTarget()?.kind === 'unlabelled' &&
             'bg-selected ring-1 ring-inset ring-accent'
         )}
@@ -731,7 +717,7 @@ function ExpandedGroupSection(props: {
         <Show
           when={
             rail.channelTagsEnabled() &&
-            props.config.group === 'team_channels' &&
+            props.config.group === 'channels' &&
             headerElement()
           }
           keyed
@@ -776,7 +762,7 @@ function ExpandedGroupSection(props: {
             label={props.config.label}
           />
           <Show
-            when={props.config.group === 'team_channels'}
+            when={props.config.group === 'channels'}
             fallback={
               <CreateRailAction
                 label={props.config.createLabel}
@@ -884,20 +870,13 @@ function ExpandedBrowse() {
   const hasItems = () =>
     rail.labels().length > 0 ||
     rail.favorites().length > 0 ||
-    CHANNEL_LIST_GROUPS.some((group) => rail.sources[group].items().length > 0);
+    rail.sources.channels.items().length > 0 ||
+    rail.sources.direct_messages.items().length > 0;
   const sourcesSettled = () =>
-    CHANNEL_LIST_GROUPS.every(
-      (group) =>
-        !rail.sources[group].isLoading() && !rail.sources[group].error()
-    );
-  // Open sections share the column evenly; the collapsed headers and the gaps
-  // come off the top first.
-  const sectionMaxHeight = () => {
-    const total = GROUPS.length;
-    const open = GROUPS.filter(({ group }) => rail.isGroupOpen(group)).length;
-    if (open === 0) return '100%';
-    return `calc((100% - ${total - open} * ${COLLAPSED_SECTION_HEIGHT}px - ${total - 1} * var(--sidebar-section-gap)) / ${open})`;
-  };
+    !rail.sources.channels.isLoading() &&
+    !rail.sources.direct_messages.isLoading() &&
+    !rail.sources.channels.error() &&
+    !rail.sources.direct_messages.error();
 
   return (
     <Switch>
@@ -908,16 +887,11 @@ function ExpandedBrowse() {
         <ViewSidebar.Content class="h-full overflow-hidden">
           <ChannelFavoritesSection />
           {/* The groups split the height left after favorites between them.
-              Their caps resolve against this column, not the whole sidebar,
-              so favorites is never squeezed out. */}
+              Their half-height caps resolve against this column, not the
+              whole sidebar, so favorites is never squeezed out. */}
           <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
             <For each={GROUPS}>
-              {(config) => (
-                <ExpandedGroupSection
-                  config={config}
-                  maxHeight={sectionMaxHeight()}
-                />
-              )}
+              {(config) => <ExpandedGroupSection config={config} />}
             </For>
           </div>
         </ViewSidebar.Content>

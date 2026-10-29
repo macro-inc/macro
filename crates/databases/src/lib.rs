@@ -12,3 +12,7 @@ pub mod outbound;
 
 #[cfg(feature = "postgres")]
 pub mod wiring;
+
+/// The one-off backfill of formula columns' stored cells.
+#[cfg(feature = "postgres")]
+pub mod backfill;

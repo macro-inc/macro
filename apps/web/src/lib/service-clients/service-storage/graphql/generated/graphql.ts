@@ -233,6 +233,226 @@ export type CreateSavedViewInput = {
   sharedTeamId?: string | number | null | undefined;
 };
 
+/** Match the checked or unchecked state of a cell. */
+export type DatabaseViewCheckboxTest = {
+  /** Whether the cell must be checked. */
+  checked: boolean;
+};
+
+/** How the conditions within a filter group combine. */
+export type DatabaseViewConjunction =
+  /** Require every condition. */
+  | 'AND'
+  /** Require at least one condition. */
+  | 'OR';
+
+/** An ordering comparison between instants. */
+export type DatabaseViewDateOperator =
+  /** The instant is after the comparison instant. */
+  | 'AFTER'
+  /** The instant is before the comparison instant. */
+  | 'BEFORE'
+  /** The instant is at or after the comparison instant. */
+  | 'ON_OR_AFTER'
+  /** The instant is at or before the comparison instant. */
+  | 'ON_OR_BEFORE';
+
+/** How a date range relates to a day. */
+export type DatabaseViewDateRangeOperator =
+  /** The range overlaps the day. */
+  | 'CONTAINS'
+  /** The range misses the day, or is empty. */
+  | 'DOES_NOT_CONTAIN'
+  /** The range ends before the day. */
+  | 'ENDS_BEFORE'
+  /** The range ends on or after the day. */
+  | 'ENDS_ON_OR_AFTER'
+  /** The range starts after the day. */
+  | 'STARTS_AFTER'
+  /** The range starts on or before the day. */
+  | 'STARTS_ON_OR_BEFORE';
+
+/** Compare a date range cell with the day starting at a UTC instant. */
+export type DatabaseViewDateRangeTest = {
+  /** The comparison to apply. */
+  operator: DatabaseViewDateRangeOperator;
+  /** The start of the day compared against. */
+  value: unknown;
+};
+
+/** Compare a date cell with a UTC instant. */
+export type DatabaseViewDateTest = {
+  /** The comparison to apply. */
+  operator: DatabaseViewDateOperator;
+  /** The value to compare the cell against. */
+  value: unknown;
+};
+
+/** Compare referenced entity identities with a set of entities. */
+export type DatabaseViewEntitiesTest = {
+  /** Referenced entity identities. */
+  entities: Array<string>;
+  /** The comparison to apply. */
+  operator: DatabaseViewSetOperator;
+};
+
+/** A typed predicate on one column placement. */
+export type DatabaseViewFilterCondition = {
+  /** Column placement identity within the selected table. */
+  column: string | number;
+  /** The comparison appropriate for this column. */
+  test: DatabaseViewFilterTest;
+};
+
+/** A conjunction of column conditions or nested groups. */
+export type DatabaseViewFilterGroup = {
+  /** Column tests or nested groups. */
+  conditions: Array<DatabaseViewFilterNode>;
+  /** Require every condition or at least one condition. */
+  conjunction: DatabaseViewConjunction;
+};
+
+/** Exactly one column condition or nested filter group. */
+export type DatabaseViewFilterNode =
+  {   /** A predicate on one column. */
+  condition: DatabaseViewFilterCondition; group?: never; }
+  |  { condition?: never;   /** A nested group of predicates. */
+  group: DatabaseViewFilterGroup; };
+
+/** Exactly one test compatible with the selected column type. */
+export type DatabaseViewFilterTest =
+  {   /** Test a checkbox cell. */
+  checkbox: DatabaseViewCheckboxTest; date?: never; dateRange?: never; entities?: never; number?: never; options?: never; presence?: never; text?: never; }
+  |  { checkbox?: never;   /** Test a date cell. */
+  date: DatabaseViewDateTest; dateRange?: never; entities?: never; number?: never; options?: never; presence?: never; text?: never; }
+  |  { checkbox?: never; date?: never;   /** Test a date range cell against a day. */
+  dateRange: DatabaseViewDateRangeTest; entities?: never; number?: never; options?: never; presence?: never; text?: never; }
+  |  { checkbox?: never; date?: never; dateRange?: never;   /** Test referenced entity identities. */
+  entities: DatabaseViewEntitiesTest; number?: never; options?: never; presence?: never; text?: never; }
+  |  { checkbox?: never; date?: never; dateRange?: never; entities?: never;   /** Test a numeric cell. */
+  number: DatabaseViewNumberTest; options?: never; presence?: never; text?: never; }
+  |  { checkbox?: never; date?: never; dateRange?: never; entities?: never; number?: never;   /** Test selected option identities. */
+  options: DatabaseViewOptionsTest; presence?: never; text?: never; }
+  |  { checkbox?: never; date?: never; dateRange?: never; entities?: never; number?: never; options?: never;   /** Test cell emptiness. */
+  presence: DatabaseViewPresenceTest; text?: never; }
+  |  { checkbox?: never; date?: never; dateRange?: never; entities?: never; number?: never; options?: never; presence?: never;   /** Test a text or link cell. */
+  text: DatabaseViewTextTest; };
+
+/** A numeric equality or ordering comparison. */
+export type DatabaseViewNumberOperator =
+  /** The number is greater than the comparison value. */
+  | 'GREATER_THAN'
+  /** The number is at least the comparison value. */
+  | 'GREATER_THAN_OR_EQUAL'
+  /** The value equals the comparison value. */
+  | 'IS'
+  /** The value differs from the comparison value. */
+  | 'IS_NOT'
+  /** The number is less than the comparison value. */
+  | 'LESS_THAN'
+  /** The number is at most the comparison value. */
+  | 'LESS_THAN_OR_EQUAL';
+
+/** Compare a numeric cell with a finite number. */
+export type DatabaseViewNumberTest = {
+  /** The comparison to apply. */
+  operator: DatabaseViewNumberOperator;
+  /** The value to compare the cell against. */
+  value: number;
+};
+
+/** Compare selected option identities with a set of options. */
+export type DatabaseViewOptionsTest = {
+  /** The comparison to apply. */
+  operator: DatabaseViewSetOperator;
+  /** Option identities from the selected column. */
+  options: Array<string | number>;
+};
+
+/** The requested cell-presence condition. */
+export type DatabaseViewPresenceOperator =
+  /** The cell has no value. */
+  | 'IS_EMPTY'
+  /** The cell has a value. */
+  | 'IS_NOT_EMPTY';
+
+/** Test whether the cell has a value. */
+export type DatabaseViewPresenceTest = {
+  /** The comparison to apply. */
+  operator: DatabaseViewPresenceOperator;
+};
+
+/** Filtering and ordering applied to the entire table before pagination. */
+export type DatabaseViewQueryInput = {
+  /** Optional filter; omission includes every row. */
+  filter?: DatabaseViewFilterGroup | null | undefined;
+  /** Ordering keys in priority order; omission uses manual row order. */
+  sort?: Array<DatabaseViewSort>;
+};
+
+/** A table view and its optional continuation, with a bounded page size. */
+export type DatabaseViewRowsInput = {
+  /** The preceding page’s opaque cursor; omit for the first page. */
+  cursor?: string | null | undefined;
+  /** Page size from 1 through 500; defaults to 500. */
+  limit?: number | null | undefined;
+  /** The complete filtering and ordering definition. */
+  query: DatabaseViewQueryInput;
+  /** The table within the authorized database. */
+  tableId: string | number;
+};
+
+/** A membership condition for single- or multi-valued cells. */
+export type DatabaseViewSetOperator =
+  /** The cell contains every supplied identity. */
+  | 'HAS_ALL'
+  /** The cell contains at least one supplied identity. */
+  | 'HAS_ANY'
+  /** The cell contains no supplied identity. */
+  | 'HAS_NONE'
+  /** The single-valued cell matches one supplied identity. */
+  | 'IS_ANY_OF'
+  /** The single-valued cell matches no supplied identity. */
+  | 'IS_NONE_OF';
+
+/** One ordering key; earlier keys take precedence. */
+export type DatabaseViewSort = {
+  /** Column placement identity within the selected table. */
+  column: string | number;
+  /** Ascending or descending value order. */
+  direction: DatabaseViewSortDirection;
+};
+
+/** The direction of a view ordering key. */
+export type DatabaseViewSortDirection =
+  /** Order values from lowest to highest. */
+  | 'ASCENDING'
+  /** Order values from highest to lowest. */
+  | 'DESCENDING';
+
+/** A text equality or substring comparison. */
+export type DatabaseViewTextOperator =
+  /** The text contains the comparison string. */
+  | 'CONTAINS'
+  /** The text does not contain the comparison string. */
+  | 'DOES_NOT_CONTAIN'
+  /** The text ends with the comparison string. */
+  | 'ENDS_WITH'
+  /** The value equals the comparison value. */
+  | 'IS'
+  /** The value differs from the comparison value. */
+  | 'IS_NOT'
+  /** The text starts with the comparison string. */
+  | 'STARTS_WITH';
+
+/** Compare a text or link cell with a string. */
+export type DatabaseViewTextTest = {
+  /** The comparison to apply. */
+  operator: DatabaseViewTextOperator;
+  /** The value to compare the cell against. */
+  value: string;
+};
+
 /** Delete an event, one occurrence, or an occurrence onward. */
 export type DeleteCalendarEventInput = {
   /**
@@ -4548,6 +4768,23 @@ export type DatabaseRowFieldsFragment =
   | DatabaseRowFields_GraphqlSoupProject_Fragment
   | DatabaseRowFields_GraphqlSoupReminder_Fragment
 ;
+
+export type DatabaseViewRowsQueryVariables = Exact<{
+  databaseId: string | number;
+  input: DatabaseViewRowsInput;
+}>;
+
+
+export type DatabaseViewRowsQuery = { user: { id: string, databaseViewRows: { nextCursor: string | null, version: number, items: Array<{ __typename: 'GraphqlSoupDatabaseRow', tableId: string, position: string, ownerId: string, createdAt: string, updatedAt: string, cacheProjection: string | null, id: string, properties: Array<{ id: string, propertyDefinitionId: string, value:
+            | { __typename: 'GraphqlBooleanPropertyValue', boolValue: boolean }
+            | { __typename: 'GraphqlDatePropertyValue', dateValue: string }
+            | { __typename: 'GraphqlDateRangePropertyValue', rangeStart: string, rangeEnd: string }
+            | { __typename: 'GraphqlEntityReferencePropertyValue', references: Array<{ entityId: string, entityType: GraphqlPropertyEntityType, specificMessageId: string | null }> }
+            | { __typename: 'GraphqlLinkPropertyValue', urls: Array<string> }
+            | { __typename: 'GraphqlNumberPropertyValue', numberValue: number }
+            | { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: Array<string> }
+            | { __typename: 'GraphqlStringPropertyValue', stringValue: string }
+           | null }>, notifications: Array<{ __typename: 'GraphqlNotification', id: string, eventType: string, entityType: GraphqlSoupEntityType, targetEntityType: GraphqlEntityType, entityId: string, sent: boolean, state: NotificationState, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null }> }> } } };
 
 export type DeleteEntityPropertyMutationVariables = Exact<{
   entityType: GraphqlPropertyTargetEntityType;
@@ -21299,6 +21536,7 @@ export const CrmRecordPipelineEntriesDocument = {"kind":"Document","definitions"
 export const RenameDatabaseDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RenameDatabase"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"displayName"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"renameEntities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"inputs"},"value":{"kind":"ListValue","values":[{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"entity"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"type"},"value":{"kind":"EnumValue","value":"DATABASE"}},{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"displayName"},"value":{"kind":"Variable","name":{"kind":"Name","value":"displayName"}}}]}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"results"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"DatabaseEntityMutationResultFields"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"DatabaseEntityMutationResultFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlEntityMutationResult"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlMutationError"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"errorCode"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<RenameDatabaseMutation, RenameDatabaseMutationVariables>;
 export const TrashDatabaseDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"TrashDatabase"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"trashEntities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"entities"},"value":{"kind":"ListValue","values":[{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"type"},"value":{"kind":"EnumValue","value":"DATABASE"}},{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"results"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"DatabaseEntityMutationResultFields"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"DatabaseEntityMutationResultFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlEntityMutationResult"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlMutationError"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"errorCode"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<TrashDatabaseMutation, TrashDatabaseMutationVariables>;
 export const DatabaseRowsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DatabaseRows"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SoupInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"soup"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"DatabaseRowFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"nextCursor"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"SoupNotificationStateFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlNotification"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"eventType"}},{"kind":"Field","name":{"kind":"Name","value":"entityType"}},{"kind":"Field","name":{"kind":"Name","value":"targetEntityType"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"sent"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"viewedAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"senderId"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"SoupPropertyValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlBooleanPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"boolValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlNumberPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"numberValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlStringPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"stringValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlDatePropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"dateValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlDateRangePropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"rangeStart"},"name":{"kind":"Name","value":"start"}},{"kind":"Field","alias":{"kind":"Name","value":"rangeEnd"},"name":{"kind":"Name","value":"end"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSelectOptionPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"optionIds"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlEntityReferencePropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"references"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"entityType"}},{"kind":"Field","name":{"kind":"Name","value":"specificMessageId"}}]}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlLinkPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"urls"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"DatabaseRowFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSoupEntity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"cacheProjection"},"directives":[{"kind":"Directive","name":{"kind":"Name","value":"cacheOnly"}}]},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"notifications"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"SoupNotificationStateFields"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSoupDatabaseRow"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tableId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"ownerId"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"properties"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"propertyDefinitionId"}},{"kind":"Field","name":{"kind":"Name","value":"value"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"SoupPropertyValueFields"}}]}}]}}]}}]}}]} as unknown as DocumentNode<DatabaseRowsQuery, DatabaseRowsQueryVariables>;
+export const DatabaseViewRowsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DatabaseViewRows"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"databaseId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"DatabaseViewRowsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"databaseViewRows"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"databaseId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"databaseId"}}},{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"DatabaseRowFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"nextCursor"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"SoupNotificationStateFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlNotification"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"eventType"}},{"kind":"Field","name":{"kind":"Name","value":"entityType"}},{"kind":"Field","name":{"kind":"Name","value":"targetEntityType"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"sent"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"viewedAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"senderId"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"SoupPropertyValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlBooleanPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"boolValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlNumberPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"numberValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlStringPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"stringValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlDatePropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"dateValue"},"name":{"kind":"Name","value":"value"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlDateRangePropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"rangeStart"},"name":{"kind":"Name","value":"start"}},{"kind":"Field","alias":{"kind":"Name","value":"rangeEnd"},"name":{"kind":"Name","value":"end"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSelectOptionPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"optionIds"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlEntityReferencePropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"references"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"entityType"}},{"kind":"Field","name":{"kind":"Name","value":"specificMessageId"}}]}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlLinkPropertyValue"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"urls"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"DatabaseRowFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSoupEntity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"cacheProjection"},"directives":[{"kind":"Directive","name":{"kind":"Name","value":"cacheOnly"}}]},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"notifications"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"SoupNotificationStateFields"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSoupDatabaseRow"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tableId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"ownerId"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"properties"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"propertyDefinitionId"}},{"kind":"Field","name":{"kind":"Name","value":"value"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"SoupPropertyValueFields"}}]}}]}}]}}]}}]} as unknown as DocumentNode<DatabaseViewRowsQuery, DatabaseViewRowsQueryVariables>;
 export const DeleteEntityPropertyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteEntityProperty"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"entityType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlPropertyTargetEntityType"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"entityId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"entityPropertyId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteEntityProperty"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"entityType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"entityType"}}},{"kind":"Argument","name":{"kind":"Name","value":"entityId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"entityId"}}},{"kind":"Argument","name":{"kind":"Name","value":"entityPropertyId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"entityPropertyId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"graphqlTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}}]}}]}}]} as unknown as DocumentNode<DeleteEntityPropertyMutation, DeleteEntityPropertyMutationVariables>;
 export const SetEmailThreadArchivedDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetEmailThreadArchived"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SetEmailThreadArchivedInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setEmailThreadArchived"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"inboxVisible"}}]}}]}}]} as unknown as DocumentNode<SetEmailThreadArchivedMutation, SetEmailThreadArchivedMutationVariables>;
 export const SetEmailThreadsArchivedDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetEmailThreadsArchived"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SetEmailThreadsArchivedInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setEmailThreadsArchived"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"threads"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"inboxVisible"}}]}},{"kind":"Field","name":{"kind":"Name","value":"failedThreadIds"}}]}}]}}]} as unknown as DocumentNode<SetEmailThreadsArchivedMutation, SetEmailThreadsArchivedMutationVariables>;

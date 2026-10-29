@@ -210,6 +210,7 @@ fn a_row_insert_is_undone_by_deleting_the_rows_it_inserted() {
         },
     };
     let write = Write::InsertRows {
+        derivation: None,
         table_id: GUESTS,
         rows: vec![vec![(NAME_DEFINITION, PropertyValue::Str("Maria".into()))]],
         restored: Vec::new(),
@@ -261,6 +262,7 @@ fn a_cell_update_is_undone_by_writing_back_the_old_value_or_clearing_an_empty_ce
         },
     };
     let write = Write::UpdateRows {
+        derivation: None,
         table_id: GUESTS,
         rows: vec![
             (
@@ -1241,6 +1243,7 @@ fn what_a_batch_creates_and_removes_again_needs_no_inverse() {
             definition: None,
         },
         Write::InsertRows {
+            derivation: None,
             table_id: GUESTS,
             rows: vec![Vec::new()],
             restored: Vec::new(),

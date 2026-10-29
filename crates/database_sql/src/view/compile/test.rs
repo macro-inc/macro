@@ -196,7 +196,11 @@ fn a_nested_view_is_the_select_its_sql_resolves_to() {
         ],
     };
 
-    assert_eq!(compile_view(&view, &issues_catalog()), Ok(expected));
+    assert_eq!(compile_view(&view, &issues_catalog()), Ok(expected.clone()));
+    assert_eq!(
+        compile_table_query(ISSUES, &view.query, &issues_catalog()),
+        Ok(expected)
+    );
 }
 
 #[test]

@@ -1,7 +1,6 @@
 export type ChannelsTab = 'browse' | 'recents' | 'threads';
 
-/** The All tab's conversation lists, each its own paginated query. */
-export type ChannelsGroup = 'team_channels' | 'channels' | 'direct_messages';
+export type ChannelsGroup = 'channels' | 'direct_messages';
 
 export type ChannelListSort = 'viewed_at' | 'updated_at' | 'created_at';
 

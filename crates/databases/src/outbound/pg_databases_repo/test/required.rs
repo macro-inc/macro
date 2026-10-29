@@ -6,6 +6,7 @@ use models_properties::service::property_value::PropertyValue;
 
 fn batch(database_id: DatabaseId, writes: Vec<Write>) -> Writes {
     Writes {
+        derivations: Vec::new(),
         database_id,
         created_by: user(),
         writes,
@@ -43,6 +44,7 @@ async fn required_cells_are_checked_for_app_and_core_writes(pool: PgPool) {
         let missing = batch(
             table.database_id,
             vec![Write::InsertRows {
+                derivation: None,
                 table_id: table.id,
                 rows: vec![vec![]],
                 restored: vec![],
@@ -72,6 +74,7 @@ async fn required_cells_are_checked_for_app_and_core_writes(pool: PgPool) {
         .apply_storage_writes(&batch(
             table.database_id,
             vec![Write::InsertRows {
+                derivation: None,
                 table_id: table.id,
                 rows: vec![vec![(definition, PropertyValue::Str(String::new()))]],
                 restored: vec![],
@@ -98,6 +101,7 @@ async fn required_cells_are_checked_for_app_and_core_writes(pool: PgPool) {
             .apply_storage_writes(&batch(
                 table.database_id,
                 vec![Write::UpdateRows {
+                    derivation: None,
                     table_id: table.id,
                     rows: vec![(row, vec![(definition, value)])],
                 }],
@@ -127,10 +131,12 @@ async fn required_cells_are_checked_for_app_and_core_writes(pool: PgPool) {
             table.database_id,
             vec![
                 Write::UpdateRows {
+                    derivation: None,
                     table_id: table.id,
                     rows: vec![(row, vec![(definition, None)])],
                 },
                 Write::UpdateRows {
+                    derivation: None,
                     table_id: table.id,
                     rows: vec![(
                         row,
@@ -186,6 +192,7 @@ async fn adding_a_required_column_requires_values_for_existing_rows_in_the_same_
             vec![
                 create,
                 Write::UpdateRows {
+                    derivation: None,
                     table_id: table.id,
                     rows: vec![(
                         row,

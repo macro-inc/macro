@@ -54,6 +54,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('ends a cancelled read without reporting a query failure', async () => {
+  await traceDatabaseSqlRun(
+    { kind: 'sql', sql: 'SELECT 1' },
+    { tables: [] },
+    () => errAsync({ kind: 'cancelled' }),
+    { reason: 'statement-change', requestPolicy: 'network-only' }
+  );
+  expect(recorded.roots[0].attributes['database_sql.cancelled']).toBe(true);
+  expect(recorded.roots[0].attributes.error).toBeUndefined();
+  expect(recorded.roots[0].ended).toBe(true);
+  expect(recorded.warnings).not.toHaveBeenCalled();
+});
+
 const catalog: Catalog = {
   tables: [
     {

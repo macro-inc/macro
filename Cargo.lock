@@ -1765,6 +1765,7 @@ dependencies = [
  "asynk-strim",
  "base64 0.22.1",
  "bytes",
+ "chrono",
  "fast_chemail",
  "fnv",
  "futures-channel",
@@ -3715,7 +3716,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.52"
+version = "0.6.53"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4772,6 +4773,7 @@ dependencies = [
  "chrono",
  "crm",
  "databases",
+ "databases_sql",
  "email",
  "entity_access",
  "entity_mutation",
@@ -4781,6 +4783,7 @@ dependencies = [
  "graphql_channel",
  "graphql_common",
  "graphql_crm",
+ "graphql_databases",
  "graphql_email",
  "graphql_entity_mutation",
  "graphql_favorite",
@@ -4797,6 +4800,7 @@ dependencies = [
  "model_notifications",
  "model_owner",
  "model_user",
+ "models_databases",
  "models_pagination",
  "models_permissions",
  "models_properties",
@@ -5957,13 +5961,16 @@ dependencies = [
  "axum",
  "bot_id",
  "chrono",
+ "clap",
  "connection_gateway_client",
+ "database_env_vars",
  "database_sql",
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_entrypoint",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -6001,6 +6008,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "bot_id",
  "chrono",
  "contacts",
@@ -6023,6 +6031,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "soup",
  "thiserror 2.0.18",
  "tokio",
@@ -6558,6 +6567,7 @@ dependencies = [
  "gmail_client",
  "graphql_calendar",
  "graphql_crm",
+ "graphql_databases",
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
@@ -9129,6 +9139,27 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_databases"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "databases",
+ "databases_sql",
+ "entity_access",
+ "futures",
+ "graphql_common",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "models_databases",
+ "rootcause",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
