@@ -484,7 +484,8 @@ async function mount(page: Page, state: LinkedServer, query = '') {
     }
     if (/^\/(auth|dss|notification|connection-gateway)\//.test(url.pathname))
       return route.fulfill({ json: {} });
-    return route.fulfill({ response: await route.fetch() });
+    // Let the browser load Vite modules without copying each response through Node.
+    return route.continue();
   });
   await page.goto(
     `${origin}/tests/functional/whatsapp-linked/index.html${query}`
