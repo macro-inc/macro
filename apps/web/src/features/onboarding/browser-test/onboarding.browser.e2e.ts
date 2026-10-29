@@ -312,7 +312,7 @@ test('a personal address refers friends instead of creating a team', async ({
     record: { status: 'active', suggestedTeamDomain: undefined },
   });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'team' })
     );
