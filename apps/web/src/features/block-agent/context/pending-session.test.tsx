@@ -15,6 +15,7 @@ const fold = vi.hoisted(() => ({
   readSession: vi.fn(),
   closeSession: vi.fn(),
 }));
+const flags = vi.hoisted(() => ({ firstPromptOnCreate: true }));
 const harness = vi.hoisted(() => ({
   create: vi.fn(),
   get: vi.fn(),
@@ -22,6 +23,17 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock('@core/agent-fold/client', () => fold);
+vi.mock('@core/constant/featureFlags', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/constant/featureFlags')>();
+  return {
+    ...actual,
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
+      flag === actual.enableFirstPromptOnCreate
+        ? flags.firstPromptOnCreate
+        : actual.isFeatureEnabled(flag),
+  };
+});
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
 }));
@@ -99,6 +111,7 @@ const snapshots = () =>
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  flags.firstPromptOnCreate = true;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
     messages: [],
@@ -459,6 +472,19 @@ describe('first prompt on the create', () => {
     await settle();
 
     expect(harness.create.mock.calls[0][0]).toEqual({ id });
+  });
+
+  it('sends the first prompt as a control POST while the rollout is off', async () => {
+    flags.firstPromptOnCreate = false;
+    const id = startPendingSession({ prompt: 'Hello' });
+    await settle();
+
+    expect(harness.create.mock.calls[0][0]).toEqual({ id });
+    expect(harness.control).toHaveBeenCalledOnce();
+    expect(harness.control.mock.calls[0][1]).toMatchObject({
+      type: 'prompt',
+      prompt: 'Hello',
+    });
   });
 
   it("keeps a speed's first prompt for after the session is configured", async () => {

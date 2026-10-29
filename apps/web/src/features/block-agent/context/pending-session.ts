@@ -24,6 +24,10 @@
 
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { analytics } from '@app/lib/analytics';
+import {
+  enableFirstPromptOnCreate,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import {
   type PromptSubmitSurface,
@@ -159,6 +163,7 @@ export function startPendingSession(
   // the create cannot deliver one: those send it once the session exists.
   const promptActionId =
     firstPrompt &&
+    isFeatureEnabled(enableFirstPromptOnCreate) &&
     !options.botId &&
     !options.effortOverride &&
     !options.speedOverride
