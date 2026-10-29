@@ -8,6 +8,25 @@ use url::Url;
 use super::{IMMUTABLE_ID_PREFERENCE, OutlookApiClientRepository};
 use crate::domain::models::{AccessToken, EmailApiError, RateLimitOrigin, StreamToken};
 
+/// A failed Graph request with the response details a caller may branch on.
+pub(super) struct GraphFailure {
+    pub(super) error: EmailApiError,
+    pub(super) status: Option<StatusCode>,
+    pub(super) code: Option<String>,
+    pub(super) request_id: Option<String>,
+}
+
+impl From<EmailApiError> for GraphFailure {
+    fn from(error: EmailApiError) -> Self {
+        Self {
+            error,
+            status: None,
+            code: None,
+            request_id: None,
+        }
+    }
+}
+
 impl OutlookApiClientRepository {
     pub(super) fn endpoint(&self, segments: &[&str]) -> Result<Url, EmailApiError> {
         let mut url = self.root.clone();
@@ -54,6 +73,20 @@ impl OutlookApiClientRepository {
         body: Option<&Value>,
         expected_version: Option<&str>,
     ) -> Result<Response, EmailApiError> {
+        self.graph_request(token, method, url, body, expected_version)
+            .await
+            .map_err(|failure| failure.error)
+    }
+
+    /// Like `conditional_request`, for callers that branch on the Graph error code.
+    pub(super) async fn graph_request(
+        &self,
+        token: &AccessToken,
+        method: Method,
+        url: Url,
+        body: Option<&Value>,
+        expected_version: Option<&str>,
+    ) -> Result<Response, GraphFailure> {
         let refreshed = self
             .refreshed_token
             .lock()
@@ -81,8 +114,11 @@ impl OutlookApiClientRepository {
             .rejected_token_refresh
             .as_ref()
             .and_then(|_| request.try_clone());
-        match self.gated_request(request).await {
-            Err(EmailApiError::AuthRequired) => {
+        match self.gated_graph_request(request).await {
+            Err(GraphFailure {
+                error: EmailApiError::AuthRequired,
+                ..
+            }) => {
                 if let (Some(refresh), Some(retry), Some(mailbox)) =
                     (&self.rejected_token_refresh, retry, self.mailbox)
                 {
@@ -101,9 +137,9 @@ impl OutlookApiClientRepository {
                     .map_err(|_| invalid_response())?;
                     authorization.set_sensitive(true);
                     headers.insert(reqwest::header::AUTHORIZATION, authorization);
-                    self.gated_request(retry.headers(headers)).await
+                    self.gated_graph_request(retry.headers(headers)).await
                 } else {
-                    Err(EmailApiError::AuthRequired)
+                    Err(EmailApiError::AuthRequired.into())
                 }
             }
             result => result,
@@ -115,6 +151,12 @@ impl OutlookApiClientRepository {
         &self,
         request: RequestBuilder,
     ) -> Result<Response, EmailApiError> {
+        self.gated_graph_request(request)
+            .await
+            .map_err(|failure| failure.error)
+    }
+
+    async fn gated_graph_request(&self, request: RequestBuilder) -> Result<Response, GraphFailure> {
         let permit = if let Some(gate) = &self.gate {
             let mailbox = self.mailbox.ok_or_else(invalid_response)?;
             Some((mailbox, gate.acquire(mailbox).await?))
@@ -124,9 +166,10 @@ impl OutlookApiClientRepository {
         let result = Self::send_request(request).await;
         if let (Some(gate), Some((mailbox, permit))) = (&self.gate, permit) {
             let retry_after = match &result {
-                Err(EmailApiError::RateLimited { retry_after, .. }) => {
-                    Some(retry_after.unwrap_or(Duration::from_secs(30)))
-                }
+                Err(GraphFailure {
+                    error: EmailApiError::RateLimited { retry_after, .. },
+                    ..
+                }) => Some(retry_after.unwrap_or(Duration::from_secs(30))),
                 _ => None,
             };
             gate.finish(mailbox, permit, retry_after).await;
@@ -134,7 +177,7 @@ impl OutlookApiClientRepository {
         result
     }
 
-    async fn send_request(request: RequestBuilder) -> Result<Response, EmailApiError> {
+    async fn send_request(request: RequestBuilder) -> Result<Response, GraphFailure> {
         let transport_failed = |_| EmailApiError::Transient {
             message: "Microsoft Graph transport failed".into(),
         };
@@ -181,7 +224,7 @@ impl OutlookApiClientRepository {
             );
         }
         // Do not propagate provider messages, bodies, request URLs, or cursor tokens.
-        Err(match status {
+        let error = match status {
             StatusCode::UNAUTHORIZED => EmailApiError::AuthRequired,
             StatusCode::FORBIDDEN => EmailApiError::Forbidden,
             StatusCode::GONE => EmailApiError::OutdatedCursor,
@@ -207,6 +250,12 @@ impl OutlookApiClientRepository {
             status => EmailApiError::Permanent {
                 message: format!("Microsoft Graph returned HTTP {}", status.as_u16()),
             },
+        };
+        Err(GraphFailure {
+            error,
+            status: Some(status),
+            code: code.map(str::to_owned),
+            request_id,
         })
     }
 

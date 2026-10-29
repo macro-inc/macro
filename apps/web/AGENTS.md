@@ -21,9 +21,12 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
-Desktop sidebar view titles staying whole at a typical rail width have a
-backend-free regression:
+Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
+switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+
+Search facet chip sizing, text alignment, and filter interactions have a backend-free
+regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
 Agent image attachments preserve external and inline image URLs; only configured
 static-file endpoints receive thumbnail sizing. The backend-free regression is
@@ -383,7 +386,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner
   sidebar title and compact in list controls; retain each view's creation
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
-  and Tasks headers: title, filters, view options, New, expandable Search. Put sidebar search in
+  Tasks, and Projects headers: title, filters, view options, New, expandable Search.
+  Render project collection titles with `ViewSidebar.Title caret={false}`; keep
+  individual project names and touch pickers unchanged. Put sidebar search in
   `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.

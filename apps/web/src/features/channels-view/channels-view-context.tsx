@@ -58,6 +58,7 @@ export type ChannelsViewContext = {
   /** Threads tab filter: the conversation whose threads are shown, or all. */
   threadsChannelId: Accessor<string | undefined>;
   setThreadsChannelId: (channelId: string | undefined) => void;
+  setUnreadOnly: (unreadOnly: boolean) => void;
   setTab: (tab: ChannelsTab) => void;
   setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
@@ -80,6 +81,7 @@ function createInitialState(
     },
     collapsedLabels: initial.collapsedLabels ?? [],
     threadsChannelId: initial.threadsChannelId,
+    unreadOnly: initial.unreadOnly ?? false,
     sortBy: {
       team_channels:
         initial.sortBy?.team_channels ?? CHANNELS_DEFAULT_SORT_BY.team_channels,
@@ -225,6 +227,7 @@ export const [ChannelsViewProvider, useChannelsView] =
           if (state.threadsChannelId === channelId) return;
           setState('threadsChannelId', channelId);
         },
+        setUnreadOnly: (unreadOnly) => setState('unreadOnly', unreadOnly),
         setTab: (tab) => {
           if (state.tab === tab) return;
           setState('tab', tab);

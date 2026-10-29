@@ -41,6 +41,7 @@ import { buildEmailSearchRequest } from './email-search';
 import type { EmailSearchFilesItem } from './email-search-files';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useEmailSearchFiles } from './use-email-search-files';
+import { useFocusEmailSource } from './use-focus-email-source';
 import { useReminderEmailSource } from './use-reminder-email-source';
 import { useScheduledEmailSource } from './use-scheduled-email-source';
 
@@ -56,7 +57,7 @@ export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
 
 export type EmailDataSourceInput = Pick<
   EmailViewState,
-  'tab' | 'search' | 'inboxIds' | 'facets' | 'aliasFilter'
+  'tab' | 'search' | 'inboxIds' | 'facets' | 'focusSort' | 'aliasFilter'
 >;
 
 export type UseEmailDataSourceOptions = {
@@ -96,6 +97,7 @@ function emailMatchesTab(
         'reminders',
         'calendar',
         'all',
+        'focus',
         () => true
       )
       .exhaustive(() => true)
@@ -120,7 +122,9 @@ export function useEmailDataSource(
   const userId = useUserId();
   const scheduled = useScheduledEmailSource(state);
   const reminders = useReminderEmailSource(state, options);
+  const focus = useFocusEmailSource(state, options);
   const showsReminders = () => state.tab === 'reminders';
+  const showsFocus = () => state.tab === 'focus';
   const showsScheduled = () => state.tab === 'scheduled';
   const showsFavorites = () => state.tab === 'favorites';
   // Uses GraphQL favorites with enable-graphql-soup, REST otherwise. Guard
@@ -161,7 +165,10 @@ export function useEmailDataSource(
   const filtersReady = () =>
     tagsReady() && (!state.search.trim() || searchFavoritesReady());
   const sourceEnabled = () =>
-    tagsReady() && state.tab !== 'scheduled' && state.tab !== 'reminders';
+    tagsReady() &&
+    state.tab !== 'scheduled' &&
+    state.tab !== 'reminders' &&
+    state.tab !== 'focus';
   const searchContext = (): EmailQueryContext => ({
     ...queryContext(),
     ...(showsFavorites() ? { favoriteThreadIds: favoriteThreadIds() } : {}),
@@ -242,7 +249,7 @@ export function useEmailDataSource(
   );
 
   const rawEntities = createMemo<EntityData[]>(() => {
-    // Scheduled/Reminders disable native discovery. Reading its pending data
+    // Scheduled/Reminders/Focus disable native discovery. Reading its pending data
     // would suspend the whole split even though that query is not fetching.
     // Disabled searches can also retain previous-facet placeholder data.
     if (!sourceEnabled() || !filtersReady()) return [];
@@ -588,16 +595,21 @@ export function useEmailDataSource(
         ? reminders.items()
         : showsScheduled()
           ? scheduled.items()
-          : items(),
+          : showsFocus()
+            ? focus.items()
+            : items(),
     isLoading: () =>
       showsReminders()
         ? reminders.isLoading()
         : showsScheduled()
           ? scheduled.isLoading()
-          : isLoading(),
+          : showsFocus()
+            ? focus.isLoading()
+            : isLoading(),
     isFetching: () => {
       if (showsReminders()) return reminders.isFetching();
       if (showsScheduled()) return scheduled.isFetching();
+      if (showsFocus()) return focus.isFetching();
       if (search.isSettling()) return true;
       return (
         refreshing() ||
@@ -608,6 +620,7 @@ export function useEmailDataSource(
     error: () => {
       if (showsReminders()) return reminders.error();
       if (showsScheduled()) return scheduled.error();
+      if (showsFocus()) return focus.error();
       return (
         (search.isSearching() && showsFavorites()
           ? favorites.error
@@ -622,17 +635,19 @@ export function useEmailDataSource(
       );
     },
     hasMore: () =>
-      showsReminders() ? reminders.hasMore() : !showsScheduled() && hasMore(),
+      showsReminders()
+        ? reminders.hasMore()
+        : !showsScheduled() && !showsFocus() && hasMore(),
     isLoadingMore: () =>
       showsReminders()
         ? reminders.isLoadingMore()
-        : !showsScheduled() && isLoadingMore(),
+        : !showsScheduled() && !showsFocus() && isLoadingMore(),
     loadMore: async () => {
       if (showsReminders()) {
         await reminders.loadMore();
         return;
       }
-      if (showsScheduled()) return;
+      if (showsScheduled() || showsFocus()) return;
       if (usesServiceSearch()) {
         aliasAdvance.resetError();
         await search.fetchNextPage();
@@ -647,6 +662,10 @@ export function useEmailDataSource(
       }
       if (showsScheduled()) {
         await scheduled.refresh();
+        return;
+      }
+      if (showsFocus()) {
+        await focus.refresh();
         return;
       }
       const requestScope = scope();

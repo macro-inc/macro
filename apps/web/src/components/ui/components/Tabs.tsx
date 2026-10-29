@@ -1,6 +1,17 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { SegmentedControl as KSegmentedControl } from '@kobalte/core/segmented-control';
-import { type Component, For, Match, Show, Switch } from 'solid-js';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import {
+  type Component,
+  createEffect,
+  createSignal,
+  For,
+  Match,
+  on,
+  type ParentProps,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 import {
@@ -10,6 +21,7 @@ import {
   labeledControlFrames,
 } from '../utils/control-sizes';
 import { Layer } from './Layer';
+import { ToggleSwitch } from './ToggleSwitch';
 import { Tooltip } from './Tooltip';
 
 export type TabOption<T extends string> = {
@@ -55,6 +67,14 @@ function tabContentClasses(size: TabsSize) {
  */
 export type TabsTouchStyle = 'pill' | 'inset' | 'segmented' | 'pills';
 
+export type TabsToggle = {
+  label: string;
+  /** Shown in the switch track so the switch reads without its label. */
+  icon?: Component<{ class?: string }>;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+};
+
 export type TabsProps<T extends string> = {
   'aria-label': string;
   options: readonly TabOption<T>[];
@@ -65,6 +85,12 @@ export type TabsProps<T extends string> = {
   /** Show only icons, with each label as a tooltip; options without an icon keep their label. */
   iconOnly?: boolean;
   disabled?: boolean;
+  /**
+   * An on/off view filter after the options, such as "Unread". The desktop
+   * frame holds it past a divider as one more segment, raised like a selected
+   * option while on; elsewhere it follows the options.
+   */
+  toggle?: TabsToggle;
   /** Placement only (margins, width, alignment); never restyle the options. */
   class?: string;
   ref?: (element: HTMLElement) => void;
@@ -113,19 +139,38 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
   // Wrapping presets retain separate pills; desktop view tabs share a frame.
   const touchStyle = (): TabsTouchStyle =>
     isTouchDevice() && !props.wrap ? (props.touch ?? 'pill') : 'pills';
+  const joined = () =>
+    props.variant !== 'track' &&
+    !isTouchDevice() &&
+    !props.wrap &&
+    props.variant !== 'pills';
+  // A narrow toggle frame first drops the toggle's text, then shows options
+  // as their icons when every option has one (see ToggleFrame).
+  const [collapseStage, setCollapseStage] = createSignal(0);
+  const iconOnly = () => (props.iconOnly ?? false) || collapseStage() >= 2;
+  const maxCollapseStage = () =>
+    props.options.every((option) => option.icon !== undefined) ? 2 : 1;
+  // With a toggle the frame is soft: a borderless filled track whose selected
+  // option and pressed toggle are borderless fills too.
+  const frameClass = () =>
+    cn(
+      'inline-flex min-w-0 items-stretch overflow-hidden rounded-full',
+      props.toggle
+        ? 'bg-active gap-0.5 p-1'
+        : 'border border-edge-button bg-control gap-0.5 p-0.5',
+      labeledControlFrames[props.size ?? 'md'],
+      props.fullWidth && 'w-full'
+    );
 
-  return (
+  // The toggle sits beside the segmented control, not inside its radio group.
+  const control = (rootClass: string | undefined) => (
     <KSegmentedControl
       ref={props.ref}
       aria-label={props['aria-label']}
       value={props.value ?? ''}
       onChange={select}
       disabled={props.disabled}
-      class={cn(
-        'relative inline-flex min-w-0 items-center',
-        props.fullWidth && 'flex w-full',
-        props.class
-      )}
+      class={cn('relative inline-flex min-w-0 items-center', rootClass)}
     >
       <Switch
         fallback={
@@ -153,23 +198,24 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
         <Match when={props.variant === 'track'}>
           <Track {...props} />
         </Match>
-        <Match
-          when={!isTouchDevice() && !props.wrap && props.variant !== 'pills'}
-        >
+        <Match when={joined()}>
           <div
-            class={cn(
-              'inline-flex min-w-0 items-stretch overflow-hidden rounded-full border border-edge-button bg-control gap-0.5 p-0.5',
-              labeledControlFrames[props.size ?? 'md'],
-              props.fullWidth && 'w-full'
-            )}
+            class={
+              props.toggle
+                ? 'flex min-w-0 flex-1 items-stretch gap-0.5'
+                : frameClass()
+            }
           >
             <For each={props.options}>
               {(option) => (
                 <PillOption
                   option={option}
                   size={props.size ?? 'md'}
-                  iconOnly={props.iconOnly ?? false}
-                  fullWidth={props.fullWidth ?? false}
+                  iconOnly={iconOnly()}
+                  // Beside a toggle, options keep their label widths and share
+                  // what is left, so no label truncates before it must.
+                  fullWidth={(props.fullWidth ?? false) && !props.toggle}
+                  soft={props.toggle !== undefined}
                   joined
                 />
               )}
@@ -188,21 +234,154 @@ export function Tabs<T extends string>(props: TabsProps<T>) {
       </Switch>
     </KSegmentedControl>
   );
+
+  return (
+    <Show
+      when={props.toggle}
+      fallback={control(cn(props.fullWidth && 'flex w-full', props.class))}
+    >
+      {(toggle) => (
+        <ToggleFrame
+          class={cn(
+            joined() ? frameClass() : 'inline-flex min-w-0 items-center gap-2',
+            props.fullWidth && 'flex w-full',
+            props.class
+          )}
+          toggle={toggle()}
+          size={props.size ?? 'md'}
+          joined={joined()}
+          optionCount={props.options.length}
+          stage={collapseStage()}
+          maxStage={maxCollapseStage()}
+          onStageChange={setCollapseStage}
+        >
+          {control(
+            cn(
+              joined() && 'flex-1 items-stretch',
+              !joined() && props.fullWidth && 'flex-1'
+            )
+          )}
+        </ToggleFrame>
+      )}
+    </Show>
+  );
+}
+
+/**
+ * Holds the options and the toggle. When an option label would truncate, a
+ * narrow frame first drops the toggle's text (shown as a tooltip), then shows
+ * the options as icons (labels become tooltips). Each step undoes only once
+ * the frame has grown by what the labels were short when it was taken, so
+ * undoing it cannot truncate them again and flip back.
+ */
+function ToggleFrame(
+  props: ParentProps<{
+    class: string;
+    toggle: TabsToggle;
+    size: TabsSize;
+    joined: boolean;
+    optionCount: number;
+    stage: number;
+    maxStage: number;
+    onStageChange: (stage: number) => void;
+  }>
+) {
+  const [frame, setFrame] = createSignal<HTMLElement>();
+  const frameSize = createElementSize(frame);
+  const expandAtWidth: number[] = [];
+  createEffect(
+    on(
+      () => [frameSize.width, props.optionCount, props.stage] as const,
+      ([width, , stage]) => {
+        const element = frame();
+        if (!element || width === null) return;
+        if (stage > 0 && width >= (expandAtWidth[stage] ?? 0)) {
+          props.onStageChange(stage - 1);
+          return;
+        }
+        if (stage >= props.maxStage) return;
+        let shortfall = 0;
+        for (const label of element.querySelectorAll('[data-tab-label]')) {
+          shortfall += label.scrollWidth - label.clientWidth;
+        }
+        if (shortfall <= 0) return;
+        expandAtWidth[stage + 1] = width + shortfall;
+        props.onStageChange(stage + 1);
+      }
+    )
+  );
+
+  return (
+    <div ref={setFrame} class={props.class}>
+      {props.children}
+      <Show when={props.joined}>
+        <span aria-hidden="true" class="my-1 w-px shrink-0 bg-edge-button" />
+      </Show>
+      <ToggleSegment
+        toggle={props.toggle}
+        size={props.size}
+        joined={props.joined}
+        collapsed={props.stage >= 1}
+      />
+    </div>
+  );
+}
+
+function ToggleSegment(props: {
+  toggle: TabsToggle;
+  size: TabsSize;
+  joined: boolean;
+  collapsed: boolean;
+}) {
+  return (
+    <Tooltip
+      label={props.toggle.label}
+      disabled={!props.collapsed}
+      class={cn('shrink-0', props.joined && 'self-stretch')}
+    >
+      <ToggleSwitch
+        size={
+          props.size === 'xs'
+            ? 'xs'
+            : props.size === 'lg' || props.size === 'xl'
+              ? 'md'
+              : 'sm'
+        }
+        label={props.toggle.label}
+        labelClass={props.collapsed ? 'sr-only' : undefined}
+        trackIcon={props.toggle.icon}
+        checked={props.toggle.checked}
+        onChange={props.toggle.onChange}
+        // A view filter, not a setting: a neutral borderless track.
+        controlClass="border-transparent bg-ink/15 data-checked:border-transparent data-checked:bg-ink/60"
+        class={cn(
+          'shrink-0 rounded-full border border-transparent font-medium whitespace-nowrap text-ink-muted transition-colors duration-120 select-none motion-reduce:transition-none',
+          'not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
+          'data-checked:overlay-active data-checked:text-ink',
+          labeledControlContents[props.size],
+          props.collapsed && 'px-1',
+          props.joined && 'self-stretch py-0'
+        )}
+      />
+    </Tooltip>
+  );
 }
 
 function OptionContent<T extends string>(props: {
   option: TabOption<T>;
   iconOnly: boolean;
+  hideIcon?: boolean;
   iconClass: string;
 }) {
   return (
     <>
-      <Show when={props.option.icon}>
+      <Show when={!props.hideIcon && props.option.icon}>
         {(icon) => (
           <Dynamic component={icon()} class={cn('shrink-0', props.iconClass)} />
         )}
       </Show>
       <span
+        data-tab-label=""
         class={cn(
           'truncate',
           props.iconOnly && props.option.icon !== undefined && 'sr-only'
@@ -224,6 +403,8 @@ function PillOption<T extends string>(props: {
   size: TabsSize;
   iconOnly: boolean;
   fullWidth: boolean;
+  /** Size to the label and drop the selected border, beside a toggle. */
+  soft?: boolean;
   joined?: boolean;
 }) {
   const square = () => props.iconOnly && props.option.icon !== undefined;
@@ -234,7 +415,10 @@ function PillOption<T extends string>(props: {
       class={cn(
         'relative inline-flex min-w-0 shrink-0 rounded-full border text-ink-muted transition-colors duration-120 motion-reduce:transition-none',
         props.joined
-          ? 'self-stretch border-transparent data-checked:border-edge-button'
+          ? cn(
+              'self-stretch border-transparent',
+              !props.soft && 'data-checked:border-edge-button'
+            )
           : 'bg-control border-edge-button',
         'shadow-none not-touch:not-data-checked:hover:overlay-hover not-touch:not-data-checked:hover:text-ink',
         'data-checked:overlay-active data-checked:text-ink',
@@ -247,7 +431,8 @@ function PillOption<T extends string>(props: {
         props.joined && square() && joinedIconSizes[props.size],
         'touch:min-h-8',
         square() && 'touch:min-w-8',
-        props.fullWidth && !square() && 'flex-1'
+        props.fullWidth && !square() && 'flex-1',
+        props.soft && !square() && 'flex-auto'
       )}
     >
       <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
@@ -255,12 +440,15 @@ function PillOption<T extends string>(props: {
         class={cn(
           'flex min-w-0 flex-1 self-stretch items-center justify-center gap-2 font-medium whitespace-nowrap select-none',
           !square() && tabContentClasses(props.size),
+          props.soft && 'px-1.5',
           props.joined && 'py-0'
         )}
       >
         <OptionContent
           option={props.option}
           iconOnly={props.iconOnly}
+          // Soft options show their icon only once collapsed to icons.
+          hideIcon={props.soft === true && !props.iconOnly}
           // Glyphs match a Button of the same size: smaller beside a label.
           iconClass={tabIconSizes[props.size][square() ? 'square' : 'labeled']}
         />
@@ -270,7 +458,11 @@ function PillOption<T extends string>(props: {
 
   return (
     <Show when={square()} fallback={item()}>
-      <Tooltip label={props.option.label} class="shrink-0">
+      <Tooltip
+        label={props.option.label}
+        // Soft icon options share the frame's width, each icon centered.
+        class={cn('shrink-0', props.soft && 'flex-1 justify-center')}
+      >
         {item()}
       </Tooltip>
     </Show>

@@ -65,6 +65,7 @@ import {
 import { confirmLocalDraftSave } from '@queries/email/local-draft-confirmation';
 import {
   clearLocalAttachmentReceipt,
+  forgetLocalDraft,
   readLocalDraft,
   recordLocalAttachment,
   reviveLocalDraft,
@@ -357,6 +358,7 @@ export function createEmailComposeContext(
       get retryDraft() {
         return queueActive() ? retryEmailDraftSynchronization : undefined;
       },
+      forgetLocalDraft: (draftId) => forgetLocalDraft(draftId),
       readDraft: readEmailDraft,
       watchDrafts: watchEmailDrafts,
       async saveDraft({
