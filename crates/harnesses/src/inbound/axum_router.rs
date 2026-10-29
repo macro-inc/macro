@@ -7,7 +7,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use harness_id::HarnessId;
 use macro_authorization::{
@@ -22,7 +22,7 @@ use crate::domain::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessSession,
-        PairingDetails,
+        PairingDetails, PatchHarnessRequest,
     },
     ports::{HarnessError, HarnessService},
 };
@@ -116,7 +116,8 @@ where
         )
         .route(
             "/harnesses/{harness_id}",
-            delete(delete_harness_handler::<S, Auth>),
+            delete(delete_harness_handler::<S, Auth>)
+                .merge(patch(patch_harness_handler::<S, Auth>)),
         )
         .with_state(state)
 }
@@ -268,6 +269,40 @@ pub async fn list_harnesses_handler<S: HarnessService, Auth: MacroAuthorizationS
         state
             .service
             .list_harnesses(authorization.authorization.user.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Handler for `PATCH /harnesses/{harness_id}`.
+#[utoipa::path(
+    patch,
+    tag = "harnesses",
+    operation_id = "patch_harness",
+    path = "/harnesses/{harness_id}",
+    params(("harness_id" = HarnessId, Path, description = "Harness ID")),
+    request_body = PatchHarnessRequest,
+    responses(
+        (status = 200, body = Harness),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn patch_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<HarnessPath>,
+    Json(req): Json<PatchHarnessRequest>,
+) -> Result<Json<Harness>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .patch_harness(
+                authorization.authorization.user.macro_user_id,
+                path.harness_id,
+                req,
+            )
             .await?,
     ))
 }

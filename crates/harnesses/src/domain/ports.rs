@@ -11,7 +11,7 @@ use uuid::Uuid;
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
     Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-    PairingStatus, RequestedHarnessScope,
+    PairingStatus, PatchHarnessRequest, RequestedHarnessScope,
 };
 
 /// A pairing row to persist.
@@ -33,6 +33,15 @@ pub struct NewPairing {
     pub requested_scope: Option<RequestedHarnessScope>,
     /// When the pairing expires.
     pub expires_at: DateTime<Utc>,
+}
+
+/// Validated changes to a harness row; `None` leaves a column as it is.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HarnessChanges {
+    /// New display name, already trimmed and length-checked.
+    pub name: Option<String>,
+    /// New permission-bypass setting.
+    pub allow_permission_bypass: Option<bool>,
 }
 
 /// A harness row to create at approval.
@@ -135,6 +144,13 @@ pub trait HarnessRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
 
+    /// Apply a validated change to an active harness.
+    fn update_harness(
+        &self,
+        harness_id: HarnessId,
+        changes: HarnessChanges,
+    ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
+
     /// Soft-delete a harness and revoke its tokens.
     fn delete_harness(
         &self,
@@ -203,6 +219,14 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Harness>, HarnessError>> + Send;
+
+    /// Change a harness the caller may manage.
+    fn patch_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        req: PatchHarnessRequest,
+    ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
 
     /// Revoke a harness the caller may manage.
     fn delete_harness(

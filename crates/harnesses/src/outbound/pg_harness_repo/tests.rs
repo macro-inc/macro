@@ -555,3 +555,57 @@ async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
         assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn update_harness_changes_only_the_named_columns(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    insert_user(&pool, OWNER_ID).await;
+    repo.insert_pairing(new_pairing("AAAA-BBBB", "secret"))
+        .await
+        .unwrap();
+    let harness = repo
+        .approve_pairing("AAAA-BBBB", new_harness())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let bypassed = repo
+        .update_harness(
+            harness.id,
+            HarnessChanges {
+                name: None,
+                allow_permission_bypass: Some(true),
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(bypassed.allow_permission_bypass);
+    assert_eq!(bypassed.name, harness.name);
+
+    let renamed = repo
+        .update_harness(
+            harness.id,
+            HarnessChanges {
+                name: Some("studio".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(renamed.name, "studio");
+    assert!(renamed.allow_permission_bypass);
+    assert_eq!(
+        repo.get_harness(harness.id).await.unwrap().unwrap().name,
+        "studio"
+    );
+
+    assert!(repo.delete_harness(harness.id).await.unwrap());
+    assert!(
+        repo.update_harness(harness.id, HarnessChanges::default())
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

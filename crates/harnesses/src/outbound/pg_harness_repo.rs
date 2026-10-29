@@ -16,7 +16,7 @@ use crate::domain::{
         Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
         PairingStatus, RequestedHarnessScope,
     },
-    ports::{HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
+    ports::{HarnessChanges, HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
 };
 
 /// Postgres-backed harness repository.
@@ -370,6 +370,35 @@ impl HarnessRepo for PgHarnessRepo {
 
     async fn get_harness(&self, harness_id: HarnessId) -> Result<Option<Harness>, Self::Err> {
         fetch_harness(&self.pool, harness_id.as_uuid()).await
+    }
+
+    async fn update_harness(
+        &self,
+        harness_id: HarnessId,
+        changes: HarnessChanges,
+    ) -> Result<Option<Harness>, Self::Err> {
+        let row = sqlx::query_as!(
+            HarnessRow,
+            r#"
+            UPDATE harnesses
+            SET
+                name = COALESCE($2, name),
+                allow_permission_bypass = COALESCE($3, allow_permission_bypass),
+                updated_at = now()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING
+                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
+                created_at, updated_at, last_connected_at, last_disconnected_at
+            "#,
+            harness_id.as_uuid(),
+            changes.name,
+            changes.allow_permission_bypass,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to update harness")?;
+
+        row.map(Harness::try_from).transpose()
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {

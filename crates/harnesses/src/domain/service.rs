@@ -14,9 +14,9 @@ use super::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
-        PairingDetails, PairingStatus,
+        PairingDetails, PairingStatus, PatchHarnessRequest,
     },
-    ports::{HarnessError, HarnessRepo, HarnessService, NewHarness, NewPairing},
+    ports::{HarnessChanges, HarnessError, HarnessRepo, HarnessService, NewHarness, NewPairing},
     tokens,
 };
 
@@ -32,6 +32,17 @@ const MAX_OPEN_PAIRINGS_PER_NAME: i64 = 4;
 const CODE_ATTEMPTS: usize = 5;
 const MAX_NAME_CHARS: usize = 100;
 const MAX_HOST_CHARS: usize = 200;
+
+/// A trimmed display name within the length limit.
+fn validated_name(name: &str) -> Result<String, HarnessError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
+        return Err(HarnessError::BadRequest(format!(
+            "name must be 1..={MAX_NAME_CHARS} characters"
+        )));
+    }
+    Ok(name.to_owned())
+}
 
 /// Harness service backed by a repository.
 #[derive(Debug, Clone)]
@@ -83,12 +94,8 @@ where
         &self,
         req: CreatePairingRequest,
     ) -> Result<CreatedPairing, HarnessError> {
-        let name = req.name.trim();
-        if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
-            return Err(HarnessError::BadRequest(format!(
-                "name must be 1..={MAX_NAME_CHARS} characters"
-            )));
-        }
+        let name = validated_name(&req.name)?;
+        let name = name.as_str();
         let host = req
             .host
             .as_deref()
@@ -183,23 +190,10 @@ where
         // Reuses the pending/expired policy so approval failures report the
         // same way the lookup does.
         let details = self.get_pairing(code).await?;
-        if req.allow_permission_bypass && details.requested_allow_permission_bypass == Some(false) {
-            return Err(HarnessError::BadRequest(
-                "this daemon requires permission prompts".to_owned(),
-            ));
-        }
         let code = tokens::normalize_pairing_code(code).expect("get_pairing validated the code");
 
         let name = match &req.name {
-            Some(name) => {
-                let name = name.trim();
-                if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
-                    return Err(HarnessError::BadRequest(format!(
-                        "name must be 1..={MAX_NAME_CHARS} characters"
-                    )));
-                }
-                name.to_owned()
-            }
+            Some(name) => validated_name(name)?,
             None => details.requested_name,
         };
 
@@ -299,6 +293,35 @@ where
             .list_visible_harnesses(caller)
             .await
             .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self, req), fields(caller = %caller), err)]
+    async fn patch_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        req: PatchHarnessRequest,
+    ) -> Result<Harness, HarnessError> {
+        let harness = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+        self.ensure_may_manage(&caller, &harness).await?;
+
+        let changes = HarnessChanges {
+            name: req.name.as_deref().map(validated_name).transpose()?,
+            allow_permission_bypass: req.allow_permission_bypass,
+        };
+        if changes == HarnessChanges::default() {
+            return Ok(harness);
+        }
+        self.repo
+            .update_harness(harness_id, changes)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
