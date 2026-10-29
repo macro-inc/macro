@@ -136,7 +136,9 @@ function EffortModelSubmenu(
                         props.onClose?.();
                       }}
                     >
-                      <span class="flex-1">{option.name}</span>
+                      <span class="min-w-0 flex-1 whitespace-normal wrap-anywhere">
+                        {option.name}
+                      </span>
                       <Show
                         when={
                           props.selected &&
