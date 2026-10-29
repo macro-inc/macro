@@ -233,7 +233,7 @@ const InlineFormatButton = (props: {
         shortcut: InlineShortcuts[props.format],
       }}
       size={props.size ?? 'icon-sm'}
-      variant={isActive() ? 'primary' : 'ghost'}
+      variant={isActive() ? 'accent' : 'ghost'}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
@@ -285,7 +285,7 @@ export const ElementFormatButton = (props: {
       size={props.size ?? 'icon-sm'}
       variant={
         isElementFormatActive(props.selection(), props.format)
-          ? 'primary'
+          ? 'accent'
           : 'ghost'
       }
       onClick={(e: MouseEvent | KeyboardEvent) =>
@@ -519,7 +519,7 @@ export function FormatTools(props: {
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant={isActive() ? 'primary' : 'ghost'}
+          variant={isActive() ? 'accent' : 'ghost'}
           size={buttonSize()}
           tooltip="Text Styles"
           disabled={buttonIsDisabled()}
@@ -581,7 +581,7 @@ export function FormatTools(props: {
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant={isActive() ? 'primary' : 'ghost'}
+          variant={isActive() ? 'accent' : 'ghost'}
           size={buttonSize()}
           tooltip="Text Styles"
           disabled={props.buttonIsDisabled()}
@@ -636,7 +636,7 @@ export function FormatTools(props: {
               (format) => !props.excludes?.includes(format)
             )
           )
-            ? 'primary'
+            ? 'accent'
             : 'ghost'
         }
         size={buttonSize()}
@@ -683,7 +683,7 @@ export function FormatTools(props: {
       <Dropdown.Trigger
         variant={
           hasActiveElementFormat(selection(), props.elements)
-            ? 'primary'
+            ? 'accent'
             : 'ghost'
         }
         size={buttonSize()}

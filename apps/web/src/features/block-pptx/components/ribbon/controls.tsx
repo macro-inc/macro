@@ -23,7 +23,7 @@ export function RibbonButton(props: ButtonProps) {
   const [local, rest] = splitProps(props, ['aria-pressed', 'class']);
   return (
     <Button
-      variant={local['aria-pressed'] ? 'primary' : 'ghost'}
+      variant={local['aria-pressed'] ? 'accent' : 'ghost'}
       size="icon-sm"
       aria-pressed={local['aria-pressed']}
       class={cn('size-7 rounded-md p-1', local.class)}

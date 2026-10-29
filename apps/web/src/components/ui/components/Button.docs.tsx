@@ -12,7 +12,7 @@ import { ButtonGroup } from './ButtonGroup';
 
 const VARIANTS: ButtonVariant[] = [
   'primary',
-  'neutral',
+  'accent',
   'secondary',
   'outline',
   'ghost',
@@ -244,7 +244,7 @@ export default defineDoc({
   name: 'Button',
   category: 'Actions',
   description:
-    'Shared action control with semantic materials, automatic desktop elevation and touch glass, explicit icon sizes, and configurable tooltips.',
+    'Shared action control with solid neutral primary, explicit accent emphasis, automatic desktop elevation and touch glass, explicit icon sizes, and configurable tooltips.',
   status: 'beta',
   exports: ['Button', 'ButtonGroup'],
   import: "import { Button, ButtonGroup } from '@ui';",

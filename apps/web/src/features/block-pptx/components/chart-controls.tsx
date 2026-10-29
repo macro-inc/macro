@@ -686,7 +686,7 @@ export function ChartDesignTab(props: {
         </RibbonPopover>
         <RibbonTextButton
           aria-label="Data labels"
-          variant={chart()?.dataLabels ? 'primary' : 'ghost'}
+          variant={chart()?.dataLabels ? 'accent' : 'ghost'}
           aria-pressed={!!chart()?.dataLabels}
           disabled={ro()}
           onClick={() =>

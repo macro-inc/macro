@@ -127,7 +127,7 @@ function TextStyleControls(props: SpreadsheetToolbarProps) {
         aria-label="Bold"
         tooltip="Bold (⌘/Ctrl B)"
         aria-pressed={!!props.cell?.bold}
-        variant={props.cell?.bold ? 'primary' : 'ghost'}
+        variant={props.cell?.bold ? 'accent' : 'ghost'}
         disabled={props.readonly}
         onClick={() => props.onStyle({ bold: !props.cell?.bold })}
       >
@@ -138,7 +138,7 @@ function TextStyleControls(props: SpreadsheetToolbarProps) {
         aria-label="Italic"
         tooltip="Italic (⌘/Ctrl I)"
         aria-pressed={!!props.cell?.italic}
-        variant={props.cell?.italic ? 'primary' : 'ghost'}
+        variant={props.cell?.italic ? 'accent' : 'ghost'}
         disabled={props.readonly}
         onClick={() => props.onStyle({ italic: !props.cell?.italic })}
       >
@@ -148,7 +148,7 @@ function TextStyleControls(props: SpreadsheetToolbarProps) {
         size="icon-sm"
         aria-label="Strikethrough"
         aria-pressed={!!props.cell?.strikethrough}
-        variant={props.cell?.strikethrough ? 'primary' : 'ghost'}
+        variant={props.cell?.strikethrough ? 'accent' : 'ghost'}
         disabled={props.readonly}
         onClick={() =>
           props.onStyle({ strikethrough: !props.cell?.strikethrough })
@@ -161,7 +161,7 @@ function TextStyleControls(props: SpreadsheetToolbarProps) {
         aria-label="Underline"
         tooltip="Underline (⌘/Ctrl U)"
         aria-pressed={!!props.cell?.underline}
-        variant={props.cell?.underline ? 'primary' : 'ghost'}
+        variant={props.cell?.underline ? 'accent' : 'ghost'}
         disabled={props.readonly}
         onClick={() => props.onStyle({ underline: !props.cell?.underline })}
       >
@@ -280,7 +280,7 @@ export function SpreadsheetToolbar(props: SpreadsheetToolbarProps) {
           size="icon-sm"
           aria-label="Wrap text"
           aria-pressed={!!props.cell?.wrap}
-          variant={props.cell?.wrap ? 'primary' : 'ghost'}
+          variant={props.cell?.wrap ? 'accent' : 'ghost'}
           disabled={props.readonly}
           onClick={() => props.onStyle({ wrap: !props.cell?.wrap })}
         >

@@ -14,7 +14,7 @@ export function InputActionButton(props: {
       tooltip={props.label}
       aria-label={props.label}
       disabled={props.disabled}
-      variant={props.active ? 'primary' : 'ghost'}
+      variant={props.active ? 'accent' : 'ghost'}
       size="icon-md"
       class={cn('touch:size-6', props.class)}
       onPointerDown={(event: PointerEvent) => event.preventDefault()}

@@ -293,7 +293,7 @@ export function ViewTab() {
         <RibbonTextButton
           aria-label="Normal"
           aria-pressed={!env.sorter()}
-          variant={env.sorter() ? 'ghost' : 'primary'}
+          variant={env.sorter() ? 'ghost' : 'accent'}
           onClick={() => env.setSorter(false)}
         >
           <Rectangle />
@@ -302,7 +302,7 @@ export function ViewTab() {
         <RibbonTextButton
           aria-label="Slide Sorter"
           aria-pressed={env.sorter()}
-          variant={env.sorter() ? 'primary' : 'ghost'}
+          variant={env.sorter() ? 'accent' : 'ghost'}
           data-testid="pptx-tab-view-sorter"
           onClick={() => env.setSorter(true)}
         >
@@ -356,7 +356,7 @@ export function ViewTab() {
         </RibbonButton>
         <RibbonTextButton
           aria-label="Fit to window"
-          variant={env.zoom() === 'fit' ? 'primary' : 'ghost'}
+          variant={env.zoom() === 'fit' ? 'accent' : 'ghost'}
           onClick={() => env.setZoom('fit')}
         >
           <ArrowsOut />
@@ -367,7 +367,7 @@ export function ViewTab() {
         <RibbonTextButton
           aria-label="Ruler"
           aria-pressed={view().ruler}
-          variant={view().ruler ? 'primary' : 'ghost'}
+          variant={view().ruler ? 'accent' : 'ghost'}
           data-testid="pptx-view-ruler"
           onClick={() => env.view.set({ ruler: !view().ruler })}
         >
@@ -377,7 +377,7 @@ export function ViewTab() {
         <RibbonTextButton
           aria-label="Gridlines"
           aria-pressed={view().gridlines}
-          variant={view().gridlines ? 'primary' : 'ghost'}
+          variant={view().gridlines ? 'accent' : 'ghost'}
           data-testid="pptx-view-gridlines"
           onClick={() => env.view.set({ gridlines: !view().gridlines })}
         >
@@ -388,7 +388,7 @@ export function ViewTab() {
           aria-label="Guides"
           tooltip="Guides (⌥F9)"
           aria-pressed={view().drawingGuides}
-          variant={view().drawingGuides ? 'primary' : 'ghost'}
+          variant={view().drawingGuides ? 'accent' : 'ghost'}
           data-testid="pptx-view-guides"
           onClick={() => env.view.set({ drawingGuides: !view().drawingGuides })}
         >
@@ -471,7 +471,7 @@ export function ViewTab() {
         <RibbonTextButton
           aria-label="Notes"
           aria-pressed={env.notesVisible()}
-          variant={env.notesVisible() ? 'primary' : 'ghost'}
+          variant={env.notesVisible() ? 'accent' : 'ghost'}
           onClick={env.toggleNotes}
         >
           <Notepad />

@@ -63,7 +63,7 @@ export function CanvasDrawingToolbar(props: {
                 aria-label={`${tool.label} tool`}
                 tooltip={{ content: `${tool.label} tool`, shortcut: tool.key }}
                 aria-pressed={props.tool === tool.id}
-                variant={props.tool === tool.id ? 'primary' : 'ghost'}
+                variant={props.tool === tool.id ? 'accent' : 'ghost'}
                 onClick={() => props.onTool(tool.id)}
               >
                 <Dynamic component={tool.icon} class="size-4" />
