@@ -201,8 +201,16 @@ fn max_output_tokens_is_each_models_cap() {
         "anthropic/claude-haiku-4-5",
         "anthropic/claude-opus-4-5",
         "anthropic/claude-sonnet-4-5",
+        "anthropic/claude-sonnet-4-0",
+        "anthropic/claude-sonnet-4-20250514",
     ] {
         assert_eq!(cap(id), 64_000, "{id}");
     }
-    assert_eq!(cap("anthropic/claude-opus-4-1"), 32_000);
+    for id in [
+        "anthropic/claude-opus-4-1",
+        "anthropic/claude-opus-4-0",
+        "anthropic/claude-opus-4-20250514",
+    ] {
+        assert_eq!(cap(id), 32_000, "{id}");
+    }
 }
