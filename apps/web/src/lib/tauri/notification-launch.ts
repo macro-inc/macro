@@ -4,11 +4,34 @@ import {
   pendingNotificationNavigation,
   receiveNotificationTap,
 } from '@notifications/notification-navigation-intent';
+import { notificationOpenSpan } from '@notifications/notification-open-trace';
+import { createEffect, on, onCleanup } from 'solid-js';
 import {
   createPushApi,
   releaseNotificationCover,
   supportsNotificationLaunch,
 } from './push-api';
+
+const NOTIFICATION_COVER_MAX_WAIT_MS = 8000;
+
+/** Keep every tap usable even when navigation or its acknowledgment stalls. */
+export function useNotificationCoverTimeout(): void {
+  createEffect(
+    on(pendingNotificationNavigation, (intent) => {
+      if (!supportsNotificationLaunch() || !intent?.deliveryId) return;
+      const timeout = setTimeout(() => {
+        if (pendingNotificationNavigation() !== intent) return;
+        notificationOpenSpan(intent.notificationId)?.event(
+          'notification.cover_timeout'
+        );
+        // Revealing the app does not consume the durable destination. Native
+        // can redeliver it, and a later route acknowledgment still completes it.
+        fireAndForget(releaseNotificationCover(), 'notification-launch');
+      }, NOTIFICATION_COVER_MAX_WAIT_MS);
+      onCleanup(() => clearTimeout(timeout));
+    })
+  );
+}
 
 /** Read the native launch intent before the hash router can restore another page. */
 export async function prepareNotificationLaunch(): Promise<void> {

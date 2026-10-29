@@ -471,6 +471,19 @@ on failure or timeout without consuming the pending tap. Late responses must
 use normal account-checked navigation, never reset the mounted router's hash.
 `notification.launch` records whether startup continued ready, failed, or timed out.
 
+Bound the native cover to eight seconds for each received durable tap, including
+warm resumes and stalled route acknowledgments. Release without consuming the
+intent on timeout; duplicate delivery must not extend the deadline, and a newer
+tap gets its own deadline. Convert fallible notification lookups and navigation
+promises into error results so failure cleanup acknowledges the tap and shows
+the existing error toast. The deadline requires responsive JavaScript and IPC;
+it cannot recover a frozen WebContent process.
+
+The frontend cover deadline has a backend-free phone browser regression:
+`bunx playwright test --config src/lib/tauri/browser-test/playwright.config.ts`.
+It uses the real navigation intent and push API with simulated native IPC;
+UIKit presentation still requires an iOS device or simulator.
+
 Generate APNs validators with `scripts/generate-api-schema.ts`; its compact
 `generated/push.ts` entry avoids importing every notification-service schema
 on the startup path. Carry known channel root IDs in push navigation (a null
