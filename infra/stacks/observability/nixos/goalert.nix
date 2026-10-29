@@ -118,7 +118,7 @@ in
     };
 
     macro-alerts-relay = needsSecrets // {
-      description = "Forward GoAlert and Grafana notifications to Macro Alerts";
+      description = "Forward GoAlert notifications to Macro Alerts";
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         DynamicUser = true;
