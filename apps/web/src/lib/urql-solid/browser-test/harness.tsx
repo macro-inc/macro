@@ -5,11 +5,11 @@ import { render } from 'solid-js/web';
 import { filter, map, pipe } from 'wonka';
 import { createUrqlQuery } from '../create-urql-query';
 
-const firstDocument = gql`query Soup { value }`;
-const secondDocument = gql`query ChannelListSoup { value }`;
-const firstText = print(firstDocument);
-const secondText = print(secondDocument);
-const client = createClient({
+const FIRST_DOCUMENT = gql`query Soup { value }`;
+const SECOND_DOCUMENT = gql`query ChannelListSoup { value }`;
+const FIRST_TEXT = print(FIRST_DOCUMENT);
+const SECOND_TEXT = print(SECOND_DOCUMENT);
+const CLIENT = createClient({
   url: 'https://localhost/graphql',
   exchanges: [
     () => (operations) =>
@@ -27,10 +27,10 @@ const client = createClient({
 });
 
 function Harness() {
-  const [document, setDocument] = createSignal(firstDocument);
+  const [document, setDocument] = createSignal(FIRST_DOCUMENT);
   const query = createUrqlQuery<{ value: string }, Record<string, never>>(
     () => ({
-      client,
+      client: CLIENT,
       query: document(),
       variables: {},
     })
@@ -39,9 +39,9 @@ function Harness() {
     // Observe each new result before inspecting the shared ASTs.
     if (!query.operation) return 'Loading';
     const valid =
-      print(firstDocument) === firstText &&
-      print(secondDocument) === secondText;
-    const textMatchesName = [firstDocument, secondDocument].every(
+      print(FIRST_DOCUMENT) === FIRST_TEXT &&
+      print(SECOND_DOCUMENT) === SECOND_TEXT;
+    const textMatchesName = [FIRST_DOCUMENT, SECOND_DOCUMENT].every(
       (document) => {
         const name = getOperationAST(document)?.name?.value;
         return (
@@ -55,10 +55,10 @@ function Harness() {
   };
   return (
     <main>
-      <button type="button" onClick={() => setDocument(firstDocument)}>
+      <button type="button" onClick={() => setDocument(FIRST_DOCUMENT)}>
         Home
       </button>
-      <button type="button" onClick={() => setDocument(secondDocument)}>
+      <button type="button" onClick={() => setDocument(SECOND_DOCUMENT)}>
         Channels
       </button>
       <output aria-label="Query result">
@@ -72,6 +72,6 @@ function Harness() {
   );
 }
 
-const root = document.getElementById('app');
-if (!root) throw new Error('Missing harness root');
-render(() => <Harness />, root);
+const ROOT = document.getElementById('app');
+if (!ROOT) throw new Error('Missing harness root');
+render(() => <Harness />, ROOT);

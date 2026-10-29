@@ -14,7 +14,7 @@ import {
 
 const nativeNetwork = vi.hoisted(() => ({ controller: new AbortController() }));
 vi.mock('../mobile/native-network-status', () => ({
-  getNativeNetworkAbortSignal: () => nativeNetwork.controller.signal,
+  getNativeNetworkAbortSignal: vi.fn(() => nativeNetwork.controller.signal),
 }));
 
 const RESOURCE_URL = 'https://localhost/resource';
@@ -62,6 +62,9 @@ describe('fetchWithToken refresh latch', () => {
   beforeEach(() => {
     unsetTokenPromise();
     nativeNetwork.controller = new AbortController();
+    vi.mocked(getNativeNetworkAbortSignal).mockImplementation(
+      () => nativeNetwork.controller.signal
+    );
     global.fetch = mockFetch as typeof fetch;
   });
 
@@ -69,10 +72,33 @@ describe('fetchWithToken refresh latch', () => {
     global.fetch = originalFetch;
     mockFetch.mockReset();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   const refreshCalls = () =>
     mockFetch.mock.calls.filter(([input]) => isRefresh(input)).length;
+
+  test('refreshes on runtimes without AbortSignal.any', async () => {
+    vi.spyOn(AbortSignal, 'any').mockImplementation(() => {
+      throw new TypeError('AbortSignal.any is unavailable');
+    });
+    mockFetch.mockResolvedValue(jsonResponse(200));
+
+    expect((await fetchToken()).isOk()).toBe(true);
+  });
+
+  test('clears failed refresh setup and its timer so the next caller can retry', async () => {
+    vi.useFakeTimers();
+    vi.mocked(getNativeNetworkAbortSignal).mockImplementationOnce(() => {
+      throw new Error('Reachability setup failed');
+    });
+    mockFetch.mockResolvedValue(jsonResponse(200));
+
+    await expect(fetchToken()).rejects.toThrow('Reachability setup failed');
+    expect(vi.getTimerCount()).toBe(0);
+    expect((await fetchToken()).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(1);
+  });
 
   test('a stalled refresh times out and permits retry without expiring the session', async () => {
     vi.useFakeTimers();

@@ -169,19 +169,23 @@ export async function fetchToken(
     const generation = refreshGeneration;
     tokenPromise = Telemetry.span('auth.refresh', async (span) => {
       const controller = new AbortController();
-      const timer = setTimeout(
-        () =>
-          controller.abort(
-            new DOMException('Refresh deadline expired', 'TimeoutError')
-          ),
-        REFRESH_TIMEOUT_MS
-      );
-      const refreshSignal = AbortSignal.any([
-        controller.signal,
-        getNativeNetworkAbortSignal(),
-      ]);
-      perfMark('auth.refresh-start');
+      const refreshSignal = controller.signal;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let nativeSignal: AbortSignal | undefined;
+      const abortOffline = () => controller.abort(nativeSignal?.reason);
       try {
+        timer = setTimeout(
+          () =>
+            controller.abort(
+              new DOMException('Refresh deadline expired', 'TimeoutError')
+            ),
+          REFRESH_TIMEOUT_MS
+        );
+        nativeSignal = getNativeNetworkAbortSignal();
+        if (nativeSignal.aborted) abortOffline();
+        else
+          nativeSignal.addEventListener('abort', abortOffline, { once: true });
+        perfMark('auth.refresh-start');
         const result = await waitForToken(
           fetchWithCredentials(`${SERVER_HOSTS['auth-service']}/jwt/refresh`, {
             method: 'POST',
@@ -218,11 +222,13 @@ export async function fetchToken(
 
         return ok(undefined);
       } finally {
-        clearTimeout(timer);
-        if (generation === refreshGeneration) {
-          tokenPromise = null;
-        }
+        if (timer !== undefined) clearTimeout(timer);
+        nativeSignal?.removeEventListener('abort', abortOffline);
       }
+    }).finally(() => {
+      // Settlement runs after tokenPromise is assigned, including when setup
+      // fails before the first await. A failed setup must not poison the cache.
+      if (generation === refreshGeneration) tokenPromise = null;
     });
   }
   return waitForToken(tokenPromise, signal);
