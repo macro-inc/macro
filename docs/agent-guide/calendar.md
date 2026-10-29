@@ -236,7 +236,8 @@ reach while the form scrolls. The title and description come first, then
 `Event` and `Out of office` as selectable labels. A section of rows holds
 All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
 second has one row each for Calendar, Guests, Call, Location, and Reminders
-(Declines and Message for out-of-office events). Guest permissions follow, one
+(Declines and Message for out-of-office events). Location is a text field in
+its row, so the sheet scrolls it above the keyboard. Guest permissions follow, one
 per row. Guests opens its own sheet over the composer, as tall as the event
 sheet, with Cancel, the `Guests` title, and Done; its list fills the sheet.
 Picks apply only on Done, and Cancel, the backdrop, or Escape drop them; the

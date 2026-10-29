@@ -11,7 +11,7 @@ function SheetRow(props: { label: string; children: JSX.Element }) {
   return (
     <div class="flex min-h-11 items-center justify-between gap-3 px-3">
       <span class="shrink-0 text-sm text-ink">{props.label}</span>
-      <div class="flex min-w-0 items-center justify-end gap-1">
+      <div class="flex min-w-0 flex-1 items-center justify-end gap-1">
         {props.children}
       </div>
     </div>
@@ -88,7 +88,7 @@ export function MobileEventForm(
               <EventFormParts.ConferencePill />
             </SheetRow>
             <SheetRow label="Location">
-              <EventFormParts.LocationPill />
+              <EventFormParts.LocationInput />
             </SheetRow>
           </Show>
           <Show when={form.isOutOfOffice()}>

@@ -5,7 +5,7 @@ import {
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { Button, cn, Layer, RadioGroup, Tooltip } from '@ui';
+import { Button, cn, Input, Layer, RadioGroup, Tooltip } from '@ui';
 import {
   createContext,
   For,
@@ -344,6 +344,27 @@ function LocationPill() {
   );
 }
 
+/**
+ * The location as a text field, for a sheet row: inside the sheet's scroll it
+ * stays above the keyboard, where a popover would float off with its pill.
+ */
+function LocationInput() {
+  const form = useEventForm();
+  return (
+    <Input
+      size="sm"
+      class="w-full"
+      value={form.state().location}
+      onInput={(event) =>
+        form.controller.setField('location', event.currentTarget.value)
+      }
+      placeholder="Add location"
+      aria-label="Location"
+      disabled={form.fieldIsDisabled('location')}
+    />
+  );
+}
+
 /** How an out-of-office event declines meetings, where the calendar can. */
 function DeclinePill() {
   const form = useEventForm();
@@ -630,6 +651,7 @@ export const EventFormParts = {
   GuestsSheetPill,
   ConferencePill,
   LocationPill,
+  LocationInput,
   DeclinePill,
   DeclineMessagePill,
   RemindersPill,
