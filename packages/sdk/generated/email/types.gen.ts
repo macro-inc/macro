@@ -3102,6 +3102,35 @@ export type GetMessageResponses = {
 
 export type GetMessageResponse = GetMessageResponses[keyof GetMessageResponses];
 
+export type GetMessageEmlData = {
+    body?: never;
+    path: {
+        /**
+         * Message ID.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/messages/{id}/eml';
+};
+
+export type GetMessageEmlErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetMessageEmlError = GetMessageEmlErrors[keyof GetMessageEmlErrors];
+
+export type GetMessageEmlResponses = {
+    200: Array<number>;
+};
+
+export type GetMessageEmlResponse = GetMessageEmlResponses[keyof GetMessageEmlResponses];
+
 export type PatchSettingsData = {
     body: PatchSettingsRequest;
     path?: never;
