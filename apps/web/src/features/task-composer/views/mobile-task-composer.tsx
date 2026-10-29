@@ -42,7 +42,12 @@ export function MobileTaskComposer(props: {
         <div class="flex-1 flex items-center">
           <TaskComposer.ContinueInSplit />
         </div>
-        <TaskComposer.Submit />
+        {/* Far enough from Create Task that a tap meant for one cannot land
+            on the other. */}
+        <div class="flex items-center gap-8">
+          <TaskComposer.Clear />
+          <TaskComposer.Submit />
+        </div>
       </EntityComposer.Header>
       <TaskComposer.Recovery />
       {/* The sheet sizes the composer to its content, so nothing needs

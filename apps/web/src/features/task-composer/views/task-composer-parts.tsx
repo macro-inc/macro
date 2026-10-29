@@ -86,6 +86,23 @@ function ClearDraft() {
   );
 }
 
+/** `ClearDraft` as a text-only action, for the touch sheet's header. */
+function Clear() {
+  const composer = useTaskComposer();
+  return (
+    <Show when={composer.hasDraftChanges()}>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={composer.isCreating()}
+        onClick={composer.clearDraft}
+      >
+        Clear
+      </Button>
+    </Show>
+  );
+}
+
 function Close() {
   const composer = useTaskComposer();
   return (
@@ -379,6 +396,7 @@ export const TaskComposer = {
   Root,
   ContinueInSplit,
   ClearDraft,
+  Clear,
   Close,
   Recovery,
   Title,

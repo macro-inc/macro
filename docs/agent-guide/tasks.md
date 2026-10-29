@@ -588,7 +588,8 @@ On touch devices, task creation opens in a bottom sheet with a drag handle and
 scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
 filter sheets. Its header has `Continue editing in split` on the left and
-`Create Task` on the right, with no `Clear Draft` or close button. When the
+`Create Task` on the right, with a text-only `Clear` 32px to its left once the
+draft has changes, and no close button. When the
 keyboard leaves too little room for the whole composer, the header pins to the
 top of the sheet (with a solid background only while pinned over content), so
 `Create Task` stays in reach. The properties sit on a single line that scrolls
@@ -648,7 +649,7 @@ Task creation requires a connection. Before any create request, the composer
 saves a separate copy of the title, description/editor state, properties, and
 sharing choice on this device. Pending submissions do not expire and survive an
 app restart. Reopen the same task composer context and choose **Recover: <title>**
-to continue an unconfirmed draft; **Clear Draft** (desktop) discards that recovered copy.
+to continue an unconfirmed draft; **Clear Draft** (**Clear** on touch) discards that recovered copy.
 Explicit logout removes these account-scoped copies. Recovery does not submit
 anything automatically: check Tasks before retrying because a lost response may
 mean the task already exists. A submission still in flight cannot be recovered
