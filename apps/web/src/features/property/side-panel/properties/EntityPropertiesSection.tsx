@@ -528,6 +528,18 @@ function SidePanelPropertyRow(props: {
   const isInputType = () =>
     t() === 'STRING' || t() === 'NUMBER' || t() === 'LINK' || t() === 'BOOLEAN';
   const isMultilineRow = () => t() === 'STRING' && hasValue(props.property);
+  const hasInlineAddAction = () =>
+    isMultiValueRow() &&
+    !(t() === 'ENTITY' && props.property.specificEntityType === 'USER');
+  const renderActions = () => (
+    <PropertyRowActions
+      canRemoveFromEntity={props.canRemoveFromEntity}
+      canPinPendingProperty={props.canPinPendingProperty}
+      property={props.property}
+      onRemovePendingProperty={props.onRemovePendingProperty}
+      onPropertyPinned={props.onPropertyPinned}
+    />
+  );
 
   return (
     <div class="contents group/property-row">
@@ -566,7 +578,10 @@ function SidePanelPropertyRow(props: {
                 <InputValue />
               </Match>
               <Match when={isMultiValueRow()}>
-                <MultiValue property={props.property} />
+                <MultiValue
+                  property={props.property}
+                  renderActions={renderActions}
+                />
               </Match>
             </Switch>
             <PropertyNS.PopoverEditor
@@ -576,13 +591,7 @@ function SidePanelPropertyRow(props: {
               }}
             />
           </PropertyNS.Root>
-          <PropertyRowActions
-            canRemoveFromEntity={props.canRemoveFromEntity}
-            canPinPendingProperty={props.canPinPendingProperty}
-            property={props.property}
-            onRemovePendingProperty={props.onRemovePendingProperty}
-            onPropertyPinned={props.onPropertyPinned}
-          />
+          <Show when={!hasInlineAddAction()}>{renderActions()}</Show>
         </div>
       </div>
     </div>
@@ -667,7 +676,12 @@ function PropertyRowActions(props: {
   return (
     <Show when={hasActions()}>
       <div
-        class="flex shrink-0 items-center gap-0.5"
+        class={cn(
+          'flex shrink-0 items-center gap-0.5 transition-opacity',
+          'pointer-events-none opacity-0',
+          'group-hover/property-row:pointer-events-auto group-hover/property-row:opacity-100 group-focus-within/property-row:pointer-events-auto group-focus-within/property-row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
+          'touch:pointer-events-auto touch:opacity-100'
+        )}
         onMouseDown={stopRowInteraction}
       >
         <Show when={canRemove()}>
@@ -675,15 +689,11 @@ function PropertyRowActions(props: {
             variant="ghost"
             appearance="bare"
             size="icon-xs"
+            data-property-row-action
             title="Remove from entity"
             aria-label="Remove from entity"
             disabled={isSaving()}
-            class={cn(
-              'text-ink-muted hover:bg-hover hover:text-failure-ink transition-opacity',
-              'pointer-events-none opacity-0',
-              'group-hover/property-row:pointer-events-auto group-hover/property-row:opacity-100 group-focus-within/property-row:pointer-events-auto group-focus-within/property-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100',
-              'touch:pointer-events-auto touch:opacity-100'
-            )}
+            class="text-ink-muted hover:bg-hover hover:text-failure-ink"
             onClick={removeFromEntity}
           >
             <TrashIcon class="size-4" />
@@ -694,11 +704,15 @@ function PropertyRowActions(props: {
             variant="ghost"
             appearance="bare"
             size="icon-xs"
+            data-property-row-action
             title={pinLabel()}
             aria-label={pinLabel()}
             aria-pressed={isPinned()}
             disabled={isSaving()}
-            class="text-ink-muted hover:bg-hover hover:text-ink"
+            class={cn(
+              'hover:bg-hover',
+              isPinned() ? 'text-accent' : 'text-ink-muted hover:text-ink'
+            )}
             onClick={togglePin}
           >
             <Show when={isPinned()} fallback={<PushPinIcon class="size-4" />}>
@@ -786,7 +800,10 @@ function UserStackPill(props: { property: Property }) {
   );
 }
 
-function MultiValue(props: { property: Property }) {
+function MultiValue(props: {
+  property: Property;
+  renderActions: () => JSX.Element;
+}) {
   const ctx = usePropertiesContext();
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const isEntity = () => props.property.valueType === 'ENTITY';
@@ -801,7 +818,12 @@ function MultiValue(props: { property: Property }) {
       <PropertyNS.Tooltip property={props.property}>
         <Show
           when={!isEntity()}
-          fallback={<NonUserEntityValue property={props.property} />}
+          fallback={
+            <NonUserEntityValue
+              property={props.property}
+              renderActions={props.renderActions}
+            />
+          }
         >
           <div class="flex flex-wrap items-center gap-1.5">
             <PropertyNS.Chips
@@ -818,14 +840,17 @@ function MultiValue(props: { property: Property }) {
                 </Layer>
               )}
             />
-            <Show when={!isReadOnly()}>
-              <PropertyNS.Pill
-                class="size-6 p-0"
-                aria-label={`Add ${props.property.displayName}`}
-              >
-                <Plus class="size-3" />
-              </PropertyNS.Pill>
-            </Show>
+            <div class="flex shrink-0 items-center gap-1">
+              {props.renderActions()}
+              <Show when={!isReadOnly()}>
+                <PropertyNS.Pill
+                  class="size-6 p-0"
+                  aria-label={`Add ${props.property.displayName}`}
+                >
+                  <Plus class="size-3" />
+                </PropertyNS.Pill>
+              </Show>
+            </div>
           </div>
         </Show>
       </PropertyNS.Tooltip>
@@ -833,7 +858,10 @@ function MultiValue(props: { property: Property }) {
   );
 }
 
-function NonUserEntityValue(props: { property: Property }) {
+function NonUserEntityValue(props: {
+  property: Property;
+  renderActions: () => JSX.Element;
+}) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
   const entities = () => getEntityValues(props.property);
@@ -868,31 +896,34 @@ function NonUserEntityValue(props: { property: Property }) {
           />
         )}
       </For>
-      <Show
-        when={!isReadOnly()}
-        fallback={
-          <Show when={entities().length === 0}>
-            <Badge variant="ghost" size="sm">
-              <SidePanel.EmptyPill />
-            </Badge>
+      <div class="flex shrink-0 items-center gap-1">
+        {props.renderActions()}
+        <Show
+          when={!isReadOnly()}
+          fallback={
+            <Show when={entities().length === 0}>
+              <Badge variant="ghost" size="sm">
+                <SidePanel.EmptyPill />
+              </Badge>
+            </Show>
+          }
+        >
+          <Show when={entities().length === 0 || props.property.isMultiSelect}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Add ${props.property.displayName}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                propertyCtx.openEditor(event.currentTarget);
+              }}
+            >
+              <Plus class="size-3" />
+            </Button>
           </Show>
-        }
-      >
-        <Show when={entities().length === 0 || props.property.isMultiSelect}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Add ${props.property.displayName}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              propertyCtx.openEditor(event.currentTarget);
-            }}
-          >
-            <Plus class="size-3" />
-          </Button>
         </Show>
-      </Show>
+      </div>
     </div>
   );
 }
@@ -961,6 +992,12 @@ function EntityCollectionPropertyBody(props: {
           {props.property.displayName}
         </span>
         <div class="ml-auto flex shrink-0 items-center gap-1">
+          <PropertyRowActions
+            canRemoveFromEntity={props.canRemoveFromEntity}
+            property={props.property}
+            onRemovePendingProperty={props.onRemovePendingProperty}
+            onPropertyPinned={props.onPropertyPinned}
+          />
           <Show when={!isReadOnly()}>
             <Button
               type="button"
@@ -976,12 +1013,6 @@ function EntityCollectionPropertyBody(props: {
               <Plus class="size-3" />
             </Button>
           </Show>
-          <PropertyRowActions
-            canRemoveFromEntity={props.canRemoveFromEntity}
-            property={props.property}
-            onRemovePendingProperty={props.onRemovePendingProperty}
-            onPropertyPinned={props.onPropertyPinned}
-          />
         </div>
       </div>
       <div class="mt-2 flex flex-wrap gap-1.5">
