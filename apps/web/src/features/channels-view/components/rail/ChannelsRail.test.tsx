@@ -170,6 +170,9 @@ vi.mock('../../channels-view-context', () => ({
     threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
+    hideSupportChannels: () => false,
+    canHideSupportChannels: () => false,
+    setHideSupportChannels: vi.fn(),
   }),
 }));
 vi.mock('../../queries', () => ({
@@ -234,6 +237,7 @@ const source = {
   refresh: async () => {},
 };
 const sources: ChannelsSources = {
+  team_channels: { ...source, items: () => [] },
   channels: source,
   direct_messages: source,
   recents: source,

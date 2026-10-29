@@ -16,7 +16,10 @@ use futures::Stream;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
-/// The recorded-SSE corpus directory.
+/// The recorded-SSE corpus directory. Test-only: `env!("CARGO_MANIFEST_DIR")`
+/// in the library would compile this checkout's absolute path into it, so it
+/// (and every crate above it) would never share a kache entry across machines.
+#[cfg(test)]
 #[must_use]
 pub fn fixtures_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -30,6 +33,7 @@ pub fn fixtures_dir() -> std::path::PathBuf {
 /// # Panics
 /// On an unreadable file — fixtures are part of the test suite, and a broken
 /// one should fail loudly.
+#[cfg(test)]
 #[must_use]
 pub fn fixture_sse(name: &str) -> String {
     let path = fixtures_dir().join(name);
@@ -38,6 +42,7 @@ pub fn fixture_sse(name: &str) -> String {
 }
 
 /// Load original complete SSE records without decoding their payloads.
+#[cfg(test)]
 #[must_use]
 pub fn fixture_records(name: &str) -> Vec<NativeRecord> {
     crate::replay::records(&fixture_sse(name))

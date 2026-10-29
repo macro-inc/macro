@@ -17,6 +17,8 @@ use soup_filter_projection::{
 };
 use std::borrow::Cow;
 
+pub(crate) mod reconciliation;
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 

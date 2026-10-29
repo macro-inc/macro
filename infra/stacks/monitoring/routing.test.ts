@@ -5,8 +5,14 @@ const resources: pulumi.runtime.MockResourceArgs[] = [];
 
 beforeAll(async () => {
   pulumi.runtime.setAllConfig(
-    { 'monitoring:goalertIntegrationKey': 'integration-key' },
-    ['monitoring:goalertIntegrationKey']
+    {
+      'monitoring:goalertIntegrationKey': 'integration-key',
+      'monitoring:goalertNotifyIntegrationKey': 'notify-integration-key',
+    },
+    [
+      'monitoring:goalertIntegrationKey',
+      'monitoring:goalertNotifyIntegrationKey',
+    ]
   );
   pulumi.runtime.setMocks(
     {
@@ -40,28 +46,46 @@ const synthetics = () =>
     (r) => r.type === 'datadog:index/syntheticsTest:SyntheticsTest'
   );
 
-test('every monitor and synthetic test notifies only the Macro Alerts channel and GoAlert', () => {
-  const routed = [...monitors(), ...synthetics()];
+// Notification handles and email addresses; attribute names like `@error` in
+// message text are not handles.
+const handles = (message: string): string[] =>
+  message.match(
+    /@(?:webhook|slack|pagerduty|opsgenie|teams)-[\w-]+|[\w.+-]+@[\w-]+\.[\w.]+/g
+  ) ?? [];
+
+test('every monitor and synthetic test notifies only GoAlert', () => {
+  const routed = [...monitors(), ...synthetics()].filter(
+    (r) => r.name !== 'goalert-health'
+  );
   expect(routed.length).toBeGreaterThan(80);
   for (const resource of routed) {
-    // Notification handles and email addresses; attribute names like `@error`
-    // in message text are not handles.
-    const handles: string[] =
-      resource.inputs.message.match(
-        /@(?:webhook|slack|pagerduty|opsgenie|teams)-[\w-]+|[\w.+-]+@[\w-]+\.[\w.]+/g
-      ) ?? [];
-    expect({ name: resource.name, handles }).toEqual({
+    const found = handles(resource.inputs.message);
+    expect({ name: resource.name, handles: found }).toEqual({
       name: resource.name,
-      handles: expect.arrayContaining(['@webhook-macro-alert-hook']),
+      handles: expect.arrayContaining([
+        '@webhook-goalert-notify',
+        '@webhook-goalert-notify-close',
+      ]),
     });
-    for (const handle of handles) {
+    for (const handle of found) {
       expect([
-        '@webhook-macro-alert-hook',
         '@webhook-goalert',
         '@webhook-goalert-close',
+        '@webhook-goalert-notify',
+        '@webhook-goalert-notify-close',
       ]).toContain(handle);
     }
   }
+});
+
+test('only the GoAlert health check posts to the channel directly', () => {
+  const health = synthetics().find((r) => r.name === 'goalert-health');
+  expect(handles(health?.inputs.message)).toEqual([
+    '@webhook-macro-alert-hook',
+  ]);
+  expect(health?.inputs.requestDefinition.url).toBe(
+    'https://oncall.macro-internal.com/health'
+  );
 });
 
 test('every monitor renotifies while it stays in alert', () => {
@@ -81,35 +105,25 @@ test('every monitor renotifies while it stays in alert', () => {
   }
 });
 
-test('paging prod monitors open and close a GoAlert alert; the rest only notify', () => {
+test('a paging monitor pages on critical and notifies otherwise', () => {
   const blocked = monitors().find(
     (r) => r.name === 'macrodb-blocked-connections'
   );
-  expect(blocked?.inputs.message).toContain(
-    '{{#is_alert}}Paging on-call. @webhook-goalert{{/is_alert}}'
-  );
-  expect(blocked?.inputs.message).toContain(
-    '{{#is_recovery}}@webhook-goalert-close{{/is_recovery}}'
+  expect(blocked?.inputs.message).toEndWith(
+    '{{#is_alert}}Paging on-call. @webhook-goalert{{/is_alert}}{{#is_warning}}@webhook-goalert-notify{{/is_warning}}{{#is_no_data}}@webhook-goalert-notify{{/is_no_data}}{{#is_recovery}}@webhook-goalert-close @webhook-goalert-notify-close{{/is_recovery}}'
   );
   expect(blocked?.inputs.priority).toBe('2');
+});
 
+test('a non-paging monitor notifies on every state', () => {
   // Grafana pages for this one, so Datadog only notifies.
   const freeable = monitors().find(
     (r) => r.name === 'macrodb-primary-freeable-memory'
   );
-  expect(freeable?.inputs.message).not.toContain('@webhook-goalert');
-
-  const latency = monitors().find((r) => r.name === 'macrodb-read-latency');
-  expect(latency?.inputs.message).not.toContain('@webhook-goalert');
-  expect(latency?.inputs.priority).toBe('3');
-});
-
-test('the GoAlert health check does not page through GoAlert', () => {
-  const health = synthetics().find((r) => r.name === 'goalert-health');
-  expect(health?.inputs.message).not.toContain('@webhook-goalert');
-  expect(health?.inputs.requestDefinition.url).toBe(
-    'https://oncall.macro-internal.com/health'
+  expect(freeable?.inputs.message).toEndWith(
+    '{{#is_alert}}@webhook-goalert-notify{{/is_alert}}{{#is_warning}}@webhook-goalert-notify{{/is_warning}}{{#is_no_data}}@webhook-goalert-notify{{/is_no_data}}{{#is_recovery}}@webhook-goalert-notify-close{{/is_recovery}}'
   );
+  expect(freeable?.inputs.priority).toBe('3');
 });
 
 test('anomaly rules recover at zero and carry their alert window', () => {

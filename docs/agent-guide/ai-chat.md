@@ -83,6 +83,11 @@ words, never the prompt's hidden context. The sent prompt is fully opaque from
 the first paint, and its `Context` chip is already in place, so nothing shifts
 when the server confirms it.
 
+A session started by mentioning the agent in a thread (for example `@macro` in a
+channel) gets no opener. Its thread reply is one message that updates only as
+each passage finishes, so the line would arrive with the text after it. The
+reply starts with the chosen model's answer.
+
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone
 must not send a prompt. Record navigation and focus time separately from typing
@@ -331,6 +336,11 @@ the shimmer.
   app authentication and disconnection), also available under Settings → Integrations.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
+- Ask the agent to connect an MCP server by URL (for example "connect the MCP
+  server at https://mcp.example.com/mcp"). It calls **ConnectMcpServer**, which
+  adds a public `https` server to Connections and renders a **Connected MCP
+  server** card; when the server needs a sign-in, the agent asks the user to
+  click Connect next to it in Connections.
 
   In a secondary desktop split, the new-conversation page and existing chats show
   one close button beside **Show navigation** while the sidebar is collapsed.
@@ -1597,9 +1607,10 @@ choose **Reply to this** above the selection. The composer inserts a single-line
 **Replying to** preview with the same quote-reply styling as channel replies.
 Click the preview to open the full **Referenced text** viewer. While editable,
 hover the preview for its menu: **Copy**, **Convert to text**, or **Delete**.
-A plain-text paste over 1500 characters collapses into a **pasted** chip that
-opens the same viewer, titled **Pasted text**. Text in either viewer can be
-drag-selected and copied, from the composer and from sent messages.
+A plain-text paste over 1500 characters outside a code block collapses into a
+**pasted** chip that opens the same viewer, titled **Pasted text**. Text in
+either viewer can be drag-selected and copied, from the composer and from sent
+messages.
 Selecting text in the composer or outside the transcript must not show the reply
 button; clearing the transcript selection dismisses it.
 
@@ -1892,13 +1903,17 @@ must stay hidden; subsequent live messages must still appear.
   `Allow bypassing permission requests`, off by default. Enabling it warns that
   agents may run commands and edit files on the machine without approval.
   Macrod Quickstart and Config also offer `Full Access`, off by
-  default. The choice applies at the next pairing: off disables bypass in the
-  pairing page; on preselects bypass with a warning, and the approving user
-  can turn it off. Older daemons leave this choice to the pairing page.
+  default. Quickstart and Config give Full Access a bordered, three-line control
+  labeled `Suggested`, without enabling it. On short terminals, Config scrolls to
+  the selected setting and keeps consent warnings below it; Quickstart keeps its
+  submit button visible. The choice applies at the next pairing:
+  off disables bypass in the pairing page; on preselects bypass with a warning,
+  and the approving user can turn it off. Older daemons leave this choice to the pairing page.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
-  and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
-  bypass requires both harness consent and the agent's explicit choice. Built-in
-  Macro, in-memory, Cursor, and Codex runtimes always bypass and have no
+  and `Always bypass` only for local macrod harnesses. The larger `Always bypass`
+  choice is labeled `Suggested`; the label does not select it. Macrod defaults to
+  prompts; bypass requires both harness consent and the agent's explicit choice.
+  Built-in Macro, in-memory, Cursor, and Codex runtimes always bypass and have no
   permission policy selector. The backend enforces these policies.
 
 Locally sent user messages in both AI implementations enter with a short upward
@@ -1952,6 +1967,12 @@ verify that reconnecting the gateway catches up changes missed while disconnecte
 There is no periodic PR lookup polling.
 
 ### Agent reasoning effort
+
+Long model names wrap in model menus and touch sheets. Desktop composer
+triggers stay on one line within the available width; hover a truncated trigger
+to read its full model and effort in the native tooltip. Verify both ordinary
+model rows and rows that open effort submenus, including search results.
+Long runtime-provided effort names wrap within their submenu rows as well.
 
 Open the model selector and hover a model to choose its reasoning effort in the
 submenu on desktop, opened with Right Arrow. On mobile, tap a model to select it,

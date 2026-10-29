@@ -5421,7 +5421,7 @@ enum GraphqlGroupByField {
 	"""
 	ENTITY_TYPE
 	"""
-	Group by containing project.
+	Group by the Project property (initiative membership).
 	"""
 	PROJECT
 	"""

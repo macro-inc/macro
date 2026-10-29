@@ -6,27 +6,36 @@ Datadog monitors and synthetic tests as code.
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
-`redis.ts`, `queues.ts`, `regressions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, and one log-based metric.
+`redis.ts`, `queues.ts`, `regressions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, one log-based metric, and one downtime.
 
 ## Routing
 
-Every monitor and synthetic test notifies through `notify.ts`, and nowhere
-else:
+Every monitor and synthetic test notifies GoAlert through `notify.ts`, and
+nothing else. GoAlert runs on the observability host (`infra/stacks/observability`)
+and has two services, each with its pair of webhooks declared in `goalert.ts`:
 
-- **All of them** post to the Macro Alerts channel (`@webhook-macro-alert-hook`,
-  a webhook integration configured in the Datadog UI).
-- **Paging monitors** also open a GoAlert alert on `{{#is_alert}}` and close it
-  on `{{#is_recovery}}` (`@webhook-goalert`, `@webhook-goalert-close`, declared
-  in `goalert.ts`). GoAlert runs on the observability host
-  (`infra/stacks/observability`) and phones the on-call engineer. Warnings never
-  page.
-- **Every monitor renotifies hourly** (`RENOTIFY_MINUTES`) while it stays in
-  warning or alert.
+- **Notify** (`@webhook-goalert-notify`, `@webhook-goalert-notify-close`):
+  posts the alert to the Macro Alerts channel. Every warning, alert and no-data
+  notification opens or updates an alert here, except a paging monitor's
+  critical alert.
+- **Paging** (`@webhook-goalert`, `@webhook-goalert-close`): also phones the
+  on-call engineer. Only a paging monitor's `{{#is_alert}}` opens one; its
+  warnings and no-data go to Notify.
+- **Every recovery** closes on each service the monitor could have opened.
+  Closing an alert GoAlert does not have open does nothing.
+- **The hourly re-post comes from GoAlert**: its escalation posts to the channel
+  and repeats every hour until someone acknowledges. Monitors still renotify
+  hourly (`RENOTIFY_MINUTES`); the repeat dedups into the open GoAlert alert
+  (`$ALERT_CYCLE_KEY`) and reopens it if someone closed it while the monitor
+  still fires.
+- **Datadog never posts to the channel itself**, so each alert appears once.
+  The only exception is the GoAlert health check (`goalert-health`), which
+  posts straight to `@webhook-macro-alert-hook` (a webhook integration
+  configured in the Datadog UI): when GoAlert is down, nothing routed through
+  it arrives.
 - `routing.test.ts` fails if any monitor mentions another handle or an email
-  address, or lacks the renotify interval.
-
-The GoAlert health check (`goalert-health`) notifies the channel only: when the
-pager is down, a page through it would never arrive.
+  address, if anything but the health check mentions the channel webhook, or if
+  a monitor lacks the renotify interval.
 
 Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
@@ -41,8 +50,8 @@ its thresholds many times a day.
 the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
-the critical ones through GoAlert. Their Datadog copies only notify, so one
-incident pages once. Keep thresholds and windows in sync by hand. The error-logs
+the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
+Notify service), so one incident pages once. Keep thresholds and windows in sync by hand. The error-logs
 anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
@@ -55,11 +64,12 @@ graph with matching markers.
 
 ## Read this before deploying
 
-**Set the GoAlert integration key and deploy GoAlert first.** The webhooks
-need the key, and paging monitors reference them:
+**Set the GoAlert integration keys and deploy GoAlert first.** The webhooks
+need the keys, and every monitor references them:
 
 ```bash
-pulumi config set --secret goalertIntegrationKey '<Generic API key of the Datadog service in GoAlert>'
+pulumi config set --secret goalertIntegrationKey '<Generic API key of the paging service in GoAlert>'
+pulumi config set --secret goalertNotifyIntegrationKey '<Generic API key of the Notify service in GoAlert>'
 ```
 
 **Run the import before the first `pulumi up`.** The program declares 34
@@ -93,12 +103,22 @@ and records options omitted during import.
 The gate is that preview:
 
 - **34 monitors + 1 synthetic test updated, in `message` and
-  `renotifyInterval` only** — the routing move. The two AI-editing monitors,
-  already deployed from this stack, update the same way.
+  `renotifyInterval` only** — the routing move to GoAlert. The two AI-editing
+  monitors, already deployed from this stack, update their `message` the same
+  way. `dss-errors-prod` also changes its query and critical threshold
+  (150 → 800).
+- **Already-deployed monitors update their `message`** (GoAlert handles instead
+  of the channel), and the GraphQL soup volume, gateway connections and task
+  count monitors their `query` and thresholds.
 - **73 resources to create**: 64 monitors (25 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
   1 log-based metric, the GoAlert synthetic test, the four prod alert
-  dashboards, and the notification retention dashboard.
+  dashboards, and the notification retention dashboard. If the paging
+  webhooks and GoAlert synthetic are already deployed, expect only the 2
+  Notify webhooks among the webhooks.
+- **1 downtime to create**, muting `[PROD] Notification consumer: no
+  telemetry`, which fires by design until the DSS consumer health
+  instrumentation ships. Delete it then.
 - **Any other update, a replace, or a delete** — the hand-written code in
   `monitors/*.ts` drifted from the live monitor. Reconcile against
   `imported.generated.ts` before deploying.
@@ -213,7 +233,9 @@ failed delete publication, plus a cross-environment retention trace-flush alarm.
 The dashboard URL is exported as `notificationRetentionDashboardUrl`.
 
 Deploy the notification consumer instrumentation in DSS before these monitors;
-otherwise the missing-telemetry alerts intentionally fire. This monitoring stack
+otherwise the missing-telemetry alerts intentionally fire. Until it ships, a
+downtime in `notification-retention.ts` mutes the prod one; delete the downtime
+once the instrumentation is deployed. This monitoring stack
 still requires a separate, explicitly approved manual deployment. Adopted
 monitors may change only in `message` and `renotifyInterval` (see the gate above).
 

@@ -119,7 +119,7 @@ export type BuildTaskQueryOptions = {
   crm?: TaskCrmScope;
   /** Only tasks whose name contains this text, case-insensitively. */
   nameContains?: string;
-  /** Board Project columns use the initiative property, not legacy folders. */
+  /** Board Project columns use explicit property grouping for column editing. */
   board?: boolean;
 };
 

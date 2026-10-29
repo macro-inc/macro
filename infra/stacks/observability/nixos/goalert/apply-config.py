@@ -1,5 +1,6 @@
-"""Migrate GoAlert's database, replace its config with the Nix-declared one, and
-create the `admin` login if it does not exist.
+"""Migrate GoAlert's database, replace its config with the Nix-declared one,
+make Macro Workspace accounts admins, and create the `admin` login if it does
+not exist.
 
 GoAlert keeps application config only in Postgres. Running this before every
 start makes the Nix attrset the source of truth: edits in the admin UI last
@@ -12,7 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-goalert, template_path, psql = sys.argv[1], sys.argv[2], sys.argv[3]
+goalert, template_path, psql, workspace_admins_sql = sys.argv[1:5]
 credentials = Path(os.environ['CREDENTIALS_DIRECTORY'])
 
 
@@ -34,6 +35,10 @@ environment = {
 subprocess.run([goalert, 'migrate'], env=environment, check=True)
 subprocess.run(
     [goalert, 'set-config'], env=environment, input=json.dumps(config), text=True, check=True,
+)
+subprocess.run(
+    [psql, '-v', 'ON_ERROR_STOP=1', '-q', '-f', workspace_admins_sql, environment['GOALERT_DB_URL']],
+    env=environment, check=True,
 )
 admin_exists = subprocess.run(
     [psql, '-tAc', "select 1 from auth_basic_users where username = 'admin'", environment['GOALERT_DB_URL']],
