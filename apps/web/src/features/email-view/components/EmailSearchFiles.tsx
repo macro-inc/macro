@@ -101,8 +101,8 @@ export function EmailSearchFileRow(props: {
       <Button
         variant="ghost"
         size="icon-sm"
-        label="Open email"
-        shortcut="shift+enter"
+        aria-label="Open email"
+        tooltip={{ content: 'Open email', shortcut: 'shift+enter' }}
         data-file-action
         class={cn(
           'text-ink-extra-muted',
