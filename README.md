@@ -139,7 +139,7 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 **Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!
 
-![Macro Sales pipeline board grouped by stage with its navigation sidebar open](.github/readme/crm-board.jpg)
+![Macro Sales Demo pipeline with 11 fictional company cards grouped by stage and its navigation sidebar open](.github/readme/crm-board.jpg)
 
 We haven't innovated on the core idea of CRM other than what you read in the above paragraph. None of this should be that interesting:
 
