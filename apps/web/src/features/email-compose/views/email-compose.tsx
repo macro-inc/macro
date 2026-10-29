@@ -307,7 +307,10 @@ function LoadedEmailComposeView(
           >
             <ComposeLayout
               toolbar={(hotkeyScope) => (
-                <EmailComposeToolbar editor={editor} hotkeyScope={hotkeyScope} />
+                <EmailComposeToolbar
+                  editor={editor}
+                  hotkeyScope={hotkeyScope}
+                />
               )}
               notice={
                 // A missing inbox must not hide a draft that only this

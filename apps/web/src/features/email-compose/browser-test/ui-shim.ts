@@ -1,7 +1,9 @@
+export { AvatarGroup } from '../../../components/ui/components/Avatar';
 export {
   Button,
   buttonClasses,
 } from '../../../components/ui/components/Button';
+export { ButtonGroup } from '../../../components/ui/components/ButtonGroup';
 export { Dialog } from '../../../components/ui/components/Dialog';
 export { Dropdown } from '../../../components/ui/components/Dropdown';
 export { Hotkey } from '../../../components/ui/components/Hotkey';
@@ -12,5 +14,3 @@ export { Tooltip } from '../../../components/ui/components/Tooltip';
 export { cn } from '../../../components/ui/utils/classname';
 export { highlightFirstMenuItemOnOpen } from '../../../components/ui/utils/menuKeyboardNavigation';
 export { pressHandlers } from '../../../components/ui/utils/press';
-export { AvatarGroup } from '../../../components/ui/components/Avatar';
-export { ButtonGroup } from '../../../components/ui/components/ButtonGroup';
