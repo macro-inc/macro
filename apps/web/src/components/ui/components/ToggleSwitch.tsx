@@ -97,7 +97,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       >
         <KobalteSwitch.Thumb
           class={cn(
-            'absolute rounded-full border border-border-secondary bg-[white] transition-[width,translate,background-color] duration-150 ease-out data-checked:bg-accent-contrast motion-reduce:transition-none',
+            'absolute rounded-full border border-border-secondary bg-[white] transition-[width,translate] duration-150 ease-out motion-reduce:transition-none',
             sizing().thumb,
             !local.disabled && !others.readOnly && sizing().pressed
           )}
