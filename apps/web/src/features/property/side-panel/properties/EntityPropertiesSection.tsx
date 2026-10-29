@@ -667,43 +667,44 @@ function PropertyRowActions(props: {
   return (
     <Show when={hasActions()}>
       <div
-        class={cn(
-          'flex shrink-0 items-center gap-0.5',
-          'transition-opacity',
-          canPin() && isPinned()
-            ? 'pointer-events-auto opacity-100'
-            : 'pointer-events-none opacity-0',
-          'group-hover/property-row:pointer-events-auto group-hover/property-row:opacity-100 group-focus-within/property-row:pointer-events-auto group-focus-within/property-row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
-          'touch:pointer-events-auto touch:opacity-100'
-        )}
+        class="flex shrink-0 items-center gap-0.5"
         onMouseDown={stopRowInteraction}
       >
+        <Show when={canRemove()}>
+          <Button
+            variant="ghost"
+            appearance="bare"
+            size="icon-xs"
+            title="Remove from entity"
+            aria-label="Remove from entity"
+            disabled={isSaving()}
+            class={cn(
+              'text-ink-muted hover:bg-hover hover:text-failure-ink transition-opacity',
+              'pointer-events-none opacity-0',
+              'group-hover/property-row:pointer-events-auto group-hover/property-row:opacity-100 group-focus-within/property-row:pointer-events-auto group-focus-within/property-row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100',
+              'touch:pointer-events-auto touch:opacity-100'
+            )}
+            onClick={removeFromEntity}
+          >
+            <TrashIcon class="size-4" />
+          </Button>
+        </Show>
         <Show when={canPin()}>
           <Button
             variant="ghost"
-            size="icon-sm"
+            appearance="bare"
+            size="icon-xs"
             title={pinLabel()}
             aria-label={pinLabel()}
             aria-pressed={isPinned()}
             disabled={isSaving()}
+            class="text-ink-muted hover:bg-hover hover:text-ink"
             onClick={togglePin}
           >
             <Show when={isPinned()} fallback={<PushPinIcon class="size-4" />}>
               <PushPinSlashIcon class="size-4" />
             </Show>
           </Button>
-        </Show>
-        <Show when={canRemove()}>
-          <button
-            type="button"
-            title="Remove from entity"
-            aria-label="Remove from entity"
-            disabled={isSaving()}
-            class="flex size-5 items-center justify-center rounded-full text-ink-muted outline-none ring-0 shadow-none hover:bg-hover hover:text-failure-ink focus:outline-none focus-visible:outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-50"
-            onClick={removeFromEntity}
-          >
-            <TrashIcon class="size-3" />
-          </button>
         </Show>
       </div>
     </Show>
