@@ -71,7 +71,8 @@ impl HarnessPresence for PgHarnessPresence {
             let result = sqlx::query!(
                 r#"
                 UPDATE harnesses
-                SET last_connected_at = now(), operator_allows_bypass = $2
+                SET last_connected_at = now(),
+                    operator_allows_bypass = COALESCE($2, operator_allows_bypass)
                 WHERE id = $1
                 "#,
                 harness.as_uuid(),
