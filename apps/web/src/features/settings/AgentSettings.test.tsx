@@ -20,7 +20,6 @@ vi.mock('./Agents', () => ({
   Agents: (props: {
     createKind?: AgentKind;
     onCloseCreate?: () => void;
-    onCursor: () => void;
     onNewRuntime: () => void;
     focusRuntimes?: boolean;
   }) => (
@@ -29,22 +28,8 @@ vi.mock('./Agents', () => ({
       <span>{props.createKind}</span>
       <span>{props.focusRuntimes ? 'Runtimes in view' : 'Top of page'}</span>
       <button onClick={props.onCloseCreate}>Cancel create</button>
-      <button type="button" onClick={props.onCursor}>
-        Add Cursor
-      </button>
       <button type="button" onClick={props.onNewRuntime}>
         New runtime
-      </button>
-    </div>
-  ),
-}));
-
-vi.mock('./CursorConnectPage', () => ({
-  CursorConnectPage: (props: { onClose: () => void }) => (
-    <div>
-      <h1>Cursor guide</h1>
-      <button type="button" onClick={props.onClose}>
-        Back
       </button>
     </div>
   ),
@@ -72,14 +57,9 @@ afterEach(() => {
 });
 
 describe('AgentSettings', () => {
-  it('opens Cursor and pairing from the agents page and comes back', () => {
+  it('opens pairing from the agents page and returns to the runtimes', () => {
     render(() => <AgentSettings />);
     expect(screen.getByRole('heading', { name: 'Agents page' })).toBeTruthy();
-    expect(screen.getByText('Top of page')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Cursor' }));
-    expect(screen.getByRole('heading', { name: 'Cursor guide' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByText('Top of page')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'New runtime' }));

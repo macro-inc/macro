@@ -3,11 +3,11 @@ import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { AgentFaceLook } from '../core/agent-face';
 import { AgentFace } from './agent-face';
-import { AgentHero, AgentStage, AgentStageTitle } from './agent-stage';
+import { AgentHero, AgentStage } from './agent-stage';
 
 /**
  * An existing agent's settings on the same stage the wizard uses: its face
- * over its color, its name in slab, then every section in one column, with
+ * over its color, its name, then every section in one column, with
  * Save held at the bottom of the view.
  */
 export function AgentEditFrame(props: {
@@ -61,7 +61,9 @@ export function AgentEditFrame(props: {
       >
         <div class="flex flex-col items-center text-center">
           <AgentHero>{props.hero}</AgentHero>
-          <AgentStageTitle>{props.title}</AgentStageTitle>
+          <h1 class="mt-6 text-[26px]/tight font-medium tracking-[-0.025em] text-ink [text-wrap:balance]">
+            {props.title}
+          </h1>
           <p class="mt-2 text-sm text-ink-muted">{props.subtitle}</p>
         </div>
         <div class="@container mt-10 flex flex-col" ref={props.contentRef}>
@@ -81,9 +83,7 @@ export function AgentEditSection(props: {
   return (
     <section class="border-t border-edge-muted py-8 first:border-t-0 first:pt-0">
       <div class="mb-4">
-        <h2 class="font-[Roboto_Slab_Variable] text-xl font-[340] leading-tight tracking-[-.015em]">
-          {props.title}
-        </h2>
+        <h2 class="text-base font-medium text-ink">{props.title}</h2>
         <Show when={props.description}>
           <p class="mt-1 text-sm text-ink-muted">{props.description}</p>
         </Show>

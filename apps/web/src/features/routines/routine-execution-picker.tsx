@@ -27,7 +27,7 @@ function ConnectedPicker(props: RoutineExecutionPickerProps): JSX.Element {
   const { openSettings } = useSettingsState();
 
   function connect(agent: RosterAgent): void {
-    if (agent.harness === 'cursor') openSettings('Agents');
+    if (agent.harness === 'cursor') openSettings('Harness');
   }
 
   return (

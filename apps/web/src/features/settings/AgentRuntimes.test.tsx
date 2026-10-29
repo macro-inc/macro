@@ -7,6 +7,8 @@ vi.mock('@core/codex/flag', () => ({
  * @vitest-environment jsdom
  */
 
+import { useAgentModelsQuery } from '@queries/agents/models';
+import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
   render,
@@ -14,8 +16,15 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/solid-query';
+import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRuntimes } from './AgentRuntimes';
+import { chooseModelOption } from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
@@ -27,6 +36,30 @@ vi.mock('./codex/views/CodexHarness', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  status: {
+    isSuccess: true,
+    isError: false,
+    data: {
+      registered: false,
+      defaultModelId: null as string | null,
+      updatedAt: null as string | null,
+    },
+    isPlaceholderData: false,
+  },
+  models: {
+    data: {
+      status: 'available' as const,
+      currentModel: 'default-model',
+      models: [{ id: 'default-model', name: 'Default Model' }],
+    },
+    isPending: false,
+    isError: false,
+    isSuccess: true,
+    refetch: vi.fn(),
+  },
+  save: vi.fn(),
+  disconnect: vi.fn(),
+  setDefaultModel: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
 }));
@@ -39,6 +72,26 @@ const harnessMocks = vi.hoisted(() => ({
     isError: false,
   },
   deleteHarness: vi.fn(),
+}));
+
+vi.mock('@queries/auth/cursor-api-key', () => ({
+  useCursorApiKeyStatusQuery: () => mocks.status,
+  useSaveCursorApiKey: () => ({
+    mutateAsync: mocks.save,
+    isPending: false,
+  }),
+  useDisconnectCursorApiKey: () => ({
+    mutateAsync: mocks.disconnect,
+    isPending: false,
+  }),
+  useSetCursorDefaultModel: () => ({
+    mutateAsync: mocks.setDefaultModel,
+    isPending: false,
+  }),
+}));
+
+vi.mock('@queries/agents/models', () => ({
+  useAgentModelsQuery: vi.fn(() => mocks.models),
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
@@ -76,6 +129,22 @@ beforeAll(() => {
 beforeEach(() => {
   codexAccess.enabled = true;
   vi.clearAllMocks();
+  mocks.status.data = {
+    registered: false,
+    defaultModelId: null,
+    updatedAt: null,
+  };
+  mocks.status.isPlaceholderData = false;
+  mocks.models.data = {
+    status: 'available',
+    currentModel: 'default-model',
+    models: [{ id: 'default-model', name: 'Default Model' }],
+  };
+  mocks.models.isPending = false;
+  mocks.models.isError = false;
+  mocks.models.isSuccess = true;
+  mocks.save.mockResolvedValue(undefined);
+  mocks.disconnect.mockResolvedValue(undefined);
   harnessMocks.query.data = [];
   harnessMocks.query.isError = false;
   harnessMocks.deleteHarness.mockResolvedValue(undefined);
@@ -91,14 +160,161 @@ describe('AgentRuntimes', () => {
     }
   );
 
-  it('lists Macro Agent, but not Cursor, among the built-in runtimes', () => {
+  it.each(['success', 'error'] as const)(
+    'keeps settings visible while Cursor models load and after %s',
+    async (outcome) => {
+      mocks.status.data.registered = true;
+      let resolveModels!: (models: LoadAgentModelsResponse) => void;
+      let rejectModels!: (error: Error) => void;
+      const response = new Promise<LoadAgentModelsResponse>(
+        (resolve, reject) => {
+          resolveModels = resolve;
+          rejectModels = reject;
+        }
+      );
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      vi.mocked(useAgentModelsQuery).mockImplementationOnce(() =>
+        useQuery(() => ({
+          queryKey: ['pending-cursor-models'],
+          queryFn: () => response,
+        }))
+      );
+      const view = render(() => (
+        <QueryClientProvider client={client}>
+          <Suspense fallback={<p>Settings suspended</p>}>
+            <AgentRuntimes onNewRuntime={vi.fn()} />
+          </Suspense>
+        </QueryClientProvider>
+      ));
+      expect(screen.queryByText('Settings suspended')).toBeNull();
+      expect(screen.getByText('Loading models…')).toBeTruthy();
+      expect(
+        (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
+      ).toBe(true);
+
+      if (outcome === 'error') {
+        rejectModels(new Error('Cursor is unavailable'));
+        await waitFor(() =>
+          expect(screen.getByText(/Could not load Cursor models/)).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+      } else {
+        resolveModels({
+          status: 'available',
+          currentModel: 'loaded-model',
+          models: [
+            {
+              id: 'loaded-model',
+              name: 'Loaded Model',
+              group: 'Cursor',
+            },
+          ],
+        });
+        await waitFor(() =>
+          expect(screen.getByText('Loaded Model')).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(
+          (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
+        ).toBe(false);
+      }
+      view.unmount();
+      client.clear();
+    }
+  );
+
+  it('lists Macro Agent and Cursor in the harness list', () => {
     render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Macro Agent' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Cursor' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
     expect(
       screen.getByText(/Uses official Macro tools and MCPs to get the job done/)
     ).toBeTruthy();
+  });
+
+  it('validates and saves a Cursor API key', async () => {
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
+
+    const apiKeyInput = screen.getByLabelText('API key');
+    const saveButton = screen.getByRole('button', { name: 'Save' });
+
+    expect(apiKeyInput).toHaveProperty('type', 'password');
+    expect(saveButton).toHaveProperty('disabled', true);
+
+    fireEvent.input(apiKeyInput, { target: { value: 'not-a-cursor-key' } });
+    fireEvent.click(saveButton);
+
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'Cursor API keys start with grok_ or crsr_'
+    );
+
+    fireEvent.input(apiKeyInput, { target: { value: '  grok_example  ' } });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mocks.save).toHaveBeenCalledWith('grok_example');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor connected');
+      expect(apiKeyInput).toHaveProperty('value', '');
+    });
+  });
+
+  it('still accepts a Cursor API key minted with the older crsr_ prefix', async () => {
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
+
+    fireEvent.input(screen.getByLabelText('API key'), {
+      target: { value: 'crsr_example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mocks.save).toHaveBeenCalledWith('crsr_example');
+    });
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('shows connection status, the default model picker, and disconnect for connected Cursor', async () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: null,
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    mocks.models.data.models.push({
+      id: 'another-model',
+      name: 'Another Model',
+    });
+
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
+
+    expect(screen.getByText('Connected')).toBeTruthy();
+    expect(screen.queryByLabelText('API key')).toBeNull();
+    expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
+
+    chooseModelOption(screen.getByLabelText('Default model'), 'Another Model');
+    await waitFor(() => {
+      expect(mocks.setDefaultModel).toHaveBeenCalledWith('another-model');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+
+    await waitFor(() => {
+      expect(mocks.disconnect).toHaveBeenCalledOnce();
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor disconnected');
+    });
+  });
+
+  it('does not flash the API key form while connection status loads', () => {
+    mocks.status.isPlaceholderData = true;
+
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
+
+    expect(screen.getByText('Loading…')).toBeTruthy();
+    expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
   it('hides the empty paired runtimes section', () => {

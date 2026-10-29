@@ -63,8 +63,10 @@ describe('individual settings search', () => {
     }));
     expect(searchSettings(groups, 'signature')).toEqual([]);
   });
-  it('finds Cursor among agents, apart from Macro API keys', () => {
-    expect(search('cursor')[0].tab).toBe('Agents');
+  it('finds the Cursor runtime apart from Macro API keys', () => {
+    const [result] = search('cursor');
+    expect(result.tab).toBe('Agents');
+    expect(result.target).toBe('runtimes');
     expect(search('cursor').some((item) => item.tab === 'API Keys')).toBe(
       false
     );

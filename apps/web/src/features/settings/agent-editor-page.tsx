@@ -108,10 +108,8 @@ export function AgentEditorPage(props: {
     props.agent?.harness_id ??
       props.agent?.harness ??
       (props.initialKind === 'coder'
-        ? props.connectedHarnesses.find(
-            (harness) =>
-              harness.kind === 'macrod' ||
-              (harness.id !== 'cursor' && isCoderHarness(harness.id))
+        ? props.connectedHarnesses.find((harness) =>
+            isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
           )?.id
         : undefined) ??
       props.connectedHarnesses[0]?.id ??
@@ -557,40 +555,36 @@ export function AgentEditorPage(props: {
             {apiKeyField()}
           </div>
         </WhereItRunsOption>
-        {/* Cursor is an agent of its own (@Cursor), not a place to run new
-            agents; only agents already running there keep the option. */}
-        <Show when={props.agent?.harness === 'cursor'}>
-          <WhereItRunsOption
-            value="cursor"
-            title="In Cursor"
-            description={
-              cursorHarness()
-                ? 'Runs as a Cursor Cloud agent on your Cursor plan.'
-                : 'Connect Cursor first. Runs as a Cursor Cloud agent on your Cursor plan.'
-            }
-            icon={<CursorIcon />}
-            checked={harnessId() === 'cursor'}
-            disabled={!cursorHarness()}
-            action={
-              <Show when={!cursorHarness()}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="text-ink"
-                  aria-label="Connect Cursor"
-                  disabled={busy()}
-                  onClick={() => setSetup('cursor')}
-                >
-                  Connect
-                </Button>
-              </Show>
-            }
-            onSelect={() => handleHarnessChange('cursor')}
-          >
-            {modelField()}
-          </WhereItRunsOption>
-        </Show>
+        <WhereItRunsOption
+          value="cursor"
+          title="In Cursor"
+          description={
+            cursorHarness()
+              ? 'Runs as a Cursor Cloud agent on your Cursor plan.'
+              : 'Connect Cursor first. Runs as a Cursor Cloud agent on your Cursor plan.'
+          }
+          icon={<CursorIcon />}
+          checked={harnessId() === 'cursor'}
+          disabled={!cursorHarness()}
+          action={
+            <Show when={!cursorHarness()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="text-ink"
+                aria-label="Connect Cursor"
+                disabled={busy()}
+                onClick={() => setSetup('cursor')}
+              >
+                Connect
+              </Button>
+            </Show>
+          }
+          onSelect={() => handleHarnessChange('cursor')}
+        >
+          {modelField()}
+        </WhereItRunsOption>
         <WhereItRunsOption
           value="harness"
           title="In your harness"

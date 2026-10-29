@@ -1158,7 +1158,7 @@ describe('agent-led new conversation', () => {
     page(false, [], false, [], 'code');
     const before = screen.getByRole('button', { name: 'Agent' }).title;
     await selectAgent(/Cursor/);
-    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
+    expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
     expect(screen.getByRole('button', { name: 'Agent' }).title).toBe(before);
   });
   it.each(['free', 'premium', 'max'])(

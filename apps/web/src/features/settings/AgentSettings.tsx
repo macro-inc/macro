@@ -10,13 +10,12 @@ import {
 } from 'solid-js';
 import { Agents } from './Agents';
 import { agentSettingsRequest } from './agentSettingsState';
-import { CursorConnectPage } from './CursorConnectPage';
 import { RuntimePairingPage } from './RuntimePairingPage';
 
 /** Where the Agents page opens: its top, or its Runtimes section. */
 export type AgentManagementSection = 'agents' | 'runtimes';
 
-type AgentSettingsPage = 'agents' | 'cursor' | 'pairing';
+type AgentSettingsPage = 'agents' | 'pairing';
 
 /** One management surface, mounted by both Settings and the Agents workspace. */
 export function AgentSettings(props: {
@@ -66,14 +65,10 @@ export function AgentSettings(props: {
         <Agents
           createKind={props.createKind}
           onCloseCreate={showAgents}
-          onCursor={() => navigate('cursor')}
           onNewRuntime={() => navigate('pairing')}
           focusRuntimes={focusRuntimes()}
           onRuntimesFocused={() => setFocusRuntimes(false)}
         />
-      </Match>
-      <Match when={activePage() === 'cursor'}>
-        <CursorConnectPage onClose={showAgents} />
       </Match>
       <Match when={activePage() === 'pairing'}>
         <RuntimePairingPage

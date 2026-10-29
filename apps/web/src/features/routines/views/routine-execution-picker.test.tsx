@@ -276,7 +276,7 @@ describe('routine execution picker', () => {
       screen.getByRole('menuitem', { name: /Connect Cursor/ }),
       { key: 'Enter' }
     );
-    expect(host.openSettings).toHaveBeenCalledWith('Agents');
+    expect(host.openSettings).toHaveBeenCalledWith('Harness');
     await expectClosed(trigger);
     trigger = openPicker();
     fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Create agent' }), {

@@ -100,8 +100,9 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Agents',
-    title: 'Cursor',
-    keywords: 'cursor cloud coding agent api key',
+    title: 'Cursor runtime',
+    target: 'Runtimes',
+    keywords: 'cursor cloud coding agent api key credential',
   },
   {
     tab: 'Agents',

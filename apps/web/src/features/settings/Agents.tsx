@@ -3,11 +3,6 @@ import type { AgentKind } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  CURSOR_BOT_HANDLE,
-  CURSOR_BOT_ID,
-  CURSOR_BOT_NAME,
-} from '@core/constant/cursorAgent';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
@@ -42,7 +37,6 @@ import {
   createMemo,
   createSignal,
   For,
-  type JSX,
   on,
   Show,
 } from 'solid-js';
@@ -65,18 +59,6 @@ import { SettingsCard, SettingsPage, SettingsSurface } from './primitives';
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
 
-/** The first-party Cursor agent, mentioned as @Cursor once it is added. */
-const CURSOR_AGENT: AgentSummary = {
-  id: CURSOR_BOT_ID,
-  name: CURSOR_BOT_NAME,
-  tag: CURSOR_BOT_HANDLE,
-  instructions: '',
-  whereItRuns: 'Cursor Cloud',
-  defaultModel: '',
-  channelSummary: 'All channels',
-  share: 'Team',
-};
-
 const MACRO_AGENT: AgentSummary = {
   id: MACRO_AGENT_BOT_ID,
   name: 'Macro',
@@ -92,8 +74,6 @@ const MACRO_AGENT: AgentSummary = {
 export function Agents(props: {
   createKind?: AgentKind;
   onCloseCreate?: () => void;
-  /** Adds Cursor, or manages it once it is connected. */
-  onCursor: () => void;
   onNewRuntime: () => void;
   /** Scrolls the Runtimes section into view, then reports it did. */
   focusRuntimes?: boolean;
@@ -317,44 +297,6 @@ export function Agents(props: {
                   }
                   messagePending={agentDm?.pending()}
                 />
-                <AgentRow
-                  agent={CURSOR_AGENT}
-                  badge={false}
-                  subtitle={
-                    cursorConnected()
-                      ? 'Cursor Cloud agents on your Cursor plan · All channels'
-                      : 'Hands coding work to a Cursor Cloud agent. Add your Cursor API key to mention it.'
-                  }
-                  actions={
-                    <Show when={cursorStatus.isSuccess}>
-                      <Show
-                        when={cursorConnected()}
-                        fallback={
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            aria-label="Add Cursor"
-                            onClick={props.onCursor}
-                          >
-                            <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
-                            Add
-                          </Button>
-                        }
-                      >
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          aria-label="Manage Cursor"
-                          onClick={props.onCursor}
-                        >
-                          Manage
-                        </Button>
-                      </Show>
-                    </Show>
-                  }
-                />
                 <For each={[...teamAgents(), ...privateAgents()]}>
                   {(agent) => (
                     <AgentRow
@@ -498,12 +440,6 @@ function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
 
 function AgentRow(props: {
   agent: AgentSummary;
-  /** Replaces the Team/Private pill; `false` shows none. */
-  badge?: string | false;
-  /** Replaces the where-it-runs, model, and channels line. */
-  subtitle?: string;
-  /** Replaces Message, Edit, and Delete. */
-  actions?: JSX.Element;
   onEdit?: () => void;
   onDelete?: () => void;
   onMessage?: () => void;
@@ -525,19 +461,16 @@ function AgentRow(props: {
           <span class="truncate text-xs text-ink-extra-muted">
             @{props.agent.tag}
           </span>
-          <Show when={props.badge !== false}>
-            <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
-              {props.badge || props.agent.share}
-            </span>
-          </Show>
+          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
+            {props.agent.share}
+          </span>
         </div>
         <p class="mt-0.5 text-xs text-ink-extra-muted">
-          {props.subtitle ??
-            `${props.agent.whereItRuns} · ${props.agent.defaultModel} · ${props.agent.channelSummary}`}
+          {props.agent.whereItRuns} · {props.agent.defaultModel} ·{' '}
+          {props.agent.channelSummary}
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-1">
-        {props.actions}
         <Show when={props.onMessage}>
           {(onMessage) => (
             <Button

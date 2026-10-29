@@ -65,10 +65,7 @@ function ConnectHarness(props: ConnectAppDecoratorProps) {
       {...props}
       connected={connected}
       icon={<HarnessIcon harness={props.appSlug} class="size-3.5" />}
-      // Cursor is an agent on Settings → Agents; other harnesses are runtimes.
-      onConnect={() =>
-        openSettings(props.appSlug === 'cursor' ? 'Agents' : 'Harness')
-      }
+      onConnect={() => openSettings('Harness')}
     />
   );
 }
