@@ -1,6 +1,6 @@
 import { rowPillClasses } from '@app/features/entity/components/row-pill';
 import { TAG_COLORS } from '@app/features/property/tags/tagColors';
-import { cn, TagDot } from '@ui';
+import { Badge, cn, TagDot } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { type ConnectionState, StatusDot } from '../integration-ui';
@@ -8,10 +8,17 @@ import { type ConnectionState, StatusDot } from '../integration-ui';
 /** Whether an integration is in use; connected rows sort to the top. */
 export type IntegrationStatus = ConnectionState | 'available';
 
+/**
+ * How an integration reaches Macro: built into Macro (`native`), or as tools
+ * agents call through an MCP server (`mcp`).
+ */
+export type IntegrationKind = 'native' | 'mcp';
+
 /** One row of the Integrations list. */
 export type IntegrationItem = {
   id: string;
   name: string;
+  kind: IntegrationKind;
   icon: JSX.Element;
   /** What it does in Macro, or which accounts are connected. */
   description: string;
@@ -132,6 +139,7 @@ export function IntegrationsListHeader() {
 export function IntegrationListRow(props: {
   icon: JSX.Element;
   name: string;
+  kind: IntegrationKind;
   description: string;
   categories: string[];
   status: IntegrationStatus;
@@ -168,6 +176,18 @@ export function IntegrationListRow(props: {
             >
               {props.name}
             </span>
+            <Badge
+              variant="outline"
+              size="xs"
+              class="shrink-0 text-ink-muted"
+              title={
+                props.kind === 'mcp'
+                  ? 'Agents use it through an MCP server'
+                  : 'Built into Macro'
+              }
+            >
+              {props.kind}
+            </Badge>
             <Show when={dotState()}>
               {(state) => (
                 <span class="flex @[640px]/integrations:hidden">
@@ -209,6 +229,7 @@ export function IntegrationItemRow(props: { item: IntegrationItem }) {
     <IntegrationListRow
       icon={props.item.icon}
       name={props.item.name}
+      kind={props.item.kind}
       description={props.item.description}
       categories={props.item.categories}
       status={props.item.status}

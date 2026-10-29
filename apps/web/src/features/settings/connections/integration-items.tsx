@@ -73,6 +73,7 @@ function emailItem(
   return {
     id: outlook ? 'outlook' : 'gmail',
     name: outlook ? 'Outlook' : 'Gmail',
+    kind: 'native',
     icon: outlook ? <OutlookIcon /> : <GmailIcon />,
     get description() {
       if (links().length > 0)
@@ -199,6 +200,7 @@ export function useGithubItem(
   return {
     id: 'github',
     name: 'GitHub',
+    kind: 'native',
     icon: providerIcon('github'),
     get description() {
       const summary =
@@ -299,6 +301,7 @@ export function useAgentProviderItem(
   return {
     id: provider,
     name,
+    kind: 'mcp',
     icon: providerIcon(provider),
     description: CURATED_AI[provider].outcome,
     categories: AGENT_PROVIDER_CATEGORIES[provider],
@@ -347,6 +350,7 @@ export function useGranolaItem(): IntegrationItem {
   return {
     id: 'granola',
     name: 'Granola',
+    kind: 'native',
     icon: (
       <PipedreamConnectorIcon
         appSlug={GRANOLA_APP_SLUG}
@@ -376,6 +380,7 @@ export function aiAppItems(hosts: IntegrationItemHosts): IntegrationItem[] {
     {
       id: 'macro-mcp',
       name: 'Claude Code, Codex, and ChatGPT',
+      kind: 'mcp',
       icon: <ClaudeIcon />,
       description:
         'Use your Macro workspace from Claude Code, Codex, ChatGPT, Claude.ai, and IDEs through the Macro MCP server.',
@@ -396,6 +401,7 @@ export function aiAppItems(hosts: IntegrationItemHosts): IntegrationItem[] {
     items.push({
       id: 'local-agents',
       name: 'Coding agents on your computer',
+      kind: 'native',
       icon: <DesktopIcon />,
       description:
         'Pair your computer so Macro agents run on Claude Code, Codex, OpenCode, OpenClaw, or Hermes there, with each session streamed into Macro.',

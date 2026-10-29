@@ -318,6 +318,7 @@ export function LeftoverRow(props: {
             </Show>
           }
           name={item.title}
+          kind="mcp"
           description={
             connectionFailed()
               ? `Last attempt failed · ${item.subtitle}`
@@ -339,6 +340,7 @@ export function LeftoverRow(props: {
             <PipedreamConnectorIcon appSlug={item.appSlug} class="size-5" />
           }
           name={item.title}
+          kind="mcp"
           description="Agents can use this app when you ask them to. Nothing is copied into Macro."
           categories={['Agent tools']}
           status={status()}

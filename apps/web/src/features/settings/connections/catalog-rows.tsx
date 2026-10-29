@@ -108,6 +108,7 @@ function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
         />
       }
       name={name()}
+      kind="mcp"
       description={connectorDescription(props.entry.app_slug, name())}
       categories={catalogCategories(props.entry)}
       status="available"
