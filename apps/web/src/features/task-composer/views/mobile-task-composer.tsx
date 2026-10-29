@@ -45,7 +45,9 @@ export function MobileTaskComposer(props: {
         <TaskComposer.Submit />
       </EntityComposer.Header>
       <TaskComposer.Recovery />
-      <EntityComposer.Main>
+      {/* The sheet sizes the composer to its content, so nothing needs
+          clipping, and the property row can scroll to the sheet's edges. */}
+      <EntityComposer.Main class="overflow-visible">
         <TaskComposer.Title />
         <TaskComposer.Body />
         <div class="shrink-0 flex items-center py-2">
