@@ -22,7 +22,13 @@ async fn each_connect_records_the_operators_latest_report(pool: PgPool) {
     .unwrap();
     let presence = Arc::new(PgHarnessPresence::new(pool.clone()));
 
-    for report in [Some(true), Some(false), None] {
+    // A runtime too old to report keeps the last report, so a downgrade
+    // cannot undo a withdrawn consent.
+    for (report, stored_after) in [
+        (Some(true), Some(true)),
+        (Some(false), Some(false)),
+        (None, Some(false)),
+    ] {
         Arc::clone(&presence)
             .connected(HarnessId::new_from_uuid(harness_id), report)
             .await;
@@ -33,6 +39,6 @@ async fn each_connect_records_the_operators_latest_report(pool: PgPool) {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(stored, report);
+        assert_eq!(stored, stored_after);
     }
 }
