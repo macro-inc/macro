@@ -1,7 +1,8 @@
 """ACP stand-in for the self-update end-to-end test.
 
-Streams a numbered `tick` notification every 100 ms, carrying its own pid and
-the pid of a background child it started, and answers every request.
+Streams a numbered `tick` notification every 20 ms, carrying its own pid,
+the pid of a background child it started, and the wall-clock time it was
+written, and answers every request.
 """
 
 import json
@@ -27,10 +28,10 @@ def tick():
         send({
             "jsonrpc": "2.0",
             "method": "tick",
-            "params": {"n": n, "pid": os.getpid(), "child": child.pid},
+            "params": {"n": n, "pid": os.getpid(), "child": child.pid, "t": time.time()},
         })
         n += 1
-        time.sleep(0.1)
+        time.sleep(0.02)
 
 
 threading.Thread(target=tick, daemon=True).start()

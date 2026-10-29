@@ -6,8 +6,14 @@ publishes v2 to the mirror, and checks that macrod replaced itself in place:
 same macrod pid, same agent pid, the agent's background child alive, and no
 gap in the agent's numbered frames across the two gateway connections.
 
+Two more update cases cover the gap between the old image closing its
+gateway socket and the new one dialing: `prompt-in-gap` sends a prompt on the
+closing socket after macrod has said it is disconnecting and checks it is
+answered exactly once, on the new connection; `output-in-gap` checks agent
+output written while no socket is up reaches the gateway.
+
 Negative cases run the same way and check that macrod keeps running v1:
-`bad-checksum`, `failing-smoke-test`, and `opt-out`.
+`bad-checksum`, `failing-smoke-test`, `opt-out` and `opt-out-config`.
 
     python3 update_e2e.py --releases DIR --v1 TAG --v2 TAG [--case NAME]
 
@@ -98,9 +104,19 @@ def broken_archive():
 
 
 class Gateway:
-    """The runtime gateway: accepts macrod's WebSocket and records ticks."""
+    """The runtime gateway: accepts macrod's WebSocket and records ticks.
 
-    def __init__(self):
+    With `prompt_on_disconnect`, it answers macrod's `disconnected` event by
+    sending a `session/prompt` on that same, closing socket.
+    """
+
+    PROMPT_ID = "prompt-in-gap"
+
+    def __init__(self, prompt_on_disconnect=False):
+        self.prompt_on_disconnect = prompt_on_disconnect
+        self.disconnected_at = {}  # connection -> wall-clock time
+        self.opened_at = {}  # connection -> wall-clock time
+        self.responses = []  # (connection, id)
         self.listener = socket.socket()
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listener.bind(("127.0.0.1", 0))
@@ -146,6 +162,7 @@ class Gateway:
         with self.lock:
             self.connections += 1
             number = self.connections
+            self.opened_at[number] = time.time()
         reader = conn.makefile("rb")
         buffered = io.BytesIO(rest)
 
@@ -180,15 +197,41 @@ class Gateway:
                 if message.get("type") == "acp" and message.get("method") == "tick":
                     params = message["params"]
                     with self.lock:
-                        self.ticks.append((number, params["n"], params["pid"], params["child"]))
+                        self.ticks.append((number, params["n"], params["pid"], params["child"], params["t"]))
+                elif message.get("type") == "acp" and "id" in message and "method" not in message:
+                    with self.lock:
+                        self.responses.append((number, message["id"]))
+                elif message.get("type") == "event" and message.get("event") == "disconnected":
+                    with self.lock:
+                        self.disconnected_at[number] = time.time()
+                    if self.prompt_on_disconnect and number == 1:
+                        send_text(conn, {
+                            "type": "acp", "jsonrpc": "2.0", "id": self.PROMPT_ID,
+                            "method": "session/prompt",
+                            "params": {"sessionId": "s", "prompt": [{"type": "text", "text": "hi"}]},
+                        })
         except (EOFError, OSError, ValueError):
             return
         finally:
             conn.close()
 
+    def gap_record(self):
+        with self.lock:
+            return dict(self.disconnected_at), dict(self.opened_at), list(self.responses)
+
     def snapshot(self):
         with self.lock:
             return self.connections, list(self.ticks)
+
+
+def send_text(conn, message):
+    """One unmasked server-to-client WebSocket text frame."""
+    payload = json.dumps(message).encode()
+    if len(payload) < 126:
+        header = bytes([0x81, len(payload)])
+    else:
+        header = bytes([0x81, 126]) + struct.pack(">H", len(payload))
+    conn.sendall(header + payload)
 
 
 # ------------------------------------------------------------------- helpers
@@ -261,7 +304,7 @@ def run_case(case, releases, v1, v2):
     binary = os.path.join(home, ".local", "bin", "macrod")
     assert installed_version(binary) == v1, "install.sh installs the latest release"
 
-    gateway = Gateway()
+    gateway = Gateway(prompt_on_disconnect=case == "prompt-in-gap")
     base = f"http://127.0.0.1:{gateway.port}"
     workspace = os.path.join(work, "workspace")
     os.makedirs(workspace)
@@ -309,20 +352,20 @@ path = "{workspace}"
 
     threading.Thread(target=drain, daemon=True).start()
     try:
-        wait_for("the first connection's ticks", lambda: len(gateway.snapshot()[1]) >= 20, 60)
+        wait_for("the first connection's ticks", lambda: len(gateway.snapshot()[1]) >= 100, 60)
         _, ticks = gateway.snapshot()
         agent_pid, child_pid = ticks[0][2], ticks[0][3]
 
-        if case == "update":
+        if case in UPDATE_CASES:
             mirror.publish(v2)
             wait_for("the updated macrod's connection", lambda: gateway.snapshot()[0] >= 2, 120)
             wait_for(
                 "ticks on the second connection",
-                lambda: sum(1 for t in gateway.snapshot()[1] if t[0] == 2) >= 20,
+                lambda: sum(1 for t in gateway.snapshot()[1] if t[0] == 2) >= 100,
                 60,
             )
             connections, ticks = gateway.snapshot()
-            numbers = [n for _, n, _, _ in ticks]
+            numbers = [t[1] for t in ticks]
             assert numbers == list(range(len(numbers))), f"frames lost or repeated: {numbers}"
             assert {t[2] for t in ticks} == {agent_pid}, "one agent process across the update"
             assert alive(agent_pid) and alive(child_pid), "the agent and its child kept running"
@@ -341,6 +384,20 @@ path = "{workspace}"
                     {"event": "startup", "version": v2, "from_handoff": True},
                 ],
             )
+            disconnected_at, opened_at, responses = gateway.gap_record()
+            if case == "prompt-in-gap":
+                answers = [connection for connection, id in responses if id == Gateway.PROMPT_ID]
+                assert answers == [2], f"the prompt sent during the handoff is answered once, on the new socket: {answers}"
+                print("   a prompt sent on the closing socket was answered once, on the new one")
+            if case == "output-in-gap":
+                # From the last frame the old image forwarded to the new
+                # socket's handshake, nothing was reading the agent.
+                gap = (max(t[4] for t in ticks if t[0] == 1), opened_at[2])
+                in_gap = [t for t in ticks if gap[0] < t[4] < gap[1]]
+                assert in_gap, f"no output was written during the {gap[1] - gap[0]:.2f}s gap"
+                assert {t[0] for t in in_gap} == {2}, "output written in the gap arrives on the new socket"
+                assert disconnected_at[1] < opened_at[2], "the old socket said it was disconnecting first"
+                print(f"   {len(in_gap)} frames written during the {gap[1] - gap[0]:.2f}s gap all arrived on the new socket")
             print(
                 f"   macrod pid {pid} kept, agent pid {agent_pid} kept, child {child_pid} alive, "
                 f"{len(numbers)} frames 0..{numbers[-1]} over {connections} connections, now {v2}"
@@ -393,6 +450,10 @@ path = "{workspace}"
         shutil.rmtree(work, ignore_errors=True)
 
 
+UPDATE_CASES = ["update", "prompt-in-gap", "output-in-gap"]
+NEGATIVE_CASES = ["bad-checksum", "failing-smoke-test", "opt-out", "opt-out-config"]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--releases", required=True)
@@ -401,10 +462,10 @@ def main():
     parser.add_argument(
         "--case",
         action="append",
-        choices=["update", "bad-checksum", "failing-smoke-test", "opt-out", "opt-out-config"],
+        choices=UPDATE_CASES + NEGATIVE_CASES,
     )
     args = parser.parse_args()
-    for case in args.case or ["update", "bad-checksum", "failing-smoke-test", "opt-out", "opt-out-config"]:
+    for case in args.case or UPDATE_CASES + NEGATIVE_CASES:
         run_case(case, os.path.abspath(args.releases), args.v1, args.v2)
     print("all cases passed")
 

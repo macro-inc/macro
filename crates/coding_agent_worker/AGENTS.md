@@ -50,7 +50,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   launcher for the newest `versions\<tag>\macrod-core.exe`; updates install
   as a new version for the next launch and the footer says so.
 - `e2e/`: end-to-end update and installer tests (`build_releases.sh`,
-  `update_e2e.py`, `installer_test.sh`, `windows_test.ps1` for the launcher
+  `update_e2e.py` (update, prompt-in-gap, output-in-gap, and the negative
+  cases), `installer_test.sh`, `windows_test.ps1` for the launcher
   layout, `windows_update_test.ps1` for a running macrod updating itself), run
   by the `test_macrod_update` workflow on Linux, macOS and Windows.
 - `README.md`: native Herdr session behavior (repositories, reconnect, model
