@@ -8,6 +8,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import Plus from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { CollectionEmptyState } from '@property/component/CollectionEmptyState';
@@ -36,16 +37,30 @@ export function EntityCollectionProperty(props: {
   const ctx = usePropertiesContext();
   const saving = createSignal(false);
   const [isSaving, setIsSaving] = saving;
+  const [isAdding, setIsAdding] = createSignal(false);
   const saveProperty: PropertySaveHandler['saveProperty'] = async (
     property,
     values
   ) => {
     if (!ctx.canEdit || property.isMetadata || isSaving()) return;
+    const currentRefs = getEntityValues(property);
+    setIsAdding(
+      values.valueType === 'ENTITY' &&
+        Boolean(
+          values.refs?.some((reference) =>
+            !currentRefs.some((current) =>
+              current.entity_id === reference.entity_id &&
+              current.entity_type === reference.entity_type
+            )
+          )
+        )
+    );
     setIsSaving(true);
     try {
       await ctx.saveHandler.saveProperty(property, values);
       await props.onRefresh();
     } finally {
+      setIsAdding(false);
       setIsSaving(false);
     }
   };
@@ -59,6 +74,7 @@ export function EntityCollectionProperty(props: {
       <EntityCollectionPropertyBody
         entityId={props.entityId}
         loading={props.loading}
+        adding={isAdding()}
         onSave={saveProperty}
         property={props.property}
         saving={saving}
@@ -77,6 +93,7 @@ export function EntityCollectionProperty(props: {
 function EntityCollectionPropertyBody(props: {
   entityId: string;
   loading?: boolean;
+  adding: boolean;
   onSave: PropertySaveHandler['saveProperty'];
   property: Property;
   saving: Signal<boolean>;
@@ -99,7 +116,8 @@ function EntityCollectionPropertyBody(props: {
   });
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
   const canDrop = () => dropTarget?.canDrop() ?? false;
-  const dropZoneHeight = () => entities().length > 0 ? 'h-18' : 'h-16';
+  const dropZoneHeight = () => (entities().length > 0 ? 'h-18' : 'h-16');
+  const showDropZone = () => canDrop() || props.adding;
   const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
     event.stopPropagation();
     if (isReadOnly() || isSaving()) return;
@@ -124,7 +142,7 @@ function EntityCollectionPropertyBody(props: {
         {props.property.displayName}
       </span>
       <div class="ml-auto flex shrink-0 items-center">
-        <Show when={!isReadOnly() && entities().length > 0}>
+        <Show when={!isReadOnly()}>
           <Button
             type="button"
             variant="ghost"
@@ -143,31 +161,14 @@ function EntityCollectionPropertyBody(props: {
         ref={(element) => dropTarget?.ref(element)}
         role="group"
         aria-label={props.property.displayName}
-        aria-busy={isSaving()}
         class="col-span-2 mt-1 min-w-0"
       >
-        <div class="flex flex-wrap gap-1.5">
+        <div class="flex flex-wrap gap-1.5" aria-busy={isSaving()}>
           <For
             each={entities()}
             fallback={
-              <Show when={!props.loading && !canDrop()}>
-                <CollectionEmptyState
-                  message={t('common.emptyCollection')}
-                  action={
-                    <Show when={!isReadOnly()}>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        disabled={isSaving()}
-                        onClick={handleAdd}
-                      >
-                        <Plus class="size-4" />
-                        {t('common.add')}
-                      </Button>
-                    </Show>
-                  }
-                />
+              <Show when={!props.loading && !showDropZone()}>
+                <CollectionEmptyState message={t('common.emptyCollection')} />
               </Show>
             }
           >
@@ -193,23 +194,34 @@ function EntityCollectionPropertyBody(props: {
           </For>
         </div>
         <div
-          aria-hidden={!canDrop()}
+          aria-hidden={!showDropZone()}
           class={cn(
             'overflow-hidden transition-all duration-150 ease-out motion-reduce:transition-none',
-            canDrop() ? `${dropZoneHeight()} opacity-100` : 'h-0 opacity-0'
+            showDropZone() ? `${dropZoneHeight()} opacity-100` : 'h-0 opacity-0'
           )}
         >
           <div
             class={cn(
-              'flex h-16 items-center justify-center gap-2 rounded-lg border border-dashed text-xs text-accent',
+              'flex h-16 items-center justify-center gap-2 rounded-lg border text-xs',
               entities().length > 0 && 'mt-2',
-              isDraggingOver()
-                ? 'border-accent bg-accent/10'
-                : 'border-accent/40 bg-accent/5'
+              props.adding && 'border-edge-muted bg-surface text-ink-muted',
+              !props.adding && 'border-dashed text-accent',
+              !props.adding && isDraggingOver() && 'border-accent bg-accent/10',
+              !props.adding && !isDraggingOver() && 'border-accent/40 bg-accent/5'
             )}
           >
-            <ArrowDownIcon class="size-4 shrink-0" />
-            {t('common.dropToAdd')}
+            <Show
+              when={props.adding}
+              fallback={<ArrowDownIcon class="size-4 shrink-0" aria-hidden="true" />}
+            >
+              <SpinnerIcon
+                class="size-4 shrink-0 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            </Show>
+            <span role="status" aria-live="polite" aria-atomic="true">
+              {props.adding ? t('common.addingItem') : t('common.dropToAdd')}
+            </span>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ export default {
   emptyCollection: 'No items added yet',
   emptyTags: 'No tags added yet',
   dropToAdd: 'Drop to add',
+  addingItem: 'Adding item…',
   cannotAddDraggedItem: 'Can’t add this item',
   addPhotos: 'Add photos',
   addFiles: 'Add files',

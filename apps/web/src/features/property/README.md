@@ -12,19 +12,24 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 ## Side-panel collections
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
-properties. Empty collections show plain, full-width copy with an outline Add
-action below the message. No resting border, padded box, or trailing action
-column surrounds the empty state. During app-item drags, compatible collections
-expand into full-width dashed dropzones with the same label-to-content gap.
+properties. Empty collections show plain, full-width copy without a resting
+border or padded box. The ghost Add action stays beside the property name for
+both empty and populated collections. During app-item drags, compatible
+collections expand into full-width dashed dropzones with the same
+label-to-content gap.
 Incompatible collections keep their Add actions visible and retain their height.
 Incompatible or unavailable collections show no rejection feedback. The same
 target covers empty and populated bodies, and geometry updates during expansion.
 Drops append a reference using the same entity-type conversion as the picker,
 ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
-state until refresh completes. Read-only, metadata, loading, saving, and open-editor
-states reject drops. Native file uploads are not supported here; the Add action
-remains available for keyboard and touch.
+state until refresh completes. While adding references, the dropzone remains
+visible with a spinner and “Adding item…” until saving and refresh finish;
+existing values remain visible. Collection rows retain their definition identity
+through query updates so loading state survives refreshed property objects.
+Read-only, metadata, loading, saving, and
+open-editor states reject drops. Native file uploads are not supported here;
+the Add action remains available for keyboard and touch.
 
 `component/CollectionEmptyState.tsx` is local to this feature and shared by
 property collections and Tags. Drop handling and save callbacks stay in callers.

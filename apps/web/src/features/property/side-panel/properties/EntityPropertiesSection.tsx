@@ -343,31 +343,43 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 
           <Show when={collectionProperties().length > 0}>
             <div class="flex flex-col gap-2 pb-2">
-              <For each={collectionProperties()}>
-                {(property) => (
-                  <EntityCollectionProperty
-                    entityId={props.entityId}
-                    loading={isLoading()}
-                    onRefresh={refetch}
-                    property={property}
-                    actions={(saving) => (
-                      <PropertyRowActions
-                        saving={saving}
+              <For
+                each={collectionProperties().map(
+                  (property) => property.propertyDefinitionId
+                )}
+              >
+                {(definitionId) => (
+                  <Show
+                    when={collectionProperties().find(
+                      (property) => property.propertyDefinitionId === definitionId
+                    )}
+                  >
+                    {(property) => (
+                      <EntityCollectionProperty
+                        entityId={props.entityId}
+                        loading={isLoading()}
                         onRefresh={refetch}
-                        canRemoveFromEntity={
-                          !defaultPinnedDefinitionIds().has(
-                            property.propertyDefinitionId
-                          )
-                        }
-                        pinFirst
-                        property={property}
-                        onRemovePendingProperty={removePendingProperty}
-                        onPropertyPinned={
-                          props.onPropertyPinned ? pinProperty : undefined
-                        }
+                        property={property()}
+                        actions={(saving) => (
+                          <PropertyRowActions
+                            saving={saving}
+                            onRefresh={refetch}
+                            canRemoveFromEntity={
+                              !defaultPinnedDefinitionIds().has(
+                                property().propertyDefinitionId
+                              )
+                            }
+                            pinFirst
+                            property={property()}
+                            onRemovePendingProperty={removePendingProperty}
+                            onPropertyPinned={
+                              props.onPropertyPinned ? pinProperty : undefined
+                            }
+                          />
+                        )}
                       />
                     )}
-                  />
+                  </Show>
                 )}
               </For>
             </div>

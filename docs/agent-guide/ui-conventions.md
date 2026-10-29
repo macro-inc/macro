@@ -154,10 +154,11 @@ confirmation drawers use the same action hierarchy.
 
 ## Property collections
 
-Multi-entity property collections show plain, full-width empty copy with an
-outline Add action below the message, without a resting border or padded box.
-The dedicated Tags section uses the same empty-state layout. While dragging an
-app item, compatible collections expand into full-width dashed dropzones;
+Multi-entity property collections show plain, full-width empty copy without a
+resting border or padded box. Their ghost Add action stays beside the property
+name, including when empty. The dedicated Tags section retains its outlined
+empty-state Add action. While dragging an app item, compatible collections
+expand into full-width dashed dropzones;
 hovering a valid zone strengthens its accent treatment. Empty-state and dropzone
 content keep the same spacing below the field label. Incompatible or unavailable
 collections retain their height, keep eligible Add actions visible, and show no
@@ -169,6 +170,9 @@ restriction are ignored. Read-only, metadata, loading, saving, and open-editor
 states reject drops. Picker saves, drops, chip removal, and row removal share a
 busy state through save and refresh, preventing stale references from replacing
 newly selected values.
+While adding a reference, the dropzone stays visible with an “Adding item…”
+spinner until save and refresh finish. Existing values remain visible; further
+edits and drops stay locked during that operation.
 
 The **Add** action remains the keyboard/touch alternative. This target does not
 upload files dragged from the computer. A persisted drop changes property data;
