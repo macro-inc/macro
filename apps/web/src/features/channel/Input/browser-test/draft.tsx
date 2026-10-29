@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ChannelInput } from '../ChannelInput';
+import { Input } from '../Input';
 import { makeInputValuePersistenceKey } from '../utils/persistence';
 
 const channelId = 'draft-fixture-channel';
@@ -86,6 +87,24 @@ function Fixture() {
                           channelId,
                         })}
                       />
+                      <Show
+                        when={new URLSearchParams(location.search).has(
+                          'customActions'
+                        )}
+                      >
+                        <ChannelInput
+                          input={{
+                            id: 'custom-action-editor',
+                            mode: 'edit',
+                            placeholder: 'Custom actions',
+                          }}
+                          participants={() => []}
+                          bots={() => []}
+                          onSend={() => {}}
+                        >
+                          <Input.SendAction />
+                        </ChannelInput>
+                      </Show>
                     </Show>
                   </main>
                 </QuickAccessProvider>

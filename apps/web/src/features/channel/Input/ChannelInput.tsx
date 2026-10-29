@@ -271,7 +271,12 @@ export function ChannelInput(props: ChannelInputProps) {
     attachmentTracker: props.attachmentTracker,
     persistenceKey: props.persistenceKey,
     callbacks: {
-      ...props,
+      onChange: props.onChange,
+      onToggleFormatRibbon: props.onToggleFormatRibbon,
+      onClose: props.onClose,
+      onRemoveAttachment: props.onRemoveAttachment,
+      onStartTyping: props.onStartTyping,
+      onStopTyping: props.onStopTyping,
       onSend: props.onSend
         ? (snapshot) =>
             props.onSend?.({
