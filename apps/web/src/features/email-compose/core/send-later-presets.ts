@@ -1,6 +1,6 @@
 export const SEND_LATER_DEFAULT_TIME = { hours: 8, minutes: 0 } as const;
 
-/** Superhuman's send-later suggestions, relative to the supplied time. */
+/** The send-later menu's suggestions, relative to the supplied time. */
 export function sendLaterPresets(now: Date) {
   const daysUntilMonday = (8 - now.getDay()) % 7 || 7;
   const day = (offset: number, hours: number) =>
