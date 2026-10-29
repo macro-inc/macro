@@ -845,10 +845,36 @@ must be omitted from a distributed release.
 Actual Android OS cache eviction is not qualified: the API 36 emulator's
 `pm clear --cache-only com.macro.app.prod` command hung and did not remove the
 active OTA cache. Missing-assets/eviction recovery remains covered by updater
-unit tests. Expired-session refresh, all pending-upload and queued-write logout
-paths, actual large-document rendering/hydration, and physical memory-pressure,
-battery, and cellular testing remain necessary for full Task 05 acceptance.
-Play verification remains Task 07.
+unit tests.
+
+Signed-in evidence recorded on 2026-10-29 uses a fresh API 36 x86_64 emulator
+with 2 GB RAM, WebView 133, and a locally signed, OTA-enabled release of
+`com.macro.workspace.mobile` (versionCode 2005100) with the production frontend:
+
+- Email-code sign-in reached a rendered Home in about 2.1 s, at about 157 MiB
+  PSS. After background process death, a cold launch (activity start 260 ms)
+  returned to Home still signed in.
+- A synthetic 640 KB document (200 sections, 3,000 paragraphs) reopened with a
+  skeleton at 2 s and content by 5 s. Twenty flings rendered 171 frames, 4.1%
+  janky (p50 16 ms, p90 17 ms, p99 61 ms), at about 190 MiB PSS with about
+  74 MiB swapped. `uiautomator dump` does not finish on that document's
+  accessibility tree, so use screenshots for timing.
+- An edit typed in airplane mode survived background process death and an
+  offline relaunch, and reached the server exactly once after reconnecting.
+- Unsent shares from other apps survive process death: the share sheet
+  reopened with the pending text after relaunch.
+- Logging out while offline went straight to the login screen. Relaunching
+  offline and then online stayed signed out; the native cookie jar did not
+  restore the session. The server session ends only at expiry.
+- After 62 minutes in the background (past the 1-hour access token), a hot
+  resume showed Home with rows from that hour and no sign-in prompt, and a new
+  document edit reached the server.
+- Swiping the Android share sheet down left the app blocked behind its
+  backdrop until restart; Back and taps did not recover it.
+
+Pending-upload and queued-write logout paths beyond the cache-scope unit tests,
+and physical memory-pressure, battery, Doze, and cellular testing, remain
+necessary for full Task 05 acceptance. Play verification remains Task 07.
 
 ## Native calling
 
