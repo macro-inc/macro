@@ -59,6 +59,7 @@ it('keeps the current company preview mounted while searching and cancelling its
     expect(screen.getByTestId('company-preview')).toBe(original);
     expect(disposals).toBe(0);
     expect(editor.value).toBe('');
+    expect(editor.placeholder).toBe('Search companies');
     expect(document.activeElement).toBe(editor);
     fireEvent.input(editor, { target: { value: 'new company' } });
     expect(picker?.search).toBe('new company');
