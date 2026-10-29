@@ -602,6 +602,7 @@ fn image_attachment(entity_id: &str) -> ContextAttachment {
 /// A mention whose own message has no files, on a thread whose root does.
 fn thread_root_image_context(root_file: &str) -> TriggerContext {
     TriggerContext::Mentioned(DiscussionContext {
+        agent_request: None,
         surface: DiscussionSurface::Channel {
             id: Uuid::from_u128(1),
             name: Some("eng".to_owned()),
