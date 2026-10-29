@@ -126,6 +126,8 @@ to that property remain blocked, and dragging waits only when the pending proper
 controls the current grouping. Complete simultaneous saves out of order and check
 that each property unlocks independently.
 
+![Controlled browser regression showing two optimistic priorities while both HTTP requests remain pending](images/task-property-network-pending.png)
+
 For tags, include a task with no prior tag assignment. Delay
 `UpdateEntityPropertyOptions` and the following `EntityProperties` query: the tag
 should appear immediately and stay visible through both responses in the list,
