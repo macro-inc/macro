@@ -22,7 +22,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 const DEFAULT_MAX_TURNS: usize = 200;
-const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// A session's system prompt, optionally split where the part every session
 /// of the agent repeats byte for byte ends, with an optional tail that
@@ -125,7 +124,8 @@ pub struct AgentLoop {
     reasoning_effort: Option<ReasoningEffort>,
     speed: ModelSpeed,
     max_turns: usize,
-    max_tokens: u64,
+    /// The output cap per model response; `None` asks for the model's maximum.
+    max_tokens: Option<u64>,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
     result_limit: Option<ToolResultLimit>,
@@ -158,7 +158,7 @@ impl AgentLoop {
             reasoning_effort: None,
             speed: ModelSpeed::Standard,
             max_turns: DEFAULT_MAX_TURNS,
-            max_tokens: DEFAULT_MAX_TOKENS,
+            max_tokens: None,
             recorder,
             user_tool_finisher: None,
             result_limit: None,
@@ -243,9 +243,10 @@ impl AgentLoop {
         self
     }
 
-    /// Override the default max output tokens.
+    /// Cap each model response at `n` output tokens instead of the model's
+    /// maximum.
     pub fn with_max_tokens(mut self, n: u64) -> Self {
-        self.max_tokens = n;
+        self.max_tokens = Some(n);
         self
     }
 
@@ -363,7 +364,7 @@ impl AgentLoop {
             &SystemPrompt,
             &ToolSearch,
             usize,
-            u64,
+            Option<u64>,
             GenAiContext,
         ) -> ProviderAgent,
     ) -> Session

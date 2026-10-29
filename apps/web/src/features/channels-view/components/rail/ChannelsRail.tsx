@@ -66,7 +66,6 @@ import {
   filterChannelLabelMembers,
 } from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
-import { isSupportChannel } from '../../core/support-channels';
 import {
   type ChannelsSourceScope,
   type ChannelsSources,
@@ -154,7 +153,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     threadsEnabled,
     threadsChannelId,
     setThreadsChannelId,
-    hideSupportChannels,
   } = useChannelsView();
 
   const panel = useSplitPanelOrThrow();
@@ -363,9 +361,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return 'Channel labels are unavailable right now.';
   };
 
-  const allFavorites = createMemo(() => favoritesData()?.favorites ?? []);
+  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
   const favoriteChannelIds = createMemo(() =>
-    allFavorites()
+    favorites()
       .filter((favorite) => favorite.entityType === 'channel')
       .map((favorite) => favorite.entityId)
   );
@@ -399,11 +397,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const labelledChannels = createMemo<ChannelEntity[]>(() => {
     if (!channelTagsEnabled()) return [];
     const labelled = new Set(labels().flatMap((label) => label.channelIds));
-    return referencedChannels()
-      .filter((channel) => labelled.has(channel.id))
-      .filter(
-        (channel) => !hideSupportChannels() || !isSupportChannel(channel)
-      );
+    return referencedChannels().filter((channel) => labelled.has(channel.id));
   });
 
   const allChannels = createMemo(() =>
@@ -415,15 +409,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelById = (channelId: string) =>
     channelsById().get(channelId) ??
     referencedChannels().find((channel) => channel.id === channelId);
-  const favorites = createMemo(() => {
-    const all = allFavorites();
-    if (!hideSupportChannels()) return all;
-    return all.filter((favorite) => {
-      if (favorite.entityType !== 'channel') return true;
-      const channel = channelById(favorite.entityId);
-      return channel === undefined || !isSupportChannel(channel);
-    });
-  });
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
 

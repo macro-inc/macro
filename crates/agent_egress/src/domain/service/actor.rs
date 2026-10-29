@@ -68,7 +68,7 @@ where
             (actor, user)
         };
         tracing::info!(session = %grant.session, ?actor, listing, "resolved MCP actor");
-        let resolution = match self.credentials.resolve(user, destination).await {
+        let resolution = match self.credentials.resolve(user, grant.agent, destination).await {
             Ok(resolution) => resolution,
             Err(EgressError::UnknownCustomServer(_)) if !listing => return Ok(tool_result_response(id,
                 "This custom MCP server is not connected for the selected actor. Ask them to add or reconnect that server in Agents → Connections. Do not switch accounts unless they requested it.".into())),

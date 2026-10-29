@@ -8,6 +8,7 @@
 
 export * from './binaryBody';
 export * from './blameRow';
+export * from './blameRowActor';
 export * from './blameRowUserId';
 export * from './copyDocumentRequest';
 export * from './copyDocumentRequestVersionId';
@@ -18,6 +19,7 @@ export * from './getSnapshotRequest';
 export * from './getSnapshotRequestVersionId';
 export * from './peerResponse';
 export * from './peerWithUserId';
+export * from './peerWithUserIdActor';
 export * from './snapshotResponse';
 export * from './updateRequest';
 export * from './updateResponse';

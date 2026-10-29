@@ -231,18 +231,6 @@ const SETTINGS: Setting[] = [
     keywords: 'access public private permission',
   },
   {
-    tab: 'Team Connections',
-    title: 'Team GitHub connection',
-    target: 'Connections',
-    keywords: 'repository app install integration',
-  },
-  {
-    tab: 'Team Connections',
-    title: 'Import from Slack',
-    target: 'Connections',
-    keywords: 'slack export channels messages history team',
-  },
-  {
     tab: 'Tags',
     title: 'Personal tags',
     target: 'Personal',
@@ -254,16 +242,78 @@ const SETTINGS: Setting[] = [
     target: 'Team',
     keywords: 'shared label workspace category',
   },
+  // Integrations rows are targeted by name.
   {
     tab: 'Connected',
-    title: 'GitHub account',
-    target: 'Accounts',
-    keywords: 'connect integration repository pull request',
+    title: 'Gmail',
+    target: 'Gmail',
+    keywords: 'email google workspace inbox calendar connect account',
+  },
+  {
+    tab: 'Connected',
+    title: 'Outlook',
+    target: 'Outlook',
+    keywords: 'email microsoft 365 inbox calendar connect account',
+  },
+  {
+    tab: 'Connected',
+    title: 'GitHub',
+    target: 'GitHub',
+    keywords:
+      'connect integration repository pull request code app install team',
+  },
+  {
+    tab: 'Connected',
+    title: 'Slack',
+    target: 'Slack',
+    keywords: 'chat messages channels agent tools mcp connect',
+  },
+  {
+    tab: 'Connected',
+    title: 'Import from Slack',
+    target: 'Slack',
+    keywords: 'slack export channels messages history team',
+  },
+  {
+    tab: 'Connected',
+    title: 'Linear',
+    target: 'Linear',
+    keywords: 'issues tasks projects agent tools mcp connect import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Notion',
+    target: 'Notion',
+    keywords: 'pages wikis docs agent tools mcp connect import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Granola',
+    target: 'Granola',
+    keywords: 'meetings notes transcripts calls import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Claude Code, Codex, and ChatGPT',
+    target: 'Claude Code, Codex, and ChatGPT',
+    keywords: 'ai apps mcp ide setup',
+  },
+  {
+    tab: 'Connected',
+    title: 'Coding agents on your computer',
+    target: 'Coding agents on your computer',
+    keywords: 'local harness hermes openclaw desktop stream sessions',
+  },
+  {
+    tab: 'Connected',
+    title: 'Custom MCP server',
+    keywords: 'add mcp server url integration',
   },
   {
     tab: 'Connected',
     title: 'Agent apps and tools',
-    keywords: 'mcp integration connect external services',
+    keywords:
+      'mcp integration connect external services catalog airtable trello jira asana google drive dropbox',
   },
   {
     tab: 'Agent',

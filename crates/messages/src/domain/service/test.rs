@@ -254,6 +254,7 @@ fn fixture() -> Repo {
             imported_author: Some(ImportedAuthor {
                 name: "External PDF author".into(),
             }),
+            triggered_via: None,
             triggered_by: None,
             content: "root".into(),
             created_at: Utc::now(),
@@ -1140,12 +1141,26 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
         input.attribution = MessageAttribution::Unprompted;
         assert!(
             service
-                .post(receipt(), input)
+                .post(receipt(), input.clone())
                 .await
                 .unwrap()
                 .triggered_by
                 .is_none()
         );
+        input.attribution = MessageAttribution::ActingUserVia {
+            client: "Claude Code".into(),
+        };
+        service.post(receipt(), input).await.unwrap();
+        {
+            let creates = repo.creates.lock().unwrap();
+            let via = creates.last().unwrap();
+            assert_eq!(
+                via.triggered_by.as_deref(),
+                Some("macro|author@example.com")
+            );
+            assert_eq!(via.triggered_via.as_deref(), Some("Claude Code"));
+            assert!(creates[0].triggered_via.is_none());
+        }
         service
             .patch(
                 receipt(),
@@ -1169,7 +1184,7 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
             }
         ));
         assert!(matches!(
-            events[2].change,
+            events[3].change,
             MessageChange::Edited {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
                 ..

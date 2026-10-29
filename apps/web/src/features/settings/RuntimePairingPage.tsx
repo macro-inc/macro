@@ -326,7 +326,7 @@ export function RuntimePairingPage(props: {
               <Match when={approved()}>
                 <Button
                   type="button"
-                  variant="neutral"
+                  variant="primary"
                   size="sm"
                   onClick={props.onClose}
                 >
@@ -355,7 +355,7 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="neutral"
+                  variant="primary"
                   size="sm"
                   disabled={!canApprove()}
                   onClick={() => fireAndForget(approve(), 'runtime-pairing')}
@@ -384,7 +384,7 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="neutral"
+                  variant="primary"
                   size="sm"
                   disabled={codeInput().trim().length === 0}
                   onClick={lookUp}

@@ -42,8 +42,8 @@ shared Button touch targets; do not resize these controls through classes.
 On touch devices, low-emphasis header actions remain borderless with their
 existing hover and pressed states. Emphasized variants retain their treatment,
 including an active call's green ink. Button size does not change variant colors
-or framing. Primary, neutral, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
-Primary Buttons use the theme accent and its resolved contrast color. Use `neutral` for solid monochrome emphasis (black in light themes, white in dark themes), and secondary for softer neutral actions. Current Button usages trial secondary instead of outline; the outline API and canonical gallery examples remain available. The separate accent variant remains removed.
+or framing. Primary, accent, secondary, danger, and success Buttons automatically use raised desktop styling and glass on touch. Use `finish="flat"` to opt out, or `finish="raised"` to frame a ghost/link action. Outline Buttons always stay flat, including when a finish is supplied.
+Primary Buttons use solid monochrome emphasis (black in light themes, white in dark themes) for main actions such as create, save, submit, invite, and continue. Do not use accent merely because an action is primary. Accent Buttons use the theme accent and its resolved contrast color; accent emphasis is always explicit. Omitted variants use primary, and secondary remains the softer neutral action. Current Button usages trial secondary instead of outline; the outline API and canonical gallery examples remain available.
 Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
@@ -72,6 +72,11 @@ rounded selected pill. Use borders and selected fills without raised edges,
 gradients, or shadows. Buttons use variant-specific pressed fills. Wrapping
 preset choices can remain separate pills. Keep each surface's existing touch
 treatment and the agent composer's sliding track (`variant="track"`).
+
+Mobile chrome marks selection in ink, never the accent: the selected pill tab
+fills with ink, the current dock icon and drawer row stay at full ink while
+their siblings dim, and a checked filter option gets an ink check. The accent
+stays for attention — unread dots and filter counts.
 
 Reuse `Button`, `Input`, `InputGroup`, `Tabs`, `ComposerSurface`, `menu-surface`, and
 `elevated-surface` instead of introducing one-off surface styling. Every menu,

@@ -19,11 +19,11 @@ import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
+import { Key } from '@solid-primitives/keyed';
 import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Show,
   Suspense,
 } from 'solid-js';
@@ -180,25 +180,27 @@ export function InlineTaskProperties() {
             size="xs"
             showAddButton={documentKind === 'document' && canEdit()}
           />
-          <For each={inlineProperties()}>
+          <Key each={inlineProperties()} by="propertyId">
             {(property) => (
               <InlinePropertyValue
-                property={property}
+                property={property()}
                 entityId={blockId}
                 canManage={
-                  !property.propertyId.startsWith('pending:') ||
-                  defaultDefinitionIds().includes(property.propertyDefinitionId)
+                  !property().propertyId.startsWith('pending:') ||
+                  defaultDefinitionIds().includes(
+                    property().propertyDefinitionId
+                  )
                 }
                 canRemove={
-                  !property.propertyId.startsWith('pending:') &&
+                  !property().propertyId.startsWith('pending:') &&
                   (documentKind !== 'task' ||
                     !getBuiltinPropertyIds('task').includes(
-                      property.propertyDefinitionId
+                      property().propertyDefinitionId
                     ))
                 }
               />
             )}
-          </For>
+          </Key>
           <Show when={documentKind === 'document' && canEdit()}>
             <AddPropertyButton variant="secondary" size="xs" class="gap-1.5" />
           </Show>

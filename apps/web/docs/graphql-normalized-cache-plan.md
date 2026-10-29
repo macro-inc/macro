@@ -867,6 +867,22 @@ use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
 
+Mail list pages carry same-query server membership in the existing `baseline`
+field. The Mail adapter reconciles only baseline rows outside the indexed window,
+retaining unknown rows and rejecting confirmed nonmembers. Known read, archive,
+and signal flags can disprove an incomplete row's membership through the compiled
+predicate; missing facts never prove a new match. Optimistic and committed flags
+are read from the same engine revision as the page.
+
+Fallbacks preserve the server's query-dependent preview fields while selecting
+live flags independently of canonical preview hydration. Lists with retained rows,
+or older native hosts without `retainedKeys`, remain eligible for mutation-driven
+server revalidation. Indexed cursors do not move to retained rows; continuation
+publishes an ordered through-read of the union instead of appending across them.
+New server membership triggers evaluation even when the local list is already
+longer. A baseline beyond the 5,000-row cap discards the local projection and uses
+the live server list; indexed rows do not count against that baseline cap.
+
 Grouped Soup uses `graphql/create-grouped-soup-live-query.ts` to own the initial
 request and every loaded per-bin continuation. With maintained cache queries and
 a supported filter plus created/updated sort, their combined server membership
@@ -962,7 +978,11 @@ transaction as their normalized write. It compares up to 500 local matches
 against returned IDs, bounded by the last canonical view timestamp and ID when
 `nextCursor` exists. Exhausted/empty first pages cover the whole matching slice.
 Missing matches become durable incomplete projections, not deleted records or
-invented archive/signal facts. Full canonical snapshots restore their proof;
+invented archive/signal facts. Mail retention excludes explicitly invalidated
+(`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
+takes precedence; an older open view cannot restore the revoked evidence.
+This differs from missing metadata, which still retains same-query membership.
+Full canonical snapshots restore their proof;
 partial patches cannot. Backfills, cursor pages, incomplete responses,
 unsupported predicates, identity switches, and pending optimistic rows do not
 supply this negative evidence. The existing authoritative-write telemetry covers

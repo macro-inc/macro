@@ -58,6 +58,8 @@ export interface FreshSortConfig<T = unknown> {
   gapPenaltyWeight?: number;
   /** How much to penalize matches that start later in the string. Higher values penalize later starts more. Default: 0 */
   startBonusDecay?: number;
+  /** Rank names equal to the query first, then names starting with it, then other matches, ignoring case; the blended score orders each group. Default: false */
+  rankNameMatchesFirst?: boolean;
 }
 
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
@@ -74,6 +76,8 @@ export interface FreshSortResult<T> {
   timeScore: number;
   brevityScore: number;
   combinedScore: number;
+  /** 2 for an exact name, 1 for a name starting with the query, else 0; always 0 unless `rankNameMatchesFirst`. */
+  nameMatchRank: number;
 }
 
 const DEFAULT_CONFIG = {
@@ -90,6 +94,7 @@ const DEFAULT_CONFIG = {
   boostFn: undefined,
   gapPenaltyWeight: 0,
   startBonusDecay: 0,
+  rankNameMatchesFirst: false,
 } as const;
 
 function extractTimestamp(
@@ -138,6 +143,35 @@ export function normalizeFuzzyScore(
   return Math.max(0, Math.min(1, fuzzyScore / maxPossibleScore));
 }
 
+function calculateNameMatchRank(name: string, term: string): number {
+  if (!term) return 0;
+  const normalizedName = name.trim().toLocaleLowerCase();
+  if (normalizedName === term) return 2;
+  if (normalizedName.startsWith(term)) return 1;
+  return 0;
+}
+
+type MatchPosition = { start: number; ranges: number[] | undefined };
+
+/** Where the query matches each label, for rows whose search text adds more than the label. */
+function labelMatchPositions(
+  labels: string[],
+  query: string,
+  idxs: number[]
+): Map<number, MatchPosition> {
+  const positions = new Map<number, MatchPosition>();
+  const labelIdxs = uf.filter(labels, query, idxs);
+  if (!labelIdxs || labelIdxs.length === 0) return positions;
+  const info = uf.info(labelIdxs, labels, query);
+  info.idx.forEach((labelIdx, infoIdx) => {
+    positions.set(labelIdx, {
+      start: info.start[infoIdx] ?? 0,
+      ranges: info.ranges[infoIdx],
+    });
+  });
+  return positions;
+}
+
 function calculateBrevityScore(text: string): number {
   if (!text || text.length === 0) return 0;
   const maxLength = 100;
@@ -148,6 +182,7 @@ function calculateBrevityScore(text: string): number {
 function ufuzzyFilter<T>(
   items: T[],
   getName: NameFn<T>,
+  getDisplayName: NameFn<T>,
   query: string,
   gapPenaltyWeight: number,
   startBonusDecay: number
@@ -162,10 +197,19 @@ function ufuzzyFilter<T>(
 
   if (!order || order.length === 0) return [];
 
+  // Score where the query falls in the label when it matches there, so
+  // aliases or keywords placed before the label don't count as a late start.
+  const labelPositions =
+    getDisplayName === getName
+      ? undefined
+      : labelMatchPositions(items.map(getDisplayName), query, idxs);
+
   const queryLen = query.length;
   return order.map((orderIdx) => {
     const haystackIdx = info.idx[orderIdx];
-    const ranges = info.ranges[orderIdx];
+    const labelPosition = labelPositions?.get(haystackIdx);
+    const ranges = labelPosition ? labelPosition.ranges : info.ranges[orderIdx];
+    const start = labelPosition ? labelPosition.start : info.start[orderIdx];
 
     let matchSpan = queryLen;
     if (ranges && ranges.length >= 2) {
@@ -176,8 +220,7 @@ function ufuzzyFilter<T>(
     const clampedStartDecay = Math.max(0, startBonusDecay);
     const rawGapPenalty = matchSpan > 0 ? queryLen / matchSpan : 1;
     const gapPenalty = 1 - (1 - rawGapPenalty) * clampedGapWeight;
-    const startBonus =
-      1 / (1 + (info.start[orderIdx] ?? 0) * clampedStartDecay);
+    const startBonus = 1 / (1 + (start ?? 0) * clampedStartDecay);
     const score = gapPenalty * startBonus * 100;
 
     return {
@@ -190,6 +233,7 @@ function ufuzzyFilter<T>(
 
 function freshSort<T>(
   filterResults: FuzzyFilterResult<T>[],
+  getNameMatchRank: (item: T) => number,
   config: FreshSortConfig<T> = {},
   isChannelItem: BooleanFn<T>,
   isDmItem: BooleanFn<T>,
@@ -257,16 +301,22 @@ function freshSort<T>(
       timeScore,
       brevityScore,
       combinedScore,
+      nameMatchRank: getNameMatchRank(result.original),
     };
   });
 
-  scoredResults.sort((a, b) => b.combinedScore - a.combinedScore);
+  scoredResults.sort(
+    (a, b) =>
+      b.nameMatchRank - a.nameMatchRank || b.combinedScore - a.combinedScore
+  );
   return scoredResults;
 }
 
 interface CreateFreshSearchArgs<T> {
   config?: FreshSortConfig<T>;
   getName: NameFn<T>;
+  /** The label people see, for name-match ranking and match position when `getName` adds aliases, emails, or keywords. Default: getName */
+  getDisplayName?: NameFn<T>;
   isChannelItem?: BooleanFn<T>;
   isDmItem?: BooleanFn<T>;
   getTimestamp: TimestampFn<T>;
@@ -275,6 +325,7 @@ interface CreateFreshSearchArgs<T> {
 export function createFreshSearch<T>({
   config = {},
   getName,
+  getDisplayName = getName,
   isChannelItem = () => false,
   isDmItem = () => false,
   getTimestamp,
@@ -282,6 +333,11 @@ export function createFreshSearch<T>({
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
     const trimmedQuery = query.trim();
+    const term = trimmedQuery.toLocaleLowerCase();
+    const getNameMatchRank = (item: T) =>
+      finalConfig.rankNameMatchesFirst
+        ? calculateNameMatchRank(getDisplayName(item), term)
+        : 0;
 
     const hasComma = trimmedQuery.includes(',');
     const hasSpace = trimmedQuery.includes(' ');
@@ -296,6 +352,7 @@ export function createFreshSearch<T>({
       }));
       return freshSort(
         allResults,
+        getNameMatchRank,
         config,
         isChannelItem,
         isDmItem,
@@ -326,6 +383,7 @@ export function createFreshSearch<T>({
       const nonChannelResults = ufuzzyFilter(
         nonChannelItems,
         getName,
+        getDisplayName,
         trimmedQuery,
         finalConfig.gapPenaltyWeight,
         finalConfig.startBonusDecay
@@ -333,6 +391,7 @@ export function createFreshSearch<T>({
       const allResults = [...channelResults, ...nonChannelResults];
       return freshSort(
         allResults,
+        getNameMatchRank,
         config,
         isChannelItem,
         isDmItem,
@@ -343,12 +402,14 @@ export function createFreshSearch<T>({
     const fuzzyResults = ufuzzyFilter(
       items,
       getName,
+      getDisplayName,
       query,
       finalConfig.gapPenaltyWeight,
       finalConfig.startBonusDecay
     );
     return freshSort(
       fuzzyResults,
+      getNameMatchRank,
       config,
       isChannelItem,
       isDmItem,
@@ -376,6 +437,18 @@ function createSameDomainBoostFn<T>(
     return itemDomain === userDomain ? boost : 0;
   };
 }
+
+/**
+ * How closely a typed query matches an item's name: exact names, then names
+ * starting with the query, then tight matches near the start. Menus that find
+ * entities by name (Command-K, mobile name search, @ mentions) share this and
+ * keep their own recency weights and type boosts.
+ */
+export const NAME_MATCH_RANKING = {
+  gapPenaltyWeight: 0.4,
+  startBonusDecay: 0.2,
+  rankNameMatchesFirst: true,
+} as const satisfies FreshSortConfig;
 
 /**
  * Preset configurations for common fresh search use cases.
