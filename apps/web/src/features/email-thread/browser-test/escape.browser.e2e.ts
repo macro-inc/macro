@@ -67,27 +67,17 @@ for (const [name, setup] of firstPressCases) {
   });
 }
 
-const replyCases: [string, string, (page: Page) => Promise<void>][] = [
-  ['an empty reply', '', openReply],
+const replyCases: [string, (page: Page) => Promise<void>][] = [
+  ['an empty reply', openReply],
   [
     'a reply with text',
-    '',
     async (page) => {
       await openReply(page);
       await editor(page).pressSequentially('See you Monday');
     },
   ],
   [
-    'a saved draft the thread focused on open',
-    '?draft',
-    async (page) => {
-      await expect(editor(page)).toBeFocused();
-      await expect(editor(page)).toContainText('Saved reply');
-    },
-  ],
-  [
     'a new forward with focus in To',
-    '',
     async (page) => {
       await page.keyboard.press('f');
       await expect(page.getByRole('combobox').first()).toBeFocused();
@@ -95,11 +85,11 @@ const replyCases: [string, string, (page: Page) => Promise<void>][] = [
   ],
 ];
 
-for (const [name, search, setup] of replyCases) {
+for (const [name, setup] of replyCases) {
   test(`Escape leaves ${name} for its message, then returns to the list`, async ({
     page,
   }) => {
-    await openThread(page, search);
+    await openThread(page);
     await setup(page);
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-message-body-id="last"]')).toBeFocused();
@@ -110,6 +100,17 @@ for (const [name, search, setup] of replyCases) {
     await expect(page.getByTestId('deleted-drafts')).toBeEmpty();
   });
 }
+
+test('one Escape returns to the list with a saved draft open, and keeps it', async ({
+  page,
+}) => {
+  await openThread(page, '?draft');
+  await expect(editor(page)).toContainText('Saved reply');
+  await expect(editor(page)).not.toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(inbox(page)).toBeVisible();
+  await expect(page.getByTestId('deleted-drafts')).toBeEmpty();
+});
 
 test('a reply with text is still a draft after leaving the thread', async ({
   page,
