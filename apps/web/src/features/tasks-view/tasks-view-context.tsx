@@ -470,7 +470,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      isNavigable: (row) => row.kind !== 'section-header',
+      // Continuation rows load on their own when scrolled into view.
+      isNavigable: (row) =>
+        row.kind === 'entity' || row.kind === 'group-header',
       isSelectable: (row) => row.kind === 'entity',
       onActivate: (value) => activation.current?.(value),
     })

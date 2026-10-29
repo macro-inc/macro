@@ -53,10 +53,15 @@ editor initializes; the project title, properties, and discussion stay visible.
 Project task lists automatically fetch all matching pages in every group, without
 per-group `Load More` rows. A failed continuation stops automatic requests and shows
 `Try again` above the list; already fetched group rows remain available.
+The regular Tasks list loads a group's next page when the end of that group
+scrolls into view, with a spinner row instead of a `Load More` button. A failed
+page shows `Retry` in that row and stops automatic requests for the group.
+ArrowDown waits on a group's last loaded task until the next page arrives; after
+a failure it continues into the next group. Collapsed groups load nothing.
 With GraphQL Soup enabled, verify a group with more than one page in both the
-regular Tasks list (`Load More`) and a project task list (automatic pagination).
-Both must use the parent Soup query's continuation owner; reaching the last page
-removes the group's paging control without hiding already loaded tasks.
+regular Tasks list (scroll and ArrowDown) and a project task list (automatic
+pagination). Both must use the parent Soup query's continuation owner; reaching
+the last page removes the group's paging row without hiding already loaded tasks.
 Refresh a group containing at least 11 tasks while delaying its continuation
 response: every already loaded continuation row should stay mounted, with no
 brief collapse to the first 10 rows. Verify both background and explicit refresh,
