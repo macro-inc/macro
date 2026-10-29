@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useIsAuthenticated } from '@core/auth';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -34,7 +35,7 @@ import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Badge, Button, Layer } from '@ui';
+import { Badge, Button, CollectionEmptyState, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createEffect,
@@ -396,6 +397,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                 {(property) => (
                   <EntityCollectionProperty
                     entityId={props.entityId}
+                    loading={isLoading()}
                     property={property}
                     canRemoveFromEntity={
                       !defaultPinnedDefinitionIds().has(
@@ -939,6 +941,7 @@ function NonUserEntityValue(props: {
 function EntityCollectionProperty(props: {
   canRemoveFromEntity: boolean;
   entityId: string;
+  loading?: boolean;
   onRemovePendingProperty: (property: Property) => void;
   onPropertyPinned?: (propertyId: string) => void;
   property: Property;
@@ -954,6 +957,7 @@ function EntityCollectionProperty(props: {
     >
       <EntityCollectionPropertyBody
         canRemoveFromEntity={props.canRemoveFromEntity}
+        loading={props.loading}
         property={props.property}
         onRemovePendingProperty={props.onRemovePendingProperty}
         onPropertyPinned={props.onPropertyPinned}
@@ -970,6 +974,7 @@ function EntityCollectionProperty(props: {
 
 function EntityCollectionPropertyBody(props: {
   canRemoveFromEntity: boolean;
+  loading?: boolean;
   onRemovePendingProperty: (property: Property) => void;
   onPropertyPinned?: (propertyId: string) => void;
   property: Property;
@@ -978,6 +983,11 @@ function EntityCollectionPropertyBody(props: {
   const propertyCtx = useProperty();
   const entities = () => getEntityValues(props.property);
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
+  const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
+    event.stopPropagation();
+    if (isReadOnly()) return;
+    propertyCtx.openEditor(event.currentTarget);
+  };
 
   const handleRemoveEntity = async (entityId: string) => {
     const remaining = entities().filter(
@@ -1000,17 +1010,14 @@ function EntityCollectionPropertyBody(props: {
           {props.property.displayName}
         </span>
         <div class="ml-auto flex shrink-0 items-center">
-          <Show when={!isReadOnly()}>
+          <Show when={!isReadOnly() && entities().length > 0}>
             <Button
               type="button"
               variant="ghost"
               size="icon-xs"
               class="text-ink-extra-muted"
               aria-label={`Add ${props.property.displayName}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                propertyCtx.openEditor(event.currentTarget);
-              }}
+              onClick={handleAdd}
             >
               <Plus class="size-4" />
             </Button>
@@ -1027,7 +1034,27 @@ function EntityCollectionPropertyBody(props: {
       <div class="mt-2 flex flex-wrap gap-1.5">
         <For
           each={entities()}
-          fallback={<span class="text-ink-extra-muted">Empty</span>}
+          fallback={
+            <Show when={!props.loading}>
+              <CollectionEmptyState
+                message={t('common.emptyCollection')}
+                action={
+                  <Show when={!isReadOnly()}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      class="text-ink-extra-muted"
+                      onClick={handleAdd}
+                    >
+                      <Plus class="size-4" />
+                      {t('common.add')}
+                    </Button>
+                  </Show>
+                }
+              />
+            </Show>
+          }
         >
           {(entityRef) => (
             <NonUserEntityChip

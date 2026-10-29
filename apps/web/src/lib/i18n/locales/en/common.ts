@@ -1,4 +1,6 @@
 export default {
+  add: 'Add',
+  emptyCollection: 'No items added yet.',
   addPhotos: 'Add photos',
   addFiles: 'Add files',
   photosFromDevice: 'Images from your device',

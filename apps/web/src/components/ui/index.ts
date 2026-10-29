@@ -53,6 +53,10 @@ export {
 } from './components/Checkbox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
+export {
+  CollectionEmptyState,
+  type CollectionEmptyStateProps,
+} from './components/CollectionEmptyState';
 export type {
   ColorPickerFieldProps,
   ColorPickerInputProps,
