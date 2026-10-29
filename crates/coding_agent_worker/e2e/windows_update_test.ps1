@@ -109,9 +109,10 @@ scope = "user"
 "@ | Set-Content (Join-Path $runDir 'macrod.toml')
     $env:MACROD_UPDATE_CHECK_SECONDS = '2'
 
-    # Its own console, as a user starts it from a terminal.
-    $v1 = Start-Process -FilePath $launcher -WorkingDirectory $runDir -PassThru
-    $processes += $v1
+    # Its own console, as a user starts it from a terminal. (PowerShell
+    # names are case-insensitive: $v1 would overwrite the $V1 tag.)
+    $firstLaunch = Start-Process -FilePath $launcher -WorkingDirectory $runDir -PassThru
+    $processes += $firstLaunch
     Wait-For "the $V1 core to start" { (Cores).Count -eq 1 } 30
     $v1Core = (Cores)[0]
     Check ($v1Core.ExecutablePath -like "*\versions\$V1\macrod-core.exe") "the launcher started $V1 (pid $($v1Core.ProcessId), $($v1Core.ExecutablePath))"
@@ -124,7 +125,7 @@ scope = "user"
     $seen = Requests-For (Archive $V2)
     Wait-For "$V1 to retry the tampered $V2" { (Requests-For (Archive $V2)) -gt $seen } 30
     Check (-not (Test-Path (Join-Path $installDir "versions\$V2"))) "a $V2 with a wrong checksum is not installed"
-    Check (-not $v1.HasExited) "$V1 keeps running after the rejected update"
+    Check (-not $firstLaunch.HasExited) "$V1 keeps running after the rejected update"
 
     # The real release: downloaded, verified, installed beside the running v1.
     Publish $V2
@@ -132,7 +133,7 @@ scope = "user"
     Check (-not (Test-Path (Join-Path $installDir "versions\$V2.partial"))) "$V2 was committed, not left partial"
     $installedVersion = & (Join-Path $installDir "versions\$V2\macrod-core.exe") --version
     Check ($installedVersion -eq "macrod $V2") "the installed core is $V2 ($installedVersion)"
-    Check (-not $v1.HasExited) "$V1 keeps running after installing $V2"
+    Check (-not $firstLaunch.HasExited) "$V1 keeps running after installing $V2"
     $running = Cores
     Check ($running.Count -eq 1 -and $running[0].ProcessId -eq $v1Core.ProcessId) "the session process is still $V1 (pid $($v1Core.ProcessId)) until the next launch"
 
@@ -141,10 +142,10 @@ scope = "user"
 
     # The next launch runs v2 and prunes v1.
     Stop-Process -Id $v1Core.ProcessId -Force
-    Wait-For "$V1 to exit" { $v1.HasExited } 30
+    Wait-For "$V1 to exit" { $firstLaunch.HasExited } 30
     Check ((& $launcher --version) -eq "macrod $V2") "after the update the launcher runs $V2"
-    $v2 = Start-Process -FilePath $launcher -WorkingDirectory $runDir -PassThru
-    $processes += $v2
+    $secondLaunch = Start-Process -FilePath $launcher -WorkingDirectory $runDir -PassThru
+    $processes += $secondLaunch
     Wait-For "the $V2 core to start" { (Cores).Count -eq 1 } 30
     $v2Core = (Cores)[0]
     Check ($v2Core.ExecutablePath -like "*\versions\$V2\macrod-core.exe") "the next launch started $V2 (pid $($v2Core.ProcessId), $($v2Core.ExecutablePath))"
