@@ -228,6 +228,11 @@ export function FormPageView(props: FormPageProps) {
                       refetch={props.source.refetch}
                       compact={false}
                       scrollContainer={() => respondScroll}
+                      onOpenResponses={
+                        detail().form.responsesVisible
+                          ? () => props.onTabChange('responses')
+                          : undefined
+                      }
                     />
                   </div>
                 }
