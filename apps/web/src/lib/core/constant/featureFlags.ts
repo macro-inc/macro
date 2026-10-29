@@ -842,6 +842,13 @@ export const enableRoutineConditions = defineFlag({
   default: onInDev,
 });
 
+// Templates are not ready for general use. Follow PostHog even in development
+// so the UI and the server's per-user rollout agree.
+export const enableRoutineSharing = defineFlag({
+  key: 'enable-routine-sharing',
+  env: 'ENABLE_ROUTINE_SHARING',
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;

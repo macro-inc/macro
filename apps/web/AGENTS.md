@@ -449,6 +449,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   The resolved interface language is reported to PostHog as the person
   property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
+- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
 ## Rules

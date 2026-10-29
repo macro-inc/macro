@@ -1114,10 +1114,22 @@ routine is deleted the mention reads `Deleted` and clicking it shows a card
 instead of opening the routine. Routines do not appear in the mention menu.
 Only the owner sees a routine's editor and can edit, enable, run, duplicate,
 delete, or view run history. Anyone else who opens a routine link sees its
-template when the owner shared one, and otherwise "isn't shared as a template".
+template when the owner shared one and routine sharing is enabled, and otherwise
+an unavailable message.
 Run conversations keep their own permissions.
 
 ### Routine templates
+
+Templates require the per-user PostHog flag `enable-routine-sharing`, which is
+off unless explicitly enabled, including in development. Configure it for both
+client and server evaluation. While off, sharing actions, message cards, and
+**Created from template** links are hidden; someone else's routine link shows
+**Routine sharing is unavailable.** after flags finish loading. Template queries
+and activation dialogs do not mount. The API also rejects publishing, reading,
+and activation with 404 when the flag is off, missing, or cannot be evaluated.
+Owners can still stop sharing through the API; their existing routines and
+already activated copies keep working. `VITE_ENABLE_ROUTINE_SHARING` overrides
+only the web gate; exercising templates needs the backend flag enabled too.
 
 A routine runs as its owner, so it is shared as a template, never directly.
 The three-dot menu's **Share as template** opens **Share: name**. It explains

@@ -117,7 +117,9 @@ hostnames and internally rewrites cognition paths. `PREVIEW_DOMAIN` and
 `PREVIEW_CONTROL_HOSTS` values are retained only for old-image rollback; new
 code does not read them. `POSTHOG_API_KEY` and `POSTHOG_HOST` drive
 feature flags and the MCP and integration analytics; when the key is unset,
-analytics are off.
+analytics are off and routine template publishing, reads, and activation are
+disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
+owner unsharing and already activated routines remain available.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
