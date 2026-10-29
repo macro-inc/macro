@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   fetchServers: vi.fn(),
   reservePopup: vi.fn(),
   assignUrl: vi.fn(),
+  linkGithub: vi.fn(),
   overlays: [] as { app_slug: string; server_url: string }[],
   overlaysUnavailable: false,
   cachedOverlays: undefined as
@@ -24,6 +25,9 @@ const mocks = vi.hoisted(() => ({
     | undefined,
 }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.native }));
+vi.mock('@core/auth/authorize-github', () => ({
+  linkGithubAccount: mocks.linkGithub,
+}));
 vi.mock('@core/pipedream/connect-native', () => ({
   openNativePipedreamConnectUI: mocks.openNative,
 }));
@@ -259,6 +263,35 @@ describe('overlaid apps connect through their own MCP server', () => {
       'https://sentry.io/oauth/authorize?x=1'
     );
     expect(mocks.token).not.toHaveBeenCalled();
+  });
+});
+
+describe('GitHub connects through the account link', () => {
+  const github = {
+    app_slug: 'github',
+    server_url: 'https://api.githubcopilot.com/mcp',
+  };
+
+  beforeEach(() => {
+    mocks.cachedOverlays = [github];
+  });
+
+  it('links the account instead of authorizing the server or Pipedream', async () => {
+    mocks.linkGithub.mockResolvedValue(true);
+
+    expect(await connectPipedreamApp({ appSlug: 'github' })).toBe('connected');
+    expect(mocks.linkGithub).toHaveBeenCalled();
+    expect(mocks.reservePopup).not.toHaveBeenCalled();
+    expect(mocks.startAuth).not.toHaveBeenCalled();
+    expect(mocks.token).not.toHaveBeenCalled();
+    expect(mocks.invalidate).toHaveBeenCalled();
+  });
+
+  it('reports closed when the page leaves for GitHub or the link fails', async () => {
+    mocks.linkGithub.mockResolvedValue(false);
+
+    expect(await connectPipedreamApp({ appSlug: 'github' })).toBe('closed');
+    expect(mocks.startAuth).not.toHaveBeenCalled();
   });
 });
 
