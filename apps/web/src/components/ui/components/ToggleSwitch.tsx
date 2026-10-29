@@ -8,6 +8,11 @@ export type ToggleSwitchProps = {
   defaultChecked?: boolean;
   labelClass?: string;
   label?: JSX.Element;
+  /**
+   * Short text inside the track, beside the thumb. It names the switch when
+   * there is no `label`.
+   */
+  trackLabel?: string;
   disabled?: boolean;
   checked?: boolean;
   /** Visual size. `sm` (default) is the compact toolbar size; `md` is larger,
@@ -23,18 +28,30 @@ const SWITCH_SIZES = {
     thumb: 'top-0.5 left-0.5 h-2.5',
     stretched: 'w-3 data-checked:translate-x-1.5',
     normal: 'w-2.5 data-checked:translate-x-2',
+    labelled: {
+      text: 'pl-4 pr-1 text-[0.5rem] group-data-checked:pl-1 group-data-checked:pr-4',
+      thumb: 'w-2.5 data-checked:left-[calc(100%-0.75rem)]',
+    },
   },
   sm: {
     control: 'h-4 w-6',
     thumb: 'top-0.5 left-0.5 h-3',
     stretched: 'w-4 data-checked:translate-x-1',
     normal: 'w-3 data-checked:translate-x-2',
+    labelled: {
+      text: 'pl-4.5 pr-1.5 text-[0.5625rem] group-data-checked:pl-1.5 group-data-checked:pr-4.5',
+      thumb: 'w-3 data-checked:left-[calc(100%-0.875rem)]',
+    },
   },
   md: {
     control: 'h-5 w-9',
     thumb: 'top-0.5 left-0.5 h-4',
     stretched: 'w-5 data-checked:translate-x-3',
     normal: 'w-4 data-checked:translate-x-4',
+    labelled: {
+      text: 'pl-6 pr-2 text-xxs group-data-checked:pl-2 group-data-checked:pr-6',
+      thumb: 'w-4 data-checked:left-[calc(100%-1.125rem)]',
+    },
   },
 } as const;
 
@@ -60,6 +77,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
     'class',
     'controlClass',
     'label',
+    'trackLabel',
     'size',
   ]);
   const sizing = () => SWITCH_SIZES[local.size ?? 'sm'];
@@ -105,20 +123,49 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
       <KobalteSwitch.Input class="sr-only" />
       <KobalteSwitch.Control
         class={cn(
-          'relative rounded-full bg-ink-muted/40 transition-colors duration-100 data-checked:bg-accent',
+          'group relative rounded-full bg-ink-muted/40 transition-colors duration-100 data-checked:bg-accent',
           sizing().control,
+          local.trackLabel !== undefined && 'inline-flex w-auto items-center',
           local.controlClass
         )}
       >
+        <Show when={local.trackLabel}>
+          {(text) => (
+            <span
+              aria-hidden="true"
+              class={cn(
+                'font-medium leading-none whitespace-nowrap text-ink transition-[padding] duration-100 ease-in-out select-none group-data-checked:text-accent-contrast',
+                sizing().labelled.text
+              )}
+            >
+              {text()}
+            </span>
+          )}
+        </Show>
         <KobalteSwitch.Thumb
           class={cn(
             'absolute rounded-full bg-surface transition-all duration-100 ease-in-out',
             sizing().thumb,
-            isStretched() ? sizing().stretched : sizing().normal
+            local.trackLabel !== undefined
+              ? sizing().labelled.thumb
+              : isStretched()
+                ? sizing().stretched
+                : sizing().normal
           )}
         />
       </KobalteSwitch.Control>
-      <Show when={local.label != null}>
+      <Show
+        when={local.label != null}
+        fallback={
+          <Show when={local.trackLabel}>
+            {(text) => (
+              <KobalteSwitch.Label class="sr-only">
+                {text()}
+              </KobalteSwitch.Label>
+            )}
+          </Show>
+        }
+      >
         <KobalteSwitch.Label class={cn(local.labelClass)}>
           {local.label}
         </KobalteSwitch.Label>
