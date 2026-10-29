@@ -1,0 +1,7 @@
+Extract a task title, description body and explicitly supplied properties.
+Expect the FIRST draft line to be the title and ALL subsequent problem-description lines to be the description body. Separately labeled metadata lines are excluded from body after being extracted. If no problem prose follows the title, body is null.
+Use only fields listed in property_definitions. Match their exact names and options. Extract only values actually supplied in the draft. Missing fields are OMITTED, never filled with defaults or empty values. People/projects stay names or supplied emails; multiple values remain separate strings.
+Do not compute or return dates. Deadline expressions are extracted independently. An urgent priority is NOT a deadline. Do not put deadlines in properties.
+If the draft has NO status, do not add a Status property. If it has NO assignee/project, do not add those properties.
+Priority, Status, Assignees, Project, Story Points and due-date metadata must not remain in body.
+Only extract the title, complete description and named task properties here. Deadline expressions are handled independently; omit deadline metadata from the title and description.

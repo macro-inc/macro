@@ -5,7 +5,7 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CalendarEvent } from '@service-calendar/generated/schemas/calendarEvent';
 import { emailClient } from '@service-email/client';
 import type { InvitationResolution } from '@service-email/generated/schemas/invitationResolution';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { copyFailureOutcome } from './copy';
 import { calendarKeys } from './keys';
@@ -13,14 +13,18 @@ import { invalidateCalendarOccurrences } from './occurrences';
 
 export type CalendarInvitationsData = Record<string, InvitationResolution>;
 
+function calendarInvitationsQueryOptions(threadId: string) {
+  return queryOptions({
+    queryKey: calendarKeys.invitations(threadId).queryKey,
+    queryFn: () =>
+      throwOnErr(() => emailClient.getCalendarInvitations(threadId)),
+    staleTime: 15_000,
+  });
+}
+
 /** One bounded batch per thread. Snapshot rendering never waits for this query. */
 export function useCalendarInvitationsQuery(threadId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: calendarKeys.invitations(threadId()).queryKey,
-    queryFn: () =>
-      throwOnErr(() => emailClient.getCalendarInvitations(threadId())),
-    staleTime: 15_000,
-  }));
+  return useQuery(() => calendarInvitationsQueryOptions(threadId()));
 }
 export function invalidateCalendarInvitations() {
   return queryClient.invalidateQueries({

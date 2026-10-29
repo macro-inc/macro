@@ -42,8 +42,26 @@ verifying a local iOS build without PostHog configuration, enable that path with
 the build-time `VITE_ENABLE_GRAPHQL_SOUP=true` override; see the
 [cache guide](../../apps/web/docs/graphql-normalized-cache-plan.md#cached-email-quick-access).
 
-Category/mode changes keep the same input mounted and focused. Enter dismisses
-the keyboard without ending search. Opening a result hides search chrome while
+Category/mode changes keep the same input mounted and focused. Return inserts
+a newline and keeps the keyboard open; the Search bar expands with the text.
+When **enable-universal-input** is on, three words or 24 characters reveal
+Universal Input's suggested form above the bar. The editor stays mounted while
+classification and extraction update the form. Shorter edits keep the form until
+the input is cleared. While the card is active, the normal search results and top
+category tabs are hidden; clearing the input restores them. The card stays above
+the keyboard with its type selector and action buttons visible; scroll the form
+contents inside the card. Use the
+explicit action button to create or send, or **Save as draft** to save an email.
+Manual field edits keep precedence over later predictions. Event dates and times
+are edited directly in the card; changing the start preserves the duration. The same PostHog flag
+as Command K applies; when it is off, the view keeps normal
+live search. Closing Search clears the input and its unsent suggested form.
+For Search intent, extraction selects a search type before extracting only that
+type's supported filters. Task status/priority/assignee/creator filters and channel
+In/From filters use the same controls and resolution as desktop Command K.
+The shared global-search filters and results update live above the bar. Open a
+filtered result directly; there is no separate Search submit action.
+Opening a result hides search chrome while
 preserving that Search history entry's query, category, mode, result order, and
 scroll position. Opening a result does not promote it within that saved list,
 even when its last-viewed time changes. Swiping back, pressing the native Back control, or using browser Back

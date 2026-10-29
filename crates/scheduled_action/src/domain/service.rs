@@ -138,6 +138,53 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         Ok(())
     }
 
+    async fn create(
+        &self,
+        principal: &CreationPrincipal,
+        input: CreateScheduledAction,
+        template_id: Option<Uuid>,
+    ) -> Result<ScheduledAction>
+    where
+        Targets: TaskTargetValidator,
+    {
+        let owner = principal.owner();
+        let owner_user = owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: owner.owner_type(),
+        })?;
+        let input = ActionConfiguration::from(input);
+        self.check_event_management(&input.trigger)?;
+        self.check_conditions(&input.trigger)?;
+        self.targets.validate_task(&input.task, owner_user).await?;
+        let now = Utc::now();
+        let next_run_at = next_run(&input.trigger)?;
+        let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
+        let created = self
+            .repo
+            .create_action(ScheduledAction {
+                id: None,
+                owner,
+                name: input.name,
+                trigger: input.trigger,
+                kind: input.kind,
+                task: input.task,
+                enabled: input.enabled,
+                run_visibility: input.run_visibility,
+                created_at: now,
+                updated_at: now,
+                configuration_revision: ConfigurationRevision::INITIAL,
+                event_activated_at,
+                next_run_at,
+                claimed: None,
+                template_id,
+            })
+            .await?;
+        self.dispatcher_tx
+            .send(DispatchEvent::Create(created.clone()))
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to dispatch create event: {e}"))?;
+        Ok(created)
+    }
+
     async fn replace_configuration(
         &self,
         mut action: ScheduledAction,
@@ -299,41 +346,16 @@ where
         principal: &CreationPrincipal,
         input: CreateScheduledAction,
     ) -> Result<ScheduledAction> {
-        let owner = principal.owner();
-        let owner_user = owner.as_user().ok_or(OwnerNotUserError {
-            owner_type: owner.owner_type(),
-        })?;
-        let input = ActionConfiguration::from(input);
-        self.check_event_management(&input.trigger)?;
-        self.check_conditions(&input.trigger)?;
-        self.targets.validate_task(&input.task, owner_user).await?;
-        let now = Utc::now();
-        let next_run_at = next_run(&input.trigger)?;
-        let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
-        let created = self
-            .repo
-            .create_action(ScheduledAction {
-                id: None,
-                owner,
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task: input.task,
-                enabled: input.enabled,
-                run_visibility: input.run_visibility,
-                created_at: now,
-                updated_at: now,
-                configuration_revision: ConfigurationRevision::INITIAL,
-                event_activated_at,
-                next_run_at,
-                claimed: None,
-            })
-            .await?;
-        self.dispatcher_tx
-            .send(DispatchEvent::Create(created.clone()))
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to dispatch create event: {e}"))?;
-        Ok(created)
+        self.create(principal, input, None).await
+    }
+
+    async fn create_action_from_template(
+        &self,
+        principal: &CreationPrincipal,
+        input: CreateScheduledAction,
+        template_id: Uuid,
+    ) -> Result<ScheduledAction> {
+        self.create(principal, input, Some(template_id)).await
     }
 
     async fn get_actions(

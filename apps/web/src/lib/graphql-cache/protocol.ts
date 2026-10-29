@@ -127,7 +127,13 @@ export type EntityFilterCacheArgs = {
   /** Omit for exact evaluation; even an empty array requests reconciliation. */
   baseline?: Array<{ key: string; sortTimestamp: string }>;
   /** Explicit cached-Mail pagination, independent of server cursors. */
-  mail?: { view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT'; cursor?: string };
+  mail?: {
+    view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT';
+    /** Continue after this row. Valid across writes; not with `through`. */
+    cursor?: string;
+    /** A page's `endCursor`: read from the top through that row instead of `limit` rows. */
+    through?: string;
+  };
 };
 
 export type EntityFilterCacheResult =
@@ -136,11 +142,16 @@ export type EntityFilterCacheResult =
       kind: 'mail-page';
       revision: CacheRevision;
       keys: string[];
+      /** Server members with incomplete local metadata; absent on older native hosts. */
+      retainedKeys?: string[];
       /** View-correct timestamps aligned with keys, independent of cached previews. */
       sortTimestamps: string[];
       nextCursor: string | null;
+      /** Position of the last row. Absent from native engines that predate `through`. */
+      endCursor?: string | null;
       optimistic: boolean;
     }
+  /** The cursor's engine generation or query changed; on native engines that predate `through`, any write. */
   | { kind: 'stale-cursor'; revision: CacheRevision }
   | {
       kind: 'reconciled';
@@ -291,6 +302,8 @@ export type CacheRevisionResult = {
 };
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
+/** The most rows a Mail read `through` a position returns, as the engine caps it. */
+export const MAX_MAIL_THROUGH_ROWS = 5_000;
 export const MAX_CACHE_SEARCH_QUERY_BYTES = 512;
 export const MAX_NORMALIZED_RECORD_KEY_LENGTH = 1024;
 

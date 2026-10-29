@@ -100,8 +100,8 @@ const mocks = vi.hoisted(() => ({
   updateAgentPermissions: vi.fn(),
   getInitiativePermissions: vi.fn(),
   updateInitiativePermissions: vi.fn(),
-  getWhatsappPermissions: vi.fn(),
-  updateWhatsappPermissions: vi.fn(),
+  getExternalChatPermissions: vi.fn(),
+  updateExternalChatPermissions: vi.fn(),
   getDocumentPermissions: vi.fn(),
   getDatabasePermissions: vi.fn(),
   updateDatabasePermissions: vi.fn(),
@@ -143,10 +143,13 @@ vi.mock('@queries/storage/databases', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-vi.mock('@channel/Input', () => ({
-  createConfiguredChannelMarkdownEditor: () => ({
-    controls: { focus: vi.fn() },
+vi.mock('@core/component/ForwardMessageComposer', () => ({
+  createForwardMessageComposer: () => ({
+    message: () => ({ content: '', mentions: [], attachments: [] }),
+    isUploading: () => false,
+    clear: vi.fn(),
   }),
+  ForwardMessageComposer: () => <textarea aria-label="Optional message" />,
 }));
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -230,11 +233,11 @@ vi.mock('@queries/initiative/share-permissions', () => ({
   updateInitiativeSharePermissions: (...args: unknown[]) =>
     mocks.updateInitiativePermissions(...args),
 }));
-vi.mock('@queries/whatsapp-groups/share-permissions', () => ({
-  fetchWhatsappGroupPermissions: (...args: unknown[]) =>
-    mocks.getWhatsappPermissions(...args),
-  updateWhatsappGroupPermissions: (...args: unknown[]) =>
-    mocks.updateWhatsappPermissions(...args),
+vi.mock('@queries/external-chats/share-permissions', () => ({
+  fetchExternalChatPermissions: (...args: unknown[]) =>
+    mocks.getExternalChatPermissions(...args),
+  updateExternalChatPermissions: (...args: unknown[]) =>
+    mocks.updateExternalChatPermissions(...args),
 }));
 vi.mock('@core/component/SharePermissions', () => ({
   Permissions: { OWNER: 'owner', CAN_EDIT: 'edit', CAN_VIEW: 'view' },
@@ -369,12 +372,13 @@ vi.mock('@ui', async () => {
     children?: JSX.Element;
     disabled?: boolean;
     tooltip?: string;
+    'aria-label'?: string;
     onClick?: () => void;
   }) => (
     <button
       disabled={props.disabled}
       onClick={props.onClick}
-      aria-label={props.tooltip}
+      aria-label={props['aria-label'] ?? props.tooltip}
     >
       {props.children}
     </button>
@@ -420,7 +424,7 @@ vi.mock('@ui', async () => {
       ItemIndicator: Container,
       Group: Container,
     }),
-    ButtonGroup: Object.assign(Container, { Divider: () => null }),
+    ButtonGroup: Object.assign(Container, { Button, Divider: () => null }),
     Tabs: (props: {
       'aria-label'?: string;
       onChange?: (value: string) => void;
@@ -1599,25 +1603,25 @@ describe('native project sharing', () => {
     }
   );
 
-  it('lets the owner of a WhatsApp chat revoke a channel its mention shared it with', async () => {
+  it('lets the owner of an external chat revoke a channel its mention shared it with', async () => {
     mocks.inBlock = false;
-    mocks.getWhatsappPermissions.mockResolvedValue(
+    mocks.getExternalChatPermissions.mockResolvedValue(
       ok({
-        id: 'whatsapp-permissions',
+        id: 'external-chat-permissions',
         owner: ME,
         channelSharePermissions: [
           { channel_id: 'channel-1', access_level: 'view' },
         ],
       })
     );
-    mocks.updateWhatsappPermissions.mockResolvedValue(ok(undefined));
+    mocks.updateExternalChatPermissions.mockResolvedValue(ok(undefined));
     render(() => (
       <ShareModal
-        id="group-1"
+        id="chat-1"
         name="Family"
         owner={ME}
-        itemType="whatsapp_group"
-        blockAlias="whatsapp_group"
+        itemType="external_chat"
+        blockAlias="external_chat"
         userPermissions={Permissions.OWNER}
         open
         onOpenChange={vi.fn()}
@@ -1627,15 +1631,18 @@ describe('native project sharing', () => {
       await screen.findByRole('button', { name: 'Set option none' })
     );
     await vi.waitFor(() =>
-      expect(mocks.updateWhatsappPermissions).toHaveBeenCalledWith('group-1', {
-        channelSharePermissions: [
-          { operation: 'remove', channelId: 'channel-1' },
-        ],
-      })
+      expect(mocks.updateExternalChatPermissions).toHaveBeenCalledWith(
+        'chat-1',
+        {
+          channelSharePermissions: [
+            { operation: 'remove', channelId: 'channel-1' },
+          ],
+        }
+      )
     );
   });
 
-  it('copies the project route instead of a block URL', () => {
+  it('copies the project link that pastes as a mention', () => {
     mocks.inBlock = false;
     render(() => (
       <ShareTrigger
@@ -1646,7 +1653,7 @@ describe('native project sharing', () => {
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(
-      'https://macro.com/app/component/initiative-view~initiative-1~overview'
+      'https://macro.com/app/initiative/initiative-1'
     );
   });
 });
@@ -1978,9 +1985,9 @@ describe('form share roles', () => {
     );
   });
 
-  it('offers View and Edit on a form, which has no comments, View on a WhatsApp chat, and every level elsewhere', () => {
+  it('offers View and Edit on a form, which has no comments, View on an external chat, and every level elsewhere', () => {
     expect(shareLevelsFor('form')).toEqual(['view', 'edit']);
-    expect(shareLevelsFor('whatsapp_group')).toEqual(['view']);
+    expect(shareLevelsFor('external_chat')).toEqual(['view']);
     expect(shareLevelsFor('document')).toBeUndefined();
     render(() => (
       <ShareOptions

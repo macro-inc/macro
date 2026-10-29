@@ -37,28 +37,28 @@ export function FormatButtons(props: FormatButtonsProps) {
         active={selection()?.bold}
         onClick={() => props.onInlineFormat('bold')}
       >
-        <TextBoldIcon />
+        <TextBoldIcon class="size-4" />
       </FormatButton>
       <FormatButton
         label="Italic"
         active={selection()?.italic}
         onClick={() => props.onInlineFormat('italic')}
       >
-        <TextItalicIcon />
+        <TextItalicIcon class="size-4" />
       </FormatButton>
       <FormatButton
         label="Strikethrough"
         active={selection()?.strikethrough}
         onClick={() => props.onInlineFormat('strikethrough')}
       >
-        <TextStrikethroughIcon />
+        <TextStrikethroughIcon class="size-4" />
       </FormatButton>
       <FormatButton
         label="Inline code"
         active={selection()?.code}
         onClick={() => props.onInlineFormat('code')}
       >
-        <TextCodeIcon />
+        <TextCodeIcon class="size-4" />
       </FormatButton>
       <div class="w-px h-5 bg-edge-muted" />
       <FormatButton
@@ -66,28 +66,28 @@ export function FormatButtons(props: FormatButtonsProps) {
         active={elementsInRange()?.has('list-bullet')}
         onClick={() => toggleNodeFormat('list-bullet')}
       >
-        <ListBulletsIcon />
+        <ListBulletsIcon class="size-4" />
       </FormatButton>
       <FormatButton
         label="Numbered list"
         active={elementsInRange()?.has('list-number')}
         onClick={() => toggleNodeFormat('list-number')}
       >
-        <ListNumbersIcon />
+        <ListNumbersIcon class="size-4" />
       </FormatButton>
       <FormatButton
         label="Checklist"
         active={elementsInRange()?.has('list-check')}
         onClick={() => toggleNodeFormat('list-check')}
       >
-        <ListChecksIcon />
+        <ListChecksIcon class="size-4" />
       </FormatButton>
       <FormatButton
         label="Blockquote"
         active={elementsInRange()?.has('quote')}
         onClick={() => toggleNodeFormat('quote')}
       >
-        <TextQuoteIcon />
+        <TextQuoteIcon class="size-4" />
       </FormatButton>
     </>
   );
@@ -104,9 +104,8 @@ type FormatButtonProps = {
 function FormatButton(props: FormatButtonProps) {
   return (
     <Button
+      tooltip={{ content: props.label, hotkey: props.hotkeyToken }}
       aria-label={props.label}
-      label={props.label}
-      hotkey={props.hotkeyToken}
       variant="ghost"
       size="icon-sm"
       class={props.active ? 'bg-active text-ink' : ''}

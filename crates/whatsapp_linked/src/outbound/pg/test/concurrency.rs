@@ -1,11 +1,16 @@
 use super::*;
-use crate::domain::ports::{AccountRepository, SendIntent, SendRepository};
+use crate::domain::{ports::SendRepository, provider::WhatsAppProvider};
+use external_chat::domain::ports::{ChatProvider, SendIntent};
 use tokio::sync::Barrier;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sends_and_roster_refreshes_share_a_consistent_lock_order(pool: PgPool) {
     let (_, session, repository, binding, alice, _) = adopted(&pool).await;
-    let account = repository.owned_account(ALICE).await.unwrap().unwrap();
+    let account = WhatsAppProvider::new(repository.clone())
+        .account(&person(ALICE))
+        .await
+        .unwrap()
+        .unwrap();
     let barrier = Barrier::new(2);
     let sends = async {
         for index in 0..64 {
@@ -13,15 +18,16 @@ async fn sends_and_roster_refreshes_share_a_consistent_lock_order(pool: PgPool) 
                 idempotency_key: Uuid::now_v7(),
                 message: ReplyContent::Text {
                     text: format!("Concurrent send {index}"),
+                    mentions: vec![],
                 },
                 reply_to: None,
             };
             barrier.wait().await;
             repository
                 .enqueue(SendIntent {
-                    user: ALICE,
+                    user: &person(ALICE),
                     account: &account,
-                    binding: &binding,
+                    chat: &binding,
                     request: &request,
                     digest: [index; 32],
                 })
@@ -52,10 +58,13 @@ async fn observers_can_refresh_groups_in_opposite_orders(pool: PgPool) {
         .await
         .unwrap();
     linked
-        .adopt(
-            ALICE,
-            &AdoptGroup {
-                group_jid: second.jid.clone(),
+        .chats
+        .add(
+            &person(ALICE),
+            &AddChat {
+                provider: ExternalChatProvider::WhatsApp,
+                remote_id: second.jid.clone(),
+                kind: ExternalChatKind::Group,
             },
             SendAuthority::Human,
         )

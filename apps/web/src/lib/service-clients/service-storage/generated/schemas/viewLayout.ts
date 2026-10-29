@@ -5,9 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ViewLayoutOneOf } from './viewLayoutOneOf';
+import type { ViewLayoutOneOfFive } from './viewLayoutOneOfFive';
 import type { ViewLayoutOneOfThree } from './viewLayoutOneOfThree';
 
 /**
  * How a view draws its rows.
  */
-export type ViewLayout = ViewLayoutOneOf | ViewLayoutOneOfThree;
+export type ViewLayout =
+  | ViewLayoutOneOf
+  | ViewLayoutOneOfThree
+  | ViewLayoutOneOfFive;

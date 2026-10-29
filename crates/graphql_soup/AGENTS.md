@@ -10,6 +10,8 @@ viewer pattern), which apply to every type defined here.
 
 ## Gotchas
 
+- `PROJECT` grouping forwards the Project property (initiative membership) to Soup; legacy folder IDs are not grouping keys.
+
 - `SoupItemLoader` (single-entity lookups, `soupUpdates` hydration) resolves
   email threads through entity-access view receipts, the rule the REST thread
   route applies, not through the viewer's inbox scope; Soup's email leg only
@@ -19,4 +21,4 @@ viewer pattern), which apply to every type defined here.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
   accepts it descending only and `groupSoup` rejects it. Its continuation
   cursors carry a different sort tag, so `inputs.rs` decodes both cursor shapes.
-- Standalone WhatsApp groups are intentionally excluded from Soup hydration; use the External group API.
+- External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.

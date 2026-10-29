@@ -1,9 +1,0 @@
-diff a/Cargo.lock b/Cargo.lock	(rejected hunks)
-@@ -21645,6 +21645,7 @@ dependencies = [
-  "macro_db_migrator",
-  "macro_entrypoint",
-  "macro_env",
-+ "macro_env_var",
-  "macro_service_urls",
-  "rootcause",
-  "rustls",

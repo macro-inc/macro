@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 
 use super::*;
 use crate::domain::models::{DatabaseView, ViewId};
+use models_databases::views::ViewLayout;
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
     DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
@@ -62,8 +63,13 @@ pub(super) fn views_without_column(
         .iter()
         .filter_map(|view| {
             let Some(layout) = view.layout.without_column(column, next_title) else {
-                return Some(Err(SchemaError::BoardGroupsByRemovedColumn {
-                    board: view.name.clone(),
+                return Some(Err(match view.layout {
+                    ViewLayout::Timeline { .. } => SchemaError::TimelineSpansRemovedColumn {
+                        timeline: view.name.clone(),
+                    },
+                    _ => SchemaError::BoardGroupsByRemovedColumn {
+                        board: view.name.clone(),
+                    },
                 }));
             };
             let query = view.query.without_column(column);
@@ -81,7 +87,8 @@ pub(super) fn views_without_column(
 
 /// The views of a table whose filters test `column`, rewritten without
 /// those tests, for a change of the column's type: they tested values the
-/// column no longer holds. A board grouped by it must go or regroup first.
+/// column no longer holds. A timeline grouped by it stops grouping. A board
+/// grouped by it, or a timeline spanning it, must go or change first.
 pub(super) fn views_without_tests_of(
     views: &[DatabaseView],
     column: ColumnId,
@@ -90,15 +97,21 @@ pub(super) fn views_without_tests_of(
     views
         .iter()
         .filter_map(|view| {
-            if view.layout.group_by() == Some(column) {
-                return Some(Err(SchemaError::BoardGroupsByRetypedColumn {
-                    board: view.name.clone(),
+            let Some(layout) = view.layout.retyping(column) else {
+                return Some(Err(match view.layout {
+                    ViewLayout::Timeline { .. } => SchemaError::TimelineSpansRetypedColumn {
+                        timeline: view.name.clone(),
+                    },
+                    _ => SchemaError::BoardGroupsByRetypedColumn {
+                        board: view.name.clone(),
+                    },
                 }));
-            }
+            };
             let query = view.query.without_tests_of(column);
-            (query != view.query).then(|| {
+            (query != view.query || layout != view.layout).then(|| {
                 Ok(DatabaseView {
                     query,
+                    layout,
                     updated_at: now,
                     ..view.clone()
                 })

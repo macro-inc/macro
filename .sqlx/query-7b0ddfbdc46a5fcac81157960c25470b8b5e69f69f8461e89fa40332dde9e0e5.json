@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM whatsapp_pairing WHERE consumed_at < now() - interval '1 day'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "7b0ddfbdc46a5fcac81157960c25470b8b5e69f69f8461e89fa40332dde9e0e5"
+}

@@ -91,6 +91,15 @@ fn gemini_installs_the_limit_rig_omits_without_generation_config() {
 }
 
 #[test]
+fn responses_installs_the_ceiling_when_the_limit_is_unset() {
+    let mut body = json!({});
+    profile(WireProtocol::Responses)
+        .constrain(&mut body)
+        .unwrap();
+    assert_eq!(body["max_output_tokens"], 20);
+}
+
+#[test]
 fn unverified_modalities_server_tools_and_cache_ttls_fail_closed() {
     for mut body in [
         json!({"max_tokens": 20, "messages": [{"content": [{"type":"image","source":{}}]}]}),

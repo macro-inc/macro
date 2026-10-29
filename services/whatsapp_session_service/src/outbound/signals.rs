@@ -7,18 +7,19 @@
 //! so it emits [`Signal::Resync`] and the supervisor re-reads everything.
 //!
 //! Payloads are `whatsapp_linked`'s JSON signals; each one's `traceparent`
-//! parents a `whatsapp.signal.receive` span, so the sender's trace continues
-//! here.
+//! parents a `whatsapp.signal.receive` span that travels with the signal, so
+//! the supervisor's and the runner's work continues the sender's trace.
 
 use sqlx::postgres::{PgConnectOptions, PgListener, PgPoolOptions};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use whatsapp_linked::outbound::pg::signals::{
+use external_chat::signals::trace_context;
+use whatsapp_linked::signals::{
     ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, PAIRING_REQUESTED, SEND_REQUESTED,
 };
-use whatsapp_linked::outbound::trace_context;
 
+use crate::domain::ports::Traced;
 use crate::domain::supervisor::Signal;
 
 const CHANNELS: [&str; 5] = [
@@ -58,7 +59,7 @@ impl SignalListener {
     }
 
     /// Forwards notifications until `stop` or until the supervisor goes away.
-    pub async fn run(mut self, signals: mpsc::Sender<Signal>, stop: CancellationToken) {
+    pub async fn run(mut self, signals: mpsc::Sender<Traced<Signal>>, stop: CancellationToken) {
         loop {
             let received = tokio::select! {
                 () = stop.cancelled() => return,
@@ -74,8 +75,9 @@ impl SignalListener {
                                 signal = ?signal,
                             );
                             trace_context::adopt(&span, traceparent.as_deref());
-                            span.in_scope(|| tracing::trace!("WhatsApp signal received"));
-                            signal
+                            // Handed on: the supervisor and the account's
+                            // runner do the signal's work inside it.
+                            Traced { signal, span }
                         }
                         None => {
                             tracing::warn!(
@@ -87,10 +89,10 @@ impl SignalListener {
                     }
                 }
                 // The connection dropped; the next call reconnects and resubscribes.
-                Ok(None) => Signal::Resync,
+                Ok(None) => Signal::Resync.into(),
                 Err(error) => {
                     tracing::warn!(error = %error, "WhatsApp signal listener failed; reconnecting");
-                    Signal::Resync
+                    Signal::Resync.into()
                 }
             };
             if signals.send(signal).await.is_err() {
@@ -103,7 +105,7 @@ impl SignalListener {
 /// Maps one notification to a signal and the sender's trace context; `None`
 /// for unknown channels or payloads.
 pub fn parse(channel: &str, payload: &str) -> Option<(Signal, Option<String>)> {
-    let payload = whatsapp_linked::outbound::pg::signals::Signal::parse(payload)?;
+    let payload = external_chat::signals::Signal::parse(payload)?;
     let id = payload.id;
     let signal = match channel {
         ACCOUNT_RELEASED => Some(Signal::AccountReleased(id)),

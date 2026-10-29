@@ -1683,12 +1683,22 @@ fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
 }
 
 #[test]
-fn database_rows_are_requested_by_naming_a_table_or_a_row_outside_a_not() {
+fn database_rows_are_requested_by_include_or_id_outside_a_not() {
     use database_row::{DatabaseRowLiteral, database_rows_requested};
     let table = Uuid::from_u128(0x7ab1e);
     let row = Uuid::from_u128(0x0001);
 
     assert!(!database_rows_requested(None));
+    assert!(database_rows_requested(Some(&Expr::val(
+        DatabaseRowLiteral::Include
+    ))));
+    assert!(!database_rows_requested(Some(&Expr::is_not(Expr::val(
+        DatabaseRowLiteral::Include
+    )))));
+    assert_eq!(
+        serde_json::to_value(DatabaseRowLiteral::Include).unwrap(),
+        json!("inc")
+    );
     assert!(database_rows_requested(Some(&Expr::val(
         DatabaseRowLiteral::TableId(table)
     ))));

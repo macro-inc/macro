@@ -6,19 +6,26 @@
  * the bottom, immediately above the composer, so Up from the input lands on
  * "the one about to be sent" and further Up presses walk toward the newest.
  *
- * Rows start as one-line previews. Opening a prompt reveals its scrollable
+ * Rows start as one-line previews rendered through the static Lexical
+ * surface, so mentions and links read as they do in the transcript rather
+ * than as serialized markup. Opening a prompt reveals its scrollable
  * Lexical editor; only one row is expanded at a time.
  * Edits debounce and autosave through `onEdit`, with a flush on blur; there
  * are no save/cancel affordances. Non-prompt entries (compact) are
  * read-only text but keep their remove affordance, which is always visible.
  * While a turn is in flight, each row offers Steer: that message jumps the
- * queue and the current turn is cancelled so it runs next.
+ * queue and the current turn is cancelled so it runs next. A row whose
+ * steer the server refused stays queued and says it was not sent.
  */
 
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg?component-solid';
 import XIcon from '@icon/system/regular/x.svg?component-solid';
+import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
 import { Button, Surface } from '@ui';
 import {
   createEffect,
@@ -42,6 +49,8 @@ export type QueuedPromptItem = {
   attachments?: { name: string; mimeType?: string | null }[];
   /** Who queued it, when it was somebody other than the current user. */
   queuedBy?: string;
+  /** A force-send of it was refused; it is still queued and can be retried. */
+  sendFailed?: boolean;
 };
 
 export interface QueuedPromptsProps {
@@ -168,9 +177,13 @@ function QueuedRow(props: QueuedRowProps) {
   const [draft, setDraft] = createSignal<string>();
   let toggle: HTMLButtonElement | undefined;
   let focusBody: (() => void) | undefined;
-  const preview = () =>
+  const previewMarkdown = () =>
     props.item.kind === 'prompt'
-      ? (draft() ?? props.item.prompt ?? '').trim() || 'Attached files'
+      ? (draft() ?? stripAgentContext(props.item.prompt ?? '')).trim()
+      : '';
+  const previewLabel = () =>
+    props.item.kind === 'prompt'
+      ? 'Attached files'
       : 'Compact the conversation';
   const open = () => {
     props.onExpandedChange(true);
@@ -216,19 +229,48 @@ function QueuedRow(props: QueuedRowProps) {
               class="size-3 shrink-0 text-ink-muted transition-transform"
               classList={{ 'rotate-180': props.expanded }}
             />
-            <span class="truncate">{preview()}</span>
-          </button>
-          <span class="shrink-0 text-xs text-ink-extra-muted">
-            Queued
-            <Show when={props.item.queuedBy}>
-              {(name) => <> by {name()}</>}
+            <Show
+              when={previewMarkdown()}
+              fallback={<span class="truncate">{previewLabel()}</span>}
+            >
+              {(markdown) => (
+                // Inert so chips and links never take the click that opens
+                // the row.
+                <div class="min-w-0 flex-1 truncate">
+                  <StaticMarkdown
+                    markdown={markdown()}
+                    theme={singleLineMarkdownTheme}
+                    singleLine
+                    inert
+                  />
+                </div>
+              )}
             </Show>
-          </span>
+          </button>
+          <Show
+            when={props.item.sendFailed}
+            fallback={
+              <span class="shrink-0 text-xs text-ink-extra-muted">
+                Queued
+                <Show when={props.item.queuedBy}>
+                  {(name) => <> by {name()}</>}
+                </Show>
+              </span>
+            }
+          >
+            <span
+              class="shrink-0 text-xs text-failure-ink"
+              role="status"
+              title="This message could not be sent. It is still queued."
+            >
+              Not sent
+            </span>
+          </Show>
           <Show when={props.onSteer}>
             <Button
+              aria-label="Steer"
               variant="ghost"
               size="xs"
-              label="Steer"
               tooltip="Interrupt the current turn and send this message next"
               disabled={props.disabled}
               onClick={() => props.onSteer?.()}
@@ -238,9 +280,10 @@ function QueuedRow(props: QueuedRowProps) {
             </Button>
           </Show>
           <Button
+            aria-label="Remove queued message"
+            tooltip="Remove queued message"
             variant="ghost"
             size="icon-sm"
-            label="Remove queued message"
             disabled={props.disabled}
             onClick={() => props.onRemove()}
             class="shrink-0"
@@ -289,7 +332,7 @@ function PromptBody(
   // The last text this row and the server agree on: what was mounted,
   // applied from a server snapshot, or handed to `onEdit`. Both the autosave
   // and the anti-clobber check compare against it.
-  let synced = props.item.prompt ?? '';
+  let synced = stripAgentContext(props.item.prompt ?? '');
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
   const flush = () => {
@@ -303,7 +346,10 @@ function PromptBody(
     // prompts and "delete the text" has the remove affordance for it.
     if (text === synced || text.trim().length === 0) return;
     synced = text;
-    props.onEdit(text);
+    // Keep the private prefix on the wire when saving the visible text.
+    const raw = props.item.prompt ?? '';
+    const visible = stripAgentContext(raw);
+    props.onEdit(raw.slice(0, raw.length - visible.length) + text);
   };
 
   const scheduleSave = (markdown: string) => {
@@ -314,9 +360,15 @@ function PromptBody(
     saveTimer = setTimeout(flush, AUTOSAVE_DEBOUNCE_MS);
   };
 
+  // The composer's features, so a queued prompt edits the way it was written.
   const editor = buildConfig('chat')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agent-queued-prompt')
+    .withMentions({ showOpenTabs: true, block: 'agent' })
+    .withEmojis()
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
+    .withCode()
     .onChange(scheduleSave)
     .onEscape(() => {
       flush();
@@ -348,7 +400,7 @@ function PromptBody(
   // untouched — never over a focused editor or unsaved local changes, which
   // are about to become the server's text anyway.
   createEffect(() => {
-    const server = props.item.prompt ?? '';
+    const server = stripAgentContext(props.item.prompt ?? '');
     if (server === synced) return;
     const root = editor.lexical.getRootElement();
     const focused = root?.contains(document.activeElement) ?? false;
@@ -364,7 +416,7 @@ function PromptBody(
     <div class="text-sm text-ink" onFocusOut={flush}>
       <MarkdownShell
         config={editor}
-        initialValue={props.item.prompt}
+        initialValue={stripAgentContext(props.item.prompt ?? '')}
         disabled={props.disabled}
       />
       {/* Attached files ride the prompt as-is: an edit rewrites the text and

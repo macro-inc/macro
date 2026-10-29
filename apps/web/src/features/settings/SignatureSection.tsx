@@ -154,6 +154,7 @@ export function SignatureSection(props: { link: EmailLink }) {
   // The backend fetches the Gmail signature and saves it, so on success the
   // editor shows the persisted value and any unsaved draft is discarded.
   const importFromGmail = () => {
+    if (props.link.provider !== 'GMAIL') return;
     setSaveError(null);
     fireAndForget(
       traceSignatureMutation('import', props.link.id, (span) =>

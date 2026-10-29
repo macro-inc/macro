@@ -2,7 +2,10 @@ import {
   DocumentAccessDenied,
   useSharedAccessUpdates,
 } from '@app/features/access-requests/access-requests';
-import { shareEntity } from '@app/features/access-requests/core/types';
+import {
+  matchesConfirmedAccess,
+  shareEntity,
+} from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import {
   DocumentFileSidePanelSections,
@@ -86,7 +89,7 @@ function FileDetailBodyState(props: {
             <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
               {String(props.error)}
             </pre>
-            <Button variant="outline" size="sm" onClick={props.onAction}>
+            <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
           </div>
@@ -138,7 +141,7 @@ export function FileDetailLoadGate<
         return;
       }
       const loaded = document.state === 'ready' ? document.latest : undefined;
-      if (loaded?.userAccessLevel !== level) reload();
+      if (!matchesConfirmedAccess(loaded?.userAccessLevel, level)) reload();
     }
   );
   const accessDenied = () => {

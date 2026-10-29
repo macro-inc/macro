@@ -2,6 +2,8 @@
 pub mod activity;
 #[cfg(feature = "calendar_invitations")]
 pub mod calendar_invitation_parser;
+#[cfg(all(feature = "calendar_invitations", feature = "ports"))]
+pub mod event_forward;
 pub mod events;
 #[cfg(feature = "ports")]
 pub mod followup;
@@ -39,6 +41,10 @@ pub mod attachment_cleanup;
 
 #[cfg(feature = "mailbox")]
 pub mod attachment_access;
+
+/// Authorized original-source (`.eml`) reads of synced messages.
+#[cfg(feature = "mailbox")]
+pub mod message_source;
 
 /// Provider-neutral mailbox connection entitlements.
 pub mod inbox_entitlement;

@@ -323,7 +323,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         &self,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> Result<bool, Self::Err> {
+    ) -> Result<Option<Vec<EntityPropertyMutationSnapshot>>, Self::Err> {
         property_option_queries::delete_property_option(
             &self.pool,
             property_definition_id,

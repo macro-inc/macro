@@ -1,6 +1,7 @@
 import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
+  ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -42,20 +43,33 @@ export function EmailViewBreadcrumbItem() {
       metadata={{ type: 'email-view' }}
       order={0}
     >
-      {(item) => (
-        <ViewBreadcrumbs.Button
-          class="shrink-0 rounded-md hover:bg-hover"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-        >
-          <span class="truncate @max-[720px]/view-shell:hidden">
-            {tabTitle()}
-          </span>
-          <span class="hidden @max-[720px]/view-shell:inline">
-            {inboxSelected() ? 'Inbox' : 'Email'}
-          </span>
-        </ViewBreadcrumbs.Button>
-      )}
+      {(item) => {
+        const label = () => (
+          <>
+            <span class="truncate @max-[720px]/view-shell:hidden">
+              {tabTitle()}
+            </span>
+            <span class="hidden @max-[720px]/view-shell:inline">
+              {inboxSelected() ? 'Inbox' : 'Email'}
+            </span>
+          </>
+        );
+        const button = () => (
+          <ViewBreadcrumbs.Button
+            class="shrink-0 rounded-md hover:bg-hover"
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+          >
+            {label()}
+          </ViewBreadcrumbs.Button>
+        );
+        // At the list itself the name switches views; deeper, it returns here.
+        return (
+          <Show when={item.isActive()} fallback={button()}>
+            <ViewSwitchTrigger fallback={button()}>{label()}</ViewSwitchTrigger>
+          </Show>
+        );
+      }}
     </ViewBreadcrumbs.Item>
   );
 }
@@ -134,6 +148,7 @@ export function EmailHeader(props: EmailHeaderProps) {
             <Tabs
               ref={tourTarget(EMAIL_TOUR.signalNoise)}
               aria-label="Inbox view"
+              size="md"
               class="shrink-0"
               options={[
                 { value: 'important', label: EMAIL_TAB_LABELS.important },

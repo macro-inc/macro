@@ -1,12 +1,12 @@
 use std::sync::Mutex;
 
 use chrono::Utc;
+use external_chat::domain::ports::ExternalChatResult;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
     InboundEvent, InboundKind, Message, MessageKind, SessionScope,
 };
 use whatsapp_linked::domain::models::Identity;
-use whatsapp_linked::domain::ports::LinkedResult;
 
 use super::{InboundGate, InboundStore};
 use crate::domain::ports::InboundSink;
@@ -23,10 +23,11 @@ struct FakeStore {
     adopted: Mutex<Vec<String>>,
     loads: Mutex<usize>,
     stored: Mutex<Vec<Uuid>>,
+    stored_chats: Mutex<Vec<String>>,
 }
 
 impl InboundStore for FakeStore {
-    async fn observed_groups(&self, _scope: SessionScope) -> LinkedResult<Vec<String>> {
+    async fn observed_groups(&self, _scope: SessionScope) -> ExternalChatResult<Vec<String>> {
         *self.loads.lock().unwrap() += 1;
         Ok(self.adopted.lock().unwrap().clone())
     }
@@ -35,8 +36,12 @@ impl InboundStore for FakeStore {
         &self,
         _scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         self.stored.lock().unwrap().push(event.event_id);
+        self.stored_chats
+            .lock()
+            .unwrap()
+            .push(event.group_jid.clone());
         Ok(())
     }
 }
@@ -45,6 +50,7 @@ fn text(event: u128) -> InboundEvent {
     InboundEvent {
         event_id: Uuid::from_u128(event),
         group_jid: GROUP.to_owned(),
+        chat_alternate_jid: None,
         source_at: Utc::now(),
         observed_at: Utc::now(),
         kind: InboundKind::Message(Message {
@@ -57,9 +63,14 @@ fn text(event: u128) -> InboundEvent {
             kind: MessageKind::Text,
             text: "hello".to_owned(),
             history: false,
+            from_me: false,
             revision: 0,
             target: None,
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            view_once: false,
+            rich: None,
         }),
     }
 }
@@ -94,5 +105,30 @@ async fn adopted_groups_stay_cached_and_unadopted_ones_are_checked_every_time() 
     assert_eq!(
         *gate.store.stored.lock().unwrap(),
         vec![Uuid::from_u128(1), Uuid::from_u128(2)]
+    );
+}
+
+#[tokio::test]
+async fn a_direct_chat_added_by_one_address_takes_messages_sent_to_the_other() {
+    const PHONE: &str = "15552223333@s.whatsapp.net";
+    const LID: &str = "987654321@lid";
+    let gate = InboundGate::new(FakeStore::default(), SCOPE);
+    gate.store.adopted.lock().unwrap().push(LID.to_owned());
+    gate.reload().await;
+
+    let mut by_phone = text(1);
+    by_phone.group_jid = PHONE.to_owned();
+    by_phone.chat_alternate_jid = Some(LID.to_owned());
+    assert!(gate.accept(&by_phone).await);
+    let mut unknown = text(2);
+    unknown.group_jid = "15559990000@s.whatsapp.net".to_owned();
+    unknown.chat_alternate_jid = Some("111@lid".to_owned());
+    assert!(gate.accept(&unknown).await, "someone else's chat is acked");
+
+    assert_eq!(*gate.store.stored.lock().unwrap(), vec![Uuid::from_u128(1)]);
+    assert_eq!(
+        *gate.store.stored_chats.lock().unwrap(),
+        vec![LID.to_owned()],
+        "stored under the address it was added by"
     );
 }

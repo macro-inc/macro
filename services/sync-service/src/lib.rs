@@ -1,21 +1,18 @@
 mod ai_peer;
-mod auth;
-mod cf_worker;
+use inbound::credentials as auth;
+mod inbound;
+mod outbound;
+use outbound::{d1, dss_internal, lexical_service, secrets, storage};
 mod constants;
-mod d1;
 mod domain;
-mod dss_internal;
-mod durable_object;
+use inbound::durable_object;
 mod error;
 mod generated;
 pub mod keepalive;
-mod lexical_service;
 mod metrics;
 mod mutex;
-mod secrets;
 mod socket;
 mod state;
-mod storage;
 mod tags;
 mod timeout;
 
@@ -66,7 +63,7 @@ fn start() {
 
 #[event(fetch)]
 async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::Response> {
-    use crate::cf_worker::router;
+    use crate::inbound::worker::router;
     use tracing::Instrument;
 
     let traceparent = worker_rs_otel::traceparent_from_request(&req);
@@ -83,3 +80,6 @@ async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::R
 
     worker_rs_otel::scope(&env, &ctx, router(env.clone(), req).instrument(span)).await
 }
+
+#[cfg(feature = "openapi")]
+pub mod swagger;

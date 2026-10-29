@@ -228,8 +228,10 @@ pub async fn run() -> anyhow::Result<()> {
 
     tracing::trace!("initialized config");
 
+    // Per task. Normally each task runs about one query at a time; a larger
+    // max only lets a slow database pile up more sessions.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (50, 150),
+        Environment::Production => (10, 50),
         Environment::Develop => (25, 100),
         Environment::Local => (15, 50),
     };
@@ -299,6 +301,7 @@ pub async fn run() -> anyhow::Result<()> {
         .search_event_queue(&search_event_queue)
         .document_delete_queue(&document_delete_queue)
         .gmail_ops_queue(&gmail_ops_queue)
+        .gmail_label_write_batches(config.gmail_label_write_batches_enabled)
         .email_scheduled_queue(&email_scheduled_queue);
     let webhook_event_queue = webhook::outbound::SqsWebhookQueue::new(
         Arc::new(sqs_client.clone()),
@@ -1479,25 +1482,20 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service: entity_access_service.clone(),
         authorization_state: authorization_state.clone(),
     };
-    let whatsapp_linked_state =
-        crate::whatsapp_linked::build(crate::whatsapp_linked::Dependencies {
-            redis: redis_client.clone(),
-            documents: document_service.clone(),
-            s3: macro_aws_config::s3_client().await,
-            document_bucket: config.document_storage_bucket.as_ref().to_owned(),
-            features: whatsapp_linked::domain::models::Features {
-                pairing: config.whatsapp_linked_pairing_enabled,
-                adoption: config.whatsapp_linked_adoption_enabled,
-                sending: config.whatsapp_linked_sending_enabled,
-            },
-            pool: db.clone(),
-            access: entity_access_service.clone(),
-            authorization: authorization_state.clone(),
-            notifications: notification_ingress_service.clone(),
-            connection_gateway: conn_gateway_client.clone(),
-            tracker: consumer_tracker.clone(),
-            cancellation: consumer_cancellation_token.clone(),
-        });
+    let external_chat_state = crate::external_chat::build(crate::external_chat::Dependencies {
+        redis: redis_client.clone(),
+        static_files: static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
+        pool: db.clone(),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+        notifications: notification_ingress_service.clone(),
+        connection_gateway: conn_gateway_client.clone(),
+        tracker: consumer_tracker.clone(),
+        cancellation: consumer_cancellation_token.clone(),
+    });
 
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
@@ -2125,7 +2123,10 @@ pub async fn run() -> anyhow::Result<()> {
         complete_graph::EntityAccessWorkFeedViewers(entity_access_service.clone()),
     );
 
+    let sync_sessions =
+        sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
     let api_context = ApiContext {
+        sync_sessions,
         dictation_state,
         graphql_work_feed_context,
         contacts_ingress: contacts_ingress.clone(),
@@ -2157,7 +2158,7 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         slack_state,
-        whatsapp_linked_state,
+        external_chat_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),

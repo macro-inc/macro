@@ -60,13 +60,13 @@ export function CanvasDrawingToolbar(props: {
           >
             {(tool) => (
               <Toolbar.Button
-                label={`${tool.label} tool`}
-                shortcut={tool.key}
+                aria-label={`${tool.label} tool`}
+                tooltip={{ content: `${tool.label} tool`, shortcut: tool.key }}
                 aria-pressed={props.tool === tool.id}
-                variant={props.tool === tool.id ? 'cta' : 'ghost'}
+                variant={props.tool === tool.id ? 'primary' : 'ghost'}
                 onClick={() => props.onTool(tool.id)}
               >
-                <Dynamic component={tool.icon} />
+                <Dynamic component={tool.icon} class="size-4" />
               </Toolbar.Button>
             )}
           </For>
@@ -74,9 +74,12 @@ export function CanvasDrawingToolbar(props: {
         <Show when={!props.readOnly && props.onAttach}>
           <Toolbar.Divider />
           <Toolbar.Button
-            label="Attach"
-            shortcut="i"
-            tooltipDisabled={props.attachOpen}
+            aria-label="Attach"
+            tooltip={{
+              content: 'Attach',
+              disabled: props.attachOpen,
+              shortcut: 'i',
+            }}
             aria-expanded={props.attachOpen ?? false}
             aria-haspopup="menu"
             onClick={(event) => {
@@ -84,7 +87,7 @@ export function CanvasDrawingToolbar(props: {
               props.onAttach?.({ x: rect.left + rect.width / 2, y: rect.top });
             }}
           >
-            <Paperclip />
+            <Paperclip class="size-4" />
           </Toolbar.Button>
         </Show>
       </Toolbar>
@@ -102,28 +105,30 @@ export function CanvasHistoryControls(props: {
     <Show when={hasHistory()}>
       <div class="flex items-center" role="group" aria-label="Canvas history">
         <Button
+          variant="ghost"
+          aria-label="Undo"
+          tooltip={{ content: 'Undo', hotkey: TOKENS.canvas.undo }}
           size="icon-xs"
-          label="Undo"
-          hotkey={TOKENS.canvas.undo}
           disabled={!props.state.session().canUndo}
           onClick={() => {
             props.state.editor.undo();
             props.onFocusCanvas();
           }}
         >
-          <Undo />
+          <Undo class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          variant="ghost"
+          aria-label="Redo"
+          tooltip={{ content: 'Redo', hotkey: TOKENS.canvas.redo }}
           size="icon-xs"
-          label="Redo"
-          hotkey={TOKENS.canvas.redo}
           disabled={!props.state.session().canRedo}
           onClick={() => {
             props.state.editor.redo();
             props.onFocusCanvas();
           }}
         >
-          <Redo />
+          <Redo class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </Show>
@@ -159,9 +164,10 @@ function CanvasZoomMenu(props: ParentProps<CanvasZoomProps>) {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        aria-label="Zoom options"
+        tooltip="Zoom options"
         variant="ghost"
         size="sm"
-        label="Zoom options"
         class="gap-1.5 tabular-nums"
       >
         <output aria-label="Zoom level">
@@ -220,14 +226,19 @@ export function CanvasZoomToolbar(props: CanvasZoomProps) {
       <Toolbar size="icon-sm" aria-label="Canvas zoom">
         <Toolbar.Group>
           <Toolbar.Button
-            label="Zoom out"
+            aria-label="Zoom out"
+            tooltip="Zoom out"
             onClick={() => props.onZoom(1 / 1.2)}
           >
-            <Minus />
+            <Minus class="size-4" />
           </Toolbar.Button>
           <CanvasZoomMenu {...props} />
-          <Toolbar.Button label="Zoom in" onClick={() => props.onZoom(1.2)}>
-            <Plus />
+          <Toolbar.Button
+            aria-label="Zoom in"
+            tooltip="Zoom in"
+            onClick={() => props.onZoom(1.2)}
+          >
+            <Plus class="size-4" />
           </Toolbar.Button>
         </Toolbar.Group>
       </Toolbar>

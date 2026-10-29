@@ -40,7 +40,7 @@ function notificationEntityTypeToSoupTag(
         'form',
         'scheduled_action',
         'initiative',
-        'whatsapp_group'
+        'external_chat'
       ),
       () => null
     )

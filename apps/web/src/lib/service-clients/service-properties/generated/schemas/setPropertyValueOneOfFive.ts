@@ -4,12 +4,14 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { DateRange } from './dateRange';
 import type { SetPropertyValueOneOfFiveType } from './setPropertyValueOneOfFiveType';
 
 /**
- * Numeric value
+ * Date range value
  */
 export type SetPropertyValueOneOfFive = {
   type: SetPropertyValueOneOfFiveType;
-  value: number;
+  value: DateRange;
 };

@@ -43,6 +43,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
       style={{
         // A scheduled send's badge is wider than a date, so it sizes its column.
         'grid-template-columns':
+          props.referenceProperties ||
           props.scheduleStatus ||
           (isEmailEntity(props.entity) && props.entity.scheduledSendTime)
             ? 'auto 1fr auto'
@@ -129,6 +130,7 @@ export function NarrowInboxLayout(props: LayoutProps) {
         placement="timestamp"
         class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light pt-3 pr-4"
       >
+        {props.referenceProperties}
         {props.scheduleStatus}
         <Show
           when={

@@ -321,10 +321,12 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
   );
 }
 
-type RecipientSelectorProps<K extends CombinedRecipientKind> = {
+export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   options: Accessor<CombinedRecipientItem<K>[]>;
   selectedOptions: WithCustomUserInput<K>[];
   setSelectedOptions: (next: WithCustomUserInput<K>[]) => void;
+  /** Notify the owner while a recipient query is being entered, before selection. */
+  onInputChange?: (value: string) => void;
   // If you provide triedToSubmit, the component will show an error message if no options are selected and triedToSubmit is true
   triedToSubmit?: Accessor<boolean>;
   placeholder?: string | JSX.Element;
@@ -348,6 +350,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   portalScope?: 'local';
   /** Show an invite action for a complete email outside the known recipients. */
   inviteExternalEmails?: boolean;
+  /** Messages can target only existing users or channels. Defaults to true. */
+  allowCustomRecipients?: boolean;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -600,6 +604,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
     // Only add custom input if it doesn't match an existing email
     if (
+      props.allowCustomRecipients !== false &&
       currentUserInput &&
       !hasExactEmailMatch &&
       EmailValidator.validate(currentUserInput)
@@ -661,21 +666,25 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     if (emails.length === 0 || !emails.every((e) => EmailValidator.validate(e)))
       return false;
     const known = recipients().raw;
-    const added = emails
-      .filter((email) => !selectedEmails().has(email.toLowerCase()))
-      .map(
-        (email) =>
-          known.find(
-            (option) =>
-              getRecipientOptionEmail(option)?.toLowerCase() ===
-              email.toLowerCase()
-          ) ??
-          recipientEntityMapper('custom')({
-            id: emailToId(email),
-            email,
-            invalid: false,
-          })
+    const findKnown = (email: string) =>
+      known.find(
+        (option) =>
+          getRecipientOptionEmail(option)?.toLowerCase() === email.toLowerCase()
       );
+    const pending = emails.filter(
+      (email) => !selectedEmails().has(email.toLowerCase())
+    );
+    if (props.allowCustomRecipients === false && !pending.every(findKnown))
+      return false;
+    const added = pending.map(
+      (email) =>
+        findKnown(email) ??
+        recipientEntityMapper('custom')({
+          id: emailToId(email),
+          email,
+          invalid: false,
+        })
+    );
     if (added.length === 0) return false;
     handleChange([
       ...(props.selectedOptions as CombinedRecipientItem[]),
@@ -685,6 +694,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   };
 
   const onInputChange = (next: string) => {
+    props.onInputChange?.(next);
     if (commitSeparatedEmails(next)) {
       setInputValue('');
       return;

@@ -35,6 +35,11 @@ pub fn show(catalog: &Catalog, value: Option<&Cell>) -> String {
         }
         Some(Cell::Bool(checked)) => if *checked { "☑" } else { "☐" }.into(),
         Some(Cell::Date(date)) => date.format("%Y-%m-%d").to_string(),
+        Some(Cell::DateRange(range)) => format!(
+            "{} → {}",
+            range.start.format("%Y-%m-%d"),
+            range.end.format("%Y-%m-%d")
+        ),
         Some(Cell::Options(ids)) => ids.iter().map(label).collect::<Vec<_>>().join(", "),
         Some(Cell::Entities(ids)) => ids.join(", "),
         Some(Cell::Row(id)) => id.to_string(),
@@ -105,6 +110,7 @@ pub fn print_outcome(catalog: &Catalog, outcome: &Outcome) {
                     OutcomeKind::Number => "number",
                     OutcomeKind::Boolean => "checkbox",
                     OutcomeKind::Date => "date",
+                    OutcomeKind::DateRange => "date range",
                     OutcomeKind::Select => "select",
                     OutcomeKind::Entity => "entity",
                     OutcomeKind::Row => "row",

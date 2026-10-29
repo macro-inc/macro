@@ -1,6 +1,6 @@
 import {
+  isTeamSettingsGroup,
   type SettingsTabGroup,
-  TEAM_SETTINGS_GROUP_LABEL,
 } from '@core/constant/settingsTabsConfig';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import { type Accessor, createMemo } from 'solid-js';
@@ -16,7 +16,7 @@ export function useTeamSettingsGroups(groups: Accessor<SettingsTabGroup[]>) {
     // Keep every page while teams load so the nav doesn't jump.
     const teams = userTeamsQuery.isSuccess ? userTeamsQuery.data : undefined;
     return groups().map((group) => {
-      if (group.label !== TEAM_SETTINGS_GROUP_LABEL || !teams) return group;
+      if (!isTeamSettingsGroup(group) || !teams) return group;
       const team = teams[0];
       return team
         ? { ...group, label: `${group.label} · ${team.name}` }

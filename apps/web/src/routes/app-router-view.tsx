@@ -115,6 +115,7 @@ import {
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
+  externalChatRoute,
   externalRoute,
   foldersRoute,
   formRespondRoute,
@@ -153,7 +154,6 @@ import {
   tasksSplitRoute,
   teamInviteRoute,
   welcomeRoute,
-  whatsappGroupRoute,
 } from './routes';
 import {
   AppShell,
@@ -163,9 +163,9 @@ import {
   withMeetingShell,
 } from './shells';
 
-const WhatsAppGroupRouteView = lazyNamed(
-  () => import('@app/features/whatsapp-group/route-views'),
-  'WhatsAppGroupRouteView'
+const ExternalChatRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalChatRouteView'
 );
 
 const { Router, Route } = SplitRouter;
@@ -400,7 +400,12 @@ export function AppRouterView() {
           definition={externalRoute}
           component={ExternalRouteView}
           loading={ExternalViewSkeleton}
-        />
+        >
+          <Route
+            definition={externalChatRoute}
+            component={ExternalChatRouteView}
+          />
+        </Route>
         <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}
@@ -420,10 +425,6 @@ export function AppRouterView() {
         <Route definition={callsRoute} component={CallsRouteView}>
           <Route definition={callsCallRoute} component={CallsCallDetail} />
         </Route>
-        <Route
-          definition={whatsappGroupRoute}
-          component={WhatsAppGroupRouteView}
-        />
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>

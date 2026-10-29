@@ -333,7 +333,8 @@ export async function safeFetch<
 
         if (
           contentType.includes('application/octet-stream') ||
-          contentType.includes('text/calendar')
+          contentType.includes('text/calendar') ||
+          contentType.includes('message/rfc822')
         ) {
           return ok(new Uint8Array(await response.arrayBuffer()) as T);
         }

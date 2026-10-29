@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_roster (account_id, group_jid, observed_at, metadata)\n        SELECT $1, read.group_jid, read.observed_at, read.metadata\n        FROM UNNEST($2::text[], $3::timestamptz[], $4::jsonb[]) AS read(group_jid, observed_at, metadata)\n        ON CONFLICT (account_id, group_jid) DO UPDATE SET observed_at = excluded.observed_at, metadata = excluded.metadata\n        WHERE whatsapp_roster.observed_at <= excluded.observed_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TimestamptzArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "de918f0b08f2314d829201b6d485eecbbd04055c6c93ed30fbbf21d6ee78a98a"
+}

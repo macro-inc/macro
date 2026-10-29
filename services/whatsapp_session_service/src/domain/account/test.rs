@@ -11,18 +11,19 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ClaimedSend, InboundEvent, InboundKind, MediaImport, Message, MessageKind, OutboundMedia,
-    SessionScope,
+    ClaimedSend, InboundEvent, InboundKind, MediaImport, Message, MessageAnchor, MessageKind,
+    OutboundMedia, SessionScope,
 };
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_linked::domain::session::SessionService;
-use whatsapp_linked::outbound::pg::PgLinkedRepository;
+use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
 
 use super::{AccountConfig, AccountSessions};
 use crate::domain::inbound::InboundGate;
 use crate::domain::ports::{
     AccountControl, AccountExit, AccountRunner, AccountSignal, DownloadFailure, InboundSink,
-    SendFailure, SessionConnector, SessionError, SessionEvent, UploadedMedia, WhatsAppSession,
+    SendFailure, SessionConnector, SessionError, SessionEvent, Traced, UploadedMedia,
+    WhatsAppSession,
 };
 
 const IDENTITY: &str = "15550001111@s.whatsapp.net";
@@ -41,6 +42,10 @@ enum Call {
     PasskeyResponse(serde_json::Value),
     ConfirmPasskey,
     Group(String),
+    /// Chat, message id before which, count.
+    RequestHistory(String, String, u32),
+    /// Chat, message id.
+    RequestMessage(String, String),
 }
 
 #[derive(Clone)]
@@ -51,6 +56,14 @@ struct FakeWhatsApp {
     identity: Arc<Mutex<Option<String>>>,
     /// What reading one group returns.
     group: Arc<Mutex<Option<GroupInfo>>>,
+    /// Failures the next opens return, in order, before opening succeeds.
+    open_failures: Arc<Mutex<Vec<OpenFailure>>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum OpenFailure {
+    DeviceUnreadable,
+    KmsUnavailable,
 }
 
 struct FakeSession {
@@ -66,12 +79,21 @@ impl SessionConnector for FakeWhatsApp {
         fresh_device: bool,
         inbound: Arc<dyn InboundSink>,
     ) -> Result<(FakeSession, mpsc::UnboundedReceiver<SessionEvent>), SessionError> {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        *self.events.lock().unwrap() = Some(sender);
-        *self.inbound.lock().unwrap() = Some(inbound);
         self.calls
             .send(Call::Open(scope.lease_epoch, fresh_device))
             .unwrap();
+        let failure = {
+            let mut failures = self.open_failures.lock().unwrap();
+            (!failures.is_empty()).then(|| failures.remove(0))
+        };
+        match failure {
+            Some(OpenFailure::DeviceUnreadable) => return Err(SessionError::DeviceUnreadable),
+            Some(OpenFailure::KmsUnavailable) => return Err(SessionError::KmsUnavailable),
+            None => {}
+        }
+        let (sender, receiver) = mpsc::unbounded_channel();
+        *self.events.lock().unwrap() = Some(sender);
+        *self.inbound.lock().unwrap() = Some(inbound);
         Ok((
             FakeSession {
                 whatsapp: self.clone(),
@@ -130,6 +152,38 @@ impl WhatsAppSession for FakeSession {
         Err(SendFailure::Unknown)
     }
 
+    async fn request_history(
+        &self,
+        chat_jid: &str,
+        before: &MessageAnchor,
+        count: u32,
+    ) -> Result<(), SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::RequestHistory(
+                chat_jid.to_owned(),
+                before.id.clone(),
+                count,
+            ))
+            .unwrap();
+        Ok(())
+    }
+
+    async fn request_message(
+        &self,
+        chat_jid: &str,
+        message: &MessageAnchor,
+    ) -> Result<(), SessionError> {
+        self.whatsapp
+            .calls
+            .send(Call::RequestMessage(
+                chat_jid.to_owned(),
+                message.id.clone(),
+            ))
+            .unwrap();
+        Ok(())
+    }
+
     async fn joined_groups(&self) -> Result<Vec<GroupInfo>, SessionError> {
         self.whatsapp.calls.send(Call::JoinedGroups).unwrap();
         Ok(vec![GroupInfo {
@@ -144,11 +198,11 @@ impl WhatsAppSession for FakeSession {
                 admin: true,
             }],
             announce: false,
-            disappearing: false,
-            community: false,
+            disappearing_seconds: None,
+            community_parent: false,
+            community_jid: None,
+            community_announcements: false,
             observed_at: Utc::now(),
-            group: None,
-            shared: None,
         }])
     }
 
@@ -248,22 +302,25 @@ fn runner_with(
         inbound: Arc::default(),
         identity: Arc::default(),
         group: Arc::default(),
+        open_failures: Arc::default(),
     };
     let runner = Arc::new(AccountSessions::new(
-        SessionService::new(Arc::new(PgLinkedRepository::new(pool.clone()))),
+        SessionService::new(Arc::new(PgWhatsAppRepository::new(pool.clone()))),
         whatsapp.clone(),
         AccountConfig {
             send_timeout: Duration::from_secs(5),
             send_batch: 16,
             tick_every,
             groups_refresh_interval,
+            backfill_timeout: Duration::from_secs(60),
+            backfill_retry: Duration::from_secs(300),
         },
     ));
     (runner, whatsapp, call_receiver)
 }
 
 struct Started {
-    signals: mpsc::Sender<AccountSignal>,
+    signals: mpsc::Sender<Traced<AccountSignal>>,
     release: CancellationToken,
     running: tokio::task::JoinHandle<AccountExit>,
 }
@@ -273,6 +330,7 @@ fn start(runner: &Arc<AccountSessions<FakeWhatsApp>>, account: Uuid) -> Started 
     let release = CancellationToken::new();
     let control = AccountControl {
         signals: signal_receiver,
+        cause: tracing::Span::none(),
         release: release.clone(),
         stop: CancellationToken::new(),
     };
@@ -333,13 +391,50 @@ async fn pairing_records_the_qr_and_identity_then_refreshes_groups(pool: PgPool)
     assert_eq!(linked.identity_jid.as_deref(), Some(IDENTITY));
     assert_eq!(linked.lease_epoch, 1);
     let roster = sqlx::query_scalar!(
-        "SELECT group_jid FROM whatsapp_group_roster WHERE account_id = $1",
+        "SELECT group_jid FROM whatsapp_roster WHERE account_id = $1",
         account
     )
     .fetch_all(&pool)
     .await
     .unwrap();
     assert_eq!(roster, vec![GROUP.to_owned()]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn running_out_of_qr_codes_expires_the_pairing_instead_of_failing_it(pool: PgPool) {
+    let (account, pairing) = insert_pairing_account(&pool).await;
+    let (runner, whatsapp, mut calls) = runner(&pool);
+    let started = start(&runner, account);
+    assert_eq!(calls.recv().await, Some(Call::Open(1, true)));
+    assert_eq!(calls.recv().await, Some(Call::StartPairing));
+    assert_eq!(calls.recv().await, Some(Call::Connect));
+
+    let events = event_sender(&whatsapp);
+    events.send(SessionEvent::Qr("qr-1".to_owned())).unwrap();
+    events.send(SessionEvent::PairExpired).unwrap();
+    assert_eq!(started.running.await.unwrap(), AccountExit::Idle);
+
+    let ended = sqlx::query!(
+        "SELECT state, consumed_at IS NOT NULL AS \"consumed!\", qr_code FROM whatsapp_pairing WHERE id = $1",
+        pairing
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        ended.state, "expired",
+        "the web rolls an expired code on its own"
+    );
+    assert!(ended.consumed);
+    assert_eq!(ended.qr_code, None);
+    let state = sqlx::query_scalar!(
+        "SELECT state FROM whatsapp_linked_account WHERE id = $1",
+        account
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(state, "disconnected");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -351,7 +446,7 @@ async fn a_replica_whose_epoch_was_taken_over_cannot_write_and_stops(pool: PgPoo
     assert_eq!(calls.recv().await, Some(Call::StartPairing));
     assert_eq!(calls.recv().await, Some(Call::Connect));
 
-    let takeover = SessionService::new(Arc::new(PgLinkedRepository::new(pool.clone())))
+    let takeover = SessionService::new(Arc::new(PgWhatsAppRepository::new(pool.clone())))
         .begin_lease(account)
         .await
         .unwrap();
@@ -407,7 +502,11 @@ async fn an_owner_who_disconnects_gets_the_device_unlinked(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    started.signals.send(AccountSignal::Changed).await.unwrap();
+    started
+        .signals
+        .send(AccountSignal::Changed.into())
+        .await
+        .unwrap();
 
     assert_eq!(calls.recv().await, Some(Call::Logout));
     assert_eq!(started.running.await.unwrap(), AccountExit::Idle);
@@ -456,7 +555,7 @@ async fn passkey_pairing_shows_the_challenge_forwards_the_assertion_once_and_con
     .unwrap();
     started
         .signals
-        .send(AccountSignal::Pairing(pairing))
+        .send(AccountSignal::Pairing(pairing).into())
         .await
         .unwrap();
     assert_eq!(calls.recv().await, Some(Call::PasskeyResponse(assertion)));
@@ -487,6 +586,7 @@ fn group_text(event: u128) -> InboundEvent {
     InboundEvent {
         event_id: Uuid::from_u128(event),
         group_jid: GROUP.to_owned(),
+        chat_alternate_jid: None,
         source_at: Utc::now(),
         observed_at: Utc::now(),
         kind: InboundKind::Message(Message {
@@ -499,9 +599,14 @@ fn group_text(event: u128) -> InboundEvent {
             kind: MessageKind::Text,
             text: "hello".to_owned(),
             history: false,
+            from_me: false,
             revision: 0,
             target: None,
             media: vec![],
+            mentions: vec![],
+            forwarded: false,
+            view_once: false,
+            rich: None,
         }),
     }
 }
@@ -509,7 +614,7 @@ fn group_text(event: u128) -> InboundEvent {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_gate_acks_unadopted_traffic_unstored_and_refuses_once_fenced(pool: PgPool) {
     let (account, _pairing) = insert_pairing_account(&pool).await;
-    let sessions = SessionService::new(Arc::new(PgLinkedRepository::new(pool.clone())));
+    let sessions = SessionService::new(Arc::new(PgWhatsAppRepository::new(pool.clone())));
     let stale = sessions.begin_lease(account).await.unwrap().scope;
     let current = sessions.begin_lease(account).await.unwrap().scope;
 
@@ -614,8 +719,16 @@ async fn requested_group_refreshes_are_rate_limited_per_account(pool: PgPool) {
     let (_, _, mut calls, started) = connected(&pool, Duration::from_secs(3600)).await;
     // Opening the page right after connecting does not read the groups again;
     // a resync (missed notifications) always does. Signals run in order.
-    started.signals.send(AccountSignal::Groups).await.unwrap();
-    started.signals.send(AccountSignal::Resync).await.unwrap();
+    started
+        .signals
+        .send(AccountSignal::Groups.into())
+        .await
+        .unwrap();
+    started
+        .signals
+        .send(AccountSignal::Resync.into())
+        .await
+        .unwrap();
     assert_eq!(calls.recv().await, Some(Call::JoinedGroups));
     started.release.cancel();
     assert_eq!(started.running.await.unwrap(), AccountExit::Released);
@@ -629,7 +742,11 @@ async fn requested_group_refreshes_are_rate_limited_per_account(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn requested_group_refreshes_run_once_the_interval_passed(pool: PgPool) {
     let (_, _, mut calls, started) = connected(&pool, Duration::ZERO).await;
-    started.signals.send(AccountSignal::Groups).await.unwrap();
+    started
+        .signals
+        .send(AccountSignal::Groups.into())
+        .await
+        .unwrap();
     assert_eq!(calls.recv().await, Some(Call::JoinedGroups));
     started.release.cancel();
     assert_eq!(started.running.await.unwrap(), AccountExit::Released);
@@ -642,7 +759,7 @@ async fn live_group_events_update_the_one_group(pool: PgPool) {
         .await
         .unwrap();
     listener
-        .listen(whatsapp_linked::outbound::pg::signals::CHANGED)
+        .listen(external_chat::signals::CHANGED)
         .await
         .unwrap();
     let (account, whatsapp, mut calls, started) = connected(&pool, Duration::from_secs(3600)).await;
@@ -660,11 +777,11 @@ async fn live_group_events_update_the_one_group(pool: PgPool) {
             admin: false,
         }],
         announce: false,
-        disappearing: false,
-        community: false,
+        disappearing_seconds: None,
+        community_parent: false,
+        community_jid: None,
+        community_announcements: false,
         observed_at: Utc::now(),
-        group: None,
-        shared: None,
     };
     event_sender(&whatsapp)
         .send(SessionEvent::GroupChanged {
@@ -675,7 +792,7 @@ async fn live_group_events_update_the_one_group(pool: PgPool) {
     listener.recv().await.unwrap();
     let roster = |pool: PgPool| async move {
         sqlx::query_scalar!(
-            "SELECT group_jid FROM whatsapp_group_roster WHERE account_id = $1 ORDER BY group_jid",
+            "SELECT group_jid FROM whatsapp_roster WHERE account_id = $1 ORDER BY group_jid",
             account
         )
         .fetch_all(&pool)
@@ -701,4 +818,114 @@ async fn live_group_events_update_the_one_group(pool: PgPool) {
     assert_eq!(roster(pool.clone()).await, vec![GROUP.to_owned()]);
     started.release.cancel();
     assert_eq!(started.running.await.unwrap(), AccountExit::Released);
+}
+
+/// Marks the account connected; `pairing` keeps its pairing transaction live
+/// (the owner asked to pair again).
+async fn make_connected(pool: &PgPool, account: Uuid, pairing: bool) {
+    sqlx::query!(
+        "UPDATE whatsapp_linked_account SET state = 'connected', identity_jid = $2 WHERE id = $1",
+        account,
+        IDENTITY,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    if !pairing {
+        sqlx::query!(
+            "UPDATE whatsapp_pairing SET state = 'success', consumed_at = now() WHERE account_id = $1",
+            account
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+async fn account_state(pool: &PgPool, account: Uuid) -> String {
+    sqlx::query_scalar!(
+        "SELECT state FROM whatsapp_linked_account WHERE id = $1",
+        account
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pairing_replaces_a_device_kms_can_no_longer_read_once(pool: PgPool) {
+    let (account, _pairing) = insert_pairing_account(&pool).await;
+    make_connected(&pool, account, true).await;
+    let (runner, whatsapp, mut calls) = runner(&pool);
+    whatsapp
+        .open_failures
+        .lock()
+        .unwrap()
+        .push(OpenFailure::DeviceUnreadable);
+    let started = start(&runner, account);
+    // Connected, so the device is kept at first; it can't be read, so the
+    // pairing starts from a fresh one instead of failing forever.
+    assert_eq!(calls.recv().await, Some(Call::Open(1, false)));
+    assert_eq!(calls.recv().await, Some(Call::Open(1, true)));
+    assert_eq!(calls.recv().await, Some(Call::StartPairing));
+    assert_eq!(calls.recv().await, Some(Call::Connect));
+    started.release.cancel();
+    assert_eq!(started.running.await.unwrap(), AccountExit::Released);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pairing_gives_up_when_even_a_fresh_device_cannot_be_opened(pool: PgPool) {
+    let (account, _pairing) = insert_pairing_account(&pool).await;
+    let (runner, whatsapp, mut calls) = runner(&pool);
+    whatsapp
+        .open_failures
+        .lock()
+        .unwrap()
+        .extend([OpenFailure::DeviceUnreadable; 3]);
+    let started = start(&runner, account);
+    assert_eq!(calls.recv().await, Some(Call::Open(1, true)));
+    assert_eq!(calls.recv().await, Some(Call::Open(1, true)));
+    assert_eq!(started.running.await.unwrap(), AccountExit::Failed);
+    assert!(calls.try_recv().is_err(), "replaced once, not in a loop");
+    assert_eq!(account_state(&pool, account).await, "pairing");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_connected_account_whose_device_cannot_be_read_is_asked_to_reconnect(pool: PgPool) {
+    let (account, _pairing) = insert_pairing_account(&pool).await;
+    make_connected(&pool, account, false).await;
+    let (runner, whatsapp, mut calls) = runner(&pool);
+    whatsapp
+        .open_failures
+        .lock()
+        .unwrap()
+        .push(OpenFailure::DeviceUnreadable);
+    let started = start(&runner, account);
+    assert_eq!(calls.recv().await, Some(Call::Open(1, false)));
+    assert_eq!(started.running.await.unwrap(), AccountExit::Idle);
+    assert!(
+        calls.try_recv().is_err(),
+        "nothing is replaced without a pairing"
+    );
+    assert_eq!(account_state(&pool, account).await, "logged_out");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_kms_outage_leaves_a_connected_account_and_its_device_alone(pool: PgPool) {
+    let (account, _pairing) = insert_pairing_account(&pool).await;
+    make_connected(&pool, account, false).await;
+    let (runner, whatsapp, mut calls) = runner(&pool);
+    whatsapp
+        .open_failures
+        .lock()
+        .unwrap()
+        .push(OpenFailure::KmsUnavailable);
+    let started = start(&runner, account);
+    assert_eq!(calls.recv().await, Some(Call::Open(1, false)));
+    assert_eq!(started.running.await.unwrap(), AccountExit::Failed);
+    assert!(
+        calls.try_recv().is_err(),
+        "no fresh device on a transient failure"
+    );
+    assert_eq!(account_state(&pool, account).await, "connected");
 }

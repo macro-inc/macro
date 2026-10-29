@@ -69,6 +69,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
   },
 }));
 
+// No normalized cache here: a no-op entity write rolls its hide back.
+vi.mock('@queries/notification/state-cache', () => ({
+  confirmEntityNotificationsDone: () => false,
+}));
 vi.mock('@queries/notification/entity-mutations', () => ({
   toNotificationEntityRef: mocks.toNotificationEntityRef,
   updateNotificationsForEntities: vi.fn(),
@@ -191,6 +195,11 @@ describe('canExecuteMarkDoneOnView', () => {
 
   it('allows mark done on the archived tab', () => {
     expect(canExecuteMarkDoneOnView('mail', 'archived')).toBe(true);
+  });
+
+  it('allows mark done in Search but not in task lists', () => {
+    expect(canExecuteMarkDoneOnView('search', 'all')).toBe(true);
+    expect(canExecuteMarkDoneOnView('tasks', 'my-tasks')).toBe(false);
   });
 });
 

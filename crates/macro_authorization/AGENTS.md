@@ -70,6 +70,11 @@ does not turn a user credential into bot authority or change endpoint policies.
 - Cookies are ambient and only considered when no explicit credential is
   present; an explicit credential always wins over a cookie.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
+- `mark_harness_token_used` runs on every harness-authenticated request. It
+  writes `last_used_at` at most once a minute and skips a row another request
+  is already updating. Don't make it a plain per-request `UPDATE`: one busy
+  token would then queue its requests on the row lock, each holding a pool
+  connection.
 
 ## Related
 

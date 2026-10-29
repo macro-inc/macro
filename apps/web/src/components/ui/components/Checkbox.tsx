@@ -1,52 +1,94 @@
 import CheckIcon from '@icon/system/regular/check.svg';
-import MinusIcon from '@icon/system/regular/minus.svg';
-import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
-import type { ComponentProps } from 'solid-js';
-import { splitProps } from 'solid-js';
+import {
+  Checkbox as KobalteCheckbox,
+  useCheckboxContext,
+} from '@kobalte/core/checkbox';
+import {
+  type ComponentProps,
+  createContext,
+  splitProps,
+  useContext,
+} from 'solid-js';
 import { cn } from '../utils/classname';
+import { createVariants } from '../utils/variants';
 
-/*
-<Checkbox checked={...} onChange={...}>
-  <Checkbox.Control />
-</Checkbox>
-
-A bare <Checkbox.Control /> renders its own <Checkbox.Indicator /> with a
-check (or minus for indeterminate). Override by passing children:
-
-<Checkbox.Control>
-  <Checkbox.Indicator>
-    <CustomGlyph />
-  </Checkbox.Indicator>
-</Checkbox.Control>
-*/
-
-export type CheckboxProps = ComponentProps<typeof KobalteCheckbox>;
+export type CheckboxSize = 'sm' | 'md' | 'lg';
+export type CheckboxProps = ComponentProps<typeof KobalteCheckbox> & {
+  size?: CheckboxSize;
+};
 type ControlProps = ComponentProps<typeof KobalteCheckbox.Control>;
 type IndicatorProps = ComponentProps<typeof KobalteCheckbox.Indicator>;
 type LabelProps = ComponentProps<typeof KobalteCheckbox.Label>;
 
-const CONTROL_CLASS = cn(
-  'inline-flex items-center justify-center size-4 shrink-0 rounded-sm text-surface',
-  'bg-surface border-1 border-edge',
-  'data-checked:bg-accent data-checked:border-accent',
-  'data-indeterminate:bg-accent data-indeterminate:border-accent',
-  'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
-  'data-invalid:border-failure',
-  'peer-focus-visible:ring-2 peer-focus-visible:ring-accent'
+const CheckboxSizeContext = createContext((): CheckboxSize => 'md');
+const checkboxVariants = createVariants(
+  'inline-grid shrink-0 place-items-center rounded border border-border-primary bg-transparent text-button-accent-ink data-checked:border-accent data-checked:bg-accent data-indeterminate:border-accent data-indeterminate:bg-accent',
+  {
+    size: {
+      sm: 'size-3.5',
+      md: 'size-4',
+      lg: 'size-5',
+    },
+  },
+  { size: 'md' }
 );
+const markSizes: Record<CheckboxSize, string> = {
+  sm: 'size-2.5',
+  md: 'size-3',
+  lg: 'size-3.5',
+};
+
+/** Keep both paths mounted so checking and unchecking use the same motion. */
+function CheckboxMark(props: {
+  checked: boolean;
+  indeterminate: boolean;
+  size: CheckboxSize;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.25"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class={cn('block', markSizes[props.size])}
+    >
+      <path
+        d="M2 6.25 4.5 8.75 10 3.25"
+        pathLength="1"
+        stroke-dasharray="1 2"
+        stroke-dashoffset={props.checked && !props.indeterminate ? 0 : 1.2}
+        class="transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none"
+      />
+      <path
+        d="M2.5 6h7"
+        pathLength="1"
+        stroke-dasharray="1 2"
+        stroke-dashoffset={props.indeterminate ? 0 : 1.2}
+        class="transition-[stroke-dashoffset] duration-100 ease-out motion-reduce:transition-none"
+      />
+    </svg>
+  );
+}
 
 function CheckboxIndicator(props: IndicatorProps) {
-  const [local, rest] = splitProps(props, ['class', 'children']);
+  const [local, rest] = splitProps(props, ['class', 'children', 'forceMount']);
+  const context = useCheckboxContext();
+  const size = useContext(CheckboxSizeContext);
   return (
     <KobalteCheckbox.Indicator
-      class={cn('group inline-flex items-center justify-center', local.class)}
+      forceMount={local.forceMount ?? local.children == null}
+      class={cn('inline-flex items-center justify-center', local.class)}
       {...rest}
     >
       {local.children ?? (
-        <>
-          <CheckIcon class="size-3 group-data-indeterminate:hidden" />
-          <MinusIcon class="size-3 hidden group-data-indeterminate:block" />
-        </>
+        <CheckboxMark
+          checked={context.checked()}
+          indeterminate={context.indeterminate()}
+          size={size()}
+        />
       )}
     </KobalteCheckbox.Indicator>
   );
@@ -54,10 +96,18 @@ function CheckboxIndicator(props: IndicatorProps) {
 
 function CheckboxControl(props: ControlProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
+  const size = useContext(CheckboxSizeContext);
   return (
     <>
       <KobalteCheckbox.Input class="peer sr-only" />
-      <KobalteCheckbox.Control class={cn(CONTROL_CLASS, local.class)} {...rest}>
+      <KobalteCheckbox.Control
+        class={cn(
+          checkboxVariants({ size: size() }),
+          'data-disabled:cursor-not-allowed data-invalid:border-failure peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
+          local.class
+        )}
+        {...rest}
+      >
         {local.children ?? <CheckboxIndicator />}
       </KobalteCheckbox.Control>
     </>
@@ -70,35 +120,34 @@ function CheckboxLabel(props: LabelProps) {
 }
 
 /**
- * A Kobalte checkbox with the app's control styling, composed from slots so
- * the label, description, and error message are yours to place.
+ * A checkbox for a value that can be saved or selected independently.
  *
- * @do Always render a `Checkbox.Label`, even when the visible text sits
- *   elsewhere.
- * @do Use `indeterminate` on a select-all that only covers part of its group.
- * @do Use `InlineCheckbox` when the whole row is already clickable.
- * @dont Do not use a checkbox for an immediate action — that is a ToggleSwitch
- *   or a Button.
- * @dont Do not add `Checkbox.Input` yourself; `Checkbox.Control` already
- *   renders one.
+ * @do Use the size prop rather than resizing the control with classes.
+ * @do Render a Checkbox.Label or provide an accessible name on the root.
+ * @do Use indeterminate when only part of a select-all group is checked.
+ * @do Use InlineCheckbox when an enclosing option owns the interaction.
+ * @dont Add Checkbox.Input yourself; Checkbox.Control already renders one.
+ * @dont Use a checkbox for an immediate setting change; use ToggleSwitch.
  */
 export const Checkbox = Object.assign(
   (props: CheckboxProps) => {
-    const [local, rest] = splitProps(props, ['class']);
+    const [local, rest] = splitProps(props, ['class', 'size']);
     return (
-      <KobalteCheckbox
-        class={cn('relative inline-flex items-center gap-2', local.class)}
-        {...rest}
-      />
+      <CheckboxSizeContext.Provider value={() => local.size ?? 'md'}>
+        <KobalteCheckbox
+          class={cn(
+            'relative inline-flex items-center gap-2 data-disabled:cursor-not-allowed data-disabled:opacity-50',
+            local.class
+          )}
+          {...rest}
+        />
+      </CheckboxSizeContext.Provider>
     );
   },
   {
-    ErrorMessage:
-      KobalteCheckbox.ErrorMessage /* passthrough — styled via class at use sites */,
-    Description:
-      KobalteCheckbox.Description /* passthrough — styled via class at use sites */,
-    Input:
-      KobalteCheckbox.Input /* passthrough — Control already renders one */,
+    ErrorMessage: KobalteCheckbox.ErrorMessage,
+    Description: KobalteCheckbox.Description,
+    Input: KobalteCheckbox.Input,
     Indicator: CheckboxIndicator,
     Control: CheckboxControl,
     Label: CheckboxLabel,
@@ -111,21 +160,22 @@ export const SingleSelectCheck = (props: { active: boolean }) => (
   />
 );
 
-/**
- * Inline checkbox affordance — a small square that fills accent when checked
- * and shows an outlined empty box when not. Matches the soup-menu checkbox
- * pattern. Visual-only; pair with a clickable parent for the actual toggle.
- */
-export const InlineCheckbox = (props: { checked: boolean }) => (
+/** Visual-only; the enclosing row owns selection, focus, and input semantics. */
+export const InlineCheckbox = (props: {
+  checked: boolean;
+  indeterminate?: boolean;
+  size?: CheckboxSize;
+}) => (
   <span
-    aria-hidden
-    class={cn(
-      'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
-      props.checked
-        ? 'bg-accent text-surface'
-        : 'bg-transparent border-1 border-edge-muted text-transparent'
-    )}
+    aria-hidden="true"
+    data-checked={props.checked ? '' : undefined}
+    data-indeterminate={props.indeterminate ? '' : undefined}
+    class={checkboxVariants({ size: props.size ?? 'sm' })}
   >
-    <CheckIcon class="size-2.5" />
+    <CheckboxMark
+      checked={props.checked}
+      indeterminate={props.indeterminate ?? false}
+      size={props.size ?? 'sm'}
+    />
   </span>
 );

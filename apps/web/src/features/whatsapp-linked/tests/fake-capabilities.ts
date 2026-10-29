@@ -1,7 +1,6 @@
 import { okAsync, type ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { vi } from 'vitest';
-import type { GroupSummary } from '../../whatsapp-group/core/group';
 import type {
   PairingRead,
   PasskeyCapability,
@@ -10,8 +9,10 @@ import type {
   WhatsAppLinkedCapabilities,
 } from '../context/whatsapp-linked-context';
 import type { WhatsAppAccount } from '../core/account';
-import type { WhatsAppGroup } from '../core/group';
+import type { AddFailure } from '../core/add';
+import type { WhatsAppChat } from '../core/chat';
 import type { PairingStep } from '../core/pairing';
+import { createOpenSections } from '../primitives/open-sections';
 
 function signalRead<Value>(
   initial: Value | undefined
@@ -35,45 +36,69 @@ function signalRead<Value>(
 /** Server state a test drives by setting signals; actions are spies. */
 export function createFakeWhatsApp(initial: {
   account: WhatsAppAccount | null;
-  groups?: WhatsAppGroup[];
+  chats?: WhatsAppChat[];
   passkey?: PasskeyCapability;
-  sharedGroups?: GroupSummary[];
 }) {
   const [account, setAccount] = signalRead<WhatsAppAccount | null>(
     initial.account
   );
-  const [groups, setGroups] = signalRead<WhatsAppGroup[]>(initial.groups);
-  const [features] = signalRead({ pairing: true, adoption: true });
-  const [pairing, setPairingRead] = signalRead<PairingRead>(undefined);
-  const setPairing = (step: PairingStep, expiresAt?: string) =>
-    setPairingRead({
-      step,
-      expiresAt: expiresAt ?? new Date(Date.now() + 52_000).toISOString(),
-    });
-  const groupsEnabled: Accessor<boolean>[] = [];
+  const [chats, setChats] = signalRead<WhatsAppChat[]>(initial.chats);
+  // Pairings are numbered as `connect` starts them; reads are per pairing.
+  let started = 0;
+  const [pairings, setPairings] = createSignal<
+    Record<string, PairingRead | 'error'>
+  >({});
+  /** The server can't read a pairing (gone, or not the caller's). */
+  const failPairingRead = (pairingId: string) =>
+    setPairings((current) => ({ ...current, [pairingId]: 'error' }));
+  /** Report `step` for a pairing, the latest started one by default. */
+  const setPairing = (
+    step: PairingStep,
+    options: { pairingId?: string; expiresAt?: string } = {}
+  ) =>
+    setPairings((current) => ({
+      ...current,
+      [options.pairingId ?? `pairing-${started}`]: {
+        step,
+        expiresAt:
+          options.expiresAt ?? new Date(Date.now() + 52_000).toISOString(),
+      },
+    }));
+  const pairingRead = (
+    pairingId: Accessor<string>
+  ): SourceRead<PairingRead> => ({
+    get isPending() {
+      return pairings()[pairingId()] === undefined;
+    },
+    get isError() {
+      return pairings()[pairingId()] === 'error';
+    },
+    get data() {
+      const read = pairings()[pairingId()];
+      return read === 'error' ? undefined : read;
+    },
+    refetch: vi.fn(),
+  });
+  const chatsEnabled: Accessor<boolean>[] = [];
   const capabilities = {
-    features,
-    sharedGroups: signalRead(initial.sharedGroups ?? [])[0],
     account,
-    groups: vi.fn((enabled: Accessor<boolean>) => {
-      groupsEnabled.push(enabled);
-      return groups;
+    chats: vi.fn((enabled: Accessor<boolean>) => {
+      chatsEnabled.push(enabled);
+      return chats;
     }),
     passkey: initial.passkey ?? {
       kind: 'handoff',
       desktopUrl: (pairingId: string) =>
         `macro:///external?whatsappPairing=${pairingId}`,
     },
-    pairing: vi.fn((_pairingId: Accessor<string>) => pairing),
+    pairing: vi.fn(pairingRead),
     connect: vi.fn(
-      (
-        _replace: boolean
-      ): ResultAsync<
+      (): ResultAsync<
         { pairingId: string; expiresAt: string },
         RequestFailure
       > =>
         okAsync({
-          pairingId: 'pairing-1',
+          pairingId: `pairing-${++started}`,
           expiresAt: new Date(Date.now() + 52_000).toISOString(),
         })
     ),
@@ -88,17 +113,23 @@ export function createFakeWhatsApp(initial: {
       ): ResultAsync<{ remoteUnlinkRequested: boolean }, RequestFailure> =>
         okAsync({ remoteUnlinkRequested: false })
     ),
-    adopt: vi.fn(
-      (_request: {
-        groupJid: string;
-        name: string;
-      }): ResultAsync<{ groupId: string }, RequestFailure> =>
-        okAsync({ groupId: 'channel-new' })
+    add: vi.fn(
+      (
+        _chat: Pick<WhatsAppChat, 'jid' | 'kind'>
+      ): ResultAsync<{ chatId: string }, AddFailure> =>
+        okAsync({ chatId: 'chat-new' })
     ),
     isConnecting: () => false,
     isDisconnecting: () => false,
-    isAdopting: () => false,
-    openGroup: vi.fn(),
+    openChat: vi.fn(),
+    sections: createOpenSections('test:whatsapp-sections', () => undefined),
   } satisfies WhatsAppLinkedCapabilities;
-  return { capabilities, setAccount, setGroups, setPairing, groupsEnabled };
+  return {
+    capabilities,
+    setAccount,
+    setChats,
+    setPairing,
+    failPairingRead,
+    chatsEnabled,
+  };
 }

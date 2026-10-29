@@ -12,8 +12,7 @@ pub async fn handle_non_retryable_error(
     e: &DetailedError,
 ) -> anyhow::Result<()> {
     // A rate-limited operation is only non-retryable here once it has been
-    // re-enqueued to the retry queue, or when it is a notification that a
-    // later one supersedes, so deleting it loses nothing.
+    // re-enqueued to the retry queue, so deleting it loses nothing.
     if e.reason == FailureReason::GmailApiRateLimited {
         tracing::debug!(error = %e, payload = format!("{:?}", data.operation), "Rate-limited inbox sync message deferred. The message will be deleted.");
     } else {
