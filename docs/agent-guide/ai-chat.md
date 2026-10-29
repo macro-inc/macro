@@ -84,8 +84,9 @@ the first paint, and its `Context` chip is already in place, so nothing shifts
 when the server confirms it.
 
 A session started by mentioning the agent in a thread (for example `@macro` in a
-channel) gets no opener: its thread reply appears all at once, so the line would
-add nothing. Its reply starts with the chosen model's answer.
+channel) gets no opener. Its thread reply is one message that updates only as
+each passage finishes, so the line would arrive with the text after it. The
+reply starts with the chosen model's answer.
 
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone

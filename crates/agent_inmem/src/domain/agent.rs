@@ -724,6 +724,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         "agent.acp.prompt",
                         agent.session.id = %state.session_id,
                         gen_ai.conversation.id = %state.session_id,
+                        agent.turn.reply_delivery = ?state.delivery,
                         agent.turn.ttft_ms = tracing::field::Empty,
                         agent.turn.first_text_ms = tracing::field::Empty,
                         agent.turn.admission_wait_ms = tracing::field::Empty,
