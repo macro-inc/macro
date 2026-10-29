@@ -382,18 +382,24 @@ async fn core_rows_stay_out_of_soup_even_with_a_stray_database_grant(pool: PgPoo
 }
 
 /// A form over the CRM's Deals table, granting the stranger `level`.
-async fn grant_the_stranger_a_crm_form(pool: &PgPool, level: &str, trashed: bool) {
+async fn grant_the_stranger_a_crm_form(
+    pool: &PgPool,
+    level: &str,
+    trashed: bool,
+    responses_visible: bool,
+) {
     let form_id = Uuid::now_v7();
     let stranger = stranger();
     sqlx::query!(
         r#"
-        INSERT INTO forms (id, name, owner_id, database_id, table_id, trashed_at)
-        VALUES ($1, 'Deal intake', 'macro|owner@databases.test', $2, $3, CASE WHEN $4 THEN now() END)
+        INSERT INTO forms (id, name, owner_id, database_id, table_id, trashed_at, responses_visible)
+        VALUES ($1, 'Deal intake', 'macro|owner@databases.test', $2, $3, CASE WHEN $4 THEN now() END, $5)
         "#,
         form_id,
         CRM,
         DEALS,
         trashed,
+        responses_visible,
     )
     .execute(pool)
     .await
@@ -441,7 +447,7 @@ async fn stranger_reads(pool: &PgPool) -> (Vec<Uuid>, Vec<Uuid>) {
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_form_editor_reads_the_rows_of_the_forms_database(pool: PgPool) {
-    grant_the_stranger_a_crm_form(&pool, "edit", false).await;
+    grant_the_stranger_a_crm_form(&pool, "edit", false, false).await;
 
     assert_eq!(
         stranger_reads(&pool).await,
@@ -451,14 +457,24 @@ async fn a_form_editor_reads_the_rows_of_the_forms_database(pool: PgPool) {
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_form_respondent_reads_no_rows(pool: PgPool) {
-    grant_the_stranger_a_crm_form(&pool, "view", false).await;
+    grant_the_stranger_a_crm_form(&pool, "view", false, false).await;
 
     assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
 }
 
 #[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_respondent_of_a_form_that_shares_responses_reads_its_rows(pool: PgPool) {
+    grant_the_stranger_a_crm_form(&pool, "view", false, true).await;
+
+    assert_eq!(
+        stranger_reads(&pool).await,
+        (vec![DEAL_3, DEAL_2, DEAL_1], vec![DEAL_2, DEAL_1])
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_trashed_form_owner_reads_no_rows(pool: PgPool) {
-    grant_the_stranger_a_crm_form(&pool, "owner", true).await;
+    grant_the_stranger_a_crm_form(&pool, "owner", true, false).await;
 
     assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
 }
