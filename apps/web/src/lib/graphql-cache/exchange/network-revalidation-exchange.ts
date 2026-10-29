@@ -25,6 +25,7 @@ import {
 
 const REQUEST_CONTEXT_KEY = '__macroNetworkRevalidationRequest';
 const MUTATION_CONTEXT_KEY = '__macroNetworkOptimisticMutation';
+const SCOPE_CONTEXT_KEY = '__macroNetworkScope';
 const REVALIDATION_WAIT_MS = 15_000;
 
 /** A domain-owned projection over existing query snapshots, not durable storage. */
@@ -70,16 +71,14 @@ export function networkRevalidationExchange(
         confirmed: boolean;
         afterRequest: number;
         queries: Set<number>;
-        scope: unknown;
       }
     >();
     let mutationId = 0;
+    let activeScope: unknown = Symbol('uninitialized');
 
     function project(result: OperationResult): OperationResult {
       let data = result.data;
-      for (const layer of layers.values()) {
-        if (Object.is(layer.scope, scope())) data = layer.update.project(data);
-      }
+      for (const layer of layers.values()) data = layer.update.project(data);
       const state = queries.get(result.operation.key);
       if (state && (enabled() || state.view) && isQueryObject(data)) {
         if (state.view) state.view.replace(data);
@@ -126,10 +125,15 @@ export function networkRevalidationExchange(
       }
     }
 
-    function expireLayers(): void {
-      for (const [id, layer] of layers) {
-        if (Object.is(layer.scope, scope())) continue;
-        layers.delete(id);
+    function synchronizeScope(): void {
+      const nextScope = scope();
+      if (Object.is(activeScope, nextScope)) return;
+      activeScope = nextScope;
+      queries.clear();
+      for (const key of waiters.keys()) finish(key);
+      const previous = [...layers.values()];
+      layers.clear();
+      for (const layer of previous) {
         if (!layer.forwarded) {
           projections.next({
             operation: layer.operation,
@@ -146,7 +150,7 @@ export function networkRevalidationExchange(
     }
 
     function track(operation: Operation): Operation | undefined {
-      expireLayers();
+      synchronizeScope();
       if (operation.kind === 'teardown') {
         queries.delete(operation.key);
         for (const layer of layers.values())
@@ -161,6 +165,7 @@ export function networkRevalidationExchange(
           const tagged = makeOperation('mutation', operation, {
             ...operation.context,
             [MUTATION_CONTEXT_KEY]: id,
+            [SCOPE_CONTEXT_KEY]: activeScope,
           });
           const forwarded = !blocked(update.keys);
           layers.set(id, {
@@ -170,7 +175,6 @@ export function networkRevalidationExchange(
             confirmed: false,
             afterRequest: requestId,
             queries: new Set(),
-            scope: scope(),
           });
           publish();
           // This acknowledges only the local projection, never durable admission.
@@ -178,11 +182,18 @@ export function networkRevalidationExchange(
           return forwarded ? tagged : undefined;
         }
       }
+      if (operation.kind === 'mutation') {
+        return makeOperation('mutation', operation, {
+          ...operation.context,
+          [SCOPE_CONTEXT_KEY]: activeScope,
+        });
+      }
       if (operation.kind !== 'query') return operation;
       const id = ++requestId;
       const tagged = makeOperation('query', operation, {
         ...operation.context,
         [REQUEST_CONTEXT_KEY]: id,
+        [SCOPE_CONTEXT_KEY]: activeScope,
       });
       const previous = queries.get(operation.key);
       queries.set(operation.key, {
@@ -277,6 +288,33 @@ export function networkRevalidationExchange(
       return project(state?.result ?? result);
     }
 
+    function settleLayer(result: OperationResult): boolean {
+      const id = result.operation.context[MUTATION_CONTEXT_KEY];
+      if (typeof id !== 'number') return true;
+      const layer = layers.get(id);
+      if (!layer) return false;
+      if (result.hasNext) return true;
+      const disposition = optimisticMutationDispositionOf(result);
+      const confirmed =
+        result.data != null &&
+        !result.error &&
+        (!disposition || disposition.kind === 'committed')
+          ? layer.update.commit(result.data)
+          : undefined;
+      if (confirmed) {
+        layer.update = confirmed;
+        layer.confirmed = true;
+        layer.afterRequest = requestId;
+        layer.queries = new Set(queries.keys());
+      } else {
+        layers.delete(id);
+      }
+      publish();
+      dispatchWaiting();
+      prune();
+      return true;
+    }
+
     return (operations$) => {
       const results = pipe(
         merge([
@@ -289,35 +327,20 @@ export function networkRevalidationExchange(
         ]),
         forward,
         mergeMap((result) => {
-          expireLayers();
+          synchronizeScope();
           const { operation } = result;
+          if (
+            (operation.kind === 'query' || operation.kind === 'mutation') &&
+            !Object.is(operation.context[SCOPE_CONTEXT_KEY], activeScope)
+          ) {
+            return operation.kind === 'mutation' ? fromValue(result) : empty;
+          }
           if (operation.kind === 'query') {
             const accepted = acceptQuery(result);
             return accepted ? fromValue(accepted) : empty;
           }
           const disposition = optimisticMutationDispositionOf(result);
-          const id = operation.context[MUTATION_CONTEXT_KEY];
-          const layer = typeof id === 'number' ? layers.get(id) : undefined;
-          if (typeof id === 'number' && !layer) return fromValue(result);
-          if (layer && typeof id === 'number' && !result.hasNext) {
-            const confirmed =
-              result.data != null &&
-              !result.error &&
-              (!disposition || disposition.kind === 'committed')
-                ? layer.update.commit(result.data)
-                : undefined;
-            if (confirmed) {
-              layer.update = confirmed;
-              layer.confirmed = true;
-              layer.afterRequest = requestId;
-              layer.queries = new Set(queries.keys());
-            } else {
-              layers.delete(id);
-            }
-            publish();
-            dispatchWaiting();
-            prune();
-          }
+          if (!settleLayer(result)) return fromValue(result);
           if (
             operation.kind !== 'mutation' ||
             !enabled() ||

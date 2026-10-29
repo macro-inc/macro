@@ -844,8 +844,9 @@ conflicting slots keep submission order. An enqueue acknowledgement means the
 local layer is installed, not that the server committed. Successful responses
 replace temporary assignment IDs and remain projected until a post-commit read
 confirms them, including through failed or stale refreshes. Failures remove only
-their own layer. Session changes discard old layers and cancel undispatched
-writes. Healthy-cache operations retain the durable queue's existing ownership.
+their own layer. Session changes discard old snapshots and layers, reject stale
+query responses, replace the plain client, and cancel undispatched writes.
+Healthy-cache operations retain the durable queue's existing ownership.
 The `graphql_cache.network_property_projection` span records active query and
 layer counts without property values.
 

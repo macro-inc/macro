@@ -374,22 +374,26 @@ export async function dssGraphqlFetch(
   });
 }
 
-const graphqlSoupClient = createClient({
-  url: `${dssHost}/items/soup/graphql`,
-  exchanges: [
-    networkRevalidationExchange(
-      () => true,
-      createPropertyNetworkOptimism,
-      () => cacheSessionGeneration
-    ),
-    fetchExchange,
-  ],
-  fetch: dssGraphqlFetch,
-  // urql's default ("within-url-limit") sends small documents as GET, but
-  // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
-  // executes. Every pre-activity document was too large to trigger this.
-  preferGetMethod: false,
-});
+function createPlainGraphqlSoupClient(): Client {
+  return createClient({
+    url: `${dssHost}/items/soup/graphql`,
+    exchanges: [
+      networkRevalidationExchange(
+        () => true,
+        createPropertyNetworkOptimism,
+        () => cacheSessionGeneration
+      ),
+      fetchExchange,
+    ],
+    fetch: dssGraphqlFetch,
+    // urql's default ("within-url-limit") sends small documents as GET, but
+    // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
+    // executes. Every pre-activity document was too large to trigger this.
+    preferGetMethod: false,
+  });
+}
+
+let graphqlSoupClient = createPlainGraphqlSoupClient();
 
 const reconnectListeners = new Set<() => void>();
 
@@ -566,6 +570,8 @@ export function setGraphqlSoupSessionActive(active: boolean): void {
 
 function disposeSessionClients(): void {
   cacheSessionGeneration += 1;
+  // A plain urql client also retains query results; never replay another session's data.
+  graphqlSoupClient = createPlainGraphqlSoupClient();
   cacheRecovery.reset();
   cacheInitializationFailed = false;
   const cleanup = cachedCacheCleanup;

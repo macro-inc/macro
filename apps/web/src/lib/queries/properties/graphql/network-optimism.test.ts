@@ -236,6 +236,36 @@ describe('network property optimism', () => {
     subscription.unsubscribe();
   });
 
+  it('does not republish a previous session snapshot for a new edit or late response', async () => {
+    let session = 0;
+    const { client, request, respond, save } = setup(
+      () => true,
+      () => session
+    );
+    const values: unknown[] = [];
+    const subscription = client
+      .query(EntityPropertiesDocument, {
+        input: { entityType: 'DOCUMENT', entityId: 'task' },
+      })
+      .subscribe((result) => values.push(result.data));
+    const old = {
+      ...entity('task'),
+      user: { ...entity('task').user, id: 'old-viewer' },
+    };
+    await respond(0, old);
+    expect(values).toEqual([old]);
+    session++;
+    const saving = save('task', 'new-session');
+    await request(1);
+    expect(values).toEqual([old]);
+    await respond(0, old);
+    expect(values).toEqual([old]);
+    await respond(1, { setEntityProperty: property('new-session') });
+    await saving;
+    expect(values).toEqual([old]);
+    subscription.unsubscribe();
+  });
+
   it('cancels undispatched edits and drops old optimism when the session changes', async () => {
     let session = 0;
     const { client, requests, request, respond, save } = setup(
