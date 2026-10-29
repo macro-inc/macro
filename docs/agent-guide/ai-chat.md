@@ -70,8 +70,12 @@ later chunks can arrive in batches. Reasoning or a tool row should not delay the
 first prose. Verify a second prompt and a reload preserve the complete answer.
 A model selected before the first prompt is part of the create request, and the
 runtime starts on it; no model change appears in the new session's transcript.
-A selected effort is confirmed before the first prompt; settings the runtime
-already reports do not need another control request.
+Resuming or reconnecting a session also applies its saved model without a
+line — that is not a switch the user made. A selected effort is confirmed
+before the first prompt; settings the runtime already reports do not need
+another control request.
+A model the user picks mid-session is a line between turns. Work from before
+the change stays above it; anything the agent says after appears below it.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
@@ -1848,6 +1852,10 @@ must stay hidden; subsequent live messages must still appear.
   it scrolls on its own and starts scrolled to the bottom, so the next-to-send row stays
   visible. Scroll up inside the list to reach newer entries; no extra count row hides
   messages. Each prompt starts as a single-line preview, including long messages.
+  The preview is rendered markdown: links and `@` mention chips appear as they do
+  in the transcript, never as their `<m-link>` / `<m-document-mention>` markup, and
+  clicking one opens the row rather than the link. The expanded editor has the
+  composer's `@` mentions, links, emoji, and code.
   Click a preview (or press Enter/Space on it) to open its editor; opening another
   row collapses the previous one. The expanded editor scrolls within the smaller of
   32% of the viewport and 16rem. Click the preview again or press Escape to collapse

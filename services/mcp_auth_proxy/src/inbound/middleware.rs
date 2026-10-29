@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use ai_toolset::ToolCaller;
 use axum::{
     body::Body,
     http::{
@@ -10,12 +11,24 @@ use axum::{
         header::{HeaderValue, WWW_AUTHENTICATE},
     },
 };
+use bot_id::BotId;
 use macro_auth::middleware::decode_jwt::{JwtToken, JwtValidationArgs, handler};
+
+use crate::domain::access_token_clients::AccessTokenClients;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// Validated Macro JWT from the `Authorization: Bearer` header.
 #[derive(Clone)]
 pub struct JwtAccessToken(pub String);
+
+/// What the bearer middleware validates a request with.
+#[derive(Clone)]
+pub struct BearerAuth {
+    /// Signature, audience, and issuer checks for both token kinds.
+    pub jwt_args: JwtValidationArgs,
+    /// Which client each OAuth access token was issued to.
+    pub clients: AccessTokenClients,
+}
 
 /// Which kind of credential authenticated an MCP request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,9 +110,17 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
 }
 
 /// Validates `Authorization: Bearer <token>` and stores the authenticated
-/// [`MacroUserIdStr`] and its [`McpAuthMethod`] in the request extensions.
+/// [`MacroUserIdStr`], its [`McpAuthMethod`], and its [`ToolCaller`] in the
+/// request extensions. Every authenticated request carries a caller:
+/// - a Macro API token signed for an agent (only key holders such as the
+///   agent harness's egress sign the claim, so a client cannot name a bot) is
+///   [`ToolCaller::Agent`];
+/// - an OAuth access token is [`ToolCaller::McpClient`], named after the
+///   client the broker issued it to;
+/// - any other Macro API token is a pasted key, [`ToolCaller::ApiKey`].
+#[tracing::instrument(skip_all, fields(caller = tracing::field::Empty))]
 pub async fn validate_bearer(
-    axum::extract::State(jwt_args): axum::extract::State<JwtValidationArgs>,
+    axum::extract::State(auth): axum::extract::State<BearerAuth>,
     mut request: Request<Body>,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
@@ -115,7 +136,7 @@ pub async fn validate_bearer(
         return unauthorized_response(&request, None);
     };
 
-    let jwt_token = match handler(&jwt_args, &token) {
+    let jwt_token = match handler(&auth.jwt_args, &token) {
         Ok(token) => token,
         Err(error) => {
             tracing::warn!(error=?error, "MCP bearer token validation failed");
@@ -123,10 +144,33 @@ pub async fn validate_bearer(
         }
     };
 
-    let (user_id, auth_method) = match jwt_token {
-        JwtToken::MacroAccessToken(token) => (token.macro_user_id, McpAuthMethod::OAuth),
-        JwtToken::MacroApiToken(token) => (token.macro_user_id, McpAuthMethod::ApiKey),
+    let (user_id, auth_method, caller) = match jwt_token {
+        JwtToken::MacroAccessToken(access) => {
+            let name = match auth.clients.client_name(&token).await {
+                Ok(name) => name,
+                Err(error) => {
+                    tracing::error!(error=?error, "could not read the client an access token was issued to");
+                    let mut response = Response::new(Body::empty());
+                    *response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+                    return response;
+                }
+            };
+            (
+                access.macro_user_id,
+                McpAuthMethod::OAuth,
+                ToolCaller::McpClient { name },
+            )
+        }
+        JwtToken::MacroApiToken(api) => (
+            api.macro_user_id,
+            McpAuthMethod::ApiKey,
+            match api.agent_id {
+                Some(agent) => ToolCaller::Agent(BotId::new_from_uuid(agent)),
+                None => ToolCaller::ApiKey,
+            },
+        ),
     };
+    tracing::Span::current().record("caller", tracing::field::debug(&caller));
 
     let user_id = match MacroUserIdStr::try_from(user_id) {
         Ok(user_id) => user_id,
@@ -138,6 +182,7 @@ pub async fn validate_bearer(
 
     request.extensions_mut().insert(user_id);
     request.extensions_mut().insert(auth_method);
+    request.extensions_mut().insert(caller);
     request.extensions_mut().insert(JwtAccessToken(token));
 
     next.run(request).await

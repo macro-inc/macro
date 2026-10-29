@@ -22,6 +22,12 @@ detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
 ## Email — `/app/component/mail`
 
+Newly fetched mail, including calendar invitations, stays visible while local
+cache metadata loads. To check this transition, return to Inbox repeatedly and
+trigger a background cache refresh: rows should not disappear and return. A
+confirmed archive still removes its row. Cached pagination preserves its position
+while those server-confirmed rows load their canonical previews.
+
 Email's Tags sidebar uses the [nested tag tree](tasks.md#nested-sidebar-tags).
 Carets and folder-only parents expand branches; actual tags select their exact ID
 and switch the mailbox to All. Parent selection does not include descendant tags.
@@ -324,7 +330,12 @@ means `inboxVisible = false`; it is **not** notification lifecycle state. Signal
 retain their Inbox scope, so archived mail is found in Archived (All + Done).
 
 A `Showing cached mail` notice identifies results over synchronized metadata, not a
-claim of complete mailbox coverage. These lists paginate locally beyond the first
+claim of complete mailbox coverage. On an online cold tab, hold the first server
+response and verify that an empty local page keeps the loading indicator visible;
+show the empty state only after the query settles. Nonempty cached rows remain
+immediately usable. Confirmed empty pages stay empty during background refreshes,
+and offline or cache-only views do not wait for HTTP.
+These lists paginate locally beyond the first
 page without a server cursor. Filter or engine-generation changes restart
 the local page chain, and a cache write re-reads it through the last row already loaded; online server results take over again when available. After
 reconnecting, `Load more` follows the same server page chain as the displayed rows,
@@ -341,8 +352,10 @@ range (including timestamp/ID ties). An exhausted page covers the remaining
 matching range, including an empty result. This checks at most 500 local matches
 per write; larger stale sets converge over refreshes. It preserves normalized
 threads and pending optimistic edits, and does not use cursor pages or backfill
-gaps as negative evidence. Invalidated facts stay unqueryable until a full
-canonical snapshot arrives, rather than guessing whether a thread was moved or
+gaps as negative evidence. An older open view's server snapshot cannot restore
+explicitly invalidated membership; pending local edits still take precedence.
+Invalidated facts stay unqueryable until a full canonical snapshot arrives,
+rather than guessing whether a thread was moved or
 deleted. Verification: seed stale Noise matches between returned rows, apply a
 first page, switch Drafts → Noise repeatedly, then reload without reseeding;
 stale rows must stay absent while rows beyond the page remain. This runs against
@@ -372,7 +385,14 @@ necessarily evaluated from the last synchronized grants.
 The lightweight metadata backfill runs before body hydration. Its refreshes scan all
 metadata: message-time watermarks alone miss archive/read changes on old threads.
 Filter availability therefore does not guarantee that opening every message body works offline. Missing
-projection proof is unknown, never false. Tag selections use cached property postings;
+projection proof is unknown, never false. A retained invitation keeps its fetched
+preview while read/archive flags update immediately, including rollback and undo.
+Check the retained invitation itself: mark it read, archive it, reject an archive,
+and undo a committed archive before metadata hydration finishes. Older cache hosts
+must still refresh affected lists after commit. Scroll across a retained row and
+check that the next page remains ordered; a baseline beyond 5,000 rows returns to
+the live server list instead of freezing local membership.
+Tag selections use cached property postings;
 attachment chips refine the cached rows on the client. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile

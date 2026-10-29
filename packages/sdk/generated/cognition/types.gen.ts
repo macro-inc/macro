@@ -476,6 +476,49 @@ export type DatabaseChange = {
 };
 
 /**
+ * A proposal, never stored results or permission to read the named database.
+ */
+export type DatabaseQueryAnswer = {
+    answerable: boolean;
+    chart?: null | DatabaseQueryChart;
+    databaseId?: string | null;
+    displayMode: DatabaseQueryDisplayMode;
+    explanation: string;
+    sql: string;
+    title: string;
+};
+
+/**
+ * Chart fields name the proposal's result columns exactly.
+ */
+export type DatabaseQueryChart = {
+    color?: string | null;
+    stack: boolean;
+    title: string;
+    x: string;
+    y: Array<string>;
+};
+
+/**
+ * Supported live-answer presentations.
+ */
+export type DatabaseQueryDisplayMode = 'scalar' | 'table' | 'bar' | 'line' | 'area' | 'scatter' | 'pie';
+
+/**
+ * The question and untrusted schema hints; authorization remains in the read services.
+ */
+export type DatabaseQueryRequest = {
+    /**
+     * The SQL engine's error from one failed proposal, used for a bounded repair.
+     */
+    error?: string | null;
+    model: string;
+    prompt: string;
+    schema: unknown;
+    sql: string;
+};
+
+/**
  * Sanitized, machine-readable failure of a decision request.
  */
 export type DecisionErrorBody = {
@@ -2666,6 +2709,33 @@ export type GetCitationHandlerResponses = {
 };
 
 export type GetCitationHandlerResponse = GetCitationHandlerResponses[keyof GetCitationHandlerResponses];
+
+export type GenerateDatabaseQueryData = {
+    body: DatabaseQueryRequest;
+    path?: never;
+    query?: never;
+    url: '/database-query';
+};
+
+export type GenerateDatabaseQueryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    402: StructuredCompletionError;
+    403: StructuredCompletionError;
+    500: StructuredCompletionError;
+    503: StructuredCompletionError;
+    504: StructuredCompletionError;
+};
+
+export type GenerateDatabaseQueryError = GenerateDatabaseQueryErrors[keyof GenerateDatabaseQueryErrors];
+
+export type GenerateDatabaseQueryResponses = {
+    200: DatabaseQueryAnswer;
+};
+
+export type GenerateDatabaseQueryResponse = GenerateDatabaseQueryResponses[keyof GenerateDatabaseQueryResponses];
 
 export type DecisionsData = {
     body: DecisionRequest;

@@ -3,9 +3,11 @@ use crate::public_mcp::analytics::{
 };
 use crate::public_mcp::markdown_images::MarkdownImageResolver;
 use crate::public_mcp::tool_response::tool_result_with_media;
-use agent_code_mode::inbound::toolset::UserCodeModeToolContext;
+use agent_code_mode::{domain::UserCodeMode, inbound::toolset::UserCodeModeToolContext};
 use agent_inmem::domain::tool_mode::{ToolMode, ToolModeSelector};
+use ai_toolset::ToolCaller;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
+use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
     handler::server::ServerHandler,
@@ -41,14 +43,32 @@ fn definitions<Context>(toolset: &AsyncToolCollection<Context>) -> impl Iterator
     })
 }
 
+/// A tool context that runs its tools for the caller the request authenticated.
+pub trait CalledBy {
+    /// Run mutating tools for `caller`, still on the authenticated user's behalf.
+    fn called_by(self, caller: &ToolCaller) -> Self;
+}
+
+impl CalledBy for ai_tools::ToolServiceContext {
+    fn called_by(self, caller: &ToolCaller) -> Self {
+        self.for_caller(caller)
+    }
+}
+
+impl CalledBy for () {
+    fn called_by(self, _caller: &ToolCaller) -> Self {}
+}
+
 /// Code mode for flagged users: SDK-covered native tools give way to the SDK.
 pub struct CodeModeSurface<Context> {
     /// Native tools still listed in code mode, from `tools_for_mcp_code_mode`.
     pub native: Arc<AsyncToolCollection<Context>>,
     /// `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs`.
     pub tools: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
-    /// User-scoped execution and Jev.
-    pub context: UserCodeModeToolContext,
+    /// User-scoped execution.
+    pub service: Arc<dyn UserCodeMode>,
+    /// Jev, for selecting documentation by task.
+    pub cognition: Option<Arc<dyn Cognition>>,
     /// The `ai-code-mode` flag, per user.
     pub selector: Arc<dyn ToolModeSelector>,
 }
@@ -136,12 +156,24 @@ impl<Context> AuthenticatedToolService<Context> {
     }
 }
 
+/// The caller the bearer middleware authenticated the request as. Every
+/// authenticated request carries one; there is no default to fall back to.
+/// Nothing the request says for itself (headers, arguments) can name a bot.
+fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::ErrorData> {
+    extensions
+        .get::<http::request::Parts>()
+        .and_then(|parts| parts.extensions.get::<ToolCaller>().cloned())
+        .ok_or_else(|| {
+            rmcp::ErrorData::internal_error("missing tool caller — is auth configured?", None)
+        })
+}
+
 #[cfg(test)]
 mod test;
 
 impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
@@ -247,7 +279,7 @@ where
 
 impl<Context> AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
+    Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
 {
     /// Runs one tool call and classifies how it ended, for analytics.
     async fn run_tool(
@@ -260,6 +292,10 @@ where
         Result<rmcp::model::CallToolResult, rmcp::ErrorData>,
     ) {
         let mut request_context = RequestContext::new(user_id.clone());
+        let caller = match caller(&context.extensions) {
+            Ok(caller) => caller,
+            Err(error) => return (ToolCallOutcome::InvalidRequest, Err(error)),
+        };
 
         let Some(arguments) = request.arguments.map(serde_json::Value::Object) else {
             return (
@@ -284,7 +320,11 @@ where
             let result = match code_mode
                 .tools
                 .try_tool_call(
-                    code_mode.context.clone(),
+                    UserCodeModeToolContext {
+                        service: code_mode.service.clone(),
+                        cognition: code_mode.cognition.clone(),
+                        caller,
+                    },
                     request_context,
                     &request.name,
                     &arguments,
@@ -317,7 +357,7 @@ where
         let result = match self
             .toolset
             .try_tool_call(
-                self.context.clone(),
+                self.context.clone().called_by(&caller),
                 request_context,
                 &request.name,
                 &arguments,

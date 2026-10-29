@@ -2123,6 +2123,7 @@
     ],
     "ai_toolset": [
       "crates/ai_toolset",
+      "crates/bot_id",
       "crates/cowlike",
       "crates/genai_telemetry",
       "crates/macro_env_var",
@@ -9951,8 +9952,11 @@
       "crates/maybe_send"
     ],
     "mcp_auth_proxy": [
+      "crates/ai_toolset",
+      "crates/bot_id",
       "crates/cowlike",
       "crates/fusionauth",
+      "crates/genai_telemetry",
       "crates/macro_auth",
       "crates/macro_env",
       "crates/macro_env_var",
@@ -10020,6 +10024,7 @@
     ],
     "mcp_toolset": [
       "crates/ai_toolset",
+      "crates/bot_id",
       "crates/cowlike",
       "crates/genai_telemetry",
       "crates/macro_env_var",

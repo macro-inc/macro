@@ -76,10 +76,8 @@ pub async fn router(
         Arc::new(CodeModeSurface {
             native: ai_tools::tools_for_mcp_code_mode().toolset,
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
-            context: agent_code_mode::inbound::toolset::UserCodeModeToolContext {
-                service: code_mode.service,
-                cognition: tool_context.cognition_tool_context.service.clone(),
-            },
+            service: code_mode.service,
+            cognition: tool_context.cognition_tool_context.service.clone(),
             selector: Arc::new(CachedToolMode::new(code_mode.selector)),
         })
     });
