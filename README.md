@@ -150,6 +150,8 @@ Macro is designed to fit the exact needs of your team. Our databases let you bui
 
 You can ask agents to create tables, update records, and answer questions about your data. You can also embed a database view or query result in a document and it'll stay up to date as the underlying data changes.
 
+![A Donations Example database with dates, amounts, categories, and related donors](.github/readme/databases-table.png)
+
 <br />
 
 # CRM that keeps itself up to date
@@ -177,7 +179,7 @@ Since Macro has the team context in a single database, it is uniquely positioned
 - This memory is available to external agents via MCP, or any AI model (OpenAI, Google, Anthropic, etc.) through the model picker for maximum portability.
 - The memory is plainly stored in markdown so you can export it as you please. To manually update it, just ask the AI to remember something/update your memory.
 
-![A Macro coding-agent session with tool calls, a successful audit, and a pull request](.github/readme/agents-task-handoff.jpg)
+![A Macro coding-agent session with tool calls, a successful audit, and a pull request](.github/readme/agents-task-handoff.png)
 
 Memory isn't supposed to encompass everything. Macro also has a tool/MCP surface with near 100% coverage of the things you can do in Macro's UI, so that your agents aren't limited in what they can do like they are in most SaaS.
 
@@ -214,6 +216,8 @@ We built a simple Calendar in Macro so you can manage your week right next to wh
 - Share personal or team booking links. Guests don’t need a Macro account.
 - Set your availability and avoid conflicts across connected calendars.
 - Ask agents to find time, schedule meetings, and update events.
+
+![Macro Calendar showing a populated week, connected calendars, and booking links](.github/readme/calendar-week.png)
 
 <br />
 

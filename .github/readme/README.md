@@ -2,14 +2,16 @@
 
 ## Product screenshots
 
-The six JPEGs were recaptured on October 29, 2026 from a signed-in
-Macro workspace in the web app. Use a desktop viewport around 1144 CSS pixels
-wide so text remains readable at GitHub's README width. Trim excess empty
-height rather than fitting an entire desktop into the image. Keep the navigation
-sidebar visible. CRM uses a 1440-pixel viewport and a 1395-pixel-wide crop to
-show three complete populated stages; the fourth stage is outside the crop.
-These are live UI captures. The CRM board uses fictional sample companies
-and deal values in a dedicated private Sales Demo pipeline.
+The root README uses the eight-image selection from the final October 29,
+2026 gallery. Five existing JPEGs are retained unchanged. Databases and Agents
+use new high-resolution web captures; Calendar uses a desktop capture. The
+Databases example and CRM pipeline contain fictional sample data. The Calendar
+capture was explicitly selected with its real meeting names visible.
+
+The new PNGs preserve the gallery's selected crops without another lossy encode.
+They omit browser chrome, the system sharing indicator, and the pointer. Keep
+text readable at GitHub's README width rather than fitting an entire desktop
+into every image. The existing CRM crop shows three complete populated stages.
 
 | Asset | View |
 | --- | --- |
@@ -18,9 +20,11 @@ and deal values in a dedicated private Sales Demo pipeline.
 | `tasks-list.jpg` | Search surface area project, Tasks grouped by assignee |
 | `docs-prd.jpg` | PRD: Team Channels, with tags, assignees, and readable requirements |
 | `crm-board.jpg` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
-| `agents-task-handoff.jpg` | Add Reminder Icon To Tasks, with a successful audit and PR #8824 |
+| `databases-table.png` | Donations Example, showing dates, amounts, designations, and donor relations |
+| `agents-task-handoff.png` | Add Reminder Icon To Tasks, recaptured on web with a successful audit and PR #8824 |
+| `calendar-week.png` | Populated weekly calendar with connected calendars and booking-link controls |
 
-Keep the navigation sidebar open in every screenshot. Capture browser page
+Keep the navigation rail visible; show the expanded sidebar when it adds useful context. Capture browser page
 content so macOS screen-sharing indicators and window controls stay out of the
 image. Move the pointer away from controls and wait for tooltips to disappear.
 
@@ -30,6 +34,10 @@ private customer details, credentials, financial information, and personal
 conversations. Use a populated pipeline board with fictional sample companies
 for CRM and keep the root README's alt text consistent with each displayed
 view. Review every saved image before staging it.
+The previous `agents-task-handoff.jpg` is retained but no longer referenced by
+the root README. The banner is unchanged. Calls and booking-link companion
+images remain optional and are not part of this eight-image selection.
+
 The marketing homepage's separate screenshot copies under
 `apps/marketing/src/app/assets/desktop-feature-screens` are independent.
 
