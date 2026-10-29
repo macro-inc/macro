@@ -1,7 +1,8 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Button, cn } from '@ui';
-import { type JSX, Match, Show, Switch } from 'solid-js';
+import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { FeedDay } from '../core/feed';
 import { type BoardItem, latestMessage } from '../core/item';
@@ -150,6 +151,52 @@ export function FeedEnd(props: {
         </div>
       </FeedColumn>
     </div>
+  );
+}
+
+/** Where the first rows will land, while they load. */
+export function FeedSkeleton(props: { density: FeedDensity; label: string }) {
+  return (
+    <ListSkeleton.Root label={props.label} class="size-full overflow-hidden">
+      <FeedColumn density={props.density} class="pt-3">
+        <ListSkeleton.Bar class="mx-3 mb-3 w-14" />
+        <For each={[0, 1, 2, 3, 4, 5, 6, 7]}>
+          {(index) => (
+            <Switch>
+              <Match when={props.density === 'headlines'}>
+                <div class="flex h-10 items-center gap-2.5 px-3 touch:h-11">
+                  <ListSkeleton.Bar class="size-5" />
+                  <ListSkeleton.Bar class={index % 2 ? 'w-24' : 'w-36'} />
+                  <ListSkeleton.Bar class={index % 3 ? 'w-64' : 'w-48'} />
+                  <ListSkeleton.Bar class="ml-auto w-8" />
+                </div>
+              </Match>
+              <Match when={props.density === 'digest'}>
+                <div class="flex gap-3 px-3 py-2.5">
+                  <ListSkeleton.Bar class="size-9 shrink-0" />
+                  <div class="flex flex-1 flex-col gap-2.5 pt-1">
+                    <ListSkeleton.Bar class={index % 2 ? 'w-28' : 'w-40'} />
+                    <ListSkeleton.Bar class={index % 3 ? 'w-3/4' : 'w-1/2'} />
+                  </div>
+                </div>
+              </Match>
+              <Match when={props.density === 'threads'}>
+                <div class="py-1.5">
+                  <div class="flex flex-col gap-3 rounded-2xl border border-edge-muted p-4">
+                    <div class="flex items-center gap-2.5">
+                      <ListSkeleton.Bar class="size-8" />
+                      <ListSkeleton.Bar class={index % 2 ? 'w-28' : 'w-40'} />
+                    </div>
+                    <ListSkeleton.Bar class="ml-7 h-8 w-2/3 rounded-[18px]" />
+                    <ListSkeleton.Bar class="ml-7 h-8 w-1/2 rounded-[18px]" />
+                  </div>
+                </div>
+              </Match>
+            </Switch>
+          )}
+        </For>
+      </FeedColumn>
+    </ListSkeleton.Root>
   );
 }
 

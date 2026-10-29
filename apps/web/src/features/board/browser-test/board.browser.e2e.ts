@@ -266,6 +266,17 @@ test('a list scrolls back through older activity to the end', async ({
   ).toBeVisible();
 });
 
+test('a list draws its rows to come while it loads', async ({ page }) => {
+  const list = await openList(page, 'v2a');
+  await page.getByRole('button', { name: 'Toggle loading' }).click();
+  await expect(
+    page.getByRole('status', { name: 'Loading the board…' })
+  ).toBeVisible();
+  await expect(list).toHaveCount(0);
+  await page.getByRole('button', { name: 'Toggle loading' }).click();
+  await expect(row(list, 'launch')).toBeVisible();
+});
+
 test('keys move through a list and open the focused item', async ({ page }) => {
   const list = await openList(page, 'v2a');
   await list.focus();

@@ -24,6 +24,7 @@ import {
   type FeedEndState,
   FeedItemFrame,
   type FeedItemProps,
+  FeedSkeleton,
   HeadlineRow,
   ThreadCard,
 } from '../components/feed-rows';
@@ -87,7 +88,7 @@ function FeedView(props: VariantProps & { density: FeedDensity }) {
     return feed.hasOlder() ? 'more' : 'end';
   };
 
-  // Only drawn while there is nothing to list.
+  // Only drawn while there is nothing to list; loading draws rows to come.
   const status = (): BoardSceneView => {
     const state = board.source.state();
     if (state === 'loading') return { t: 'loading' };
@@ -159,7 +160,14 @@ function FeedView(props: VariantProps & { density: FeedDensity }) {
   return (
     <Show
       when={props.scene.all().length > 0}
-      fallback={<BoardStatus view={status()} onRetry={props.onRetry} />}
+      fallback={
+        <Show
+          when={status().t === 'loading'}
+          fallback={<BoardStatus view={status()} onRetry={props.onRetry} />}
+        >
+          <FeedSkeleton density={props.density} label={t('board.loading')} />
+        </Show>
+      }
     >
       <div
         role="grid"
