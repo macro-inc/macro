@@ -875,9 +875,14 @@ retry but cannot authorize an answer. Logout/account switching ends native calls
 The **Calls** notification channel presents Answer/Decline and an ongoing End
 call action. Telecom handles headset/system actions and coordinates interruptions.
 Android's full-screen-intent setting controls whether a locked phone opens the
-call activity automatically; when unavailable, the call notification remains the
-entry point. Android 14+ revokes it by default for Play installs unless the Play
-Console's full-screen intent declaration names calling as core functionality;
+incoming-call screen automatically; when unavailable, Android keeps a heads-up
+call notification with Answer/Decline. Answer opens the call activity directly,
+so microphone permission requests and verification errors remain accessible
+without a background receiver launching an activity. Content, Answer, and
+Decline intents are bound to the offered call; stale notification actions cannot
+act on a replacement call. Android 14+ revokes full-screen access by default for
+Play installs unless the Play Console's full-screen intent declaration names calling
+as core functionality;
 check with `adb shell appops get <package> USE_FULL_SCREEN_INTENT`. Once
 notifications are on, Macro shows a toast while the setting is off; **Allow**
 opens Android's per-app setting, and the toast stays until returning to Macro
@@ -888,8 +893,17 @@ camera access is requested when enabling video, and Bluetooth access when select
 that route on Android 12 or newer. A denied permission does not silently enable
 capture.
 
-The native call activity presents a themed drawer at approximately 92% of the
-safe screen height, above navigation bars/cutouts. A large participant tile sits
+While ringing, the native call activity fills the screen with an opaque themed
+background, caller initials and name (or channel name when unavailable), channel
+context, and large Answer/Decline controls. It has no drawer handle or participant
+tiles. Back hides the screen while leaving the notification available; cancellation,
+expiry and answering elsewhere dismiss it. A full-screen intent lets Android
+choose this screen while locked or a notification while the phone is in use.
+Test full-screen access allowed/denied, including notification Answer with
+microphone permission missing and a stale action after another call arrives.
+
+After answering, the native call activity presents a themed drawer at approximately
+92% of the safe screen height, above navigation bars/cutouts. A large participant tile sits
 above a horizontally scrolling participant strip; tapping a strip tile selects
 it as primary. Agent participants such as the transcriber are hidden. Speaker,
 Mute and Video form a labelled control row of Phosphor icons, with Leave in the

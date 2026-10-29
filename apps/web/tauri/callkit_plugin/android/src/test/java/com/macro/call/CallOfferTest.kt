@@ -19,6 +19,15 @@ class CallOfferTest {
         assertEquals("channel-1", parsed.channelId)
         assertEquals("recipient-scoped-token", parsed.token)
         assertEquals(1000L, parsed.sentTime)
+        assertEquals("Alice", parsed.callerName)
+    }
+    @Test fun missingCallerNamesKeepTheChannelIdentity() {
+        val json = offer()
+        json.remove("callerName")
+        assertNull(CallOffer.parse(json.toString(), 1000).callerName)
+        for (name in listOf("", " ", JSONObject.NULL)) {
+            assertNull(CallOffer.parse(json.put("callerName", name).toString(), 1000).callerName)
+        }
     }
     @Test fun refusesToSendBearerTokensToUntrustedOrInsecureRingEndpoints() {
         for (url in listOf("http://dev.macro.com/ring", "https://macro.com.evil.example/ring", "https://evil.example/ring", "https://user@macro.com/ring")) {
