@@ -52,7 +52,7 @@ for (const environment of ['dev', 'prod']) {
     },
     { dependsOn: goalertWebhooks }
   );
-  new datadog.Monitor(
+  const heartbeat = new datadog.Monitor(
     `notification-consumer-heartbeat-${environment}`,
     {
       ...common,
@@ -65,6 +65,21 @@ for (const environment of ['dev', 'prod']) {
     },
     { dependsOn: goalertWebhooks }
   );
+  // Fires by design until the DSS notification consumer health
+  // instrumentation is deployed in prod. Delete this downtime once it is.
+  if (environment === 'prod') {
+    new datadog.DowntimeSchedule(
+      'notification-consumer-heartbeat-prod-downtime',
+      {
+        scope: '*',
+        monitorIdentifier: { monitorId: heartbeat.id.apply(Number) },
+        // No start or end: muted from creation until this resource is deleted.
+        oneTimeSchedule: {},
+        message:
+          'Muted until the DSS notification consumer health instrumentation is deployed.',
+      }
+    );
+  }
   new datadog.Monitor(
     `notification-delete-publication-${environment}`,
     {
