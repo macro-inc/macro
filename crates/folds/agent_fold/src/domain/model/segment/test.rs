@@ -255,6 +255,57 @@ fn a_step_still_running_when_the_turn_ended_is_interrupted() {
 }
 
 #[test]
+fn generated_images_ride_on_their_activity_segment() {
+    let parts = [
+        text("Drawing it."),
+        MessagePart::ToolUse {
+            id: ToolUseId("image".to_owned()),
+            name: ToolName::Mcp {
+                server: "macro".to_owned(),
+                tool: "GenerateImage".to_owned(),
+            },
+            status: ToolStatus::Completed,
+            detail: ToolDetail::Macro {
+                input: serde_json::json!({ "prompt": "a lighthouse" }),
+                output: Some(serde_json::json!({
+                    "staticFileId": "0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f",
+                    "url": "https://static.example/file/0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f",
+                    "mimeType": "image/png",
+                    "sizeBytes": 2048,
+                    "width": 1024,
+                    "height": 768,
+                })),
+                error: None,
+            },
+        },
+        MessagePart::ToolUse {
+            id: ToolUseId("failed".to_owned()),
+            name: ToolName::native("GenerateImage"),
+            status: ToolStatus::Failed,
+            detail: ToolDetail::Macro {
+                input: serde_json::json!({ "prompt": "another" }),
+                output: None,
+                error: Some("the image model request failed".to_owned()),
+            },
+        },
+        text("Here it is."),
+    ];
+
+    let projected = project(&parts, true);
+
+    assert_eq!(projected[0].images, Vec::new());
+    assert_eq!(
+        projected[1].images,
+        vec![GeneratedImage {
+            static_file_id: "0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f".to_owned(),
+            width: Some(1024),
+            height: Some(768),
+        }]
+    );
+    assert_eq!(projected[2].images, Vec::new());
+}
+
+#[test]
 fn only_sealed_prose_carries_its_text_to_the_server() {
     let parts = [
         text("Narration."),

@@ -31,6 +31,9 @@ use super::{ElicitationOutcome, PermissionOutcome};
 mod test;
 
 mod code_execution;
+mod generated_image;
+
+pub use generated_image::GeneratedImage;
 
 /// Longest detail a row keeps, in characters.
 const DETAIL_MAX_CHARS: usize = 80;
@@ -118,6 +121,9 @@ pub struct ProjectedSegment {
     /// still writing it - an unfinished passage is not posted - and for
     /// every other kind.
     pub text: Option<String>,
+    /// Images the segment's tool calls generated, for an activity segment.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<GeneratedImage>,
 }
 
 /// Group a reply's parts into segments.
@@ -169,7 +175,12 @@ pub fn project(parts: &[MessagePart], closed: bool) -> Vec<ProjectedSegment> {
         .map(|segment| {
             let text = (segment.kind == SegmentKind::Prose && segment.sealed)
                 .then(|| prose_text(parts, &segment));
-            ProjectedSegment { segment, text }
+            let images = generated_image::images(slice(parts, &segment));
+            ProjectedSegment {
+                segment,
+                text,
+                images,
+            }
         })
         .collect()
 }

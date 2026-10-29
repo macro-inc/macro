@@ -13,6 +13,7 @@ fn passage(index: u32, text: &str) -> ProjectedSegment {
             rows: Vec::new(),
         },
         text: Some(text.to_owned()),
+        images: Vec::new(),
     }
 }
 

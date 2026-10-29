@@ -23,6 +23,8 @@ to the browser via `inbound/wasm`.
   and deduplicate attachments by URI during replay.
 - `src/domain/model/segment/code_execution.rs`: expands internal code receipts
   into SDK activity rows for conversation snapshots, independent of harness.
+- `src/domain/model/segment/generated_image.rs`: reads `GenerateImage` results
+  into `ProjectedSegment::images`, which the harness attaches to channel replies.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
   `ToolStatus`, …) folds produce.
 - `src/domain/log.rs`: the raw log vocabulary folds consume.

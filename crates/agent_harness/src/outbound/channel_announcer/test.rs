@@ -470,6 +470,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
             ],
         },
         text: None,
+        images: Vec::new(),
     }];
     for thread in [None, Some(Uuid::from_u128(2))] {
         let lexical = wiremock::MockServer::start().await;
