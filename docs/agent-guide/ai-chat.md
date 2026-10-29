@@ -1498,21 +1498,26 @@ chip is a GitHub link instead. The icon and status word follow open /
 merged / closed. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
+Agent prose sets the documents, sessions, pull requests, and contacts it
+mentions in the accent color, as people mentions already are.
+
 Tool rows show the tool's own name without an MCP server or workspace prefix.
 Chat MCP rows retain their service icon.
 
-Individual tools appear as bare rows with an icon, tool name, optional detail,
-and a right-aligned result summary. The caret on the right opens the results;
-it points right when collapsed and down when expanded. Individual results start
+Individual tools appear as bare rows with no icon or indent, in the group
+header's tone: the tool name, then any detail and result summary in a dimmer
+tone. A successful call shows no outcome. The caret after them appears on hover
+or keyboard focus, and always on touch, and opens the results; it points right
+when collapsed and down when expanded. Individual results start
 collapsed. Existing rich result views retain their own content and controls;
 when a result view provides its own disclosure, use that control rather than
 adding a second nested disclosure. Counts come from structured responses,
 edits show additions/deletions, and other tools show their outcome. A Macro
-tool call keeps the same label and icon as its successful row in every state,
+tool call keeps the same label as its successful row in every state,
 never the tool's code name: while it runs its text shimmers; a call cut off when
-its turn ends reads **Stopped**; a failed call is faded with **Failed** on the
-right (for example **Add to calendar · Failed**), and when the tool gave a
-reason, **Failed** carries a caret that opens it. Only a call whose arguments do
+its turn ends reads **Stopped**; a failed call is faded with **Failed** in the failure
+color after its label (for example **Add to calendar Failed**), and when the
+tool gave a reason, the row's caret opens it. Only a call whose arguments do
 not fit the tool (still arriving, or malformed) keeps the summary row with the
 tool's name. Labels stay in the present tense (**Fetch**, **Load tools**) until
 a result arrives.

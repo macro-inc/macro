@@ -145,8 +145,10 @@ as it starts, and steps running at the same time take turns every two seconds.
 A thread reply shows `Thinking…` only while it has no open run; the line
 replaces it. Once the run closes, it folds to a `Used N tools` summary (with
 `· N failed` when a step failed), with a caret after it on hover, that opens
-to compact rows: a status icon
-(spinner, check, cross, or warning for interrupted), the label, and the detail.
+to compact rows like the session's tool rows: the label, the detail in a
+dimmer tone, and **Failed** or **Interrupted** when a step did not finish.
+Documents, sessions, pull requests, and contacts an agent's reply mentions are
+set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
 input details, in both shared threads and DMs. The line follows the session
 live while the run is open; the summary shows the snapshot saved in the
