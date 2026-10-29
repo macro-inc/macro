@@ -442,9 +442,9 @@ pub struct InitiativeFilters {
     /// Initiative ids to filter by. Empty to include all accessible initiatives.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub initiative_ids: Vec<String>,
-    /// Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-    /// owner.
+    /// Filter by initiative owner principal — a user ('macro|user@example.com'), a
+    /// bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+    /// every owner.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
     /// Case-insensitive name substring.

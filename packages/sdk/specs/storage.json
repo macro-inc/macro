@@ -34157,7 +34157,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "description": "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           }
         }
       },

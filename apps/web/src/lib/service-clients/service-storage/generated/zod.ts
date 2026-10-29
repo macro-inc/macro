@@ -32155,7 +32155,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           ),
       })
       .optional()

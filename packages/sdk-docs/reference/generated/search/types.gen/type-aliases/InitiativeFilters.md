@@ -14,4 +14,4 @@ Filters for initiatives.
 | <a id="property-initiative_ids"></a> `initiative_ids?` | `string`[] | Initiative ids to filter by. Empty to include all accessible initiatives. |
 | <a id="property-name"></a> `name?` | `string` \| `null` | Case-insensitive name substring. |
 | <a id="property-notification_filters"></a> `notification_filters?` | [`NotificationFilters`](NotificationFilters.md) | Filter by initiative notification state. |
-| <a id="property-owners"></a> `owners?` | `string`[] | Filter by initiative owner principal — a user ('macro\|user1@user.com'), a bot ('bot\|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every owner. |
+| <a id="property-owners"></a> `owners?` | `string`[] | Filter by initiative owner principal — a user ('macro\|user@example.com'), a bot ('bot\|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every owner. |
