@@ -1,7 +1,6 @@
 import type { GanttCreation } from '@app/components/gantt/create-gantt-creation';
 import { Gantt } from '@app/components/gantt/gantt';
 import { deriveGanttRange } from '@app/components/gantt/gantt-date';
-import type { SoupGroupHeaderRow } from '@app/features/soup';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -39,16 +38,6 @@ function EntityGroupLabel(props: {
 }) {
   const name = props.createName(() => props.id);
   return <>{name()}</>;
-}
-
-function fallbackGroupLabel(groupBy: TaskGroupBy, group: SoupGroupHeaderRow) {
-  if (!group.groupId) {
-    return groupBy === 'project' ? 'No project' : group.label;
-  }
-  if (groupBy === 'status' || groupBy === 'priority') {
-    return getPropertyOptionLabel(group.groupId) ?? group.label;
-  }
-  return group.label;
 }
 
 export function TaskGanttView(props: {
@@ -291,10 +280,14 @@ export function TaskGanttView(props: {
                                         props.groupBy === 'project') &&
                                       group().groupId
                                     }
-                                    fallback={fallbackGroupLabel(
-                                      props.groupBy,
-                                      group()
-                                    )}
+                                    fallback={
+                                      props.groupBy === 'status' ||
+                                      props.groupBy === 'priority'
+                                        ? (getPropertyOptionLabel(
+                                            group().groupId
+                                          ) ?? group().label)
+                                        : group().label
+                                    }
                                   >
                                     <EntityGroupLabel
                                       id={group().groupId}

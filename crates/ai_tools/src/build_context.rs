@@ -649,6 +649,12 @@ pub async fn build_tool_service_context_from_env(
     } else {
         ToolImportToolContext::unwired()
     };
+    let mcp_server_tool_context = match &native_servers {
+        Some(native_servers) => crate::tool_context::ToolMcpServerToolContext::wired(
+            mcp_client::domain::service::ServerDirectory::new(native_servers.clone()),
+        ),
+        None => crate::tool_context::ToolMcpServerToolContext::unwired(),
+    };
 
     Ok(ToolServiceContext {
         connector_tool_context: crate::tool_context::build_connector_tool_context(
@@ -701,6 +707,7 @@ pub async fn build_tool_service_context_from_env(
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context,
+        mcp_server_tool_context,
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,

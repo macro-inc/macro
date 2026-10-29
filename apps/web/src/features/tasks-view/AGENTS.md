@@ -14,6 +14,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 ## Gotchas
 
+- Group task lists by the Project property, matching the Project column and Board; resolve project headers through the authorized project identity query.
+
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
@@ -39,7 +41,6 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Default older definitions without grouping to the All Tasks default, Priority; warn on unknown grouping and block ordinary definition saves until explicit cleanup.
 - Preserve the raw saved layout during mobile or flag fallbacks; capture that layout instead of the displayed list fallback.
 - Block ordinary definition saves while unsupported settings remain; only explicit banner cleanup removes them, and metadata writes leave the definition unchanged.
-- Group by Project through the initiative Project property in every layout; Soup's `project` grouping is the legacy Drive-folder project, which no task carries, so it puts every task in No Project.
 
 ## Checks
 
@@ -47,6 +48,7 @@ Run from `apps/web`:
 
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
+- Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
 
 ## Related
 

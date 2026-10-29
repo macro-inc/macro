@@ -77,6 +77,7 @@ describe('task CRM scope', () => {
       ...options,
       crm: { type: 'activity' },
       groupBy: 'project',
+      board: true,
     });
     const gantt = buildTaskQuery({
       ...options,
@@ -131,13 +132,21 @@ describe('task CRM scope', () => {
   });
 });
 
-it('groups by the initiative Project property, never the legacy folder project', () => {
+it('uses explicit Project property grouping for board editing and Project grouping for lists', () => {
+  const boardQuery = buildTaskQuery({
+    ...options,
+    groupBy: 'project',
+    board: true,
+  });
   const listQuery = buildTaskQuery({ ...options, groupBy: 'project' });
-  const sortedBoardQuery = buildTaskQuery(options);
+  const sortedBoardQuery = buildTaskQuery({ ...options, board: true });
 
-  expect(listQuery.groupBy).toEqual({
+  expect(boardQuery.groupBy).toEqual({
     type: 'property',
     propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
+  });
+  expect(listQuery.groupBy).toEqual({
+    type: 'project',
   });
   expect(sortedBoardQuery.params).toMatchObject({
     sort_method: 'updated_at',
@@ -173,8 +182,7 @@ describe('saved task presentation', () => {
     expect(restored.layout).toBe('gantt');
     expect(restored.groupBy).toBe('project');
     expect(buildTaskQuery({ ...options, ...restored }).groupBy).toEqual({
-      type: 'property',
-      propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
+      type: 'project',
     });
     expect(restored.sort).toEqual(config.sort);
     expect(

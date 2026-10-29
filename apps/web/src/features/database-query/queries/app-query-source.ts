@@ -2,7 +2,6 @@ import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-ha
 import type { TModel } from '@core/component/AI/constant';
 import { databaseSqlAnswer } from '@core/database-sql/answer';
 import { databaseSqlSchema } from '@core/database-sql/catalog';
-import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import {
   checkDatabaseSql,
@@ -13,13 +12,12 @@ import {
   useDatabaseQueryDefinition,
 } from '@queries/storage/database-queries';
 import {
+  databaseDetailQueryOptions,
   fetchViewerDatabases,
   useViewerDatabases,
 } from '@queries/storage/databases';
 import { useDatabaseTableChanges } from '@queries/storage/databases-sync';
-import { databasesKeys } from '@queries/storage/keys';
 import { useEntitySubscription } from '@service-connection/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
@@ -97,11 +95,7 @@ export function createQueryCapabilities(
     describe: (databaseId) =>
       ResultAsync.fromPromise(
         queryClient.fetchQuery({
-          queryKey: databasesKeys.detail(databaseId).queryKey,
-          queryFn: () =>
-            throwOnErr(() =>
-              storageServiceClient.databases.get({ id: databaseId })
-            ),
+          ...databaseDetailQueryOptions(databaseId),
           staleTime: 0,
         }),
         databasesFailure

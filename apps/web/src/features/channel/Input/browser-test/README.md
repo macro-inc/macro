@@ -19,3 +19,8 @@ line.
 The send regression checks desktop and phone: a pending send clears the editor,
 a rejected send restores its draft, and a rejection preserves a newer draft
 typed while delivery was pending. The fixture controls completion locally.
+
+The code-paste regression types three backticks to open a code block in the
+production composer and pastes a Macro link, then Markdown. Both land as literal
+code text: the link used to become a mention the code block dropped, and the
+Markdown used to lose its syntax.

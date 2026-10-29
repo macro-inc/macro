@@ -342,18 +342,23 @@ function SetupOptions(props: {
               {t('localRuntime.workspaceHint')}
             </p>
           </div>
-          <label class="flex w-fit items-start gap-2 text-sm text-ink">
+          <label class="flex w-full items-start gap-3 rounded-lg border border-edge-muted p-4 text-sm text-ink">
             <input
               type="checkbox"
-              class="mt-0.5"
+              class="mt-0.5 size-5 shrink-0 accent-accent"
               checked={props.fullAccess}
               onChange={(event) =>
                 props.onFullAccess(event.currentTarget.checked)
               }
             />
             <span>
-              {t('localRuntime.fullAccess')}
-              <span class="block text-xs text-ink-extra-muted">
+              <span class="flex flex-wrap items-center gap-2 font-semibold">
+                {t('localRuntime.fullAccess')}
+                <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
+                  {t('localRuntime.suggested')}
+                </span>
+              </span>
+              <span class="mt-1 block text-sm text-ink-muted">
                 {t('localRuntime.fullAccessHint')}
               </span>
             </span>

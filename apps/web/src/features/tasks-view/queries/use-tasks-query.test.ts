@@ -370,6 +370,7 @@ it.each([false, true])(
             tagSets: () => [],
             tagSetsReady: () => true,
             isGroupExpanded: () => !board,
+            board: () => board,
             reference: () => ({
               propertyDefinitionId: companies,
               entityId: 'acme',
@@ -432,6 +433,7 @@ it('exposes uncollapsed board rows and hides stale groups during query changes',
           tagSets: () => [],
           tagSetsReady: () => true,
           isGroupExpanded: () => false,
+          board: () => true,
         }
       );
 
@@ -627,6 +629,7 @@ it('keeps activity membership in list and grouped paging and excludes optimistic
           tagSetsReady: () => true,
           isGroupExpanded: () => true,
           crm: () => ({ type: 'activity' }),
+          board: () => true,
         }
       );
       const call = fixture.calls[0];

@@ -309,14 +309,17 @@ export function ChoiceRow(props: {
   checked: boolean;
   title: string;
   description: string;
+  suggested?: boolean;
   disabled?: boolean;
   onChange: () => void;
 }) {
   return (
     <label
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
         'cursor-not-allowed opacity-50': props.disabled,
+        'p-4': props.suggested,
+        'p-3': !props.suggested,
       }}
     >
       <input
@@ -330,7 +333,14 @@ export function ChoiceRow(props: {
         class="mt-0.5 accent-accent"
       />
       <span class="min-w-0">
-        <span class="block text-sm font-medium text-ink">{props.title}</span>
+        <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
+          {props.title}
+          <Show when={props.suggested}>
+            <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
+              Suggested
+            </span>
+          </Show>
+        </span>
         <span class="mt-0.5 block text-sm text-ink-muted">
           {props.description}
         </span>

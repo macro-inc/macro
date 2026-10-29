@@ -92,11 +92,14 @@ let
         pages = lib.boolToString ((alert.pages or false) && severity == "critical");
       };
       # Grafana turns the dashboard and panel annotations into the panel link
-      # in notifications and the rule view.
+      # in the rule view. GoAlert's details list annotations but not Grafana's
+      # panel link, so `panel_url` repeats it. `externalURL` is the runtime
+      # root_url; trim its trailing slash.
       annotations = {
         summary = alert.title;
         inherit (alert) description;
         runbook_url = "https://github.com/macro-inc/macro/blob/main/docs/runbooks/${alert.runbook}";
+        panel_url = ''{{ reReplaceAll "/$" "" externalURL }}/d/${prodAlerts.dashboardUid}?viewPanel=${toString alert.panelId}'';
         __dashboardUid__ = prodAlerts.dashboardUid;
         __panelId__ = toString alert.panelId;
       };
@@ -197,6 +200,14 @@ in
   services.grafana.provision.alerting = {
     contactPoints.settings = {
       apiVersion = 1;
+      # Grafana keeps removed provisioned contact points until told to delete
+      # them. GoAlert now posts to the channel instead.
+      deleteContactPoints = [
+        {
+          orgId = 1;
+          uid = "macro-alerts";
+        }
+      ];
       contactPoints = [
         {
           orgId = 1;
@@ -209,24 +220,6 @@ in
               settings = {
                 sigv4.region = "us-east-2";
                 topic_arn = "$GRAFANA_ALERT_TOPIC_ARN";
-              };
-            }
-          ];
-        }
-        {
-          orgId = 1;
-          name = "Macro Alerts";
-          receivers = [
-            {
-              uid = "macro-alerts";
-              type = "webhook";
-              disableResolveMessage = false;
-              # The loopback relay adds the channel token; see goalert.nix.
-              settings = {
-                url = "http://127.0.0.1:8090/grafana";
-                httpMethod = "POST";
-                title = ''{{ template "default.title" . }}'';
-                message = ''{{ template "default.message" . }}'';
               };
             }
           ];
@@ -248,14 +241,34 @@ in
             }
           ];
         }
+        {
+          orgId = 1;
+          name = "GoAlert notify";
+          receivers = [
+            {
+              uid = "goalert-notify";
+              type = "webhook";
+              disableResolveMessage = false;
+              # GoAlert's `Notify` service, whose policy posts to the channel.
+              settings = {
+                url = "http://127.0.0.1:3030/api/v2/grafana/incoming?token=$GOALERT_GRAFANA_NOTIFY_KEY";
+                httpMethod = "POST";
+              };
+            }
+          ];
+        }
       ];
     };
+    # Every prod alert goes to GoAlert, which posts it to the Macro Alerts
+    # channel and re-posts until acknowledged. Paging criticals go to the
+    # paging service, everything else to `Notify`. GoAlert dedups by alert
+    # fingerprint, so repeats only refresh the open alert.
     policies.settings = {
       apiVersion = 1;
       policies = [
         {
           orgId = 1;
-          receiver = "Macro Alerts";
+          receiver = "GoAlert notify";
           group_by = [
             "grafana_folder"
             "alertname"
@@ -276,8 +289,6 @@ in
                 ]
               ];
             }
-            # Paging prod rules; `continue` lets the next routes still post them
-            # to Macro Alerts.
             {
               receiver = "GoAlert";
               object_matchers = [
@@ -292,10 +303,10 @@ in
                   "critical"
                 ]
               ];
-              continue = true;
+              repeat_interval = "1h";
             }
             {
-              receiver = "Macro Alerts";
+              receiver = "GoAlert notify";
               object_matchers = [
                 [
                   "severity"
@@ -305,7 +316,6 @@ in
               ];
               repeat_interval = "1h";
             }
-            { receiver = "Macro Alerts"; }
           ];
         }
       ];

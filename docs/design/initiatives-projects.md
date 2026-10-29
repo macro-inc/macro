@@ -116,7 +116,7 @@ The user request takes precedence over Linear differences: Macro Projects live u
 - New feature: `apps/web/src/features/projects/`; decode `Initiative*` transport DTOs to a feature-owned Project model.
 - Preserve existing folder `project`, `projectId`, `/projects` APIs, block routes and tools. New task relationship fields use `initiativeId`/`initiative` internally.
 - Register component splits through [componentRegistry](../../apps/web/src/components/app/split-layout/componentRegistry.tsx), using a project-specific component identity such as `initiative-view~<id>~<tab>`. Follow existing ID serialization patterns; component params alone are lost on URL restore. Host adapters translate all project links, command results and notification targets into this identity.
-- Existing task grouping named `project` currently means folder grouping in [task-query](../../apps/web/src/features/tasks-view/queries/task-query.ts). Add a distinct initiative grouping key if grouping is exposed, and label the existing folder operation clearly. Never silently reinterpret persisted folder filters.
+- Task grouping named `project` uses the Project property (initiative membership), matching the Project column. Legacy folder filters retain their existing meaning.
 
 ### Properties, permissions and membership
 

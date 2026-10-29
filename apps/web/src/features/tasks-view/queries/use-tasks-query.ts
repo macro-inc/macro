@@ -23,7 +23,10 @@ import {
 } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
@@ -66,6 +69,7 @@ export type UseTasksDataSourceOptions = {
   networkPaused?: Accessor<boolean>;
   /** Project lists drain all cursors instead of requiring per-group Load More. */
   loadAll?: boolean;
+  board?: Accessor<boolean>;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
@@ -113,6 +117,32 @@ function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
   ).includes(crm.id);
 }
 
+/** A plain copy of the view's facet store, safe to keep in cached options. */
+function copyFacets(
+  facets: TaskViewContext['facets']
+): TaskViewContext['facets'] {
+  return Object.fromEntries(
+    Object.entries(facets).map(([facet, values]) => [facet, [...values]])
+  );
+}
+
+/** Admits an optimistic row only where this scoped view shows it. */
+function taskInsertFilter(
+  context: TaskViewContext,
+  reference: TaskReferenceScope | undefined,
+  crm: TaskCrmScope | undefined
+): SoupApiItemFilter {
+  return (item) => {
+    const entity = mapApiSoupItemToEntity(item);
+    return (
+      isTaskEntity(entity) &&
+      taskMatchesView(entity, context) &&
+      (!reference || referencesEntity(entity, reference)) &&
+      (!crm || namesCrmRecord(entity, crm))
+    );
+  };
+}
+
 /** Query, service search, and row assembly owned by the production Tasks view. */
 export function useTasksDataSource(
   state: TasksDataSourceInput,
@@ -147,38 +177,32 @@ export function useTasksDataSource(
       reference: options.reference?.(),
       crm: options.crm?.(),
       nameContains,
+      board: options.board?.(),
     });
   const queryArgs = () => queryArgsFor();
 
   const scoped = Boolean(options.reference || options.crm);
-  const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: facetOptionsReady(),
-    networkPaused: options.networkPaused?.(),
-    keepPreviousData: scoped,
-    // Scoped lists admit optimistic rows only where this view shows them.
-    meta: scoped
-      ? {
-          insertFilter: (item) => {
-            const entity = mapApiSoupItemToEntity(item);
-            const reference = options.reference?.();
-            const crm = options.crm?.();
-            return (
-              isTaskEntity(entity) &&
-              taskMatchesView(entity, viewContext()) &&
-              (!reference || referencesEntity(entity, reference)) &&
-              (!crm || namesCrmRecord(entity, crm))
-            );
-          },
-        }
-      : undefined,
-  }));
-
   const viewContext = (): TaskViewContext => ({
     tab: state.tab,
     userId: options.userId(),
     facets: state.facets,
     facetContext: facetContext(),
   });
+
+  const query = useSoupAstItemsQuery(queryArgs, () => ({
+    enabled: facetOptionsReady(),
+    networkPaused: options.networkPaused?.(),
+    keepPreviousData: scoped,
+    meta: scoped
+      ? {
+          insertFilter: taskInsertFilter(
+            { ...viewContext(), facets: copyFacets(state.facets) },
+            options.reference?.(),
+            options.crm?.()
+          ),
+        }
+      : undefined,
+  }));
 
   const transformEntities = (entities: EntityData[]) => {
     const selected: TaskEntityWithProperties[] = [];
