@@ -587,21 +587,24 @@ Use existing PRs and do not modify hosted data.
 On touch devices, task creation opens in a bottom sheet with a drag handle and
 scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
-filter sheets. Its footer wraps when a phone is too narrow for one row: the
-`Share with <team name>` switch keeps the left corner and `Create More` and
-`Create Task` move to a right-aligned row below it. When the keyboard leaves
-too little room for the whole composer, the footer pins to the bottom of the
-sheet (with a solid background only while pinned over content), so
-`Create Task` stays visible above the keyboard. `Create Task` shows no
+filter sheets. Its header has `Continue editing in split` on the left and
+`Create Task` on the right, with no `Clear Draft` or close button. When the
+keyboard leaves too little room for the whole composer, the header pins to the
+top of the sheet (with a solid background only while pinned over content), so
+`Create Task` stays in reach. The properties sit on a single line that scrolls
+horizontally, with the `Share with <team name>` switch below them. The sheet
+has no `Create More` switch and no similar-tasks list. `Create Task` shows no
 keyboard shortcut on touch. While the keyboard is up, the tag picker opens
 above its trigger so its search results stay above the keyboard. Desktop uses
-the centered composer dialog.
+the centered composer dialog. Both layouts are views in
+`apps/web/src/features/task-composer/views` composing the shared
+`TaskComposer` parts.
 
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
    chip (defaults to you), `Due Date`, `Project` (when Projects is enabled; the standard
-   property dropdown, listing projects), `Change or select tags`, a `Create More` switch,
+   property dropdown, listing projects), `Change or select tags`, a desktop-only `Create More` switch,
    and `Create Task Ctrl ↵` (`Create Task` alone on touch). `Attach image or video`
    (paperclip) sits just under the
    description, above the property buttons. If the chosen project can't be
@@ -645,7 +648,7 @@ Task creation requires a connection. Before any create request, the composer
 saves a separate copy of the title, description/editor state, properties, and
 sharing choice on this device. Pending submissions do not expire and survive an
 app restart. Reopen the same task composer context and choose **Recover: <title>**
-to continue an unconfirmed draft; **Clear Draft** discards that recovered copy.
+to continue an unconfirmed draft; **Clear Draft** (desktop) discards that recovered copy.
 Explicit logout removes these account-scoped copies. Recovery does not submit
 anything automatically: check Tasks before retrying because a lost response may
 mean the task already exists. A submission still in flight cannot be recovered
