@@ -58,7 +58,7 @@ import {
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useSearchParams } from '@solidjs/router';
-import { ApiKeyInput, Avatar, Button, Dialog, Panel } from '@ui';
+import { ApiKeyInput, Avatar, Button, Checkbox, Dialog, Panel } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
@@ -787,6 +787,9 @@ function AgentEditorPage(props: {
     (allowPermissionBypass() && autoAcceptChoice());
   // The saved choice, or none: an agent that never chose follows its
   // harness, so a fresh form and a re-picked runtime both start from there.
+  const [isEphemeral, setIsEphemeral] = createSignal(
+    props.agent?.is_ephemeral ?? false
+  );
   const [codingChoice, setCodingChoice] = createSignal<boolean | undefined>(
     props.agent?.is_coding ??
       (props.initialKind ? props.initialKind === 'coder' : undefined)
@@ -1065,6 +1068,7 @@ function AgentEditorPage(props: {
       teamId: selectedTeamId(),
       autoAcceptPermissions: autoAcceptPermissions(),
       isCoding: isCoding(),
+      isEphemeral: isEphemeral(),
     });
     if (!saved) return;
     await saveApiKey(saved);
@@ -1360,6 +1364,30 @@ function AgentEditorPage(props: {
                     settings to enable this option.
                   </p>
                 </Show>
+              </AgentFormSection>
+
+              <AgentFormSection
+                title="Message privacy"
+                description="Choose who sees conversations started with an @mention."
+              >
+                <Checkbox
+                  checked={isEphemeral()}
+                  onChange={setIsEphemeral}
+                  disabled={busy()}
+                  class="items-start"
+                >
+                  <Checkbox.Control class="mt-0.5" />
+                  <div class="flex flex-col gap-1">
+                    <Checkbox.Label class="text-sm font-medium text-ink">
+                      Ephemeral agent
+                    </Checkbox.Label>
+                    <Checkbox.Description class="text-xs leading-relaxed text-ink-muted">
+                      Only the person who @mentions this agent can see the
+                      thread and its replies. Conversations stay saved in their
+                      history.
+                    </Checkbox.Description>
+                  </div>
+                </Checkbox>
               </AgentFormSection>
 
               <AgentFormSection

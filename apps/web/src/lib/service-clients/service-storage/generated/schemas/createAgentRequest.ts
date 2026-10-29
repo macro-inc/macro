@@ -40,6 +40,8 @@ asking. Omit to always prompt. */
   /** Whether the agent is a coding agent: a mention is answered with a magic
 chip into its live session (`true`) or a reply in the thread (`false`). */
   is_coding: boolean;
+  /** Mentions start a durable thread visible only to the invoking user. */
+  is_ephemeral?: boolean;
   /** Which MCP servers sessions of this agent are handed. */
   mcp?: AgentMcpServers;
   /** Display name. */

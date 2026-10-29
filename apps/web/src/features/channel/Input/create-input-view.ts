@@ -31,6 +31,7 @@ export type InputView = {
   showFormatRibbon: Accessor<boolean>;
   isSending: Accessor<boolean>;
   setValue: (value: string) => void;
+  setEphemeral: (value: boolean) => void;
   setShowFormatRibbon: (updater: (prev: boolean) => boolean) => void;
   setIsSending: (value: boolean) => void;
   setIsDraggedOver: (value: boolean) => void;
@@ -45,6 +46,12 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     ? makePersisted(rawValue, { name: options.persistenceKey })
     : rawValue;
   const value = () => persistedValue() ?? '';
+  const privacySignal = createSignal(options.initialInput.ephemeral ?? false);
+  const [ephemeral, setEphemeral] = options.persistenceKey
+    ? makePersisted(privacySignal, {
+        name: `${options.persistenceKey}:ephemeral`,
+      })
+    : privacySignal;
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(
     !!options.initialInput.showFormatRibbon
@@ -55,11 +62,13 @@ export function createInputView(options: CreateInputViewOptions): InputView {
   const snapshot = createMemo<InputSnapshot>(() => ({
     value: value(),
     mentions: options.mentions(),
+    ...(ephemeral() ? { ephemeral: true } : {}),
     attachments: options.attachmentTracker.attachments(),
   }));
 
   const view = createMemo<InputData>(() => ({
     ...options.initialInput,
+    ephemeral: ephemeral(),
     value: value(),
     isDraggedOver: isDraggedOver() || options.initialInput.isDraggedOver,
     showFormatRibbon: showFormatRibbon(),
@@ -86,6 +95,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
 
   const reset = () => {
     setValue('');
+    setEphemeral(false);
     options.attachmentTracker.clearAttachments();
   };
 
@@ -96,6 +106,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     showFormatRibbon,
     isSending,
     setValue,
+    setEphemeral,
     setShowFormatRibbon,
     setIsSending,
     setIsDraggedOver,

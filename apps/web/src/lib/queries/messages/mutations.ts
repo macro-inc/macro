@@ -129,6 +129,15 @@ function makeOptimisticTopLevelMessage(
     parent: vars.parent,
     sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
+    visibility: vars.ephemeral
+      ? {
+          type: 'private',
+          user_id: vars.senderId,
+          bot_ids: (vars.mentions ?? [])
+            .filter((mention) => mention.entity_type === 'bot')
+            .map((mention) => mention.entity_id),
+        }
+      : { type: 'public' },
     mentions: vars.mentions ?? [],
     thread_id: vars.thread_id ?? null,
     content: vars.content,
@@ -140,6 +149,9 @@ function makeOptimisticTopLevelMessage(
     reactions: [],
     state: {
       root_id: vars.optimisticId,
+      visibility: vars.ephemeral
+        ? { type: 'private', user_id: vars.senderId, bot_ids: [] }
+        : { type: 'public' },
       user_id: vars.senderId,
       created_at: now,
       updated_at: now,
@@ -164,6 +176,15 @@ function makeOptimisticThreadReply(
     parent: vars.parent,
     sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
+    visibility: vars.ephemeral
+      ? {
+          type: 'private',
+          user_id: vars.senderId,
+          bot_ids: (vars.mentions ?? [])
+            .filter((mention) => mention.entity_type === 'bot')
+            .map((mention) => mention.entity_id),
+        }
+      : { type: 'public' },
     mentions: vars.mentions ?? [],
     thread_id: vars.thread_id ?? null,
     content: vars.content,

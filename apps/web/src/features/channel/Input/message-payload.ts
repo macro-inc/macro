@@ -80,6 +80,7 @@ export function buildPostMessageSendPayload(
   return {
     message: {
       content: snapshot.value,
+      ...(snapshot.ephemeral ? { ephemeral: true } : {}),
       thread_id: threadId,
       mentions: authoredMentions(snapshot.mentions),
       attachments: optimisticAttachments.map((item) => item.attachment),

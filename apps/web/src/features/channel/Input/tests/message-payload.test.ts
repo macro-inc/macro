@@ -169,3 +169,12 @@ describe('buildPostMessageRequest — bot mentions', () => {
     ]);
   });
 });
+
+it('sends the explicit private audience choice without changing public requests', () => {
+  const snapshot = snap([]);
+  expect(buildPostMessageRequest({ snapshot }).ephemeral).toBeUndefined();
+  expect(
+    buildPostMessageRequest({ snapshot: { ...snapshot, ephemeral: true } })
+      .ephemeral
+  ).toBe(true);
+});

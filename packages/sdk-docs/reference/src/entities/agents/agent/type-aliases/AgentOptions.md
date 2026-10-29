@@ -1,6 +1,6 @@
 # Type Alias: AgentOptions
 
-> **AgentOptions** = `Omit`\<[`CreateAgentRequest`](../../../../../generated/storage/types.gen/type-aliases/CreateAgentRequest.md), `"channel_ids"` \| `"team_id"` \| `"harness_id"` \| `"auto_accept_permissions"` \| `"avatar_url"` \| `"channel_scope"` \| `"default_model"` \| `"is_coding"`\> & \{ `autoAcceptPermissions?`: `boolean`; `avatarUrl?`: `string`; `channels?`: [`Channel`](../../../channels/channel/classes/Channel.md)[]; `channelScope`: [`CreateAgentRequest`](../../../../../generated/storage/types.gen/type-aliases/CreateAgentRequest.md)\[`"channel_scope"`\]; `defaultModel`: `string`; `host?`: [`Harness`](../../../harnesses/harness/classes/Harness.md); `isCoding`: `boolean`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \}
+> **AgentOptions** = `Omit`\<[`CreateAgentRequest`](../../../../../generated/storage/types.gen/type-aliases/CreateAgentRequest.md), `"channel_ids"` \| `"team_id"` \| `"harness_id"` \| `"auto_accept_permissions"` \| `"avatar_url"` \| `"channel_scope"` \| `"default_model"` \| `"is_coding"` \| `"is_ephemeral"`\> & \{ `autoAcceptPermissions?`: `boolean`; `avatarUrl?`: `string`; `channels?`: [`Channel`](../../../channels/channel/classes/Channel.md)[]; `channelScope`: [`CreateAgentRequest`](../../../../../generated/storage/types.gen/type-aliases/CreateAgentRequest.md)\[`"channel_scope"`\]; `defaultModel`: `string`; `host?`: [`Harness`](../../../harnesses/harness/classes/Harness.md); `isCoding`: `boolean`; `isEphemeral?`: `boolean`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \}
 
 Agent creation and replacement settings.
 
@@ -15,4 +15,5 @@ Agent creation and replacement settings.
 | `defaultModel` | `string` | Default model. |
 | `host?` | [`Harness`](../../../harnesses/harness/classes/Harness.md) | Host running the agent. |
 | `isCoding` | `boolean` | Whether this is a coding agent. |
+| `isEphemeral?` | `boolean` | Mentions start a private thread saved only in the invoking user's history. |
 | `team?` | [`Team`](../../../teams/team/classes/Team.md) | Owning team. |

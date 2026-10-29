@@ -1662,6 +1662,7 @@
 - [MessageTimelineResponse](type-aliases/MessageTimelineResponse.md)
 - [MessageTimelineResponses](type-aliases/MessageTimelineResponses.md)
 - [MessageTopicEvent](type-aliases/MessageTopicEvent.md)
+- [MessageVisibility](type-aliases/MessageVisibility.md)
 - [MyResponse](type-aliases/MyResponse.md)
 - [NewAttachment](type-aliases/NewAttachment.md)
 - [NewColumn](type-aliases/NewColumn.md)

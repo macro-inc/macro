@@ -1,6 +1,6 @@
 # Type Alias: CreateAgentRequest
 
-> **CreateAgentRequest** = \{ `auto_accept_permissions?`: `boolean` \| `null`; `avatar_url?`: `string` \| `null`; `channel_ids?`: `string`[]; `channel_scope`: [`AgentChannelScope`](AgentChannelScope.md); `default_model`: `string`; `description?`: `string` \| `null`; `handle`: `string`; `harness`: `string`; `harness_id?`: `null` \| [`HarnessId`](HarnessId.md); `instructions`: `string`; `is_coding`: `boolean`; `mcp?`: [`AgentMcpServers`](AgentMcpServers.md); `name`: `string`; `team_id?`: `string` \| `null`; \}
+> **CreateAgentRequest** = \{ `auto_accept_permissions?`: `boolean` \| `null`; `avatar_url?`: `string` \| `null`; `channel_ids?`: `string`[]; `channel_scope`: [`AgentChannelScope`](AgentChannelScope.md); `default_model`: `string`; `description?`: `string` \| `null`; `handle`: `string`; `harness`: `string`; `harness_id?`: `null` \| [`HarnessId`](HarnessId.md); `instructions`: `string`; `is_coding`: `boolean`; `is_ephemeral?`: `boolean`; `mcp?`: [`AgentMcpServers`](AgentMcpServers.md); `name`: `string`; `team_id?`: `string` \| `null`; \}
 
 Request to create a persisted AI agent.
 
@@ -19,6 +19,7 @@ Request to create a persisted AI agent.
 | <a id="property-harness_id"></a> `harness_id?` | `null` \| [`HarnessId`](HarnessId.md) | - |
 | <a id="property-instructions"></a> `instructions` | `string` | Instructions supplied to the agent at the start of a conversation. |
 | <a id="property-is_coding"></a> `is_coding` | `boolean` | Whether the agent is a coding agent: a mention is answered with a magic chip into its live session (`true`) or a reply in the thread (`false`). |
+| <a id="property-is_ephemeral"></a> `is_ephemeral?` | `boolean` | Mentions start a durable thread visible only to the invoking user. |
 | <a id="property-mcp"></a> `mcp?` | [`AgentMcpServers`](AgentMcpServers.md) | Which MCP servers sessions of this agent are handed. |
 | <a id="property-name"></a> `name` | `string` | Display name. |
 | <a id="property-team_id"></a> `team_id?` | `string` \| `null` | Team owner. Omit for a private, user-owned agent. |

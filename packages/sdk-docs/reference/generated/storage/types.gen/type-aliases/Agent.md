@@ -1,6 +1,6 @@
 # Type Alias: Agent
 
-> **Agent** = \{ `auto_accept_permissions?`: `boolean` \| `null`; `bot`: [`Bot`](Bot.md); `channel_ids`: `string`[]; `channel_scope`: [`AgentChannelScope`](AgentChannelScope.md); `default_model`: `string`; `harness`: `string`; `harness_id?`: `null` \| [`HarnessId`](HarnessId.md); `instructions`: `string`; `is_coding`: `boolean`; `mcp`: [`AgentMcpServers`](AgentMcpServers.md); \}
+> **Agent** = \{ `auto_accept_permissions?`: `boolean` \| `null`; `bot`: [`Bot`](Bot.md); `channel_ids`: `string`[]; `channel_scope`: [`AgentChannelScope`](AgentChannelScope.md); `default_model`: `string`; `harness`: `string`; `harness_id?`: `null` \| [`HarnessId`](HarnessId.md); `instructions`: `string`; `is_coding`: `boolean`; `is_ephemeral?`: `boolean`; `mcp`: [`AgentMcpServers`](AgentMcpServers.md); \}
 
 A persisted user- or team-owned AI agent.
 
@@ -17,4 +17,5 @@ A persisted user- or team-owned AI agent.
 | <a id="property-harness_id"></a> `harness_id?` | `null` \| [`HarnessId`](HarnessId.md) | - |
 | <a id="property-instructions"></a> `instructions` | `string` | Instructions supplied to the agent at the start of a conversation. |
 | <a id="property-is_coding"></a> `is_coding` | `boolean` | Whether the agent works in a repository, which decides how it answers a channel mention: a coding agent posts a magic chip into its live session, a chat agent replies in the thread. Chosen in the agent's settings; the persona's word, not the runtime's. |
+| <a id="property-is_ephemeral"></a> `is_ephemeral?` | `boolean` | Mentions start a durable thread visible only to the invoking user. |
 | <a id="property-mcp"></a> `mcp` | [`AgentMcpServers`](AgentMcpServers.md) | Which MCP servers sessions of this agent are handed. |

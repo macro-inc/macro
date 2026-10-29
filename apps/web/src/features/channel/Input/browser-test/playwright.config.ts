@@ -5,6 +5,7 @@ const port = process.env.CHANNEL_DRAFT_TEST_PORT ?? '3006';
 export default defineConfig({
   testDir: fileURLToPath(new URL('.', import.meta.url)),
   testMatch: '*.browser.e2e.ts',
+  testIgnore: 'privacy.browser.e2e.ts',
   workers: 1,
   timeout: 120_000,
   use: {

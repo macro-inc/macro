@@ -48,6 +48,7 @@ import {
 } from 'lexical';
 import {
   type Accessor,
+  createEffect,
   createSignal,
   type JSX,
   Match,
@@ -62,6 +63,7 @@ import {
 } from '../../dictation/components/dictation-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
 import type { DictationController } from '../../dictation/core/types';
+import { useEphemeralMentionAgent } from '../queries/message-privacy';
 import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
@@ -78,6 +80,7 @@ import {
 import { createCollapsedInputState } from './create-collapsed-input-state';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
+import { MessagePrivacyControl } from './MessagePrivacyControl';
 import type {
   EntityMentionInsertCoordinates,
   InputAttachmentTracker,
@@ -267,11 +270,20 @@ export function ChannelInput(props: ChannelInputProps) {
     input: props.input,
     attachmentTracker: props.attachmentTracker,
     persistenceKey: props.persistenceKey,
-    callbacks: props,
+    callbacks: {
+      ...props,
+      onSend: props.onSend
+        ? (snapshot) =>
+            props.onSend?.({
+              ...snapshot,
+              ...(isPrivate() ? { ephemeral: true } : {}),
+            })
+        : undefined,
+    },
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
     restoreEditor: (snapshot) => restoreFailedSend(snapshot),
-    trackTyping: () => acceptTyping,
+    trackTyping: () => acceptTyping && !isPrivate(),
     attachFiles: async (files) => {
       await uploadInputAttachments({
         files,
@@ -293,6 +305,14 @@ export function ChannelInput(props: ChannelInputProps) {
 
   let isEditorConnected = false;
   let acceptTyping = false;
+  const ephemeralAgent = useEphemeralMentionAgent(mentionsTracker.mentions);
+  createEffect(() => {
+    if (ephemeralAgent()) inputState.setEphemeral(true);
+  });
+  const privacyLocked = () =>
+    props.input.privateThread === true || !!ephemeralAgent();
+  const isPrivate = () =>
+    privacyLocked() || inputState.view().ephemeral === true;
   let pendingRestore:
     | {
         snapshot: InputSnapshot;
@@ -309,6 +329,7 @@ export function ChannelInput(props: ChannelInputProps) {
     options?: RestoreSnapshotOptions
   ) => {
     acceptTyping = false;
+    inputState.setEphemeral(snapshot.ephemeral ?? false);
     markdownEditor.controls.setMarkdown(snapshot.value);
     pendingCursor = options?.cursor;
     attachmentTracker.setAttachments(snapshot.attachments);
@@ -749,6 +770,19 @@ export function ChannelInput(props: ChannelInputProps) {
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
+        <Show when={props.parent?.type === 'channel' && !props.children}>
+          <MessagePrivacyControl
+            private={isPrivate()}
+            locked={privacyLocked()}
+            newThread={isReplyInput(props.input) && !props.input.privateThread}
+            reason={
+              ephemeralAgent()
+                ? `@${ephemeralAgent()?.bot.name} is an ephemeral agent. Its threads are only visible to you.`
+                : undefined
+            }
+            onChange={(value) => inputState.setEphemeral(value)}
+          />
+        </Show>
         <Input.Layout
           ref={setLayout}
           oneLineInput={oneLineInput()}

@@ -29,6 +29,10 @@ export type InputAttachmentData = {
 export type InputPersistenceKey = PersistenceKey;
 
 type InputDataBase = {
+  /** Audience inherited from the thread; private replies cannot become public. */
+  privateThread?: boolean;
+  /** Manual privacy choice restored with a draft. */
+  ephemeral?: boolean;
   id?: string;
   placeholder?: string;
   value?: string;
@@ -56,6 +60,7 @@ export const isInlineReplyInput = (input: InputData): input is ReplyInputMode =>
 export type InputActionEvent = MouseEvent | KeyboardEvent;
 
 export type InputSnapshot = {
+  ephemeral?: boolean;
   value: string;
   mentions: ItemMention[];
   attachments: InputAttachmentData[];

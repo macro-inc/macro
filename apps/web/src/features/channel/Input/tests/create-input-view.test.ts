@@ -88,4 +88,35 @@ describe('createInputView', () => {
       dispose();
     });
   });
+  it('restores private drafts and clears privacy after sending', () => {
+    const persistenceKey = makeInputValuePersistenceKey({
+      channelId: 'private-channel',
+    });
+    const options = {
+      initialInput: { mode: 'channel' as const, value: '' },
+      mentions: () => [],
+      persistenceKey,
+    };
+    createRoot((dispose) => {
+      const view = createInputView({
+        ...options,
+        attachmentTracker: createInputAttachmentTracker(),
+      });
+      view.setValue('Private draft');
+      view.setEphemeral(true);
+      dispose();
+    });
+    createRoot((dispose) => {
+      const view = createInputView({
+        ...options,
+        attachmentTracker: createInputAttachmentTracker(),
+      });
+      expect(view.value()).toBe('Private draft');
+      expect(view.view().ephemeral).toBe(true);
+      expect(view.snapshot().ephemeral).toBe(true);
+      view.reset();
+      expect(view.view().ephemeral).toBe(false);
+      dispose();
+    });
+  });
 });

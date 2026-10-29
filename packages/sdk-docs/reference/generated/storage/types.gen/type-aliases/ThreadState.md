@@ -1,6 +1,6 @@
 # Type Alias: ThreadState
 
-> **ThreadState** = \{ `anchor?`: `null` \| [`ThreadAnchor`](ThreadAnchor.md); `created_at`: `string`; `deleted_at?`: `string` \| `null`; `resolved`: `boolean`; `root_id`: `string`; `updated_at`: `string`; `user_id`: `string`; \}
+> **ThreadState** = \{ `anchor?`: `null` \| [`ThreadAnchor`](ThreadAnchor.md); `created_at`: `string`; `deleted_at?`: `string` \| `null`; `resolved`: `boolean`; `root_id`: `string`; `updated_at`: `string`; `user_id`: `string`; `visibility?`: [`MessageVisibility`](MessageVisibility.md); \}
 
 State belonging to a whole thread, keyed by its root message.
 
@@ -15,3 +15,4 @@ State belonging to a whole thread, keyed by its root message.
 | <a id="property-root_id"></a> `root_id` | `string` | Root message UUID; there is no separate thread identity. |
 | <a id="property-updated_at"></a> `updated_at` | `string` | Last state change. |
 | <a id="property-user_id"></a> `user_id` | `string` | User who owns this discussion, including imported discussions. |
+| <a id="property-visibility"></a> `visibility?` | [`MessageVisibility`](MessageVisibility.md) | Immutable audience inherited from the root message. |

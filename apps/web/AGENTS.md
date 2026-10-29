@@ -232,6 +232,10 @@ The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
 ## Development Patterns
 
+Keep ephemeral-agent exchanges on the shared message composer: show and preserve
+**Only you** before sending, inherit thread privacy on replies, and keep it in
+restored drafts. See `docs/architecture/private-message-threads.md` at the repo root.
+
 Route database row rename and delete through `renameDatabase` and
 `trashDatabase`; use the row grant for rename, delete, and sharing permissions.
 

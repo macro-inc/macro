@@ -1451,6 +1451,30 @@ MIME type. Linked video preview cards also offer Download, using the document's
 current version, name, and file type. See [Downloading files](files.md#downloading-files)
 for progress, cancellation, retries, and mobile save/share verification.
 
+## Private threads and ephemeral agents
+
+The channel composer's visibility menu starts at **Everyone**. Choose **Only you**
+to start a private thread. Only the sender sees it and any agent replies; it stays
+saved in that person's channel history. Each private message has a lock and an
+**Only you** label. Desktop and phone use the same audience control.
+
+Mentioning an agent configured as **Ephemeral agent** automatically selects and
+locks **Only you**. Removing the mention keeps the draft private until the sender
+chooses Everyone. Replies to a private thread inherit its audience. Choosing
+Only you while replying to a shared thread starts a separate private thread;
+it does not change who can see the original thread.
+
+Verify with two local accounts in the same channel: send and reopen a private
+thread as the sender, then check that the other account cannot see it, fetch its
+root or replies by URL/id, receive notifications, or find its contents in shared
+search. Verify a normal shared send afterward. Private attachments must not be
+shared with the channel. Changing an agent's checkbox affects future threads;
+existing private threads remain private. See
+[the privacy architecture](../architecture/private-message-threads.md).
+
+A public message edit cannot introduce an ephemeral agent. Start a new private
+thread so the existing conversation keeps its original audience.
+
 ## Pending message drafts
 
 Sending clears the composer immediately while delivery is pending. If delivery

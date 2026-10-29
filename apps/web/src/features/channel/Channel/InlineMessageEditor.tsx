@@ -55,6 +55,7 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
         parent={props.parent}
         input={{
           mode: 'channel',
+          privateThread: props.message.visibility?.type === 'private',
           id: `edit-message-input-${props.message.id}`,
           value: snapshot()?.value,
           attachments: snapshot()?.attachments,

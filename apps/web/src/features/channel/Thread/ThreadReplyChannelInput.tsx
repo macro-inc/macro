@@ -1,8 +1,10 @@
 import { useUserId } from '@core/context/user';
+import { queryReadyGate } from '@queries/gate';
 import {
   newMessageId,
   useSendMessageMutation,
 } from '@queries/messages/mutations';
+import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import type { MessageParent } from '@service-storage/messages';
 import {
@@ -58,6 +60,12 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();
+  const thread = useMessageThreadQuery(
+    () => props.parent,
+    () => props.threadId
+  );
+  const privateThread = () =>
+    queryReadyGate(thread) && thread.data.root.visibility?.type === 'private';
   const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
 
   const tracker = createInputAttachmentTracker({
@@ -105,6 +113,8 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         value: props.replyInputState()?.value,
         attachments: props.replyInputState()?.attachments,
         mode: 'reply',
+        privateThread: privateThread(),
+        ephemeral: props.replyInputState()?.ephemeral,
         host: props.host,
       }}
       collapsible={props.collapsible}
@@ -147,7 +157,8 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         if (!senderId) return;
         const payload = buildPostMessageSendPayload({
           snapshot,
-          threadId: props.threadId,
+          threadId:
+            snapshot.ephemeral && !privateThread() ? undefined : props.threadId,
         });
 
         sendMessageMutation.mutate(

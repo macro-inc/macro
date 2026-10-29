@@ -3,12 +3,14 @@ import type {
   MessageAttachment,
   MessageParent,
   MessageSender,
+  MessageVisibility,
 } from '@service-storage/messages';
 
 export type MessageData = {
   parent?: MessageParent;
   imported_author?: { name: string } | null;
   guest_name?: string | null;
+  visibility?: MessageVisibility;
   id: string;
   content: string;
   sender_id: string;

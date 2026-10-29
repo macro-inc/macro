@@ -107,3 +107,5 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+
+- Preserve saved agent privacy when `isEphemeral` is omitted on update; private threads remain in the initiating user's history.

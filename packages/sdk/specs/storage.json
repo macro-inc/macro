@@ -19936,6 +19936,10 @@
             "type": "boolean",
             "description": "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
           },
+          "is_ephemeral": {
+            "type": "boolean",
+            "description": "Mentions start a durable thread visible only to the invoking user."
+          },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
             "description": "Which MCP servers sessions of this agent are handed."
@@ -25356,6 +25360,10 @@
           "is_coding": {
             "type": "boolean",
             "description": "Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`)."
+          },
+          "is_ephemeral": {
+            "type": "boolean",
+            "description": "Mentions start a durable thread visible only to the invoking user."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
@@ -35022,6 +35030,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Last persisted update."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/MessageVisibility",
+            "description": "Audience fixed when the thread was created."
           }
         }
       },
@@ -35282,6 +35294,10 @@
               "type": {
                 "type": "string",
                 "enum": ["typing"]
+              },
+              "visibility": {
+                "$ref": "#/components/schemas/MessageVisibility",
+                "description": "Audience inherited from the target thread."
               }
             }
           }
@@ -35742,6 +35758,10 @@
           "triggered_by": {
             "type": ["string", "null"],
             "description": "User whose invocation produced a bot response."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/MessageVisibility",
+            "description": "Immutable audience of the originating thread."
           }
         }
       },
@@ -36014,6 +36034,44 @@
           }
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
+      },
+      "MessageVisibility": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Everyone with access to the conversation.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["public"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Only the initiating user and explicitly invited agents.",
+            "required": ["user_id", "bot_ids", "type"],
+            "properties": {
+              "bot_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Canonical bot principals invited when the thread was created."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["private"]
+              },
+              "user_id": {
+                "type": "string",
+                "description": "Authenticated user who started the thread."
+              }
+            }
+          }
+        ],
+        "description": "The immutable audience of a durable message thread."
       },
       "MyResponse": {
         "type": "object",
@@ -37367,6 +37425,10 @@
           "content": {
             "type": "string",
             "description": "Macro Markdown body."
+          },
+          "ephemeral": {
+            "type": "boolean",
+            "description": "Start a thread visible only to the sender and its explicitly mentioned agents."
           },
           "id": {
             "type": ["string", "null"],
@@ -43598,6 +43660,10 @@
           "user_id": {
             "type": "string",
             "description": "User who owns this discussion, including imported discussions."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/MessageVisibility",
+            "description": "Immutable audience inherited from the root message."
           }
         }
       },
@@ -44135,6 +44201,10 @@
           "is_coding": {
             "type": "boolean",
             "description": "Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`)."
+          },
+          "is_ephemeral": {
+            "type": ["boolean", "null"],
+            "description": "New mention privacy. Omit to preserve the saved setting."
           },
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",

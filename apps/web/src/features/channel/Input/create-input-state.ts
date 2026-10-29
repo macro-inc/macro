@@ -28,6 +28,7 @@ export type InputState = {
   snapshot: Accessor<InputSnapshot>;
   commands: InputCommands;
   setValue: (value: string) => void;
+  setEphemeral: (value: boolean) => void;
   setIsDraggedOver: (value: boolean) => void;
   reset: () => void;
 };
@@ -65,6 +66,7 @@ export function createInputState(options: CreateInputStateOptions): InputState {
     snapshot: view.snapshot,
     commands,
     setValue: view.setValue,
+    setEphemeral: view.setEphemeral,
     setIsDraggedOver: view.setIsDraggedOver,
     reset: () => {
       view.reset();

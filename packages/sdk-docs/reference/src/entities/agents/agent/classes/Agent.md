@@ -15,6 +15,7 @@ A configurable agent backed by a bot identity.
 | <a id="property-host"></a> `host` | `readonly` | () => `Promise`\<[`Harness`](../../../harnesses/harness/classes/Harness.md) \| `undefined`\> | Host running this agent. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-instructions"></a> `instructions` | `readonly` | () => `Promise`\<`string`\> | Agent instructions. | - |
+| <a id="property-isephemeral"></a> `isEphemeral` | `readonly` | () => `Promise`\<`NonNullable`\<`boolean` \| `undefined`\> \| `undefined`\> | Whether mentions start private, durable threads. | - |
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Display name. | - |
 
 ## Methods

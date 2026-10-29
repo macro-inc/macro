@@ -20,6 +20,7 @@ export type AgentOptions = Omit<
   | 'channel_scope'
   | 'default_model'
   | 'is_coding'
+  | 'is_ephemeral'
 > & {
   /** Channels the agent can access. */
   channels?: Channel[];
@@ -37,6 +38,8 @@ export type AgentOptions = Omit<
   defaultModel: string;
   /** Whether this is a coding agent. */
   isCoding: boolean;
+  /** Mentions start a private thread saved only in the invoking user's history. */
+  isEphemeral?: boolean;
 };
 
 /** A configurable agent backed by a bot identity. */
@@ -68,6 +71,9 @@ export class Agent extends MacroEntity<AgentRecord> {
 
   /** Default model. */
   readonly defaultModel = this.field('default_model');
+
+  /** Whether mentions start private, durable threads. */
+  readonly isEphemeral = this.field('is_ephemeral');
 
   /** Visible channels. */
   readonly channels = this.mappedField('channel_ids', (ids) =>
@@ -101,6 +107,7 @@ export function agentBody(options: AgentOptions): CreateAgentRequest {
     channelScope,
     defaultModel,
     isCoding,
+    isEphemeral,
     ...rest
   } = options;
   return {
@@ -113,5 +120,6 @@ export function agentBody(options: AgentOptions): CreateAgentRequest {
     channel_scope: channelScope,
     default_model: defaultModel,
     is_coding: isCoding,
+    is_ephemeral: isEphemeral,
   };
 }
