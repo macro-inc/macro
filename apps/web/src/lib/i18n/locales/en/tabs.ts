@@ -11,8 +11,8 @@ export default {
   },
 
   // Company and contact sections.
-  recordSections: 'Record sections',
-  recordSection: 'Section: {{section}}',
+  recordSections: 'Switch view',
+  recordSection: 'View: {{section}}',
   'record-overview': 'Overview',
   'record-team': 'Team',
   'record-emails': 'Emails',

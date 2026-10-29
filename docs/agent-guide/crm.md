@@ -193,7 +193,7 @@ On phones and tablets, the current section appears as a labeled header island
 with a caret. When the host collapses it, the section icon and caret keep its
 accessible label. Embedded phone headers put the switcher below the breadcrumb
 and actions so the record name and navigation retain space. Tap the switcher to
-open the shared bottom drawer: every available section
+open the shared **Switch view** bottom drawer: every available section
 has an icon and label, with a check beside the current section. Choosing a section
 closes the drawer and updates the header label; Escape, backdrop tap, and drag
 also dismiss it. Focus returns to the section trigger. Databases remains gated
@@ -209,11 +209,19 @@ the toggle to dismiss it; the open state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
-The Team, Emails, Files, Tasks, Calls, and Databases tabs share a compact toolbar: search on
-the left, with available filters and actions on the right. Search remains visible
-for empty lists. `Add contact` and `New task` match the project task list's
-creation button: a rounded outline, standard height, and leading plus icon.
-The associated-tab search fields match the creation buttons' height.
+The Team, Emails, Files, Tasks, Calls, and Databases views share a compact
+toolbar. On desktop, search stays on the left with existing filters and creation
+actions on the right. On touch, search has 16px of space below the header and
+fills the row beside the filter button, or the whole row without filters.
+Email importance and inbox choices open in the shared filter drawer.
+Section creation actions appear at the bottom right above the navigation dock,
+replacing the default app-wide action: Add contact, New email, New note, New task,
+New call, or New database. Existing contact-domain requirements, email-sync and
+database gates, recipients, and task associations still apply. Keyboard focus and
+higher-priority composers suppress the floating action; leaving the section
+restores the default action. Search remains visible for empty lists.
+Verify filter changes, section changes, disabled creation, and bottom-row clearance
+on phone and tablet; desktop creation controls must stay in the toolbar.
 Team rows show a profile photo when available, otherwise a
 letter avatar at the same 16px size as channel list icons. Team uses the same Soup
 row component as Emails, Files, and Calls: the avatar, name, and email are inline,

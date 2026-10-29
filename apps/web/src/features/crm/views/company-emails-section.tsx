@@ -3,7 +3,10 @@ import type { CrmCompanyEntity } from '@entity';
 import { Tabs } from '@ui';
 import { createMemo, createSignal } from 'solid-js';
 import { CrmListEmpty } from '../components/list-state';
-import { RecordSection } from '../components/record-section';
+import {
+  RecordSection,
+  RecordSectionFilters,
+} from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type {
   CrmEmailSignal as EmailSignalView,
@@ -36,8 +39,21 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
       title="Emails"
       search={search()}
       onSearchChange={setSearch}
+      createAction={
+        props.company?.emailSync === false
+          ? undefined
+          : { label: 'New email', onClick: () => crm.openEmailComposer() }
+      }
       actions={
-        <>
+        <RecordSectionFilters
+          activeCount={
+            Number(signalView() !== 'all') + Number(view() !== 'team')
+          }
+          onClear={() => {
+            setSignalView('all');
+            setView('team');
+          }}
+        >
           <Tabs
             aria-label="Email importance"
             size="sm"
@@ -60,7 +76,7 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
             value={view()}
             onChange={setView}
           />
-        </>
+        </RecordSectionFilters>
       }
     >
       <RecordItemList
