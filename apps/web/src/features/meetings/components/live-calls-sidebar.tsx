@@ -73,7 +73,7 @@ export function LiveCallsSidebar<T extends LiveCallRow>(props: {
                     <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
                       <ViewSidebar.Control
                         class="rounded-md"
-                        label={`Dismiss ${call().label}`}
+                        aria-label={`Dismiss ${call().label}`}
                         onClick={() => props.onDismiss?.(call())}
                       >
                         <XIcon class="size-3" />
