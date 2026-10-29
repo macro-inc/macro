@@ -496,7 +496,7 @@ export function ChannelInput(props: ChannelInputProps) {
         {
           id: 'gif',
           label: 'GIF',
-          icon: <GifIcon class="size-3.5" />,
+          icon: <GifIcon class="size-5" />,
           onSelect: () =>
             runInEditor((editor) => action.action(editor, actionContext), {
               focus: true,
@@ -516,7 +516,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 {
                   id: 'mention',
                   label: 'Mention',
-                  icon: <AtIcon class="size-3.5" />,
+                  icon: <AtIcon class="size-5" />,
                   hint: '@',
                   onSelect: () =>
                     runInEditor(openMentionTypeahead, { focus: true }),
@@ -527,7 +527,7 @@ export function ChannelInput(props: ChannelInputProps) {
           {
             id: 'attach',
             label: 'Attach files',
-            icon: <PaperclipIcon class="size-3.5" />,
+            icon: <PaperclipIcon class="size-5" />,
             onSelect: () => collapsedInput.attach(),
           },
           ...gif(),
