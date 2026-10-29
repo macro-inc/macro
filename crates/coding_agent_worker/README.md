@@ -109,8 +109,13 @@ Start macrod inside Herdr and choose **Claude Code in herdr** or **Codex in
 herdr** in Quickstart. Select a workspace directory containing your existing
 clones and pair with Macro. Native CLI authentication and Git credentials are
 reused. Each instance has one configuration, with no profiles to choose per run.
+The TUI and `macrod service` share `~/.macrod/macrod.toml`
+(`%USERPROFILE%\.macrod\macrod.toml` on Windows; `--config` overrides it), and
+only one macrod can serve a config at a time. The runtime's name, access, and
+permission bypass are set on the web at Settings → Agents → Runtimes.
 
-The Config tab adds **Model** (empty uses the native default), **Extra args**
+The Config tab adds **Model** (empty uses the native default, and is only the
+launch fallback: Macro picks each agent's model), **Extra args**
 (shell-style quoting), **Storage** (empty uses automatic instance storage), and
 **Open sessions** (foreground or background). Switching agents clears the
 previous agent's model and extra arguments. Storage and focus preferences remain.
