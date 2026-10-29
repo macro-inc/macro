@@ -194,7 +194,7 @@ describe('connect-app chip', () => {
   });
 
   it.each([['codex-cloud', 'Codex']])(
-    'opens Harness settings for an unconnected %s account',
+    'opens Runtimes settings for an unconnected %s account',
     (appSlug, name) => {
       render(() => (
         <ConnectApp

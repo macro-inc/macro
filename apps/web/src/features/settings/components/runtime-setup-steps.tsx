@@ -78,7 +78,7 @@ export function RuntimeSetupSteps(props: { children: JSX.Element }) {
         <p class="mb-6 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2 text-sm text-ink-muted">
           Setting up this computer? The desktop app bundles the runtime — use
           the <span class="font-medium text-ink">This computer</span> card on
-          the Runtimes page instead; no download or pairing code needed. The
+          the Runtimes section instead; no download or pairing code needed. The
           steps below connect a different machine.
         </p>
       </Show>
