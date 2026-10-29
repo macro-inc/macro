@@ -67,9 +67,12 @@ export function usePipedreamConnectionsQuery(options?: {
   refetchInterval?: number;
   /** See the same option on `useMcpServersQuery`. */
   neverSuspend?: boolean;
+  /** See the same option on `useMcpServersQuery`. */
+  enabled?: () => boolean;
 }) {
   return useQuery(() => ({
     ...pipedreamConnectionsQueryOptions(),
+    enabled: options?.enabled?.() ?? true,
     refetchOnMount: 'always' as const,
     refetchOnWindowFocus: 'always' as const,
     refetchInterval: options?.refetchInterval,

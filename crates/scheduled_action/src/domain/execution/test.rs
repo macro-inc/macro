@@ -331,6 +331,7 @@ fn action() -> ScheduledAction {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 fn executor(repo: Repo, runner: Runner) -> InProcessExecutor<Repo, Live, Runner> {

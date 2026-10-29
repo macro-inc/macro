@@ -72,9 +72,11 @@ Choose **Save signature** to save edits and return to the canonical preview.
 after clearing, reopening Rich text starts empty. It leaves the inbox connected, while
 **Remove inbox** in Accounts uses the existing inbox removal confirmation.
 **Add to replies & forwards** saves that preference immediately. On desktop,
-**Import from Gmail** in each inbox's header fetches that account's Gmail
+**Import from Gmail** in each Gmail inbox's header fetches that account's Gmail
 signature and saves it right away, replacing any unsaved draft; a toast reports
-when Gmail has no signature. Unsaved drafts
+when Gmail has no signature. Outlook inboxes offer Rich text and HTML editing
+without a Gmail import action. The import action uses the inbox's provider,
+not its email domain. Unsaved drafts
 survive switching settings pages. On phones, the signature preview, replies/forwards
 toggle, and clear action are available; editing and import remain desktop-only.
 Accounts list each inbox as its own row, followed by **Connect another Google
@@ -92,6 +94,9 @@ conversion and verify the saved HTML is unchanged. Check the preview on a phone
 and ensure a wide signature scrolls inside its own preview instead of the page.
 Save a signature created in Rich text, reopen settings, and confirm Rich text
 editing resumes without a conversion prompt.
+With Gmail and Outlook inboxes connected, confirm only Gmail offers import
+(including Gmail accounts on a custom domain), while both support HTML and Rich
+text editing. Empty Outlook signatures must not suggest Gmail import.
 Type an unsaved Rich text draft and clear it, both with and without an existing
 saved signature. Reopen settings and confirm the editor stays empty and the
 composer no longer includes a signature. A delayed clear must preserve a newer
@@ -627,6 +632,10 @@ Provider and custom-server More menus contain Disable, Reconnect, and Disconnect
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.
 Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+In chat and agent sessions, the agent can add one for the user with the
+`ConnectMcpServer` tool: it must be a public `https` URL, the row appears here
+unauthenticated, and the user still clicks Connect to sign in. Re-adding a URL
+the user already has leaves that row and its sign-in unchanged.
 The Add MCP Server dialog uses the same 24px padding above its title as on its sides.
 Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
 Codex, macrod, in-memory) alongside connected apps, through the same session
@@ -674,7 +683,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and Full access. `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 

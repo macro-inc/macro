@@ -12,7 +12,7 @@ import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import { Button, Panel, Scroll } from '@ui';
+import { Button, ButtonGroup, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -416,49 +416,56 @@ function SidePanelLayoutInner(
   );
 }
 
-function Toggle() {
+function Toggle(props: { size?: 'sm' | 'md' } = {}) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
     throw new Error('<SidePanel.Toggle> must be inside <SidePanel.Root>');
   }
+  const iconSize = () =>
+    isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
 
   return (
     <Show when={ctx.hasSections()}>
-      <HeaderActionGroup label="Details">
-        <Button
-          depth={2}
+      <HeaderActionGroup label="Details" size={props.size}>
+        <ButtonGroup.Button
           variant="ghost"
-          size="icon-md"
+          size={iconSize()}
+          aria-label={ctx.isOpen() ? 'Hide details' : 'Show details'}
           class={cn(
             isTouchDevice() &&
               'border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
             isTouchDevice() && ctx.isOpen() && 'text-accent'
           )}
-          tooltip={
-            isTouchDevice()
+          tooltip={{
+            content: isTouchDevice()
               ? ctx.isOpen()
                 ? 'Hide details'
                 : 'Show details'
               : ctx.isOpen()
                 ? 'Hide Side Panel'
-                : 'Show Side Panel'
-          }
+                : 'Show Side Panel',
+            hotkey: TOKENS.block.toggleSidePanel,
+          }}
           aria-haspopup={isTouchDevice() ? 'dialog' : undefined}
           aria-expanded={ctx.isOpen()}
-          hotkey={TOKENS.block.toggleSidePanel}
           onClick={() => ctx.toggle()}
         >
           <Show
             when={isTouchDevice()}
             fallback={
               <SidePanelIcon
-                class={cn('rotate-180', ctx.isOpen() && 'text-accent')}
+                class={cn(
+                  'size-4 shrink-0 rotate-180',
+                  ctx.isOpen() && 'text-accent'
+                )}
               />
             }
           >
-            <InfoIcon class={cn(ctx.isOpen() && 'text-accent')} />
+            <InfoIcon
+              class={cn('size-6 shrink-0', ctx.isOpen() && 'text-accent')}
+            />
           </Show>
-        </Button>
+        </ButtonGroup.Button>
       </HeaderActionGroup>
     </Show>
   );

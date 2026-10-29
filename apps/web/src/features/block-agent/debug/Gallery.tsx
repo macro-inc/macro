@@ -4,6 +4,7 @@
  * `/component/agent-ui`.
  */
 
+import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
 import {
   initialValues,
   validate,
@@ -204,12 +205,19 @@ function QueuedInFlightDemo() {
     {
       actionId: 'older',
       kind: 'prompt',
-      prompt: 'Summarize the queue design',
+      prompt:
+        '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nSummarize the queue design',
     },
     {
       actionId: 'newer',
       kind: 'prompt',
       prompt: 'Also mention the flush control',
+    },
+    {
+      actionId: 'refused',
+      kind: 'prompt',
+      prompt: 'This steer was refused, so it stays queued',
+      sendFailed: true,
     },
   ]);
   const [note, setNote] = createSignal(
@@ -217,7 +225,10 @@ function QueuedInFlightDemo() {
   );
 
   return (
-    <div class="flex max-w-xl flex-col gap-2">
+    <div
+      class="flex max-w-xl flex-col gap-2"
+      data-testid="queued-context-proof"
+    >
       <p class="text-xs text-ink-muted">{note()}</p>
       <QueuedPrompts
         items={items()}
@@ -899,9 +910,12 @@ function PromptAuthorDemo() {
     parts: [{ kind: 'text', text }],
   });
   return (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-3" data-testid="prompt-context-proof">
       <Message
-        message={prompt(userId() ?? null, 'Tighten up the fold, please.')}
+        message={prompt(
+          userId() ?? null,
+          '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nTighten up the fold, please.'
+        )}
         inFlight={false}
       />
       <Message
@@ -1153,6 +1167,24 @@ export default function AgentUiGallery() {
                 },
                 schema: FIXTURE_ELICITATION,
               }}
+            />
+          </Item>
+
+          <Item label="PermissionCard (native Herdr session)">
+            <PermissionCard
+              action="Run command"
+              detail="cargo test -p coding_agent_worker"
+              options={[
+                { id: 'allow', name: 'Allow once', kind: 'allow_once' },
+                {
+                  id: 'always',
+                  name: 'Always allow `cargo test -p coding_agent_worker` in this session',
+                  kind: 'allow_always',
+                },
+                { id: 'reject', name: 'Reject', kind: 'reject_once' },
+              ]}
+              canAnswer
+              onSelect={() => {}}
             />
           </Item>
 

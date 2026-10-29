@@ -142,7 +142,7 @@ export function RuntimePairingPage(props: {
           disabled={approveMutation.isPending}
           onClick={props.onClose}
         >
-          <ArrowLeftIcon />
+          <ArrowLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Back
         </Button>
       }
@@ -163,7 +163,7 @@ export function RuntimePairingPage(props: {
                   <div>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={tryAnotherCode}
                     >
@@ -326,7 +326,7 @@ export function RuntimePairingPage(props: {
               <Match when={approved()}>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="neutral"
                   size="sm"
                   onClick={props.onClose}
                 >
@@ -355,7 +355,7 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="neutral"
                   size="sm"
                   disabled={!canApprove()}
                   onClick={() => fireAndForget(approve(), 'runtime-pairing')}
@@ -384,7 +384,7 @@ export function RuntimePairingPage(props: {
                 </Button>
                 <Button
                   type="button"
-                  variant="cta"
+                  variant="neutral"
                   size="sm"
                   disabled={codeInput().trim().length === 0}
                   onClick={lookUp}

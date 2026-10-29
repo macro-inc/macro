@@ -74,6 +74,10 @@ word docs, Illustrator/Photoshop files).
   (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
   lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`
   and returns the Macro markdown that mention tracking reads.
+- Create a document with its source's dates (an import): set
+  `NewDocumentMetadata::builder(..).created_at(..).updated_at(..)`. Its folder
+  and every folder above it then widen to those dates (`extend_project_dates`)
+  instead of being marked updated now.
 - Change content storage/markdown lifecycle: `src/domain/content.rs` →
   `src/outbound/s3_markdown_source.rs` / `src/outbound/markdown_init.rs` →
   `src/bin/backfill_markdown_content_location.rs` if existing documents need

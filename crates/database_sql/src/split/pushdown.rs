@@ -42,12 +42,9 @@ pub fn divide(
         pushable(filter, bindings, relations)
             .filter(|(relation, _)| !left_joined.contains(relation))
     };
-    let mut pushed: Vec<Option<Expr<PropertiesLiteral>>> = vec![None; relations.len()];
+    let mut pushed: Vec<Vec<Expr<PropertiesLiteral>>> = vec![Vec::new(); relations.len()];
     let mut push_into = |relation: usize, expr: Expr<PropertiesLiteral>| {
-        pushed[relation] = Some(match pushed[relation].take() {
-            Some(existing) => Expr::and(existing, expr),
-            None => expr,
-        });
+        pushed[relation].push(expr);
     };
     let residual = match filter {
         Filter::And(parts) => {
@@ -72,7 +69,13 @@ pub fn divide(
             None => Some(other),
         },
     };
-    (pushed, residual)
+    (
+        pushed
+            .into_iter()
+            .map(|parts| balanced(parts, Expr::and))
+            .collect(),
+        residual,
+    )
 }
 
 /// The relation a whole filter tests and its `propf` form, or `None` if it
@@ -112,31 +115,54 @@ fn push(filter: &Filter, bindings: &[Binding]) -> Option<Expr<PropertiesLiteral>
             column,
             values,
             negated: false,
-        } => values
-            .iter()
-            .map(|value| literal(*column, value, bindings))
-            .collect::<Option<Vec<_>>>()?
-            .into_iter()
-            .reduce(Expr::or),
+        } => balanced(
+            values
+                .iter()
+                .map(|value| literal(*column, value, bindings))
+                .collect::<Option<Vec<_>>>()?,
+            Expr::or,
+        ),
         Filter::Has {
             column,
             value,
             negated: false,
         } => literal(*column, value, bindings),
-        Filter::And(parts) => parts
-            .iter()
-            .map(|part| push(part, bindings))
-            .collect::<Option<Vec<_>>>()?
-            .into_iter()
-            .reduce(Expr::and),
-        Filter::Or(parts) => parts
-            .iter()
-            .map(|part| push(part, bindings))
-            .collect::<Option<Vec<_>>>()?
-            .into_iter()
-            .reduce(Expr::or),
+        Filter::And(parts) => balanced(
+            parts
+                .iter()
+                .map(|part| push(part, bindings))
+                .collect::<Option<Vec<_>>>()?,
+            Expr::and,
+        ),
+        Filter::Or(parts) => balanced(
+            parts
+                .iter()
+                .map(|part| push(part, bindings))
+                .collect::<Option<Vec<_>>>()?,
+            Expr::or,
+        ),
         _ => None,
     }
+}
+
+/// Pair adjacent terms in rounds so long associative filters have logarithmic
+/// depth when cloned, serialized, or dropped.
+fn balanced<T>(
+    mut parts: Vec<Expr<T>>,
+    combine: fn(Expr<T>, Expr<T>) -> Expr<T>,
+) -> Option<Expr<T>> {
+    while parts.len() > 1 {
+        let mut terms = parts.into_iter();
+        parts = std::iter::from_fn(|| {
+            let left = terms.next()?;
+            Some(match terms.next() {
+                Some(right) => combine(left, right),
+                None => left,
+            })
+        })
+        .collect();
+    }
+    parts.pop()
 }
 
 /// A match on one option or one entity reference of the property behind a

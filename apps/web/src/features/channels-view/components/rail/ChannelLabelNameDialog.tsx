@@ -99,7 +99,6 @@ function LabelNameDialog(
             <Button
               type="button"
               variant="ghost"
-              depth={2}
               disabled={pending()}
               onClick={() => props.onOpenChange(false)}
             >
@@ -107,8 +106,7 @@ function LabelNameDialog(
             </Button>
             <Button
               type="submit"
-              variant="strong"
-              depth={2}
+              variant="primary"
               disabled={!canSubmit() || pending()}
             >
               {pending() ? 'Saving…' : props.confirmLabel}

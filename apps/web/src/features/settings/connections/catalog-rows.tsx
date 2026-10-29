@@ -53,9 +53,8 @@ export function CatalogRows(props: {
         <div class="flex items-center justify-center gap-3 px-3 py-6 text-sm text-ink-muted">
           Couldn't load the app catalog.
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
-            depth={3}
             onClick={() => props.catalog.query.refetch()}
           >
             Retry
@@ -74,7 +73,7 @@ export function CatalogRows(props: {
       <Show when={props.catalog.query.isFetchNextPageError}>
         <div class="flex items-center justify-center gap-3 py-4 text-sm text-ink-muted">
           Couldn't load more apps.
-          <Button variant="outline" size="sm" onClick={loadMore}>
+          <Button variant="secondary" size="sm" onClick={loadMore}>
             Retry
           </Button>
         </div>

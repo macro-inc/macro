@@ -376,8 +376,19 @@ async fn run() -> anyhow::Result<()> {
             ),
             redis.clone(),
         ),
+        // After each finished turn Jev decides whether a generated name has
+        // stopped fitting; only then does Haiku propose a new one. Without a
+        // TypeSafe key, names stay as first generated.
         agent_session::domain::name_generation::AdmittedAgentSessionNameGenerator::new(
-            HaikuAgentSessionNameGenerator::new(recorder.clone()),
+            agent_session::domain::name_generation::ClassifiedRetitle::new(
+                HaikuAgentSessionNameGenerator::new(recorder.clone()),
+                config
+                    .typesafe_api_key
+                    .value()
+                    .map(jev::outbound::SystemOneJev::typesafe)
+                    .transpose()?
+                    .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+            ),
             admission.clone(),
         ),
         turn_observer.clone(),

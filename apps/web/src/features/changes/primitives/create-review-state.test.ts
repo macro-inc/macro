@@ -55,6 +55,46 @@ function setup() {
 }
 
 describe('createReviewState', () => {
+  it('defaults by total changed lines and keeps choices until the next capture', () => {
+    createRoot((dispose) => {
+      const storage = memoryStorage();
+      const capture = changeset('cs1', ['small.ts', 'boundary.ts', 'large.ts']);
+      capture.files[1]!.additions = 20;
+      capture.files[1]!.deletions = 20;
+      capture.files[2]!.additions = 20;
+      capture.files[2]!.deletions = 21;
+      const [current, setCurrent] = createSignal<Changeset | undefined>();
+      const review = createReviewState({
+        scopeKey: () => 's1',
+        changeset: current,
+        storage,
+      });
+      setCurrent(capture);
+      expect(review.isCollapsed('small.ts')).toBe(false);
+      expect(review.isCollapsed('boundary.ts')).toBe(false);
+      expect(review.isCollapsed('large.ts')).toBe(true);
+      review.toggleCollapsed('small.ts');
+      review.activate('large.ts');
+      expect(review.isCollapsed('small.ts')).toBe(true);
+      expect(review.isCollapsed('large.ts')).toBe(false);
+      const restored = createReviewState({
+        scopeKey: () => 's1',
+        changeset: current,
+        storage,
+      });
+      expect(restored.isCollapsed('small.ts')).toBe(true);
+      expect(restored.isCollapsed('large.ts')).toBe(false);
+      review.toggleAllCollapsed();
+      expect(review.anyExpanded()).toBe(false);
+      review.toggleAllCollapsed();
+      expect(review.isCollapsed('large.ts')).toBe(false);
+      setCurrent({ ...capture, id: 'cs2' });
+      expect(review.isCollapsed('small.ts')).toBe(false);
+      expect(review.isCollapsed('large.ts')).toBe(true);
+      dispose();
+    });
+  });
+
   it('collapses and reopens an individual file', () => {
     createRoot((dispose) => {
       const { review } = setup();

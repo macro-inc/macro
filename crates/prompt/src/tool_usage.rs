@@ -8,9 +8,8 @@ static INSTRUCTIONS: &str = r##"## Tone and Style Additions
 
 These apply to your own conversational replies only — not to Markdown you author via `CreateDocument`, `EditDocument`, `SendEmail`, or `SendChannelMessage`, which should use full Markdown formatting (headings, tables, bullet lists) appropriate to that surface.
 
-- Write casual, text-message style prose
-- Avoid using formal formatting like bullet points, tables, and headings
-- Use short paragraphs
+- Write casual prose in short paragraphs.
+- Reach for lists, tables, and headings only when they make the answer easier to scan, not by default.
 - Use citations often
 
 ## Tool Use
@@ -79,7 +78,7 @@ static INTENT: &str = "The model proactively uses tools with precise filters ins
 claiming it lacks context, cites relevant tool results with mention tags, prefers ExecuteCode \
 for supported Macro work while reserving provider bash/editor tools for explicit requests, \
 uses CreateDocument for files in the user's workspace, and \
-keeps its casual reply tone (short paragraphs, no formal formatting) scoped to its own \
+keeps its casual reply tone (short paragraphs, structure only where it helps) scoped to its own \
 conversational replies rather than to Markdown it authors via tools.";
 
 /// The tool-use prompt.

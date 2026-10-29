@@ -31,12 +31,13 @@ export function ChangesHeader(props: {
     <>
       <Show when={props.mobile}>
         <Button
+          aria-label="Back to conversation"
+          tooltip="Back to conversation"
           variant="ghost"
           size="icon-sm"
-          label="Back to conversation"
           onClick={props.onClose}
         >
-          <ArrowLeftIcon />
+          <ArrowLeftIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
       <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -123,26 +124,36 @@ export function ChangesHeader(props: {
       <Show when={!props.mobile}>
         <Show when={props.onSpotlight}>
           <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-pressed={props.spotlit}
-            label={
+            aria-label={
               props.spotlit
                 ? 'Back to the split'
                 : 'Expand changes to the full width'
             }
+            tooltip={
+              props.spotlit
+                ? 'Back to the split'
+                : 'Expand changes to the full width'
+            }
+            variant="ghost"
+            size="icon-sm"
+            aria-pressed={props.spotlit}
             onClick={() => props.onSpotlight?.()}
           >
-            {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+            {props.spotlit ? (
+              <ArrowsInSimpleIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            ) : (
+              <ArrowsOutSimpleIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            )}
           </Button>
         </Show>
         <Button
+          aria-label="Close the changes pane"
+          tooltip="Close the changes pane"
           variant="ghost"
           size="icon-sm"
-          label="Close the changes pane"
           onClick={() => props.onClose()}
         >
-          <XIcon />
+          <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
     </>

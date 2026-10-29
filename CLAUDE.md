@@ -36,7 +36,7 @@ patterns in older code.
 | --- | --- |
 | `CODING.md` | Coding rules for every language; read before writing code. |
 | `AGENTS.md` in a directory | Scope, map, checks, and gotchas for that subtree; a sibling `CLAUDE.md` symlinks to it. |
-| `.agents/skills/` | Task workflows. `.claude/skills` and `.pi/skills` symlink here. |
+| `.agents/skills/` | Task workflows. Cursor loads this directory. `.claude/skills` and `.pi/skills` symlink here. |
 | `.agents/rules/` | Path-scoped conventions, loaded when you touch matching files. `.claude/rules` and `.cursor/rules` symlink here. |
 | `.agents/agents/` | Subagents (`auditor`, `browser-verifier`). `.claude/agents` symlinks here. |
 | `.agents/templates/` | Templates for new rules and `AGENTS.md` files. |
@@ -61,6 +61,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Giving the user a local preview link | `local-preview` skill |
 | Working inside Cursor Cloud | [Cursor Cloud](docs/development/cursor-cloud.md) |
 | Driving the app through a browser | [App agent guide](docs/agent-guide/README.md) |
+| Agent MCP servers, including GoAlert | [MCP servers](docs/development/mcp-servers.md) |
 | Adding or changing SDK methods | [SDK rule](.agents/rules/sdk.md), `add-sdk-endpoint` skill |
 | SDK version bumps and npm publishing | [SDK release guide](packages/sdk/RELEASING.md), [release-sdk skill](.agents/skills/release-sdk/SKILL.md) |
 | Adding a service, worker, or Pulumi stack | [New service guide](docs/guides/new-service.md) |
@@ -93,7 +94,8 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 - Never deploy (`pulumi up`, `wrangler deploy`, workflow dispatch) without
   explicit permission for that deploy.
 - Never reset databases or wipe stack volumes without approval.
-- Never paste or commit secrets.
+- Never paste or commit secrets, or put customer PII (emails, phones,
+  addresses) in commits, PR titles, or PR descriptions.
 - PR titles and bodies, commits, review replies, comments, and docs describe
   only the code. Never name people, customers, their companies or products,
   places, or support channels and tickets; state any reason in general terms.

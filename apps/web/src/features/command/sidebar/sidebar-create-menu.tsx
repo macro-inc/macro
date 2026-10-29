@@ -111,14 +111,17 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             when={props.variant === 'icon'}
             fallback={
               <Dropdown.Trigger
+                aria-label={t('create.create')}
+                tooltip={{
+                  content: t('create.create'),
+                  placement: 'right',
+                  disabled: !isSlim(),
+                  hotkey: TOKENS.global.createCommand,
+                }}
                 ref={createMenuTarget}
                 as={NavRow}
                 class="center h-8 bg-ink/4 text-[13px]"
                 fullWidth
-                tooltipPlacement="right"
-                tooltipDisabled={!isSlim()}
-                label={t('create.create')}
-                hotkey={TOKENS.global.createCommand}
                 onMouseDown={(e: MouseEvent) => {
                   if (e.button !== 0) return;
                   e.preventDefault();
@@ -142,20 +145,22 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
             }
           >
             <Dropdown.Trigger
+              aria-label={t('create.create')}
+              tooltip={{
+                content: t('create.create'),
+                hotkey: TOKENS.global.createCommand,
+              }}
               ref={createMenuTarget}
               as={Button}
-              variant="outline"
+              variant="secondary"
               size="icon-sm"
-              depth={1}
-              class="size-[26px] bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
-              label={t('create.create')}
-              hotkey={TOKENS.global.createCommand}
+              class="size-[26px] bg-surface shadow-md shadow-drop-shadow"
               onMouseDown={(e: MouseEvent) => {
                 if (e.button !== 0) return;
                 e.preventDefault();
               }}
             >
-              <CreateIcon />
+              <CreateIcon class="size-4 shrink-0" />
             </Dropdown.Trigger>
           </Show>
         }

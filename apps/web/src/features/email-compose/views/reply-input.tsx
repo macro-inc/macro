@@ -449,17 +449,18 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
 
   const AttachButton = () => (
     <Button
+      variant="ghost"
       ref={(el) =>
         fileSelector(el, () => ({
           multiple: true,
           onSelect: handleAddAttachments,
         }))
       }
-      size="icon-composer"
+      size="icon-md"
       tooltip="Attach"
       disabled={editingDisabled()}
     >
-      <Paperclip />
+      <Paperclip class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 
@@ -727,7 +728,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   setComposerExpanded(true);
                 }}
               >
-                <DotsThree />
+                <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
               </Button>
             </div>
           </Show>
@@ -752,12 +753,12 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   as={Button}
                   variant="ghost"
                   size="icon-sm"
-                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
+                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"
                   pressed={form.replyAppended()}
                   disabled={editingDisabled()}
                   onChange={toggleQuotedText}
                 >
-                  <DotsThree />
+                  <DotsThree class="size-5 shrink-0" />
                 </KToggleButton>
               </Tooltip>
             </div>
@@ -790,12 +791,13 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             >
               <div class="flex shrink-0 items-center gap-1">
                 <Button
+                  variant="ghost"
                   onClick={deleteDraftAndReset}
                   tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={editingDisabled()}
                 >
-                  <Trash />
+                  <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
                 <Show
@@ -823,8 +825,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   pending={isSending()}
                   hidden={sendActionHidden()}
                   onClick={() => sendEmail()}
-                  tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
-                  shortcut={sendUnavailableReason() ? undefined : 'cmd+enter'}
+                  tooltip={{
+                    content: sendUnavailableReason() ?? scheduleActionLabel(),
+                    shortcut: sendUnavailableReason() ? undefined : 'cmd+enter',
+                  }}
                   aria-label={scheduleActionLabel()}
                 />
               </div>

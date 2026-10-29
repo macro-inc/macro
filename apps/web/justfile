@@ -302,6 +302,7 @@ build-cache-wasm-browser-test-hooks:
 # fresh-scope startup, DB-ready, first-ready, and linear-memory budgets.
 test-cache-wasm-browser:
     bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts --project chromium --project firefox
+    bunx --bun playwright test --config src/lib/queries/soup/graphql/browser-test/playwright.config.ts --project chromium
     bunx --bun playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.production.config.ts --project chromium-production --project firefox-production
 
 # Local profiling build: retain Rust symbols and DWARF source locations so an

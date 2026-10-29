@@ -331,14 +331,10 @@ export function EmailCard(props: { class?: string } = {}) {
               </Show>
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
-              <Button
-                variant="ghost"
-                depth={3}
-                onClick={() => setRemoveTarget(null)}
-              >
+              <Button variant="ghost" onClick={() => setRemoveTarget(null)}>
                 Cancel
               </Button>
-              <Button variant="strong" depth={3} onClick={handleRemoveInbox}>
+              <Button variant="secondary" onClick={handleRemoveInbox}>
                 Remove
               </Button>
             </div>
@@ -442,7 +438,7 @@ function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
         </div>
         <span class="text-xs text-ink-muted">Sync disabled</span>
       </div>
-      <Button variant="outline" size="md" depth={3} onClick={props.onEnable}>
+      <Button variant="secondary" size="md" onClick={props.onEnable}>
         Enable
       </Button>
     </SettingsSurface>
@@ -529,9 +525,8 @@ function InboxRow(props: {
         <div class="flex max-w-full flex-wrap items-center gap-2 shrink-0">
           <Show when={props.link.needs_reauth}>
             <Button
-              variant="accent"
+              variant="primary"
               size="md"
-              depth={3}
               onClick={props.onReconnect}
               aria-label={`Reconnect ${props.link.email_address}`}
             >
@@ -544,9 +539,8 @@ function InboxRow(props: {
             when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >
             <Button
-              variant="outline"
+              variant="secondary"
               size="md"
-              depth={3}
               onClick={props.onEnableCalendar}
               aria-label={`Enable calendar for ${props.link.email_address}`}
             >
@@ -568,9 +562,8 @@ function InboxRow(props: {
           >
             <Tooltip label="Turn off calendar">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="icon-sm"
-                depth={3}
                 onClick={props.onTurnOffCalendar}
                 aria-label={`Turn off calendar for ${props.link.email_address}`}
               >
@@ -581,9 +574,8 @@ function InboxRow(props: {
           <Show when={ENABLE_INBOX_RESYNC}>
             <Tooltip label="Force sync">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="icon-sm"
-                depth={3}
                 disabled={
                   props.resyncing ||
                   (ENABLE_INBOX_SYNC_STATUS &&
@@ -600,7 +592,6 @@ function InboxRow(props: {
             <Button
               variant="ghost"
               size="md"
-              depth={3}
               onClick={props.onRemove}
               aria-label={`Remove ${props.link.email_address}`}
             >

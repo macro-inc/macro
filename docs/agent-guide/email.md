@@ -335,6 +335,29 @@ when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
 any preview. Calendar uses the authoritative thread calendar-attachment flag.
 
+A successful authoritative `Soup` first page also invalidates cached Mail facts
+that match its supported view/filter but are missing inside its covered sort
+range (including timestamp/ID ties). An exhausted page covers the remaining
+matching range, including an empty result. This checks at most 500 local matches
+per write; larger stale sets converge over refreshes. It preserves normalized
+threads and pending optimistic edits, and does not use cursor pages or backfill
+gaps as negative evidence. Invalidated facts stay unqueryable until a full
+canonical snapshot arrives, rather than guessing whether a thread was moved or
+deleted. Verification: seed stale Noise matches between returned rows, apply a
+first page, switch Drafts → Noise repeatedly, then reload without reseeding;
+stale rows must stay absent while rows beyond the page remain. This runs against
+real browser worker/WASM/OPFS storage in `mail-reconciliation.browser.e2e.ts`.
+The stronger `queries/soup/graphql/browser-test/mail-flicker.browser.e2e.ts`
+mounts the production Soup source and normalized exchange with a small Solid row
+renderer. It holds local evaluation until the saved server list renders, then
+holds HTTP until local evaluation finishes. Every observed DOM row-ID state must
+stay identical through network settlement, repeated Drafts → Inbox → Noise visits,
+and an OPFS reload. The unrepaired first visit must expose and remove the seeded
+stale rows as a positive control. Each run saves `rendered-row-transitions.json`;
+removing the adapter's `first_page_updates` call and rebuilding WASM must make
+this test fail on the transient extra rows, not on final membership or a timeout.
+Native persistence reconciliation requires a rebuilt native cache adapter.
+
 Shared requires a last-known thread grant through the viewer, a team, or an active
 channel, plus the existing Mail UI rule excluding viewer-owned threads. Merely
 having a different owner or a delegated inbox does not qualify. Shared metadata has
@@ -1137,3 +1160,10 @@ Storage/schema failures that cannot prove preservation show recovery/update
 instructions instead of repeatedly reopening potentially damaged storage.
 
 Date-grouped email lists start directly with today's messages; Today is not shown as a leading group heading. Older date headings remain visible and ordering still uses the server's thread activity timestamp.
+
+## Dragging sidebar tags
+
+On desktop, drag a tag from the sidebar onto an email row. Its existing tags
+remain; dropping onto a selected row applies the tag to every taggable selected
+row. The dragged chip shows the tag color and name, and the target gets an outline.
+Clicking the tag still filters the list. Mobile uses the existing tag menu.

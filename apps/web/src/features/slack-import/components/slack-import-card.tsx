@@ -15,9 +15,8 @@ export function SlackImportCard(props: Props): JSX.Element {
         description="Import your team's channels and message history from a Slack export into Channels."
       >
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
-          depth={3}
           onClick={(event) => props.onOpen(event.currentTarget)}
         >
           Import from Slack

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_message_labels (message_id, label_id)\n        SELECT r.message_id, l.id\n        FROM unnest($1::uuid[], $2::text[]) AS r(message_id, provider_label_id)\n        JOIN email_labels l ON l.link_id = $3 AND l.provider_label_id = r.provider_label_id\n        ON CONFLICT (message_id, label_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "daa957d34f4e5cb39e457ec5f4ec30f70ffddc6f134322a1422355a793b8707b"
+}

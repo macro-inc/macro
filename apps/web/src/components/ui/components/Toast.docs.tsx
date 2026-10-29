@@ -14,7 +14,7 @@ function NotificationsDemo() {
   return (
     <div class="flex flex-wrap gap-2">
       <Button
-        variant="outline"
+        variant="secondary"
         onClick={() =>
           remember(toast.success('Changes saved', { stack: true }))
         }
@@ -22,7 +22,7 @@ function NotificationsDemo() {
         Success
       </Button>
       <Button
-        variant="outline"
+        variant="secondary"
         onClick={() => {
           for (const message of [
             'Link copied',
@@ -36,7 +36,7 @@ function NotificationsDemo() {
         Preview stack
       </Button>
       <Button
-        variant="outline"
+        variant="secondary"
         onClick={() =>
           remember(
             toast.custom(

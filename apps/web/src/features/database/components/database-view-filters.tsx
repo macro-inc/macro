@@ -273,9 +273,10 @@ function ConditionEditor(props: {
         )}
       </Show>
       <Button
+        aria-label="Remove filter"
+        tooltip="Remove filter"
         variant="ghost"
         size="icon-md"
-        label="Remove filter"
         onClick={props.onRemove}
       >
         <XIcon class="size-4 touch:size-3.5" />

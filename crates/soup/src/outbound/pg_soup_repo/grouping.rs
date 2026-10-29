@@ -2,13 +2,19 @@
 
 use models_grouping::{GroupByField, date_bucket_sql_key, date_bucket_sql_order};
 use std::borrow::Cow;
+use system_properties::SystemPropertyKey;
+
+const PROJECT_GROUPING: GroupByField = GroupByField::Property {
+    property_definition_id: SystemPropertyKey::PROJECT_UUID,
+    entity_type: None,
+};
 
 /// Build the group select expression for a field.
 pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
         GroupByField::Date => Cow::Owned(date_bucket_sql_key("sort_ts")),
         GroupByField::EntityType => Cow::Borrowed("item_type"),
-        GroupByField::Project => Cow::Borrowed("COALESCE(project_id::text, '')"),
+        GroupByField::Project => group_select_expr(&PROJECT_GROUPING),
         GroupByField::Property { .. } => Cow::Borrowed(
             "COALESCE(
                 CASE ep_group.values->>'type'
@@ -28,7 +34,7 @@ pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
         GroupByField::Date => Cow::Owned(date_bucket_sql_order("sort_ts")),
         GroupByField::EntityType => Cow::Borrowed("item_type"),
-        GroupByField::Project => Cow::Borrowed("project_id NULLS LAST"),
+        GroupByField::Project => group_order_expr(&PROJECT_GROUPING),
         GroupByField::Property { .. } => Cow::Borrowed(
             "COALESCE(
                 (SELECT po.display_order FROM property_options po
@@ -64,6 +70,8 @@ pub struct GroupJoinClause {
 /// type, so a task ignores legacy `DOCUMENT` assignments for the same id.
 pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
     match field {
+        // Project is the initiative property displayed by the task column.
+        GroupByField::Project => group_join_clause(&PROJECT_GROUPING),
         GroupByField::Property {
             property_definition_id,
             entity_type,

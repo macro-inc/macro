@@ -148,6 +148,7 @@ export function EmailHeader(props: EmailHeaderProps) {
             <Tabs
               ref={tourTarget(EMAIL_TOUR.signalNoise)}
               aria-label="Inbox view"
+              size="md"
               class="shrink-0"
               options={[
                 { value: 'important', label: EMAIL_TAB_LABELS.important },

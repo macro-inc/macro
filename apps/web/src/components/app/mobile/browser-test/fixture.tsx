@@ -51,7 +51,7 @@ function EmailSettingsPage() {
         </Button>
       </SettingsRow>
       <SettingsRow label="Add another inbox">
-        <Button variant="outline" onClick={connectEmail}>
+        <Button variant="secondary" onClick={connectEmail}>
           Add account
         </Button>
       </SettingsRow>

@@ -90,7 +90,6 @@ export function ReactionChip(props: ReactionChipProps) {
             data-emoji={props.emoji}
             data-user-reacted={props.selected ? '' : undefined}
             aria-pressed={!!props.selected}
-            noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
                 onLongPress: () => {
@@ -100,9 +99,12 @@ export function ReactionChip(props: ReactionChipProps) {
               }))
             }
             size="sm"
-            variant={props.selected ? 'accent' : 'outline'}
+            variant="secondary"
+            appearance={props.selected ? 'bare' : undefined}
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1',
+              props.selected &&
+                'border-border-secondary bg-accent-bg text-accent aria-pressed:overlay-active not-touch:not-data-disabled:hover:overlay-accent-bg',
               !props.interactive && 'pointer-events-auto'
             )}
             disabled={!props.interactive}

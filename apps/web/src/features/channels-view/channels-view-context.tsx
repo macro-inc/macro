@@ -15,8 +15,9 @@ import { createPreviewSelectionGuard } from '@components/app/createPreviewSelect
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { useUserId } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMacroStaffEmail } from '@core/user/staff';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
@@ -65,6 +66,10 @@ export type ChannelsViewContext = {
   setLabelOpen: (labelId: string, open: boolean) => void;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
   setAsideWidth: (width: number) => void;
+  /** Staff accounts on the company domain can hide support conversations. */
+  canHideSupportChannels: Accessor<boolean>;
+  hideSupportChannels: Accessor<boolean>;
+  setHideSupportChannels: (hide: boolean) => void;
 };
 
 function createInitialState(
@@ -74,12 +79,15 @@ function createInitialState(
     tab: initial.tab ?? 'browse',
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
+      team_channels: initial.expandedGroups?.team_channels ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
     collapsedLabels: initial.collapsedLabels ?? [],
     threadsChannelId: initial.threadsChannelId,
     sortBy: {
+      team_channels:
+        initial.sortBy?.team_channels ?? CHANNELS_DEFAULT_SORT_BY.team_channels,
       channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
       direct_messages:
         initial.sortBy?.direct_messages ??
@@ -89,11 +97,16 @@ function createInitialState(
     asideWidth: clampChannelsRailWidth(
       initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
     ),
+    hideSupportChannels: initial.hideSupportChannels ?? true,
   };
 }
 
 function shouldRestorePreferences(initial: ChannelsViewStateOptions): boolean {
-  return initial.asideWidth === undefined && initial.sortBy === undefined;
+  return (
+    initial.asideWidth === undefined &&
+    initial.sortBy === undefined &&
+    initial.hideSupportChannels === undefined
+  );
 }
 
 export const [ChannelsViewProvider, useChannelsView] =
@@ -102,6 +115,7 @@ export const [ChannelsViewProvider, useChannelsView] =
     (props) => {
       const panel = useSplitPanelOrThrow();
       const userId = useUserId();
+      const email = useEmail();
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
       const [search, setSearch] = createSearchParams(channelsSearch);
@@ -240,6 +254,14 @@ export const [ChannelsViewProvider, useChannelsView] =
         setSortBy: (group, sort) => setState('sortBy', group, sort),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),
+        canHideSupportChannels: () => isMacroStaffEmail(email()),
+        hideSupportChannels: () =>
+          isMacroStaffEmail(email()) && state.hideSupportChannels,
+        setHideSupportChannels: (hide) => {
+          if (!isMacroStaffEmail(email())) return;
+          if (state.hideSupportChannels === hide) return;
+          setState('hideSupportChannels', hide);
+        },
       };
     }
   );

@@ -82,7 +82,7 @@ function Header(
             {local.actions}
             <Show when={!isTouchDevice() && local.search}>
               <Control
-                label={local.searchLabel ?? 'Search'}
+                aria-label={local.searchLabel ?? 'Search'}
                 aria-expanded={searchOpen()}
                 onClick={toggleSearch}
               >
@@ -192,9 +192,9 @@ function Control(props: ButtonProps) {
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size="icon-xs"
       {...rest}
-      class={cn('size-(--sidebar-control-size) shrink-0', local.class)}
+      class={cn('shrink-0', local.class)}
       data-view-sidebar-control=""
     />
   );
@@ -325,7 +325,7 @@ function TreeItem(props: {
         <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
           <Control
             class="rounded-md"
-            label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
+            aria-label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
             aria-expanded={props.expanded}
             onClick={props.onToggle}
           >
@@ -368,6 +368,7 @@ function Action(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
     <Button
+      variant="secondary"
       type="button"
       {...rest}
       class={cn(

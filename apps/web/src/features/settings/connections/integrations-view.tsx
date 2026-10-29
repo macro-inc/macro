@@ -120,7 +120,7 @@ function ConnectionsContent(props: IntegrationsViewProps) {
                   {error()
                     ? "Couldn't load agent tools."
                     : "Some connections couldn't be loaded."}
-                  <Button variant="outline" size="sm" depth={3} onClick={retry}>
+                  <Button variant="secondary" size="sm" onClick={retry}>
                     Retry
                   </Button>
                 </div>
@@ -273,7 +273,7 @@ function IntegrationsOverview(
         />
         <Show when={props.agentToolsAvailable}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="md"
             onClick={() => setAddingCustom(true)}
           >

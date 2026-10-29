@@ -26,7 +26,7 @@ import CaretUp from '@icon/system/regular/caret-up.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { Button, cn } from '@ui';
+import { Button, ButtonGroup, cn } from '@ui';
 import {
   createMemo,
   onCleanup,
@@ -127,11 +127,11 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      square
-      size="sm"
+      variant="ghost"
+      aria-label={t('splitMenu.goBack')}
+      tooltip={{ content: t('splitMenu.goBack'), hotkey: TOKENS.split.go.back }}
+      size="icon-sm"
       class="p-1 touch:active:bg-transparent"
-      label={t('splitMenu.goBack')}
-      hotkey={TOKENS.split.go.back}
       disabled={
         !context.handle.canGoBack() &&
         !hasAgentsBackFallback(context.handle.content())
@@ -152,7 +152,7 @@ function SplitBackButton() {
         })
       }
     >
-      <CaretLeft />
+      <CaretLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -164,13 +164,19 @@ function _SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 hidden"
-        label={
+        variant="ghost"
+        aria-label={
           context.handle.isSpotLight()
             ? t('splitMenu.minimizeSplit')
             : t('splitMenu.spotlightSplit')
         }
-        hotkey={TOKENS.window.spotlight.toggle}
+        tooltip={{
+          content: context.handle.isSpotLight()
+            ? t('splitMenu.minimizeSplit')
+            : t('splitMenu.spotlightSplit'),
+          hotkey: TOKENS.window.spotlight.toggle,
+        }}
+        class="p-1 hidden"
         onClick={() => context.handle.toggleSpotlight()}
       >
         {context.handle.isSpotLight() ? (
@@ -205,13 +211,13 @@ function SplitCloseButton() {
       }
     >
       <Button
-        square
+        aria-label={label()}
+        tooltip={{ content: label(), hotkey: TOKENS.split.close }}
+        variant="ghost"
         size="icon-sm"
-        label={label()}
-        hotkey={TOKENS.split.close}
         onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}
       >
-        <CloseIcon class="size-4" />
+        <CloseIcon class="size-3.5" />
       </Button>
     </Show>
   );
@@ -344,30 +350,41 @@ function SoupNavigationButtons() {
 export function ListNavigationButtons(props: {
   navigation: ListDetailNavigationTarget;
   class?: string;
+  size?: 'sm' | 'md';
 }) {
+  const iconSize = () =>
+    isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
   return (
-    <HeaderActionGroup label={t('splitMenu.itemNavigation')}>
+    <HeaderActionGroup label={t('splitMenu.itemNavigation')} size={props.size}>
       <div class={cn('flex items-center touch:gap-0.5', props.class)}>
-        <Button
-          size="icon-md"
-          label={t('splitMenu.previousItem')}
-          hotkey={TOKENS.entity.step.start}
+        <ButtonGroup.Button
+          aria-label={t('splitMenu.previousItem')}
+          tooltip={{
+            content: t('splitMenu.previousItem'),
+            hotkey: TOKENS.entity.step.start,
+          }}
+          variant="ghost"
+          size={iconSize()}
           disabled={!props.navigation.canPrevious()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={props.navigation.previous}
         >
           <CaretUp class="size-4" />
-        </Button>
-        <Button
-          size="icon-md"
-          label={t('splitMenu.nextItem')}
-          hotkey={TOKENS.entity.step.end}
+        </ButtonGroup.Button>
+        <ButtonGroup.Button
+          aria-label={t('splitMenu.nextItem')}
+          tooltip={{
+            content: t('splitMenu.nextItem'),
+            hotkey: TOKENS.entity.step.end,
+          }}
+          variant="ghost"
+          size={iconSize()}
           disabled={!props.navigation.canNext()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={props.navigation.next}
         >
           <CaretDown class="size-4" />
-        </Button>
+        </ButtonGroup.Button>
       </div>
     </HeaderActionGroup>
   );

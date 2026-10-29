@@ -50,6 +50,10 @@ the socket themselves.
 - A send can target a connection on a different instance — it always goes
   through the Redis relay in `src/service/redis.rs`, never a direct in-process
   lookup; don't bypass it when adding a new send path.
+- Presence (`user_tracking_change`) counts an entity row as active for 60s
+  after its last `open` or `ping`, compared across instances' clocks. A `ping`
+  for a row that is gone re-creates it, so a lost `open` heals on the next
+  heartbeat.
 
 ## Related
 

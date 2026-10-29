@@ -70,7 +70,8 @@ function AccountConnections() {
             <Button
               variant="ghost"
               size="icon-md"
-              label="Email settings"
+              aria-label="Email settings"
+              tooltip="Email settings"
               onClick={() => openSettings('Email')}
               class="touch:min-h-11 touch:min-w-11"
             >

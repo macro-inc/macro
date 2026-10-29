@@ -25,6 +25,7 @@ fn limited_bridge(
             }),
             tool_loads: ToolLoads::default(),
             user_tool_finisher: None,
+            stream_tool_calls: false,
             result_limit: Some(limit.clone()),
         },
         Arc::new(vec![]),
