@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import type { SoupQueryVariables } from '../../../../service-clients/service-storage/graphql/generated/graphql';
 import { CACHED_IDS, id, response, SERVER_IDS, STALE_IDS } from './fixtures';
@@ -88,8 +89,10 @@ test('Noise never reintroduces repaired stale threads between cached and network
     );
     visits.push({ visit, localIds, ...observation });
   }
+  const evidence = testInfo.outputPath('rendered-row-transitions.json');
+  await writeFile(evidence, JSON.stringify({ initial, visits }, null, 2));
   await testInfo.attach('rendered-row-transitions', {
-    body: JSON.stringify({ initial, visits }, null, 2),
+    path: evidence,
     contentType: 'application/json',
   });
   expect(errors).toEqual([]);

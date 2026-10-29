@@ -347,6 +347,15 @@ deleted. Verification: seed stale Noise matches between returned rows, apply a
 first page, switch Drafts → Noise repeatedly, then reload without reseeding;
 stale rows must stay absent while rows beyond the page remain. This runs against
 real browser worker/WASM/OPFS storage in `mail-reconciliation.browser.e2e.ts`.
+The stronger `queries/soup/graphql/browser-test/mail-flicker.browser.e2e.ts`
+mounts the production Soup source and normalized exchange with a small Solid row
+renderer. It holds local evaluation until the saved server list renders, then
+holds HTTP until local evaluation finishes. Every observed DOM row-ID state must
+stay identical through network settlement, repeated Drafts → Inbox → Noise visits,
+and an OPFS reload. The unrepaired first visit must expose and remove the seeded
+stale rows as a positive control. Each run saves `rendered-row-transitions.json`;
+removing the adapter's `first_page_updates` call and rebuilding WASM must make
+this test fail on the transient extra rows, not on final membership or a timeout.
 Native persistence reconciliation requires a rebuilt native cache adapter.
 
 Shared requires a last-known thread grant through the viewer, a team, or an active

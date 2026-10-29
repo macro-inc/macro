@@ -428,6 +428,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   page range without deleting normalized threads or treating backfill gaps as
   deletions. The OPFS revisit/reload regression is
   `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts mail-reconciliation --project chromium`.
+  For transient row flicker, run
+  `bunx playwright test --config src/lib/queries/soup/graphql/browser-test/playwright.config.ts`:
+  it uses the real Soup source and exchange, holds local/network completion,
+  and asserts every observed row-ID state on revisits and an OPFS reload.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
