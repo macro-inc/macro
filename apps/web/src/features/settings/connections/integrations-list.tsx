@@ -3,6 +3,7 @@ import { TAG_COLORS } from '@app/features/property/tags/tagColors';
 import { Badge, cn, TagDot } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { settingsTarget } from '../core/settings-target';
 import { type ConnectionState, StatusDot } from '../integration-ui';
 
 /** Whether an integration is in use; connected rows sort to the top. */
@@ -101,10 +102,13 @@ function Columns(props: {
   class?: string;
   children: JSX.Element;
   role: 'row';
+  /** Label the settings search reveals this row by. */
+  target?: string;
 }) {
   return (
     <div
       role={props.role}
+      data-settings-target={settingsTarget(props.target)}
       class={cn(
         'grid items-center gap-3 grid-cols-[minmax(0,1fr)_auto]',
         '@[640px]/integrations:grid-cols-[minmax(0,1fr)_15rem_7rem_12.5rem]',
@@ -154,6 +158,7 @@ export function IntegrationListRow(props: {
   return (
     <Columns
       role="row"
+      target={props.name}
       class="min-h-14 rounded-lg px-3 py-2 text-sm not-touch:hover:bg-list-hover focus-within:bg-list-hover"
     >
       <div role="cell" class="flex min-w-0 items-center gap-3">

@@ -305,8 +305,9 @@ and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
-that page, scrolls to its section or row, and briefly highlights it. Try
-`singature`, `email digest`, `calendar color`, or `cursor`. Arrow Down from search
+that page, scrolls to its section or row, and briefly highlights it. Each
+built-in integration is a result that highlights its Integrations row. Try
+`singature`, `email digest`, `calendar color`, `granola`, or `cursor`. Arrow Down from search
 focuses the first result; Tab moves through controls normally. Escape in the
 search field clears the query. Clearing search restores the grouped navigation. Keyboard shortcuts are listed
 by category with the action on the left and keys on the right; expand **Keyboard
