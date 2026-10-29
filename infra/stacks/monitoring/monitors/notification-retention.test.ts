@@ -4,6 +4,11 @@ import * as pulumi from '@pulumi/pulumi';
 const resources: pulumi.runtime.MockResourceArgs[] = [];
 
 beforeAll(async () => {
+  // The monitors depend on the GoAlert webhooks, which read these keys.
+  pulumi.runtime.setAllConfig({
+    'monitoring:goalertIntegrationKey': 'integration-key',
+    'monitoring:goalertNotifyIntegrationKey': 'notify-integration-key',
+  });
   pulumi.runtime.setMocks(
     {
       newResource(args) {

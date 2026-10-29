@@ -69,7 +69,7 @@ ${notify({ pages: args.severe ?? false })}`,
       includeTags: true,
       notifyAudit: false,
     },
-    { dependsOn: args.severe ? goalertWebhooks : [] }
+    { dependsOn: goalertWebhooks }
   );
 }
 
