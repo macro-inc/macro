@@ -74,7 +74,8 @@ export function createDraftSyncStatus(options: {
         action: match(availability)
           .with('unavailable', () => 'retry' as const)
           .with('recovery-required', () => 'reload' as const)
-          .otherwise(() => undefined),
+          .with('recovering', () => undefined)
+          .exhaustive(),
         canKeepEditing: false,
       };
     }

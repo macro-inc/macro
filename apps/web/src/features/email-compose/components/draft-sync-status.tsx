@@ -37,7 +37,8 @@ export function DraftSyncStatus(props: {
               {match(state().action)
                 .with('retry-discard', () => 'Retry discard')
                 .with('reload', () => 'Reload')
-                .otherwise(() => 'Retry')}
+                .with('retry', undefined, () => 'Retry')
+                .exhaustive()}
             </Button>
           </Show>
           <Show when={state().canKeepEditing}>
