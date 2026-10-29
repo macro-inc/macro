@@ -244,34 +244,39 @@ function TaskPropertiesPreviewContent(
                 property={property}
                 canEdit={props.canEdit}
                 onSave={saveHandler.saveProperty}
-                onRefresh={props.refetch}
               >
-                <PropertyUI.Tooltip property={property}>
-                  <PropertyUI.EditTrigger
-                    class="inline-flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
-                    aria-disabled={!props.canEdit || !!property.isMetadata}
-                  >
-                    <Show
-                      when={hasValue(property)}
-                      fallback={<CircleIcon class="size-4 text-ink-muted" />}
-                    >
-                      <PropertyUI.Icon property={property} class="size-4" />
-                    </Show>
-                    <span class="sr-only">
-                      Task status:{' '}
-                      <PropertyUI.Text
-                        property={property}
-                        fallback="Not started"
-                      />
-                    </span>
-                  </PropertyUI.EditTrigger>
-                </PropertyUI.Tooltip>
-                <PropertyUI.PopoverEditor
-                  entitySelfFilter={{
-                    entityType: 'TASK',
-                    blockId: props.taskId,
-                  }}
-                />
+                {(shown) => (
+                  <>
+                    <PropertyUI.Tooltip property={shown()}>
+                      <PropertyUI.EditTrigger
+                        class="inline-flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+                        aria-disabled={!props.canEdit || !!shown().isMetadata}
+                      >
+                        <Show
+                          when={hasValue(shown())}
+                          fallback={
+                            <CircleIcon class="size-4 text-ink-muted" />
+                          }
+                        >
+                          <PropertyUI.Icon property={shown()} class="size-4" />
+                        </Show>
+                        <span class="sr-only">
+                          Task status:{' '}
+                          <PropertyUI.Text
+                            property={shown()}
+                            fallback="Not started"
+                          />
+                        </span>
+                      </PropertyUI.EditTrigger>
+                    </PropertyUI.Tooltip>
+                    <PropertyUI.PopoverEditor
+                      entitySelfFilter={{
+                        entityType: 'TASK',
+                        blockId: props.taskId,
+                      }}
+                    />
+                  </>
+                )}
               </PropertyUI.Root>
             )}
           </For>

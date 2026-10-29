@@ -1,8 +1,16 @@
 import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cn, Dropdown } from '@ui';
-import { createSignal, type JSX, splitProps } from 'solid-js';
-import type { Property } from '../types';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type JSX,
+  splitProps,
+  untrack,
+} from 'solid-js';
+import type { Property, PropertyApiValues } from '../types';
+import { withApiValues } from '../utils/transforms';
 import {
   type PropertyEditFn,
   PropertyRootContext,
@@ -11,13 +19,23 @@ import {
 } from './context';
 
 interface PropertyRootProps
-  extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onSave' | 'property'> {
+  extends Omit<
+    JSX.HTMLAttributes<HTMLDivElement>,
+    'onSave' | 'property' | 'children'
+  > {
   property: Property;
   canEdit?: boolean;
   onSave?: PropertySaveFn;
   onEdit?: PropertyEditFn;
-  onRefresh?: () => void;
+  /** A function receives the property as shown, including a pick still saving. */
+  children?: JSX.Element | ((property: Accessor<Property>) => JSX.Element);
 }
+
+/**
+ * A pick the source has not shown yet. `base` is unset while the save runs;
+ * after it succeeds, the pick stays until the source emits a newer property.
+ */
+type PendingValue = { value: PropertyApiValues; base?: Property };
 
 export function Root(props: PropertyRootProps) {
   const [local, rest] = splitProps(props, [
@@ -25,7 +43,6 @@ export function Root(props: PropertyRootProps) {
     'canEdit',
     'onSave',
     'onEdit',
-    'onRefresh',
     'class',
     'children',
   ]);
@@ -36,6 +53,31 @@ export function Root(props: PropertyRootProps) {
   );
 
   useHoldParentHoverCardOpen(editorOpen);
+
+  // Editors close before their save finishes, and the source only catches up
+  // once the cache projects the write, so show the pick until then.
+  const [pending, setPending] = createSignal<PendingValue>();
+  const property = createMemo(() => {
+    const current = pending();
+    return current &&
+      (current.base === undefined || current.base === local.property)
+      ? withApiValues(local.property, current.value)
+      : local.property;
+  });
+
+  const save: PropertySaveFn = async (saved, value) => {
+    const onSave = local.onSave;
+    if (!onSave) return;
+    const entry: PendingValue = { value };
+    setPending(entry);
+    try {
+      await onSave(saved, value);
+      if (pending() === entry) setPending({ value, base: local.property });
+    } catch (error) {
+      if (pending() === entry) setPending(undefined);
+      throw error;
+    }
+  };
 
   // Focus restoration helper - used by both closeEditor and onOpenChange
   // When a value is saved, the component may remount (due to reactive updates),
@@ -64,16 +106,13 @@ export function Root(props: PropertyRootProps) {
   };
 
   const value: PropertyRootContextValue = {
-    property: () => local.property,
+    property,
     canEdit: () => local.canEdit ?? false,
     get onSave() {
-      return local.onSave;
+      return local.onSave && save;
     },
     get onEdit() {
       return local.onEdit;
-    },
-    get onRefresh() {
-      return local.onRefresh;
     },
     editorOpen,
     openEditor: (anchor) => {
@@ -84,6 +123,13 @@ export function Root(props: PropertyRootProps) {
       setEditorOpen(false);
       restoreFocusToAnchor();
     },
+  };
+
+  const children = () => {
+    const content = local.children;
+    return typeof content === 'function'
+      ? untrack(() => content(property))
+      : content;
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -109,7 +155,7 @@ export function Root(props: PropertyRootProps) {
           data-property-type={local.property.valueType}
           {...rest}
         >
-          {local.children}
+          {children()}
         </div>
       </Dropdown>
     </PropertyRootContext.Provider>
