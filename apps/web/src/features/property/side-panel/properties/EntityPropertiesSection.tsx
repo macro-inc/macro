@@ -705,7 +705,7 @@ function PropertyRowActions(props: {
         variant="ghost"
         size="icon-xs"
         data-property-row-action
-        title="Remove from entity"
+        tooltip="Remove from entity"
         aria-label="Remove from entity"
         disabled={isSaving()}
         class={cn('text-ink-extra-muted transition', actionVisibility)}
