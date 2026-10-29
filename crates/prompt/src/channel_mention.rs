@@ -38,18 +38,15 @@ chat or using the email composer.
 
 ## Sharing what you link
 
-Linking an item in your reply shares it with this channel, as the person who asked you: a
-mention chip (the XML mention tags) or an attachment for a document, calendar event, chat,
-database, form, project, call, email thread, or agent session grants the channel access, within
-what that person may share. A plain URL to a Macro item shares nothing and does not render as a
-chip, so always link Macro items with mention tags. Link only what should be shared with this
-channel; describe anything else without linking it. Never ask whether to share an item you
-linked; it is already shared.
+Items you create in this session and link in your reply, as a mention chip (the XML mention
+tags) or an attachment, are shared with this channel as the person who asked you. Existing
+items you link are not shared. A plain URL to a Macro item is never shared and does not render
+as a chip, so always link Macro items with mention tags. Never ask whether to share.
 
-Call `ShareWithChannel` only when the user explicitly asks you to share something your reply
-does not link. `channelId` is the `id` on the conversation parent above; a calendar chip is
-entity type `calendar_event` whose `entityId` is the chip's `documentId`. If the tool says you
-cannot share it, say that plainly.
+Call `ShareWithChannel` only when the user asks you to share an existing item. `channelId` is
+the `id` on the conversation parent above; a calendar chip is entity type `calendar_event`
+whose `entityId` is the chip's `documentId`. If the tool says you cannot share it, say that
+plainly.
 "##;
 
 static INTENT: &str = "The model replies to the marked mention, treats the <thread> block as \
@@ -60,9 +57,9 @@ does not — treats tool calls as executing immediately (no composer or pending 
 confirmation to point the user at), only takes explicitly requested actions, checks before \
 creating events with attendees, declines email drafting/sending with a pointer to AI chat \
 or the email composer, links Macro items only as mention chips (never \
-plain URLs) and only items that should be shared, because a linked chip or attachment shares \
-the item with the channel as the person who asked, never asks whether to share, and calls \
-ShareWithChannel only when explicitly asked to share something it does not link.";
+plain URLs), knowing that linked items it created in this session are shared with the channel \
+as the person who asked while existing items it links are not, never asks whether to share, \
+and calls ShareWithChannel only when the user asks to share an existing item.";
 
 /// The channel-mention prompt for the Macro channel bot.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
@@ -72,15 +69,20 @@ mod test {
     use super::PROMPT;
 
     #[test]
-    fn linking_an_item_shares_it_so_the_bot_never_asks() {
+    fn items_created_in_the_session_are_shared_and_the_bot_never_asks() {
         let instructions = PROMPT.instructions.as_ref();
-        assert!(instructions.contains("Linking an item in your reply shares it with this channel"));
-        assert!(instructions.contains("A plain URL to a Macro item shares nothing"));
-        assert!(instructions.contains("Never ask whether to share an item you"));
+        assert!(instructions.contains("Items you create in this session and link in your reply"));
+        assert!(instructions.contains("Existing\nitems you link are not shared."));
+        assert!(instructions.contains("A plain URL to a Macro item is never shared"));
+        assert!(instructions.contains("Never ask whether to share."));
         assert!(!instructions.contains("Do you want me to share this"));
-        assert!(instructions.contains("`ShareWithChannel` only when the user explicitly asks"));
+        assert!(
+            instructions.contains(
+                "`ShareWithChannel` only when the user asks you to share an existing item"
+            )
+        );
         assert!(instructions.contains("calendar_event"));
-        assert!(instructions.contains("`channelId` is the `id` on the conversation parent"));
+        assert!(instructions.contains("`channelId` is\nthe `id` on the conversation parent"));
         assert!(instructions.contains("whose `entityId` is the chip's `documentId`"));
         assert!(PROMPT.intent.contains("never asks whether to share"));
     }

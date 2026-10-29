@@ -964,6 +964,27 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, Self::Err>> + Send;
 }
 
+/// What an agent session created, so its channel reply shares only those items.
+pub trait AgentSessionCreations: Clone + Send + Sync + 'static {
+    /// Error type for creation lookups.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// When `bot`'s agent session in the thread rooted at `thread_root` started, if it has one.
+    fn session_started_at(
+        &self,
+        thread_root: Uuid,
+        bot: BotId,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
+    /// The `items` that `bot` recorded creating at or after `since`.
+    fn created_since(
+        &self,
+        bot: BotId,
+        since: DateTime<Utc>,
+        items: Vec<ReferencedShareItem>,
+    ) -> impl Future<Output = Result<Vec<ReferencedShareItem>, Self::Err>> + Send;
+}
+
 /// Errors that can occur while mutating channels.
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelMutationErr {

@@ -2,8 +2,13 @@
 use super::{
     events::{ChannelEvent, ReactionNotificationContext},
     models::{ChannelMetadata, MutatedMessage, ReferencedShareItem, Sender},
-    ports::{ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo},
+    ports::{
+        AgentSessionCreations, ChannelEventDispatcher, ChannelReferenceSharePermissions,
+        ChannelRepo,
+    },
 };
+use bot_id::BotId;
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     delivery::MessageRealtime,
@@ -12,6 +17,8 @@ use messages::domain::{
     },
     ports::{MessageChange, MessageEvent, MessageEventPublisher},
 };
+use std::time::Duration;
+use tracing::Instrument;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -22,24 +29,30 @@ mod test;
 /// message service commits a channel message, and sends the common
 /// `message_update` payload to the channel's participants.
 #[derive(Clone)]
-pub struct ChannelMessageDelivery<R, E, P, G> {
+pub struct ChannelMessageDelivery<R, E, P, G, C> {
     repo: R,
     events: E,
     permissions: P,
     realtime: G,
+    creations: C,
 }
 
-impl<R, E, P, G> ChannelMessageDelivery<R, E, P, G> {
+impl<R, E, P, G, C> ChannelMessageDelivery<R, E, P, G, C> {
     /// Compose existing channel policies with the shared realtime transport.
-    pub fn new(repo: R, events: E, permissions: P, realtime: G) -> Self {
+    pub fn new(repo: R, events: E, permissions: P, realtime: G, creations: C) -> Self {
         Self {
             repo,
             events,
             permissions,
             realtime,
+            creations,
         }
     }
 }
+
+/// Activity is ingested asynchronously, so a creation the agent just made may
+/// not be recorded yet when its reply is delivered.
+const CREATION_RECHECK_DELAYS: [Duration; 2] = [Duration::from_secs(5), Duration::from_secs(30)];
 
 fn persisted(channel_id: Uuid, message: &Message) -> MutatedMessage {
     MutatedMessage {
@@ -56,17 +69,129 @@ fn persisted(channel_id: Uuid, message: &Message) -> MutatedMessage {
     }
 }
 
+/// The person a bot message was posted for.
+fn triggering_person(message: &Message) -> Option<MacroUserIdStr<'static>> {
+    let id = message.triggered_by.clone()?;
+    MacroUserIdStr::try_from(id)
+        .inspect_err(|error| tracing::warn!(?error, "unparseable triggered_by"))
+        .ok()
+}
+
+/// Share the `pending` items once their creation by `bot` is recorded, giving
+/// up on any still unrecorded after the last re-check.
+async fn recheck_session_creations<C, P>(
+    creations: C,
+    permissions: P,
+    bot: BotId,
+    started_at: DateTime<Utc>,
+    person: MacroUserIdStr<'static>,
+    channel_id: Uuid,
+    mut pending: Vec<ReferencedShareItem>,
+) where
+    C: AgentSessionCreations,
+    P: ChannelReferenceSharePermissions,
+{
+    for (attempt, delay) in CREATION_RECHECK_DELAYS.into_iter().enumerate() {
+        tokio::time::sleep(delay).await;
+        let created = match creations
+            .created_since(bot, started_at, pending.clone())
+            .await
+        {
+            Ok(created) => created,
+            Err(error) => {
+                tracing::warn!(error = ?error.into(), attempt, "agent creation re-check failed");
+                continue;
+            }
+        };
+        if created.is_empty() {
+            continue;
+        }
+        pending.retain(|item| !created.contains(item));
+        if let Err(error) = permissions
+            .update_channel_share_permissions_for_referenced_items(
+                person.clone(),
+                channel_id,
+                created,
+            )
+            .await
+        {
+            tracing::warn!(error = ?error.into(), attempt, "sharing agent creations failed");
+        }
+        if pending.is_empty() {
+            return;
+        }
+    }
+    tracing::info!(
+        unshared = pending.len(),
+        "linked items with no creation record from the agent session stay unshared"
+    );
+}
+
 fn repo_error(error: impl Into<anyhow::Error>) -> rootcause::Report {
     rootcause::report!("channel message delivery failed: {}", error.into())
 }
 
-impl<R, E, P, G> ChannelMessageDelivery<R, E, P, G>
+impl<R, E, P, G, C> ChannelMessageDelivery<R, E, P, G, C>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
-    P: ChannelReferenceSharePermissions,
+    P: ChannelReferenceSharePermissions + Clone,
     G: MessageRealtime,
+    C: AgentSessionCreations,
 {
+    /// Share, as `person`, the linked items that `bot`'s agent session in this
+    /// thread created. Items without a creation record yet are re-checked in
+    /// the background; the rest, including anything the session did not
+    /// create, stay unshared.
+    #[tracing::instrument(skip(self, person, items), fields(items = items.len()), err)]
+    async fn share_session_creations(
+        &self,
+        bot: BotId,
+        person: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        thread_root: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> anyhow::Result<()> {
+        let Some(started_at) = self
+            .creations
+            .session_started_at(thread_root, bot)
+            .await
+            .map_err(Into::into)?
+        else {
+            return Ok(());
+        };
+        let created = self
+            .creations
+            .created_since(bot, started_at, items.clone())
+            .await
+            .map_err(Into::into)?;
+        let pending: Vec<_> = items
+            .into_iter()
+            .filter(|item| !created.contains(item))
+            .collect();
+        if !pending.is_empty() {
+            tokio::spawn(
+                recheck_session_creations(
+                    self.creations.clone(),
+                    self.permissions.clone(),
+                    bot,
+                    started_at,
+                    person.clone(),
+                    channel_id,
+                    pending,
+                )
+                .instrument(tracing::info_span!("channels.recheck_agent_creations")),
+            );
+        }
+        if !created.is_empty() {
+            self.permissions
+                .update_channel_share_permissions_for_referenced_items(person, channel_id, created)
+                .await
+                .map_err(Into::into)?;
+        }
+        Ok(())
+    }
+
     async fn channel_metadata(
         &self,
         channel_id: Uuid,
@@ -91,12 +216,13 @@ where
     }
 }
 
-impl<R, E, P, G> MessageEventPublisher for ChannelMessageDelivery<R, E, P, G>
+impl<R, E, P, G, C> MessageEventPublisher for ChannelMessageDelivery<R, E, P, G, C>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
-    P: ChannelReferenceSharePermissions,
+    P: ChannelReferenceSharePermissions + Clone,
     G: MessageRealtime,
+    C: AgentSessionCreations,
 {
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
         let MessageParent::Channel(channel_id) = event.parent else {
@@ -123,39 +249,47 @@ where
             message, mentions, ..
         } = &event.change
         {
-            // A bot shares as the person it posted for; with no such person, nothing is shared.
-            let sharer = actor.as_user().cloned().or_else(|| {
-                message.triggered_by.clone().and_then(|id| {
-                    MacroUserIdStr::try_from(id)
-                        .inspect_err(|error| tracing::warn!(?error, "unparseable triggered_by"))
-                        .ok()
+            let items = message
+                .attachments
+                .iter()
+                .filter_map(|attachment| {
+                    ReferencedShareItem::from_raw(
+                        attachment.entity_id.clone(),
+                        &attachment.entity_type,
+                    )
                 })
-            });
-            if let Some(user) = sharer {
-                let items = message
-                    .attachments
-                    .iter()
-                    .filter_map(|attachment| {
-                        ReferencedShareItem::from_raw(
-                            attachment.entity_id.clone(),
-                            &attachment.entity_type,
-                        )
-                    })
-                    .chain(mentions.iter().filter_map(|mention| {
-                        ReferencedShareItem::from_raw(
-                            mention.entity_id.clone(),
-                            &mention.entity_type,
-                        )
-                    }))
-                    .collect::<Vec<_>>();
-                if !items.is_empty()
-                    && let Err(error) = self
-                        .permissions
+                .chain(mentions.iter().filter_map(|mention| {
+                    ReferencedShareItem::from_raw(mention.entity_id.clone(), &mention.entity_type)
+                }))
+                .collect::<Vec<_>>();
+            if !items.is_empty() {
+                // A person shares what they link. A bot shares, as the person
+                // it posted for, only what its agent session created.
+                let shared = if let Some(user) = actor.as_user() {
+                    self.permissions
                         .update_channel_share_permissions_for_referenced_items(
-                            user, channel_id, items,
+                            user.clone(),
+                            channel_id,
+                            items,
                         )
                         .await
+                        .map(drop)
+                        .map_err(Into::into)
+                } else if let Some(bot) = actor.as_bot()
+                    && let Some(person) = triggering_person(message)
                 {
+                    self.share_session_creations(
+                        bot.bot_id(),
+                        person,
+                        channel_id,
+                        message.thread_id.unwrap_or(message.id),
+                        items,
+                    )
+                    .await
+                } else {
+                    Ok(())
+                };
+                if let Err(error) = shared {
                     side_effect_error = Some(repo_error(error));
                 }
             }

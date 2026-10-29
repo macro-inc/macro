@@ -15510,7 +15510,7 @@ export interface SetSenderPolicyResponse {
   summary: string;
 }
 /**
- * Share an item with the current members of a channel by writing a channel entity-access grant. Call it only when the user explicitly asks you to share an item your reply does not link; linking an item as a mention chip or attachment in a channel message already shares it with that channel. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, agent_session, or external_chat. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
+ * Share an item with the current members of a channel by writing a channel entity-access grant. Call it only when the user asks you to share an existing item; items you create in this session and link in a channel message as a mention chip or attachment are already shared with that channel. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, agent_session, or external_chat. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
  */
 export interface ShareWithChannel {
   /**

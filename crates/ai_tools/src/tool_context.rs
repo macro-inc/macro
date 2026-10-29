@@ -400,6 +400,9 @@ fn message_service_with_side_effects(
                     Arc::new(access.clone()),
                 ),
                 realtime.clone(),
+                channels::outbound::pg_agent_session_creations::PgAgentSessionCreations::new(
+                    pool.clone(),
+                ),
             ),
             messages::domain::delivery::DiscussionDelivery::new(
                 messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
