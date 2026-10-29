@@ -45,20 +45,89 @@ Macro is composed of 'blocks' designed to be modular, extensible, and work toget
 
 Each surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.
 
-| Block         | Docs                                                      | What it does                                                                  |
-| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes.   |
-| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |
-| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |
-| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |
-| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |
-| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Use our models or your agents to work across Macro and automate tasks.                   |
-| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |
-| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |
-| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |
-| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |
-| Databases     | — | Tables with typed columns, relations, saved views, and agent queries. |
-| Calendar      | [Docs &rarr;](https://docs.macro.com/product/calendar) | Calendar sync, availability, and personal or team booking links. |
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/email"><img src=".github/readme/features/email.jpg" alt="Email: Multi-account unified inbox, keyboard shortcuts, and shared inboxes." width="100%" /></a>
+      <h3>Email</h3>
+      <p>Multi-account unified inbox, keyboard shortcuts, and shared inboxes.</p>
+      <a href="https://docs.macro.com/product/email">Explore email &rarr;</a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/channels"><img src=".github/readme/features/messages.jpg" alt="Messages: Channels and direct messages designed for focused technical discussions." width="100%" /></a>
+      <h3>Messages</h3>
+      <p>Channels and direct messages designed for focused technical discussions.</p>
+      <a href="https://docs.macro.com/product/channels">Explore messages &rarr;</a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/tasks"><img src=".github/readme/features/tasks.jpg" alt="Tasks: Linear-inspired tasks, tightly integrated with channels, email, and agents." width="100%" /></a>
+      <h3>Tasks</h3>
+      <p>Linear-inspired tasks, tightly integrated with channels, email, and agents.</p>
+      <a href="https://docs.macro.com/product/tasks">Explore tasks &rarr;</a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/docs"><img src=".github/readme/features/docs.jpg" alt="Docs: Real-time collaborative, markdown-native docs built on CRDTs, with @mentions." width="100%" /></a>
+      <h3>Docs</h3>
+      <p>Real-time collaborative, markdown-native docs built on CRDTs, with @mentions.</p>
+      <a href="https://docs.macro.com/product/docs">Explore docs &rarr;</a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/canvas"><img src=".github/readme/features/canvas.jpg" alt="Canvas: 2D board with embedded @links to tasks, files, and emails." width="100%" /></a>
+      <h3>Canvas</h3>
+      <p>2D board with embedded @links to tasks, files, and emails.</p>
+      <a href="https://docs.macro.com/product/canvas">Explore canvas &rarr;</a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/agents"><img src=".github/readme/features/agents.jpg" alt="Agents: Use our models or your agents to work across Macro and automate tasks." width="100%" /></a>
+      <h3>Agents</h3>
+      <p>Use our models or your agents to work across Macro and automate tasks.</p>
+      <a href="https://docs.macro.com/product/agents">Explore agents &rarr;</a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/calls"><img src=".github/readme/features/calls.jpg" alt="Calls: Recorded, transcribed, and logged to team memory for agents." width="100%" /></a>
+      <h3>Calls</h3>
+      <p>Recorded, transcribed, and logged to team memory for agents.</p>
+      <a href="https://docs.macro.com/product/calls">Explore calls &rarr;</a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/folders"><img src=".github/readme/features/files.jpg" alt="File storage: Auto-imported from email and channels, fully searchable." width="100%" /></a>
+      <h3>File storage</h3>
+      <p>Auto-imported from email and channels, fully searchable.</p>
+      <a href="https://docs.macro.com/product/folders">Explore file storage &rarr;</a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/integrations/github"><img src=".github/readme/features/pull-requests.jpg" alt="Pull requests: Linked to tasks, embeddable in channels, available to agents." width="100%" /></a>
+      <h3>Pull requests</h3>
+      <p>Linked to tasks, embeddable in channels, available to agents.</p>
+      <a href="https://docs.macro.com/integrations/github">Explore pull requests &rarr;</a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="https://docs.macro.com/product/crm"><img src=".github/readme/features/crm.jpg" alt="CRM: Customer and contact objects, custom properties, email sync, enrichment." width="100%" /></a>
+      <h3>CRM</h3>
+      <p>Customer and contact objects, custom properties, email sync, enrichment.</p>
+      <a href="https://docs.macro.com/product/crm">Explore crm &rarr;</a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Databases</h3>
+      <p>Tables with typed columns, relations, saved views, and agent queries.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Calendar</h3>
+      <p>Calendar sync, availability, and personal or team booking links.</p>
+      <a href="https://docs.macro.com/product/calendar">Explore calendar &rarr;</a>
+    </td>
+  </tr>
+</table>
 
 <br />
 
