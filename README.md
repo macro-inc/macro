@@ -57,6 +57,8 @@ Each surface is purpose-built for its job rather than composed from a generic bl
 | File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |
 | Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |
 | CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |
+| Databases     | — | Tables with typed columns, relations, saved views, and agent queries. |
+| Calendar      | [Docs &rarr;](https://docs.macro.com/product/calendar) | Calendar sync, availability, and personal or team booking links. |
 
 <br />
 
