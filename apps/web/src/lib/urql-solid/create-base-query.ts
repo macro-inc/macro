@@ -67,13 +67,15 @@ export function createBaseQuery<
           // store proxies let unwrap skip unchanged branches in constant time.
           reconciled[key] = state[key];
         } else if (
-          key === 'data' &&
-          (containsReactiveStore(next[key]) ||
-            containsReactiveStore(previous[key]) ||
-            !supportsStoreReconciliation(next[key]) ||
-            !supportsStoreReconciliation(previous[key]))
+          key !== 'data' ||
+          containsReactiveStore(next[key]) ||
+          containsReactiveStore(previous[key]) ||
+          !supportsStoreReconciliation(next[key]) ||
+          !supportsStoreReconciliation(previous[key])
         ) {
-          // Preserve store ownership and fields that Solid reconcile skips.
+          // Operations contain shared GraphQL documents and cached request
+          // identities. Reconcile only result data; mutating metadata can
+          // change an operation's name without changing its cached query text.
           setState(
             produce((draft) => {
               draft[key] = next[key];
