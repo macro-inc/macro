@@ -870,7 +870,8 @@ with 2 GB RAM, WebView 133, and a locally signed, OTA-enabled release of
   resume showed Home with rows from that hour and no sign-in prompt, and a new
   document edit reached the server.
 - Swiping the Android share sheet down left the app blocked behind its
-  backdrop until restart; Back and taps did not recover it.
+  backdrop until restart; `MobileDrawer` now snaps a sheet back open when its
+  owner refuses the close.
 
 Pending-upload and queued-write logout paths beyond the cache-scope unit tests,
 and physical memory-pressure, battery, Doze, and cellular testing, remain
