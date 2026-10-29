@@ -127,6 +127,32 @@ describe('home projects', () => {
       expect(projectClause({ type: types })).toBe('null');
     }
   });
+
+  it('filters them by seen state with the Read facet', () => {
+    // The not-done base clause stays; the facet ANDs the seen state onto it.
+    const unread = projectClause({ read: ['unread'] });
+    expect(unread.startsWith('{"&":[')).toBe(true);
+    expect(unread.endsWith('{"l":{"ns":"unseen"}}]}')).toBe(true);
+    // Read means seen or done; the base clause still excludes done rows.
+    expect(
+      projectClause({ read: ['read'] }).endsWith(
+        '{"|":[{"l":{"ns":"seen"}},{"l":{"ns":"done"}}]}]}'
+      )
+    ).toBe(true);
+  });
+
+  it('never asks Noise for projects, whatever the facets say', () => {
+    const cases: Record<string, string[]>[] = [
+      {},
+      { type: ['projects'] },
+      { read: ['unread'] },
+    ];
+    for (const facets of cases) {
+      expect(
+        buildHomeQuery({ ...context, facets, tab: 'noise' }).body.if
+      ).toBeUndefined();
+    }
+  });
 });
 
 describe('home date buckets', () => {

@@ -34,6 +34,7 @@ function readClause(seen: boolean): FacetClause {
     cf: clause.eq('chatSeen', seen),
     pf: clause.eq('folderSeen', seen),
     fef: clause.eq('foreignEntitySeen', seen),
+    if: clause.eq('initiativeSeen', seen),
   };
 }
 

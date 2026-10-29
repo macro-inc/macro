@@ -167,9 +167,16 @@ export function buildHomeQuery(
   const body: SoupAstBody = mergeAst(base, refinements);
 
   // Type facets exclude entity targets by nil-filling their ids; projects are
-  // opt-in instead, so a type selection without them drops their clause.
+  // opt-in instead, so a type selection without them drops their clause, and
+  // so does Noise, which lists emails only: a facet's own project clause
+  // would otherwise be the opt-in.
   const types = context.facets.type ?? [];
-  if (types.length > 0 && !types.includes('projects')) delete body.if;
+  if (
+    context.tab === 'noise' ||
+    (types.length > 0 && !types.includes('projects'))
+  ) {
+    delete body.if;
+  }
 
   if (context.tab === 'signal' || context.tab === 'noise') {
     body.emailView = 'inbox';
