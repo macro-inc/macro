@@ -433,6 +433,12 @@ bot asks before scheduling a specific clock time. Within the rollout, `@Macro` â
 `@cursor` / `@codex` when available â€” opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+An agent mentioned in a thread reply gets, on its first turn, the images and
+videos on the mentioning message and then on the thread root and earlier
+replies (at most 8, no duplicates); follow-ups carry only their own files.
+Files elsewhere in the channel appear only as `<attachment>` entries in its
+context. To check, post an image on a thread root, mention an agent in a
+reply without attaching anything, and confirm it describes the image.
 Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
 when it appears among existing participants or bots. Check with the agents
 rollout both enabled and disabled.
