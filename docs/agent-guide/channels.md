@@ -254,15 +254,19 @@ remain visible when the entire timeline fits without scrolling.
 
 ## Thread side panel
 
-On desktop, the sidebar button right of a channel's tabs (**Open threads in
-side panel**) switches threads from inline expansion to a panel on
-the right; the choice persists across channels and sessions. In panel mode a
-root shows only an `N replies` summary; clicking it, `Reply`, or the reply and
-expand hotkeys opens the panel with every reply and a composer that stays open,
-and the root stays highlighted. A pane narrower than 44rem gives the panel its
-full width. A notification jump to a reply still expands that thread inline so
-it can land on the reply. Touch devices never offer the button and keep threads
-inline. Check opening, replying, switching threads, closing, and toggling back.
+On desktop, a switch in its own pill right of a channel's tabs chooses the
+thread layout. Its label names the current mode: **Collapse** (on) collapses
+threads into a panel on the right, **Expand** (off) expands them inline. The
+tooltip names the action and its shortcut, `Cmd/Ctrl+Shift+E`, which also
+works from the composer. The choice persists across channels and sessions.
+In collapsed mode a root shows only an `N replies` summary; clicking it,
+`Reply`, or the reply and expand hotkeys opens the panel with every reply and
+a composer that stays open, and the root stays highlighted. Message images and
+videos shrink to small thumbnails that still open the viewer. A pane narrower
+than 44rem gives the panel its full width. A notification jump to a reply
+closes the panel and expands that thread inline so it can land on the reply.
+Touch devices never offer the switch and keep threads inline. Check opening,
+replying, switching threads, closing, the shortcut, and toggling back.
 
 ## Agent session entities
 

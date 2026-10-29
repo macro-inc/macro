@@ -9,6 +9,8 @@ import {
 import { createFocusRequest, type FocusRequest } from '../Thread/focus-request';
 
 export type ChannelThreadPanel = {
+  /** Touch devices show one pane, so threads stay inline there. */
+  available: Accessor<boolean>;
   /** Threads open in a side panel instead of expanding inline. */
   enabled: Accessor<boolean>;
   setEnabled: (enabled: boolean) => void;
@@ -33,9 +35,11 @@ export function createChannelThreadPanel(): ChannelThreadPanel {
   });
   const [threadId, setThreadId] = createSignal<string>();
   const replyFocusRequest = createFocusRequest();
-  const enabled = () => preferred() && !isTouchDevice();
+  const available = () => !isTouchDevice();
+  const enabled = () => preferred() && available();
 
   return {
+    available,
     enabled,
     setEnabled: (next) => {
       setPreferred(next);

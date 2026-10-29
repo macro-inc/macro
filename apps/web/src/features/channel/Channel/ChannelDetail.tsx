@@ -14,6 +14,7 @@ import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
 import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { ChannelTitleIcon } from '@channel/components/ChannelTopIcon';
 import { DebugSuspense } from '@channel/DebugSuspense';
+import { MediaDensityContext } from '@channel/Media/media-density';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -34,11 +35,11 @@ import {
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
-import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
-import { Button, cn, Tabs } from '@ui';
+import { cn, Tabs } from '@ui';
 import {
   type Accessor,
   children,
@@ -59,6 +60,7 @@ import {
   type ChannelTargetRequest,
 } from './ChannelSurface';
 import { ChannelTabProvider, useChannelTab } from './ChannelTabContext';
+import { ChannelThreadLayoutToggle } from './ChannelThreadLayoutToggle';
 import { ChannelThreadPanel } from './ChannelThreadPanel';
 import { ChannelLiveIndicators } from './ChannelTopBarLiveIndicators';
 import { withChannelTabIcons } from './channel-tab-icons';
@@ -72,7 +74,6 @@ import {
 import {
   ChannelThreadPanelContext,
   createChannelThreadPanel,
-  useChannelThreadPanel,
 } from './thread-panel';
 import {
   canUseInlineCallTab,
@@ -158,36 +159,6 @@ export function ChannelDetailTabs(props: {
       value={activeTab()}
       onChange={setActiveTab}
     />
-  );
-}
-
-/**
- * Chooses whether threads expand inline or open in a side panel. Touch
- * devices show one pane, so they keep threads inline and never offer it.
- */
-function ChannelThreadLayoutToggle() {
-  const panel = useChannelThreadPanel();
-
-  return (
-    <Show when={panel && !isTouchDevice() ? panel : undefined}>
-      {(panel) => (
-        <Button
-          aria-label="Open threads in side panel"
-          aria-pressed={panel().enabled()}
-          tooltip={
-            panel().enabled()
-              ? 'Show threads inline'
-              : 'Open threads in side panel'
-          }
-          variant="ghost"
-          size="icon-sm"
-          class="shrink-0"
-          onClick={() => panel().setEnabled(!panel().enabled())}
-        >
-          <SidebarIcon class="size-4 shrink-0 -scale-x-100 pointer-events-none" />
-        </Button>
-      )}
-    </Show>
   );
 }
 
@@ -428,6 +399,22 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   );
   onCleanup(() => callCtx?.syncCallPageTab(channelId, false));
 
+  registerHotkey({
+    scopeId: panel.splitHotkeyScope,
+    hotkey: 'shift+cmd+e',
+    hotkeyToken: TOKENS.channel.toggleThreadPanel,
+    description: () =>
+      threadPanel.enabled()
+        ? 'Expand threads inline'
+        : 'Collapse threads into a side panel',
+    runWithInputFocused: true,
+    condition: threadPanel.available,
+    keyDownHandler: () => {
+      threadPanel.setEnabled(!threadPanel.enabled());
+      return true;
+    },
+  });
+
   const botManagement = useChannelBotManagement({
     channelId,
     hotkeyScopeId: panel.splitHotkeyScope,
@@ -465,34 +452,43 @@ function ChannelDetailContent(props: ChannelDetailProps) {
             >
               <Switch>
                 <Match when={activeTab() === 'messages'}>
-                  {/* A narrow pane gives the open thread the whole width. */}
-                  <div class="@container/channel-body flex min-h-0 flex-1">
-                    <div
-                      class={cn(
-                        'flex min-h-0 min-w-0 flex-1 flex-col',
-                        threadPanel.openThreadId() &&
-                          '@max-[44rem]/channel-body:hidden'
-                      )}
-                    >
-                      <DebugSuspense
-                        name="ChannelDetail.messages"
-                        fallback={<ChannelLoading />}
+                  {/* A narrow pane gives the open thread the whole width.
+                      Collapsed threads shrink message media to thumbnails. */}
+                  <MediaDensityContext.Provider
+                    value={() =>
+                      threadPanel.enabled() ? 'compact' : 'regular'
+                    }
+                  >
+                    <div class="@container/channel-body flex min-h-0 flex-1">
+                      <div
+                        class={cn(
+                          'flex min-h-0 min-w-0 flex-1 flex-col',
+                          threadPanel.openThreadId() &&
+                            '@max-[44rem]/channel-body:hidden'
+                        )}
                       >
-                        <ChannelMessages autofocus={props.autofocus ?? false} />
-                      </DebugSuspense>
-                    </div>
-                    <Show when={threadPanel.openThreadId()}>
-                      {(threadId) => (
-                        <DebugSuspense name="ChannelDetail.thread-panel">
-                          <ChannelThreadPanel
-                            channelId={channelId}
-                            threadId={threadId()}
-                            panel={threadPanel}
+                        <DebugSuspense
+                          name="ChannelDetail.messages"
+                          fallback={<ChannelLoading />}
+                        >
+                          <ChannelMessages
+                            autofocus={props.autofocus ?? false}
                           />
                         </DebugSuspense>
-                      )}
-                    </Show>
-                  </div>
+                      </div>
+                      <Show when={threadPanel.openThreadId()}>
+                        {(threadId) => (
+                          <DebugSuspense name="ChannelDetail.thread-panel">
+                            <ChannelThreadPanel
+                              channelId={channelId}
+                              threadId={threadId()}
+                              panel={threadPanel}
+                            />
+                          </DebugSuspense>
+                        )}
+                      </Show>
+                    </div>
+                  </MediaDensityContext.Provider>
                 </Match>
                 <Match when={activeTab() === 'attachments'}>
                   <DebugSuspense name="ChannelDetail.attachments">

@@ -199,39 +199,38 @@ describe('channel top bar thread layout toggle', () => {
     return panel!;
   }
 
+  const toggle = () => screen.getByRole('switch') as HTMLInputElement;
+
   it('is offered only by hosts with a thread panel', () => {
     render(() => <ChannelDetailTopBar channelId="channel-1" />);
-    expect(screen.queryByLabelText('Open threads in side panel')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
-  it('moves threads into the side panel and back inline', () => {
+  it('collapses threads into the side panel and expands them back inline', () => {
     const panel = renderWithThreadPanel();
-    const toggle = screen.getByLabelText('Open threads in side panel');
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle().checked).toBe(false);
+    expect(screen.getByText('Expand')).toBeTruthy();
 
     panel.open('message-1');
     expect(panel.openThreadId()).toBeUndefined();
 
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(toggle());
+    expect(toggle().checked).toBe(true);
+    expect(screen.getByText('Collapse')).toBeTruthy();
     panel.open('message-1');
     expect(panel.openThreadId()).toBe('message-1');
 
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle());
+    expect(toggle().checked).toBe(false);
     expect(panel.openThreadId()).toBeUndefined();
   });
 
   it('remembers the choice for the next channel', () => {
     renderWithThreadPanel();
-    fireEvent.click(screen.getByLabelText('Open threads in side panel'));
+    fireEvent.click(toggle());
     cleanup();
 
     renderWithThreadPanel();
-    expect(
-      screen
-        .getByLabelText('Open threads in side panel')
-        .getAttribute('aria-pressed')
-    ).toBe('true');
+    expect(toggle().checked).toBe(true);
   });
 });
