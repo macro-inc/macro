@@ -1,4 +1,4 @@
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import BellSimpleIcon from '@icon/system/regular/bell-simple.svg';
 import CalendarDotsIcon from '@icon/system/regular/calendar-dots.svg';
 import CalendarXIcon from '@icon/system/regular/calendar-x.svg';
@@ -18,7 +18,7 @@ import { PropertyCaret } from '@property/extractors/PropertyCaret';
 import { PropertyPill } from '@property/extractors/PropertyPill';
 import type { EntityProperty } from '@property/types';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { Button, cn, Layer, Select, Tabs, Tooltip } from '@ui';
+import { cn, Layer, Select, Tabs, Tooltip } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   formatReminderOffset,
@@ -311,44 +311,19 @@ function GuestsSheetEditor(props: {
   };
 
   return (
-    <MobileDrawer
-      side="bottom"
-      open={ctx.editorOpen()}
-      onOpenChange={(open) => {
-        if (!open) cancel();
-      }}
-    >
-      <MobileDrawer.Portal>
-        <MobileDrawer.Overlay />
-        {/* Opens as tall as the event sheet beneath it. It does not drag:
-            Cancel and Done own closing, and a drag here would also reach the
-            event sheet, so both slid away together. */}
-        <MobileDrawer.Content targetHeight={92} data-corvu-no-drag>
-          <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-4 pb-2">
-            <Button variant="ghost" class="justify-self-start" onClick={cancel}>
-              Cancel
-            </Button>
-            <MobileDrawer.Title class="text-base font-semibold text-ink">
-              Guests
-            </MobileDrawer.Title>
-            <Button variant="primary" class="justify-self-end" onClick={done}>
-              Done
-            </Button>
-          </div>
-          {/* The picker scrolls its own list, filling the sheet below the header. */}
-          <div class="flex min-h-0 flex-auto flex-col">
-            <GuestsEditor
-              selected={shown()}
-              currentGuests={props.currentGuests}
-              options={props.options}
-              onChange={setDraft}
-              onClose={cancel}
-              fillHeight
-            />
-          </div>
-        </MobileDrawer.Content>
-      </MobileDrawer.Portal>
-    </MobileDrawer>
+    <PickerSheet.Root open={ctx.editorOpen()} onCancel={cancel}>
+      <PickerSheet.Header title="Guests" onDone={done} />
+      <PickerSheet.Body>
+        <GuestsEditor
+          selected={shown()}
+          currentGuests={props.currentGuests}
+          options={props.options}
+          onChange={setDraft}
+          onClose={cancel}
+          fillHeight
+        />
+      </PickerSheet.Body>
+    </PickerSheet.Root>
   );
 }
 

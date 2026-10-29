@@ -60,6 +60,14 @@ read their code, and follow that pattern rather than inventing a new one.
   chrome between the handle and `MobileDrawer.ScrollBody`, never in a sticky
   band inside the scroll. A touch popover split exposes that slot as
   `drawerHeader` on its panel context; see `MobileEventForm`.
+- Pick people, projects, tags, or other searchable lists from a touch sheet
+  with `PickerSheet` (`components/app/mobile`), not a dropdown: a full-height
+  sheet stacked over the current one with Cancel, a title, and Done, and no
+  handle or drag. Create the draft or picker session inside it so each opening
+  starts fresh, apply it only on Done, let the list fill `PickerSheet.Body`,
+  and cancel `pointerdown` and `mousedown` on the rows so the search field
+  keeps the keyboard. `Property.SheetEditor` (entity properties),
+  `InlineTagsSheetPill`, and the event composer's guest pill use it.
 - A backdrop tap only dismisses: `MobileDrawer` swallows the rest of that tap,
   so it never presses what the scrim covered, even when the sheet unmounts as
   it closes (a `<Show>` around it, or `openDialog`). It swallows only a tap

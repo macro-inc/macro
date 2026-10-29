@@ -1,9 +1,9 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Match, Switch } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { DateEditor } from './DateEditor';
 import { DateRangeEditor } from './DateRangeEditor';
-import { EntityEditor } from './EntityEditor';
+import { EntityEditor, EntitySheetEditor } from './EntityEditor';
 import { SelectEditor } from './SelectEditor';
 
 type PopoverEditorProps = {
@@ -38,5 +38,22 @@ export function PopoverEditor(props: PopoverEditorProps) {
         <EntityEditor selfFilter={props.entitySelfFilter} />
       </Match>
     </Switch>
+  );
+}
+
+/**
+ * `PopoverEditor` for pills inside a touch sheet: ENTITY properties (people,
+ * projects) pick in a `PickerSheet` stacked over it; dates and selects keep
+ * their popovers.
+ */
+export function SheetEditor(props: PopoverEditorProps) {
+  const ctx = useProperty();
+  return (
+    <Show
+      when={ctx.property().valueType === 'ENTITY'}
+      fallback={<PopoverEditor entitySelfFilter={props.entitySelfFilter} />}
+    >
+      <EntitySheetEditor selfFilter={props.entitySelfFilter} />
+    </Show>
   );
 }

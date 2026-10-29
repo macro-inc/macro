@@ -1,4 +1,6 @@
 import { onElementConnect } from '@core/util/onElementConnect';
+import { Property } from '@property';
+import { InlineTagsSheetPill } from '@property/tags';
 import { cn, EntityComposer } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
@@ -29,7 +31,11 @@ export function MobileTaskComposer(props: {
   };
 
   return (
-    <TaskComposer.Root composer={props.composer}>
+    <TaskComposer.Root
+      composer={props.composer}
+      tagsPill={InlineTagsSheetPill}
+      propertyEditor={Property.SheetEditor}
+    >
       <EntityComposer.Header
         ref={observeHeader}
         class={cn(

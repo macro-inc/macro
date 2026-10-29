@@ -1,4 +1,4 @@
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
@@ -11,6 +11,7 @@ import {
   DropdownSearchInput,
   DropdownSelectableRow,
 } from '@property/editors/selectors/PropertyOptionSelector';
+import { useSearchInputFocus } from '@property/utils';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { Button, cn, Layer } from '@ui';
@@ -331,31 +332,16 @@ export function TagSheetPicker(props: {
       >
         {props.children}
       </button>
-      <MobileDrawer
-        side="bottom"
-        open={open()}
-        onOpenChange={(next) => {
-          if (!next) setOpen(false);
-        }}
-      >
-        <MobileDrawer.Portal>
-          <MobileDrawer.Overlay />
-          {/* As tall as the sheet beneath it. It does not drag: Cancel and
-              Done own closing, and a drag here would also reach that sheet. */}
-          <MobileDrawer.Content targetHeight={92} data-corvu-no-drag>
-            {/* The content mounts with each opening, so each session starts
-                from the applied tags. */}
-            <TagPickerSheetBody
-              docTags={props.docTags}
-              onClose={() => setOpen(false)}
-              onOpenEditEditor={(mode) => {
-                setEditorMode(mode);
-                setOpen(false);
-              }}
-            />
-          </MobileDrawer.Content>
-        </MobileDrawer.Portal>
-      </MobileDrawer>
+      <PickerSheet.Root open={open()} onCancel={() => setOpen(false)}>
+        <TagPickerSheetBody
+          docTags={props.docTags}
+          onClose={() => setOpen(false)}
+          onOpenEditEditor={(mode) => {
+            setEditorMode(mode);
+            setOpen(false);
+          }}
+        />
+      </PickerSheet.Root>
       <Show when={editorMode()}>
         <TagEditorDialog
           open
@@ -383,28 +369,13 @@ function TagPickerSheetBody(props: {
   });
   return (
     <>
-      <div class="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pt-4 pb-2">
-        <Button
-          variant="ghost"
-          class="justify-self-start"
-          onClick={props.onClose}
-        >
-          Cancel
-        </Button>
-        <MobileDrawer.Title class="text-base font-semibold text-ink">
-          Tags
-        </MobileDrawer.Title>
-        <Button
-          variant="primary"
-          class="justify-self-end"
-          onClick={() => fireAndForget(session.saveAndClose(), 'tag-picker')}
-        >
-          Done
-        </Button>
-      </div>
-      <div class="flex min-h-0 flex-auto flex-col text-sm">
+      <PickerSheet.Header
+        title="Tags"
+        onDone={() => fireAndForget(session.saveAndClose(), 'tag-picker')}
+      />
+      <PickerSheet.Body>
         <TagPickerList session={session} fillHeight />
-      </div>
+      </PickerSheet.Body>
     </>
   );
 }
@@ -519,6 +490,8 @@ function TagPickerList(props: {
   // Picking a row keeps focus in the search field, so a phone keyboard stays
   // up; iOS devices still send mousedown after a cancelled pointerdown.
   const keepSearchFocus = (event: Event) => event.preventDefault();
+  let searchInput: HTMLInputElement | undefined;
+  useSearchInputFocus(() => searchInput);
 
   return (
     <Show
@@ -529,6 +502,9 @@ function TagPickerList(props: {
             value={session.search()}
             placeholder="Change or add tags"
             onInput={session.setSearch}
+            inputRef={(element) => {
+              searchInput = element;
+            }}
           />
           <div
             class={cn(

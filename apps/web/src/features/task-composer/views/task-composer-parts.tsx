@@ -8,6 +8,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { Property } from '@property';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import { InlineTagsPill } from '@property/tags';
@@ -20,6 +21,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { tabbable } from 'tabbable';
 import {
   ComposeTaskTitleEditor,
@@ -37,15 +39,40 @@ function useTaskComposer() {
   return composer;
 }
 
+/** The pickers the parts open; a touch sheet's view picks in stacked sheets. */
+type TaskComposerPickers = {
+  tagsPill: typeof InlineTagsPill;
+  propertyEditor: typeof Property.PopoverEditor;
+};
+
+const TaskComposerPickersContext = createContext<TaskComposerPickers>({
+  tagsPill: InlineTagsPill,
+  propertyEditor: Property.PopoverEditor,
+});
+
 function Root(props: {
   composer: TaskComposerController;
+  /** The tags pill; `InlineTagsSheetPill` inside a touch sheet. */
+  tagsPill?: typeof InlineTagsPill;
+  /** The editor property pills open; `Property.SheetEditor` inside a touch sheet. */
+  propertyEditor?: typeof Property.PopoverEditor;
   children: JSX.Element;
 }) {
+  const pickers: TaskComposerPickers = {
+    get tagsPill() {
+      return props.tagsPill ?? InlineTagsPill;
+    },
+    get propertyEditor() {
+      return props.propertyEditor ?? Property.PopoverEditor;
+    },
+  };
   return (
     <TaskComposerPartsContext.Provider value={props.composer}>
-      <EntityComposer.Root tabIndex={-1} ref={props.composer.setContainerRef}>
-        {props.children}
-      </EntityComposer.Root>
+      <TaskComposerPickersContext.Provider value={pickers}>
+        <EntityComposer.Root tabIndex={-1} ref={props.composer.setContainerRef}>
+          {props.children}
+        </EntityComposer.Root>
+      </TaskComposerPickersContext.Provider>
     </TaskComposerPartsContext.Provider>
   );
 }
@@ -144,11 +171,13 @@ function Recovery() {
 
 function Title() {
   const composer = useTaskComposer();
+  const pickers = useContext(TaskComposerPickersContext);
   return (
     <EntityComposer.Title>
       <Show when={composer.tagLayoutMode() === 'title'}>
         <TaskTitleAccessory>
-          <InlineTagsPill
+          <Dynamic
+            component={pickers.tagsPill}
             docTags={composer.composerTags}
             variant="secondary"
             size="xs"
@@ -242,6 +271,7 @@ function Attach() {
 /** The property pills, tags, and Add property; `class` places the row. */
 function Properties(props: { class?: string }) {
   const composer = useTaskComposer();
+  const pickers = useContext(TaskComposerPickersContext);
   return (
     <Suspense fallback={<div class="h-7" />}>
       <PropertiesProvider
@@ -274,11 +304,13 @@ function Properties(props: { class?: string }) {
               <InlinePropertyValue
                 property={property}
                 emptyLabel={property.displayName}
+                editor={pickers.propertyEditor}
               />
             )}
           </For>
           <Show when={composer.tagLayoutMode() === 'bottom'}>
-            <InlineTagsPill
+            <Dynamic
+              component={pickers.tagsPill}
               docTags={composer.composerTags}
               variant="secondary"
               size="xs"
