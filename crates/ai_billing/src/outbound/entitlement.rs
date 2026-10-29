@@ -55,24 +55,30 @@ where
     /// paying team with a subscription (`TeamService::team_bills_per_seat`).
     /// A canceled subscription leaves its id on the team, so the id alone
     /// does not mean the team pays.
+    #[tracing::instrument(
+        skip(self, team),
+        fields(team_id = %team.id(), bills_seats = tracing::field::Empty),
+        err
+    )]
     async fn team_bills_seats(&self, team: &Team) -> Result<bool> {
-        if team.enterprise() {
-            return Ok(true);
-        }
-        let paying = self
-            .teams
-            .get_team_payment_status(team.id())
-            .await
-            .map_err(entitlement_err)?;
-        if !paying {
-            return Ok(false);
-        }
-        Ok(self
-            .teams
-            .get_team_subscription_id(team.id())
-            .await
-            .map_err(entitlement_err)?
-            .is_some())
+        let bills_seats = if team.enterprise() {
+            true
+        } else {
+            let paying = self
+                .teams
+                .get_team_payment_status(team.id())
+                .await
+                .map_err(entitlement_err)?;
+            paying
+                && self
+                    .teams
+                    .get_team_subscription_id(team.id())
+                    .await
+                    .map_err(entitlement_err)?
+                    .is_some()
+        };
+        tracing::Span::current().record("bills_seats", bills_seats);
+        Ok(bills_seats)
     }
 }
 
