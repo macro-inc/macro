@@ -97,7 +97,9 @@ impl Versions {
             .max_by_key(|(version, _)| *version)
     }
 
-    /// Remove every version folder but `keep`, and abandoned partial ones.
+    /// Remove every complete version folder but `keep`. Partial folders
+    /// stay: a running macrod may be staging one, and an abandoned one is
+    /// never launched and is overwritten when that version is staged again.
     /// Best effort: a version another macrod is still running from cannot be
     /// removed on Windows, and stays until a later launch.
     pub fn prune(&self, keep: ReleaseVersion) {
@@ -107,8 +109,7 @@ impl Versions {
         for entry in entries.filter_map(Result::ok) {
             let name = entry.file_name();
             let Some(name) = name.to_str() else { continue };
-            let stale = name.ends_with(PARTIAL_SUFFIX)
-                || ReleaseVersion::parse(name).is_some_and(|version| version != keep);
+            let stale = ReleaseVersion::parse(name).is_some_and(|version| version != keep);
             if stale && let Err(error) = std::fs::remove_dir_all(entry.path()) {
                 tracing::debug!(error = %error, folder = name, "could not prune an old macrod version");
             }

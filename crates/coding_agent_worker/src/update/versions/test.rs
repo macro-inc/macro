@@ -42,7 +42,7 @@ fn no_versions_means_no_launcher() {
 }
 
 #[test]
-fn pruning_keeps_only_the_launched_version() {
+fn pruning_keeps_the_launched_version_and_any_being_staged() {
     let root = tempfile::tempdir().unwrap();
     let versions = Versions::new(root.path().join(VERSIONS_DIRECTORY));
     install_version(versions.directory(), "v2026.10.9.3");
@@ -57,7 +57,8 @@ fn pruning_keeps_only_the_launched_version() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     left.sort();
-    assert_eq!(left, ["scratch", "v2026.10.10.1"]);
+    // A running macrod may be writing the partial version right now.
+    assert_eq!(left, ["scratch", "v2026.10.10.1", "v2026.10.11.0.partial"]);
 }
 
 #[test]

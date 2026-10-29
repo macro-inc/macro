@@ -115,7 +115,11 @@ async fn model_probe_process_failures_are_safely_redacted() {
 
 #[tokio::test]
 async fn relay_teaches_a_new_session_on_its_first_prompt() {
-    let (runtime, mut service) = Channel::duplex();
+    let (runtime, service) = Channel::duplex();
+    let ServerChannel {
+        tx: to_bridge,
+        rx: mut from_bridge,
+    } = service;
     // Answers `session/new` with a session id, and every prompt with the
     // prompt blocks it received.
     let agent = Harness {
@@ -136,9 +140,8 @@ for line in sys.stdin:
         ],
         env: Default::default(),
     };
-    let send = |service: &ServerChannel, value: serde_json::Value| {
-        service
-            .tx
+    let send = |value: serde_json::Value| {
+        to_bridge
             .send(ToRuntimeMessage::Acp(AcpMessage(
                 serde_json::from_value(value).expect("a valid JSON-RPC message"),
             )))
@@ -157,7 +160,7 @@ for line in sys.stdin:
     );
     let conversation = async {
         let mut next_answer = async || loop {
-            match service.rx.recv().await.expect("the bridge is running") {
+            match from_bridge.recv().await.expect("the bridge is running") {
                 ToServerMessage::Acp(AcpMessage(frame)) => {
                     break serde_json::to_value(frame).expect("a serializable message");
                 }
@@ -165,21 +168,15 @@ for line in sys.stdin:
                 other => panic!("unexpected message {other:?}"),
             }
         };
-        send(
-            &service,
-            serde_json::json!({
-                "jsonrpc": "2.0", "id": 1, "method": "session/new",
-                "params": {"cwd": "/home/operator/code", "mcpServers": []}
-            }),
-        );
+        send(serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "session/new",
+            "params": {"cwd": "/home/operator/code", "mcpServers": []}
+        }));
         next_answer().await;
-        send(
-            &service,
-            serde_json::json!({
-                "jsonrpc": "2.0", "id": 2, "method": "session/prompt",
-                "params": {"sessionId": "acp-1", "prompt": [{"type": "text", "text": "hello"}]}
-            }),
-        );
+        send(serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "method": "session/prompt",
+            "params": {"sessionId": "acp-1", "prompt": [{"type": "text", "text": "hello"}]}
+        }));
         next_answer().await
     };
 
