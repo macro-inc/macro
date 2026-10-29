@@ -61,6 +61,11 @@ caret mapping) has a backend-free timing regression:
 Keep reconcile and caret lookups linear in the document: no `getChildren()` or
 container scan per node.
 
+Collaborative Markdown editing across several peers has a fast-check fuzzer and
+the fixed scenarios it found; see
+`src/lib/core/component/LexicalMarkdown/fuzz/README.md` before changing
+`CollabProvider`, caret mapping, or Loro undo.
+
 Event details placement has a backend-free browser regression: the desktop
 popover stays beside its event when join requests arrive after it opens, and
 slides into a short window; the phone drawer shows late requests. The same
