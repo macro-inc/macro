@@ -1,17 +1,17 @@
 /**
- * The loader leading an open agent turn: a run of dots chasing clockwise
- * around the edge of a 3×3 grid, on the `agent-working-dot` keyframes in
- * `index.css`. The centre stays dark, so the run reads as a loop.
+ * The loader leading an open agent turn: the dots of a 3×3 grid brighten one
+ * at a time in a scattered order and fade out completely between turns, on
+ * the `agent-working-dot` keyframes in `index.css`, so at any moment a few
+ * of the nine are gone.
  */
 
 import { For } from 'solid-js';
 
-/** One lap around the grid's edge. */
-const LAP_MS = 800;
-const EDGE_CELLS = 8;
+/** One dot's brighten-and-fade; matches `agent-working-dot` in `index.css`. */
+const TWINKLE_MS = 1600;
 
-/** Each cell's place on the lap, row by row; the centre has none. */
-const LAP_POSITIONS = [0, 1, 2, 7, null, 3, 6, 5, 4] as const;
+/** When each dot, row by row, brightens within a cycle; scattered so no path reads. */
+const TWINKLE_OFFSETS_MS = [0, 700, 300, 1100, 500, 900, 200, 1300, 600];
 
 export function WorkingDots() {
   return (
@@ -19,22 +19,12 @@ export function WorkingDots() {
       aria-hidden="true"
       class="grid size-[13px] shrink-0 grid-cols-3 gap-[2px] text-ink-muted"
     >
-      <For each={LAP_POSITIONS}>
-        {(position) => (
+      <For each={TWINKLE_OFFSETS_MS}>
+        {(offset) => (
           <span
-            class="size-[3px] rounded-full bg-current"
-            classList={{
-              'agent-working-dot': position !== null,
-              'opacity-0': position === null,
-            }}
-            // A later place starts further back, so the lit run moves clockwise.
-            style={
-              position === null
-                ? undefined
-                : {
-                    'animation-delay': `${((position - EDGE_CELLS) * LAP_MS) / EDGE_CELLS}ms`,
-                  }
-            }
+            class="agent-working-dot size-[3px] rounded-full bg-current"
+            // Negative delays start each dot mid-cycle, so none wait blank on mount.
+            style={{ 'animation-delay': `${offset - TWINKLE_MS}ms` }}
           />
         )}
       </For>
