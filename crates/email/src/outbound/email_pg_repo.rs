@@ -34,6 +34,8 @@ mod label;
 mod link;
 mod mailbox_action;
 mod message;
+#[cfg(feature = "mailbox")]
+mod message_source;
 mod preview;
 mod preview_views;
 mod project;
