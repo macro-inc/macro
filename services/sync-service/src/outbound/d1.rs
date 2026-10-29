@@ -104,11 +104,7 @@ pub async fn get_user_id_from_peer_id(
     Ok(user_id)
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct PeerWithUserId {
-    pub peer_id: String,
-    pub user_id: String,
-}
+pub use crate::domain::models::PeerWithUserId;
 
 pub async fn get_peers_for_document_id(
     db: D1Database,
@@ -190,12 +186,7 @@ pub async fn delete_document_rows(db: D1Database, document_id: &str) -> worker::
     Ok(())
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct BlameRow {
-    pub peer_id: String,
-    pub user_id: Option<String>,
-    pub timestamp_ms: i64,
-}
+pub use crate::domain::models::BlameRow;
 
 /// JOIN blame with peer_user_map to get last-edit info plus resolved user_id.
 pub async fn get_blame_for_node(

@@ -10,14 +10,13 @@ use loro::{Frontiers, VersionVector};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
-use worker::{Method, Request, Response, Result};
+use worker::{Request, Response, Result};
 
 use super::{
-    DocumentSyncSession, response,
+    SyncSession, response,
     surface_api::{LIFECYCLE_KEY, SurfaceLifecycle},
 };
 use crate::{
-    auth::is_internal,
     error::ResultExt,
     state::DocumentState,
     storage::{
@@ -127,7 +126,7 @@ fn persistence_boundary(req: &Request, boundary: &str) -> Result<()> {
     Ok(())
 }
 
-impl DocumentSyncSession {
+impl SyncSession {
     async fn source_state(&self) -> Result<SourceState> {
         if let Some(value) = self.source_migration.lock("source state").clone() {
             return Ok(value);
@@ -211,18 +210,12 @@ impl DocumentSyncSession {
         state.export_snapshot(None)
     }
 
-    pub(super) async fn source_migration_handler(
+    pub(in crate::inbound) async fn source_migration_handler(
         &self,
         mut req: Request,
         id: &str,
         operation: &str,
     ) -> Result<Response> {
-        if !is_internal(&req, &self.env)? {
-            return Ok(response(401));
-        }
-        if req.method() != Method::Post {
-            return Ok(response(405));
-        }
         let Ok(source_id) = Uuid::parse_str(id) else {
             return Ok(response(400));
         };

@@ -5,9 +5,9 @@ use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use serde::{Deserialize, Serialize};
 use worker::{Date, Method, Request, Response, Result, WebSocket};
 
-use super::{DocumentSyncSession, WebSocketMetadata, Wsm, response, status_codes};
+use super::{SyncSession, WebSocketMetadata, Wsm, response, status_codes};
 use crate::{
-    auth::{TokenFrom, WriteAccess, is_internal, surface_access},
+    auth::WriteAccess,
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     state::DocumentState,
@@ -80,7 +80,7 @@ fn now_seconds() -> usize {
     (Date::now().as_millis() / 1000) as usize
 }
 
-impl DocumentSyncSession {
+impl SyncSession {
     pub(super) async fn surface_lifecycle(&self) -> Result<SurfaceLifecycle> {
         if let Some(value) = *self.surface_lifecycle.lock("surface lifecycle cached") {
             return Ok(value);
@@ -96,7 +96,11 @@ impl DocumentSyncSession {
         Ok(*cached.get_or_insert(value))
     }
 
-    pub(super) async fn surface_handler(&self, req: Request) -> Result<Response> {
+    pub(in crate::inbound) async fn surface_handler(
+        &self,
+        req: Request,
+        claims: Option<crate::auth::AuthToken>,
+    ) -> Result<Response> {
         let url = req.url()?;
         let segments: Vec<_> = url.path().split('/').collect();
         let ["", "surface", id, operation, rest @ ..] = segments.as_slice() else {
@@ -122,23 +126,6 @@ impl DocumentSyncSession {
         };
         if req.method() != allowed_method {
             return Ok(response(405));
-        }
-        if matches!(
-            *operation,
-            "initialize" | "revoke" | "initialize_verified" | "import" | "verify" | "activate"
-        ) {
-            if !is_internal(&req, &self.env)? {
-                return Ok(response(status_codes::UNAUTH));
-            }
-        } else {
-            let source = if *operation == "connect" {
-                TokenFrom::QueryParams
-            } else {
-                TokenFrom::Headers
-            };
-            if surface_access(&req, &self.env, source, &identity).is_err() {
-                return Ok(response(status_codes::UNAUTH));
-            }
         }
         let key = identity.storage_key();
         let persisted: Option<String> = self.state.storage().get(super::DOCUMENT_ID_KEY).await?;
@@ -175,7 +162,12 @@ impl DocumentSyncSession {
             return Ok(response(status_codes::FORBIDDEN));
         }
         match *operation {
-            "connect" => self.connect_handler(req, &key).await,
+            "connect" => {
+                let Some(claims) = claims else {
+                    return Ok(response(status_codes::UNAUTH));
+                };
+                self.connect(claims, &key).await
+            }
             "snapshot" => {
                 let snapshot = self.document_state().await?.export_snapshot(None)?;
                 Ok(Response::builder().body(worker::ResponseBody::Body(snapshot)))

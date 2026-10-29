@@ -2,31 +2,20 @@
 //! service calls this after it has deleted the document and its files.
 
 use tracing::warn;
-use worker::{Method, Request, Response, Result};
+use worker::{Response, Result};
 
-use super::{DocumentSyncSession, response, status_codes};
+use super::{SyncSession, response, status_codes};
 use crate::{
-    auth::is_internal,
     constants::USER_PEER_D1_BINDING,
     d1::delete_document_rows,
     storage::{get_snapshot_storage, snapshot::SnapshotStorage},
 };
 
-impl DocumentSyncSession {
+impl SyncSession {
     /// Erase the snapshot, operation log, socket metadata, peer mappings, and
     /// blame for `document_id`. Idempotent: a document that never had a
     /// session is already deleted.
-    pub(super) async fn delete_handler(
-        &self,
-        req: &Request,
-        document_id: &str,
-    ) -> Result<Response> {
-        if !is_internal(req, &self.env)? {
-            return Ok(response(status_codes::UNAUTH));
-        }
-        if req.method() != Method::Delete {
-            return Ok(response(405));
-        }
+    pub(in crate::inbound) async fn delete_handler(&self, document_id: &str) -> Result<Response> {
         for socket in self.state.get_websockets() {
             if let Err(error) = socket.close(Some(1008), Some("document deleted")) {
                 warn!(error = ?error, "failed to close socket of deleted document");
