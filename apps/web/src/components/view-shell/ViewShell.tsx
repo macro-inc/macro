@@ -14,7 +14,6 @@ import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { tourTarget } from '@ui/components/Tour';
@@ -35,6 +34,7 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
+import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
 import { VIEW_SHELL_TOUR } from './tour';
 import {
@@ -201,7 +201,7 @@ function Root(props: ViewShellRootProps) {
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const animateSidebar = createSidebarMotion(root);
-  const size = createElementSize(root);
+  const width = createFrameWidth(root);
 
   const thresholds = (): BreakpointThresholds =>
     local.breakpoints ?? DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS;
@@ -245,7 +245,6 @@ function Root(props: ViewShellRootProps) {
   };
 
   const resizable = () => local.resizable ?? false;
-  const width = () => size.width ?? undefined;
   const breakpoints = createSizeBreakpoints(width, thresholds);
 
   const atLayoutBreakpoint = () => {
