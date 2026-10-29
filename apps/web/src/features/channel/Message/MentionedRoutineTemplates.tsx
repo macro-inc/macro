@@ -23,14 +23,14 @@ export function MentionedRoutineTemplates(props: { content: string }) {
       .map((mention) => mention.documentId)
   );
   return (
-    <ShowFeatureFlag flag={enableRoutineSharing}>
-      <Show when={routineIds().length > 0}>
+    <Show when={routineIds().length > 0}>
+      <ShowFeatureFlag flag={enableRoutineSharing}>
         <Suspense>
           <For each={routineIds()}>
             {(routineId) => <RoutineTemplateCard routineId={routineId} />}
           </For>
         </Suspense>
-      </Show>
-    </ShowFeatureFlag>
+      </ShowFeatureFlag>
+    </Show>
   );
 }
