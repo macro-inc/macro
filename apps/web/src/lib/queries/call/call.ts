@@ -150,6 +150,22 @@ function isNotFoundResultError(error: unknown) {
   );
 }
 
+/**
+ * Refetches the record of the channel's call after the user leaves it, even
+ * while unmounted, so the Call tab doesn't list them in the call. Runs before
+ * the active-call invalidation, whose refetch may clear the call id.
+ */
+export function refetchLeftCallRecord(channelId: string) {
+  const callId = queryClient.getQueryData<CallActiveResponse | null>(
+    callKeys.active(channelId).queryKey
+  )?.callId;
+  if (!callId) return;
+  queryClient.invalidateQueries({
+    queryKey: callKeys.record(callId).queryKey,
+    refetchType: 'all',
+  });
+}
+
 export function useLeaveCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
@@ -164,7 +180,8 @@ export function useLeaveCallMutation() {
         throw error;
       }
     },
-    onSuccess() {
+    onSuccess(_result, channelId) {
+      refetchLeftCallRecord(channelId);
       fireAndForget(invalidateActiveCallQueries(), 'call-membership');
     },
     onError(error: Error) {
@@ -188,6 +205,20 @@ function callRecordQueryOptions(callId: string) {
 
 export function useCallRecordQuery(callId: Accessor<string>) {
   return useQuery(() => callRecordQueryOptions(callId()));
+}
+
+function liveCallRecordQueryOptions(callId: string) {
+  return queryOptions({
+    ...callRecordQueryOptions(callId),
+    // Participants join and leave without an event; poll like the active call.
+    staleTime: 0,
+    refetchInterval: 15_000,
+  });
+}
+
+/** The call record with current participants, for presence in a live call. */
+export function useLiveCallRecordQuery(callId: Accessor<string>) {
+  return useQuery(() => liveCallRecordQueryOptions(callId()));
 }
 
 export function fetchCallRecord(
