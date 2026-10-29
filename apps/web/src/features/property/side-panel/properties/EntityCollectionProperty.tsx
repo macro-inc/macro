@@ -9,7 +9,10 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import Plus from '@icon/system/regular/plus.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
-import { usePropertiesContext } from '@property/context/PropertiesContext';
+import {
+  type PropertySaveHandler,
+  usePropertiesContext,
+} from '@property/context/PropertiesContext';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { Property } from '@property/types';
 import { getEntityValues } from '@property/utils';
@@ -30,18 +33,31 @@ export function EntityCollectionProperty(props: {
 }) {
   const ctx = usePropertiesContext();
   const saving = createSignal(false);
+  const [isSaving, setIsSaving] = saving;
+  const saveProperty: PropertySaveHandler['saveProperty'] = async (
+    property,
+    values
+  ) => {
+    if (!ctx.canEdit || property.isMetadata || isSaving()) return;
+    setIsSaving(true);
+    try {
+      await ctx.saveHandler.saveProperty(property, values);
+      await props.onRefresh();
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <PropertyNS.Root
       property={props.property}
       canEdit={ctx.canEdit}
-      onSave={ctx.saveHandler.saveProperty}
-      onRefresh={ctx.onRefresh}
+      onSave={saveProperty}
     >
       <EntityCollectionPropertyBody
         entityId={props.entityId}
         loading={props.loading}
-        onRefresh={props.onRefresh}
+        onSave={saveProperty}
         property={props.property}
         saving={saving}
         actions={props.actions(saving)}
@@ -59,7 +75,7 @@ export function EntityCollectionProperty(props: {
 function EntityCollectionPropertyBody(props: {
   entityId: string;
   loading?: boolean;
-  onRefresh: () => Promise<unknown>;
+  onSave: PropertySaveHandler['saveProperty'];
   property: Property;
   saving: Signal<boolean>;
   actions: JSX.Element;
@@ -68,7 +84,7 @@ function EntityCollectionPropertyBody(props: {
   const propertyCtx = useProperty();
   const entities = () => getEntityValues(props.property);
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const [isSaving, setIsSaving] = props.saving;
+  const [isSaving] = props.saving;
   const dropTarget = createEntityCollectionDropTarget({
     property: () => props.property,
     selfId: () => props.entityId,
@@ -86,19 +102,11 @@ function EntityCollectionPropertyBody(props: {
     propertyCtx.openEditor(event.currentTarget);
   };
 
-  const saveReferences = async (refs: EntityReference[]) => {
-    if (isReadOnly() || isSaving()) return;
-    setIsSaving(true);
-    try {
-      await ctx.saveHandler.saveProperty(props.property, {
-        valueType: 'ENTITY',
-        refs: refs.length > 0 ? refs : null,
-      });
-      await props.onRefresh();
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  const saveReferences = (refs: EntityReference[]) =>
+    props.onSave(props.property, {
+      valueType: 'ENTITY',
+      refs: refs.length > 0 ? refs : null,
+    });
 
   const handleRemoveEntity = (entityId: string) =>
     saveReferences(entities().filter((entity) => entity.entity_id !== entityId));

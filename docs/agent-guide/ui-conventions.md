@@ -161,8 +161,9 @@ shows **Drop to add**. Dropping adds a reference without moving the original ite
 Existing references stay in place. Duplicate references, the owning entity's
 matching type-and-ID pair, unsupported item types, and types outside the property's
 restriction are ignored. Read-only, metadata, loading, saving, and open-editor
-states reject drops. Collection edits and row removal share a busy state so neither
-can run while the other is saving or refreshing.
+states reject drops. Picker saves, drops, chip removal, and row removal share a
+busy state through save and refresh, preventing stale references from replacing
+newly selected values.
 
 The **Add** action remains the keyboard/touch alternative. This target does not
 upload files dragged from the computer. A persisted drop changes property data;
