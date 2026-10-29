@@ -1,5 +1,19 @@
 # README assets
 
+## Feature grid graphics
+
+The ten SVGs in `features/` illustrate each block in the top README grid.
+They use fictional product scenes and are separate from the live screenshots
+below. The visual reference is the website refresh worktree's
+`apps/marketing/src/app/components/featureGraphics/` and
+`graphics/PreviewWindow.tsx`: dark rounded panels, fine borders, overlapping
+message cards, subtle dot grids, and colored Macro icons.
+
+Run `python3 .github/readme/feature-graphics.py` from the repository root to
+regenerate them. The script embeds the marketing app's SVG icons so the
+output has no external image, font, or script dependencies. Keep all ten
+feature categories and their documentation links in the README grid.
+
 ## Product screenshots
 
 The six JPEGs were captured on October 28, 2026 from a signed-in
