@@ -8,9 +8,12 @@
 // versionCode (`just android-bump`: the next production web deploy stops
 // serving shared JS to older installs and prompts them to update) or left as
 // the base has it (`just android-bump --no-min`: a release older installs
-// don't need). A PR labelled skip-android-update never releases, so with
-// --skip-release the floor must not rise above the base's: that would prompt
-// every older install to update to a version Play never published.
+// don't need). A PR without Android native changes releases nothing, so it
+// may raise the floor only as far as the base's versionCode, a version that
+// already went through this gate. A PR labelled skip-android-update never
+// releases either, so with --skip-release the floor must not rise above the
+// base's: either would prompt older installs to update to a version Play
+// never published.
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -53,8 +56,15 @@ export function checkAndroidVersion({
         `changed=${changed}\nversion_code=${androidVersionCode(git, headCommit)}\n`
       );
   };
+  const previous = androidVersionCode(git, baseCommit);
+  const baseFloor = androidNativeBuildFloor(git, baseCommit);
+  const floor = androidNativeBuildFloor(git, headCommit);
   if (androidNativeHash(git, baseCommit) === androidNativeHash(git, headCommit)) {
     output(false);
+    if (floor > baseFloor && floor > previous)
+      throw new Error(
+        `min-native-build.json raises the Android native build floor to ${floor}, above the base branch's versionCode ${previous}, but this PR has no Android native changes and releases nothing: after the production deploy, Android installs below it would be prompted to update to a version that was never published. Raise the floor only to a released versionCode.`
+      );
     return 'No Android native changes; no Android version bump needed.';
   }
   output(true);
@@ -62,14 +72,11 @@ export function checkAndroidVersion({
   const reason = androidChangeReasons(git, baseCommit, headCommit).join(
     ' and '
   );
-  const previous = androidVersionCode(git, baseCommit);
   const next = androidVersionCode(git, headCommit);
   if (next <= previous)
     throw new Error(
       `${reason}, but Android versionCode (${next}) must exceed the base branch (${previous}). Run just android-bump in apps/web and commit the result before merging.`
     );
-  const baseFloor = androidNativeBuildFloor(git, baseCommit);
-  const floor = androidNativeBuildFloor(git, headCommit);
   if (floor !== next && floor !== baseFloor)
     throw new Error(
       `min-native-build.json has android ${floor}; expected the new versionCode ${next}, so older Android installs are prompted to update after the production deploy, or ${baseFloor}, unchanged from the base branch, for a release older installs don't need. Run just android-bump (or just android-bump --no-min) in apps/web.`

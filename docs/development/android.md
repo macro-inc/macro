@@ -163,7 +163,8 @@ To release:
    Android installs, which show the update-required prompt instead. Use
    `just android-bump --no-min` for a release older installs don't need.
    The gate accepts only those two floors: the new versionCode or the base
-   branch's.
+   branch's. A PR without Android native changes may raise the floor only as
+   far as the base branch's versionCode.
 2. Add the **`android-update`** label once the PR is ready to merge. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,

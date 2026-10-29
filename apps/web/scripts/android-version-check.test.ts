@@ -185,6 +185,28 @@ describe('PR Android version enforcement', () => {
     expect(checkAndroidVersion({ cwd, base })).toContain('No Android native changes');
   });
 
+  it('lets a PR without native changes raise the Android floor to a released version code', () => {
+    version(3);
+    commit();
+    const base = git('rev-parse', 'HEAD');
+    floor(3);
+    commit();
+    expect(checkAndroidVersion({ cwd, base })).toContain(
+      'No Android native changes'
+    );
+  });
+
+  it('rejects a PR without native changes that raises the Android floor past the base version code', () => {
+    version(3);
+    commit();
+    const base = git('rev-parse', 'HEAD');
+    floor(4);
+    commit();
+    expect(() => checkAndroidVersion({ cwd, base })).toThrow(
+      /floor to 4, above the base branch's versionCode 3/
+    );
+  });
+
   it.each([
     'apps/web/tauri/src-tauri/gen/apple/project.yml',
     'apps/web/tauri/src-tauri/Info.ios.plist',
