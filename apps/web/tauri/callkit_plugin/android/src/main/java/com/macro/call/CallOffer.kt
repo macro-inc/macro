@@ -14,6 +14,8 @@ internal data class CallOffer(
     val ringUrl: String? = null,
     val sentTime: Long = System.currentTimeMillis(),
     val callerName: String? = null,
+    val traceparent: String? = null,
+    val tracestate: String? = null,
 ) {
     companion object {
         fun fresh(sentTime: Long, now: Long): Boolean = RingPolicy.fresh(sentTime, now)
@@ -26,7 +28,9 @@ internal data class CallOffer(
             require(URI(ring).let { it.scheme == "https" && (it.host == "macro.com" || it.host?.endsWith(".macro.com") == true) && it.userInfo == null })
             return CallOffer(id, data.getString("channelId"), data.optString("channelName", "Macro call"), server,
                 data.getString("livekitToken"), ring, sentTime,
-                data.optString("callerName").takeIf { !data.isNull("callerName") && it.isNotBlank() }).also {
+                data.optString("callerName").takeIf { !data.isNull("callerName") && it.isNotBlank() },
+                data.optString("traceparent").takeIf { !data.isNull("traceparent") && it.isNotBlank() },
+                data.optString("tracestate").takeIf { !data.isNull("tracestate") && it.isNotBlank() }).also {
                 require(it.channelId.isNotBlank() && it.token.isNotBlank())
             }
         }

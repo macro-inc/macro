@@ -902,6 +902,48 @@ choose this screen while locked or a notification while the phone is in use.
 Test full-screen access allowed/denied, including notification Answer with
 microphone permission missing and a stale action after another call arrives.
 
+### Native call tracing
+
+The Kotlin call plugin uses OpenTelemetry to export through the same OTLP endpoint
+and enablement decision as browser telemetry. The guarded `configure_tracing`
+command persists only the endpoint and environment, so incoming calls can export
+without starting the WebView. Older binaries without the capability flag skip
+this command. Reapplying an unchanged configuration preserves an active trace;
+changing the endpoint or disabling telemetry closes and detaches it before shutting
+down the provider, without ending the call. Disabled calls do not propagate the
+old trace context in subsequent requests.
+
+The outbound notification adapter adds `traceparent`/`tracestate` to the existing
+Android call offer under `call.push.send`; older consumers ignore them. Native
+`call.incoming` adopts that producer context. Children cover `call.push.receive`,
+`call.notification`, `call.activity`, `call.permission.microphone`, `call.answer`,
+`call.ring_status` and `call.connect`. Notification intents carry W3C context;
+status requests inject it into HTTP headers so the backend request joins the
+trace. Older pushes without valid context start a native root. Search by
+`resource.service.name="android-calls"` and the opaque `call.id`; `call.outcome`
+records permission, retry, cancellation and connection outcomes. Durations come
+from span boundaries. Only exception classes are recorded: never caller/channel
+names, JWTs, authorization headers or connection URLs.
+
+The SDK uses a bounded 512-span queue and a three-second exporter timeout. It
+shares the native media stack's OkHttp 4 transport and enables core library
+desugaring, preserving the existing Android/Kotlin baseline. Consumer R8 rules
+retain the HTTP transport provider, and optional SDK interfaces and annotation
+types are present for release shrinking. Debug builds permit HTTP exporters for
+local device testing; releases require HTTPS. Export is best effort when the
+device is offline or terminated.
+
+Run `CallTracingTest` with the native connected-test command below. It uses local
+HTTP fixtures to verify producer context, real notification intents, permission
+outcomes, downstream headers, protobuf export, mid-call telemetry changes and
+connection failure without sending real pushes. With local Tempo on port 4318,
+add `-Pandroid.testInstrumentationRunnerArguments.tracesUrl=http://10.0.2.2:4318/v1/traces`.
+The synthetic trace ID is saved to `/sdcard/Download/native-call-trace-id.txt`;
+fetch it from Tempo at `http://localhost:3200/api/traces/<trace-id>` to inspect
+the connected backend producer, native phases and status-request server span.
+
+### Active call controls
+
 After answering, the native call activity presents a themed drawer at approximately
 92% of the safe screen height, above navigation bars/cutouts. A large participant tile sits
 above a horizontally scrolling participant strip; tapping a strip tile selects

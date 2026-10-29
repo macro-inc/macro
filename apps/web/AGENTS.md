@@ -525,6 +525,9 @@ Calls notification as the fallback when full-screen access is unavailable.
 Keep notification Answer intents pointed directly at the call activity and scoped
 to the offered call; active calls retain the drawer and PiP controls. See
 `docs/development/android.md#native-calling` at the repository root.
+Native call tracing retains the browser telemetry gate and exporter for cold
+calls; propagate W3C context through push payloads, notification intents and
+ring-status requests, and keep caller names, tokens and URLs out of spans.
 
 Read iOS's durable pending tap before mounting the router, then choose its
 destination only after the authenticated account matches `recipientId`. Keep

@@ -313,3 +313,10 @@ follow the hardware matrix in [Android development](../development/android.md#na
 Synthetic emulator captures: [incoming screen](media/calls/android-incoming-call.png),
 [notification fallback](media/calls/android-call-notification.png), and
 [microphone permission after Answer](media/calls/android-call-microphone-permission.png).
+
+Native Android call spans use service `android-calls` and the opaque `call.id`.
+The existing telemetry gate also controls cold calls. W3C context connects the
+push producer, notification/activity, permission and answer phases, and status
+HTTP requests; connection and cancellation outcomes end the incoming trace.
+For local collector verification and the exporter fixture, see
+[native call tracing](../development/android.md#native-call-tracing).

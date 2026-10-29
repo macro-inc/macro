@@ -42,11 +42,13 @@ class CallActivity : Activity() {
     private val renderers = mutableListOf<Pair<VideoTrack, SurfaceViewRenderer>>()
     private var permissionAction: (() -> Unit)? = null
     private var permissionCallId: String? = null
+    private var permissionTrace: CallTrace.Phase? = null
     private var rendered: List<Any?>? = null
     private val callback: () -> Unit = { render() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (!matchesCall(intent)) { finish(); return }
+        val receipt = Calls.trace?.activity(intent)
         current = WeakReference(this)
         if (Build.VERSION.SDK_INT >= 33) {
             backCallback = android.window.OnBackInvokedCallback { dismissDrawer() }
@@ -74,13 +76,16 @@ class CallActivity : Activity() {
             permission(Manifest.permission.RECORD_AUDIO, id) { Calls.answer(this, id) }
         }
         render()
+        receipt?.end("shown")
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (!matchesCall(intent)) return
+        val receipt = Calls.trace?.activity(intent)
         setIntent(intent)
         intent.getStringExtra("answer")?.let { id -> permission(Manifest.permission.RECORD_AUDIO, id) { Calls.answer(this, id) } }
         render()
+        receipt?.end("shown")
     }
     private fun matchesCall(intent: Intent): Boolean {
         val id = intent.getStringExtra("callId") ?: intent.getStringExtra("answer")
@@ -92,6 +97,7 @@ class CallActivity : Activity() {
             return
         }
         if (checkSelfPermission(name) == PackageManager.PERMISSION_GRANTED) {
+            if (callId != null) Calls.trace?.takeIf { it.callId == callId }?.phase("call.permission.microphone")?.end("already_granted")
             callId?.let { Calls.finishMicrophonePermission(it) }
             action()
             return
@@ -99,8 +105,10 @@ class CallActivity : Activity() {
         if (callId != null && !Calls.beginMicrophonePermission(callId)) return
         permissionCallId = callId
         permissionAction = action
+        if (callId != null) permissionTrace = Calls.trace?.takeIf { it.callId == callId }?.phase("call.permission.microphone")
         try { requestPermissions(arrayOf(name), 4) }
         catch (_: Exception) {
+            permissionTrace?.end("request_error", failed = true); permissionTrace = null
             permissionCallId?.let { Calls.finishMicrophonePermission(it) }
             permissionCallId = null; permissionAction = null
             Calls.error = "Could not request permission. Try again."; render()
@@ -111,9 +119,11 @@ class CallActivity : Activity() {
         if (code != 4 || permissionAction == null) return
         val action = permissionAction
         val callId = permissionCallId
+        val granted = grants.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        permissionTrace?.end(if (granted) "granted" else "denied"); permissionTrace = null
         permissionAction = null; permissionCallId = null
         callId?.let { Calls.finishMicrophonePermission(it) }
-        if (grants.firstOrNull() == PackageManager.PERMISSION_GRANTED) action?.invoke()
+        if (granted) action?.invoke()
         else { Calls.error = "Permission denied. Enable it in Android settings to use this control."; render() }
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -201,7 +211,7 @@ class CallActivity : Activity() {
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
         }
         val actions = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        actions.addView(actionButton("Decline", colors.failure) { Calls.end(this, call.callId) },
+        actions.addView(actionButton("Decline", colors.failure) { Calls.end(this, call.callId, outcome = "declined") },
             LinearLayout.LayoutParams(0, dp(64), 1f).apply { marginEnd = dp(8) })
         actions.addView(actionButton("Answer", colors.success) {
             permission(Manifest.permission.RECORD_AUDIO, call.callId) { Calls.answer(this, call.callId) }
@@ -358,6 +368,7 @@ class CallActivity : Activity() {
         Calls.stopCamera(this)
     }
     override fun onDestroy() {
+        permissionTrace?.end("activity_destroyed"); permissionTrace = null
         if (Build.VERSION.SDK_INT >= 33) backCallback?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
         backCallback = null
         permissionCallId?.let { Calls.finishMicrophonePermission(it) }
