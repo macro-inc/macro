@@ -26,6 +26,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Pass saved-view state through the existing Tasks search codec; split URLs namespace it as `s0.tasks.savedView`.
 - Keep embedded Project/CRM task consumers free of saved-view management.
 - Show filled Save view and Save changes actions; place mobile creation in a borderless, edge-to-edge info banner overlaying filter content immediately above the footer with unpunctuated copy and a leading bookmark icon on its button only when filters, layout, grouping, or sort differ from the built-in tab defaults, excluding search.
+- Render Save view and draft Cancel as separate standalone buttons; preserve their existing dialog and cancellation behavior.
 - Keep sidebar actions targeted to their own record; Edit combines naming and sharing without saving temporary settings, and Duplicate starts with a prefilled private copy and warns before omitting unsupported settings.
 - Keep saved-view names and menus in the mobile picker; overlay creation above the filter drawer footer on a drawer-colored backing without blocking the last scrollable controls, and put Save changes at the footer's right edge, opposite Clear all.
 - Place the saved-view picker after Filters and before built-in mobile tabs; omit duplicate headers and general create controls, but offer Create view in the empty state.
