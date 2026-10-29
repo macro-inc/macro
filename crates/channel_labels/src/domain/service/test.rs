@@ -239,7 +239,7 @@ async fn creation_and_assignment_report_ineligible_channels() {
     for result in [created.map(|_| ()), assigned] {
         assert!(matches!(
             result,
-            Err(ChannelLabelsError::BadRequest(message)) if message.contains("only team channels")
+            Err(ChannelLabelsError::BadRequest(message)) if message.contains("not eligible")
         ));
     }
 }
@@ -428,7 +428,7 @@ async fn set_channel_label_maps_repo_outcomes() {
 #[tokio::test]
 async fn users_without_teams_create_private_labels() {
     let actor = MacroUserIdStr::try_from(USER_ID.to_owned()).unwrap();
-    let receipt = ChannelLabelsReceipt::from_access(actor.clone(), None).unwrap();
+    let receipt = ChannelLabelsReceipt::from_access(actor.clone(), None, None).unwrap();
     let repo = FakeRepo::default();
     let service = ChannelLabelsServiceImpl::new(repo.clone());
     let channel = Uuid::now_v7();
@@ -461,7 +461,7 @@ fn cannot_use_another_users_team_receipt() {
             model_entity::EntityType::Team,
         );
     assert!(matches!(
-        ChannelLabelsReceipt::from_access(actor, Some(access)),
+        ChannelLabelsReceipt::from_access(actor, Some(access), None),
         Err(ChannelLabelsError::Unauthorized)
     ));
 }
@@ -553,4 +553,38 @@ async fn rules_can_be_edited_only_on_existing_smart_tags() {
         .await
         .unwrap();
     assert_eq!(repo.calls().len(), 1);
+}
+
+#[test]
+fn explicit_scope_requires_verified_team_membership() {
+    use crate::domain::models::ChannelLabelScopeSelection;
+    let actor = MacroUserIdStr::try_from(USER_ID.to_owned()).unwrap();
+    assert!(matches!(
+        ChannelLabelsReceipt::from_access(
+            actor.clone(),
+            None,
+            Some(ChannelLabelScopeSelection::Team)
+        ),
+        Err(ChannelLabelsError::Unauthorized)
+    ));
+    let personal = ChannelLabelsReceipt::from_access(
+        actor.clone(),
+        None,
+        Some(ChannelLabelScopeSelection::Personal),
+    )
+    .unwrap();
+    assert!(matches!(personal.scope(), ChannelLabelsScope::User(id) if id == &actor));
+    let access =
+        entity_access::domain::models::EntityAccessReceipt::dangerously_assert_authenticated_user(
+            actor.clone(),
+            &Uuid::now_v7().to_string(),
+            model_entity::EntityType::Team,
+        );
+    let personal = ChannelLabelsReceipt::from_access(
+        actor.clone(),
+        Some(access),
+        Some(ChannelLabelScopeSelection::Personal),
+    )
+    .unwrap();
+    assert!(matches!(personal.scope(), ChannelLabelsScope::User(id) if id == &actor));
 }
