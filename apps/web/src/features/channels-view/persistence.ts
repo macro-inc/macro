@@ -89,6 +89,7 @@ const channelsPreferencesSchema = z.object({
         .default(CHANNELS_DEFAULT_SORT_BY.threads),
     })
     .default(CHANNELS_DEFAULT_SORT_BY),
+  hideSupportChannels: z.boolean().default(true),
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
@@ -97,6 +98,7 @@ const DEFAULT_CHANNELS_PREFERENCES = {
   version: 1,
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
   sortBy: CHANNELS_DEFAULT_SORT_BY,
+  hideSupportChannels: true,
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
@@ -191,6 +193,7 @@ function createChannelsPreferencesStorage(options: {
       version: 1,
       asideWidth: clampChannelsRailWidth(state.asideWidth),
       sortBy: state.sortBy,
+      hideSupportChannels: state.hideSupportChannels,
     } satisfies ChannelsPreferences);
 
   return {
@@ -213,12 +216,14 @@ function createChannelsPreferencesStorage(options: {
           ...current,
           asideWidth: restored.asideWidth,
           sortBy: restored.sortBy,
+          hideSupportChannels: restored.hideSupportChannels,
         };
       } catch {
         return {
           ...current,
           asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
           sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
+          hideSupportChannels: DEFAULT_CHANNELS_PREFERENCES.hideSupportChannels,
         };
       }
     },

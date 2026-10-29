@@ -52,6 +52,7 @@ import type {
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
+import { HideSupportChannelsButton } from '../HideSupportChannelsButton';
 import { ChannelFavoritesSection } from './ChannelFavoriteRows';
 import {
   ChannelLabelMenuItems,
@@ -432,6 +433,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             value={rail.tab()}
             onChange={selectTab}
           />
+          <HideSupportChannelsButton />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
               aria-label={

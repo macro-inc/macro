@@ -34,6 +34,7 @@ import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { isSupportChannel } from './core/support-channels';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
@@ -58,6 +59,7 @@ export type ChannelsViewProps = {
 
 // Mounted inside the mobile list's Suspense boundary.
 function MobileChannelsList(props: { sources: ChannelsSources }) {
+  const { hideSupportChannels } = useChannelsView();
   const listChannels = useChannelListSearchPool();
   const mobileSearchText = () => '';
   const mobileSearchSource = createChannelSearchSource({
@@ -78,6 +80,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
     return (favoritesData()?.favorites ?? [])
       .filter((favorite) => favorite.entityType === 'channel')
       .flatMap((favorite) => channelsById.get(favorite.entityId) ?? [])
+      .filter((channel) => !hideSupportChannels() || !isSupportChannel(channel))
       .slice(0, MAX_PINNED_CHANNELS);
   });
   return (
@@ -143,8 +146,14 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, tab, mobileLayout, selectedChannel, setAsideWidth } =
-    useChannelsView();
+  const {
+    state,
+    tab,
+    mobileLayout,
+    selectedChannel,
+    setAsideWidth,
+    hideSupportChannels,
+  } = useChannelsView();
   const threadsTab = () => !mobileLayout() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -157,7 +166,8 @@ function ChannelsViewRoot() {
       if (scope === 'threads') return tab() === 'threads';
       return tab() === 'browse';
     },
-    (group) => state.sortBy[group]
+    (group) => state.sortBy[group],
+    hideSupportChannels
   );
   onMount(() => panel.handle.setDisplayName('Channels'));
 

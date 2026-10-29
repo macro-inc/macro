@@ -43,6 +43,9 @@ vi.mock('@entity', () => ({
     entity.type === 'channel_thread',
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
+vi.mock('@core/context/channels', () => ({
+  useChannelsContext: () => ({ channels: () => [] }),
+}));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { resolveReferencedChannels, useChannelsSources } from './queries';
@@ -261,6 +264,49 @@ describe('Threads rail source', () => {
       expect(sources.threads.items().map((c) => c.id)).toEqual(['eng', 'dm']);
       // The server drops the user's unanswered roots, so pages stay full.
       expect(threadFilters[0]).toContain('HasReplies');
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+});
+
+describe('hidden support conversations', () => {
+  it('drops support conversations from Recent and keeps them in search', () => {
+    const support = {
+      type: 'channel',
+      id: 'support',
+      name: 'Macro Support x acme',
+      latestRootMessage: { id: 'm1' },
+    };
+    const team = {
+      type: 'channel',
+      id: 'eng',
+      name: 'Engineering',
+      latestRootMessage: { id: 'm2' },
+    };
+    useSoupAstItemsQuery.mockImplementation(
+      () =>
+        ({
+          isEnabled: true,
+          isPending: false,
+          isLoading: false,
+          data: { entities: [support, team] },
+        }) as never
+    );
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'recents' || scope === 'search',
+        () => 'updated_at',
+        () => true
+      );
+      expect(sources.recents.items().map((channel) => channel.id)).toEqual([
+        'eng',
+      ]);
+      expect(sources.search.items().map((channel) => channel.id)).toEqual([
+        'support',
+        'eng',
+      ]);
       return dispose;
     });
     dispose();
