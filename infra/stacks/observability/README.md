@@ -496,7 +496,8 @@ Alerts channel: Grafana sends it every prod alert, and on-call engineers acknowl
 `https://oncall.macro-internal.com`, signing in with Google. It runs on this host
 so paging keeps working while production, its database or Macro itself is down.
 Today it pages by posting to the Macro Alerts channel; phone paging (Twilio) and
-a rotation are follow-ups.
+a rotation are follow-ups. Coding agents reach it through the `goalert` MCP
+server; see [MCP servers](../../../docs/development/mcp-servers.md#goalert).
 
 - `nixos/goalert/package.nix` builds GoAlert from source with `buildGoModule`,
   embedding its web UI. Bump `version` and the hashes together.
