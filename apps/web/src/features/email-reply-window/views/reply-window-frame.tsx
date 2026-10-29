@@ -1,10 +1,10 @@
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import ArrowsIn from '@phosphor/arrows-in-simple.svg';
-import ArrowsOut from '@phosphor/arrows-out-simple.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import Minus from '@phosphor/minus.svg';
-import X from '@phosphor/x.svg';
+import ArrowsIn from '@icon/system/regular/arrows-in-simple.svg';
+import ArrowsOut from '@icon/system/regular/arrows-out-simple.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 import { createEffect, on, type ParentProps, Show } from 'solid-js';
 
@@ -75,10 +75,14 @@ export function ReplyWindowFrame(
             variant="ghost"
             size="icon-sm"
             tooltip={props.minimized ? 'Restore' : 'Minimize'}
+            aria-label={props.minimized ? 'Restore' : 'Minimize'}
             onClick={() => props.onMinimizedChange(!props.minimized)}
           >
-            <Show when={props.minimized} fallback={<Minus />}>
-              <CaretUp />
+            <Show
+              when={props.minimized}
+              fallback={<Minus class="size-4 shrink-0" />}
+            >
+              <CaretUp class="size-4 shrink-0" />
             </Show>
           </Button>
           <Show when={!props.minimized}>
@@ -86,21 +90,28 @@ export function ReplyWindowFrame(
               variant="ghost"
               size="icon-sm"
               tooltip={props.expanded ? 'Exit full screen' : 'Full screen'}
+              aria-label={props.expanded ? 'Exit full screen' : 'Full screen'}
               onClick={() => props.onExpandedChange(!props.expanded)}
             >
-              <Show when={props.expanded} fallback={<ArrowsOut />}>
-                <ArrowsIn />
+              <Show
+                when={props.expanded}
+                fallback={<ArrowsOut class="size-4 shrink-0" />}
+              >
+                <ArrowsIn class="size-4 shrink-0" />
               </Show>
             </Button>
           </Show>
           <Button
             variant="ghost"
             size="icon-sm"
-            tooltip="Back to thread"
-            hotkey={TOKENS.email.popOutReply}
+            tooltip={{
+              content: 'Back to thread',
+              hotkey: TOKENS.email.popOutReply,
+            }}
+            aria-label="Back to thread"
             onClick={() => props.onClose()}
           >
-            <X />
+            <X class="size-4 shrink-0" />
           </Button>
         </header>
         <div

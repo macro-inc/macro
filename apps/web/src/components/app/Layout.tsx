@@ -356,7 +356,10 @@ export function AppChrome(props: ParentProps) {
         <InitialInteractiveOnboardingModal />
         <Suspense>
           <Show when={isAuthenticated()}>
-            <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+            <Launcher
+              open={createMenuOpen()}
+              onOpenChange={setCreateMenuOpen}
+            />
           </Show>
         </Suspense>
       </SidebarVisibilityContext.Provider>

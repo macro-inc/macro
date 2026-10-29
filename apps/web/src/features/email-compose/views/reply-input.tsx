@@ -838,9 +838,11 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   <Button
                     variant="ghost"
                     onClick={() => fireAndForget(moveReply(), 'email-compose')}
-                    tooltip="Pop out"
+                    tooltip={{
+                      content: 'Pop out',
+                      hotkey: TOKENS.email.popOutReply,
+                    }}
                     aria-label="Pop out"
-                    hotkey={TOKENS.email.popOutReply}
                     size="icon-md"
                   >
                     <ArrowSquareOut class="size-4 touch:size-6 shrink-0 pointer-events-none" />

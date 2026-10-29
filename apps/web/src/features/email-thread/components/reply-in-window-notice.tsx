@@ -1,4 +1,4 @@
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import { Button } from '@ui';
 
 /** Stands in for a reply that is open in the app's reply window. */
