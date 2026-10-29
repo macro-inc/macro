@@ -5,7 +5,9 @@ import { type ParentProps, Show } from 'solid-js';
 export function EntityMetadataRow(props: ParentProps<{ label: string }>) {
   return (
     <div class="flex min-w-0 items-center gap-3">
-      <span class="w-28 shrink-0 whitespace-nowrap">{props.label}</span>
+      <span class="w-(--sidepanel-label-width) shrink-0 whitespace-nowrap">
+        {props.label}
+      </span>
       <div class="min-w-0 flex-1 wrap-break-word">{props.children}</div>
     </div>
   );

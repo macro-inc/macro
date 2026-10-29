@@ -209,8 +209,9 @@ projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata appears at the top of each panel, before the interactive
 sections and separated by a muted divider. Each row places its label without an
-icon in a fixed-width left column, followed by a nearby left-aligned value; owner,
-timestamps, folder, and document counts share this alignment and 8px row gaps.
+icon in a left column sized by `--sidepanel-label-width`, followed by a nearby
+left-aligned value. Metadata, property grids, and inline Tags share this column
+and 12px label-to-value gap; metadata rows retain their 8px vertical gaps.
 Word and character counts appear last. There is no standard Details or Stats
 disclosure. Agent runtime information remains in its dedicated Session section.
 Section headers and bodies use 12px horizontal insets, with 12px bottom padding

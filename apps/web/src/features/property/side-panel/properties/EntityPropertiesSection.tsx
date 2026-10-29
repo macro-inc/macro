@@ -296,7 +296,9 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
             }
           >
             <div class="mb-2 flex items-center gap-3">
-              <span class="text-ink-muted">Tags</span>
+              <span class="w-(--sidepanel-label-width) shrink-0 text-ink-muted">
+                Tags
+              </span>
               <TagsRow
                 entityId={props.entityId}
                 entityType={props.entityType}
