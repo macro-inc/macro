@@ -6,7 +6,9 @@ import { openDocument } from '@core/component/LexicalMarkdown/component/core/Blo
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import Plus from '@icon/system/regular/plus.svg';
+import ProhibitIcon from '@icon/system/regular/prohibit.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import {
@@ -96,6 +98,15 @@ function EntityCollectionPropertyBody(props: {
     onDrop: (reference) => saveReferences([...entities(), reference]),
   });
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
+  const isDragging = () => dropTarget?.isDragging() ?? false;
+  const canDrop = () => dropTarget?.canDrop() ?? false;
+  const isRejected = () => dropTarget?.isRejected() ?? false;
+  const rejectionMessage = () => (
+    <span class="flex items-center gap-1.5 text-xs text-ink-extra-muted">
+      <ProhibitIcon class="size-3.5 shrink-0" />
+      {t('common.cannotAddDraggedItem')}
+    </span>
+  );
   const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
     event.stopPropagation();
     if (isReadOnly() || isSaving()) return;
@@ -142,61 +153,79 @@ function EntityCollectionPropertyBody(props: {
         role="group"
         aria-label={props.property.displayName}
         aria-busy={isSaving()}
-        class={cn(
-          'mt-2 flex min-h-8 flex-wrap gap-1.5 rounded-lg',
-          isDraggingOver() &&
-            'bg-accent/5 ring-2 ring-inset ring-accent'
-        )}
+        class={cn('mt-1 min-w-0 rounded-lg', isRejected() && 'cursor-not-allowed')}
       >
-        <For
-          each={entities()}
-          fallback={
-            <Show when={!props.loading}>
-              <CollectionEmptyState
-                message={
-                  isDraggingOver()
-                    ? t('common.dropToAdd')
-                    : t('common.emptyCollection')
+        <div class="flex flex-wrap gap-1.5">
+          <For
+            each={entities()}
+            fallback={
+              <Show when={!props.loading && !canDrop()}>
+                <CollectionEmptyState
+                  message={
+                    isRejected() ? rejectionMessage() : t('common.emptyCollection')
+                  }
+                  action={
+                    <Show when={!isReadOnly() && !isDragging()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        class="text-ink-extra-muted"
+                        disabled={isSaving()}
+                        onClick={handleAdd}
+                      >
+                        <Plus class="size-4" />
+                        {t('common.add')}
+                      </Button>
+                    </Show>
+                  }
+                />
+              </Show>
+            }
+          >
+            {(entityRef) => (
+              <NonUserEntityChip
+                property={props.property}
+                entityId={entityRef.entity_id}
+                entityType={entityRef.entity_type}
+                specificMessageId={entityRef.specific_message_id}
+                canEdit={!isReadOnly() && !isSaving()}
+                onRemove={() =>
+                  fireAndForget(
+                    handleRemoveEntity(entityRef.entity_id),
+                    'property-collection-remove'
+                  )
                 }
-                action={
-                  <Show when={!isReadOnly()}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      class="text-ink-extra-muted"
-                      disabled={isSaving()}
-                      onClick={handleAdd}
-                    >
-                      <Plus class="size-4" />
-                      {t('common.add')}
-                    </Button>
-                  </Show>
-                }
+                onEdit={(anchor) => {
+                  if (isReadOnly() || isSaving()) return;
+                  propertyCtx.openEditor(anchor);
+                }}
               />
-            </Show>
-          }
-        >
-          {(entityRef) => (
-            <NonUserEntityChip
-              property={props.property}
-              entityId={entityRef.entity_id}
-              entityType={entityRef.entity_type}
-              specificMessageId={entityRef.specific_message_id}
-              canEdit={!isReadOnly() && !isSaving()}
-              onRemove={() =>
-                fireAndForget(
-                  handleRemoveEntity(entityRef.entity_id),
-                  'property-collection-remove'
-                )
-              }
-              onEdit={(anchor) => {
-                if (isReadOnly() || isSaving()) return;
-                propertyCtx.openEditor(anchor);
-              }}
-            />
+            )}
+          </For>
+        </div>
+        <Show when={isRejected() && entities().length > 0}>
+          <div class="mt-1">{rejectionMessage()}</div>
+        </Show>
+        <div
+          aria-hidden={!canDrop()}
+          class={cn(
+            'overflow-hidden transition-all duration-150 ease-out motion-reduce:transition-none',
+            canDrop() ? 'h-18 opacity-100' : 'h-0 opacity-0'
           )}
-        </For>
+        >
+          <div
+            class={cn(
+              'mt-2 flex h-16 items-center justify-center gap-2 rounded-lg border border-dashed text-xs text-accent',
+              isDraggingOver()
+                ? 'border-accent bg-accent/10'
+                : 'border-accent/40 bg-accent/5'
+            )}
+          >
+            <ArrowDownIcon class="size-4 shrink-0" />
+            {t('common.dropToAdd')}
+          </div>
+        </div>
       </div>
     </div>
   );

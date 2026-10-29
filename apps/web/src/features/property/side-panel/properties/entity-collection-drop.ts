@@ -3,7 +3,7 @@ import { isEntityDragData } from '@entity/types/drag';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { type Accessor, createUniqueId } from 'solid-js';
+import { type Accessor, createUniqueId, onCleanup } from 'solid-js';
 import { getEntityType } from '../../editors/selectors/entityUtils';
 import type { Property } from '../../types';
 
@@ -36,7 +36,7 @@ export function getCollectionDropReference(
   return { entity_id: data.id, entity_type: entityType };
 }
 
-/** One drop target covers the collection's empty frame and populated body. */
+/** One target covers the compact collection and its expanded drag feedback. */
 export function createEntityCollectionDropTarget(options: {
   property: Accessor<Property>;
   selfId: Accessor<string>;
@@ -56,12 +56,20 @@ export function createEntityCollectionDropTarget(options: {
       options.selfId(),
       options.selfType()
     );
+  const isDragging = () => isEntityDragData(state.active.draggable?.data);
   const canDrop = () =>
     !options.disabled() && Boolean(referenceFor(state.active.draggable?.data));
   const droppable = createDroppable(id, {
     type: 'property-collection',
     isDropTargetDisabled: () => !canDrop(),
   });
+  // Expanded dropzones move other targets, so refresh collision bounds as they resize.
+  const resizeObserver = new ResizeObserver(() => {
+    if (!isDragging()) return;
+    actions.recomputeLayouts();
+    actions.detectCollisions();
+  });
+  onCleanup(() => resizeObserver.disconnect());
 
   actions.onDragEnd(({ draggable, droppable: target }) => {
     if (target?.id !== id || options.disabled()) return;
@@ -71,7 +79,13 @@ export function createEntityCollectionDropTarget(options: {
   });
 
   return {
-    ref: droppable.ref,
+    ref: (element: HTMLElement) => {
+      droppable.ref(element);
+      resizeObserver.observe(element);
+    },
+    isDragging,
+    canDrop,
+    isRejected: () => isDragging() && !canDrop(),
     isOver: () => state.active.droppable?.id === id && canDrop(),
   };
 }

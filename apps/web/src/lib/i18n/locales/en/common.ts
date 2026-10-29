@@ -2,6 +2,7 @@ export default {
   add: 'Add',
   emptyCollection: 'No items added yet.',
   dropToAdd: 'Drop to add',
+  cannotAddDraggedItem: 'Can’t add this item',
   addPhotos: 'Add photos',
   addFiles: 'Add files',
   photosFromDevice: 'Images from your device',

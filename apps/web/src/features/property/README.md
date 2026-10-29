@@ -12,8 +12,11 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 ## Side-panel collections
 
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
-properties. Its body accepts app-item drops in both empty and populated states,
-using the same entity-type conversion as the picker. Drops append a reference,
+properties. Empty collections use a compact message and trailing Add action.
+During app-item drags, compatible collections expand into dropzones; incompatible
+or unavailable collections show a muted rejection hint. The same target covers
+empty and populated bodies, and geometry updates during expansion. Drops append
+a reference using the same entity-type conversion as the picker,
 ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
 state until refresh completes. Read-only, metadata, loading, saving, and open-editor
