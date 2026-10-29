@@ -809,8 +809,10 @@ favorited agent session disappears from the list once the session is deleted.
 
 Channel favorites show the same channel picture as regular channel rows, with
 the channel icon as a fallback when no picture is available. Direct-message
-favorites keep the other participant's avatar.
-Cached channel pictures remain visible if a background refresh fails.
+favorites use the participant's avatar when available and the entity icon
+otherwise. Cached pictures remain visible when a background picture query
+rejects with an error; an omitted or unavailable channel preview uses the
+fallback icon.
 
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
