@@ -20,25 +20,6 @@ function mentionTypeLabel(type: DatabaseEntityType): string {
     .exhaustive(() => 'Item');
 }
 
-/** The search box placeholder for a reference column, named for what it links. */
-export function mentionSearchLabel(type?: DatabaseEntityType | null): string {
-  if (!type) return 'Search';
-  return match(type)
-    .with('USER', () => 'Search people')
-    .with('DOCUMENT', () => 'Search documents')
-    .with('TASK', () => 'Search tasks')
-    .with('CHANNEL', () => 'Search channels')
-    .with('PROJECT', 'INITIATIVE', () => 'Search projects')
-    .with('CHAT', () => 'Search chats')
-    .with('THREAD', () => 'Search emails')
-    .with('COMPANY', () => 'Search companies')
-    .with('CONTACT', () => 'Search contacts')
-    .with('CALL_RECORD', () => 'Search calls')
-    .with('CALENDAR_EVENT', () => 'Search events')
-    .with('DATABASE_ROW', () => 'Search rows')
-    .exhaustive(() => 'Search');
-}
-
 export function DatabaseMentionLabel(props: {
   name: string;
   icon: JSX.Element;

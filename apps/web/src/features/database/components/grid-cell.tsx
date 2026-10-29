@@ -42,7 +42,6 @@ import type {
 } from '../core/grid-cell-editor';
 import { canEditCell, formatCellValue } from '../core/table';
 import { focusAdjacent } from './cell-focus';
-import { mentionSearchLabel } from './database-mention-label';
 import { OptionPicker } from './option-picker';
 import { createPopupCellKeys, isComposingKey } from './popup-cell-keys';
 import { SelectPill } from './select-pill';
@@ -200,7 +199,7 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(undefined);
     if (isEntity()) {
       setMentionSearch(seed?.replace(/^@/, '') ?? '');
-      setDraft(seed?.replace(/^@/, '') ?? '');
+      setDraft(`@${seed?.replace(/^@/, '') ?? ''}`);
       setSelectAll(false);
       setEditing(true);
       setMentionOpen(true);
@@ -703,7 +702,6 @@ function InlineEditor(props: {
   const [focused, setFocused] = createSignal(false);
   const errorId = createUniqueId();
   let finishing = false;
-  const searchingMentions = () => props.column.dataType === 'ENTITY';
   // An earlier row's save can settle this column's type while this editor is
   // focused. Keep its DOM for this edit; use the latest type when committing.
   const renderTextEditor =
@@ -792,14 +790,6 @@ function InlineEditor(props: {
       fitViewport
     >
       <Tooltip.Trigger as="div" tabindex={-1} class="relative min-w-0">
-        <Show when={searchingMentions()}>
-          <span
-            aria-hidden="true"
-            class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-accent-ink"
-          >
-            @
-          </span>
-        </Show>
         <Show
           when={renderTextEditor}
           fallback={
@@ -810,11 +800,7 @@ function InlineEditor(props: {
               }}
               type="text"
               data-cell-text-editor
-              placeholder={
-                searchingMentions()
-                  ? mentionSearchLabel(props.column.specificEntityType)
-                  : props.emptyLabel
-              }
+              placeholder={props.emptyLabel}
               inputmode={
                 props.column.dataType === 'NUMBER' ? 'decimal' : undefined
               }
@@ -836,8 +822,7 @@ function InlineEditor(props: {
                 if (!props.mentionOpen) commit(false);
               }}
               onKeyDown={onKeyDown}
-              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-muted"
-              classList={{ 'pl-6': searchingMentions() }}
+              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none"
             />
           }
         >
