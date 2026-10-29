@@ -3316,6 +3316,148 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it.each([
+    { result: 'emails', optimistic: false },
+    { result: 'empty', optimistic: false },
+    { result: 'network error', optimistic: false },
+    { result: 'emails', optimistic: true },
+  ] as const)(
+    'keeps a cold empty Mail result loading until $result (optimistic: $optimistic)',
+    async ({ result, optimistic }) => {
+      const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+      const fake = makeFakeClient();
+      let revision = REVISION_0;
+      let keys: string[] = [];
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'mail-page',
+        revision,
+        keys,
+        retainedKeys: [],
+        sortTimestamps: keys.map(() => '2026-01-01T00:00:00Z'),
+        nextCursor: null,
+        endCursor: null,
+        optimistic,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: mailThreadRecords(keys),
+      }));
+      const { source, dispose } = createRoot((dispose) => ({
+        dispose,
+        source: createSoupLiveQuery(() => ({
+          emailView: 'INBOX',
+          sortMethod: 'UPDATED_AT',
+          filters: {
+            emailFilter: { tree: { literal: { importance: false } } },
+          },
+          limit: 20,
+        })),
+      }));
+      try {
+        await vi.waitFor(() => expect(source.cachedMail()).toBe(true));
+        expect(source.data()).toEqual([]);
+        expect(source.isFetching()).toBe(true);
+        expect(source.isLoading()).toBe(true);
+        if (result === 'network error') {
+          fake.executions[0].fail(
+            new CombinedError({ networkError: new Error('API disconnected') })
+          );
+          expect(source.isLoading()).toBe(false);
+          expect(source.data()).toEqual([]);
+          expect(source.error()).toBeUndefined();
+          return;
+        }
+        revision = REVISION_1;
+        keys = result === 'emails' ? ['GraphqlSoupEmailThread:noise'] : [];
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items:
+              result === 'emails'
+                ? [{ __typename: 'GraphqlSoupEmailThread', id: 'noise' }]
+                : [],
+            next_cursor: null,
+          })
+        );
+        expect(source.isLoading()).toBe(false);
+        await vi.waitFor(() =>
+          expect(source.data()?.map((record) => record.id)).toEqual(
+            result === 'emails' ? ['noise'] : []
+          )
+        );
+        if (result === 'empty') {
+          const refresh = source.refresh();
+          expect(source.isFetching()).toBe(true);
+          expect(source.isLoading()).toBe(false);
+          fake.executions
+            .at(-1)!
+            .next(graphqlSoupPage({ items: [], next_cursor: null }));
+          await refresh;
+          expect(source.isLoading()).toBe(false);
+        }
+      } finally {
+        dispose();
+        online.mockRestore();
+      }
+    }
+  );
+
+  it.each(['offline', 'cache-only', 'local-only'] as const)(
+    'does not wait for HTTP when an empty Mail result is %s',
+    async (mode) => {
+      const online = vi
+        .spyOn(navigator, 'onLine', 'get')
+        .mockReturnValue(mode !== 'offline');
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => REVISION_0,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      entityFilterMock.mockResolvedValue({
+        kind: 'mail-page',
+        revision: REVISION_0,
+        keys: [],
+        retainedKeys: [],
+        sortTimestamps: [],
+        nextCursor: null,
+        endCursor: null,
+        optimistic: false,
+      });
+      readRecordsByKeysMock.mockResolvedValue({
+        revision: REVISION_0,
+        records: [],
+      });
+      const { source, dispose } = createRoot((dispose) => ({
+        dispose,
+        source: createSoupLiveQuery(
+          () => ({ emailView: 'INBOX', sortMethod: 'UPDATED_AT', limit: 20 }),
+          () => ({
+            networkPaused: mode === 'cache-only',
+            localOnly: mode === 'local-only',
+          })
+        ),
+      }));
+      try {
+        await vi.waitFor(() => expect(source.cachedMail()).toBe(true));
+        expect(source.data()).toEqual([]);
+        expect(source.isLoading()).toBe(false);
+        if (mode === 'local-only') expect(fake.executions).toHaveLength(0);
+      } finally {
+        dispose();
+        online.mockRestore();
+      }
+    }
+  );
+
   it('shows current-query local data without a tab placeholder while the network continues', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

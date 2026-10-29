@@ -445,6 +445,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `bunx playwright test --config src/lib/queries/soup/graphql/browser-test/playwright.config.ts`:
   it uses the real Soup source and exchange, holds local/network completion,
   and asserts every observed row-ID state on revisits and an OPFS reload.
+  It also verifies that cold empty Mail tabs stay loading until HTTP settles.
   It also runs in `just test-cache-wasm-browser`.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see

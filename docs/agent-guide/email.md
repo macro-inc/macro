@@ -330,7 +330,12 @@ means `inboxVisible = false`; it is **not** notification lifecycle state. Signal
 retain their Inbox scope, so archived mail is found in Archived (All + Done).
 
 A `Showing cached mail` notice identifies results over synchronized metadata, not a
-claim of complete mailbox coverage. These lists paginate locally beyond the first
+claim of complete mailbox coverage. On an online cold tab, hold the first server
+response and verify that an empty local page keeps the loading indicator visible;
+show the empty state only after the query settles. Nonempty cached rows remain
+immediately usable. Confirmed empty pages stay empty during background refreshes,
+and offline or cache-only views do not wait for HTTP.
+These lists paginate locally beyond the first
 page without a server cursor. Filter or engine-generation changes restart
 the local page chain, and a cache write re-reads it through the last row already loaded; online server results take over again when available. After
 reconnecting, `Load more` follows the same server page chain as the displayed rows,

@@ -1013,7 +1013,19 @@ export function createSoupLiveQuery(
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
-    isLoading: () => query.isLoading && displayLocalProjection() === undefined,
+    isLoading: () => {
+      if (!query.isLoading) return false;
+      const local = displayLocalProjection();
+      if (!local) return true;
+      // An empty local Mail page does not establish complete mailbox coverage.
+      // Wait for the first query response before showing an online empty state.
+      return (
+        local.mail !== undefined &&
+        local.records.length === 0 &&
+        !offline() &&
+        !options().networkPaused
+      );
+    },
     isFetching: () => query.isFetching,
     isFetchingNextPage: () =>
       fetchingMailPage() || (!cachedMail() && query.isFetchingNextPage),
