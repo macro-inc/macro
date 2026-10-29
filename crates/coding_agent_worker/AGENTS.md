@@ -36,7 +36,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   once `Daemon::is_idle` (no `session/prompt` outstanding, `src/turns.rs`)
   swaps it in and `execve`s. Spans: `macrod.update.check`,
   `macrod.update.download`, `macrod.update.apply`, `macrod.update.handoff`.
-  Off with `[update] auto = false` or `MACROD_NO_UPDATE=1`.
+  Off with `[update] auto = false` or `MACROD_NO_UPDATE=1`. Every check,
+  download, apply and TUI startup appends a JSON line to
+  `~/.macrod/logs/update.log` (`src/update/log.rs`; 0600, rotated at 1 MB to
+  `update.log.1`); the Logs tab shows the path. Versions and outcomes only.
 - `src/handoff.rs`: the Unix hot handoff. `harness.rs` is macrod's own line
   relay (`outbound/acp_process/running.rs`), so it can stop at a line
   boundary and pass the live agent (pid, pipes, unread bytes, running

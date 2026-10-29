@@ -45,6 +45,23 @@ function Wait-For($description, [scriptblock] $condition, $seconds) {
 function Requests-For($name) {
     @(Get-Content $requests | Where-Object { $_ -like "*/$name" }).Count
 }
+# The update log's events in order, timestamps dropped.
+function Update-Log {
+    Get-Content (Join-Path $env:HOME '.macrod\logs\update.log') | ForEach-Object { $_ | ConvertFrom-Json }
+}
+# Each expected event appears in this order, with these fields.
+function Check-Log-In-Order($expected) {
+    $events = @(Update-Log)
+    $position = 0
+    foreach ($want in $expected) {
+        while ($position -lt $events.Count -and
+            @($want.Keys | Where-Object { $events[$position].$_ -ne $want[$_] }).Count -gt 0) {
+            $position++
+        }
+        Check ($position -lt $events.Count) "the update log has $($want | ConvertTo-Json -Compress)"
+        $position++
+    }
+}
 function Cores {
     @(Get-CimInstance Win32_Process -Filter "Name = 'macrod-core.exe'" |
         Where-Object { $_.ExecutablePath -like "$installDir*" })
@@ -108,6 +125,8 @@ token = "mhns_windows_update_test"
 scope = "user"
 "@ | Set-Content (Join-Path $runDir 'macrod.toml')
     $env:MACROD_UPDATE_CHECK_SECONDS = '2'
+    # macrod keeps ~/.macrod (and its update log) under HOME when it is set.
+    $env:HOME = Join-Path $work 'home'
 
     # Its own console, as a user starts it from a terminal. (PowerShell
     # names are case-insensitive: $v1 would overwrite the $V1 tag.)
@@ -151,6 +170,16 @@ scope = "user"
     Check ($v2Core.ExecutablePath -like "*\versions\$V2\macrod-core.exe") "the next launch started $V2 (pid $($v2Core.ProcessId), $($v2Core.ExecutablePath))"
     Wait-For "the launcher to prune $V1" { -not (Test-Path (Join-Path $installDir "versions\$V1")) } 30
     Check $true "the launcher pruned $V1"
+    Check-Log-In-Order @(
+        @{ event = 'startup'; version = $V1; from_handoff = $false },
+        @{ event = 'check'; current = $V1; latest = $V2; outcome = 'newer' },
+        @{ event = 'download'; version = $V2; checksum_ok = $false },
+        @{ event = 'download'; version = $V2; checksum_ok = $true; result = 'staged' },
+        @{ event = 'apply'; from = $V1; to = $V2; method = 'next-launch'; result = 'installed for the next launch' },
+        @{ event = 'startup'; version = $V2; from_handoff = $false }
+    )
+    Write-Host '--- update log ---'
+    Get-Content (Join-Path $env:HOME '.macrod\logs\update.log') | ForEach-Object { Write-Host $_ }
     Write-Host "self-update $V1 -> $V2 passed"
 } catch {
     Write-Host "error: $_"

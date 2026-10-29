@@ -187,9 +187,12 @@ fn write_executable(path: &Path, binary: &[u8]) -> std::io::Result<()> {
 #[cfg(unix)]
 pub fn relaunch(
     executable: &Path,
+    tag: &str,
     agent: Option<crate::handoff::HandedOffAgent>,
 ) -> std::io::Error {
     use std::os::unix::process::CommandExt as _;
+
+    use super::log::{self, ApplyMethod, UpdateEvent};
 
     let mut args = std::env::args_os();
     let mut command = std::process::Command::new(executable);
@@ -199,6 +202,10 @@ pub fn relaunch(
     command.args(args).env_remove(crate::handoff::HANDOFF_ENV);
     // Held open until `exec`: the new image reads the state from it.
     let mut _state = None;
+    let mut method = ApplyMethod::ExecveHandoff;
+    let active_prompts = agent
+        .as_ref()
+        .map_or(0, crate::handoff::HandedOffAgent::active_prompt_count);
     if let Some(agent) = &agent {
         match agent.prepare_exec() {
             Ok((state, number)) => {
@@ -206,11 +213,23 @@ pub fn relaunch(
                 _state = Some(state);
             }
             Err(error) => {
+                method = ApplyMethod::FreshAgentFallback;
                 tracing::warn!(error = %error, "could not hand the agent over; it restarts with macrod");
             }
         }
     }
+    let applied = |result: String| {
+        log::record(UpdateEvent::Apply {
+            from: Some(super::VERSION.to_owned()),
+            to: tag.to_owned(),
+            method,
+            active_prompts,
+            result,
+        });
+    };
+    applied("restarting".to_owned());
     let error = command.exec();
+    applied(format!("restart failed: {error}"));
     drop(agent);
     error
 }

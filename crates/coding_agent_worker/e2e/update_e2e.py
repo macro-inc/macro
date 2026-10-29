@@ -215,6 +215,29 @@ def installed_version(binary):
     return subprocess.run([binary, "--version"], capture_output=True, text=True, check=True).stdout.split()[-1]
 
 
+def update_log(home):
+    """The events in macrod's update log, without their timestamps."""
+    path = os.path.join(home, ".macrod", "logs", "update.log")
+    assert os.stat(path).st_mode & 0o777 == 0o600, "the update log is private"
+    events = []
+    with open(path) as log:
+        for line in log:
+            event = json.loads(line)
+            assert event.pop("time"), "every line is timestamped"
+            events.append(event)
+    return events
+
+
+def assert_in_order(events, expected):
+    """Each expected event appears, in this order, with these fields."""
+    position = 0
+    for want in expected:
+        while position < len(events) and any(events[position].get(k) != v for k, v in want.items()):
+            position += 1
+        assert position < len(events), f"missing {want} in order; log: {events}"
+        position += 1
+
+
 def run_case(case, releases, v1, v2):
     print(f"== {case}", flush=True)
     work = tempfile.mkdtemp(prefix="macrod-e2e-")
@@ -308,6 +331,16 @@ path = "{workspace}"
             if platform.system() == "Linux":
                 exe = os.readlink(f"/proc/{pid}/exe")
                 assert exe == os.path.realpath(binary), f"macrod runs {exe}"
+            assert_in_order(
+                update_log(home),
+                [
+                    {"event": "startup", "version": v1, "from_handoff": False},
+                    {"event": "check", "current": v1, "latest": v2, "outcome": "newer"},
+                    {"event": "download", "version": v2, "checksum_ok": True, "result": "staged"},
+                    {"event": "apply", "from": v1, "to": v2, "method": "execve-handoff", "result": "restarting"},
+                    {"event": "startup", "version": v2, "from_handoff": True},
+                ],
+            )
             print(
                 f"   macrod pid {pid} kept, agent pid {agent_pid} kept, child {child_pid} alive, "
                 f"{len(numbers)} frames 0..{numbers[-1]} over {connections} connections, now {v2}"
@@ -328,6 +361,15 @@ path = "{workspace}"
             assert {t[2] for t in ticks} == {agent_pid}
             leftovers = [name for name in os.listdir(os.path.dirname(binary)) if name.startswith(".macrod")]
             assert not leftovers, f"staging left {leftovers}"
+            events = update_log(home)
+            assert not [e for e in events if e["event"] == "apply"], f"nothing was applied: {events}"
+            if case == "bad-checksum":
+                assert_in_order(events, [{"event": "download", "version": v2, "checksum_ok": False}])
+            elif case == "failing-smoke-test":
+                assert_in_order(events, [{"event": "download", "version": v2, "checksum_ok": True}])
+                assert "smoke test" in next(e for e in events if e["event"] == "download")["result"]
+            else:
+                assert [e["event"] for e in events] == ["startup"], f"updating is off: {events}"
             print(f"   still {v1} after publishing {v2}; {len(ticks)} frames on one connection")
     except BaseException:
         text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", " ", screen.decode(errors="replace"))

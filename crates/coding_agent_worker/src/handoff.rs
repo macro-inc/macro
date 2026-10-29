@@ -114,6 +114,11 @@ impl HandedOffAgent {
         self.parts().pid
     }
 
+    /// How many prompts were running when the agent was handed over.
+    pub fn active_prompt_count(&self) -> usize {
+        self.parts().active_prompts.len()
+    }
+
     fn parts(&self) -> &HandedOffParts {
         self.parts.as_ref().expect("parts are present until taken")
     }
@@ -195,6 +200,13 @@ pub fn take_inherited() -> Option<HandedOffAgent> {
         Err((error, fallback)) => {
             tracing::warn!(error = %error, "could not pick up the running agent; starting a new one");
             let _ = fallback.kill();
+            crate::update::log::record(crate::update::log::UpdateEvent::Apply {
+                from: None,
+                to: crate::update::VERSION.to_owned(),
+                method: crate::update::log::ApplyMethod::FreshAgentFallback,
+                active_prompts: 0,
+                result: format!("could not pick up the running agent: {error}"),
+            });
             None
         }
     }

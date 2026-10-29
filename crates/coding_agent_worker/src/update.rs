@@ -26,11 +26,13 @@ use tokio_util::task::AbortOnDropHandle;
 use tracing::Instrument as _;
 
 mod install;
+pub mod log;
 mod release;
 #[cfg(any(windows, test))]
 pub mod versions;
 
 use install::{Installation, StageError};
+use log::{CheckOutcome, UpdateEvent};
 use release::{ReleaseClient, ReleaseSource, ReleaseVersion};
 
 #[cfg(test)]
@@ -106,6 +108,7 @@ impl StagedUpdate {
         tracing::info!("installed the new macrod binary; restarting");
         Ok(Installed {
             executable: self.installation.executable().to_owned(),
+            tag: self.tag,
         })
     }
 }
@@ -114,6 +117,7 @@ impl StagedUpdate {
 #[cfg(unix)]
 pub struct Installed {
     executable: PathBuf,
+    tag: String,
 }
 
 #[cfg(unix)]
@@ -121,7 +125,7 @@ impl Installed {
     /// Re-execute as the new binary with the same arguments and environment,
     /// handing it the running agent. Returns only on failure.
     pub fn relaunch(self, agent: Option<crate::handoff::HandedOffAgent>) -> std::io::Error {
-        install::relaunch(&self.executable, agent)
+        install::relaunch(&self.executable, &self.tag, agent)
     }
 }
 
@@ -214,24 +218,39 @@ async fn check_and_stage(
         latest = tracing::field::Empty,
         outcome = tracing::field::Empty,
     );
-    let latest = client.latest().instrument(check.clone()).await?;
+    let checked = |latest: Option<&str>, outcome: CheckOutcome| {
+        log::record(UpdateEvent::Check {
+            current: current.to_string(),
+            latest: latest.map(str::to_owned),
+            outcome,
+        });
+    };
+    let latest = client
+        .latest()
+        .instrument(check.clone())
+        .await
+        .inspect_err(|_| checked(None, CheckOutcome::Failed))?;
     check.record("latest", latest.tag.as_str());
     let Some(version) = ReleaseVersion::parse(&latest.tag) else {
         check.record("outcome", "unrecognized_tag");
+        checked(Some(&latest.tag), CheckOutcome::UnrecognizedTag);
         return Ok(None);
     };
     if version <= current {
         check.record("outcome", "up_to_date");
+        checked(Some(&latest.tag), CheckOutcome::UpToDate);
         return Ok(None);
     }
     let Some(asset) = latest.platform_asset(client.source()) else {
         // The release job uploads every platform at once; a missing one is a
         // build that failed or a platform that is not published.
         check.record("outcome", "no_asset");
+        checked(Some(&latest.tag), CheckOutcome::NoAsset);
         tracing::info!(parent: &check, tag = %latest.tag, "newer macrod has no build for this platform");
         return Ok(None);
     };
     check.record("outcome", "newer");
+    checked(Some(&latest.tag), CheckOutcome::Newer);
 
     let download = tracing::info_span!(
         parent: &check,
@@ -240,9 +259,11 @@ async fn check_and_stage(
         asset = %asset.archive_name,
         bytes = tracing::field::Empty,
     );
+    let mut bytes = 0;
     let staged = async {
         let downloaded = client.download(&asset).await?;
-        tracing::Span::current().record("bytes", downloaded.archive.len());
+        bytes = downloaded.archive.len() as u64;
+        tracing::Span::current().record("bytes", bytes);
         let staging = installation.clone();
         let tag = latest.tag.clone();
         let staged = tokio::task::spawn_blocking(move || {
@@ -253,13 +274,42 @@ async fn check_and_stage(
         smoke_test(&staged).await.inspect_err(|_| {
             let _ = std::fs::remove_file(&staged);
         })?;
-        // Windows launches it from the next start; nothing to swap later.
-        #[cfg(windows)]
-        let staged = installation.commit(&latest.tag).map_err(StageError::Io)?;
         Ok::<_, UpdateError>(staged)
     }
     .instrument(download)
-    .await?;
+    .await;
+    let checksum_ok = !matches!(
+        staged,
+        Err(UpdateError::Stage(
+            StageError::ChecksumMismatch { .. } | StageError::MalformedChecksum
+        )) | Err(UpdateError::Fetch(_))
+    );
+    log::record(UpdateEvent::Download {
+        version: latest.tag.clone(),
+        bytes,
+        checksum_ok,
+        result: match &staged {
+            Ok(_) => "staged".to_owned(),
+            Err(error) => error.to_string(),
+        },
+    });
+    let staged = staged?;
+    // Windows launches it from the next start; nothing to swap later.
+    #[cfg(windows)]
+    let staged = {
+        let committed = installation.commit(&latest.tag);
+        log::record(UpdateEvent::Apply {
+            from: Some(VERSION.to_owned()),
+            to: latest.tag.clone(),
+            method: log::ApplyMethod::NextLaunch,
+            active_prompts: 0,
+            result: match &committed {
+                Ok(_) => "installed for the next launch".to_owned(),
+                Err(error) => format!("could not install: {error}"),
+            },
+        });
+        committed.map_err(StageError::Io)?
+    };
 
     tracing::info!(tag = %latest.tag, "downloaded a newer macrod");
     Ok(Some(StagedUpdate {

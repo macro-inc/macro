@@ -249,6 +249,10 @@ async fn main() -> ExitCode {
     let mut inherited = handoff::take_inherited();
     #[cfg(not(unix))]
     let mut inherited = None;
+    update::log::record(update::log::UpdateEvent::Startup {
+        version: update::VERSION.to_owned(),
+        from_handoff: inherited.is_some(),
+    });
     loop {
         match tui::run(config_path, logs.clone(), inherited.take()).await {
             Ok(None) => return ExitCode::SUCCESS,

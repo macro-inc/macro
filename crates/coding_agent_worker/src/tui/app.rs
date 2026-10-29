@@ -124,6 +124,8 @@ pub(crate) struct App {
     /// The agent the previous macrod handed over, relayed by the first start.
     inherited: Option<InheritedAgent>,
     /// A release staged for the next launch (Windows), shown until restart.
+    /// The persistent update log the Logs tab points at.
+    pub(crate) update_log: Option<PathBuf>,
     pub(crate) update_ready: Option<String>,
     pub(crate) pending_browser: Option<BrowserTarget>,
     last_refresh: Option<Instant>,
@@ -161,6 +163,7 @@ impl App {
             daemon: None,
             inherited,
             update_ready: None,
+            update_log: crate::update::log::user_log_path(),
             pending_browser: None,
             last_refresh: None,
             quit: false,
