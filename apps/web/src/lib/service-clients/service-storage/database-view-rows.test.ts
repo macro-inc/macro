@@ -8,7 +8,7 @@ import {
   type Operation,
   type OperationResult,
 } from '@urql/core';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { filter, fromPromise, map, mergeMap, pipe, takeUntil } from 'wonka';
 import {
   type DatabaseViewPage,
@@ -16,6 +16,15 @@ import {
   readDatabaseViewPage,
 } from './database-view-rows';
 import type { DatabaseViewRowsQuery } from './graphql/generated/graphql';
+
+const platform = vi.hoisted(() => ({ native: false }));
+vi.mock('@core/util/platform', async (actual) => ({
+  ...(await actual<typeof import('@core/util/platform')>()),
+  isTauri: () => platform.native,
+}));
+afterEach(() => {
+  platform.native = false;
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -147,6 +156,20 @@ describe('database view pages with the real GraphQL client', () => {
     });
     test.network.resolve({ data: data(2) });
     await read;
+  });
+
+  it('keeps view pages out of a native app cache', async () => {
+    platform.native = true;
+    const test = harness();
+    const read = readDatabaseViewPage(test.input, test.client);
+    await vi.waitFor(() => expect(test.requests).toHaveLength(1));
+    expect(test.requests[0].context.requestPolicy).toBe('network-only');
+    expect(test.requests[0].context.persistResult).toBe(false);
+    test.network.resolve({ data: data(2) });
+    const result = await read;
+    expect(result.isOk() && result.value).toEqual(page(2));
+    expect(test.host.readQuery).not.toHaveBeenCalled();
+    expect(test.onCachedPage).not.toHaveBeenCalled();
   });
 
   it('publishes cached rows while awaiting the single revalidation', async () => {

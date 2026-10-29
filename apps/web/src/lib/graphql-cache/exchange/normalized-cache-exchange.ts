@@ -121,6 +121,14 @@ const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
 /** Marks a query as network-to-cache hydration with a projected result. */
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Publish the network result without storing it in the cache. */
+    persistResult?: false;
+  }
+}
+
 export const HYDRATE_ONLY_CONTEXT_KEY = 'normalizedCacheHydrateOnly';
 /** Retains the client-annotated document while the transport uses a stripped copy. */
 const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
@@ -1505,7 +1513,10 @@ export function normalizedCacheExchange(
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
           if (result.data != null && !result.error) state.cacheReadVersion += 1;
-          const persistence = persistQueryResult(result, state, version);
+          const persistence =
+            op.context.persistResult === false
+              ? Promise.resolve(undefined)
+              : persistQueryResult(result, state, version);
           return withResultMetadata(result, {
             source: 'live-network',
             persistence,

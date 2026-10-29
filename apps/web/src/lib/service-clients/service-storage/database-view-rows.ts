@@ -1,4 +1,5 @@
 import type { ViewQuery } from '@core/database-sql/generated/types';
+import { isTauri } from '@core/util/platform';
 import type { Client, RequestPolicy } from '@urql/core';
 import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
@@ -184,6 +185,9 @@ export function readDatabaseViewPage(
 ): ResultAsync<DatabaseViewPage, DatabaseViewPageFailure> {
   const query = databaseViewQueryInput(request.query);
   if (query.isErr()) return errAsync(query.error);
+  // Installed native apps run an older compiled cache that neither bounds these
+  // pages nor skips them at startup, so the native cache never stores them.
+  const native = isTauri();
   return ResultAsync.fromPromise(
     pipe(
       client.query(
@@ -198,7 +202,8 @@ export function readDatabaseViewPage(
           },
         },
         {
-          requestPolicy: request.requestPolicy,
+          requestPolicy: native ? 'network-only' : request.requestPolicy,
+          persistResult: native ? false : undefined,
           fetchOptions: { signal: request.signal, headers: request.headers },
         }
       ),
