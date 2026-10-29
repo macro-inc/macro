@@ -367,10 +367,10 @@ export function NonUserEntityChip(props: {
   };
 
   return (
-    <Layer depth={2}>
+    <Layer depth={3}>
       <div
         ref={containerRef}
-        class="group/collection-item inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
+        class="group/collection-item relative inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
         aria-busy={props.pending || undefined}
       >
         <Show
@@ -408,7 +408,7 @@ export function NonUserEntityChip(props: {
             />
           </Show>
           <Show when={props.canEdit && props.onRemove}>
-            <div class="flex shrink-0 border-l border-edge-muted pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:pointer-events-auto touch:opacity-100">
+            <div class="absolute inset-y-0 right-0 flex border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:pointer-events-auto touch:opacity-100">
               <Button
                 variant="ghost"
                 type="button"
