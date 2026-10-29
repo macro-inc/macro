@@ -111,6 +111,7 @@ fn message() -> Message {
         parent: MessageParent::Channel(CHANNEL),
         thread_id: None,
         sender_id: SENDER.to_owned().try_into().unwrap(),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],

@@ -2125,6 +2125,28 @@ impl ToolServiceContext {
         self
     }
 
+    /// Run the tools for `caller`, as the public MCP authenticated it: an
+    /// agent writes as itself; an MCP client writes as the Macro bot with its
+    /// name on the post ("via Claude Code"); a pasted API key writes as the
+    /// Macro bot.
+    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+        match caller {
+            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
+            ai_toolset::ToolCaller::McpClient { name: Some(name) } => self.with_via(name),
+            ai_toolset::ToolCaller::McpClient { name: None } | ai_toolset::ToolCaller::ApiKey => {
+                self
+            }
+        }
+    }
+
+    /// Label the posts the tools make with the client the user works
+    /// through.
+    fn with_via(mut self, client: &str) -> Self {
+        self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
+        self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
+        self
+    }
+
     /// Name the actor set with [`Self::with_actor`], so what the tools write
     /// is presented under the agent's own name where a reader sees it live -
     /// the cursor the editing worker draws while it types. First-party bots

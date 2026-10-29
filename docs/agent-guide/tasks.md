@@ -50,13 +50,17 @@ wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
 The description has its own subtle three-line skeleton while its collaborative
 editor initializes; the project title, properties, and discussion stay visible.
-Project task lists automatically fetch all matching pages in every group, without
-per-group `Load More` rows. A failed continuation stops automatic requests and shows
-`Try again` above the list; already fetched group rows remain available.
+Task lists, including project and CRM task lists, load a group's next page when
+the end of that group scrolls into view, with a spinner row instead of a
+`Load More` button. A failed
+page shows `Retry` in that row and stops automatic requests for the group.
+ArrowDown waits on a group's last loaded task until the next page arrives; after
+a failure it continues into the next group. Collapsed groups load nothing. A page
+that arrives after you scroll past its group must not move the rows on screen.
 With GraphQL Soup enabled, verify a group with more than one page in both the
-regular Tasks list (`Load More`) and a project task list (automatic pagination).
-Both must use the parent Soup query's continuation owner; reaching the last page
-removes the group's paging control without hiding already loaded tasks.
+regular Tasks list and a project task list (scroll and ArrowDown). Both must use
+the parent Soup query's continuation owner; reaching
+the last page removes the group's paging row without hiding already loaded tasks.
 Refresh a group containing at least 11 tasks while delaying its continuation
 response: every already loaded continuation row should stay mounted, with no
 brief collapse to the first 10 rows. Verify both background and explicit refresh,
@@ -284,11 +288,13 @@ The timeline reuses the list's filtered, sorted, grouped rows and collapsed
 state. Sidebar items fill the list's inset width and share vertical scrolling with
 bars. Compact group headers show the grouping's icon and span both the list and
 calendar; they remain visible when the list is collapsed.
-Pagination remains available in the item list and as a quiet, labeled action at
-the visible calendar's left edge outside the open list, even after horizontal
-panning. Group pagination stays after its group; the global continuation appears
-once after the loaded rows. Loading shows a spinner and disables both actions;
-pagination and group headers do not start range creation.
+A continuation row loads the next page when it scrolls near the visible rows,
+showing a spinner in the item list and at the visible calendar's left edge
+outside the open list, even after horizontal panning. A failed page shows
+**Retry loading tasks** there instead. Group continuations stay after their
+group; the global continuation appears once after the loaded rows. As in the
+list, a page that lands above the visible rows keeps them in place. Continuation
+rows and group headers do not start range creation.
 The chart contains loaded results, not an implied complete schedule. Selecting
 Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Board.
 
@@ -327,7 +333,10 @@ Layout, primary sort, sort direction, and grouping are reflected in `tasks.layou
 `tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
 Explicit URL values override saved preferences; back/forward navigation
 restores the corresponding controls, including the layout.
-Columns are 336px wide. Each column pages independently with **Load more tasks**.
+Columns are 336px wide. Each column loads its next page when the end of its cards
+scrolls into view; a failed page shows **Retry** at the bottom of that column.
+Ungrouped results, such as a search, load their next page from the end of any
+column.
 Use the horizontal scrollbar to reach more columns. Vertical wheel input over
 empty board background or gaps also scrolls horizontally. A wheel gesture stays
 with its original scroll area until momentum stops, even if another column moves

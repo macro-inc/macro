@@ -91,6 +91,19 @@ shared list skeletons. Keep search and available header actions visible in every
 state. A failed continuation retains rows and retries that page.
 Workspace activity uses the shared single-row desktop header with New and an
 expandable Search control; record-detail tabs retain their section toolbar.
+Company and contact headers keep desktop section tabs; touch uses a labeled
+header island that opens the shared bottom drawer with the current section
+checked under **Switch view**. A collapsed host keeps the section icon and
+accessible label; embedded phone headers put the switcher below the breadcrumb
+and action row. Keep the
+workspace's mobile view strip separate. Copy-link islands
+are square on touch, with a 24px glyph and the standard 40px icon control.
+On touch, record list search has space below the header and fills the row beside
+any filter button. Email filters use the shared filter drawer. Each section's
+creation action replaces the default floating action above the navigation dock
+through `FloatRegion`; keyboard focus, higher-priority composers, and inactive
+panes suppress it. Preserve record context, disabled states, and feature gates.
+Desktop creation controls remain in the toolbar.
 
 Activity rows render stored Companies and Contacts reference properties as inline
 pills through the shared Soup row. Pills use the shared property preview and open

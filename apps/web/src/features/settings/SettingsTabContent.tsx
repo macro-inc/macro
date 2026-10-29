@@ -21,7 +21,6 @@ import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
 import { TeamPage } from './Team';
-import { TeamConnections } from './TeamConnections';
 import { TeamGeneral } from './TeamGeneral';
 import { TeamMembers } from './TeamMembers';
 
@@ -75,9 +74,6 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Team Members')}>
         <TeamPage>{(team) => <TeamMembers team={team} />}</TeamPage>
-      </Show>
-      <Show when={isCurrentTab('Team Connections')}>
-        <TeamPage>{(team) => <TeamConnections team={team} />}</TeamPage>
       </Show>
       <Show when={isCurrentTab('Tags')}>
         <Tags />

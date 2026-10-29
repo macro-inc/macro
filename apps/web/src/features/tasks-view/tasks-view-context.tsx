@@ -249,12 +249,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
+      if (persistedState.groupBy === 'project' && !projectsEnabled()) {
+        return 'status';
+      }
       if (state.layout !== 'board') {
         return persistedState.groupBy;
       }
 
-      const grouping = toTaskBoardGrouping(persistedState.groupBy);
-      return grouping === 'project' && !projectsEnabled() ? 'status' : grouping;
+      return toTaskBoardGrouping(persistedState.groupBy);
     },
     get tab(): TasksTab {
       return persistedState.tab === 'projects' && !projectsEnabled()
@@ -468,7 +470,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      isNavigable: (row) => row.kind !== 'section-header',
+      // Continuation rows load on their own when scrolled into view.
+      isNavigable: (row) =>
+        row.kind === 'entity' || row.kind === 'group-header',
       isSelectable: (row) => row.kind === 'entity',
       onActivate: (value) => activation.current?.(value),
     })

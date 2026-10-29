@@ -5,6 +5,7 @@ import {
 import { SharedEventActions } from '@app/features/calendar-view/components/SharedEventActions';
 import {
   type CalendarMentionTarget,
+  calendarEventDeepLink,
   copyCalendarEventMentionTarget,
 } from '@app/features/calendar-view/copy-event-mention';
 import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
@@ -40,7 +41,7 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
-import { openExternalUrl } from '@core/util/url';
+import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
 import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
@@ -58,6 +59,7 @@ import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
+import TextTIcon from '@icon/system/regular/text-t.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import {
@@ -493,6 +495,7 @@ export function CalendarEventPreviewDetails(props: {
  */
 export type DocumentPreviewContentProps = {
   delete?: () => void;
+  convertToText?: (link: string) => void;
   collapseInfo?: {
     isCollapsable: boolean;
     isCollapsed: boolean;
@@ -721,31 +724,24 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     };
   };
 
+  const documentLink = () => {
+    const mentionTarget = calendarMentionTarget();
+    if (mentionTarget) return calendarEventDeepLink(mentionTarget);
+    return buildSimpleEntityUrl(
+      { type: targetBlockType(), id: props.documentInfo.id },
+      props.documentInfo.params
+    );
+  };
+
   const handleCopy = async () => {
     try {
-      let hostname = window.location.hostname.replace('www.', '').toLowerCase();
-      if (hostname === 'localhost') {
-        hostname = 'dev.macro.com';
-      }
-
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
         await copyCalendarEventMentionTarget(mentionTarget);
         return;
       }
 
-      let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
-
-      if (
-        props.documentInfo.params &&
-        Object.keys(props.documentInfo.params).length > 0
-      ) {
-        const queryParams = new URLSearchParams(
-          props.documentInfo.params
-        ).toString();
-        link += `?${queryParams}`;
-      }
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(documentLink());
       toast.success('Copied document link to clipboard');
     } catch (e) {
       console.error(e);
@@ -863,6 +859,14 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 {props.previewInfo?.isPreviewable
                   ? 'Convert to Embed'
                   : 'Convert to Card View'}
+              </Dropdown.Item>
+            </Show>
+            <Show when={props.convertToText}>
+              <Dropdown.Item
+                onSelect={() => props.convertToText?.(documentLink())}
+              >
+                <TextTIcon class="size-4" />
+                Convert to Plain Text
               </Dropdown.Item>
             </Show>
             <Show when={props.collapseInfo?.isCollapsable}>
@@ -1129,7 +1133,14 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
               props.documentInfo.name
             }
             fallback={
-              <div class="text-sm p-4">
+              <div class="relative text-sm p-4">
+                {/* An editor can still turn a reference the viewer can't
+                    open back into its link. */}
+                <Show when={props.convertToText}>
+                  <div class="absolute top-3 right-3">
+                    {renderActionButtons()}
+                  </div>
+                </Show>
                 {noAccessItem().access === 'no_access' ? (
                   <Unauthorized noun={itemNoun()} />
                 ) : (
@@ -1185,6 +1196,7 @@ export function PopupPreview(
         <Suspense fallback={<DocumentPreviewSkeleton />}>
           <DocumentPreviewContent
             delete={props.delete}
+            convertToText={props.convertToText}
             collapseInfo={props.collapseInfo}
             documentInfo={props.documentInfo}
             previewInfo={props.previewInfo}

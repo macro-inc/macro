@@ -11,7 +11,8 @@ Outlook (Microsoft Graph) outbound adapters.
 - `src/domain/service.rs`: `EmailApiClientServiceImpl<R, T, L>` — the
   orchestration layer, generic over a repository, token source, and request
   gate port; submodules `attachments`/`blocklist`/`contacts`/`labels`/
-  `messages`/`send`/`subscription`/`sync` hold one capability each.
+  `messages`/`raw_message`/`send`/`subscription`/`sync` hold one capability
+  each.
 - `src/domain/ports.rs`: `ProviderRequestGate` (per-mailbox admission for the
   service above), `ProviderRateLimiter` (the Outlook `MailboxApiService`'s),
   `ProviderTokenSource`, and the repository traits adapters implement.

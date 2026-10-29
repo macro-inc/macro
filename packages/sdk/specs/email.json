@@ -2712,6 +2712,97 @@
         }
       }
     },
+    "/email/messages/{id}/eml": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "Download a message's original source as an `.eml` file.",
+        "operationId": "get_message_eml",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Message ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "message/rfc822": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmlFile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/settings": {
       "patch": {
         "tags": ["Settings"],
@@ -5724,6 +5815,10 @@
             "description": "Local label. Pending provider creation is reported by settings operations."
           }
         }
+      },
+      "EmlFile": {
+        "type": "string",
+        "format": "binary"
       },
       "EmptyResponse": {
         "type": "object",

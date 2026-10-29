@@ -380,6 +380,10 @@ Routines run as their owner, so share one as a template instead:
 `routine.template()` reads it (undefined when not shared), and
 `routine.activateTemplate(options)` creates the caller's own routine from it.
 `routine.sourceTemplate()` returns the routine a template came from.
+Publishing, reading, and activating templates require the caller's
+`enable-routine-sharing` PostHog flag. Disabled or unavailable evaluations return
+404 (`template()` returns `undefined`). `stopSharingTemplate()` stays available
+to owners, and previously activated routines continue working.
 
 ### Agents, conversations and hosts
 

@@ -1,7 +1,12 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableRoutineSharing,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
@@ -23,10 +28,13 @@ import type {
 import { Button, type ManagedDialogProps, openDialog } from '@ui';
 import {
   type Accessor,
+  type ComponentProps,
+  createEffect,
   createMemo,
   createSignal,
   getOwner,
   Match,
+  on,
   Show,
   Switch,
 } from 'solid-js';
@@ -172,8 +180,21 @@ export function openActivateTemplateDialog(
   owner: ReturnType<typeof getOwner>,
   onActivated: (routineId: string) => void
 ) {
-  return openDialog(
-    ActivateTemplate,
+  if (!isFeatureEnabled(enableRoutineSharing)) return;
+  return openDialog<ComponentProps<typeof ActivateTemplate>>(
+    (props) => {
+      const sharing = useFeatureFlag(enableRoutineSharing);
+      createEffect(
+        on(sharing, (flag) => {
+          if (!flag.loading && !flag.enabled) props.onOpenChange(false);
+        })
+      );
+      return (
+        <Show when={sharing().enabled}>
+          <ActivateTemplate {...props} />
+        </Show>
+      );
+    },
     {
       template,
       onActivated: (routineId) => {
@@ -190,6 +211,25 @@ export function openActivateTemplateDialog(
  * a way to activate their own copy.
  */
 export function RoutineTemplatePage(props: {
+  scheduleId: string;
+  onBack(): void;
+}) {
+  const sharing = useFeatureFlag(enableRoutineSharing);
+  return (
+    <Show
+      when={sharing().enabled}
+      fallback={
+        <div class="flex size-full items-center justify-center p-3 text-center text-sm text-ink-muted">
+          {sharing().loading ? 'Loading…' : 'Routine sharing is unavailable.'}
+        </div>
+      }
+    >
+      <EnabledRoutineTemplatePage {...props} />
+    </Show>
+  );
+}
+
+function EnabledRoutineTemplatePage(props: {
   scheduleId: string;
   onBack(): void;
 }) {
@@ -435,10 +475,27 @@ export function openShareTemplateDialog(
   },
   owner: ReturnType<typeof getOwner>
 ) {
-  return openDialog(ShareTemplate, routine, {
-    owner,
-    key: `share-template-${routine.routineId}`,
-  });
+  if (!isFeatureEnabled(enableRoutineSharing)) return;
+  return openDialog<ComponentProps<typeof ShareTemplate>>(
+    (props) => {
+      const sharing = useFeatureFlag(enableRoutineSharing);
+      createEffect(
+        on(sharing, (flag) => {
+          if (!flag.loading && !flag.enabled) props.onOpenChange(false);
+        })
+      );
+      return (
+        <Show when={sharing().enabled}>
+          <ShareTemplate {...props} />
+        </Show>
+      );
+    },
+    routine,
+    {
+      owner,
+      key: `share-template-${routine.routineId}`,
+    }
+  );
 }
 
 /**

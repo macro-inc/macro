@@ -23,6 +23,7 @@ pub mod utils;
 
 mod attachments;
 mod chats;
+mod database_query;
 pub mod structured_completion;
 pub(crate) mod tool_selection;
 
@@ -91,6 +92,10 @@ fn api_router(api_context: ApiContext) -> Router {
         )
         .route("/decisions", decisions::route())
         .route("/chat/completions", post(completions::handler))
+        .route(
+            "/database-query",
+            post(database_query::generate_database_query),
+        )
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())

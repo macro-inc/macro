@@ -88,6 +88,7 @@ where
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        _agent: bot_id::BotId,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         // Macro's own server is the composition root's to layer on with

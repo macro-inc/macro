@@ -43,6 +43,80 @@ function setup(overrides: Partial<QueryComposerOptions> = {}) {
   return { controller, generate, read };
 }
 describe('question composer', () => {
+  it('repairs a SQL resolution failure once using its verified schema and keeps Undo', async () => {
+    const source = { databaseId: 'db', name: 'Books', tables: [] };
+    const generate = vi
+      .fn<QueryComposerOptions['generate']>()
+      .mockReturnValueOnce(
+        okAsync({ sql: 'SELECT bad FROM Books', explanation: '', source })
+      )
+      .mockReturnValueOnce(
+        okAsync({ sql: 'SELECT COUNT(*) FROM Books', explanation: '', source })
+      );
+    const read = vi
+      .fn<QueryComposerOptions['read']>()
+      .mockReturnValueOnce(
+        errAsync({
+          kind: 'engine',
+          error: {
+            stage: 'resolve',
+            kind: 'unknownColumn',
+            table: 'Books',
+            name: 'bad',
+            suggestion: null,
+          },
+          message: 'Unknown column bad',
+        })
+      )
+      .mockReturnValueOnce(okAsync(answer));
+    const { controller } = setup({ generate, read });
+    controller.setPrompt('Count books');
+    await controller.generate();
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1][0]).toMatchObject({
+      sql: 'SELECT bad FROM Books',
+      schema: source,
+      error: 'Unknown column bad',
+    });
+    expect(controller.isCurrentPreview()).toBe(true);
+    expect(controller.phase()).toBe('idle');
+    controller.undoChanges();
+    expect(controller.sql()).toBe('SELECT 1');
+  });
+  it('stops after a failed SQL repair without retrying forever', async () => {
+    const read = vi.fn<QueryComposerOptions['read']>(() =>
+      errAsync({
+        kind: 'engine',
+        error: {
+          stage: 'resolve',
+          kind: 'unknownTable',
+          name: 'Books',
+          suggestion: null,
+        },
+        message: 'Unknown table Books',
+      })
+    );
+    const { controller, generate } = setup({ read });
+    controller.setPrompt('Count books');
+    await controller.generate();
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(controller.error()).toContain('Books');
+    expect(controller.isCurrentPreview()).toBe(false);
+    expect(controller.phase()).toBe('idle');
+  });
+  it('does not repair network failures or a generated write', async () => {
+    for (const failure of [
+      { kind: 'fetch' as const, message: 'Offline' },
+      { kind: 'read-only' as const },
+    ]) {
+      const { controller, generate } = setup({ read: () => errAsync(failure) });
+      controller.setPrompt('Count books');
+      await controller.generate();
+      expect(generate).toHaveBeenCalledTimes(1);
+      expect(controller.isCurrentPreview()).toBe(false);
+    }
+  });
   it('keeps a generated title separate from the prompt through presentation changes and refresh', async () => {
     const { controller } = setup({
       generate: () =>

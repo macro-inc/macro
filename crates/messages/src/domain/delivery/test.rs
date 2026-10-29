@@ -79,6 +79,7 @@ fn event() -> MessageEvent {
         mentions: vec![],
         guest_name: None,
         imported_author: None,
+        triggered_via: None,
         triggered_by: None,
         content: "A private discussion".into(),
         created_at: Utc::now(),

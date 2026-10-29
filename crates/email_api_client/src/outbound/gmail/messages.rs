@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     AccessToken, CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
 };
-use crate::domain::ports::{MailboxCalendarClient, MailboxMessageClient};
+use crate::domain::ports::{MailboxCalendarClient, MailboxMessageClient, MailboxRawMessageClient};
 
 use super::convert::{map_message_resource_to_service, map_thread_resource_to_service};
 use super::{GmailApiClientRepository, map_gmail_error};
@@ -34,6 +34,20 @@ impl MailboxCalendarClient for GmailApiClientRepository {
         };
 
         collect_calendar_parts(&message.payload)
+    }
+}
+
+impl MailboxRawMessageClient for GmailApiClientRepository {
+    async fn get_raw_message(
+        &self,
+        access_token: &AccessToken,
+        provider_message_id: &str,
+    ) -> Result<Vec<u8>, EmailApiError> {
+        self.client
+            .get_raw_message(access_token.expose_secret(), provider_message_id)
+            .await
+            .map_err(map_gmail_error)?
+            .ok_or(EmailApiError::NotFound)
     }
 }
 

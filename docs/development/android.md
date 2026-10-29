@@ -150,13 +150,21 @@ Add **`skip-android-update`** instead for native changes that don't break
 the native/web contract: it skips the whole gate, bump included, like
 `skip-ios-update`. Such a PR never releases, and the bump only feeds the
 Play release, which checks it again before building; the next PR that
-releases bumps against whatever `main` has by then. The `Native Check
-Label` workflow re-runs just the gate job when that label is added or
-removed.
+releases bumps against whatever `main` has by then. Because it never
+releases, the gate still refuses a skipped PR that raises the Android floor
+in `apps/web/min-native-build.json`. The `Native Check Label` workflow
+re-runs just the gate job when that label is added or removed.
 
 To release:
 
-1. Bump and commit: `just android-bump` in `apps/web`.
+1. Bump and commit: `just android-bump` in `apps/web`. It also raises the
+   Android floor in `min-native-build.json` to the new versionCode, so the
+   next prod web deploy (`just build-prod`) stops serving shared JS to older
+   Android installs, which show the update-required prompt instead. Use
+   `just android-bump --no-min` for a release older installs don't need.
+   The gate accepts only those two floors: the new versionCode or the base
+   branch's. A PR without Android native changes may raise the floor only as
+   far as the base branch's versionCode.
 2. Add the **`android-update`** label once the PR is ready to merge. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
@@ -729,7 +737,9 @@ never use it for Play uploads. To build an emulator APK, run
 `apps/web/tauri/src-tauri` inside the Android Nix shell. ARM64 uses the launcher
 above. Keep OTA enabled for update acceptance; `--no-default-features` qualifies
 only embedded behavior. Shared OTA builds need both `MIN_NATIVE_BUILD_ANDROID`
-and `MIN_NATIVE_BUILD_IOS`; see the
+and `MIN_NATIVE_BUILD_IOS`; production builds read them from
+`apps/web/min-native-build.json`, whose Android floor `just android-bump`
+raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
 
 Android ConnectivityManager reports the validated default network and takes a
