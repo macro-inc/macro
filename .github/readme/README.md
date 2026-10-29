@@ -2,26 +2,29 @@
 
 ## Product screenshots
 
-The root README uses the eight-image selection from the final October 29,
-2026 gallery. Five existing JPEGs are retained unchanged. Databases and Agents
-use new high-resolution web captures; Calendar uses a desktop capture. The
-Databases example and CRM pipeline contain fictional sample data. The Calendar
-capture was explicitly selected with its real meeting names visible.
+The root README uses eight product screenshots. The October 29 final gallery
+supplies Databases, Agents, and Calendar. A subsequent sharpness review replaces
+Chat, Tasks, and Docs with the user's higher-resolution first-pass captures.
+Email and CRM retain Jacob's clean test/demo JPEGs pending equivalent sharp
+recaptures. The CRM pipeline and database contain fictional sample data.
+Calendar retains the real meeting names explicitly selected by the user.
 
-The new PNGs use the gallery selections with an additional edge crop: 6 pixels
-from the left, 8 from the right, and 12 from the bottom. This removes the white
-right-hand strip and rounded-window corner remnants without resizing the UI.
-The original gallery files remain unchanged. These lossless PNG crops omit
-browser chrome, the system sharing indicator, and the pointer. Keep
-text readable at GitHub's README width rather than fitting an entire desktop
-into every image. The existing CRM crop shows three complete populated stages.
+Chat and Tasks use 3024-pixel-wide desktop sources, trimmed by 6 pixels left,
+8 right, and 12 bottom to remove capture edges. Docs uses the 2402×1308 compact
+capture unchanged. The existing new Databases/Agents/Calendar PNGs have the same
+6/8/12 edge trim. These are genuine source crops, with no upscaling or alteration
+of UI content. Original captures remain outside the repository.
+
+Keep enough source pixels for a sharp display on high-density screens. Capture
+at a useful desktop viewport and retain roughly 2× pixels; do not downsample to
+the README's display width before saving. Use lossless PNG for cropped UI text.
 
 | Asset | View |
 | --- | --- |
 | `email-thread.jpg` | First Macro Outlook Email!, a team test message, with email navigation open |
-| `messages-channel.jpg` | Engineers, delegating project and task creation to an agent |
-| `tasks-list.jpg` | Search surface area project, Tasks grouped by assignee |
-| `docs-prd.jpg` | PRD: Team Channels, with tags, assignees, and readable requirements |
+| `messages-channel.png` | Engineers agent result, with links to the created project and task |
+| `tasks-list.png` | Search Surface Area project grouped by assignee, higher-resolution desktop capture |
+| `docs-prd.png` | PRD: Team Channels, compact desktop view with tags, assignees, and document content |
 | `crm-board.jpg` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
 | `databases-table.png` | Donations Example, showing dates, amounts, designations, and donor relations |
 | `agents-task-handoff.png` | Add Reminder Icon To Tasks, recaptured on web with a successful audit and PR #8824 |
@@ -37,8 +40,8 @@ private customer details, credentials, financial information, and personal
 conversations. Use a populated pipeline board with fictional sample companies
 for CRM and keep the root README's alt text consistent with each displayed
 view. Review every saved image before staging it.
-The previous `agents-task-handoff.jpg` is retained but no longer referenced by
-the root README. The banner is unchanged. Calls and booking-link companion
+Previous Chat, Tasks, Docs, and Agents JPEGs remain available but are no longer
+referenced by the root README. The banner is unchanged. Calls and booking-link companion
 images remain optional and are not part of this eight-image selection.
 
 The marketing homepage's separate screenshot copies under

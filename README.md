@@ -85,7 +85,7 @@ Macro Mail lives in the same interface as channels, docs, tasks, and code. From 
 
 Macro Chat is designed to be more focused than Slack. The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Copy a link to a message/thread to reference it elsewhere in Macro. Everything is stored in a bidirectional graph, so tasks @link to messages that created them, customer support emails tie into support channels, CRM records get updated when they're discussed in messages, etc. The core idea is that (i) messaging should be the centerpiece around which tasks, mail, docs, and content management are built, all in a lightweight way, and agents should be first-class citizens like human users and (ii) messaging needs to be more focused and readable for technical conversations, and not turn into battles where context is lost and progress is indistinguishable from noise.
 
-![The Macro Engineers channel delegating project and task creation to an agent](.github/readme/messages-channel.jpg)
+![An agent in the Engineers channel completing a request and linking the resulting project and task](.github/readme/messages-channel.png)
 
 We've also added ways for you to bring in conversations outside of your team into Macro. We wanted to make sure that all your external and internal communication can live in Macro.
 
@@ -105,7 +105,7 @@ The core problem with traditional issue trackers or project management tools is 
 
 The solution isn't to forgo tracking entirely. We tried that and it was a different form of chaos. **The solution we've found is lightweight issues tightly coupled to your channels and DMs, so that issue tracking naturally occurs where the conversation itself happens.**
 
-![Macro search project tasks grouped by assignee, with statuses, priorities, and project links](.github/readme/tasks-list.jpg)
+![Macro search project tasks grouped by assignee, with statuses, priorities, and project links](.github/readme/tasks-list.png)
 
 Creating tasks in Macro is easy. Where possible, tasks created are bidirectionally linked to the creating context (e.g. a customer email) so the full chain is auditable from "why are we doing this" → task → agent → pull request, all in one system.
 
@@ -136,7 +136,7 @@ We wanted everything in a single markdown editor without switching tools.
 - Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649), [Android app](https://play.google.com/store/apps/details?id=com.macro.workspace.mobile&pcampaignid=web_share), or on the web.
 - Agent native editing, powered by swarms of agents operating as peers in the CRDT collaboration system like human collaborators. See [Wolf's tech blog on this](https://404wolf.com/posts/AgentsAttackTheDocument/). Use via MCP or internal agent.
 
-![The Team Channels PRD in Macro with tags, assignees, and readable requirements](.github/readme/docs-prd.jpg)
+![The Team Channels PRD in Macro with tags, assignees, and collaborative document content](.github/readme/docs-prd.png)
 
 Agents can edit documents that are open or closed. One interesting use case for agentic editing is to maintain team-context. For example we have a Macro Routine that runs daily to update our in-office Pool Games markdown doc. It scans through all of the channels to see if anyone has won and then updates the doc. If somebody has already edited the doc, it can know that and forgo the update. Conflicts are handled natively by the CRDT collaboration system.
 
