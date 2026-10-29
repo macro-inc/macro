@@ -3006,6 +3006,10 @@ selected version into a separate document. **Close history** or Escape returns
 to the mounted editor without losing its scroll position. The two columns scroll
 independently, and other app splits remain available.
 
+Sessions, diffs, and blame tooltips name AI edits by who made them: an agent's
+edits show the agent's name, and other AI-editor writes show
+`<user> (AI)` for the user they were made for.
+
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
