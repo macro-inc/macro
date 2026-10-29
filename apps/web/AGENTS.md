@@ -20,6 +20,10 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
+Desktop sidebar view titles staying whole at a typical rail width have a
+backend-free regression:
+`bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+
 Agent image attachments preserve external and inline image URLs; only configured
 static-file endpoints receive thumbnail sizing. The backend-free regression is
 `bunx playwright test --config src/features/block-agent/browser-test/attachments.playwright.config.ts`.
@@ -418,6 +422,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.
+  Request state can report an owner as edit, so compare a loaded level with
+  the confirmed one through `matchesConfirmedAccess`.
 - Grouped Soup's `graphql/create-grouped-soup-live-query.ts` owns initial and
   continuation pages plus their local predicate projection. Group readers only
   delegate paging; pass the parent's live `groupedPaging` accessor from every

@@ -740,21 +740,23 @@ A handle to a task by document id. Details load on first access.
 
 > `static` **create**(`client`, `opts`): `Promise`\<`Task`\>
 
-Create a task. `team` scopes the team task number and may be omitted
-when the creator belongs to exactly one team; `shareWithTeam` defaults
-to true.
+Create a task, with its initiative, assignees and due date in the same
+request. The task starts Not started.
 
 #### Parameters
 
-| Parameter | Type |
-| ------ | ------ |
-| `client` | `MacroClient` |
-| `opts` | \{ `markdown?`: `string`; `name`: `string`; `project?`: [`Project`](../../../projects/project/classes/Project.md); `shareWithTeam?`: `boolean`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \} |
-| `opts.markdown?` | `string` |
-| `opts.name` | `string` |
-| `opts.project?` | [`Project`](../../../projects/project/classes/Project.md) |
-| `opts.shareWithTeam?` | `boolean` |
-| `opts.team?` | [`Team`](../../../teams/team/classes/Team.md) |
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `client` | `MacroClient` | - |
+| `opts` | \{ `assignees?`: [`User`](../../../users/user/classes/User.md)[]; `dueDate?`: `Date`; `initiative?`: [`Initiative`](../../../initiatives/initiative/classes/Initiative.md); `markdown?`: `string`; `name`: `string`; `project?`: [`Project`](../../../projects/project/classes/Project.md); `shareWithTeam?`: `boolean`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \} | - |
+| `opts.assignees?` | [`User`](../../../users/user/classes/User.md)[] | Assignees; defaults to the creator. Pass `[]` to leave it unassigned. |
+| `opts.dueDate?` | `Date` | - |
+| `opts.initiative?` | [`Initiative`](../../../initiatives/initiative/classes/Initiative.md) | The initiative (shown as the task's Project in the app) it belongs to. |
+| `opts.markdown?` | `string` | - |
+| `opts.name` | `string` | - |
+| `opts.project?` | [`Project`](../../../projects/project/classes/Project.md) | Folder the task document is filed in; unrelated to `initiative`. |
+| `opts.shareWithTeam?` | `boolean` | Defaults to true. |
+| `opts.team?` | [`Team`](../../../teams/team/classes/Team.md) | Scopes the team task number; may be omitted when the creator belongs to exactly one team. |
 
 #### Returns
 
@@ -886,3 +888,23 @@ returns deleted chats and projects; those are filtered out here.
 #### Inherited from
 
 [`Document`](../../../documents/document/classes/Document.md).[`recentlyDeleted`](../../../documents/document/classes/Document.md#recentlydeleted)
+
+***
+
+### summaries()
+
+> `static` **summaries**(`client`, `tasks`): `Promise`\<[`TaskSummary`](../interfaces/TaskSummary.md)[]\>
+
+Names and state of many tasks in one request, in the order given. Tasks
+that no longer exist are left out.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+| `tasks` | `Task`[] |
+
+#### Returns
+
+`Promise`\<[`TaskSummary`](../interfaces/TaskSummary.md)[]\>

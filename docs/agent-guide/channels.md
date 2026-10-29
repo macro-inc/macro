@@ -810,13 +810,7 @@ backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mod
 On desktop, the Chat rail has `All` and `Recent` tabs in a flat, shared track
 aligned with New. Choices use equal widths, a transparent outlined track with
 1px padding, and fully rounded pill shapes. The 32px selected state matches
-New's fill and border without an extra shadow. Staff accounts on the company
-domain see a labeled **Hide support channels** / **Show support channels**
-button under those tabs (and the same action on the mobile Recent list). It
-hides seeded `Macro Support x …`
-conversations from All, Recent, favorites, Threads, and the mobile list so
-regular channels stay findable; search still returns them. The choice is saved
-per user and defaults to hidden. All contains an optional
+New's fill and border without an extra shadow. All contains an optional
 `Favorites` section and the
 independently paginated `Team channels`, `Channels`, and `DMs` sections, in
 that order. `Team channels` lists team channels; `Channels` lists every other

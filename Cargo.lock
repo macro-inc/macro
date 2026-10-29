@@ -12369,6 +12369,7 @@ name = "macro_sha_count_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_env_var",
  "model",
  "redis",
  "tokio",
@@ -18204,6 +18205,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_sha_count_client",
  "mockall",
  "redis",
  "sqlx",

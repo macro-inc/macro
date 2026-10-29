@@ -70,8 +70,12 @@ later chunks can arrive in batches. Reasoning or a tool row should not delay the
 first prose. Verify a second prompt and a reload preserve the complete answer.
 A model selected before the first prompt is part of the create request, and the
 runtime starts on it; no model change appears in the new session's transcript.
-A selected effort is confirmed before the first prompt; settings the runtime
-already reports do not need another control request.
+Resuming or reconnecting a session also applies its saved model without a
+line — that is not a switch the user made. A selected effort is confirmed
+before the first prompt; settings the runtime already reports do not need
+another control request.
+A model the user picks mid-session is a line between turns. Work from before
+the change stays above it; anything the agent says after appears below it.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
