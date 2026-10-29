@@ -874,6 +874,9 @@ server display snapshot until canonical previews are readable; indexed page
 cursors do not move to retained rows. Older native hosts that omit `retainedKeys`
 cannot replace server membership with an incomplete local page, so the frontend
 keeps the server-backed list and its existing revalidation path.
+Combined server and indexed membership evidence above the engine's 5,000-key
+limit preserves displayed rows and enables server revalidation; do not truncate
+membership evidence to fit that limit.
 
 Grouped Soup uses `graphql/create-grouped-soup-live-query.ts` to own the initial
 request and every loaded per-bin continuation. With maintained cache queries and

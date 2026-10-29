@@ -207,9 +207,17 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
-  it.each([true, false])(
-    'keeps server mail during incomplete cache refreshes (baseline support: %s)',
-    async (supported) => {
+  it.each([
+    { name: 'current host', supported: true, includesInvite: true },
+    { name: 'older host omits row', supported: false, includesInvite: false },
+    {
+      name: 'older host omits preview',
+      supported: false,
+      includesInvite: true,
+    },
+  ])(
+    'keeps server mail during incomplete cache refreshes ($name)',
+    async ({ supported, includesInvite }) => {
       const fake = makeFakeClient();
       getGraphqlSoupClientMock.mockReturnValue(fake.client);
       makeGraphqlSoupInputMock.mockReturnValue({
@@ -217,6 +225,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       });
       let revision = REVISION_1;
       let archived = false;
+      let hydrated = false;
       let changed: (revision: string) => void = () => {};
       getGraphqlSoupCacheHostMock.mockReturnValue({
         currentRevision: async () => revision,
@@ -232,7 +241,8 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       entityFilterMock.mockImplementation(async () => ({
         kind: 'mail-page',
         revision,
-        keys: supported && !archived ? [inviteKey, normalKey] : [normalKey],
+        keys:
+          includesInvite && !archived ? [inviteKey, normalKey] : [normalKey],
         ...(supported ? { retainedKeys: archived ? [] : [inviteKey] } : {}),
         sortTimestamps: ['2026-01-02T00:00:00Z', '2026-01-01T00:00:00Z'],
         nextCursor: null,
@@ -242,7 +252,13 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         revision,
         records: mailThreadRecords([normalKey, inviteKey]).map((row) => ({
           ...row,
-          record: { ...row.record, emailName: 'Preview from another tab' },
+          record: {
+            ...row.record,
+            emailName: 'Preview from another tab',
+            ...(!supported && !hydrated && row.recordKey === inviteKey
+              ? { mailAllPreview: null }
+              : {}),
+          },
         })),
       }));
       const { query, dispose } = createRoot((dispose) => ({
@@ -277,7 +293,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             })
           )
         );
-        if (supported)
+        if (includesInvite)
           await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
         else
           await vi.waitFor(() =>
@@ -298,6 +314,15 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             expect(query.data()?.entities.map((row) => row.id)).toEqual([
               'normal',
             ])
+          );
+        } else if (includesInvite) {
+          hydrated = true;
+          revision = '3';
+          changed(revision);
+          await vi.waitFor(() =>
+            expect(query.data()?.entities[0]).toMatchObject({
+              emailName: inviteKey,
+            })
           );
         }
       } finally {

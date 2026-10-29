@@ -65,11 +65,14 @@ export async function readSoupPage(
         return [snapshots.get(soupItemKey(record)) ?? record];
       const timestamp = timestamps?.get(soupItemKey(record));
       if (!timestamp || !mailView) return [record];
-      const selected = materializeMailView(
-        record as MailItemFieldsFragment,
-        mailView,
-        timestamp
-      );
+      // Older hosts can confirm membership before the canonical preview is
+      // readable. Prefer canonical fields as soon as they become available.
+      const selected =
+        materializeMailView(
+          record as MailItemFieldsFragment,
+          mailView,
+          timestamp
+        ) ?? snapshots.get(soupItemKey(record));
       return selected ? [selected] : [];
     }
   );
