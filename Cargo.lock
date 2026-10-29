@@ -19588,13 +19588,13 @@ dependencies = [
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "base64 0.22.1",
  "bebop",
  "futures",
  "getrandom 0.3.4",
  "loro",
  "macro_sync_service_jwt",
- "matchit 0.8.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -19602,9 +19602,11 @@ dependencies = [
  "sync_service_bebop_schema",
  "thiserror 2.0.18",
  "time",
+ "tower-service",
  "tracing",
  "tracing-subscriber",
  "tracing-web",
+ "utoipa",
  "uuid",
  "wasm-bindgen",
  "web-time",
@@ -22604,6 +22606,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4afd7ae4f7fcc11e0e5e64b964890b3dda90f1290b0612f7cd821b381cc18826"
 dependencies = [
  "async-trait",
+ "axum",
  "bytes",
  "chrono",
  "futures-channel",

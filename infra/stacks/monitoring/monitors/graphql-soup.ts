@@ -282,11 +282,11 @@ rolloutMonitor('graphql-soup-db-cpu', {
 rolloutMonitor('graphql-soup-alb-bytes', {
   name: '[PROD] GraphQL soup: prod-gateway-alb processed bytes surge',
   type: 'query alert',
-  query: `sum(last_15m):sum:aws.applicationelb.processed_bytes{${GATEWAY_ALB}}.as_count() > 3000000000`,
+  query: `sum(last_15m):sum:aws.applicationelb.processed_bytes{${GATEWAY_ALB}}.as_count() > 8000000000`,
   description:
-    'prod-gateway-alb processed {{value}} bytes in 15 minutes (pre-rollout max was 1.9 GB). GraphQL request bodies are unbounded.',
-  critical: '3000000000',
-  warning: '1500000000',
+    'prod-gateway-alb processed {{value}} bytes in 15 minutes (the 7 days to 2026-10-29 averaged 0.7 GB and peaked at 4.1 GB). GraphQL request bodies are unbounded.',
+  critical: '8000000000',
+  warning: '6000000000',
   service: 'prod-gateway-alb',
 });
 

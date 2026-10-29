@@ -2,10 +2,9 @@ use bebop::{Record, SubRecord};
 use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use tracing::{Instrument, error};
 use wasm_bindgen::JsValue;
-use worker::{Env, Error, Headers, Method, Request, RequestInit, Response, Result, Stub};
+use worker::{Env, Headers, Method, Request, RequestInit, Response, Result, Stub};
 
 use crate::{
-    auth::is_internal,
     constants::{
         USER_PEER_D1_BINDING,
         header_names::{AUTHORIZATION, MACRO_INTERNAL_AUTH_KEY_HEADER_KEY},
@@ -17,53 +16,79 @@ use crate::{
     timeit_log,
     timeout::{DEFAULT_TIMEOUT_MS, timeout},
 };
-use std::sync::LazyLock;
+use axum::response::IntoResponse;
 
 const DURABLE_OBJECT_NAMESPACE: &str = "DOCUMENT_SYNC_SESSION";
-mod markers {
-    pub const ROOT: &str = "root";
-    pub const HEALTH: &str = "health";
-    pub const SCHEMA: &str = "schema";
-    pub const COPY: &str = "copy";
-    pub const REST: &str = "rest";
-    pub const SURFACE: &str = "surface";
+/// Dispatch public endpoints and proxy session requests through Axum.
+pub async fn router(env: Env, req: Request) -> Result<Response> {
+    use axum::{
+        Router,
+        routing::{any, get, post},
+    };
+    use tower_service::Service;
+    let mut router = Router::new()
+        .route("/", get(|| async { "Hello Sync Service!" }))
+        .route("/health", get(|| async { "healthy" }))
+        .route(
+            "/schema",
+            get(|| async { include_str!("../../bebop/schema.bop") }),
+        )
+        .route("/surface/{surface_id}/activate", post(activate_route))
+        .route("/document/{document_id}/copy", any(copy_route))
+        .route("/document/{document_id}/{*rest}", any(document_route))
+        .route("/surface/{surface_id}/{*rest}", any(surface_route))
+        .with_state(env);
+    let response = router.call(worker::HttpRequest::try_from(req)?).await;
+    let response = response.unwrap_or_else(|error: std::convert::Infallible| match error {});
+    Response::try_from(response)
 }
 
-pub async fn router(env: Env, req: Request) -> Result<Response> {
-    let url = req.url()?;
-    let matched = ROUTER
-        .at(url.path())
-        .with_context(|| format!("MatchError on url [{url}]"))?;
-    match *matched.value {
-        markers::ROOT => Response::builder().ok("Hello Sync Service!"),
-        markers::HEALTH => Response::builder().ok("healthy"),
-        markers::SCHEMA => Response::builder().ok(include_str!("../bebop/schema.bop")),
-        markers::SURFACE => {
-            let Some(id) = matched.params.get("surface_id") else {
-                return Ok(response(status_codes::NOT_FOUND));
-            };
-            let Ok(identity) = SessionIdentity::new(SessionKind::Surface, id) else {
-                return Ok(response(400));
-            };
-            if matched.params.get("rest") == Some("activate") {
-                return activate_surface(&env, req, &identity).await;
-            }
-            pass_to_session(&env, req, &identity.storage_key()).await
-        }
-        needs_document_id => {
-            let document_id = matched.params.get("document_id").with_context(|| {
-                Error::from(format!(
-                    "Failed to get path parameter [doocument_id] from url: [{}]",
-                    url.as_ref()
-                ))
-            })?;
-            match needs_document_id {
-                markers::COPY => copy_handler(env, req, document_id).await,
-                markers::REST => pass_to_durable_object(&env, req, document_id).await,
-                _ => Ok(response(status_codes::NOT_FOUND)),
-            }
-        }
-    }
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/document/{document_id}/copy",
+    operation_id = "copy_document",
+    tag = "sync_service",
+    params(("document_id" = String, Path, description = "Source document to copy from")),
+    request_body = CopyDocumentRequest,
+    responses(
+        (status = 200, description = "Copy succeeded; the new document was initialized"),
+        (status = 404, description = "Source snapshot not found"),
+    ),
+))]
+#[worker::send]
+pub(crate) async fn copy_route(
+    axum::extract::State(env): axum::extract::State<Env>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    req: axum::extract::Request,
+) -> super::router::HandlerResult {
+    Ok(copy_handler(env, Request::try_from(req)?, &id)
+        .await?
+        .into())
+}
+
+#[worker::send]
+async fn document_route(
+    axum::extract::State(env): axum::extract::State<Env>,
+    axum::extract::Path((id, _)): axum::extract::Path<(String, String)>,
+    req: axum::extract::Request,
+) -> super::router::HandlerResult {
+    Ok(pass_to_durable_object(&env, Request::try_from(req)?, &id)
+        .await?
+        .into())
+}
+
+#[worker::send]
+async fn surface_route(
+    axum::extract::State(env): axum::extract::State<Env>,
+    axum::extract::Path((id, _rest)): axum::extract::Path<(String, String)>,
+    req: axum::extract::Request,
+) -> super::router::HandlerResult {
+    let Ok(identity) = SessionIdentity::new(SessionKind::Surface, &id) else {
+        return Ok(axum::http::StatusCode::BAD_REQUEST.into_response());
+    };
+    let req = Request::try_from(req)?;
+    let response = pass_to_session(&env, req, &identity.storage_key()).await?;
+    Ok(response.into())
 }
 
 /// Seal the verified original before enabling the imported target. A failed or
@@ -73,12 +98,6 @@ async fn activate_surface(
     mut req: Request,
     identity: &SessionIdentity,
 ) -> Result<Response> {
-    if !is_internal(&req, env)? {
-        return Ok(response(401));
-    }
-    if req.method() != Method::Post {
-        return Ok(response(405));
-    }
     let bytes = req.bytes().await?;
     let Ok(proof) =
         serde_json::from_slice::<crate::durable_object::surface_migration::SnapshotProof>(&bytes)
@@ -193,29 +212,6 @@ pub async fn copy_handler(env: Env, mut req: Request, document_id: &str) -> Resu
     Ok(ss_res)
 }
 
-pub static ROUTER: LazyLock<matchit::Router<&str>> = LazyLock::new(|| {
-    let mut router = matchit::Router::new();
-    router
-        .insert("/", markers::ROOT)
-        .unwrap_context("Router.insert failed");
-    router
-        .insert("/health", markers::HEALTH)
-        .unwrap_context("Router.insert failed");
-    router
-        .insert("/schema", markers::SCHEMA)
-        .unwrap_context("Router.insert failed");
-    router
-        .insert("/document/{document_id}/copy", markers::COPY)
-        .unwrap_context("Router.insert failed");
-    router
-        .insert("/document/{document_id}/{*rest}", markers::REST)
-        .unwrap_context("Router.insert failed");
-    router
-        .insert("/surface/{surface_id}/{*rest}", markers::SURFACE)
-        .unwrap_context("Router.insert failed");
-    router
-});
-
 pub async fn pass_to_durable_object(
     env: &Env,
     req: Request,
@@ -257,4 +253,25 @@ fn get_durable_object(env: &Env, document_id: &str) -> Result<Stub> {
     env.durable_object(DURABLE_OBJECT_NAMESPACE)?
         .id_from_name(document_id)?
         .get_stub()
+}
+
+impl axum::extract::FromRef<Env> for crate::secrets::Secrets {
+    fn from_ref(env: &Env) -> Self {
+        Self::from(env)
+    }
+}
+
+#[worker::send]
+async fn activate_route(
+    axum::extract::State(env): axum::extract::State<Env>,
+    _: super::auth::InternalAccess,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    req: axum::extract::Request,
+) -> super::router::HandlerResult {
+    let Ok(identity) = SessionIdentity::new(SessionKind::Surface, &id) else {
+        return Ok(axum::http::StatusCode::BAD_REQUEST.into_response());
+    };
+    Ok(activate_surface(&env, Request::try_from(req)?, &identity)
+        .await?
+        .into())
 }
