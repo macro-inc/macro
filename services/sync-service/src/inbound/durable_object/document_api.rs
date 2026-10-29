@@ -16,19 +16,22 @@ const MAX_BODY_BYTES: usize = (MAX_BINARY_BYTES + MAX_REVISION_BYTES).div_ceil(3
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct UpdateRequest {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub(crate) struct UpdateRequest {
     expected_revision: String,
     update: String,
 }
 
 #[derive(Serialize)]
-struct SnapshotResponse {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub(crate) struct SnapshotResponse {
     snapshot: String,
     revision: String,
 }
 
 #[derive(Serialize)]
-struct UpdateResponse {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub(crate) struct UpdateResponse {
     revision: String,
     applied: bool,
 }
@@ -49,18 +52,15 @@ fn error_response(error: DocumentError) -> Result<Response> {
     )
 }
 
-impl DocumentSyncSession {
-    pub(super) async fn document_handler(
+impl SyncSession {
+    pub(in crate::inbound) async fn document_handler(
         &self,
         mut req: Request,
         document_id: &str,
         is_update: bool,
+        access: crate::domain::document::DocumentAccess,
+        claims: crate::auth::AuthToken,
     ) -> Result<Response> {
-        // A shared internal key never bypasses the user/document permission JWT.
-        let (access, claims) = match crate::auth::document_access(&req, &self.env, document_id) {
-            Ok(access) => access,
-            Err(error) => return error_response(error),
-        };
         if req.method() != if is_update { Method::Post } else { Method::Get } {
             return Ok(response(405));
         }

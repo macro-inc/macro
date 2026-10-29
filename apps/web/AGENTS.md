@@ -246,6 +246,8 @@ the user's newest account for that app from the last fifteen minutes.
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
+- Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
+
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.

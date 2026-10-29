@@ -146,7 +146,8 @@ fn api_messages_snapshot() {
         .flat_map(|line| native.entry(line))
     {
         let (method, params) = match event {
-            LogEvent::ModelChanged(_) => continue,
+            // Claude transcripts never report an item after its turn.
+            LogEvent::ModelChanged(_) | LogEvent::LateUpdate(_) => continue,
             LogEvent::Update(update) => {
                 ("session/update", json!({"sessionId":"s", "update":update}))
             }

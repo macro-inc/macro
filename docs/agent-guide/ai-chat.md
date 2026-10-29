@@ -1966,6 +1966,12 @@ There is no periodic PR lookup polling.
 
 ### Agent reasoning effort
 
+Long model names wrap in model menus and touch sheets. Desktop composer
+triggers stay on one line within the available width; hover a truncated trigger
+to read its full model and effort in the native tooltip. Verify both ordinary
+model rows and rows that open effort submenus, including search results.
+Long runtime-provided effort names wrap within their submenu rows as well.
+
 Open the model selector and hover a model to choose its reasoning effort in the
 submenu on desktop, opened with Right Arrow. On mobile, tap a model to select it,
 then use the adjacent effort button to adjust effort.
