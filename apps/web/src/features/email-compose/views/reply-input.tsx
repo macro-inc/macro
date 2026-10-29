@@ -187,6 +187,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     savedDraftId,
     handleEditorConnect,
     isSending,
+    collectDraft,
     scheduleDraftSave,
     persistDraftOnSenderSwitch,
     hasPaidAccess,
