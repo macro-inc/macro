@@ -506,6 +506,9 @@ its inline preview, switching apps opens the requested app's list in the target
 split instead of moving focus to the existing detail. For example, with Home on
 the left and a Chat conversation on the right, select the left split and press
 Chat: the left split shows the chat list and the right conversation stays open.
+This applies in either direction across apps: with a task open on the left and
+Home on the right, choosing Tasks from the right view switcher opens the task
+list there and preserves the left task, its state, and its history.
 See the [redacted desktop example](media/navigation/chat-list-left-split.png).
 Verify Chat → open channel → Calendar → Chat restores the same channel, then
 repeat with a filtered list and a nested Drive item. Check mobile dock switching,
