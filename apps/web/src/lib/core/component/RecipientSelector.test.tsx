@@ -93,7 +93,7 @@ describe('RecipientSelector typed addresses', () => {
   it('leaves text until a separator ends a complete address', () => {
     const { input, emails } = renderSelector();
     fireEvent.input(input, {
-      target: { value: 'a@example.com, b@example.co' },
+      target: { value: 'a@example.com, b@example.org' },
     });
     fireEvent.input(input, { target: { value: 'a@example.com, b@exa,' } });
     expect(emails()).toEqual([]);

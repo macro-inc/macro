@@ -32,7 +32,7 @@ vi.mock('../client', () => ({
 
 const outlook = {
   id: 'outlook',
-  email_address: 'teo@macro420.onmicrosoft.com',
+  email_address: 'teo@tenant.example.com',
 } as unknown as EmailLink;
 
 function Viewer(props: { linkId: () => string | undefined }) {
@@ -66,7 +66,7 @@ describe('useInboxEmail', () => {
     getLinksMock.mockResolvedValue(ok({ links: [outlook] }));
     const { viewer } = mount('outlook');
     await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@macro420.onmicrosoft.com')
+      expect(viewer()).toBe('teo@tenant.example.com')
     );
   });
 
@@ -78,7 +78,7 @@ describe('useInboxEmail', () => {
     expect(viewer()).toBe('unknown');
     request.resolve(ok({ links: [outlook] }));
     await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@macro420.onmicrosoft.com')
+      expect(viewer()).toBe('teo@tenant.example.com')
     );
   });
 
@@ -90,7 +90,7 @@ describe('useInboxEmail', () => {
     expect(getLinksMock).not.toHaveBeenCalled();
     onlineManager.setOnline(true);
     await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@macro420.onmicrosoft.com')
+      expect(viewer()).toBe('teo@tenant.example.com')
     );
   });
 
@@ -112,7 +112,7 @@ describe('useInboxEmail', () => {
     getLinksMock.mockResolvedValueOnce(ok({ links: [outlook] }));
     const { viewer } = mount('outlook');
     await vi.waitFor(() =>
-      expect(viewer()).toBe('teo@macro420.onmicrosoft.com')
+      expect(viewer()).toBe('teo@tenant.example.com')
     );
     getLinksMock.mockResolvedValue(
       err([{ code: 'HTTP_ERROR' as const, message: 'unavailable' }])
@@ -121,7 +121,7 @@ describe('useInboxEmail', () => {
     expect(client.getQueryState(emailKeys.links.queryKey)?.status).toBe(
       'error'
     );
-    expect(viewer()).toBe('teo@macro420.onmicrosoft.com');
+    expect(viewer()).toBe('teo@tenant.example.com');
   });
 
   it("is unknown until the mail's inbox is known, then follows it", async () => {
@@ -135,7 +135,7 @@ describe('useInboxEmail', () => {
     );
     expect(viewer()).toBe('unknown');
     setId('outlook');
-    expect(viewer()).toBe('teo@macro420.onmicrosoft.com');
+    expect(viewer()).toBe('teo@tenant.example.com');
   });
 
   it("is unknown for an inbox that is not one of the user's", async () => {
