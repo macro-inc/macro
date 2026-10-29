@@ -11,6 +11,9 @@ Debug page: `/props-debug` (LOCAL_ONLY).
 
 ## Side-panel collections
 
+Property rows use an 8px vertical gap, including inline Tags and the boundary
+between regular fields and collection fields.
+
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
 properties. Empty collections show plain, full-width copy without a resting
 border or padded box. The ghost Add action stays beside the property name for
