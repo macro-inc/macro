@@ -16,4 +16,5 @@ export const CreditPurchaseStatus = {
   paid: 'paid',
   declined: 'declined',
   payment_method_required: 'payment_method_required',
+  authentication_required: 'authentication_required',
 } as const;

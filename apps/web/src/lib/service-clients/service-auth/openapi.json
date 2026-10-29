@@ -6334,7 +6334,12 @@
       "CreditPurchaseStatus": {
         "type": "string",
         "description": "How a one-time credit purchase charged to the card on file ended.",
-        "enum": ["paid", "declined", "payment_method_required"]
+        "enum": [
+          "paid",
+          "declined",
+          "payment_method_required",
+          "authentication_required"
+        ]
       },
       "CursorApiKeyStatus": {
         "type": "object",

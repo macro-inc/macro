@@ -431,7 +431,7 @@ export type CreditPurchaseSnapshot = {
 /**
  * How a one-time credit purchase charged to the card on file ended.
  */
-export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_required';
+export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_required' | 'authentication_required';
 
 /**
  * What settings needs to render the Cursor connection.
