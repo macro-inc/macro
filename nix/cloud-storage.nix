@@ -868,10 +868,46 @@
           '';
         };
 
+      # GoAlert MCP server (github.com/amitray007/goalert-mcp, MIT), built from
+      # the reviewed v0.1.0 commit rather than the npm tarball. Bump `rev`,
+      # `hash` and `npmDepsHash` together, after re-reviewing the source.
+      goalert-mcp = pkgs.buildNpmPackage {
+        pname = "goalert-mcp";
+        version = "0.1.0";
+        src = pkgs.fetchFromGitHub {
+          owner = "amitray007";
+          repo = "goalert-mcp";
+          rev = "c8c285f35ce31426c576a69c25f5bb1a365a7565";
+          hash = "sha256-TDBI06V6boZ3RihwirGchDcKkZ7nKCyyB1pEebqEMiU=";
+        };
+        npmDepsHash = "sha256-PhanjTUmHoXzXsu9H3wKWVrZ89tfk8T4/QYdFcMGZ+M=";
+        nodejs = pkgs.nodejs_24;
+        # Only dev dependencies (esbuild, fsevents) ship install scripts.
+        npmFlags = [ "--ignore-scripts" ];
+        meta.mainProgram = "goalert-mcp";
+      };
+
+      # Starts goalert-mcp against Macro's GoAlert with the admin login read
+      # from Doppler at launch, read-only unless GOALERT_READ_ONLY=false.
+      goalert-mcp-macro = pkgs.writeShellApplication {
+        name = "goalert-mcp-macro";
+        runtimeInputs = [ pkgs.doppler ];
+        text = ''
+          GOALERT_PASSWORD="$(doppler secrets get GOALERT_ADMIN_PASSWORD --project observability --config prd --plain)"
+          export GOALERT_PASSWORD
+          export GOALERT_BASE_URL=https://oncall.macro-internal.com
+          export GOALERT_USERNAME=admin
+          export GOALERT_READ_ONLY="''${GOALERT_READ_ONLY:-true}"
+          exec ${pkgs.lib.getExe goalert-mcp} "$@"
+        '';
+      };
+
       shellTools =
         with pkgs;
         [
           daytona
+          goalert-mcp
+          goalert-mcp-macro
           nsc
           parallel
           docker-compose
@@ -1037,6 +1073,8 @@
           openApiBins
           dopplerConfigBins
           nextestArchive
+          goalert-mcp
+          goalert-mcp-macro
           ;
         default = cargoArtifacts;
       }
