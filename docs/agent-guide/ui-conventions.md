@@ -67,9 +67,10 @@ draw a full 1px frame edge, menus keep the glass cast shadow, and
 `ComposerSurface` (composers and settings cards) keeps the wide `composer-shadow`
 halo. Touch surfaces retain their existing shadows.
 
-Desktop view tabs share one flat rounded track, with a small inset and a fully
-rounded selected pill. Use borders and selected fills without raised edges,
-gradients, or shadows. Buttons use variant-specific pressed fills. Wrapping
+Desktop view tabs share the raised, borderless frame of a `HeaderActionGroup`
+island, with a small inset and a fully rounded, borderless selected fill. Tabs
+and islands of one size are the same height: detail headers use `sm` tabs
+beside their `sm` islands. Buttons use variant-specific pressed fills. Wrapping
 preset choices can remain separate pills. Keep each surface's existing touch
 treatment and the agent composer's sliding track (`variant="track"`).
 
