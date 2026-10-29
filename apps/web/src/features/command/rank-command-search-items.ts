@@ -1,4 +1,4 @@
-import { createFreshSearch } from '@core/util/freshSort';
+import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
 import type { CommandMenuItem } from './useCommandItems';
 
 function compareRecency(left: CommandMenuItem, right: CommandMenuItem) {
@@ -43,6 +43,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
 ): T[] {
   const search = createFreshSearch<T>({
     config: {
+      ...NAME_MATCH_RANKING,
       useViewedAt: true,
       channelBoost: 3,
       dmBoost: 1.8,

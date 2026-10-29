@@ -58,6 +58,10 @@ export interface FreshSortConfig<T = unknown> {
   gapPenaltyWeight?: number;
   /** How much to penalize matches that start later in the string. Higher values penalize later starts more. Default: 0 */
   startBonusDecay?: number;
+  /** Boost added when the whole name equals the query, ignoring case (e.g. 2 for a 3x multiplier). Default: 0 */
+  exactNameBoost?: number;
+  /** Boost added when the name starts with the query, ignoring case. Default: 0 */
+  prefixNameBoost?: number;
 }
 
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
@@ -90,6 +94,8 @@ const DEFAULT_CONFIG = {
   boostFn: undefined,
   gapPenaltyWeight: 0,
   startBonusDecay: 0,
+  exactNameBoost: 0,
+  prefixNameBoost: 0,
 } as const;
 
 function extractTimestamp(
@@ -136,6 +142,18 @@ export function normalizeFuzzyScore(
   }
 
   return Math.max(0, Math.min(1, fuzzyScore / maxPossibleScore));
+}
+
+function calculateNameMatchBoost(
+  name: string,
+  term: string,
+  config: FreshSortConfigWithDefaults
+): number {
+  if (!term) return 0;
+  const normalizedName = name.trim().toLocaleLowerCase();
+  if (normalizedName === term) return config.exactNameBoost;
+  if (normalizedName.startsWith(term)) return config.prefixNameBoost;
+  return 0;
 }
 
 function calculateBrevityScore(text: string): number {
@@ -190,6 +208,7 @@ function ufuzzyFilter<T>(
 
 function freshSort<T>(
   filterResults: FuzzyFilterResult<T>[],
+  query: string,
   config: FreshSortConfig<T> = {},
   isChannelItem: BooleanFn<T>,
   isDmItem: BooleanFn<T>,
@@ -199,6 +218,7 @@ function freshSort<T>(
     ...DEFAULT_CONFIG,
     ...config,
   } as FreshSortConfigWithDefaults;
+  const term = query.trim().toLocaleLowerCase();
   const totalWeight =
     finalConfig.fuzzyWeight +
     finalConfig.timeWeight +
@@ -241,6 +261,11 @@ function freshSort<T>(
     const itemBoost = finalConfig.boostFn
       ? finalConfig.boostFn(result.original)
       : 0;
+    const nameMatchBoost = calculateNameMatchBoost(
+      result.string,
+      term,
+      finalConfig
+    );
 
     const combinedScore =
       (normalizedFuzzyWeight * fuzzyScore +
@@ -249,7 +274,7 @@ function freshSort<T>(
       fuzzyPenalty *
       channelMultiplier *
       dmMultiplier *
-      (1 + itemBoost);
+      (1 + itemBoost + nameMatchBoost);
 
     return {
       item: result.original,
@@ -296,6 +321,7 @@ export function createFreshSearch<T>({
       }));
       return freshSort(
         allResults,
+        trimmedQuery,
         config,
         isChannelItem,
         isDmItem,
@@ -333,6 +359,7 @@ export function createFreshSearch<T>({
       const allResults = [...channelResults, ...nonChannelResults];
       return freshSort(
         allResults,
+        trimmedQuery,
         config,
         isChannelItem,
         isDmItem,
@@ -349,6 +376,7 @@ export function createFreshSearch<T>({
     );
     return freshSort(
       fuzzyResults,
+      trimmedQuery,
       config,
       isChannelItem,
       isDmItem,
@@ -376,6 +404,19 @@ function createSameDomainBoostFn<T>(
     return itemDomain === userDomain ? boost : 0;
   };
 }
+
+/**
+ * How closely a typed query matches an item's name: exact names, then names
+ * starting with the query, then tight matches near the start. Menus that find
+ * entities by name (Command-K, mobile name search, @ mentions) share this and
+ * keep their own recency weights and type boosts.
+ */
+export const NAME_MATCH_RANKING = {
+  gapPenaltyWeight: 0.4,
+  startBonusDecay: 0.2,
+  exactNameBoost: 2,
+  prefixNameBoost: 0.25,
+} as const satisfies FreshSortConfig;
 
 /**
  * Preset configurations for common fresh search use cases.

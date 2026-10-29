@@ -1215,8 +1215,10 @@ The @ menu ranks loaded projects and cached document/task matches together
 before choosing preview rows, with the same ranking on desktop and phone.
 Exact and prefix name matches get boosts, task projects get a type boost, and
 viewed recency and shorter names contribute. Empty-query browsing remains
-recency-led; existing People preview slots and phone pinning remain. Tuning lives
-in `MENTION_RANKING_CONFIG` in the mention menu's `utils/mention-ranking.ts`.
+recency-led; existing People preview slots and phone pinning remain. Name-match
+tuning is shared with Cmd+K in `NAME_MATCH_RANKING` (`@core/util/freshSort`);
+recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
+menu's `utils/mention-ranking.ts`.
 Broader cache/server matches remain reachable even when the local fuzzy matcher
 would omit them. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
@@ -1301,7 +1303,11 @@ An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Typed searches give
 channels (including DMs) the same 3x boost as the main search view, with the menu's
 additional 1.8x DM boost; relevance and viewed recency still order those results.
-This shared ranking also applies to mobile name search. Verify an older matching
+Relevance uses the same name-match scoring as the @ menu: a name equal to the
+query gets a 3x boost, a name starting with it a smaller one, and matches that
+are spread out or start late in the name score lower. Verify that typing a
+project's full name puts it above recently viewed documents and tasks that only
+contain those words. This shared ranking also applies to mobile name search. Verify an older matching
 channel stays above recent CRM contacts and agent sessions in All, and remains
 findable in Channels while its cache entry is absent. Refreshing the cache or
 reopening the menu with unchanged data must not reorder results or duplicate a

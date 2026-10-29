@@ -57,6 +57,18 @@ function project(id: string, name: string, updatedAt = NOW): CommandMenuItem {
   };
 }
 
+function note(id: string, name: string, viewedAt = NOW): EntityItem {
+  return {
+    id,
+    kind: 'entity',
+    bucket: 'note',
+    searchText: name,
+    sortTimestamp: viewedAt,
+    timestamps: { viewedAt: new Date(viewedAt) },
+    data: { id, type: 'document', name, ownerId: 'owner', fileType: 'md' },
+  };
+}
+
 function contact(
   id: string,
   name: string,
@@ -142,6 +154,22 @@ describe('command menu search ranking', () => {
       )
     ).toEqual(['recent-project', 'command', 'old-project']);
   });
+
+  it.each([false, true])(
+    'ranks an exact project name above recently viewed documents that contain it with GraphQL %s',
+    (cacheEnabled) => {
+      const items = [
+        note('scattered', 'Launch: share the updated plan with partners'),
+        note('retro', 'Team launch plan retro'),
+        note('review', 'Launch plan review notes'),
+        project('project', 'Launch plan', NOW - 20 * DAY),
+      ];
+      expect(ids(items, 'launch plan', cacheEnabled).slice(0, 2)).toEqual([
+        'project',
+        'review',
+      ]);
+    }
+  );
 
   it('keeps ranking independent of whether a match came from cached or local results', () => {
     const cached = channel('cached', 'Planning', NOW - DAY);
