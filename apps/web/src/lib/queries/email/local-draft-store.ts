@@ -15,6 +15,9 @@ type AttemptRecord = DraftAttempt & {
   storageGeneration: string;
 };
 export type DraftStorageSession = { accountId: string; epoch: string };
+
+/** The device has no usable draft session: signed out, or another account or tab took over. */
+export class DraftSessionUnavailable extends Error {}
 /** `writeId` identifies the save that produced the record, so a replay can recognize its own commit. */
 type StoredDraft = LocalDraft & { epoch: string; writeId?: string };
 const STORES = ['drafts', 'files', 'attempts', 'sends', 'meta'] as const;
@@ -166,7 +169,9 @@ export function createLocalDraftStore(
       epoch?: string,
       isCurrent = () => true
     ): Promise<DraftStorageSession> {
-      const fenced = new Error('This draft session is no longer active');
+      const fenced = new DraftSessionUnavailable(
+        'This draft session is no longer active'
+      );
       const result = await transaction<DraftStorageSession | Error>(
         'readwrite',
         (tx, finish) => {
@@ -243,7 +248,10 @@ export function createLocalDraftStore(
           ),
         false
       );
-      if (!result) throw new Error('This draft session is no longer active');
+      if (!result)
+        throw new DraftSessionUnavailable(
+          'This draft session is no longer active'
+        );
       return result;
     },
     async list(session: DraftStorageSession): Promise<LocalDraft[]> {
@@ -400,7 +408,10 @@ export function createLocalDraftStore(
           )
       );
       if (result instanceof Error) throw result;
-      if (!result) throw new Error('This draft session is no longer active');
+      if (!result)
+        throw new DraftSessionUnavailable(
+          'This draft session is no longer active'
+        );
       return result;
     },
     async file(

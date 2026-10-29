@@ -20,7 +20,10 @@ import type { OperationResult } from '@urql/core';
 import { authKeys } from '../auth/keys';
 import type { UserInfoData } from '../auth/user-info';
 import { queryClient } from '../client';
-import { createLocalDraftStore } from './local-draft-store';
+import {
+  createLocalDraftStore,
+  DraftSessionUnavailable,
+} from './local-draft-store';
 
 import type { EmailSendIntent } from './send-intent';
 
@@ -95,7 +98,7 @@ export async function emailStorageSession() {
     authKeys.userInfo.queryKey
   );
   if (!user?.authenticated || !user.id)
-    throw new Error('Sign in to save drafts on this device');
+    throw new DraftSessionUnavailable('Sign in to save drafts on this device');
   const epoch = storageEpoch();
   if (
     retiredSession ||
@@ -103,7 +106,7 @@ export async function emailStorageSession() {
       (documentSession.accountId !== user.id ||
         documentSession.epoch !== epoch))
   ) {
-    throw new Error(
+    throw new DraftSessionUnavailable(
       'This draft session is no longer active; reload to use the current account'
     );
   }

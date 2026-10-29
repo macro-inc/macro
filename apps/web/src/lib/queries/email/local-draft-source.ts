@@ -14,6 +14,7 @@ import {
 } from 'solid-js';
 import { authKeys } from '../auth/keys';
 import { queryClient } from '../client';
+import { DraftSessionUnavailable } from './local-draft-store';
 import { listLocalDrafts, localDraftStore } from './local-drafts';
 
 export { localDraftEntities } from './local-draft-entities';
@@ -37,8 +38,11 @@ export function createLocalDraftSource(enabled: Accessor<boolean>) {
       span.setAttr('email.draft_count', entries.length);
       if (!disposed && request === generation)
         setDrafts(entries.sort((a, b) => b.updatedAt - a.updatedAt));
-    } catch {
-      span.error('Unable to read local email drafts');
+    } catch (error) {
+      // Signed out or superseded by another account: there are no drafts to show.
+      if (error instanceof DraftSessionUnavailable)
+        span.setAttr('email.drafts.session', 'unavailable');
+      else span.error(error);
       if (!disposed && request === generation) setDrafts([]);
     } finally {
       span.end();

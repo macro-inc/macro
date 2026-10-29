@@ -5,7 +5,10 @@ import {
   type RestoredEmailSend,
   restoreEmailSendTransaction,
 } from './email-send-restoration';
-import type { DraftStorageSession as Session } from './local-draft-store';
+import {
+  DraftSessionUnavailable,
+  type DraftStorageSession as Session,
+} from './local-draft-store';
 import {
   type EmailSendIntent,
   emailSendReservedDraftIds,
@@ -172,11 +175,16 @@ export function createEmailSendJournal(
               };
             },
             finish,
-            new Error('This draft session is no longer active')
+            new DraftSessionUnavailable(
+              'This draft session is no longer active'
+            )
           )
       );
       if (result instanceof Error) throw result;
-      if (!result) throw new Error('This draft session is no longer active');
+      if (!result)
+        throw new DraftSessionUnavailable(
+          'This draft session is no longer active'
+        );
       return result;
     },
     async requestSendCheck(session: Session, uuid: string): Promise<void> {
