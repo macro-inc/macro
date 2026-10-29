@@ -83,4 +83,54 @@ describe('restore provider folders', () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.invalidateSoup).not.toHaveBeenCalled();
   });
+  it('bounds bulk writes and continues after a partial batch failure', async () => {
+    let active = 0;
+    let peak = 0;
+    let release!: () => void;
+    const firstBatch = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const batchStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mocks.update.mockImplementation(
+      async ({ thread_id }: { thread_id: string }) => {
+        active++;
+        peak = Math.max(peak, active);
+        if (active === 8) started();
+        if (Number(thread_id) < 8) await firstBatch;
+        active--;
+        if (thread_id === '3') throw new Error('Provider unavailable');
+        return ok(undefined);
+      }
+    );
+    const result = restoreEmailFolderThreads({
+      folder: 'trash',
+      threadIds: Array.from({ length: 25 }, (_, i) => String(i)),
+    });
+    await batchStarted;
+    expect(mocks.update).toHaveBeenCalledTimes(8);
+    release();
+    expect(await result).toEqual({
+      restoredIds: Array.from({ length: 25 }, (_, i) => String(i)).filter(
+        (id) => id !== '3'
+      ),
+      failedIds: ['3'],
+    });
+    expect(peak).toBeLessThanOrEqual(8);
+    expect(mocks.invalidateSoup).toHaveBeenCalledOnce();
+  });
+
+  it('preserves accepted restores when refreshing one thread fails', async () => {
+    mocks.update.mockResolvedValue(ok(undefined));
+    mocks.refresh.mockRejectedValueOnce(new Error('Refresh timed out'));
+    expect(
+      await restoreEmailFolderThreads({
+        folder: 'spam',
+        threadIds: ['one', 'two'],
+      })
+    ).toEqual({ restoredIds: ['one', 'two'], failedIds: [] });
+    expect(mocks.invalidateSoup).toHaveBeenCalledOnce();
+  });
 });
