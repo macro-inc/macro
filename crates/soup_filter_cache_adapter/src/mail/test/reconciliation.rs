@@ -1,383 +1,450 @@
 use super::*;
 
-async fn server_membership<S: PredicateIndexStorage>(storage: S) {
-    let mut engine = Engine::new(storage);
-    write(&mut engine, QUERY, &seed()).await;
-    // Foreground list reads do not include the cache-only canonical previews.
-    write(
-        &mut engine,
-        PARTIAL,
-        &json!({"user":{"id":VIEWER,"soup":{"items":[
-            {"__typename":TYPE,"id":id(76),"inboxVisible":true,"isRead":false},
-            {"__typename":TYPE,"id":id(6),"inboxVisible":false,"isRead":false}
-        ]}}}),
-    )
-    .await;
-    let pending = format!("{TYPE}:{}", id(76));
-    let archived = format!("{TYPE}:{}", id(6));
-    let baseline = [pending.clone(), archived.clone()]
-        .map(|key| reconciliation_baseline_entry(key, "2026-01-01T00:00:00Z").unwrap());
-    let request = || PageRequest {
-        view: "INBOX".into(),
-        cursor: None,
-        through: None,
-    };
-    let PageResult::MailPage {
-        keys,
-        retained_keys,
-        sort_timestamps,
-        next_cursor,
-        ..
-    } = page_impl(
-        &mut engine,
-        "generation",
-        filters(),
-        "UPDATED_AT",
-        "DESC",
-        10,
-        request(),
-        false,
-        &baseline,
-    )
-    .await
-    .unwrap()
-    else {
-        panic!("Mail page expected")
-    };
-    assert_eq!(keys.first(), Some(&pending));
-    assert_eq!(retained_keys, vec![pending.clone()]);
-    assert_eq!(sort_timestamps[0], "2026-01-01T00:00:00+00:00");
-    assert!(!keys.contains(&archived));
-    assert_eq!(
-        keys.len(),
-        11,
-        "retained evidence does not shrink the indexed page"
-    );
-    let PageResult::MailPage {
-        keys: next,
-        end_cursor: through,
-        ..
-    } = read(&mut engine, filters(), "INBOX", next_cursor).await
-    else {
-        panic!("continuation expected")
-    };
-    assert!(!next.is_empty());
-    assert!(
-        next.iter().all(|key| !keys.contains(key)),
-        "retained rows do not move the local cursor"
-    );
+const SOUP: &str = include_str!("reconciliation.graphql");
 
-    // A retained row below the indexed cursor must stay last when reading
-    // through the next page, without moving either continuation boundary.
-    let mut older = baseline.clone();
-    older[0] = reconciliation_baseline_entry(pending.clone(), "2024-01-01T00:00:00Z").unwrap();
-    let through_request = || PageRequest {
-        view: "INBOX".into(),
-        cursor: None,
-        through: through.clone(),
-    };
-    let PageResult::MailPage {
-        keys,
-        sort_timestamps,
-        next_cursor,
-        end_cursor,
-        ..
-    } = page_impl(
-        &mut engine,
-        "generation",
-        filters(),
-        "UPDATED_AT",
-        "DESC",
-        20,
-        through_request(),
-        false,
-        &older,
-    )
-    .await
+fn noise() -> Value {
+    let mut filters = filters();
+    filters["emailFilter"] = json!({"tree":{"literal":{"importance":false}}});
+    filters
+}
+fn variables(direction: &str) -> Map<String, Value> {
+    json!({"input":{"initial":{
+        "filters":noise(), "sortMethod":"UPDATED_AT", "sortDirection":direction,
+        "emailView":"INBOX", "limit":3
+    }}})
+    .as_object()
     .unwrap()
-    else {
-        panic!("through page expected")
-    };
-    assert_eq!(keys.last(), Some(&pending));
-    assert!(
-        sort_timestamps
-            .windows(2)
-            .all(|pair| micros(&pair[0]) >= micros(&pair[1]))
-    );
-    let PageResult::MailPage {
-        next_cursor: indexed_next,
-        end_cursor: indexed_end,
-        ..
-    } = page_impl(
-        &mut engine,
-        "generation",
-        filters(),
-        "UPDATED_AT",
-        "DESC",
-        20,
-        through_request(),
-        false,
-        &[],
-    )
-    .await
-    .unwrap()
-    else {
-        panic!("indexed page expected")
-    };
-    assert_eq!(next_cursor, indexed_next);
-    assert_eq!(end_cursor, indexed_end);
-
-    // Act on the incomplete row itself, not a different hydrated thread.
-    let archived_data = json!({"user":{"id":VIEWER,"soup":{"items":[
-        {"__typename":TYPE,"id":id(76),"inboxVisible":false,"isRead":false}
-    ]}}});
-    let vars = Map::new();
-    let updates = projection_updates(
-        cache_core::meta::bundled_schema_ref(),
+    .clone()
+}
+fn response(ids: &[u128], next: Value) -> Value {
+    let items: Vec<_> = ids
+        .iter()
+        .map(|n| {
+            let mut item = row(*n);
+            item["properties"] = json!([]);
+            item["isFavorited"] = json!(false);
+            item["isSignal"] = json!(*n == 12);
+            item
+        })
+        .collect();
+    json!({"user":{"id":VIEWER,"emailLinks":[{"id":id(1000)}],"soup":{"items":items,"nextCursor":next}}})
+}
+async fn persist<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    operation: &str,
+    vars: &Map<String, Value>,
+    data: &Value,
+) {
+    let query = SOUP.replace("query Soup(", &format!("query {operation}("));
+    let projections = projection_updates(
+        engine.schema(),
         engine.storage(),
-        PARTIAL,
-        None,
-        &vars,
-        &archived_data,
+        &query,
+        Some(operation),
+        vars,
+        data,
     )
     .await
     .unwrap();
-    let (transaction, _) = engine
-        .begin_optimistic_write_with_projections(
-            None,
-            BeginOptimisticWrite {
-                client_metadata: None,
-                uuid: "00000000-0000-0000-0000-000000003076",
-                query: PARTIAL,
-                operation_name: None,
-                variables: &vars,
-                data: &archived_data,
-                link_patches: &[],
-                revalidations: &[],
-                created_at_ms: 1,
-                identity_bindings: &[],
-            },
-            optimistic_updates(updates),
-        )
-        .await
-        .unwrap();
-    let PageResult::MailPage { keys, .. } = page_impl(
-        &mut engine,
-        "generation",
-        filters(),
-        "UPDATED_AT",
-        "DESC",
-        10,
-        request(),
-        false,
-        &baseline,
+    let projections = crate::properties::augment_authoritative(
+        engine.schema(),
+        engine.storage(),
+        &query,
+        Some(operation),
+        vars,
+        data,
+        true,
+        projections,
     )
     .await
-    .unwrap() else {
-        panic!("Mail page expected")
-    };
-    assert!(
-        !keys.contains(&pending),
-        "optimistic archive must override unknown metadata"
-    );
-    let claim = engine
-        .claim_next_mutation(MutationClaimRequest {
-            owner: "test".into(),
-            now_ms: 1,
-            lease_expires_at_ms: 100,
-        })
-        .await
-        .unwrap()
-        .unwrap();
+    .unwrap();
     engine
-        .rollback_optimistic_write(
-            transaction,
-            MutationClaimToken {
-                owner: "test".into(),
-                generation: claim.lease_generation,
+        .write_query_with_registration_and_projections(
+            None,
+            None,
+            NetworkWrite {
+                query: &query,
+                operation_name: Some(operation),
+                variables: vars,
+                data,
+                identity: Some(VIEWER),
             },
+            projections,
         )
         .await
         .unwrap();
-    let PageResult::MailPage { keys, .. } = page_impl(
-        &mut engine,
+}
+async fn current_keys<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    filter: Value,
+    direction: &str,
+) -> Vec<String> {
+    let PageResult::MailPage { keys, .. } = page_current(
+        engine,
         "generation",
-        filters(),
+        filter,
         "UPDATED_AT",
-        "DESC",
-        10,
-        request(),
-        false,
-        &baseline,
+        direction,
+        100,
+        PageRequest {
+            view: "INBOX".into(),
+            cursor: None,
+            through: None,
+        },
+        &[],
     )
     .await
     .unwrap() else {
-        panic!("Mail page expected")
+        panic!("complete mail page")
     };
-    assert!(
-        keys.contains(&pending),
-        "rollback restores the retained row"
-    );
-    write(&mut engine, PARTIAL, &archived_data).await;
-    let PageResult::MailPage { keys, .. } = page_impl(
-        &mut engine,
-        "generation",
-        filters(),
-        "UPDATED_AT",
-        "DESC",
-        10,
-        request(),
-        false,
-        &baseline,
-    )
-    .await
-    .unwrap() else {
-        panic!("Mail page expected")
-    };
-    assert!(
-        !keys.contains(&pending),
-        "committed partial archive must still exclude the row"
-    );
+    keys
+}
 
-    write(
+async fn bounded_reconciliation<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    let vars = variables("DESC");
+    persist(
         &mut engine,
-        PARTIAL,
-        &json!({"user":{"id":VIEWER,"soup":{"items":[
-            {"__typename":TYPE,"id":id(76),"inboxVisible":true,"isRead":true}
-        ]}}}),
+        "SoupMailBackfill",
+        &vars,
+        &response(&[20, 18, 16, 14, 12, 10, 8, 6, 4], Value::Null),
     )
     .await;
-    let mut unread = filters();
-    unread["emailFilter"] = json!({"tree":{"literal":{"read":false}}});
-    let PageResult::MailPage { keys, .. } = page_impl(
-        &mut engine,
-        "generation",
-        unread,
-        "UPDATED_AT",
-        "DESC",
-        10,
-        request(),
-        false,
-        &baseline,
-    )
-    .await
-    .unwrap() else {
-        panic!("Mail page expected")
-    };
+    assert_eq!(current_keys(&mut engine, noise(), "DESC").await.len(), 8);
+    let network = response(&[20, 16, 8], json!("next-page"));
+    persist(&mut engine, "Soup", &vars, &network).await;
+    let expected: Vec<_> = [20, 16, 8, 6, 4]
+        .map(|n| format!("{TYPE}:{}", id(n)))
+        .into();
+    assert_eq!(current_keys(&mut engine, noise(), "DESC").await, expected);
+    // Re-evaluation, a repeated write and an engine restart cannot resurrect gaps.
+    persist(&mut engine, "Soup", &vars, &network).await;
+    let mut engine = Engine::new(engine.into_storage());
+    assert_eq!(current_keys(&mut engine, noise(), "DESC").await, expected);
     assert!(
-        !keys.contains(&pending),
-        "known read state must disprove unread membership"
+        current_keys(&mut engine, filters(), "DESC")
+            .await
+            .contains(&format!("{TYPE}:{}", id(12)))
     );
-
-    // A known false branch does not disprove an OR whose other facts are
-    // missing. Conversely NOT of a known true flag proves non-membership.
-    for (tree, retained) in [
-        (
-            json!({"or":{"left":{"literal":{"read":false}},"right":{"literal":{"calendarOnly":true}}}}),
-            true,
-        ),
-        (
-            json!({"and":{"left":{"literal":{"read":true}},"right":{"literal":{"calendarOnly":true}}}}),
-            true,
-        ),
-        (json!({"not":{"literal":{"read":true}}}), false),
-    ] {
-        let mut compound = filters();
-        compound["emailFilter"] = json!({"tree":tree});
-        let PageResult::MailPage { keys, .. } = page_impl(
-            &mut engine,
-            "generation",
-            compound,
-            "UPDATED_AT",
-            "DESC",
-            10,
-            request(),
-            false,
-            &baseline,
-        )
-        .await
-        .unwrap() else {
-            panic!("Mail page expected")
-        };
-        assert_eq!(keys.contains(&pending), retained);
-    }
-
-    let mut hydrated = row(76);
-    hydrated["linkId"] = json!(id(1000));
-    hydrated["ownerId"] = json!(VIEWER);
-    write(
+    assert!(
+        engine
+            .storage()
+            .get_batch(&[EntityKey::entity(TYPE, &[&id(18)])])
+            .await
+            .unwrap()[0]
+            .is_some(),
+        "negative membership is not a normalized entity deletion"
+    );
+    // A fresh complete snapshot restores the facts; a partial patch cannot.
+    let partial = json!({"user":{"id":VIEWER,"soup":{"items":[{
+        "__typename":TYPE,"id":id(18),"isRead":true
+    }]}}});
+    persist(&mut engine, "Partial", &vars, &partial).await;
+    assert_eq!(current_keys(&mut engine, noise(), "DESC").await, expected);
+    persist(
         &mut engine,
-        QUERY,
-        &json!({"user":{"id":VIEWER,"soup":{"items":[hydrated]}}}),
+        "SoupMailBackfill",
+        &vars,
+        &response(&[18], Value::Null),
     )
     .await;
-    let PageResult::MailPage {
-        keys,
-        retained_keys,
-        ..
-    } = page_impl(
-        &mut engine,
-        "generation",
-        filters(),
-        "UPDATED_AT",
-        "DESC",
-        10,
-        request(),
-        false,
-        &baseline,
-    )
-    .await
-    .unwrap()
-    else {
-        panic!("hydrated page expected")
-    };
-    assert!(keys.contains(&pending));
-    assert!(retained_keys.is_empty());
-    assert!(!keys.contains(&archived));
+    assert!(
+        current_keys(&mut engine, noise(), "DESC")
+            .await
+            .contains(&format!("{TYPE}:{}", id(18)))
+    );
 }
 
 #[test]
-fn memory_retains_unhydrated_server_mail_but_removes_confirmed_nonmembers() {
-    pollster::block_on(server_membership(InMemoryStorage::new()));
+fn authoritative_mail_page_invalidates_gaps_without_deleting_threads() {
+    pollster::block_on(bounded_reconciliation(InMemoryStorage::new()));
 }
-
 #[test]
-fn turso_retains_unhydrated_server_mail_but_removes_confirmed_nonmembers() {
-    pollster::block_on(server_membership(
-        cache_turso::TursoStorage::open_in_memory("mail-server-membership").unwrap(),
+fn turso_authoritative_mail_page_invalidates_gaps_without_deleting_threads() {
+    pollster::block_on(bounded_reconciliation(
+        cache_turso::TursoStorage::open_in_memory("mail-reconciliation").unwrap(),
     ));
 }
-
 #[test]
-fn maximum_baseline_does_not_count_indexed_rows_again() {
+fn ascending_boundary_preserves_rows_after_the_server_page() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
-        write(&mut engine, QUERY, &seed()).await;
-        let baseline = (1000..6000)
-            .map(|n| {
-                reconciliation_baseline_entry(format!("{TYPE}:{}", id(n)), "2026-01-01T00:00:00Z")
-                    .unwrap()
-            })
-            .collect::<Vec<_>>();
-        let PageResult::MailPage { keys, .. } = page_impl(
+        let vars = variables("ASC");
+        persist(
             &mut engine,
-            "generation",
-            filters(),
-            "UPDATED_AT",
-            "DESC",
-            10,
-            PageRequest {
-                view: "INBOX".into(),
-                cursor: None,
-                through: None,
-            },
-            false,
-            &baseline,
+            "SoupMailBackfill",
+            &vars,
+            &response(&[4, 6, 8, 10, 14, 16], Value::Null),
+        )
+        .await;
+        persist(
+            &mut engine,
+            "Soup",
+            &vars,
+            &response(&[4, 8, 14], json!("next")),
+        )
+        .await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "ASC").await,
+            [4, 8, 14, 16].map(|n| format!("{TYPE}:{}", id(n)))
+        );
+    });
+}
+#[test]
+fn exhausted_and_empty_first_pages_revoke_older_matches() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let vars = variables("DESC");
+        persist(
+            &mut engine,
+            "SoupMailBackfill",
+            &vars,
+            &response(&[20, 18, 16, 12, 4], Value::Null),
+        )
+        .await;
+        persist(&mut engine, "Soup", &vars, &response(&[20], Value::Null)).await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [format!("{TYPE}:{}", id(20))]
+        );
+        persist(&mut engine, "Soup", &vars, &response(&[], Value::Null)).await;
+        assert!(current_keys(&mut engine, noise(), "DESC").await.is_empty());
+        assert_eq!(
+            current_keys(&mut engine, filters(), "DESC").await,
+            [format!("{TYPE}:{}", id(12))]
+        );
+    });
+}
+#[test]
+fn other_mail_views_use_their_own_timestamp_and_membership() {
+    pollster::block_on(async {
+        for view in ["ALL", "SENT", "DRAFTS"] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let mut vars = variables("DESC");
+            vars["input"]["initial"]["emailView"] = json!(view);
+            let ids = if view == "DRAFTS" {
+                [36, 30, 24, 18, 6]
+            } else {
+                [28, 24, 20, 16, 8]
+            };
+            persist(
+                &mut engine,
+                "SoupMailBackfill",
+                &vars,
+                &response(&ids, Value::Null),
+            )
+            .await;
+            persist(
+                &mut engine,
+                "Soup",
+                &vars,
+                &response(&[ids[0], ids[2], ids[3]], json!("next")),
+            )
+            .await;
+            let PageResult::MailPage { keys, .. } = page_current(
+                &mut engine,
+                "generation",
+                noise(),
+                "UPDATED_AT",
+                "DESC",
+                100,
+                PageRequest {
+                    view: view.into(),
+                    cursor: None,
+                    through: None,
+                },
+                &[],
+            )
+            .await
+            .unwrap() else {
+                panic!("supported {view}")
+            };
+            assert_eq!(
+                keys,
+                [ids[0], ids[2], ids[3], ids[4]].map(|n| format!("{TYPE}:{}", id(n))),
+                "{view}"
+            );
+        }
+    });
+}
+
+#[test]
+fn pending_local_edits_survive_negative_server_membership() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let vars = variables("DESC");
+        persist(
+            &mut engine,
+            "SoupMailBackfill",
+            &vars,
+            &response(&[20, 18, 16, 14, 8], Value::Null),
+        )
+        .await;
+        let data = json!({"user":{"id":VIEWER,"soup":{"items":[{
+            "__typename":TYPE,"id":id(18),"isRead":true
+        }]}}});
+        let projections = optimistic_updates(
+            projection_updates(
+                engine.schema(),
+                engine.storage(),
+                PARTIAL,
+                None,
+                &Map::new(),
+                &data,
+            )
+            .await
+            .unwrap(),
+        );
+        let projections = crate::properties::augment_optimistic(
+            engine.schema(),
+            engine.storage(),
+            PARTIAL,
+            None,
+            &Map::new(),
+            &data,
+            projections,
         )
         .await
-        .unwrap() else {
-            panic!("Mail page expected")
-        };
-        assert_eq!(keys.len(), 10);
+        .unwrap();
+        engine
+            .begin_optimistic_write_with_projections(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    uuid: "00000000-0000-0000-0000-000000009000",
+                    query: PARTIAL,
+                    operation_name: None,
+                    variables: &Map::new(),
+                    data: &data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                    identity_bindings: &[],
+                },
+                projections,
+            )
+            .await
+            .unwrap();
+        persist(
+            &mut engine,
+            "Soup",
+            &vars,
+            &response(&[20, 16, 8], json!("next")),
+        )
+        .await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [20, 18, 16, 8].map(|n| format!("{TYPE}:{}", id(n)))
+        );
+        let states = engine
+            .storage()
+            .load_projection_states(&[RecordKey::new(format!("{TYPE}:{}", id(18))).unwrap()])
+            .await
+            .unwrap();
+        assert!(
+            matches!(states[0], Some(ProjectionState::Complete(_))),
+            "the authoritative base must survive rollback of a pending edit"
+        );
+    });
+}
+
+#[test]
+fn view_timestamps_not_preview_updated_at_bound_the_page() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let vars = variables("DESC");
+        let mut seed = response(&[20, 18, 16, 14], Value::Null);
+        for (item, timestamp) in seed["user"]["soup"]["items"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .zip([
+                "2025-01-02T00:00:00.000003Z",
+                "2025-01-02T00:00:00.000002Z",
+                "2025-01-02T00:00:00.000001Z",
+                "2025-01-02T00:00:00Z",
+            ])
+        {
+            item["latestInboundMessageTs"] = json!(timestamp);
+        }
+        persist(&mut engine, "SoupMailBackfill", &vars, &seed).await;
+        let mut network = seed.clone();
+        network["user"]["soup"]["items"] = json!([
+            seed["user"]["soup"]["items"][0],
+            seed["user"]["soup"]["items"][2]
+        ]);
+        network["user"]["soup"]["nextCursor"] = json!("next");
+        persist(&mut engine, "Soup", &vars, &network).await;
+        assert_eq!(
+            current_keys(&mut engine, noise(), "DESC").await,
+            [20, 16, 14].map(|n| format!("{TYPE}:{}", id(n)))
+        );
+    });
+}
+
+#[test]
+fn partial_backfill_cursor_and_unsupported_queries_are_not_negative_evidence() {
+    pollster::block_on(async {
+        for case in [
+            "backfill",
+            "cursor",
+            "unsupported",
+            "partial",
+            "no-cursor",
+            "unordered",
+            "created-at",
+            "no-mail",
+        ] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let mut vars = variables("DESC");
+            persist(
+                &mut engine,
+                "SoupMailBackfill",
+                &vars,
+                &response(&[20, 18, 16, 4], Value::Null),
+            )
+            .await;
+            let mut data = response(&[20, 16], json!("next"));
+            let mut operation = "Soup";
+            match case {
+                "backfill" => operation = "SoupMailBackfill",
+                "cursor" => {
+                    vars = json!({"input":{"cursor":"server-cursor"}})
+                        .as_object()
+                        .unwrap()
+                        .clone()
+                }
+                "unsupported" => {
+                    vars["input"]["initial"]["filters"]["emailFilter"] =
+                        json!({"tree":{"literal":{"sender":{"partial":"test"}}}})
+                }
+                "partial" => data["user"]["soup"]["items"][1]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("latestInboundMessageTs")
+                    .map(|_| ())
+                    .unwrap(),
+                "no-cursor" => data["user"]["soup"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("nextCursor")
+                    .map(|_| ())
+                    .unwrap(),
+                "unordered" => data["user"]["soup"]["items"]
+                    .as_array_mut()
+                    .unwrap()
+                    .reverse(),
+                "created-at" => vars["input"]["initial"]["sortMethod"] = json!("CREATED_AT"),
+                "no-mail" => vars["input"]["initial"]["emailView"] = Value::Null,
+                _ => unreachable!(),
+            }
+            persist(&mut engine, operation, &vars, &data).await;
+            assert!(
+                current_keys(&mut engine, noise(), "DESC")
+                    .await
+                    .contains(&format!("{TYPE}:{}", id(18))),
+                "{case}"
+            );
+        }
     });
 }

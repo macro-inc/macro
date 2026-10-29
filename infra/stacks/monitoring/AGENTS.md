@@ -28,14 +28,20 @@ From `infra/`:
   in both. Grafana pages for those, so their Datadog copies use `pages: false`.
 - Read `README.md` before deployment: imported resources must be adopted first
   to avoid duplicate alerts. Never deploy without explicit approval.
-- Deploying needs the `goalertIntegrationKey` secret in stack config, and
-  GoAlert (infra/stacks/observability) reachable at oncall.macro-internal.com.
+- Deploying needs the `goalertIntegrationKey` and `goalertNotifyIntegrationKey`
+  secrets in stack config, and GoAlert (infra/stacks/observability) reachable
+  at oncall.macro-internal.com.
 - A prod monitor's graph on its file's dashboard repeats its metric and
   thresholds by hand; change both. `routing.test.ts` matches them by title.
-- Never mention a Slack handle or email address in a monitor message; end it
-  with `notify({ pages })`. `routing.test.ts` enforces it.
-- Notification retention adds nine monitors and one dashboard. Deploy DSS health
-  instrumentation first; missing telemetry is deliberately an alert, not zero lag.
+- End every monitor message with `notify({ pages })`, which routes only to
+  GoAlert, and pass `dependsOn: goalertWebhooks`. Never mention a channel
+  webhook, Slack handle or email address: GoAlert posts to the channel. Only
+  `goalert-health` posts to `@webhook-macro-alert-hook` directly.
+  `routing.test.ts` enforces it.
+- Notification retention adds nine monitors, one dashboard and a downtime muting
+  the prod missing-telemetry alarm; delete the downtime once DSS health
+  instrumentation is deployed. Missing telemetry is deliberately an alert, not
+  zero lag.
 - Do not use native committed-offset lag for the independent notification
   consumers. Their per-instance log measurements preserve broadcast semantics.
 - `notificationRetentionDashboardUrl` is a stack output, not an app route.

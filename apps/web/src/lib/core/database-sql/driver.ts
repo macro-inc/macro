@@ -147,7 +147,7 @@ async function steps(
   source: RowSource,
   trace: DatabaseSqlRunTrace
 ): Promise<Result<Outcome, DatabaseSqlFailure>> {
-  let step = feed(() => query.start());
+  let step = trace.start(() => feed(() => query.start()));
   while (step.isOk()) {
     const current = step.value;
     if (current.step === 'done') {
@@ -164,7 +164,7 @@ function drive(
   source: RowSource,
   trace: DatabaseSqlRunTrace
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
-  return ResultAsync.fromPromise(opened(), engineFailure).andThen(
+  return ResultAsync.fromPromise(trace.open(opened), engineFailure).andThen(
     (query) =>
       new ResultAsync(steps(query, source, trace).finally(() => query.free()))
   );

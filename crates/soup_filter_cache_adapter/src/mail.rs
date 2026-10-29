@@ -18,7 +18,8 @@ use soup_filter_projection::{
 };
 use std::borrow::Cow;
 
-mod reconciliation;
+pub(crate) mod reconciliation;
+mod retention;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
@@ -908,7 +909,7 @@ async fn page_impl<S: PredicateIndexStorage>(
     // Keep local cursors tied to the indexed window. A retained server row can
     // be outside it and must not cause continuation pages to skip cached mail.
     let (window, retained_keys) =
-        reconciliation::reconcile_window(engine, &query, window, baseline).await?;
+        retention::reconcile_window(engine, &query, window, baseline).await?;
     let sort_timestamps = window
         .values
         .iter()

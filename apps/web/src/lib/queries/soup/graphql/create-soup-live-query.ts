@@ -23,6 +23,7 @@ import {
   type CacheRevision,
   MAX_MAIL_THROUGH_ROWS,
 } from '../../../graphql-cache/protocol';
+import { emailThreadSortTs } from '../../../service-clients/service-storage/email-thread-sort';
 import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
@@ -35,7 +36,6 @@ import {
   type SoupQueryVariables,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import {
-  emailThreadSortTs,
   type GraphqlSoupInput,
   type GraphqlSoupItem,
   getGraphqlSoupCacheHost,

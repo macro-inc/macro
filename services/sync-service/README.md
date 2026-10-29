@@ -33,8 +33,27 @@ When a client updates a document via a WebSocket message, we apply the update to
 Unfortunately, query params are the best way to authenticate a websocket connection. Since we use tls, query params should be encrypted in transit.
 the `sync-service` will verify the jwt and ensure that the user has the correct permissions to access the document.
 
-TODO: eventually we will want to validate based on the `access_level` field in the token that the user only receives updates and does not push any updates to the document.
+HTTP routes use Axum `FromRequestParts` extractors to authenticate before the
+handler runs. Document view/edit/admin routes declare their minimum grant;
+atomic state/update routes require an exact signed document grant, and internal
+management routes require the shared service credential. Surface reads and
+connects require an exact, kind-discriminated surface JWT. WebSocket query tokens
+are validated against the requested session before accepting the upgrade.
 
+`src/inbound/` owns routing, credential decoding and Cloudflare callbacks;
+`src/domain/` owns permission/write policy and atomic document-update logic;
+`src/outbound/` owns persistence, secrets and external clients. The Cloudflare
+callback adapter shares one isolate-local session through `Rc`, preserving the
+mutation barrier across HTTP requests, WebSocket messages, alarms and closes.
+
+Socket write policy allows viewers to read, document commenters to change only
+comment marks, and editors to write full updates. Surface commenters cannot
+write. The HTTP API schema is generated with `just openapi`; WebSocket messages
+continue to use the Bebop schema. Regenerate the HTTP types from
+`apps/web/src/lib/service-clients` with
+`bun run orval --config orval.config.ts --project syncService`. The existing web
+transport handles binary payloads and permission tokens; Orval generates shared
+models only.
 
 ## Bebop
 The bebop schema is defined in `./bebop/schema.bop`.
@@ -66,9 +85,10 @@ adds `create-default-state`; `alarm-keep-alive` is opt-in.
 from existing state on the client. If a client fetches a document for the first time the worker will create
 some default state for it. In the future, this feature should be disabled, and we should be inheriting default state
 from the client.
-- `alarm-keep-alive`: This feature is used to prevent the in-memory state from being evicted when there are still
-active connections to the document. :warning: Tests should be run with both this feature enabled and disabled, to ensure
-that in a case where eviction logic is not working as expected, the core logic is still correct even though it might be slower.
+- `alarm-keep-alive`: Retained for compatibility with existing build commands.
+  Active sessions always schedule persistence/keep-alive alarms; this flag no
+  longer changes runtime behavior. `just test-no-alarm` checks the legacy feature
+  selection.
 
 ## Development
 

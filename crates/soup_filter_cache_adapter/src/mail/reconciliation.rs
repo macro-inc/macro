@@ -1,196 +1,187 @@
-//! Preserve server membership until the Mail index can confirm or reject it.
+//! Negative membership evidence from a complete, authoritative Mail first page.
+//! Invalidate contradicted projections, never infer entity deletion or a new view.
+
 use super::*;
-use cache_core::predicate::reconciliation::{
-    PredicateMembership, predicate_membership, reconcile_predicate_baseline,
-};
-use cache_core::record_selection::RecordSelection;
-use predicate_index::{PredicateExpr, ReferenceHit};
+use item_filter_index::properties::{compile_mail, mail_profile};
+use predicate_index::{IndexQuery, PredicateExpr};
 use std::collections::HashMap;
 
-pub(super) async fn reconcile_window<S: PredicateIndexStorage>(
-    engine: &mut Engine<S>,
-    query: &ValidatedIndexQuery,
-    window: Window,
-    baseline: &[PredicateBaselineEntry],
-) -> Result<(Window, Vec<String>), PageError<S::Error>> {
-    if baseline.is_empty() {
-        return Ok((window, Vec::new()));
-    }
-    let mut values: HashMap<_, _> = window
-        .keys
-        .iter()
-        .cloned()
-        .zip(window.values.iter().copied())
-        .collect();
-    // The window already proves membership. Only classify server rows outside
-    // it; combining both sets into a new baseline incorrectly consumed its cap.
-    let baseline = baseline
-        .iter()
-        .filter(|entry| !values.contains_key(&entry.record_key))
-        .cloned()
-        .collect::<Vec<_>>();
-    let keys = baseline
-        .iter()
-        .map(|entry| entry.record_key.clone())
-        .collect::<Vec<_>>();
-    let bases = engine
-        .storage()
-        .load_projection_states(&keys)
-        .await
-        .map_err(EngineError::Storage)?;
-    let shadows = engine
-        .storage()
-        .load_optimistic_projections(&keys)
-        .await
-        .map_err(EngineError::Storage)?;
-    let records = engine
-        .storage()
-        .get_batch(
-            &keys
-                .iter()
-                .map(|key| EntityKey(key.as_str().to_owned().into()))
-                .collect::<Vec<_>>(),
-        )
-        .await
-        .map_err(EngineError::Storage)?;
-    let membership = baseline
-        .iter()
-        .zip(&bases)
-        .zip(&shadows)
-        .zip(&records)
-        .map(|(((entry, base), shadow), record)| {
-            let membership =
-                predicate_membership(query, base.as_ref(), shadow.as_ref(), record.is_some());
-            let value = match membership {
-                PredicateMembership::Match(value) => value,
-                _ => entry.sort_value,
-            };
-            values.insert(entry.record_key.clone(), value);
-            membership
-        })
-        .collect::<Vec<_>>();
-    let mut result = reconcile_predicate_baseline(
-        query,
-        &baseline,
-        membership,
-        window
-            .keys
-            .into_iter()
-            .zip(window.values)
-            .map(|(record_key, sort_value)| ReferenceHit {
-                record_key,
-                sort_value,
-            })
-            .collect(),
-        window.optimistic || shadows.iter().any(Option::is_some),
-    );
-    let rejected = known_nonmembers(engine, query, &result.retained_keys).await?;
-    result.keys.retain(|key| !rejected.contains(key));
-    result.retained_keys.retain(|key| !rejected.contains(key));
-    Ok((
-        Window {
-            values: result.keys.iter().map(|key| values[key]).collect(),
-            keys: result.keys,
-            more: window.more,
-            optimistic: result.optimistic,
-        },
-        result
-            .retained_keys
-            .into_iter()
-            .map(|key| key.as_str().to_owned())
-            .collect(),
-    ))
-}
-
-/// Missing previews/capsules cannot undo a known read/archive/signal change.
-/// Substitute only present booleans into the compiled predicate, then use its
-/// normal simplifier to prove non-membership. Other facts stay unknown: this
-/// can reject a retained row, never admit a new one or invent projection facts.
-async fn known_nonmembers<S: PredicateIndexStorage>(
-    engine: &mut Engine<S>,
-    query: &ValidatedIndexQuery,
-    keys: &[RecordKey],
-) -> Result<HashSet<RecordKey>, PageError<S::Error>> {
-    if keys.is_empty() {
-        return Ok(HashSet::new());
-    }
-    let Some(partition) = query
-        .as_query()
-        .partitions
-        .iter()
-        .find(|p| p.partition == vocabulary::partition())
+/// Called only for the canonical Soup operation, after composing its current
+/// projections. Backfills and cursor pages are not negative membership evidence.
+/// Preparation and the eventual write run under the host's engine lock.
+pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
+    storage: &S,
+    variables: &Map<String, Value>,
+    data: &Value,
+    incoming: &[ProjectionMutation],
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    let Some(initial) = variables
+        .get("input")
+        .and_then(|input| input.get("initial"))
     else {
-        return Ok(keys.iter().cloned().collect());
+        return Ok(vec![]);
     };
-    let mut facts: HashMap<String, HashMap<&str, ExactValue>> = HashMap::new();
-    for (field, attribute) in [
-        ("inboxVisible", "mail-inbox"),
-        ("isRead", "mail-read"),
-        ("isSignal", "mail-signal"),
-    ] {
-        let selection = RecordSelection::parse(
-            cache_core::meta::bundled_schema_ref(),
-            &format!("fragment MailState on GraphqlSoupEmailThread {{ {field} }}"),
-            "MailState",
-        )
-        .map_err(error)?;
-        for chunk in keys.chunks(cache_core::record_selection::MAX_RECORD_SELECTION_KEYS) {
-            let selected = engine
-                .read_records_by_keys(
-                    &selection,
-                    &chunk
-                        .iter()
-                        .map(|key| EntityKey(key.as_str().to_owned().into()))
-                        .collect::<Vec<_>>(),
-                )
-                .await?;
-            for row in selected.value {
-                if let Some(value) = row.record.get(field).and_then(Value::as_bool) {
-                    let fact = boolean_fact(value, attribute)
-                        .ok_or_else(|| error("invalid boolean fact"))?;
-                    facts
-                        .entry(row.record_key.to_string())
-                        .or_default()
-                        .insert(attribute, fact.value);
-                }
+    // Canonical Mail order is view-specific activity time, not created/viewed time.
+    if initial.get("sortMethod").and_then(Value::as_str) != Some("UPDATED_AT") {
+        return Ok(vec![]);
+    }
+    let Some(view) = initial.get("emailView").and_then(Value::as_str) else {
+        return Ok(vec![]);
+    };
+    let direction = match initial.get("sortDirection").and_then(Value::as_str) {
+        Some("ASC") => SortDirection::Asc,
+        Some("DESC") | None => SortDirection::Desc,
+        _ => return Ok(vec![]),
+    };
+    let Some(user) = data.get("user") else {
+        return Ok(vec![]);
+    };
+    let Some(viewer) = user.get("id").and_then(Value::as_str) else {
+        return Ok(vec![]);
+    };
+    let Some(soup) = user.get("soup") else {
+        return Ok(vec![]);
+    };
+    let Some(items) = soup.get("items").and_then(Value::as_array) else {
+        return Ok(vec![]);
+    };
+    let exhausted = match soup.get("nextCursor") {
+        Some(Value::Null) => true,
+        Some(Value::String(_)) if !items.is_empty() => false,
+        _ => return Ok(vec![]),
+    };
+    let Some(keys) = items
+        .iter()
+        .map(|item| {
+            if item.get("__typename").and_then(Value::as_str) != Some(TYPE)
+                || !FIELDS.iter().all(|field| item.get(*field).is_some())
+            {
+                return None;
             }
+            let id = uuid::Uuid::parse_str(item.get("id")?.as_str()?).ok()?;
+            RecordKey::new(format!("{TYPE}:{id}")).ok()
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Ok(vec![]);
+    };
+    let records = storage
+        .get_batch(&[EntityKey::entity("GraphqlUser", &[viewer])])
+        .await
+        .map_err(ProjectionError::Storage)?;
+    let Some(Some(user)) = records.first() else {
+        return Ok(vec![]);
+    };
+    let Some(CacheValue::List(links)) = user.fields.get("emailLinks") else {
+        return Ok(vec![]);
+    };
+    let Some(links) = links
+        .iter()
+        .map(|link| match link {
+            CacheValue::Ref(key) => {
+                uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlEmailLink:")?).ok()
+            }
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Ok(vec![]);
+    };
+    let Ok(ast) = materialize_graphql_filter(
+        initial
+            .get("filters")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Map::new())),
+    ) else {
+        return Ok(vec![]);
+    };
+    let Ok(LocalCompileOutcome::Supported(query)) = compile_mail(
+        &ast,
+        SoupFlatRequest {
+            sort: SoupIndexSort::UpdatedAt,
+            direction,
+            limit: predicate_index::MAX_QUERY_LIMIT,
+            has_cursor: false,
+        },
+        view,
+        &links,
+        viewer,
+    ) else {
+        return Ok(vec![]);
+    };
+    let documents: HashMap<_, _> = incoming
+        .iter()
+        .filter_map(|mutation| match mutation {
+            ProjectionMutation::Replace(document) if document.profile == mail_profile() => {
+                Some((&document.record_key, document))
+            }
+            _ => None,
+        })
+        .collect();
+    // Every server row must have complete canonical facts. A partial response
+    // cannot establish a safe boundary, even when nextCursor happens to be null.
+    let Some(positions) = keys
+        .iter()
+        .map(|key| {
+            let document = documents.get(key)?;
+            let value = document
+                .sort_facts
+                .iter()
+                .find(|fact| fact.attribute == query.as_query().sort_attribute)?
+                .value;
+            Some((value, key))
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Ok(vec![]);
+    };
+    if positions
+        .windows(2)
+        .any(|pair| !query.sorts_after(pair[1], pair[0]))
+    {
+        return Ok(vec![]);
+    }
+    let mut bounded: IndexQuery = query.as_query().clone();
+    if !exhausted && let Some((value, key)) = positions.last() {
+        for partition in &mut bounded.partitions {
+            partition.predicate = PredicateExpr::And(
+                Box::new(partition.predicate.clone()),
+                Box::new(PredicateExpr::Not(Box::new(PredicateExpr::After {
+                    attribute: bounded.sort_attribute.clone(),
+                    value: *value,
+                    key: (*key).clone(),
+                    direction: bounded.sort_direction,
+                    tie_direction: bounded.tie_break_direction,
+                }))),
+            );
         }
     }
-    let mut rejected = HashSet::new();
-    for key in keys {
-        if let Some(facts) = facts.get(key.as_str()) {
-            let predicate = substitute_flags(&partition.predicate, facts)
-                .validate_and_simplify()
-                .map_err(error)?;
-            if matches!(predicate, PredicateExpr::None) {
-                rejected.insert(key.clone());
-            }
-        }
-    }
-    Ok(rejected)
-}
-
-fn substitute_flags(expr: &PredicateExpr, facts: &HashMap<&str, ExactValue>) -> PredicateExpr {
-    match expr {
-        PredicateExpr::And(a, b) => PredicateExpr::And(
-            Box::new(substitute_flags(a, facts)),
-            Box::new(substitute_flags(b, facts)),
-        ),
-        PredicateExpr::Or(a, b) => PredicateExpr::Or(
-            Box::new(substitute_flags(a, facts)),
-            Box::new(substitute_flags(b, facts)),
-        ),
-        PredicateExpr::Not(a) => PredicateExpr::Not(Box::new(substitute_flags(a, facts))),
-        PredicateExpr::Exact { attribute, value } if facts.contains_key(attribute.as_str()) => {
-            if facts.get(attribute.as_str()) == Some(value) {
-                PredicateExpr::All
-            } else {
-                PredicateExpr::None
-            }
-        }
-        PredicateExpr::ExactExists { attribute } if facts.contains_key(attribute.as_str()) => {
-            PredicateExpr::All
-        }
-        _ => expr.clone(),
-    }
+    let bounded = ValidatedIndexQuery::new(bounded).map_err(error)?;
+    // Bound each authoritative write's work to one index page. A severely stale
+    // cache converges over subsequent refreshes rather than scanning the mailbox.
+    let local = storage
+        .reconcile_predicate_index(&bounded, &[])
+        .await
+        .map_err(ProjectionError::Storage)?;
+    let returned: HashSet<_> = keys.into_iter().collect();
+    let missing: Vec<_> = local
+        .keys
+        .into_iter()
+        .filter(|key| !returned.contains(key))
+        .collect();
+    let pending = storage
+        .load_optimistic_projections(&missing)
+        .await
+        .map_err(ProjectionError::Storage)?;
+    Ok(missing
+        .into_iter()
+        .zip(pending)
+        .filter(|(_, pending)| pending.is_none())
+        .map(|(record_key, _)| ProjectionMutation::MarkIncomplete {
+            record_key,
+            profile: mail_profile(),
+            partition: vocabulary::partition(),
+            kind: ProjectionIncompleteKind::Dirty,
+        })
+        .collect())
 }

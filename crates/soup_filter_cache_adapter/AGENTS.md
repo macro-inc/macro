@@ -18,6 +18,14 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   and notification projection updates applied without a server round-trip.
 - `src/channels.rs`, `src/database_rows.rs`, `src/mail.rs`, `src/properties.rs`:
   per-entity-kind projection/patch logic.
+- `src/mail/reconciliation.rs`: invalidate contradicted Mail facts during an
+  authoritative `Soup` first-page write. Use the supported view/filter and
+  microsecond timestamp/key boundary; never infer thread deletion. Skip
+  backfills, partial/cursor pages, identity switches, and pending optimistic
+  rows. At most 500 local matches are checked per write; later full snapshots
+  restore completeness.
+- `src/mail/retention.rs`: retain same-query server rows while local facts are
+  incomplete, reject proven nonmembers, and preserve the indexed cursor.
 
 ## Scope
 
@@ -51,6 +59,9 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   nonmembers, and keep continuation cursors on the original indexed window.
   Reconcile only baseline rows outside that window; known live flags may reject
   incomplete rows through predicate simplification, never establish new membership.
+  Exclude explicitly invalidated (`Dirty`) baseline rows in the queried scope
+  unless an optimistic shadow takes precedence; an older reader must not undo
+  authoritative first-page repair. Missing facts still retain server membership.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under

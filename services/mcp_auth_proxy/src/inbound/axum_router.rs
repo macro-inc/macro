@@ -89,7 +89,15 @@ async fn authorize<I: InflightAuthStore + 'static>(
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
     match auth_proxy.start_authorization(params).await {
-        Ok(url) => Redirect::temporary(&url).into_response(),
+        // The browser carries the MCP client page's Referer across this
+        // redirect, and FusionAuth rejects any Referer outside its first-party
+        // origin list with "Invalid origin uri". The redirect URI policy has
+        // already vetted the client, so the client's origin is withheld.
+        Ok(url) => (
+            [(header::REFERRER_POLICY, "no-referrer")],
+            Redirect::temporary(&url),
+        )
+            .into_response(),
         Err(StartAuthorizationError::UnsupportedResponseType) => (
             axum::http::StatusCode::BAD_REQUEST,
             "unsupported response_type",

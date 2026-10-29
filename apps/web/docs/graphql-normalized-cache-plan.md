@@ -970,6 +970,25 @@ Background hydration retains its existing opt-in notification contract. Soup's
 local collection source opts in; ordinary foreground queries refresh on their
 normal affected-operation notifications.
 
+## Authoritative Mail membership repair
+
+The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
+inside `properties::augment_authoritative`, under the same engine lock and
+transaction as their normalized write. It compares up to 500 local matches
+against returned IDs, bounded by the last canonical view timestamp and ID when
+`nextCursor` exists. Exhausted/empty first pages cover the whole matching slice.
+Missing matches become durable incomplete projections, not deleted records or
+invented archive/signal facts. Mail retention excludes explicitly invalidated
+(`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
+takes precedence; an older open view cannot restore the revoked evidence.
+This differs from missing metadata, which still retains same-query membership.
+Full canonical snapshots restore their proof;
+partial patches cannot. Backfills, cursor pages, incomplete responses,
+unsupported predicates, identity switches, and pending optimistic rows do not
+supply this negative evidence. The existing authoritative-write telemetry covers
+this preparation/write path; no new worker command or database migration is needed.
+See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
+
 ## Cached email Quick Access
 
 The disposable Quick Access projection is version 3. Email rows index the thread
