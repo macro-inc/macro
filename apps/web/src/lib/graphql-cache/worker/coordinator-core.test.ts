@@ -289,6 +289,33 @@ describe('CoordinatorCore', () => {
     ]);
   });
 
+  it('hands over instead of wiping after losing an engine promised to a newer build', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    grantStorage(core, 'tab-a', 1);
+    expect(core.supersede()).toEqual([]);
+
+    core.tabLost('tab-a');
+    expect(core.state.kind).toBe('resetting-after-loss');
+
+    expect(core.resumeAfterLoss()).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(core.superseded).toBe(true);
+    expect(core.state.kind).toBe('waiting-for-tab');
+    expect(core.registerTab('tab-c')).toEqual([
+      {
+        kind: 'notify-cache-unavailable',
+        tabId: 'tab-c',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+  });
+
   it('keeps a pending recovery wipe when its files stay busy', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');

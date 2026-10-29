@@ -383,7 +383,9 @@ draining it, answers:
   opening or already draining the database (hiding its owner tab starts a
   drain, and opening the requesting tab usually hides it) answers at once but
   supersedes its tabs only once that engine is ready or has drained, so no
-  engine is interrupted while its files may be changing.
+  engine is interrupted while its files may be changing. If that engine is
+  lost first, the promised handover completes in place of the reset election,
+  so a build never wipes a database it agreed to hand over.
 - **Keep**, if the requester is not newer. The requester fails closed as below.
 
 A superseded page offers a persistent reload prompt. It reloads by itself only

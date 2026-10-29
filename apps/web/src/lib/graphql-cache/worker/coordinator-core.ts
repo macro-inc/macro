@@ -701,6 +701,16 @@ export class CoordinatorCore {
   resumeAfterLoss(): CoordinatorAction[] {
     const state = this.stateValue;
     if (state.kind !== 'resetting-after-loss') return [];
+    if (this.supersedePending) {
+      // The lost engine was promised to a newer build. Hand over now instead
+      // of electing a reset owner that would wipe the database it agreed to
+      // yield, queued mutations included.
+      this.stateValue = {
+        kind: 'waiting-for-tab',
+        nextDatabaseAction: state.databaseAction,
+      };
+      return this.completeSupersede();
+    }
     const candidate = this.chooseCandidate(state.previousTabId);
     if (!candidate) {
       this.stateValue = {
