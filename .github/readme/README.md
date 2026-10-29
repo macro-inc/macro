@@ -8,8 +8,11 @@ use new high-resolution web captures; Calendar uses a desktop capture. The
 Databases example and CRM pipeline contain fictional sample data. The Calendar
 capture was explicitly selected with its real meeting names visible.
 
-The new PNGs preserve the gallery's selected crops without another lossy encode.
-They omit browser chrome, the system sharing indicator, and the pointer. Keep
+The new PNGs use the gallery selections with an additional edge crop: 6 pixels
+from the left, 8 from the right, and 12 from the bottom. This removes the white
+right-hand strip and rounded-window corner remnants without resizing the UI.
+The original gallery files remain unchanged. These lossless PNG crops omit
+browser chrome, the system sharing indicator, and the pointer. Keep
 text readable at GitHub's README width rather than fitting an entire desktop
 into every image. The existing CRM crop shows three complete populated stages.
 
