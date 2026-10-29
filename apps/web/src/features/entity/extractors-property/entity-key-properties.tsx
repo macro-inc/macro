@@ -76,8 +76,6 @@ function getEntityType(entity: EntityData): EntityType {
 interface EntityKeyPropertiesProps {
   /** Entity with properties attached */
   entity: EntityWithProperties<EntityData>;
-  /** Callback when properties are refreshed */
-  onRefresh?: () => void;
   /** Max visible user avatars in the assignees stack before collapsing to +N. */
   maxUserStackUsers?: number;
   /** Whether to show the edit affordance caret. */
@@ -136,7 +134,7 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
       entityType={entityType()}
       canEdit={true}
       properties={keyProperties}
-      onRefresh={props.onRefresh ?? (() => {})}
+      onRefresh={() => {}}
       onPropertyAdded={() => {}}
       onPropertyDeleted={() => {}}
       saveHandler={saveHandler}
