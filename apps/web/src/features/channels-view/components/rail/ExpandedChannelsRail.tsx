@@ -31,6 +31,7 @@ import {
   Hotkey,
   type TabOption,
   Tabs,
+  ToggleSwitch,
   Tooltip,
 } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -451,12 +452,16 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             }
             value={rail.tab()}
             onChange={selectTab}
-            toggle={{
-              label: 'Unread',
-              icon: EyeSlashIcon,
-              checked: rail.unreadOnly(),
-              onChange: rail.setUnreadOnly,
-            }}
+            toggle={
+              rail.tab() === 'recents'
+                ? {
+                    label: 'Unread',
+                    icon: EyeSlashIcon,
+                    checked: rail.unreadOnly(),
+                    onChange: rail.setUnreadOnly,
+                  }
+                : undefined
+            }
           />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
@@ -790,6 +795,16 @@ function ExpandedGroupSection(props: {
           data-section-action=""
           class="flex items-center gap-0.5"
         >
+          <Tooltip label="Unread only">
+            <ToggleSwitch
+              aria-label={`Unread only in ${props.config.label.toLowerCase()}`}
+              size="xs"
+              class="h-7 px-1"
+              trackIcon={EyeSlashIcon}
+              checked={rail.unreadOnly()}
+              onChange={rail.setUnreadOnly}
+            />
+          </Tooltip>
           <ChannelSortDropdown
             group={props.config.group}
             label={props.config.label}
@@ -1108,6 +1123,16 @@ function ExpandedThreads() {
             <span class="min-w-0 truncate">Conversations</span>
           </span>
           <div data-section-action="" class="flex items-center gap-0.5">
+            <Tooltip label="Unread only">
+              <ToggleSwitch
+                aria-label="Unread only in conversations"
+                size="xs"
+                class="h-7 px-1"
+                trackIcon={EyeSlashIcon}
+                checked={rail.unreadOnly()}
+                onChange={rail.setUnreadOnly}
+              />
+            </Tooltip>
             <ChannelSortDropdown group="threads" label="Conversations" />
             <Show when={isTouchDevice()}>
               <ConversationsCreateMenu />

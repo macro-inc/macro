@@ -878,7 +878,11 @@ Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
 
-The **Unread** switch, after a divider in the tabs' frame, lists only
+The **Unread only** switch sits immediately left of each section's sort icon
+(Channels, DMs, Team Channels, and Threads conversations). These switches share
+one persisted setting across tabs on desktop and touch layouts. Recent keeps its
+switch beside the tabs because it has no section sort controls. Enabling it lists
+only
 conversations with an unread dot in every tab: Favorites, Channels (labels
 without unread channels are hidden), DMs, Recent, and the Threads tab's
 Conversations. Search results are not filtered. The open conversation stays
