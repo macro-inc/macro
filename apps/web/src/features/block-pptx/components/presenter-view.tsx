@@ -393,7 +393,7 @@ export function PresenterView(props: {
               <CaretRight class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <Button
-              variant={grid() ? 'accent' : 'ghost'}
+              variant={grid() ? 'primary' : 'ghost'}
               size="sm"
               tooltip="See all slides (G)"
               data-testid="pptx-presenter-grid-toggle"
@@ -403,7 +403,7 @@ export function PresenterView(props: {
               All slides
             </Button>
             <Button
-              variant={show.screen() === 'black' ? 'accent' : 'ghost'}
+              variant={show.screen() === 'black' ? 'primary' : 'ghost'}
               size="sm"
               tooltip="Black or unblack the screen (B)"
               onClick={() => show.toggleScreen('black')}

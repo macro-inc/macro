@@ -272,7 +272,7 @@ export function FloatingFormatMenu(props: {
         shortcut: buttonProps.item.shortcut,
       }}
       size="icon-sm"
-      variant={selection()?.[buttonProps.item.format] ? 'accent' : 'ghost'}
+      variant={selection()?.[buttonProps.item.format] ? 'primary' : 'ghost'}
       onPointerDown={(e: PointerEvent) => e.preventDefault()}
       onClick={(e: MouseEvent | KeyboardEvent) => {
         e.preventDefault();

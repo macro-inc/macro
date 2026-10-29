@@ -305,7 +305,7 @@ export function AnimationsTab() {
         </RibbonPopover>
         <RibbonTextButton
           aria-label="Animation pane"
-          variant={anim.pane() ? 'accent' : 'ghost'}
+          variant={anim.pane() ? 'primary' : 'ghost'}
           aria-pressed={anim.pane()}
           data-testid="pptx-animation-pane-toggle"
           onClick={anim.togglePane}

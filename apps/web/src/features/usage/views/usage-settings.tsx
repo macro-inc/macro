@@ -291,7 +291,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 <div class="flex flex-wrap gap-2">
                   <Button
                     variant={
-                      developer().plan() === 'free' ? 'accent' : 'secondary'
+                      developer().plan() === 'free' ? 'primary' : 'secondary'
                     }
                     size="sm"
                     aria-pressed={developer().plan() === 'free'}
@@ -301,7 +301,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                   </Button>
                   <Button
                     variant={
-                      developer().plan() === 'paid' ? 'accent' : 'secondary'
+                      developer().plan() === 'paid' ? 'primary' : 'secondary'
                     }
                     size="sm"
                     aria-pressed={developer().plan() === 'paid'}
@@ -327,7 +327,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                   </Button>
                   <Button
                     variant={
-                      developer().beforeLaunch() ? 'accent' : 'secondary'
+                      developer().beforeLaunch() ? 'primary' : 'secondary'
                     }
                     size="sm"
                     aria-pressed={developer().beforeLaunch()}
