@@ -49,6 +49,8 @@ export function RespondView(props: {
   scrollContainer?: () => HTMLElement | undefined;
   /** Read the form again; resolves whether the read succeeded. */
   refetch: () => Promise<boolean>;
+  /** Open the Responses table, offered when the form shares its responses. */
+  onOpenResponses?: () => void;
 }) {
   const context = useFormContext();
   // One per mount: a form can show as a page and a card at once.
@@ -396,9 +398,26 @@ export function RespondView(props: {
                         Book a time
                       </Button>
                     </Show>
+                    <Show when={props.onOpenResponses}>
+                      {(open) => (
+                        <Button
+                          variant="secondary"
+                          class="self-start"
+                          onClick={() => open()()}
+                        >
+                          See responses
+                        </Button>
+                      )}
+                    </Show>
                     <p class="px-1 text-xs text-ink-muted">
-                      Stored as a row in a database the form owner controls.
-                      Your answers are visible to the form’s editors.
+                      Stored as a row in a database the form owner controls.{' '}
+                      {props.detail.form.responsesVisible
+                        ? props.detail.form.respondentHidden
+                          ? 'Everyone who can open this form sees your answers, without your name.'
+                          : 'Everyone who can open this form sees your answers and your name.'
+                        : props.detail.form.respondentHidden
+                          ? 'The form’s editors see your answers, without your name.'
+                          : 'Your answers are visible to the form’s editors.'}
                     </p>
                   </>
                 }
