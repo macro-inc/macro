@@ -27,7 +27,7 @@ export function adopted(
       renotifyInterval: RENOTIFY_MINUTES,
       ...args,
     },
-    // Messages may mention the GoAlert webhooks, which must exist first.
+    // Messages mention the GoAlert webhooks, which must exist first.
     { protect: true, dependsOn: goalertWebhooks }
   );
 }

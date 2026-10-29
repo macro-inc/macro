@@ -1,29 +1,43 @@
 import * as pulumi from '@pulumi/pulumi';
 
-// Where every monitor in this stack notifies.
+// Where every monitor in this stack notifies: GoAlert, and nothing else.
 //
-// All monitors post to the Macro Alerts channel. Paging monitors also open a
-// GoAlert alert, which phones the on-call engineer, and close it on recovery.
+// GoAlert (infra/stacks/observability) has two services. Notify posts each
+// alert to the Macro Alerts channel and re-posts it hourly until someone
+// acknowledges it; the paging service also phones the on-call engineer.
+// Datadog never posts to the channel itself, so an alert shows up once, from
+// GoAlert. The one exception is the GoAlert health check in goalert.ts.
+//
 // Datadog sends warning and alert notifications again every RENOTIFY_MINUTES
-// while a monitor stays in that state, so an alert nobody fixed keeps showing up.
+// while a monitor stays in that state. The repeat dedups into the open GoAlert
+// alert, and reopens it if someone closed it while the monitor still fires.
 
-// Datadog webhook integration that posts into the Macro Alerts channel. It is
-// configured in the Datadog UI, not in this stack.
-export const MACRO_ALERTS = '@webhook-macro-alert-hook';
 // Declared in goalert.ts.
 export const GOALERT = '@webhook-goalert';
 export const GOALERT_CLOSE = '@webhook-goalert-close';
+export const GOALERT_NOTIFY = '@webhook-goalert-notify';
+export const GOALERT_NOTIFY_CLOSE = '@webhook-goalert-notify-close';
 
 export const RENOTIFY_MINUTES = 60;
 
-/** The notification handles that end every monitor message. */
+/**
+ * The notification handles that end every monitor message. A paging monitor's
+ * critical alert opens a page; every other warning, alert and no-data
+ * notification opens a Notify alert.
+ *
+ * Datadog allows one state block per state, never nested, so each state gets
+ * its own. A recovery closes on both services because a paging monitor may
+ * have warned before it alerted, or recovered from no data; closing an alert
+ * GoAlert does not have open does nothing.
+ */
 export function notify({ pages }: { pages: boolean }): string {
-  if (!pages) return MACRO_ALERTS;
-  // A recovery closes the page whether the monitor recovers from alert or from
-  // a warning it dropped to first. Closing an alert GoAlert no longer has
-  // open does nothing.
-  return `{{#is_alert}}Paging on-call. ${GOALERT}{{/is_alert}}{{#is_recovery}}${GOALERT_CLOSE}{{/is_recovery}}
-${MACRO_ALERTS}`;
+  const critical = pages
+    ? `{{#is_alert}}Paging on-call. ${GOALERT}{{/is_alert}}`
+    : `{{#is_alert}}${GOALERT_NOTIFY}{{/is_alert}}`;
+  const recovery = pages
+    ? `${GOALERT_CLOSE} ${GOALERT_NOTIFY_CLOSE}`
+    : GOALERT_NOTIFY_CLOSE;
+  return `${critical}{{#is_warning}}${GOALERT_NOTIFY}{{/is_warning}}{{#is_no_data}}${GOALERT_NOTIFY}{{/is_no_data}}{{#is_recovery}}${recovery}{{/is_recovery}}`;
 }
 
 // Datadog's site: dashboard `url`s are paths under it.

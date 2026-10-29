@@ -4,8 +4,10 @@
 // remove them freely once the rollout settles.
 //
 // Thresholds sit above the 7 days before the 2026-10-11 ramp: none of these
-// would have fired in that week except where noted. PostHog covers the client
-// side (exceptions, browser cache and draft-queue logs, usage) on
+// would have fired in that week except where noted. Volume, gateway
+// connections and task count were raised on 2026-10-29 above the 7 days
+// before it, after the rollout outgrew the pre-ramp numbers. PostHog covers
+// the client side (exceptions, browser cache and draft-queue logs, usage) on
 // https://us.posthog.com/project/299018/dashboard/2198651.
 //
 // GraphQL resolver errors return HTTP 200 on a single path, so the endpoint
@@ -69,7 +71,7 @@ ${notify({ pages: args.severe ?? false })}`,
       includeTags: true,
       notifyAudit: false,
     },
-    { dependsOn: args.severe ? goalertWebhooks : [] }
+    { dependsOn: goalertWebhooks }
   );
 }
 
@@ -176,15 +178,16 @@ rolloutMonitor('graphql-soup-unauthenticated-mutations', {
 });
 
 // Volume. There is no rate limit on the endpoint, so a client retry loop or
-// reconnect herd shows up here before it shows up as errors.
+// reconnect herd shows up here before it shows up as errors. Over the 7 days
+// to 2026-10-29 the average was 16k requests per 15 minutes, peak 42k.
 rolloutMonitor('graphql-soup-request-volume', {
   name: '[PROD] GraphQL soup: request volume surge',
   type: 'query alert',
-  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL}}.as_count() > 15000`,
+  query: `sum(last_15m):sum:trace.http.server.request.hits{${GRAPHQL}}.as_count() > 50000`,
   description:
-    'POST /dss/items/soup/graphql received {{value}} requests in 15 minutes (pre-rollout max was 3,841). Check for a client retry loop before scaling.',
-  critical: '15000',
-  warning: '8000',
+    'POST /dss/items/soup/graphql received {{value}} requests in 15 minutes (normal is about 16k, weekly peak 42k). Check for a client retry loop before scaling.',
+  critical: '50000',
+  warning: '45000',
   service: 'cloud-storage-service',
 });
 
@@ -223,15 +226,15 @@ rolloutMonitor('graphql-soup-dss-memory', {
 });
 
 // Each task opens its own DB pool, so a scale-out also eats DB connection
-// headroom. It scaled to 7 once in the pre-rollout week.
+// headroom. It scaled to at most 9 in the 7 days to 2026-10-29.
 rolloutMonitor('graphql-soup-dss-tasks', {
   name: '[PROD] GraphQL soup: cloud-storage-service scaled out',
   type: 'query alert',
-  query: `max(last_15m):avg:aws.ecs.service.running{${DSS}} >= 6`,
+  query: `max(last_15m):avg:aws.ecs.service.running{${DSS}} >= 10`,
   description:
-    'cloud-storage-service is running {{value}} tasks (normal is 3). Check macro-db-prod connections: each task adds a connection pool.',
-  critical: '6',
-  warning: '5',
+    'cloud-storage-service is running {{value}} tasks (weekly max was 9). Check macro-db-prod connections: each task adds a connection pool.',
+  critical: '10',
+  warning: '9',
   service: 'cloud-storage-service',
 });
 
@@ -274,7 +277,8 @@ rolloutMonitor('graphql-soup-db-cpu', {
 });
 
 // Load balancer. The gateway ALB is shared by every prod-gateway service and
-// there is no per-route size metric, so these only catch large shifts.
+// there is no per-route size metric, so these only catch large shifts. Active
+// connections peaked at 10.1k in the 7 days to 2026-10-29.
 rolloutMonitor('graphql-soup-alb-bytes', {
   name: '[PROD] GraphQL soup: prod-gateway-alb processed bytes surge',
   type: 'query alert',
@@ -289,11 +293,11 @@ rolloutMonitor('graphql-soup-alb-bytes', {
 rolloutMonitor('graphql-soup-alb-connections', {
   name: '[PROD] GraphQL soup: prod-gateway-alb active connections high',
   type: 'query alert',
-  query: `avg(last_15m):sum:aws.applicationelb.active_connection_count{${GATEWAY_ALB}}.as_count() > 6000`,
+  query: `avg(last_15m):sum:aws.applicationelb.active_connection_count{${GATEWAY_ALB}}.as_count() > 15000`,
   description:
-    'prod-gateway-alb active connections are at {{value}} (pre-rollout max was 2,922). Long-lived GraphQL websockets hold connections for up to the 3,600s idle timeout.',
-  critical: '6000',
-  warning: '4000',
+    'prod-gateway-alb active connections are at {{value}} (weekly peak 10.1k). Long-lived GraphQL websockets hold connections for up to the 3,600s idle timeout.',
+  critical: '15000',
+  warning: '12000',
   service: 'prod-gateway-alb',
 });
 

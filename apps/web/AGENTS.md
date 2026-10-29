@@ -123,6 +123,7 @@ checks project ranking and insertion on desktop and phone.
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It checks draft blank lines across remounts and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
+It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 
 Block formatting passes a forward copy of the selection to Lexical's
 `$setBlocksType` so backward selections include their first paragraph and keep
@@ -217,6 +218,9 @@ Shared diff and Changes views expand files with at most 40 additions + deletions
 by default; keep saved per-capture choices and explicit toggles authoritative.
 Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
+Project grouping in Soup and its live cache projection uses the system Project
+property (initiative membership), with an empty key labeled No Project.
+
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
 Keep editor newline handling local; result-opening handlers must yield
@@ -247,6 +251,8 @@ the user's newest account for that app from the last fifteen minutes.
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
+- Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
@@ -377,9 +383,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   notification source (`markRowNotificationsSeenOnOpen`) so read dots update
   immediately and failed writes roll back; calendar grid selections also mark
   the canonical event read, excluding team projections.
-- Route explicit call exits using the server's `callEnded` result: ended calls
-  open their record; ongoing channel and scheduled calls return to the channel
-  and Calendar. Preserve the session ID and send the server leave before media
+- Route explicit meeting-page exits using the server's `callEnded` result: ended
+  calls open their record; ongoing channel and scheduled calls return to the
+  channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
@@ -429,6 +435,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   properties do not prove prior membership. Supply complete prior multi-value
   memberships when adjusting counts: a row loaded in one bin may already be an
   unloaded member of another.
+- Reconcile authoritative Mail first pages in the shared Soup projection adapter,
+  not a UI exclusion list: invalidate contradicted facts within the supported
+  page range without deleting normalized threads or treating backfill gaps as
+  deletions. The OPFS revisit/reload regression is
+  `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts mail-reconciliation --project chromium`.
+  For transient row flicker, run
+  `bunx playwright test --config src/lib/queries/soup/graphql/browser-test/playwright.config.ts`:
+  it uses the real Soup source and exchange, holds local/network completion,
+  and asserts every observed row-ID state on revisits and an OPFS reload.
+  It also runs in `just test-cache-wasm-browser`.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).

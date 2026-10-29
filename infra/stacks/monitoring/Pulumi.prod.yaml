@@ -4,3 +4,5 @@
 config:
   monitoring:goalertIntegrationKey:
     secure: AAABAKEDvnVx7IjOr5rgXFTFIDwyqUy8gmBPo/bVOSKuV6DsgerGZ6IddCTt5xiG4VtYCz39X2aI4B5bUVXb+WSz0cU=
+  monitoring:goalertNotifyIntegrationKey:
+    secure: AAABAPQIMCniNfR6WaoRVEvQcYjpT0HH3qR97z1+juZNLzR4VrBXzglAM76tHOr/8ImIMGrTmzyl8ZaURy1VMJvRj6g=

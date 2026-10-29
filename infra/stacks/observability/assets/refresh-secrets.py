@@ -30,15 +30,23 @@ for key in ['grafana_secret_key', 'otlp_token', 'goalert_encryption_key', 'goale
         raise SystemExit(f'Secret too short: {key}')
 if not values['macro_alerts_webhook_url'].startswith('https://'):
     raise SystemExit('macro_alerts_webhook_url must use HTTPS')
-# GoAlert creates its Grafana integration key, so it can only be added after the
-# first boot. Until then GoAlert rejects Grafana's pages with 401, and Grafana
-# reports the GoAlert contact point as failing.
-grafana_key = values.get('goalert_grafana_integration_key', '')
-if not re.fullmatch(r'[0-9a-f-]{36}|', grafana_key):
-    raise SystemExit('goalert_grafana_integration_key must be a GoAlert key UUID')
-if not grafana_key:
-    print('goalert_grafana_integration_key is not set; Grafana cannot page through GoAlert')
-values['grafana-goalert.env'] = f'GOALERT_GRAFANA_KEY={grafana_key}\n'
+# GoAlert creates its Grafana integration keys, so they can only be added after
+# the first boot. Until then GoAlert rejects Grafana's alerts with 401, and
+# Grafana reports the GoAlert contact points as failing. The paging key belongs
+# to `Grafana critical`, the notify key to `Notify`.
+grafana_keys = {
+    'GOALERT_GRAFANA_KEY': ('goalert_grafana_integration_key', 'Grafana cannot page through GoAlert'),
+    'GOALERT_GRAFANA_NOTIFY_KEY': ('goalert_grafana_notify_integration_key', 'Grafana alerts cannot reach the channel'),
+}
+grafana_env = ''
+for variable, (key, consequence) in grafana_keys.items():
+    value = values.get(key, '')
+    if not re.fullmatch(r'[0-9a-f-]{36}|', value):
+        raise SystemExit(f'{key} must be a GoAlert key UUID')
+    if not value:
+        print(f'{key} is not set; {consequence}')
+    grafana_env += f'{variable}={value}\n'
+values['grafana-goalert.env'] = grafana_env
 # Native remote-write uses HTTP Basic over TLS. Only the password hash reaches nginx.
 hashed = subprocess.run(
     ['openssl', 'passwd', '-6', '-stdin'], input=values['otlp_token'] + '\n',

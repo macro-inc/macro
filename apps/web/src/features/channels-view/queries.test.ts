@@ -43,6 +43,9 @@ vi.mock('@entity', () => ({
     entity.type === 'channel_thread',
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
+vi.mock('@core/context/channels', () => ({
+  useChannelsContext: () => ({ channels: () => [] }),
+}));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { resolveReferencedChannels, useChannelsSources } from './queries';
@@ -101,21 +104,21 @@ describe('channel list query selection', () => {
       return dispose;
     });
     try {
-      // Four channel lists, the Threads rail's threads and their channels,
+      // Five channel lists, the Threads rail's threads and their channels,
       // then the selected conversation.
-      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(7);
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 4)) {
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(8);
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 5)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
         expect(options?.().staleTime).toBe(30_000);
       }
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(4, 6)) {
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(5, 7)) {
         expect(options?.().staleTime).toBe(30_000);
       }
       // The Threads rail's channels, fetched by id, are rail rows too.
-      const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[5];
+      const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[6];
       expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
       const [selectionArgs, selectionOptions] =
-        useSoupAstItemsQuery.mock.calls[6];
+        useSoupAstItemsQuery.mock.calls[7];
       expect(selectionArgs().transport).toBe('rest');
       expect(selectionOptions?.().graphqlProjection).toBeUndefined();
       expect(selectionOptions?.().staleTime).toBe(0);
@@ -261,6 +264,49 @@ describe('Threads rail source', () => {
       expect(sources.threads.items().map((c) => c.id)).toEqual(['eng', 'dm']);
       // The server drops the user's unanswered roots, so pages stay full.
       expect(threadFilters[0]).toContain('HasReplies');
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+});
+
+describe('hidden support conversations', () => {
+  it('drops support conversations from Recent and keeps them in search', () => {
+    const support = {
+      type: 'channel',
+      id: 'support',
+      name: 'Macro Support x acme',
+      latestRootMessage: { id: 'm1' },
+    };
+    const team = {
+      type: 'channel',
+      id: 'eng',
+      name: 'Engineering',
+      latestRootMessage: { id: 'm2' },
+    };
+    useSoupAstItemsQuery.mockImplementation(
+      () =>
+        ({
+          isEnabled: true,
+          isPending: false,
+          isLoading: false,
+          data: { entities: [support, team] },
+        }) as never
+    );
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'recents' || scope === 'search',
+        () => 'updated_at',
+        () => true
+      );
+      expect(sources.recents.items().map((channel) => channel.id)).toEqual([
+        'eng',
+      ]);
+      expect(sources.search.items().map((channel) => channel.id)).toEqual([
+        'support',
+        'eng',
+      ]);
       return dispose;
     });
     dispose();

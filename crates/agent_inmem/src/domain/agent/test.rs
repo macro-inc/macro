@@ -142,6 +142,7 @@ async fn record<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1814,6 +1815,7 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1871,6 +1873,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -1961,6 +1964,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
@@ -2066,6 +2070,7 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),

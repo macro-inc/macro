@@ -46,15 +46,21 @@ Queries, caching, and where data is fetched.
 ## Query callback lifetimes
 
 Query options can remain cached after their UI unmounts, including for disabled
-queries. Callbacks created inside hooks can retain component accessors, Solid
-owners, and detached DOM through shared closure environments—even when a callback
-only references a locally resolved ID. This does not mean every closure captures
-every local variable.
+queries: for `gcTime`, and indefinitely on a query other views still observe,
+which keeps its last observer's options. Callbacks created inside hooks can
+retain component accessors, Solid owners, and detached DOM through shared closure
+environments—even when a callback only references a locally resolved ID. This
+does not mean every closure captures every local variable.
 
-- Create cached callbacks in module-scope query factories accepting resolved
-  IDs, flags, and plain data. Resolve reactive inputs inside the `useQuery` /
-  `useInfiniteQuery` options accessor, e.g. `useQuery(() =>
-  itemQueryOptions(id()))`, so inputs still update reactively.
+- **FE-69** Create cached callbacks in module-scope query factories accepting
+  resolved IDs, flags, and plain data. Resolve reactive inputs inside the
+  `useQuery` / `useInfiniteQuery` options accessor, e.g. `useQuery(() =>
+  itemQueryOptions(id()))`, so inputs still update reactively. Enforced by
+  ast-grep `ts-/tsx-no-inline-query-callbacks`, CI error, for functions written
+  in a query hook's options, and in `queryOptions` or client `fetchQuery`-family
+  options inside a `use*`, `create*`, or component function or an object
+  method. Names ending in `Options` count as factories. The rule does not see
+  references to hook-local functions or wrapper-hook arguments (below).
 - Keep pure selectors and polling policies at module scope, or inside those
   factories. Check **all** retained callbacks: `queryFn`, `select`,
   `refetchInterval`, pagination, placeholder callbacks, and functions in `meta`.

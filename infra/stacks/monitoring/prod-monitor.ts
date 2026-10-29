@@ -48,7 +48,8 @@ export function prodMonitor(
       includeTags: true,
       notifyAudit: false,
     },
-    { dependsOn: args.pages ? goalertWebhooks : [] }
+    // The message mentions the GoAlert webhooks, which must exist first.
+    { dependsOn: goalertWebhooks }
   );
 }
 
