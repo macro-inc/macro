@@ -4,9 +4,6 @@ import {
   type SidePanelSectionLayout,
 } from '@components/app/side-panel/SidePanel';
 import Plus from '@icon/system/regular/plus.svg';
-import PushPinIcon from '@icon/system/regular/push-pin.svg';
-import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
@@ -39,7 +36,6 @@ import {
   type JSX,
   Match,
   Show,
-  type Signal,
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -47,6 +43,7 @@ import {
   EntityCollectionProperty,
   NonUserEntityChip,
 } from './EntityCollectionProperty';
+import { isPendingProperty, PropertyRowActions } from './PropertyRowActions';
 
 export interface EntityPropertiesSectionProps {
   entityId: string;
@@ -258,7 +255,10 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
-  const saveOne = async (property: Property, apiValues: PropertyApiValues) => {
+  const savePropertyValues = async (
+    property: Property,
+    apiValues: PropertyApiValues
+  ) => {
     await saveMutation.mutateAsync({
       properties: [
         {
@@ -269,6 +269,13 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         },
       ],
     });
+  };
+  const saveOne = async (property: Property, apiValues: PropertyApiValues) => {
+    await savePropertyValues(property, apiValues);
+    await props.onPropertiesChanged?.();
+  };
+  const refreshCollection = async () => {
+    await refetch();
     await props.onPropertiesChanged?.();
   };
 
@@ -278,9 +285,10 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
+  const canShowProperties = () => !error() || properties().length > 0;
   const renderContent = () => (
     <Show
-      when={!error()}
+      when={canShowProperties()}
       fallback={
         <div class="text-failure-ink text-center py-4 text-xs">{error()}</div>
       }
@@ -363,20 +371,24 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                   (property) => property.propertyDefinitionId
                 )}
               >
-                {(definitionId) => (
-                  <Show
-                    when={collectionProperties().find(
-                      (property) => property.propertyDefinitionId === definitionId
-                    )}
-                  >
-                    {(property) => (
-                      <EntityCollectionProperty
-                        entityId={props.entityId}
-                        loading={isLoading()}
-                        onRefresh={refetch}
-                        property={property()}
-                        actions={(saving) => (
-                          <PropertyRowActions
+                {(definitionId) => {
+                  const saving = createSignal(false);
+                  return (
+                    <Show
+                      when={collectionProperties().find(
+                        (property) => property.propertyDefinitionId === definitionId
+                      )}
+                    >
+                      {(property) => (
+                        <EntityCollectionProperty
+                          entityId={props.entityId}
+                          loading={isLoading()}
+                          onSave={savePropertyValues}
+                          onRefresh={refreshCollection}
+                          property={property()}
+                          saving={saving}
+                        >
+                          <PropertyRowActions.Root
                             saving={saving}
                             onRefresh={refetch}
                             canRemoveFromEntity={
@@ -384,18 +396,20 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                                 property().propertyDefinitionId
                               )
                             }
-                            pinFirst
                             property={property()}
                             onRemovePendingProperty={removePendingProperty}
                             onPropertyPinned={
                               props.onPropertyPinned ? pinProperty : undefined
                             }
-                          />
-                        )}
-                      />
-                    )}
-                  </Show>
-                )}
+                          >
+                            <PropertyRowActions.Pin />
+                            <PropertyRowActions.Remove />
+                          </PropertyRowActions.Root>
+                        </EntityCollectionProperty>
+                      )}
+                    </Show>
+                  );
+                }}
               </For>
             </div>
           </Show>
@@ -431,7 +445,9 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
             renderContent,
             <Show
               when={
-                !error() && props.canEdit && props.showAddProperty !== false
+                canShowProperties() &&
+                props.canEdit &&
+                props.showAddProperty !== false
               }
             >
               <AddPropertyHeaderAction />
@@ -564,16 +580,6 @@ function SidePanelPropertyRow(props: {
   const hasInlineAddAction = () =>
     isMultiValueRow() &&
     !(t() === 'ENTITY' && props.property.specificEntityType === 'USER');
-  const renderActions = () => (
-    <PropertyRowActions
-      canRemoveFromEntity={props.canRemoveFromEntity}
-      pinFirst={hasInlineAddAction()}
-      canPinPendingProperty={props.canPinPendingProperty}
-      property={props.property}
-      onRemovePendingProperty={props.onRemovePendingProperty}
-      onPropertyPinned={props.onPropertyPinned}
-    />
-  );
 
   return (
     <div class="contents group/property-row">
@@ -612,10 +618,18 @@ function SidePanelPropertyRow(props: {
                 <InputValue />
               </Match>
               <Match when={isMultiValueRow()}>
-                <MultiValue
-                  property={props.property}
-                  renderActions={renderActions}
-                />
+                <MultiValue property={props.property}>
+                  <PropertyRowActions.Root
+                    canRemoveFromEntity={props.canRemoveFromEntity}
+                    canPinPendingProperty={props.canPinPendingProperty}
+                    property={props.property}
+                    onRemovePendingProperty={props.onRemovePendingProperty}
+                    onPropertyPinned={props.onPropertyPinned}
+                  >
+                    <PropertyRowActions.Pin />
+                    <PropertyRowActions.Remove />
+                  </PropertyRowActions.Root>
+                </MultiValue>
               </Match>
             </Switch>
             <PropertyNS.PopoverEditor
@@ -625,137 +639,21 @@ function SidePanelPropertyRow(props: {
               }}
             />
           </PropertyNS.Root>
-          <Show when={!hasInlineAddAction()}>{renderActions()}</Show>
+          <Show when={!hasInlineAddAction()}>
+            <PropertyRowActions.Root
+              canRemoveFromEntity={props.canRemoveFromEntity}
+              canPinPendingProperty={props.canPinPendingProperty}
+              property={props.property}
+              onRemovePendingProperty={props.onRemovePendingProperty}
+              onPropertyPinned={props.onPropertyPinned}
+            >
+              <PropertyRowActions.Remove />
+              <PropertyRowActions.Pin />
+            </PropertyRowActions.Root>
+          </Show>
         </div>
       </div>
     </div>
-  );
-}
-
-function isPendingProperty(property: Property): boolean {
-  return property.propertyId.startsWith('pending:');
-}
-
-function PropertyRowActions(props: {
-  canRemoveFromEntity: boolean;
-  canPinPendingProperty?: boolean;
-  onRemovePendingProperty: (property: Property) => void;
-  onPropertyPinned?: (propertyId: string) => void;
-  pinFirst?: boolean;
-  property: Property;
-  saving?: Signal<boolean>;
-  onRefresh?: () => Promise<unknown>;
-}) {
-  const ctx = usePropertiesContext();
-  const [isSaving, setIsSaving] = props.saving ?? createSignal(false);
-
-  const canRemove = () =>
-    props.canRemoveFromEntity &&
-    ctx.canEdit &&
-    !props.property.isMetadata &&
-    (isPendingProperty(props.property) || Boolean(ctx.removeProperty));
-  const canPin = () =>
-    ctx.canEdit &&
-    !props.property.isMetadata &&
-    (!isPendingProperty(props.property) ||
-      props.canPinPendingProperty === true) &&
-    Boolean(
-      props.onPropertyPinned && ctx.onPropertyUnpinned && ctx.pinnedPropertyIds
-    );
-  const isPinned = () =>
-    ctx.pinnedPropertyIds?.().includes(props.property.propertyId) ?? false;
-  const pinLabel = () => (isPinned() ? 'Unpin from title' : 'Pin below title');
-  const hasActions = () => canRemove() || canPin();
-  const actionVisibility =
-    'pointer-events-none opacity-0 group-hover/property-row:pointer-events-auto group-hover/property-row:opacity-100 group-focus-within/property-row:pointer-events-auto group-focus-within/property-row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 touch:pointer-events-auto touch:opacity-100';
-
-  const stopRowInteraction = (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const togglePin = (event: MouseEvent) => {
-    stopRowInteraction(event);
-    if (!canPin() || isSaving()) return;
-    if (isPinned()) {
-      ctx.onPropertyUnpinned?.(
-        props.property.propertyId,
-        props.property.propertyDefinitionId
-      );
-    } else {
-      props.onPropertyPinned?.(props.property.propertyId);
-    }
-  };
-
-  const removeFromEntity = async (event: MouseEvent) => {
-    stopRowInteraction(event);
-    if (!canRemove() || isSaving()) return;
-
-    if (isPendingProperty(props.property)) {
-      props.onRemovePendingProperty(props.property);
-      return;
-    }
-
-    const remove = ctx.removeProperty;
-    if (!remove) return;
-
-    setIsSaving(true);
-    try {
-      await remove(props.property.propertyId);
-      ctx.onPropertyUnpinned?.(
-        props.property.propertyId,
-        props.property.propertyDefinitionId
-      );
-      await (props.onRefresh ?? ctx.onRefresh)();
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const renderRemoveAction = () => (
-    <Show when={canRemove()}>
-      <Button
-        variant="danger-ghost"
-        size="icon-xs"
-        data-property-row-action
-        tooltip="Remove from entity"
-        aria-label="Remove from entity"
-        disabled={isSaving()}
-        class={cn('transition', actionVisibility)}
-        onClick={removeFromEntity}
-      >
-        <TrashIcon class="size-4" />
-      </Button>
-    </Show>
-  );
-
-  return (
-    <Show when={hasActions()}>
-      <div
-        class="flex shrink-0 items-center gap-0.5"
-        onMouseDown={stopRowInteraction}
-      >
-        <Show when={!props.pinFirst}>{renderRemoveAction()}</Show>
-        <Show when={canPin()}>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            data-property-row-action
-            title={pinLabel()}
-            aria-label={pinLabel()}
-            aria-pressed={isPinned()}
-            disabled={isSaving()}
-            class="text-ink-extra-muted aria-pressed:bg-button-tertiary-bg aria-pressed:not-data-disabled:hover:bg-button-tertiary-hover"
-            onClick={togglePin}
-          >
-            <Show when={isPinned()} fallback={<PushPinIcon class="size-4" />}>
-              <PushPinSlashIcon class="size-4 text-accent" />
-            </Show>
-          </Button>
-        </Show>
-        <Show when={props.pinFirst}>{renderRemoveAction()}</Show>
-      </div>
-    </Show>
   );
 }
 
@@ -836,7 +734,7 @@ function UserStackPill(props: { property: Property }) {
 
 function MultiValue(props: {
   property: Property;
-  renderActions: () => JSX.Element;
+  children: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
@@ -854,10 +752,9 @@ function MultiValue(props: {
         <Show
           when={!isEntity()}
           fallback={
-            <NonUserEntityValue
-              property={props.property}
-              renderActions={props.renderActions}
-            />
+            <NonUserEntityValue property={props.property}>
+              {props.children}
+            </NonUserEntityValue>
           }
         >
           <div class="flex flex-wrap items-center gap-1.5">
@@ -891,7 +788,7 @@ function MultiValue(props: {
                   <Plus class="size-4" />
                 </Button>
               </Show>
-              {props.renderActions()}
+              {props.children}
             </div>
           </div>
         </Show>
@@ -902,7 +799,7 @@ function MultiValue(props: {
 
 function NonUserEntityValue(props: {
   property: Property;
-  renderActions: () => JSX.Element;
+  children: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
@@ -965,7 +862,7 @@ function NonUserEntityValue(props: {
             </Button>
           </Show>
         </Show>
-        {props.renderActions()}
+        {props.children}
       </div>
     </div>
   );

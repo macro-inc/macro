@@ -187,9 +187,12 @@ inline spinner through saving and refresh. Use the dragged item's label while
 its preview metadata loads. Failed saves clear pending chips through the existing
 error flow. Pending chips cannot be opened or removed. A persistently
 mounted status region announces additions, including picker saves. Removed
-references disappear immediately and are restored from saved data if saving fails.
-Other values remain visible; further edits and drops stay locked during that
-operation. Add and value edits also remain disabled while the initial collection loads.
+references disappear immediately and are restored from the last confirmed values
+if saving fails. A failed refresh does not undo a successful save: keep confirmed
+edits visible until the query reflects them, and base subsequent edits on those
+values. Other values remain visible; further edits and drops stay locked during
+that operation. Add and value edits also remain disabled while the initial
+collection loads.
 
 The empty dedicated Tags section uses a compact, tag-icon Add tags outline button,
 without a separate message, card, title, or description. Keep the button

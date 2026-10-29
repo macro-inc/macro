@@ -38,9 +38,11 @@ ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
 state until refresh completes. New references appear immediately as pending
 chips with an inline spinner until saving and refresh finish. Removed references
-disappear immediately; a failed save restores them from the saved property data.
-Other values remain visible. Failed saves clear pending additions through the
-existing error flow. Pending chips cannot be opened or removed. Collection rows
+disappear immediately; a failed save restores them from the last confirmed values.
+Confirmed edits remain visible if refresh fails, and reconcile when the query
+reflects them. Subsequent edits use these confirmed values rather than stale query
+data. Other values remain visible. Failed saves clear pending additions through
+the existing error flow. Pending chips cannot be opened or removed. Collection rows
 retain their definition identity through query updates so loading state survives
 refreshed property objects. Dropped items use the drag label while preview metadata loads.
 Read-only, metadata, loading, saving, and open-editor states reject drops.
@@ -55,6 +57,13 @@ The empty dedicated Tags section shows one compact, tag-icon Add tags outline bu
 without a separate message, card, title, or description. The existing tag picker
 handles the action; read-only sections show “No tags added yet” instead.
 Inline Tags property rows retain their compact treatment.
+
+## Side-panel row actions
+
+Compose `PropertyRowActions.Root`, `.Pin`, and `.Remove` through children so
+callers own action order. Multi-value layouts and collections accept JSX children,
+not action render callbacks. Each collection row owns one saving signal shared
+with its collection editor and row actions.
 
 ## Side-panel header actions
 

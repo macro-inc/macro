@@ -20,20 +20,66 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { batch, createSignal, For, type JSX, Show, type Signal } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+  type Signal,
+} from 'solid-js';
 import { createEntityCollectionDropTarget } from './entity-collection-drop';
 
 type PendingEntityReference = EntityReference & { displayName?: string };
+
+function sameEntityReference(left: EntityReference, right: EntityReference) {
+  return (
+    left.entity_id === right.entity_id &&
+    left.entity_type === right.entity_type &&
+    (left.specific_message_id ?? null) === (right.specific_message_id ?? null)
+  );
+}
+
 export function EntityCollectionProperty(props: {
   entityId: string;
   loading?: boolean;
   onRefresh: () => Promise<unknown>;
   property: Property;
-  actions: (saving: Signal<boolean>) => JSX.Element;
+  onSave: (property: Property, values: PropertyApiValues) => Promise<void>;
+  saving: Signal<boolean>;
+  children: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
-  const saving = createSignal(false);
-  const [isSaving, setIsSaving] = saving;
+  const [isSaving, setIsSaving] = props.saving;
+  const [confirmedReferences, setConfirmedReferences] =
+    createSignal<EntityReference[]>();
+  const displayedProperty = createMemo(() => {
+    const property = props.property;
+    const confirmed = confirmedReferences();
+    if (property.valueType !== 'ENTITY' || !confirmed) return property;
+    return { ...property, value: confirmed };
+  });
+
+  // Retire confirmed edits only after refresh, not during another optimistic save.
+  createEffect(() => {
+    if (isSaving()) return;
+    const confirmed = confirmedReferences();
+    if (!confirmed) return;
+    const current = getEntityValues(props.property);
+    if (current.length !== confirmed.length) return;
+    const unmatched = [...current];
+    for (const reference of confirmed) {
+      const index = unmatched.findIndex((value) =>
+        sameEntityReference(value, reference)
+      );
+      if (index < 0) return;
+      unmatched.splice(index, 1);
+    }
+    setConfirmedReferences(undefined);
+  });
+
   const [pendingReferences, setPendingReferences] =
     createSignal<PendingEntityReference[]>([]);
   const [pendingRemovals, setPendingRemovals] = createSignal<EntityReference[]>([]);
@@ -49,25 +95,20 @@ export function EntityCollectionProperty(props: {
       setPendingReferences(
         nextRefs
           .filter((reference) =>
-            !currentRefs.some((current) =>
-              current.entity_id === reference.entity_id &&
-              current.entity_type === reference.entity_type
-            )
+            !currentRefs.some((current) => sameEntityReference(current, reference))
           )
           .map((reference) => ({ ...reference, displayName }))
       );
       setPendingRemovals(
         currentRefs.filter((reference) =>
-          !nextRefs.some((next) =>
-            next.entity_id === reference.entity_id &&
-            next.entity_type === reference.entity_type
-          )
+          !nextRefs.some((next) => sameEntityReference(next, reference))
         )
       );
       setIsSaving(true);
     });
     try {
-      await ctx.saveHandler.saveProperty(property, values);
+      await props.onSave(property, values);
+      setConfirmedReferences(nextRefs);
       await props.onRefresh();
     } finally {
       batch(() => {
@@ -80,7 +121,7 @@ export function EntityCollectionProperty(props: {
 
   return (
     <PropertyNS.Root
-      property={props.property}
+      property={displayedProperty()}
       canEdit={ctx.canEdit}
       onSave={saveProperty}
     >
@@ -90,10 +131,11 @@ export function EntityCollectionProperty(props: {
         pendingReferences={pendingReferences()}
         pendingRemovals={pendingRemovals()}
         onSave={saveProperty}
-        property={props.property}
-        saving={saving}
-        actions={props.actions(saving)}
-      />
+        property={displayedProperty()}
+        saving={props.saving}
+      >
+        {props.children}
+      </EntityCollectionPropertyBody>
       <PropertyNS.PopoverEditor
         entitySelfFilter={{
           entityType: ctx.entityType,
@@ -116,22 +158,20 @@ function EntityCollectionPropertyBody(props: {
   ) => Promise<void>;
   property: Property;
   saving: Signal<boolean>;
-  actions: JSX.Element;
+  children: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
   const entities = () => getEntityValues(props.property);
   const pendingReference = (reference: EntityReference) =>
     props.pendingReferences.find((pending) =>
-      pending.entity_id === reference.entity_id &&
-      pending.entity_type === reference.entity_type
+      sameEntityReference(pending, reference)
     );
   const isPending = (reference: EntityReference) =>
     Boolean(pendingReference(reference));
   const isPendingRemoval = (reference: EntityReference) =>
     props.pendingRemovals.some((removed) =>
-      removed.entity_id === reference.entity_id &&
-      removed.entity_type === reference.entity_type
+      sameEntityReference(removed, reference)
     );
   const displayedEntities = () => [
     ...entities().filter(
@@ -172,8 +212,10 @@ function EntityCollectionPropertyBody(props: {
       displayName
     );
 
-  const handleRemoveEntity = (entityId: string) =>
-    saveReferences(entities().filter((entity) => entity.entity_id !== entityId));
+  const handleRemoveEntity = (reference: EntityReference) =>
+    saveReferences(
+      entities().filter((entity) => !sameEntityReference(entity, reference))
+    );
 
   return (
     <div
@@ -226,7 +268,7 @@ function EntityCollectionPropertyBody(props: {
         <div
           class={cn('flex shrink-0 items-center', !hasItems() && 'ml-auto')}
         >
-          {props.actions}
+          {props.children}
         </div>
       </div>
       <div class="col-span-2 min-w-0">
@@ -252,7 +294,7 @@ function EntityCollectionPropertyBody(props: {
                 canEdit={!isReadOnly() && !props.loading && !isSaving()}
                 onRemove={() =>
                   fireAndForget(
-                    handleRemoveEntity(entityRef.entity_id),
+                    handleRemoveEntity(entityRef),
                     'property-collection-remove'
                   )
                 }
