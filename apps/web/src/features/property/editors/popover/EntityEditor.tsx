@@ -42,6 +42,9 @@ function EntityEditorBody(props: EntityEditorProps) {
   const ctx = useProperty();
   const property = ctx.property() as EntityProperty;
 
+  // Consume initial search query for typeahead (set when user typed on trigger)
+  const initialQuery = ctx.consumeInitialSearchQuery();
+
   // Company owners are always teammates, so the owner picker offers the
   // team roster instead of the default quick-access people pool.
   const isCompanyOwner =
@@ -117,6 +120,7 @@ function EntityEditorBody(props: EntityEditorProps) {
             setDirty(true);
           }}
           onClose={closeAndSave}
+          initialQuery={initialQuery}
         />
       </Suspense>
       <Show

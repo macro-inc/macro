@@ -31,6 +31,9 @@ function SelectEditorBody() {
   const ctx = useProperty();
   const property = ctx.property() as SelectProperty;
 
+  // Consume initial search query for typeahead (set when user typed on trigger)
+  const initialQuery = ctx.consumeInitialSearchQuery();
+
   const optionsQuery = usePropertyOptionsQuery(
     () => property.propertyDefinitionId
   );
@@ -113,6 +116,7 @@ function SelectEditorBody() {
               : undefined
           }
           onClose={closeAndSave}
+          initialQuery={initialQuery}
         />
       </Show>
     </EditorPopover>
