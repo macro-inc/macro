@@ -229,6 +229,15 @@ function LoadedEmailComposeView(
     setDraftBackMenuOpen(false);
     props.host?.goBack?.();
   };
+  const reloadForRecovery = async () => {
+    try {
+      await state.flushLocal();
+    } catch (error) {
+      composeContext.notices.reportError(error);
+      return;
+    }
+    reloadApp('user_recovery');
+  };
 
   const SyncStatus = () => (
     <DraftSyncStatus
@@ -236,7 +245,7 @@ function LoadedEmailComposeView(
       busy={sync.busy()}
       error={sync.error()}
       onRetry={sync.retry}
-      onReload={() => reloadApp('user_recovery')}
+      onReload={() => fireAndForget(reloadForRecovery(), 'email-compose')}
       onKeepEditing={sync.keepEditing}
     />
   );

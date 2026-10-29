@@ -237,6 +237,15 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     setDraftBackMenuOpen(false);
     props.mobileCompose?.onClose();
   };
+  const reloadForRecovery = async () => {
+    try {
+      await state.flushLocal();
+    } catch (error) {
+      composeContext.notices.reportError(error);
+      return;
+    }
+    reloadApp('user_recovery');
+  };
   onMount(() => props.mobileCompose?.registerClose(requestClose));
   const isMobileCompose = () => props.mobileCompose !== undefined;
   const composePortalScope = () =>
@@ -471,7 +480,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       busy={sync.busy()}
       error={sync.error()}
       onRetry={sync.retry}
-      onReload={() => reloadApp('user_recovery')}
+      onReload={() => fireAndForget(reloadForRecovery(), 'email-compose')}
       onKeepEditing={sync.keepEditing}
     />
   );
