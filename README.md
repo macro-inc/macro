@@ -127,6 +127,8 @@ We wanted everything in a single markdown editor without switching tools.
 
 ![The Team Channels PRD in Macro with tags, assignees, and a details sidebar](.github/readme/docs-prd.jpg)
 
+Agents can edit documents that are open or closed. One interesting use case for agentic editing is to maintain team-context. For example we have a Macro Automation that runs daily to update our in-office Pool Games markdown doc. It scans through all of the channels to see if anyone has one and then updates the doc. If somebody has already edited the doc, it can know that and forgo the update. Conflicts are handled natively by the CRDT collaboration system.
+
 [Docs &rarr;](https://docs.macro.com/product/docs)
 
 <br />
