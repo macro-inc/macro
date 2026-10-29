@@ -256,6 +256,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
+  let isPrivacyMenuOpen = false;
   // Assigned once applySnapshot exists. Send clears before the request, so a
   // failure has to put the same draft back into the editor.
   let restoreFailedSend = (_snapshot: InputSnapshot) => {};
@@ -789,6 +790,9 @@ export function ChannelInput(props: ChannelInputProps) {
                 : undefined
             }
             onChange={(value) => inputState.setEphemeral(value)}
+            onOpenChange={(open) => {
+              isPrivacyMenuOpen = open;
+            }}
           />
         </Show>
         <Input.Layout
@@ -917,6 +921,7 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
+          if (isPrivacyMenuOpen) return;
           if (dictation.active()) return;
           collapsedInput.collapse();
         }}

@@ -1457,6 +1457,8 @@ The channel composer's visibility menu starts at **Everyone**. Choose **Only you
 to start a private thread. Only the sender sees it and any agent replies; it stays
 saved in that person's channel history. Each private message has a lock and an
 **Only you** label. Desktop and phone use the same audience control.
+On a phone, open the collapsed composer first; choosing an audience or closing
+its menu keeps the composer open and ready to type.
 
 Mentioning an agent configured as **Ephemeral agent** automatically selects and
 locks **Only you**. Removing the mention keeps the draft private until the sender

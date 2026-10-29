@@ -12,6 +12,7 @@ export function MessagePrivacyControl(props: {
   newThread?: boolean;
   reason?: string;
   onChange: (value: boolean) => void;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <div
@@ -20,7 +21,7 @@ export function MessagePrivacyControl(props: {
         props.private && 'bg-accent/5'
       )}
     >
-      <Dropdown placement="top-start">
+      <Dropdown placement="top-start" onOpenChange={props.onOpenChange}>
         <Dropdown.Trigger
           variant="ghost"
           size="sm"

@@ -66,6 +66,9 @@ function Fixture() {
                     <Show when={open()}>
                       <ChannelInput
                         parent={{ type: 'channel', id: channelId }}
+                        collapsible={new URLSearchParams(location.search).has(
+                          'collapsible'
+                        )}
                         input={{
                           mode: 'channel',
                           id: `channel-input-${channelId}`,
