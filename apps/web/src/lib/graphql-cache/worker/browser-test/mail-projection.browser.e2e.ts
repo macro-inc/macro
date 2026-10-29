@@ -1,6 +1,113 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
+test('server-confirmed invitations survive missing cache metadata and confirmed archives still leave Inbox', async ({
+  page,
+}) => {
+  const scope = `mail-membership-${crypto.randomUUID()}`;
+  await page.goto(`/mail-projection.html?scope=${scope}`);
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  const result = await page.evaluate(
+    async ({ scope, modulePath }) => {
+      const { createWorkerCacheHost } = (await import(
+        modulePath
+      )) as typeof import('../../host/worker-host');
+      const host = createWorkerCacheHost({ scope });
+      const id = (n: number) =>
+        `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+      const key = (n: number) => `GraphqlSoupEmailThread:${id(n)}`;
+      const query = `query MailUpdate { user { id soup(input:{initial:{limit:100,emailView:INBOX}}) { items { __typename id ... on GraphqlSoupEmailThread { inboxVisible isRead } } } } }`;
+      const write = (n: number, inboxVisible: boolean) =>
+        host.writeQuery({
+          query,
+          identity: 'offline-mail-viewer',
+          data: {
+            user: {
+              id: 'offline-mail-viewer',
+              soup: {
+                items: [
+                  {
+                    __typename: 'GraphqlSoupEmailThread',
+                    id: id(n),
+                    inboxVisible,
+                    isRead: false,
+                  },
+                ],
+              },
+            },
+          },
+        });
+      const filters = Object.fromEntries(
+        [
+          ['documentFilter', 'id'],
+          ['projectFilter', 'projectIdSelf'],
+          ['chatFilter', 'chatId'],
+          ['calendarEventFilter', 'id'],
+          ['channelFilter', 'channelId'],
+          ['channelThreadFilter', 'threadId'],
+          ['callFilter', 'callId'],
+          ['crmCompanyFilter', 'id'],
+          ['foreignEntityFilter', 'id'],
+        ].map(([field, literal]) => [field, { literal: { [literal]: id(0) } }])
+      );
+      try {
+        await write(76, true);
+        const baseline = [76, 60].map((n) => ({
+          key: key(n),
+          sortTimestamp: '2026-01-01T00:00:00Z',
+        }));
+        const read = () =>
+          host.entityFilter({
+            filters,
+            sortMethod: 'UPDATED_AT',
+            sortDirection: 'DESC',
+            limit: 10,
+            baseline,
+            mail: { view: 'INBOX' },
+          });
+        const before = await read();
+        // Unrelated cache revisions used to replace the server list with a partial local page.
+        await write(50, true);
+        const refreshed = await read();
+        await write(60, false);
+        const archived = await read();
+        if (
+          before.kind !== 'mail-page' ||
+          refreshed.kind !== 'mail-page' ||
+          archived.kind !== 'mail-page'
+        )
+          throw new Error('expected cached Mail pages');
+        return {
+          retained: before.retainedKeys,
+          visibleBefore: before.keys.includes(key(76)),
+          visibleAfterRefresh: refreshed.keys.includes(key(76)),
+          visibleAfterArchive: archived.keys.includes(key(76)),
+          archivedRemoved: !archived.keys.includes(key(60)),
+          inviteKey: key(76),
+        };
+      } finally {
+        host.dispose();
+      }
+    },
+    {
+      scope,
+      modulePath: `/@fs${fileURLToPath(new URL('../../host/worker-host.ts', import.meta.url))}`,
+    }
+  );
+  expect(result).toEqual({
+    retained: [result.inviteKey],
+    visibleBefore: true,
+    visibleAfterRefresh: true,
+    visibleAfterArchive: true,
+    archivedRemoved: true,
+    inviteKey: result.inviteKey,
+  });
+});
+
 test('delivered reminders immediately lead cached Signal, including sent-only threads', async ({
   page,
 }) => {

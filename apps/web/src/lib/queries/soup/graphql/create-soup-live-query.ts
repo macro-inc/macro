@@ -35,6 +35,7 @@ import {
   type SoupQueryVariables,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import {
+  emailThreadSortTs,
   type GraphqlSoupInput,
   type GraphqlSoupItem,
   getGraphqlSoupCacheHost,
@@ -539,8 +540,16 @@ export function createSoupLiveQuery(
           (record) => record.__typename !== 'GraphqlSoupEmailThread'
         )
       : serverRecords();
-    const baseline = soupReconciliationBaseline(records, initial.sortMethod);
-    if (!baseline && !mailView) return;
+    const baseline = soupReconciliationBaseline(
+      records.map((record) => {
+        if (!mailView || record.__typename !== 'GraphqlSoupEmailThread')
+          return record;
+        const timestamp = emailThreadSortTs(record, mailView);
+        return { ...record, createdAt: timestamp, updatedAt: timestamp };
+      }),
+      initial.sortMethod
+    );
+    if (!baseline) return;
     return {
       input,
       records,
@@ -707,6 +716,7 @@ export function createSoupLiveQuery(
               filters,
               sortMethod,
               sortDirection,
+              baseline,
               ...(!mailView
                 ? { limit, baseline }
                 : through
@@ -749,13 +759,25 @@ export function createSoupLiveQuery(
               discarded = true;
               return;
             }
+            // Older native hosts accept but ignore the baseline on Mail reads.
+            // Their omission cannot prove non-membership; retain the server list.
+            if (
+              result.kind === 'mail-page' &&
+              result.retainedKeys === undefined &&
+              records.some(
+                (record) => !result.keys.includes(soupItemKey(record))
+              )
+            ) {
+              setLocalProjection(undefined);
+              return;
+            }
             const selected = await readSoupPage(host, {
               page: result,
               select:
                 result.kind === 'mail-page'
                   ? mailItemSelection
                   : definition.select,
-              baseline: result.kind === 'mail-page' ? [] : records,
+              baseline: records,
               mailView,
             });
             if (requestId !== localRequest) {
@@ -773,9 +795,7 @@ export function createSoupLiveQuery(
               setLocalProjection({
                 input: definition.input,
                 generation: requestGeneration,
-                baselineKeys: new Set(
-                  result.kind === 'mail-page' ? [] : records.map(soupItemKey)
-                ),
+                baselineKeys: new Set(records.map(soupItemKey)),
                 displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
                 withoutEmail,
                 ...(result.kind === 'mail-page'
@@ -807,7 +827,7 @@ export function createSoupLiveQuery(
             finishStaleFallback('local');
             span.setAttr(
               'evaluation.retained_count',
-              result.kind === 'reconciled' ? result.retainedKeys.length : 0
+              result.retainedKeys?.length ?? 0
             );
             return;
           }
@@ -883,7 +903,6 @@ export function createSoupLiveQuery(
     if (networkIsAuthoritative()) return query.data?.records();
     const local = displayLocalProjection();
     if (!local) return query.data?.records();
-    if (local.mail) return local.records;
     const additions = unreconciledServerRecords(
       serverRecords(),
       local.baselineKeys,

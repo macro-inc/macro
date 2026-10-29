@@ -5,6 +5,7 @@
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
+- Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
@@ -426,6 +427,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
+- Reconcile cached Mail pages with same-query server membership; missing local
+  previews are unknown, not proof that a fetched email left the inbox. Keep
+  local pagination cursors independent of retained server rows.
 - Render user-visible text in new UI, and every menu and navigation label,
   with `t()` from `@app/lib/i18n`, adding only the English to
   `src/lib/i18n/locales/en/`. The periodic `update-translations` skill fills

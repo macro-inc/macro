@@ -46,6 +46,10 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 
 ## Gotchas
 
+- Mail pages reconcile server membership through the generic predicate engine;
+  retain unknown projections with their supplied sort values, exclude confirmed
+  nonmembers, and keep continuation cursors on the original indexed window.
+
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under
   `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`.

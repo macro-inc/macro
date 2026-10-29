@@ -45,19 +45,33 @@ export async function readSoupPage(
     page.kind === 'mail-page'
       ? new Map(page.keys.map((key, i) => [key, page.sortTimestamps[i]]))
       : undefined;
-  const records = materializeReconciledSoup(
-    keys,
-    chunks.flatMap((chunk) => chunk.records),
-    baseline
-  ).flatMap((record) => {
-    const timestamp = timestamps?.get(soupItemKey(record));
-    if (!timestamp || !mailView) return [record];
-    const selected = materializeMailView(
-      record as MailItemFieldsFragment,
-      mailView,
-      timestamp
-    );
-    return selected ? [selected] : [];
-  });
+  const selected = chunks.flatMap((chunk) => chunk.records);
+  const selectedKeys = new Set(selected.map((row) => row.recordKey));
+  const snapshots = new Map(
+    baseline.map((record) => [soupItemKey(record), record])
+  );
+  const retainedKeys = new Set(
+    page.kind === 'mail-page' ? page.retainedKeys : []
+  );
+  const records = materializeReconciledSoup(keys, selected, baseline).flatMap(
+    (record) => {
+      // A retained row is server membership evidence, not a complete canonical
+      // preview. Preserve its fetched display fields until hydration catches up.
+      if (
+        page.kind === 'mail-page' &&
+        (retainedKeys.has(soupItemKey(record)) ||
+          !selectedKeys.has(soupItemKey(record)))
+      )
+        return [snapshots.get(soupItemKey(record)) ?? record];
+      const timestamp = timestamps?.get(soupItemKey(record));
+      if (!timestamp || !mailView) return [record];
+      const selected = materializeMailView(
+        record as MailItemFieldsFragment,
+        mailView,
+        timestamp
+      );
+      return selected ? [selected] : [];
+    }
+  );
   return { kind: 'ready' as const, revision, records };
 }

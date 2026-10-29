@@ -22,6 +22,12 @@ detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
 ## Email — `/app/component/mail`
 
+Newly fetched mail, including calendar invitations, stays visible while local
+cache metadata loads. To check this transition, return to Inbox repeatedly and
+trigger a background cache refresh: rows should not disappear and return. A
+confirmed archive still removes its row. Cached pagination preserves its position
+while those server-confirmed rows load their canonical previews.
+
 Email's Tags sidebar uses the [nested tag tree](tasks.md#nested-sidebar-tags).
 Carets and folder-only parents expand branches; actual tags select their exact ID
 and switch the mailbox to All. Parent selection does not include descendant tags.

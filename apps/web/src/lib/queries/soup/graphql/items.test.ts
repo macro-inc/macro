@@ -44,6 +44,10 @@ vi.mock('../../../graphql-cache/exchange/normalized-cache-exchange', () => ({
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
+  emailThreadSortTs: (record: {
+    latestInboundMessageTs?: string;
+    updatedAt: string;
+  }) => record.latestInboundMessageTs ?? record.updatedAt,
   getGraphqlSoupClient: getGraphqlSoupClientMock,
   getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
   hasGraphqlCacheHost: () => getGraphqlSoupCacheHostMock() !== undefined,
@@ -202,6 +206,105 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
   });
+
+  it.each([true, false])(
+    'keeps server mail during incomplete cache refreshes (baseline support: %s)',
+    async (supported) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { emailView: 'INBOX', sortMethod: 'UPDATED_AT', limit: 20 },
+      });
+      let revision = REVISION_1;
+      let archived = false;
+      let changed: (revision: string) => void = () => {};
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof changed) => {
+          changed = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      const normalKey = 'GraphqlSoupEmailThread:normal';
+      const inviteKey = 'GraphqlSoupEmailThread:invite';
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'mail-page',
+        revision,
+        keys: supported && !archived ? [inviteKey, normalKey] : [normalKey],
+        ...(supported ? { retainedKeys: archived ? [] : [inviteKey] } : {}),
+        sortTimestamps: ['2026-01-02T00:00:00Z', '2026-01-01T00:00:00Z'],
+        nextCursor: null,
+        optimistic: false,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: mailThreadRecords([normalKey, inviteKey]).map((row) => ({
+          ...row,
+          record: { ...row.record, emailName: 'Preview from another tab' },
+        })),
+      }));
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true })
+        ),
+      }));
+      try {
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: ['invite', 'normal'].map((id) => ({
+              __typename: 'GraphqlSoupEmailThread',
+              id,
+              emailName:
+                id === 'invite' ? 'Calendar invitation' : 'Ordinary email',
+              latestInboundMessageTs: '2026-01-02T00:00:00Z',
+            })),
+            next_cursor: null,
+          })
+        );
+        await vi.waitFor(() => expect(query.data()?.entities).toHaveLength(2));
+        revision = REVISION_2;
+        changed(revision);
+        await vi.waitFor(() =>
+          expect(entityFilterMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+              baseline: expect.arrayContaining([
+                { key: inviteKey, sortTimestamp: '2026-01-02T00:00:00Z' },
+              ]),
+            })
+          )
+        );
+        if (supported)
+          await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
+        else
+          await vi.waitFor(() =>
+            expect(query.cacheMaintained?.()).not.toBe(true)
+          );
+        expect(query.data()?.entities.map((row) => row.id)).toEqual([
+          'invite',
+          'normal',
+        ]);
+        expect(query.data()?.entities[0]).toMatchObject({
+          emailName: 'Calendar invitation',
+        });
+        if (supported) {
+          archived = true;
+          revision = '3';
+          changed(revision);
+          await vi.waitFor(() =>
+            expect(query.data()?.entities.map((row) => row.id)).toEqual([
+              'normal',
+            ])
+          );
+        }
+      } finally {
+        dispose();
+      }
+    }
+  );
 
   it("hands the query's email view to the item mapper", async () => {
     const fake = makeFakeClient();
@@ -2050,7 +2153,10 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       );
     });
     const serverPage = (id: string, next: string | null) =>
-      graphqlSoupPage({ items: [{ id }], next_cursor: next });
+      graphqlSoupPage({
+        items: [{ __typename: 'GraphqlSoupEmailThread', id }],
+        next_cursor: next,
+      });
     const ids = () => query.data()?.entities.map((entity) => entity.id);
     const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
     try {

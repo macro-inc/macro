@@ -867,6 +867,14 @@ use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
 
+Mail list pages carry same-query server membership in the existing `baseline`
+field. The Mail adapter reconciles it against current predicates, retaining
+unknown rows and rejecting confirmed nonmembers. `retainedKeys` preserves the
+server display snapshot until canonical previews are readable; indexed page
+cursors do not move to retained rows. Older native hosts that omit `retainedKeys`
+cannot replace server membership with an incomplete local page, so the frontend
+keeps the server-backed list and its existing revalidation path.
+
 Grouped Soup uses `graphql/create-grouped-soup-live-query.ts` to own the initial
 request and every loaded per-bin continuation. With maintained cache queries and
 a supported filter plus created/updated sort, their combined server membership

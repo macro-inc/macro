@@ -313,6 +313,26 @@ describe('coordinator runtime protocol', () => {
     expect(mail({ cursor: 'row', through: 'row' })).toBe(false);
     expect(mail({ through: 'x'.repeat(4097) })).toBe(false);
     expect(mail({ unexpected: true })).toBe(false);
+    const baseline = [
+      {
+        key: 'GraphqlSoupEmailThread:one',
+        sortTimestamp: '2026-01-01T00:00:00Z',
+      },
+    ];
+    expect(valid({ ...request, mail: { view: 'INBOX' }, baseline })).toBe(true);
+    expect(
+      valid({ ...request, mail: { view: 'INBOX', through: 'row' }, baseline })
+    ).toBe(true);
+    expect(
+      valid({ ...request, mail: { view: 'INBOX', cursor: 'row' }, baseline })
+    ).toBe(false);
+    expect(
+      valid({
+        ...request,
+        mail: { view: 'INBOX' },
+        baseline: Array(5001).fill(baseline[0]),
+      })
+    ).toBe(false);
   });
 
   it('validates calendar range, commit, and uncertain-event requests', () => {

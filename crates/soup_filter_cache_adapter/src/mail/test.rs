@@ -11,6 +11,7 @@ use soup_filter_projection::{
 
 mod drafts;
 mod optimistic;
+mod reconciliation;
 mod reminders;
 mod through;
 
