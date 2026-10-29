@@ -79,7 +79,7 @@ export function AiGrantActions(props: {
             primary={
               <ConnectAction
                 label="Enable"
-                variant="primary"
+                variant="neutral"
                 onClick={props.onEnable}
                 disabled={props.updatePending}
               />

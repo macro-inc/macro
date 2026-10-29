@@ -244,7 +244,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           primary={
             <ConnectAction
               label="Enable"
-              variant="primary"
+              variant="neutral"
               onClick={toggle}
               disabled={busy()}
             />
@@ -271,7 +271,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           primary={
             <ConnectAction
               label="Enable"
-              variant="primary"
+              variant="neutral"
               onClick={toggle}
               disabled={busy()}
             />
