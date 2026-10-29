@@ -15,12 +15,7 @@ export function PathsToolCall(props: {
       subtitle={pathsSubtitle(props.detail.paths)}
       status={props.common.status}
       muted={props.common.muted}
-      trailing={
-        props.common.trailing ??
-        (props.common.status === 'completed' && props.detail.paths.length > 0
-          ? `${props.detail.paths.length} ${props.detail.paths.length === 1 ? 'file' : 'files'}`
-          : undefined)
-      }
+      trailing={props.common.trailing}
       hasContent={props.detail.paths.length > 0}
     >
       <Show when={props.detail.paths.length > 0}>

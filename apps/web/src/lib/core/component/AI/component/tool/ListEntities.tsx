@@ -146,17 +146,13 @@ const ListEntitiesToolResponse = (props: {
           const clickHandler = getClickHandler(item);
 
           return (
-            <button
-              type="button"
-              class="block w-full text-left hover:bg-hover"
-              onClick={clickHandler}
-            >
+            <Tool.ListButton onClick={clickHandler}>
               <Tool.ListItem icon={getItemIcon(item)}>
                 <div class="truncate text-xs text-ink">
                   {getItemTitle(item)}
                 </div>
               </Tool.ListItem>
-            </button>
+            </Tool.ListButton>
           );
         }}
       </VList>

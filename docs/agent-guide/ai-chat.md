@@ -1502,14 +1502,16 @@ Agent prose sets the documents, sessions, pull requests, and contacts it
 mentions in the accent color, as people mentions already are.
 
 Tool rows show the tool's own name without an MCP server or workspace prefix.
-Chat MCP rows retain their service icon.
 
 Individual tools appear as bare rows with no icon or indent, in the group
 header's tone: the tool name, then any detail and result summary in a dimmer
 tone. A successful call shows no outcome. The caret after them appears on hover
-or keyboard focus, and always on touch, and opens the results; it points right
-when collapsed and down when expanded. Individual results start
-collapsed. Existing rich result views retain their own content and controls;
+or keyboard focus, and always on touch, and the whole row opens the results; it
+points right when collapsed and down when expanded. Macro tools such as
+**Search** read the same way: the query in the detail tone, the result count
+right after it, and found items listed flush below in the row's tone, without
+icons. Code search output and read paths open as plain text, not a boxed block.
+Individual results start collapsed. Existing rich result views retain their own content and controls;
 when a result view provides its own disclosure, use that control rather than
 adding a second nested disclosure. Counts come from structured responses,
 edits show additions/deletions, and other tools show their outcome. A Macro
