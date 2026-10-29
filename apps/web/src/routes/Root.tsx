@@ -7,6 +7,7 @@ import {
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { rememberMobileEmailAttribution } from '@app/lib/analytics/signupAttribution';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
@@ -61,6 +62,10 @@ import { AppRouterView } from './app-router-view';
 import { useSyncLoginCookie } from './use-sync-login-cookie';
 
 const rootPreload: RoutePreloadFunc = async (args) => {
+  // Before any await: the desktop link's ad parameters have to be stored
+  // before signup navigates away to the identity provider.
+  rememberMobileEmailAttribution();
+
   await prefetchUserInfo();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history

@@ -22,6 +22,7 @@ import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { isIgnorableException, rewriteNativeFrameUrls } from './exceptionList';
 import { getPlanAnalyticsProperties } from './planProperties';
+import { mobileEmailPersonProperties } from './signupAttribution';
 
 /**
  * Resolves the user's device context for analytics enrichment.
@@ -147,6 +148,9 @@ const initializePosthog = (instance: PostHog) => {
     // reads window geometry, forcing a layout per scroll. The app shell never
     // scrolls the window, so the depth it reports is always zero.
     disable_scroll_properties: true,
+    // PostHog captures utm_* and click ids on its own. `signup_flow` is added
+    // on the mobile-email desktop link so that path is its own campaign field.
+    custom_campaign_params: ['signup_flow'],
     prepare_external_dependency_script: (script) => {
       const url = new URL(script.src);
 
@@ -344,6 +348,13 @@ const createAnalytics = () => {
       }
 
       posthog.identify(userID, { ...info });
+      // The desktop link's parameters are cookied before the identity-provider
+      // redirect strips the query string. Setting them here attaches the ad,
+      // and the fact that signup went through email capture, to this person.
+      const attribution = mobileEmailPersonProperties();
+      if (attribution) {
+        posthog.setPersonProperties(attribution.set, attribution.once);
+      }
     } catch (e) {
       console.error('[Analytics] Failed to identify user:', e);
     }

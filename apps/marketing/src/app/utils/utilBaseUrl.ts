@@ -69,7 +69,21 @@ const captureAttributionParams = (): URLSearchParams => {
   }
 };
 
-const attributionParams = captureAttributionParams();
+let attributionParams = captureAttributionParams();
+
+/**
+ * Ad parameters captured from the landing URL, including ones stored before a
+ * client-side navigation dropped the query string. Sent with the mobile
+ * email capture so the desktop link can carry them.
+ */
+export const capturedAttribution = (): Record<string, string> => {
+  attributionParams = captureAttributionParams();
+  const result: Record<string, string> = {};
+  attributionParams.forEach((value, key) => {
+    if (value) result[key] = value;
+  });
+  return result;
+};
 
 /** App URL (e.g. `/app/welcome`) with any captured attribution params appended. */
 export const buildAppUrl = (path: string): string => {
