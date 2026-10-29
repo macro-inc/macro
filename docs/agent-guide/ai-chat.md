@@ -1573,8 +1573,9 @@ tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
 Working and Thinking use the same text shimmer and keep its phase when the
-status changes; both lead with the working dots, a run of dots chasing around a
-small grid, so the label stays put when Working becomes Thinking. Check both
+status changes; both lead with the working dots, a small grid whose dots
+brighten one at a time in a scattered order and fade out completely between
+turns, so the label stays put when Working becomes Thinking. Check both
 labels in light and dark themes at desktop and phone widths: each pass should
 lift the whole label quickly from dim, fade it back, and rest dim before the
 next, with no highlight returning at the opposite edge. With reduced motion,

@@ -1358,21 +1358,21 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   }
 }
 
-/* One edge dot of `WorkingDots`: lit for half a lap, so four of the eight
-   are lit at once and the run chases around the grid. */
+/* One dot of `WorkingDots`: it brightens, then fades out completely and stays
+   gone for the rest of its cycle. */
 @keyframes agent-working-dot {
   0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
+  70%,
   100% {
-    opacity: 0.2;
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
   }
 }
 
 .agent-working-dot {
-  animation: agent-working-dot 0.8s linear infinite;
+  animation: agent-working-dot 1.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
