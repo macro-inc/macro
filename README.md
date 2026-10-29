@@ -87,8 +87,11 @@ Macro Chat is designed to be more focused than Slack. The first couple of replie
 
 ![The Macro Engineers channel delegating project and task creation to an agent](.github/readme/messages-channel.jpg)
 
-- Connect your WhatsApp account to bring conversations with customers, partners, and teammates all into one place.
-- Add people outside your team to your chats.
+We've also added ways for you to bring in conversations outside of your team into Macro.
+
+- Add people outside your team to Macro chats.
+- Connect your WhatsApp account to bring selected direct and group chats into Macro.
+- Read, reply to, and share your WhatsApp conversations from Macro.
 
 [Messages docs &rarr;](https://docs.macro.com/product/channels)
 
