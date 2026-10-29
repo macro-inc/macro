@@ -7,9 +7,7 @@ export function ChannelUnreadFilterToggle() {
 
   return (
     <ToggleSwitch
-      label="Unread"
-      labelClass="text-xs font-medium text-ink-muted"
-      class="shrink-0 gap-1.5"
+      trackLabel="Unread"
       checked={rail.unreadOnly()}
       onChange={rail.setUnreadOnly}
     />

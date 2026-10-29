@@ -438,7 +438,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             value={rail.tab()}
             onChange={selectTab}
           />
-          <ChannelUnreadFilterToggle />
           <Show when={isTouchDevice()}>
             <ViewSidebar.Control
               label={
@@ -456,6 +455,9 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             </ViewSidebar.Control>
           </Show>
         </ViewSidebar.Toolbar>
+        <div class="-mt-1 flex justify-end">
+          <ChannelUnreadFilterToggle />
+        </div>
       </ViewSidebar.Primary>
       <Show when={isTouchDevice() && props.search.isOpen()}>
         <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">
