@@ -231,7 +231,7 @@ We built a simple Calendar in Macro so you can manage your week right next to wh
 
 **Unified memory.** Agents remember what your whole team is doing across email, messages, tasks, docs, and calls, not just your own chat history. Refreshed nightly.
 
-**One inbox.** Emails, channel messages, task assignments, @mentions, and agent responses all land in one place, split into Signal and Noise. Keyboard-first throughout.
+**One inbox.** Emails, channel messages, task assignments, @mentions, and agent responses all land in one place. Keyboard-first throughout.
 
 Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers blocks, mentions, properties, and permissions; the [FAQ](https://docs.macro.com/faq) covers comparisons, licensing, and self-hosting.
 
