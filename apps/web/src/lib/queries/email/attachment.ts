@@ -12,6 +12,7 @@ import { useMutation } from '@tanstack/solid-query';
 
 type UploadDraftAttachmentsParams = {
   draftID: string;
+  draftGeneration?: number;
   attachments: File[];
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -66,13 +67,18 @@ function uploadId(file: File, draft: string): string {
 
 export async function completeDraftAttachment(input: {
   draftId: string;
+  draftGeneration?: number;
   attachmentId: string;
   inboxId?: string;
 }): Promise<void> {
   try {
     await throwOnErr(() =>
       emailClient.completeDraftAttachment(
-        { draftID: input.draftId, attachmentID: input.attachmentId },
+        {
+          draftID: input.draftId,
+          attachmentID: input.attachmentId,
+          draftGeneration: input.draftGeneration,
+        },
         input.inboxId
       )
     );
@@ -97,6 +103,7 @@ export const useUploadDraftAttachmentsMutation = (
             await emailClient.addDraftAttachment(
               {
                 draftID: params.draftID,
+                draftGeneration: params.draftGeneration,
                 attachment: {
                   upload_id: uploadId(attachment, params.draftID),
                   file_name: attachment.name,
@@ -145,6 +152,7 @@ export const useUploadDraftAttachmentsMutation = (
           }
           await completeDraftAttachment({
             draftId: params.draftID,
+            draftGeneration: params.draftGeneration,
             attachmentId: result.attachment_id,
             inboxId: params.linkId,
           });
@@ -170,6 +178,7 @@ export const useUploadDraftAttachmentsMutation = (
                   await emailClient.removeDraftAttachment(
                     {
                       draftID: variables.draftID,
+                      draftGeneration: variables.draftGeneration,
                       attachmentID: error.context.attachmentID,
                     },
                     variables.linkId
@@ -191,6 +200,7 @@ export const useUploadDraftAttachmentsMutation = (
 
 type RemoveDraftAttachmentParams = {
   draftID: string;
+  draftGeneration?: number;
   attachmentID: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -206,6 +216,7 @@ export const useRemoveDraftAttachmentMutation = (
           await emailClient.removeDraftAttachment(
             {
               draftID: params.draftID,
+              draftGeneration: params.draftGeneration,
               attachmentID: params.attachmentID,
             },
             params.linkId
@@ -225,6 +236,7 @@ export const useRemoveDraftAttachmentMutation = (
 
 type AddForwardedAttachmentsParams = {
   draftID: string;
+  draftGeneration?: number;
   attachments: { attachmentID: string }[];
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -241,6 +253,7 @@ export const useAddForwardedAttachmentsMutation = (
             await emailClient.addForwardedAttachment(
               {
                 draftID: params.draftID,
+                draftGeneration: params.draftGeneration,
                 attachmentID: att.attachmentID,
               },
               params.linkId
@@ -261,6 +274,7 @@ export const useAddForwardedAttachmentsMutation = (
 
 type RemoveForwardedAttachmentParams = {
   draftID: string;
+  draftGeneration?: number;
   attachmentID: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -276,6 +290,7 @@ export const useRemoveForwardedAttachmentMutation = (
           await emailClient.removeForwardedAttachment(
             {
               draftID: params.draftID,
+              draftGeneration: params.draftGeneration,
               attachmentID: params.attachmentID,
             },
             params.linkId

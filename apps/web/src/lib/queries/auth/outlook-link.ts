@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
@@ -15,12 +16,21 @@ export function useInitOutlookLink() {
   }));
 }
 
+/**
+ * Where a Microsoft administrator lands after approving Macro. Always the web
+ * app: the link is copied for someone else, often on another device, so a
+ * desktop deep link or native callback would not reach them.
+ */
+const adminConsentReturnUrl = () => `${getWebOrigin()}/app/inbox-link-callback`;
+
 /** Fetch on opening the chooser, without suspending unrelated application UI. */
 export function fetchEmailConnectionProviders() {
   return queryClient.fetchQuery({
     queryKey: authKeys.emailConnectionProviders.queryKey,
     queryFn: () =>
-      throwOnErr(() => authServiceClient.emailConnectionProviders()),
+      throwOnErr(() =>
+        authServiceClient.emailConnectionProviders(adminConsentReturnUrl())
+      ),
     staleTime: 0,
   });
 }

@@ -11,6 +11,8 @@ async fn records_survive_reconnection_and_remain_scoped_to_their_session(pool: P
     let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
     let other = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(2));
     let record = ExecutionRecord {
+        acting_as: None,
+        turn_id: None,
         execution_id: ExecutionId::mint(),
         source: "return 42;".into(),
         status: ExecutionStatus::Succeeded,

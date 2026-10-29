@@ -30,7 +30,7 @@ export function sectionName(layout: FormLayout, sectionId: string): string {
   const position = sectionPosition(layout, sectionId);
   return match(section.kind)
     .with('questions', () => `Section ${position}`)
-    .with('gate', () => `Screener ${position}`)
+    .with('gate', () => `Gate ${position}`)
     .with('booking', () => 'Booking')
     .exhaustive();
 }
@@ -43,7 +43,7 @@ export function routingLine(layout: FormLayout, sectionId: string): string {
   const gates = (nextAt < 0 ? later : later.slice(0, nextAt)).filter(
     (item) => item.kind === 'gate'
   ).length;
-  const check = gates === 1 ? 'Check screener' : `Check ${gates} screeners`;
+  const check = gates === 1 ? 'Check gate' : `Check ${gates} gates`;
   if (nextAt < 0) {
     const booking = later.some((item) => item.kind === 'booking');
     if (gates > 0)
@@ -71,7 +71,7 @@ export function layoutRefusalMessage(
     )
     .with(
       { kind: 'gate-section' },
-      () => 'A screener holds rules, not questions. Drop it in a section.'
+      () => 'A gate holds rules, not questions. Drop it in a section.'
     )
     .with(
       { kind: 'booking-section' },
@@ -81,7 +81,7 @@ export function layoutRefusalMessage(
     .with(
       { kind: 'booking-must-be-last' },
       ({ sectionId }) =>
-        `The booking step comes last, after every question and screener. Move “${names.section(sectionId)}” to the end.`
+        `The booking step comes last, after every question and gate. Move “${names.section(sectionId)}” to the end.`
     )
     .with(
       { kind: 'column-on-form' },

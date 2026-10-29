@@ -40,6 +40,13 @@ pub trait DocumentCreationService: Send + Sync {
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
+    /// Initialize a newly created Canvas and mark its shared content ready.
+    /// On failure, compensate any possibly-created sync snapshot.
+    fn initialize_canvas(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
     /// Assign task properties to a markdown task document.
     fn handle_task_properties(
         &self,
@@ -76,6 +83,10 @@ where
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         (**self).create_document(principal, document, job_id).await
+    }
+
+    async fn initialize_canvas(&self, document_id: &str) -> Result<(), DocumentError> {
+        (**self).initialize_canvas(document_id).await
     }
 
     async fn handle_task_properties(

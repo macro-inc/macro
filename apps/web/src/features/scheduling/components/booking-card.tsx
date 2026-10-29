@@ -7,20 +7,19 @@ import {
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import External from '@icon/system/regular/arrow-square-out.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Dots from '@icon/system/regular/dots-three.svg';
+import Info from '@icon/system/regular/info.svg';
+import MapPin from '@icon/system/regular/map-pin.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import Timer from '@icon/system/regular/timer.svg';
+import User from '@icon/system/regular/user.svg';
+import Users from '@icon/system/regular/users.svg';
+import X from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import External from '@phosphor/arrow-square-out.svg';
-import Calendar from '@phosphor/calendar-blank.svg';
-import Check from '@phosphor/check.svg';
-import Clock from '@phosphor/clock.svg';
-import Dots from '@phosphor/dots-three.svg';
-
-import Info from '@phosphor/info.svg';
-import MapPin from '@phosphor/map-pin.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import Timer from '@phosphor/timer.svg';
-import User from '@phosphor/user.svg';
-import Users from '@phosphor/users.svg';
-import X from '@phosphor/x.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { buttonClasses } from '@ui/components/Button';
 import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
@@ -372,11 +371,14 @@ export function BookingCard(props: {
           <div class="col-start-1 col-end-3 row-start-3 flex min-w-0 items-center justify-end gap-2 self-start @min-[42rem]/bookings:col-start-3 @min-[42rem]/bookings:col-end-4 @min-[42rem]/bookings:row-start-2">
             <Dropdown>
               <Dropdown.Trigger
+                aria-label={`Options for ${props.booking.name}`}
+                tooltip={{
+                  content: `Options for ${props.booking.name}`,
+                  disabled: true,
+                }}
                 variant="ghost"
                 size="icon-md"
-                label={`Options for ${props.booking.name}`}
                 class="touch:hidden"
-                tooltipDisabled
               >
                 <Dots class="size-4" />
               </Dropdown.Trigger>
@@ -393,10 +395,7 @@ export function BookingCard(props: {
                   href={url()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class={buttonClasses({
-                    variant: 'outline',
-                    size: 'md',
-                  })}
+                  class={buttonClasses({ variant: 'secondary', size: 'md' })}
                 >
                   <External aria-hidden="true" class="size-3.5" />
                   Join meeting
@@ -409,7 +408,7 @@ export function BookingCard(props: {
               }
             >
               <Button
-                variant="strong"
+                variant="secondary"
                 size="md"
                 disabled={!!props.busyId}
                 onClick={() => props.onApprove(props.booking.id)}

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_events\n            SET guests_can_modify = $2,\n                guests_can_invite_others = $3,\n                guests_can_see_other_guests = $4\n            WHERE id = $1\n            RETURNING source_link_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d701c5c7fde5479f2b11f3f8341bfe6f74f394db3181bc5f0a8a8172d498d52d"
+}

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::calendar_event::CalendarEventSearchScope;
 use crate::call_record::CallRecordSearchResponseItemWithMetadata;
 use crate::channel::{ChannelMessageSearchResponseItem, ChannelNameSearchResponseItem};
 use crate::chat::ChatSearchResponseItemWithMetadata;
@@ -106,6 +107,13 @@ pub struct UnifiedSearchRequest {
     /// index, so it is searched only under Name / NameContent.
     #[serde(default)]
     pub include_crm: bool,
+
+    /// Which calendar events to search. Defaults to `own`: events on the
+    /// caller's own and delegated calendars. `shared_with_you` searches only
+    /// events shared with a channel the caller belongs to that are on none of
+    /// their calendars.
+    #[serde(default)]
+    pub calendar_event_scope: CalendarEventSearchScope,
 
     #[schemars(skip)]
     pub collapse: Option<bool>,

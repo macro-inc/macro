@@ -8,9 +8,10 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
   QueryClient,
   QueryClientProvider,
-  useQuery,
+  useQueries,
   useQueryClient,
 } from '@tanstack/solid-query';
+import { addDays, format } from 'date-fns';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TeamOooUpcomingList } from './CalendarSidebar';
@@ -33,8 +34,13 @@ vi.mock('@app/features/scheduling/calendar-actions', () => ({
   CalendarSchedulingActions: () => null,
 }));
 vi.mock('@queries/calendar/team-ooo', () => ({
-  useTeamOutOfOfficeQuery: () =>
-    useQuery(() => ({ queryKey: ['team-ooo'], queryFn: requests.teamOoo })),
+  useTeamOutOfOfficeQueries: (input: () => { ranges: { start: string }[] }) =>
+    useQueries(() => ({
+      queries: input().ranges.map((range) => ({
+        queryKey: ['team-ooo', range.start],
+        queryFn: requests.teamOoo,
+      })),
+    })),
 }));
 
 const [selectedEvent, setSelectedEvent] = createSignal<CalendarEvent>();
@@ -53,12 +59,14 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 
 function teamOooItems(): TeamOutOfOfficeItem[] {
+  const day = format(addDays(new Date(), 28), 'yyyy-MM-dd');
+  const nextDay = format(addDays(new Date(), 29), 'yyyy-MM-dd');
   return [
     {
       eventId: 'ooo-1',
-      occurrenceKey: '2026-11-20',
+      occurrenceKey: day,
       ownerId: 'macro|jackson@macro.com',
-      time: { kind: 'allDay', startDate: '2026-11-20', endDate: '2026-11-21' },
+      time: { kind: 'allDay', startDate: day, endDate: nextDay },
     },
   ];
 }
@@ -90,10 +98,11 @@ describe('TeamOooUpcomingList', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Jackson/ }));
     const anchor = selectEvent.mock.calls[0][1];
     expect(anchor.getAttribute('aria-current')).toBe('true');
+    const initialRequests = requests.teamOoo.mock.calls.length;
 
     await refetch();
 
-    expect(requests.teamOoo).toHaveBeenCalledTimes(2);
+    expect(requests.teamOoo).toHaveBeenCalledTimes(initialRequests * 2);
     expect(screen.getByRole('button', { name: /Jackson/ })).toBe(anchor);
     expect(anchor.isConnected).toBe(true);
   });

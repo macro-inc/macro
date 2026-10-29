@@ -749,10 +749,16 @@ export class FigEngine {
    */
   retain(work: Promise<unknown>) {
     this.holds.add(work);
-    fireAndForget(
-      work.finally(() => this.holds.delete(work)),
-      'fig-engine'
-    );
+    const release = async () => {
+      try {
+        await work;
+      } catch {
+        // Its own caller reports failures.
+      } finally {
+        this.holds.delete(work);
+      }
+    };
+    fireAndForget(release(), 'fig-engine');
   }
 
   close() {

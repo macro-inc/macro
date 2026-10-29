@@ -230,7 +230,7 @@ where
         };
         if let Some(chart) = chart {
             check_chart(
-                &database_sql::result_columns(catalog.catalog(), &select),
+                &database_sql::result_columns(catalog.catalog(), &select)?,
                 chart,
             )?;
         }
@@ -303,6 +303,7 @@ where
             databases: self.databases.as_ref(),
             receipt: write_receipt,
             viewer: &viewer,
+            base_versions: &request.base_versions,
             versions: Mutex::new(HashMap::new()),
         };
         let outcome = database_sql::run(catalog.catalog(), &request.sql, &source, &sink)

@@ -38,6 +38,7 @@ export type EmailThreadState = {
   drafts: {
     getDraftForMessage: (messageDbId: string) => EmailMessage | undefined;
     deleteDraftForMessage: (messageDbId: string) => void;
+    restoreDraftForMessage: (draft: EmailMessage) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
 
@@ -88,6 +89,8 @@ export type EmailThreadState = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** Closes an embedded thread back to its list, when the host has one. */
+  returnToList?: () => void;
   /** Marks the thread done and opens the next one in the host's list. */
   archiveThreadAndAdvance: (opts?: ArchiveThreadOptions) => boolean;
   /** True when the thread is archived, i.e. currently marked done. */
@@ -100,6 +103,9 @@ export type EmailThreadState = {
   /** True when the user marked the open thread unread. Resets to false per
    *  thread — viewing marks it read, so the toggle starts at Mark Unread. */
   isThreadMarkedUnread: Accessor<boolean>;
+  /** True when the user re-marked the open thread read, as opposed to the
+   *  mark-as-read that viewing it queues. Resets to false per thread. */
+  isThreadMarkedRead: Accessor<boolean>;
   /** Marks the open thread unread; the toggle then offers Mark Read. */
   markThreadUnread: () => boolean;
   /** Re-marks the thread read after a mark-unread. */
@@ -276,6 +282,7 @@ export function createEmailThreadState(
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
     ...commands,
+    returnToList: host.returnToList,
     archiveThreadAndAdvance,
     messagesContainerRef,
     messagesListRef,

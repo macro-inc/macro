@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_pairing SET state = 'expired', consumed_at = clock_timestamp(), qr_code = NULL, pair_code = NULL, passkey_challenge = NULL, passkey_response = NULL, updated_at = now()\n        WHERE consumed_at IS NULL AND expires_at <= clock_timestamp()\n          AND ($1::text IS NULL OR user_id = $1) AND ($2::uuid IS NULL OR id = $2)\n          AND account_id = ANY($3)\n        RETURNING account_id, generation",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ba6f7b5f0219ba5e08d2b0205ef2649d1beb897aae99df203a40652b63431ac2"
+}

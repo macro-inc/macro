@@ -45,6 +45,7 @@ export function useHomeRecommendations() {
       failed:
         (emailLinks.isError && emailLinks.data === undefined) ||
         recommendations.hasError(),
+      retryable: recommendations.canRetry(),
       items: recommendations.items(),
       emailLinked:
         emailLinks.isSuccess && (emailLinks.data?.links.length ?? 0) > 0,
@@ -76,7 +77,14 @@ export function useHomeRecommendations() {
     }
 
     if (notification) {
-      const result = await openNotification(notification, splitManager, true);
+      const result = await openNotification(
+        notification,
+        splitManager,
+        true,
+        undefined,
+        undefined,
+        { source: 'home_recommendation' }
+      );
       if (result.isOk()) {
         await notificationSource.markAsRead(notification);
         return;

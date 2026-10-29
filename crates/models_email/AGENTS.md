@@ -31,6 +31,8 @@ thread/message API types, DB row types, and Gmail API response shapes.
 
 - `cargo test -p models_email` (`SQLX_OFFLINE` unset).
 
+Parsed message responses expose the draft generation captured in the same SQL snapshot as their content.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

@@ -134,13 +134,21 @@ impl SessionAnnouncer for AnnouncerMock {
             message_id: if announcement.reuse_origin_message {
                 announcement.origin_message_id
             } else {
-                macro_uuid::generate_uuid_v7()
+                announcement
+                    .reply_message_id
+                    .unwrap_or_else(macro_uuid::generate_uuid_v7)
             },
         };
-        self.announced
+        let mut announced = self
+            .announced
             .lock()
-            .expect("announcer mock lock should not be poisoned")
-            .push((announcement, message));
+            .expect("announcer mock lock should not be poisoned");
+        if !announced
+            .iter()
+            .any(|(_, existing)| existing.message_id == message.message_id)
+        {
+            announced.push((announcement, message));
+        }
         Ok(message)
     }
 

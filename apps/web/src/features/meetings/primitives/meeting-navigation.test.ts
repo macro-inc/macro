@@ -54,11 +54,13 @@ describe('meeting route ownership', () => {
     navigation.setCallState(owner, true, 'private-token');
     navigation.replace.mockClear();
 
-    navigation.leave(owner);
+    navigation.leave(owner, '/calls/call/finished-call');
     navigation.setCallState(owner, false, 'private-token');
     navigation.leave(owner);
 
-    expect(navigation.returnToApp).toHaveBeenCalledOnce();
+    expect(navigation.returnToApp).toHaveBeenCalledExactlyOnceWith(
+      '/calls/call/finished-call'
+    );
     expect(navigation.replace).not.toHaveBeenCalled();
   });
 

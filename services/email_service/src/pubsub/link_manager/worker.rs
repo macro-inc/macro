@@ -6,6 +6,7 @@ use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use futures::StreamExt;
 use sqlx::PgPool;
 use sqs_client::SQS;
@@ -25,6 +26,7 @@ pub async fn run_worker(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
 ) {
     run_worker_with_cancellation(
         worker,
@@ -37,6 +39,7 @@ pub async fn run_worker(
         connection_gateway_client,
         notification_ingress_service,
         macro_event_broker,
+        contacts_ingress,
         CancellationToken::new(),
     )
     .await;
@@ -57,6 +60,7 @@ pub async fn run_worker_with_cancellation(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     cancellation_token: CancellationToken,
 ) {
     let outlook = loop {
@@ -104,6 +108,7 @@ pub async fn run_worker_with_cancellation(
             redis_client.clone(),
             sqs_client.clone(),
             macro_event_broker.clone(),
+            contacts_ingress,
         )),
         db,
         sqs_worker: worker.clone(),

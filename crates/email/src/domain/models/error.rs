@@ -5,6 +5,12 @@ use uuid::Uuid;
 /// Errors that can occur in the email domain.
 #[derive(Debug, Error)]
 pub enum EmailErr {
+    /// A send attempt was reused with a different approved snapshot.
+    #[error("Send attempt payload does not match the original request")]
+    SendAttemptConflict,
+    /// A send snapshot is invalid or its attachments have changed.
+    #[error("Invalid send snapshot: {0}")]
+    InvalidSendSnapshot(String),
     /// A repository/infrastructure error.
     #[error(transparent)]
     RepoErr(#[from] anyhow::Error),
@@ -46,6 +52,9 @@ pub enum EmailErr {
     /// The referenced message has already been sent and cannot be modified.
     #[error("Message with id {0} has already been sent")]
     MessageAlreadySent(Uuid),
+    /// An older browser edit must not replace a newer send/cancel generation.
+    #[error("Draft changed on another device; reload before applying this edit: {0}")]
+    DraftGenerationConflict(Uuid),
     /// Delivery has been committed, claimed, or completed and cannot be edited.
     #[error("Message with id {0} is scheduled, processing, or already sent")]
     MessageDeliveryConflict(Uuid),
@@ -79,6 +88,9 @@ pub enum EmailErr {
     /// Thread not found.
     #[error("Thread not found")]
     ThreadNotFound,
+    /// A bulk request named more threads than one request may change.
+    #[error("At most {0} threads can change in one request")]
+    TooManyThreads(usize),
     /// The caller does not have permission to perform this action.
     #[error("You do not have permission to perform this action")]
     Unauthorized,

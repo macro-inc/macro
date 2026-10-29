@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat g SET backfill_state = $3,\n            backfill_requested_at = CASE WHEN $4 THEN now() ELSE g.backfill_requested_at END\n        FROM (SELECT id, backfill_state FROM external_chat WHERE id = $1 FOR UPDATE) old\n        WHERE g.id = old.id AND g.user_id = $2\n          AND g.backfill_state IN ('waiting_for_message', 'pending', 'running', 'waiting_for_phone')\n        RETURNING old.backfill_state AS \"previous!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "previous!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "7f688f5fb398cd70e2a433ed550de2b414faa328a86da6ffa901befed126b4b2"
+}

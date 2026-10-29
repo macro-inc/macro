@@ -438,7 +438,8 @@ fn test_build_message_email_filter_or() {
     let result = build_message_email_filter(&expr, &resolved);
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("OR"));
+    assert!(debug.contains("ANY("));
+    assert!(!debug.contains(" OR "));
     assert!(result.has_bind_uuid(&id1));
     assert!(result.has_bind_uuid(&id2));
     assert!(result.has_no_raw_containing("sender1@example.com"));
@@ -603,13 +604,20 @@ fn test_build_query_multi_link_fans_out_per_link() {
 }
 
 #[test]
-fn test_build_query_single_link_keeps_any_scan() {
+fn test_build_query_single_link_fans_out_per_link() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
     let sql = super::query::debug_build_query_sql(&view, &expr);
 
-    assert!(sql.contains("t.link_id = ANY("));
-    assert!(!sql.contains("FROM unnest("));
+    // One id inside ANY still cannot walk the sort index in order.
+    assert!(
+        sql.contains("FROM unnest(") && sql.contains("t.link_id = links.link_id"),
+        "single-link owned scan must fan out: {sql}"
+    );
+    assert!(
+        !sql.contains("t.link_id = ANY("),
+        "single-link owned scan must not use = ANY: {sql}"
+    );
 }
 
 #[test]
@@ -738,13 +746,15 @@ fn test_build_query_non_team_has_no_dedupe_machinery() {
     // Cursor stays inside the candidate select on the per-mailbox path
     // (contrast with the team path, which moves it past the dedupe wrapper).
     // The default UpdatedAt sort defers the uh join, so the cursor is a plain
-    // (ts, id) comparison rather than the viewed-history CASE.
+    // (ts, id) comparison rather than the viewed-history CASE. Owned scans
+    // also open a per-link LATERAL before that cursor; the message join is
+    // the later one, after the candidate LIMIT.
     let cursor_pos = sql
         .find(", t.id) < (")
         .expect("per-mailbox cursor comparison missing");
-    let lateral_pos = sql.find("CROSS JOIN LATERAL").expect("lateral missing");
+    let message_lateral = sql.find("-- Step 2:").expect("message lateral missing");
     assert!(
-        cursor_pos < lateral_pos,
+        cursor_pos < message_lateral,
         "cursor must sit inside the candidate select: {sql}"
     );
 }
@@ -1319,7 +1329,7 @@ fn test_matching_threads_ctes_domain_all_roles_share_one_contact_scan() {
 }
 
 #[test]
-fn test_matching_threads_ctes_distinct_domains_get_separate_contact_ctes() {
+fn test_matching_threads_ctes_distinct_domains_share_a_contact_cte() {
     let expr = Expr::or(
         Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into()))),
         Expr::Literal(EmailLiteral::Sender(Email::Domain("globex.com".into()))),
@@ -1329,7 +1339,8 @@ fn test_matching_threads_ctes_distinct_domains_get_separate_contact_ctes() {
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("matching_contacts_0 AS MATERIALIZED"));
-    assert!(debug.contains("matching_contacts_1 AS MATERIALIZED"));
+    assert!(!debug.contains("matching_contacts_1 AS MATERIALIZED"));
+    assert!(debug.contains("= ANY("));
     assert!(body.has_bind_string("acme.com"));
     assert!(body.has_bind_string("globex.com"));
 }

@@ -29,7 +29,7 @@ for their fixed property catalogs.
   `crates/messages`, `crates/soup`, `crates/soup_realtime`, `crates/ai_tools`,
   `crates/agent_trigger`, `crates/item_filter_index`, `crates/task_dedup`,
   `services/agent_harness_service`, `services/agent_trigger_service`,
-  `services/email_service`, `services/scheduled_action`.
+  `services/email_service`, `crates/scheduled_action`.
 
 ## Recipes
 

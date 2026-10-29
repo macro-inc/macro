@@ -9,6 +9,8 @@ export type CatalogModelOption = {
    * name), also available as a search term.
    */
   group?: string;
+  /** Listed but not selectable on the user's plan; choosing it calls `onLocked`. */
+  locked?: boolean;
 };
 
 export type ModelProviderGroup = {
@@ -20,11 +22,6 @@ export type ModelCatalog = {
   frontier: CatalogModelOption[];
   providers: ModelProviderGroup[];
 };
-
-/** Large third-party catalogs need structure rather than one long flat list. */
-export function isLargeModelCatalog(options: readonly CatalogModelOption[]) {
-  return options.length > 10;
-}
 
 /**
  * A version-looking token: alphanumerics and dots with a digit first or
@@ -118,7 +115,7 @@ export function modelProviderLabel(option: CatalogModelOption): string {
 }
 
 /**
- * Flagship choices, followed by Gemini. Prefer the base model over effort/speed
+ * Auto, then flagship choices, followed by Gemini. Prefer the base model over effort/speed
  * variants; every other variant remains in its provider's section. Include
  * suggested choices in provider groups when building the complete catalog.
  */
@@ -127,6 +124,7 @@ export function buildModelCatalog(
   includeSuggested = false
 ): ModelCatalog {
   const frontierPatterns = [
+    /^auto$/i,
     /^(?:claude[ -])?opus[ -]5[.-]5(?:$|[ -])/i,
     /^(?:claude[ -])?sonnet[ -]5[.-]5(?:$|[ -])/i,
     /^(?:gpt[ -]\d+(?:\.\d+)?[ -])?sol(?:$|[ -])|^gpt[ -]5\.6(?:[ -]sol)?(?:$|[ -](?:high|medium|low|fast)\b)/i,

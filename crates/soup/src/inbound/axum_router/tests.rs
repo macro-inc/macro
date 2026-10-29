@@ -225,6 +225,14 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
     async fn resolve_message_operation(
         &self,
         _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -355,6 +363,7 @@ impl EmailService for MockEmail {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -588,6 +597,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -720,6 +738,14 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
     async fn resolve_message_operation(
         &self,
         _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -840,6 +866,7 @@ impl EmailService for MockEmailLinkResult {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }

@@ -3,8 +3,7 @@ use crate::util::redis::RedisClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
-use crm::domain::company_metadata_resolver::CompanyMetadataResolver;
-use crm::domain::model::DomainMetadata;
+use crm::domain::company_metadata_resolver::{CompanyMetadataResolver, DomainResolution};
 use crm::domain::service::CrmServiceImpl;
 use crm::outbound::apollo_resolver::ApolloCompanyMetadataResolver;
 use crm::outbound::companies_repo::CompaniesRepositoryImpl;
@@ -44,7 +43,7 @@ pub enum CrmMetadataResolver {
 }
 
 impl CompanyMetadataResolver for CrmMetadataResolver {
-    async fn resolve(&self, domain: &str) -> DomainMetadata {
+    async fn resolve(&self, domain: &str) -> DomainResolution {
         match self {
             CrmMetadataResolver::Apollo(r) => r.resolve(domain).await,
             CrmMetadataResolver::Unfurl(r) => r.resolve(domain).await,
@@ -54,8 +53,8 @@ impl CompanyMetadataResolver for CrmMetadataResolver {
 
 /// The concrete CRM service type, backed by Postgres and the
 /// flag-selected [`CrmMetadataResolver`]. The resolver is consulted only
-/// on `crm_domain_directory` misses, so it isn't surfaced separately on
-/// [`PubSubContext`].
+/// on `crm_domain_directory` misses and for pending entries, so it isn't
+/// surfaced separately on [`PubSubContext`].
 pub type CrmServiceType = CrmServiceImpl<CompaniesRepositoryImpl, CrmMetadataResolver>;
 
 #[derive(Clone)]

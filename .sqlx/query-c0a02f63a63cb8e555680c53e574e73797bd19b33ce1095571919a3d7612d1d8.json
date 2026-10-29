@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_preview_lease SET status = 'stopped' WHERE session_id = $1\n               RETURNING metadata AS \"metadata: Json<StoredPreview>\", replica_id, status",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "metadata: Json<StoredPreview>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "replica_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "c0a02f63a63cb8e555680c53e574e73797bd19b33ce1095571919a3d7612d1d8"
+}

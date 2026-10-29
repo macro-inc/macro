@@ -138,7 +138,6 @@ export function DocumentSharingDemo() {
           <Show when={automatic() && pointer()}>
             {(point) => (
               <DemoCursor
-                label="Jacob"
                 class="doc-story-cursor doc-story-glide"
                 clicking={phase() === 2 || phase() === 4}
                 style={{

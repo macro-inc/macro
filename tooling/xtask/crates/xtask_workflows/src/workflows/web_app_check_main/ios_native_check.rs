@@ -96,6 +96,13 @@ fn paths_filter() -> Step<Use> {
         .add_with(("predicate-quantifier", "every"))
         .add_with((
             "filters",
+            // Mirror NATIVE_TREE_EXCLUDE in scripts/ios_native_tree.sh: paths
+            // named for another platform (android, macos, linux, windows,
+            // desktop) never reach the iOS binary. The generator rejects
+            // globs that match nothing, so only the shapes present in the
+            // tree today are listed; when a file in a new shape appears
+            // (e.g. the first windows_* module), extend this list to keep it
+            // in step with the regex.
             indoc::indoc! {"
                 ios_native:
                   - 'apps/web/tauri/**'
@@ -104,8 +111,22 @@ fn paths_filter() -> Step<Use> {
                   - '!apps/web/tauri/**/android_*/**'
                   - '!apps/web/tauri/**/android.*'
                   - '!apps/web/tauri/**/*.android.*'
+                  - '!apps/web/tauri/**/macos/**'
+                  - '!apps/web/tauri/**/macos_*'
+                  - '!apps/web/tauri/**/macos_*/**'
+                  - '!apps/web/tauri/**/macos.*'
+                  - '!apps/web/tauri/**/*.macos.*'
+                  - '!apps/web/tauri/**/linux_*'
+                  - '!apps/web/tauri/**/linux_*/**'
+                  - '!apps/web/tauri/**/desktop/**'
+                  - '!apps/web/tauri/**/desktop-*'
+                  - '!apps/web/tauri/**/desktop-*/**'
+                  - '!apps/web/tauri/**/desktop_*'
+                  - '!apps/web/tauri/**/desktop_*/**'
+                  - '!apps/web/tauri/**/desktop.*'
                   - '!apps/web/tauri/desktop-release.json'
                   - '!apps/web/tauri/.helix/**'
+                  - '!apps/web/tauri/**/*.md'
             "},
         ))
 }

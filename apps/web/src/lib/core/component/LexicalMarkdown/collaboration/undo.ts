@@ -5,6 +5,11 @@
 
 import { mergeRegister } from '@lexical/utils';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import {
+  COLLAB_SELECTION_TAG,
+  COLLABORATION_TAG,
+} from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import type { EditorState, LexicalEditor } from 'lexical';
 import {
   $isRangeSelection,
@@ -257,6 +262,13 @@ export function registerLoroHistory(
       return DISCARD_HISTORY_CANDIDATE;
     }
 
+    // Someone else's change, and putting this person's caret back after it,
+    // are not this person's history: they must not end the group their own
+    // typing is merging into.
+    if (tags.has(COLLABORATION_TAG) || tags.has(COLLAB_SELECTION_TAG)) {
+      return DISCARD_HISTORY_CANDIDATE;
+    }
+
     const changeType = getChangeType(
       prevState,
       nextState,
@@ -362,6 +374,41 @@ export function registerLoroHistory(
     editor.dispatchCommand(CAN_REDO_COMMAND, undoManager.canRedo());
   };
 
+  /**
+   * Runs one undo or redo in a trace. `editor.history.loro` covers Loro's undo
+   * manager and the mirror reading its result; `editor.history.apply` lasts
+   * until the reconciled editor update commits.
+   */
+  const traceHistoryStep = (
+    name: 'editor.undo' | 'editor.redo',
+    step: () => boolean
+  ) => {
+    const span = Telemetry.span(name);
+    span.setAttr('document.id', loroManager.documentId);
+    span.setAttr('editor.node_count', editor.getEditorState()._nodeMap.size);
+    const loroSpan = span.span('editor.history.loro');
+    const applied = loroSpan.run(step);
+    loroSpan.end();
+    span.setAttr('history.applied', applied);
+    if (!applied) {
+      span.end();
+      return;
+    }
+    const applySpan = span.span('editor.history.apply');
+    const unregisterApplied = editor.registerUpdateListener(
+      ({ tags, dirtyElements, dirtyLeaves }) => {
+        if (!tags.has(COLLABORATION_TAG)) return;
+        unregisterApplied();
+        applySpan.setAttr(
+          'editor.dirty_node_count',
+          dirtyElements.size + dirtyLeaves.size
+        );
+        applySpan.end();
+        span.end();
+      }
+    );
+  };
+
   const unregister = mergeRegister(
     editor.registerCommand(
       UNDO_COMMAND,
@@ -372,7 +419,7 @@ export function registerLoroHistory(
           isGroupActive = false;
         }
 
-        undoManager.undo();
+        traceHistoryStep('editor.undo', () => undoManager.undo());
 
         editor.dispatchCommand(CAN_UNDO_COMMAND, undoManager.canUndo());
         editor.dispatchCommand(CAN_REDO_COMMAND, undoManager.canRedo());
@@ -392,7 +439,7 @@ export function registerLoroHistory(
           isGroupActive = false;
         }
 
-        undoManager.redo();
+        traceHistoryStep('editor.redo', () => undoManager.redo());
 
         editor.dispatchCommand(CAN_UNDO_COMMAND, undoManager.canUndo());
         editor.dispatchCommand(CAN_REDO_COMMAND, undoManager.canRedo());

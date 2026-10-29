@@ -1,24 +1,58 @@
 import { isAgentContextData } from '../nodes/AgentContextNode';
 import { parseDatabaseQueryJson } from '../nodes/DatabaseQueryNode';
 
-export function parseUserMentions(text: string): string {
+type UserMentionData = {
+  userId?: string;
+  displayName?: string;
+  email?: string;
+};
+
+function replaceUserMentions(
+  text: string,
+  toText: (data: UserMentionData) => string
+): string {
   return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_, json) => {
     try {
-      const data = JSON.parse(json);
-      return userMentionDisplayText(data);
+      return toText(JSON.parse(json));
     } catch {
       return '';
     }
   });
 }
 
-function userMentionDisplayText(data: {
-  displayName?: string;
-  email?: string;
-}) {
+export function parseUserMentions(text: string): string {
+  return replaceUserMentions(text, userMentionDisplayText);
+}
+
+/**
+ * Flattens user mentions to the text the backend indexes for them, so a
+ * search query built from mention chips matches indexed messages.
+ */
+export function parseUserMentionsForSearch(text: string): string {
+  return replaceUserMentions(text, userMentionIndexedText);
+}
+
+function userMentionDisplayText(data: UserMentionData) {
   if (data.displayName) return data.displayName;
   if (data.email) return data.email.split('@')[0] || data.email;
   return '';
+}
+
+/**
+ * Mirrors `PlainTextFormatter::format_user` in
+ * `crates/mention_utils/src/parse.rs`, which produces the indexed text of a
+ * channel message: a Macro user is their email, a bot its display name, and
+ * any other principal "Guest". Change both together.
+ */
+function userMentionIndexedText(data: UserMentionData) {
+  const userId = data.userId ?? '';
+  if (userId.startsWith('bot|')) {
+    return data.displayName || data.email || 'Bot';
+  }
+  if (userId.startsWith('macro|')) {
+    return userId.slice('macro|'.length) || 'Guest';
+  }
+  return 'Guest';
 }
 
 export function parseContactMentions(text: string): string {
@@ -247,7 +281,7 @@ export function stripAgentContext(text: string): string {
 /**
  * Converts markdown text with XML mention tags to plain text.
  * Extracts the readable text from mention nodes:
- * - User mentions: email
+ * - User mentions: displayName (fallback to the email local part)
  * - Contact mentions: name (fallback to emailOrDomain)
  * - Date mentions: displayFormat
  * - Document mentions: documentName
@@ -260,9 +294,25 @@ export function stripAgentContext(text: string): string {
  * - Agent activity: nothing; the steps of a reply are not its text
  */
 export function markdownToPlainText(markdown: string): string {
+  return flattenMarkdown(markdown, parseUserMentions);
+}
+
+/**
+ * Like `markdownToPlainText`, but user mentions become the text the search
+ * index holds for them (see `parseUserMentionsForSearch`). Use it for text
+ * that is matched against indexed content, such as a search query.
+ */
+export function markdownToSearchText(markdown: string): string {
+  return flattenMarkdown(markdown, parseUserMentionsForSearch);
+}
+
+function flattenMarkdown(
+  markdown: string,
+  userMentions: (text: string) => string
+): string {
   const transforms: Array<(text: string) => string> = [
     parseAgentActivities,
-    parseUserMentions,
+    userMentions,
     parseContactMentions,
     parseDateMentions,
     parseGroupMentions,

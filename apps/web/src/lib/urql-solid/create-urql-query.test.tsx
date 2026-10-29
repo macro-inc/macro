@@ -2,12 +2,15 @@ import {
   type AnyVariables,
   type Client,
   CombinedError,
+  createRequest,
   type GraphQLRequest,
   gql,
+  makeOperation,
   type Operation,
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
+import { print } from 'graphql';
 import {
   type Accessor,
   createComponent,
@@ -300,6 +303,44 @@ describe('createUrqlQuery reactive state', () => {
     expect(fake.executions[3]?.document).toBe(OTHER_DOCUMENT);
   });
 
+  it('preserves shared documents and prior operations when the query changes', () => {
+    const firstDocument = gql`query InitialChannels { channels { id } }`;
+    const secondDocument = gql`query RecentChannels { channels { id name } }`;
+    const firstText = print(firstDocument);
+    const firstOperation = makeOperation(
+      'query',
+      createRequest<Data, Variables>(firstDocument, { input: 'first' }),
+      { url: 'https://localhost/graphql', requestPolicy: 'cache-first' }
+    );
+    const secondOperation = makeOperation(
+      'query',
+      createRequest<Data, Variables>(secondDocument, { input: 'first' }),
+      { url: 'https://localhost/graphql', requestPolicy: 'network-only' }
+    );
+    const fake = makeFakeClient();
+    const [document, setDocument] = createSignal(firstDocument);
+    const query = setup(() => ({
+      query: document(),
+      variables: { input: 'first' },
+      client: fake.client,
+    }));
+    fake.executions[0]?.next({
+      data: { value: 'first' },
+      operation: firstOperation,
+    });
+    setDocument(secondDocument);
+    fake.executions[1]?.next({
+      data: { value: 'second' },
+      operation: secondOperation,
+    });
+
+    expect(query.data?.value).toBe('second');
+    expect(query.operation?.query).toEqual(secondDocument);
+    expect(print(firstDocument)).toBe(firstText);
+    expect(firstOperation.context.requestPolicy).toBe('cache-first');
+    expect(firstOperation.query).toBe(firstDocument);
+  });
+
   it('disables synchronously, preserves state, and re-enables', () => {
     const fake = makeFakeClient();
     const [enabled, setEnabled] = createSignal(true);
@@ -462,6 +503,26 @@ describe('createUrqlQuery reactive state', () => {
     expect(query.stale).toBe(true);
     expect(descriptors).not.toHaveBeenCalledWith(second);
     expect(descriptors).not.toHaveBeenCalledWith(second.nested);
+  });
+
+  it('publishes initial data and settled loading state atomically', () => {
+    const fake = makeFakeClient();
+    const snapshots: Array<[string | undefined, boolean]> = [];
+    const dispose = createRoot((rootDispose) => {
+      const query = createUrqlQuery(() => activeOptions(fake.client));
+      createRenderEffect(() => {
+        snapshots.push([query.data?.value, query.isFetching]);
+      });
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ data: { value: 'loaded' } });
+
+    expect(snapshots).toEqual([
+      [undefined, true],
+      ['loaded', false],
+    ]);
   });
 
   it('publishes data and status together without notifying unchanged data consumers', () => {

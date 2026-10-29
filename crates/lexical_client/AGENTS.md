@@ -13,6 +13,9 @@ to read or render document content.
 - `src/parse_markdown.rs` (+ `src/parse_markdown/test.rs`): markdown → Lexical
   node tree parsing.
 - `src/types.rs`: the Lexical node/document types shared with the service.
+- `src/notion.rs`: `notion_to_loro_snapshot` (`POST /snapshot/notion`) and its
+  hand-copied request types; keep them in step with
+  `services/lexical-service/src/endpoints/notion-snapshot.ts`.
 
 ## Scope
 

@@ -68,6 +68,7 @@ export function useSaveDraftMutation(
 
 type DeleteDraftParams = {
   draftId: string;
+  draftGeneration?: number;
   /** Thread the draft belonged to, refetched so it leaves the drafts tab. */
   threadId?: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
@@ -86,7 +87,10 @@ export function useDeleteDraftMutation(
     mutationFn: async (vars: DeleteDraftParams) => {
       await throwOnErr(
         async () =>
-          await emailClient.deleteDraft({ id: vars.draftId }, vars.linkId)
+          await emailClient.deleteDraft(
+            { id: vars.draftId, draftGeneration: vars.draftGeneration },
+            vars.linkId
+          )
       );
     },
     ...withCallbacks<void, Error, DeleteDraftParams>(
@@ -132,6 +136,7 @@ export function useDeleteDraftMutation(
 export async function transferEmailDraft(input: {
   operationId: string;
   draftId: string;
+  draftGeneration?: number;
   sourceInboxId: string;
   destinationInboxId: string;
 }) {
@@ -142,6 +147,7 @@ export async function transferEmailDraft(input: {
         input.draftId,
         {
           operation_id: input.operationId,
+          draft_generation: input.draftGeneration ?? 0,
           destination_link_id: input.destinationInboxId,
         },
         input.sourceInboxId

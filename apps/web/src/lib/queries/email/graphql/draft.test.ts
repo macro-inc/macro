@@ -1,8 +1,12 @@
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
-import type { SaveEmailDraftMutation } from '@service-storage/graphql/generated/graphql';
+import {
+  type SaveEmailDraftMutation,
+  SoupDocument,
+} from '@service-storage/graphql/generated/graphql';
 import { createClient, type Operation } from '@urql/core';
 import { describe, expect, it } from 'vitest';
 import { map, pipe } from 'wonka';
+import { registerGraphqlSoupRevalidations } from '../../soup/graphql/active-queries';
 import {
   executeGraphqlDeleteEmailDraft,
   executeGraphqlSaveEmailDraft,
@@ -65,6 +69,7 @@ describe('optimistic draft saves', () => {
       calendarInvitations: [{ id: 'saved-invitation' }],
       createdAt: '2026-01-01T00:00:00Z',
       scheduledSendTime: '2027-01-01T12:00:00Z',
+      scheduledSendStatus: 'FAILED' as const,
       hasAttachments: true,
       attachmentsDraft: [
         {
@@ -104,6 +109,7 @@ describe('optimistic draft saves', () => {
           hasAttachments: true,
           createdAt: existing.createdAt,
           scheduledSendTime: existing.scheduledSendTime,
+          scheduledSendStatus: existing.scheduledSendStatus,
           calendarInvitations: existing.calendarInvitations,
         },
       },
@@ -348,6 +354,40 @@ it('discards a standalone draft with the original coalescing key and bindings fo
       (binding) => binding.responsePath.length === 0
     )
   ).toBe(true);
+});
+
+it('saves and discards without refetching the lists the cache maintains', async () => {
+  // A mounted list's pages. The returned draft and thread records update it.
+  const unregister = registerGraphqlSoupRevalidations(
+    () => [
+      {
+        document: SoupDocument,
+        variables: { input: { initial: { limit: 50 } } },
+      },
+    ],
+    undefined,
+    () => true
+  );
+  try {
+    const { client, operations, thread } = await standalone();
+    await executeGraphqlSaveEmailDraft(client, {
+      ...args,
+      existingThread: { ...thread, cacheProjection: 'server-capsule' },
+    });
+    await executeGraphqlDeleteEmailDraft(client, {
+      draftId: String(args.draftId),
+      threadDbId: args.threadDbId,
+      existingThread: thread,
+    });
+    for (const operation of operations) {
+      const documents = (
+        optimisticContextOf(operation)?.revalidations ?? []
+      ).map(({ operationName }) => operationName);
+      expect(documents).not.toContain('Soup');
+    }
+  } finally {
+    unregister();
+  }
 });
 
 it.each([false, true])(

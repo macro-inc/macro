@@ -1,12 +1,13 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Show } from 'solid-js';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { boardGroupColumns, laneLabel, withLaneHidden } from '../core/views';
 import { BoardCardTitlePicker } from './board-card-title-picker';
+import { ShownFieldsPicker } from './shown-fields-picker';
 
 type BoardLayout = Extract<ViewLayout, { kind: 'board' }>;
 
@@ -21,7 +22,12 @@ type BoardMenuItemProps = {
 export function BoardMenu(props: BoardMenuItemProps) {
   return (
     <Dropdown>
-      <Dropdown.Trigger variant="ghost" size="md" square label="Board menu">
+      <Dropdown.Trigger
+        aria-label="Board menu"
+        tooltip="Board menu"
+        variant="ghost"
+        size="icon-md"
+      >
         <DotsIcon class="size-4" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-48">
@@ -77,30 +83,14 @@ function GroupByItem(props: BoardMenuItemProps) {
 
 function CardFieldsItem(props: BoardMenuItemProps) {
   return (
-    <Submenu label="Card fields">
-      <For
-        each={props.columns.filter(
-          (column) => column.id !== props.layout.groupBy
-        )}
-      >
-        {(column) => (
-          <Dropdown.CheckboxItem
-            checked={props.layout.cardFields.includes(column.id)}
-            onChange={(shown) =>
-              props.onChange({
-                ...props.layout,
-                cardFields: shown
-                  ? [...props.layout.cardFields, column.id]
-                  : props.layout.cardFields.filter((id) => id !== column.id),
-              })
-            }
-            closeOnSelect={false}
-          >
-            <span class="truncate">{column.name}</span>
-          </Dropdown.CheckboxItem>
-        )}
-      </For>
-    </Submenu>
+    <ShownFieldsPicker
+      label="Card fields"
+      columns={props.columns.filter(
+        (column) => column.id !== props.layout.groupBy
+      )}
+      shown={props.layout.cardFields}
+      onChange={(cardFields) => props.onChange({ ...props.layout, cardFields })}
+    />
   );
 }
 

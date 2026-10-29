@@ -48,6 +48,7 @@ import {
   entityPropertyOptimisticMutationUuid,
   mapGraphqlEntityProperties,
   refetchGraphqlInitiativeProperties,
+  toGraphqlSetPropertyValue,
 } from './entity';
 
 type ControlledRequest = {
@@ -146,6 +147,14 @@ describe('buildEntityPropertiesInput', () => {
       ).toBeUndefined();
     }
   );
+
+  it('loads nothing for an entity type a newer service added', () => {
+    const fromNewerService = JSON.parse('"AGENT_SESSION"');
+
+    expect(
+      buildEntityPropertiesInput(fromNewerService, 'entity-1')
+    ).toBeUndefined();
+  });
 });
 
 describe('mapGraphqlEntityProperties', () => {
@@ -237,6 +246,16 @@ describe('entityPropertyOptimisticMutationUuid', () => {
         entityId: 'document-1',
         propertyDefinitionId: 'property:1',
       })
+    );
+  });
+});
+
+describe('toGraphqlSetPropertyValue', () => {
+  it('refuses to send a value type this build does not know', () => {
+    const fromNewerBuild = JSON.parse('{"type":"color","value":"#ff0000"}');
+
+    expect(() => toGraphqlSetPropertyValue(fromNewerBuild)).toThrow(
+      'Unsupported property value type: color'
     );
   });
 });

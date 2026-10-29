@@ -3,7 +3,7 @@ import { focusPopoverInput } from '@components/app/split-layout/utils/focusPopov
 import type { EditorControls } from '@core/component/LexicalMarkdown/builder/types';
 import type { Property } from '@property/types';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type ComponentProps, type ParentProps, Show } from 'solid-js';
+import { type ComponentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   type ProjectsContext,
@@ -20,10 +20,8 @@ vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/components/Button')),
   ...(await import('@app/components/ui/components/Checkbox')),
   ...(await import('@app/components/ui/components/EntityComposer')),
+  ...(await import('@app/components/ui/components/ToggleSwitch')),
   ...(await import('@app/components/ui/utils/classname')),
-}));
-vi.mock('@app/components/ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
@@ -183,7 +181,7 @@ it('hands its draft and one create with the drafted values to the host the momen
   const title = screen.getByRole('textbox', { name: 'Project name' });
   expect(document.activeElement).toBe(title);
   expect(
-    screen.getByRole('checkbox', { name: 'Share with my team' })
+    screen.getByRole('switch', { name: 'Share with my team' })
   ).toHaveProperty('checked', true);
   expect(screen.getByRole('button', { name: /Create Project/ })).toHaveProperty(
     'disabled',
@@ -197,7 +195,7 @@ it('hands its draft and one create with the drafted values to the host the momen
     }
   );
   fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Share with my team' }));
+  fireEvent.click(screen.getByRole('switch', { name: 'Share with my team' }));
   fireEvent.click(screen.getByRole('button', { name: /Create Project/ }));
   expect(service.create).toHaveBeenCalledOnce();
   expect(service.create).toHaveBeenCalledWith({

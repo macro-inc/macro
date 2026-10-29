@@ -36,6 +36,7 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
         canonical_root_id: None,
         parent: MessageParent::parse("document", document).unwrap(),
         actor: USER.to_owned().try_into().unwrap(),
+        triggered_via: None,
         triggered_by: None,
         input: PostMessage {
             id: None,
@@ -80,12 +81,15 @@ async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
         let mut input = command("message-doc-a", None, "Agent answer");
         input.actor = channel_sender::ChannelSender::new_from_bot(bot_id);
         input.triggered_by = Some(USER.to_owned());
+        input.triggered_via = Some("Claude Code".to_owned());
         let message = repo.create(input).await.unwrap();
         let read = repo
             .get(&message.parent, message.id)
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(read.triggered_by.as_deref(), Some(USER));
+        assert_eq!(read.triggered_via.as_deref(), Some("Claude Code"));
         assert_eq!(
             read.bot_profile,
             Some(BotSenderProfile {
@@ -1706,4 +1710,44 @@ async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
         .unwrap();
     assert!(deleted.deleted_at.is_some());
     assert!(deleted.content.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imported_call_discussion_needs_no_native_session(pool: PgPool) {
+    setup(&pool).await;
+    let call_id = Uuid::now_v7();
+    let permission_id = Uuid::now_v7().to_string();
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#,
+        permission_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO call_entities (id, user_id, created_via, share_permission_id) VALUES ($1, $2, 'import', $3)",
+        call_id,
+        USER,
+        permission_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::Call(call_id);
+    assert!(repo.parent_exists(&parent).await.unwrap());
+    repo.create(call_message(call_id, "Notes from an external call"))
+        .await
+        .unwrap();
+    repo.create(call_message(call_id, "Follow-up discussion"))
+        .await
+        .unwrap();
+    assert_eq!(repo.replies(&parent, call_id).await.unwrap().len(), 1);
+    sqlx::query!("DELETE FROM call_entities WHERE id = $1", call_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!repo.parent_exists(&parent).await.unwrap());
+    assert!(repo.get(&parent, call_id).await.unwrap().is_none());
+    assert!(repo.replies(&parent, call_id).await.unwrap().is_empty());
 }

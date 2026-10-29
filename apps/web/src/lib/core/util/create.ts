@@ -394,6 +394,40 @@ export async function createCodeFileFromText({
   return ok({ documentId: document.metadata.documentId });
 }
 
+/** Create a native Canvas whose shared snapshot is ready before navigation or AI use. */
+export async function createCanvasFile(args: {
+  title?: string;
+  projectId?: string;
+  source?: string;
+}) {
+  const result = await storageServiceClient.createCanvasDocument({
+    documentName: args.title ?? 'New Canvas',
+    projectId: args.projectId,
+  });
+  fireAndForget(invalidateUserQuota(), 'create-entity');
+  if (result.isErr()) return { error: 'Canvas creation failed.' };
+  const { documentId, documentMetadata, token } = result.value;
+  seedDocumentLoadBundle(documentId, {
+    documentMetadata,
+    userAccessLevel: AccessLevel.owner,
+    token,
+  });
+  setPreviewOnCreate({
+    itemId: documentId,
+    itemType: 'document',
+    name: args.title ?? 'New Canvas',
+    fileType: 'canvas',
+  });
+  refreshCreatedSoupEntity(documentId, 'document');
+  analytics.track('create_entity', {
+    entityType: 'canvas',
+    entityId: documentId,
+    projectId: args.projectId,
+    source: args.source,
+  });
+  return { documentId };
+}
+
 export async function createCanvasFileFromJsonString(args: {
   json: string;
   title?: string;

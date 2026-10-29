@@ -111,6 +111,10 @@ impl InitError {
 impl IntoResponse for InitError {
     fn into_response(self) -> Response {
         let status_code = self.status_code();
+        let headers = match &self {
+            InitError::ProviderError(error) => super::provider_error::provider_error_headers(error),
+            _ => axum::http::HeaderMap::new(),
+        };
 
         match self {
             InitError::SharedInboxConflict {
@@ -142,7 +146,7 @@ impl IntoResponse for InitError {
                 }),
             )
                 .into_response(),
-            other => (status_code, other.to_string()).into_response(),
+            other => (status_code, headers, other.to_string()).into_response(),
         }
     }
 }
@@ -251,7 +255,10 @@ pub async fn handler(
     }
     // Init runs on every authentication, so its expected no-op outcomes (400s)
     // must not error-log. The span skips the auto err event and the result is
-    // classified here, inside the span, where user fields still attach.
+    // classified here, inside the span, where user fields still attach. An
+    // already initialized inbox is the everyday case and stays at debug; any
+    // other decline is rare and names its outcome so a failed connect can be
+    // found by link id.
     let link_id = query.link_id;
     let owner = authorization
         .authorization
@@ -265,8 +272,10 @@ pub async fn handler(
         let status = e.status_code();
         if status.is_server_error() {
             tracing::error!(error = ?e, "init failed");
-        } else {
+        } else if matches!(e, InitError::AlreadyInitialized) {
             tracing::debug!(error = %e, "init declined");
+        } else {
+            tracing::info!(?link_id, status = status.as_u16(), outcome = %e, "init declined");
         }
         cleanup_in_progress_link_on_failure(&db, link_id, &owner, e).await;
     }

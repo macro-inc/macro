@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use models_email::email::service::label::Label;
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
+use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
 
@@ -59,7 +59,7 @@ async fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
     let service = EmailApiClientServiceImpl::new(
         repository,
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     assert!(matches!(
@@ -70,8 +70,9 @@ async fn list_labels_uses_list_labels_quota_and_forwards_link_id() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(link_id, ApiOperationKind::ListLabels),
+            Call::Acquire(link_id, ApiOperationKind::ListLabels),
             Call::Token(link_id, TokenFreshness::Cached),
+            Call::Finish(link_id, Some(expected_error())),
         ]
     );
 }
@@ -85,7 +86,7 @@ async fn create_label_uses_create_quota_and_forwards_name() {
     let service = EmailApiClientServiceImpl::new(
         repository,
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     assert!(matches!(
@@ -96,8 +97,9 @@ async fn create_label_uses_create_quota_and_forwards_name() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(link_id, ApiOperationKind::CreateLabel),
+            Call::Acquire(link_id, ApiOperationKind::CreateLabel),
             Call::Token(link_id, TokenFreshness::Cached),
+            Call::Finish(link_id, Some(expected_error())),
         ]
     );
 }
@@ -111,7 +113,7 @@ async fn delete_label_uses_delete_quota_and_forwards_provider_id() {
     let service = EmailApiClientServiceImpl::new(
         repository,
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     assert_eq!(
@@ -122,8 +124,9 @@ async fn delete_label_uses_delete_quota_and_forwards_provider_id() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(link_id, ApiOperationKind::DeleteLabel),
+            Call::Acquire(link_id, ApiOperationKind::DeleteLabel),
             Call::Token(link_id, TokenFreshness::Cached),
+            Call::Finish(link_id, Some(expected_error())),
         ]
     );
 }

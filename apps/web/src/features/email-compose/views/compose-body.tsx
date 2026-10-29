@@ -2,6 +2,7 @@ import { EmailAttachmentPill } from '@app/features/email-message/components/atta
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import { keyboardShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/keyboard-shortcuts';
 import { isInlineMediaFileName } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { Telemetry } from '@macro-inc/observability';
@@ -22,6 +23,7 @@ import { createAttachmentViewer } from '../components/attachment-viewer';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { useCompose } from '../context/compose-context';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
+import { EMAIL_FORMAT_SHORTCUTS } from '../primitives/format-shortcuts';
 import { addUserMentionToCc } from '../primitives/mention-to-cc';
 
 false && fileFolderDrop;
@@ -49,11 +51,17 @@ export function ComposeBody(props: {
     });
   };
 
+  let unregisterFormatShortcuts: (() => void) | undefined;
   const captureEditor = (ed: LexicalEditor) => {
     logComposeBody('captureEditor called');
     setEditor(ed);
     ctx.captureEditor(ed);
+    unregisterFormatShortcuts?.();
+    unregisterFormatShortcuts = keyboardShortcutsPlugin({
+      shortcuts: EMAIL_FORMAT_SHORTCUTS,
+    })(ed);
   };
+  onCleanup(() => unregisterFormatShortcuts?.());
 
   logComposeBody('mounted', {
     initialHtmlLength: ctx.initialHtml()?.length ?? 0,
@@ -100,9 +108,10 @@ export function ComposeBody(props: {
             editor()?.focus();
           }}
           use:fileFolderDrop={{
-            onDragStart: (valid) => setIsDragging(valid),
+            onDragStart: (valid) => setIsDragging(valid && !ctx.disabled()),
             onDragEnd: () => setIsDragging(false),
             onDrop: (files, dirs, event) => {
+              if (ctx.disabled()) return;
               const ed = editor();
               const media =
                 ed && event
@@ -174,6 +183,7 @@ export function ComposeBody(props: {
               }}
               portalScope="local"
               onPasteFilesAndDirs={(files, directories) => {
+                if (ctx.disabled()) return;
                 const ed = editor();
                 if (!ed) return;
                 ctx.bodyActions.insertFiles(ed, {
@@ -224,7 +234,7 @@ function AttachmentItem(props: {
               fileName: attachment().file.name,
               mimeType: attachment().file.type,
             }}
-            removable
+            removable={!ctx.disabled()}
             onRemove={handleRemove}
             onClick={props.onOpen}
           />
@@ -239,7 +249,7 @@ function AttachmentItem(props: {
                 : attachment().fileName,
               mimeType: attachment().contentType,
             }}
-            removable
+            removable={!ctx.disabled()}
             onRemove={handleRemove}
             onClick={props.onOpen}
           />
@@ -258,7 +268,7 @@ function AttachmentItem(props: {
               fileName: attachment().fileName,
               mimeType: attachment().mimeType,
             }}
-            removable
+            removable={!ctx.disabled()}
             onRemove={handleRemove}
             onClick={props.onOpen}
           />

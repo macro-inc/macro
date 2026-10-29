@@ -122,8 +122,10 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "UpdateInitiativeSharing",
         "ReadInitiativeActivity",
         "SetEntityProperty",
-        "CommentOnDocument",
-        "ResolveDocumentComment",
+        "ReadDiscussion",
+        "Comment",
+        "CommentOnText",
+        "ResolveComment",
         "CreateProject",
         "ReadProject",
     ];
@@ -160,8 +162,8 @@ fn app_item_actions_are_available_in_every_host() {
         "DeleteChannelMessage",
         "ReactToChannelMessage",
         "OpenDirectMessage",
-        "EditDocumentComment",
-        "DeleteDocumentComment",
+        "EditComment",
+        "DeleteComment",
         "CreateSkill",
         "MoveToTrash",
         "DuplicateItem",
@@ -596,7 +598,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let direct = tools_for_agent_code_mode();
     let sdk = code_mode_tools();
     assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
-    for name in ["NameSearch", "ReadContent", "ListEntities"] {
+    for name in ["ReadContent"] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
@@ -604,6 +606,8 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "DisplayResults",
+        "NameSearch",
+        "ListEntities",
         "ContentSearch",
         "CreateDocument",
         "ListSkills",
@@ -612,6 +616,10 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "GenerateImage",
         "CreateRoutine",
         "EditSpreadsheet",
+        "ReadCanvas",
+        "RenderCanvas",
+        "ApplyCanvasEdits",
+        "EditCanvas",
         "EditPresentation",
         "EditDocument",
         "Subagent",
@@ -647,24 +655,14 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     );
     let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
     let eager = deferred.request_schemas().unwrap();
-    assert!(!eager.iter().any(|schema| schema.name == "ListEntities"));
-    for name in ["ContentSearch", "EditDocument"] {
+    for name in [
+        "ListEntities",
+        "NameSearch",
+        "ContentSearch",
+        "EditDocument",
+    ] {
         assert!(eager.iter().any(|schema| schema.name == name), "{name}");
     }
-    assert!(
-        deferred
-            .searchable_catalog()
-            .iter()
-            .all(|tool| tool.name != "ListEntities")
-    );
-    assert!(deferred.routing_description("ListEntities").is_none());
-    assert!(deferred.routing_description("NameSearch").is_none());
-    assert!(
-        deferred
-            .searchable_catalog()
-            .iter()
-            .all(|t| t.name != "NameSearch")
-    );
     for name in ["SendEmail", "CreateCalendarEvent"] {
         assert!(standard.toolset.tools.contains_key(name));
         assert!(sdk.tools.contains_key(name));
@@ -682,4 +680,93 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
         assert!(!tools_for(host).prompt.to_string().contains(&routing));
     }
+}
+
+#[test]
+fn session_reader_is_available_to_every_conversation_host_and_mcp() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        assert!(tools.toolset.tools.contains_key("ReadAgentSession"));
+        assert!(
+            !tools
+                .deferred
+                .iter()
+                .any(|tool| tool.name == "ReadAgentSession")
+        );
+    }
+    assert!(subagent_toolset().tools.contains_key("ReadAgentSession"));
+    let code_mode = tools_for_agent_code_mode();
+    assert!(code_mode.toolset.tools.contains_key("ReadAgentSession"));
+    assert!(
+        !code_mode
+            .deferred
+            .iter()
+            .any(|tool| tool.name == "ReadAgentSession")
+    );
+}
+
+#[test]
+fn conversation_tools_only_advertise_new_sessions() {
+    for tools in [
+        tools_for(AiHost::Chat),
+        tools_for(AiHost::AgentSession),
+        tools_for(AiHost::ChannelBot),
+        tools_for(AiHost::Mcp),
+        tools_for_agent_code_mode(),
+    ] {
+        assert!(!tools.toolset.tools.contains_key("ReadChat"));
+        assert!(!tools.prompt.to_string().contains("ReadChat"));
+        for name in [
+            "ReadAgentSession",
+            "ReadAgentSessionSharing",
+            "UpdateAgentSessionSharing",
+            "CreateAgentSession",
+            "ManageAgentSession",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "missing {name}");
+        }
+        for schema in tools.toolset.request_schemas().unwrap() {
+            let json = serde_json::to_string(&schema.schema).unwrap();
+            if [
+                "NameSearch",
+                "ContentSearch",
+                "ListEntities",
+                "RenameItem",
+                "MoveToTrash",
+                "MoveToProject",
+                "DuplicateItem",
+                "UpdateSharing",
+                "ShareWithChannel",
+                "SetFavorite",
+                "GetEntityProperties",
+                "SetEntityProperty",
+                "BulkSetEntityPropertyOptions",
+                "ListNotifications",
+            ]
+            .contains(&schema.name.as_str())
+            {
+                assert!(
+                    !json.contains("\"chat\""),
+                    "{} advertises legacy chats",
+                    schema.name
+                );
+                assert!(
+                    !json.contains("\"chats\""),
+                    "{} advertises legacy chat search",
+                    schema.name
+                );
+                assert!(
+                    !json.contains("\"ai_chat\""),
+                    "{} advertises legacy chat listing",
+                    schema.name
+                );
+            }
+        }
+    }
+    assert!(!subagent_toolset().tools.contains_key("ReadChat"));
 }

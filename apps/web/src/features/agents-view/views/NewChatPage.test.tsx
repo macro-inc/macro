@@ -11,7 +11,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentsMode } from '../core/mode';
+import type { ComposerMode } from '../core/mode';
 import {
   buildAgentRoster,
   type PersistedAgentLike,
@@ -38,6 +38,14 @@ const mocks = vi.hoisted(() => ({
     mocks.preferredInmemModel = id;
   }),
   repositories: [] as { url: string; defaultBranch?: string }[],
+  autoEnabled: true,
+  chooseAgentMode: vi.fn(async (_prompt: string) => 'chat' as 'chat' | 'code'),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.autoEnabled, loading: false }),
+}));
+vi.mock('@queries/agents/mode-choice', () => ({
+  chooseAgentMode: (prompt: string) => mocks.chooseAgentMode(prompt),
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => mocks.touch,
@@ -226,9 +234,15 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
+/** Most cases exercise an explicit Chat or Code choice; Auto has its own. */
+let startInChat = true;
+
 beforeEach(() => {
   localStorage.clear();
+  startInChat = true;
   mocks.userId = () => 'user';
+  mocks.chooseAgentMode.mockClear();
+  mocks.autoEnabled = true;
 });
 
 function page(
@@ -236,7 +250,7 @@ function page(
   agents: PersistedAgentLike[] = [],
   availabilityLoading = false,
   runtimes: RuntimeLike[] = [],
-  mode?: AgentsMode
+  mode?: ComposerMode
 ) {
   const onStart = vi.fn();
   render(() => (
@@ -257,6 +271,8 @@ function page(
       onOpenRoster={vi.fn()}
     />
   ));
+  const chat = screen.queryByRole('radio', { name: 'Chat' });
+  if (mode === undefined && startInChat && chat) fireEvent.click(chat);
   return onStart;
 }
 function openAgents() {
@@ -422,7 +438,78 @@ describe('agent-led new conversation', () => {
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
   });
-  it('starts in Chat and switches to Code from the composer', async () => {
+  it('starts in Auto without an agent, model, or effort to pick', () => {
+    startInChat = false;
+    page();
+    expect(
+      (screen.getByRole('radio', { name: 'Auto' }) as HTMLInputElement).checked
+    ).toBe(true);
+    expect(
+      screen.getByRole('heading', { name: 'What should we work on?' })
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Agent' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Repository' })).toBeNull();
+  });
+  it('offers only Chat and Code without the Auto flag', () => {
+    mocks.autoEnabled = false;
+    const send = page();
+    expect(screen.queryByRole('radio', { name: 'Auto' })).toBeNull();
+    expect(
+      (screen.getByRole('radio', { name: 'Chat' }) as HTMLInputElement).checked
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(mocks.chooseAgentMode).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        botId: undefined,
+        modelOverride: 'chat-default',
+      })
+    );
+  });
+  it('sends a coding prompt in Auto to the usual coding agent with its defaults', async () => {
+    mocks.chooseAgentMode.mockResolvedValueOnce('code');
+    const send = page(true, [], false, [], undefined);
+    fireEvent.click(screen.getByRole('radio', { name: 'Auto' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Fix the login bug' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(mocks.chooseAgentMode).toHaveBeenCalledWith('Fix the login bug');
+    expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
+      prompt: 'Fix the login bug',
+      botId: CURSOR_BOT_ID,
+      repoUrl: undefined,
+    });
+  });
+  it('sends any other prompt in Auto to the chat agent with its model', async () => {
+    mocks.chooseAgentMode.mockResolvedValueOnce('chat');
+    const send = page();
+    fireEvent.click(screen.getByRole('radio', { name: 'Auto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      botId: undefined,
+      repoUrl: undefined,
+      modelOverride: 'chat-default',
+    });
+  });
+  it('skips the choice in Auto when no coding agent can start', () => {
+    const send = page(false);
+    fireEvent.click(screen.getByRole('radio', { name: 'Auto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(mocks.chooseAgentMode).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        botId: undefined,
+        modelOverride: 'chat-default',
+      })
+    );
+  });
+  it('starts in a remembered Chat and switches to Code from the composer', async () => {
     const send = page();
     expect(
       screen.getByRole('heading', { name: 'What should we work on?' })
@@ -561,13 +648,13 @@ describe('agent-led new conversation', () => {
       (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
     ).toBe('Keep this prompt');
   });
-  it('starts a new conversation on Choose repository, not the last used one', async () => {
+  it('starts a new conversation on Choose automatically, not the last used one', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
     mocks.recentUrls = ['https://github.com/macro-inc/macro'];
     const send = page(true, [], false, [], 'code');
     expect(
       screen.getByRole('button', { name: 'Repository' }).textContent
-    ).toContain('Choose repository');
+    ).toContain('Choose automatically');
     expect(
       screen.getByRole('button', { name: 'Repository' }).textContent
     ).not.toContain('macro-inc/macro');
@@ -634,7 +721,7 @@ describe('agent-led new conversation', () => {
       modelOverride: 'google/gemini-3.8-flash',
     });
   });
-  it.each(['claude-cloud', 'codex-cloud', 'future-runtime'])(
+  it.each(['codex-cloud', 'future-runtime'])(
     'shows the drawer for a saved %s coding agent without forwarding unsupported repository overrides',
     async (harness) => {
       const send = page(
@@ -706,7 +793,7 @@ describe('agent-led new conversation', () => {
     });
   });
 
-  it('keeps a disconnected paired agent visible with its availability reason', () => {
+  it('keeps a disconnected paired agent visible and offers to reconnect it', () => {
     page(
       true,
       [
@@ -723,8 +810,11 @@ describe('agent-led new conversation', () => {
     );
     openAgents();
     const row = screen.getByRole('menuitem', { name: /Laptop agent/ });
-    expect(row.getAttribute('aria-disabled')).toBe('true');
-    expect(row.textContent).toContain('Its runtime is disconnected');
+    // The row stays clickable: selecting it opens Settings → Runtimes, where
+    // the runtime can be restarted (one click on desktop) or re-paired.
+    expect(row.getAttribute('aria-disabled')).not.toBe('true');
+    expect(row.getAttribute('title')).toBe('Its runtime is disconnected');
+    expect(row.textContent).toContain('Reconnect runtime');
   });
 
   it.each([false, true])(
@@ -752,13 +842,14 @@ describe('agent-led new conversation', () => {
       }).filter((agent) => agent.kind === 'coder');
       const onCreate = vi.fn();
       const onSelect = vi.fn();
+      const onConnect = vi.fn();
       render(() => (
         <AgentPicker
           agents={roster}
           selected={roster[0]}
           loading={false}
           onSelect={onSelect}
-          onConnect={vi.fn()}
+          onConnect={onConnect}
           onCreate={onCreate}
         />
       ));
@@ -774,7 +865,9 @@ describe('agent-led new conversation', () => {
       expect(saved.textContent).toContain('Reviewer');
       expect(saved.textContent).toContain('Laptop · Sonnet 5.5');
       expect(offline.textContent).toContain('Offline agent');
-      expect(offline.textContent).toContain('Its runtime is disconnected');
+      // The disconnected row stays clickable: it offers to reconnect the
+      // runtime (opens Settings → Runtimes) and keeps the reason as a tooltip.
+      expect(offline.textContent).toContain('Reconnect runtime');
       expect(
         within(picker).queryByText('Connect the runtime to load models.')
       ).toBeNull();
@@ -782,13 +875,26 @@ describe('agent-led new conversation', () => {
       const unavailable = within(offline).getByRole(
         touch ? 'button' : 'menuitem'
       );
+      // The desktop row keeps the reason as a tooltip; the drawer row has no
+      // title attribute.
+      if (!touch) {
+        expect(unavailable.getAttribute('title')).toBe(
+          'Its runtime is disconnected'
+        );
+      }
       expect(
         touch
           ? unavailable.hasAttribute('disabled')
           : unavailable.getAttribute('aria-disabled') === 'true'
-      ).toBe(true);
-      fireEvent.click(unavailable);
-      expect(onSelect).not.toHaveBeenCalled();
+      ).toBe(false);
+      if (touch) {
+        fireEvent.click(unavailable);
+        expect(onSelect).not.toHaveBeenCalled();
+        expect(onConnect).toHaveBeenCalledOnce();
+        // Connecting closes the drawer; reopen it for the create assertion.
+        fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+        await screen.findByRole('dialog');
+      }
       const create = within(picker).getByRole(touch ? 'button' : 'menuitem', {
         name: 'Create agent',
       });
@@ -1227,7 +1333,7 @@ it('does not restore a failed first prompt into another account', () => {
   const [identity, setIdentity] = createSignal<string | undefined>('alice');
   mocks.userId = identity;
   mocks.attachments = [];
-  const start = page();
+  const start = page(true, [], false, [], 'chat');
   fireEvent.input(screen.getByLabelText('Draft'), {
     target: { value: 'Alice prompt' },
   });
@@ -1235,6 +1341,26 @@ it('does not restore a failed first prompt into another account', () => {
   setIdentity('bob');
   start.mock.calls[0][0].onFailure();
   expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+});
+
+it('drops an Auto prompt when another account signs in while it is being routed', async () => {
+  const [identity, setIdentity] = createSignal<string | undefined>('alice');
+  mocks.userId = identity;
+  mocks.attachments = [];
+  let route!: (mode: 'chat' | 'code') => void;
+  mocks.chooseAgentMode.mockReturnValueOnce(
+    new Promise((resolve) => {
+      route = resolve;
+    })
+  );
+  const start = page(true, [], false, [], 'auto');
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(mocks.chooseAgentMode).toHaveBeenCalledWith('Prompt');
+  setIdentity('bob');
+  route('code');
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(start).not.toHaveBeenCalled();
 });
 
 it('clears delivered attachments after switching away and back to the submitting account', () => {

@@ -237,7 +237,7 @@ export function createDocxEditor(options: DocxEditorOptions) {
     );
     if (editing && !options.editable) return;
     queue.push({ ops, group });
-    fireAndForget(pump(), 'block-write');
+    fireAndForget(pump(), 'docx-editor');
   }
 
   async function undo() {
@@ -245,7 +245,11 @@ export function createDocxEditor(options: DocxEditorOptions) {
       collab.undo();
       return;
     }
-    take(await engine.undo(docKey));
+    try {
+      take(await engine.undo(docKey));
+    } catch (error) {
+      options.onError?.(error);
+    }
   }
 
   async function redo() {
@@ -253,7 +257,11 @@ export function createDocxEditor(options: DocxEditorOptions) {
       collab.redo();
       return;
     }
-    take(await engine.redo(docKey));
+    try {
+      take(await engine.redo(docKey));
+    } catch (error) {
+      options.onError?.(error);
+    }
   }
 
   async function setMarkup(next: boolean) {

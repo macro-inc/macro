@@ -72,5 +72,8 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
         User.byId(client, userId),
       ),
     }))
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('macro sdk: unknown channel event', unknown);
+      return undefined;
+    });
 }

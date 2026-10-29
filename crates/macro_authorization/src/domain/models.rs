@@ -13,12 +13,33 @@ use uuid::Uuid;
 /// A user identity that has been authenticated or verified for a bot.
 #[derive(Clone, Debug)]
 pub struct MacroUserAuthentication {
+    /// The kind of credential that established this user.
+    pub origin: CredentialOrigin,
     /// Signed agent attribution for user-authorized SDK messages, not a bot credential.
     pub agent_id: Option<BotId>,
     /// The user's parsed Macro identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The authenticated user context.
     pub user_context: UserContext,
+}
+
+/// The kind of credential that authenticated a user, set where the credential
+/// is verified. Policies that need a person's own session match on it rather
+/// than on request hints.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialOrigin {
+    /// A personal session JWT.
+    Session,
+    /// A verified Macro API JWT (SDK, MCP), with or without agent attribution.
+    MacroApiJwt,
+    /// A user API key.
+    UserApiKey,
+    /// The acting user of a verified bot credential.
+    Bot,
+    /// The acting user of a verified harness credential.
+    Harness,
+    /// The acting user claimed by a verified internal service caller.
+    Internal,
 }
 
 /// The access scope selected for a bot-authorized request.
@@ -265,6 +286,31 @@ pub struct ValidatedIdentity {
     pub organization_id: Option<i32>,
     /// Permissions established while validating or enriching the identity.
     pub permissions: Option<HashSet<String>>,
+}
+
+/// A validated identity together with its cryptographically established origin.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatedCredential {
+    /// Identity established by credential validation.
+    pub identity: ValidatedIdentity,
+    /// The kind of credential that was verified.
+    pub origin: CredentialOrigin,
+}
+
+impl ValidatedCredential {
+    /// A personal session for this user context, with no agent attribution.
+    pub fn session(context: UserContext) -> Self {
+        Self {
+            origin: CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: context.user_id,
+                fusion_user_id: context.fusion_user_id,
+                organization_id: context.organization_id,
+                permissions: context.permissions,
+            },
+        }
+    }
 }
 
 /// Errors returned when a credential cannot authorize a caller.

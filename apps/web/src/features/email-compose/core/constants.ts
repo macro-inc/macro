@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern';
+
 export const MACRO_EMAIL_SIGNATURE = '-- Sent with Macro';
 
 export const MAX_ATTACHMENTS_BYTES_SIZE = 18_000_000;
@@ -7,6 +9,17 @@ export const MAX_ATTACHMENTS_BYTES_SIZE = 18_000_000;
 // uploads up to 150 MB, but the mailbox bounces anything over its send size.
 export function attachmentLimitBytes(provider?: 'GMAIL' | 'OUTLOOK'): number {
   return provider === 'OUTLOOK' ? 25_000_000 : MAX_ATTACHMENTS_BYTES_SIZE;
+}
+
+// Exchange stores at most 255 characters of a subject. Gmail has no documented
+// subject limit short of its message size cap.
+export function subjectLimitChars(
+  provider?: 'GMAIL' | 'OUTLOOK'
+): number | undefined {
+  return match(provider)
+    .with('OUTLOOK', () => 255)
+    .with('GMAIL', undefined, () => undefined)
+    .exhaustive();
 }
 
 // Stable id for the compose "To" input so the create gesture can focus it

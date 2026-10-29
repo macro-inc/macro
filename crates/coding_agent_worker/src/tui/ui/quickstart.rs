@@ -20,13 +20,21 @@ pub(crate) fn render_quickstart(
     let discovered_height = (discovered_lines(setup, 0).len() as u16 + 2).clamp(3, 12);
     let area = centered(
         84,
-        frame.area().height.saturating_sub(2).min(36),
+        frame.area().height.saturating_sub(2).min(38),
         frame.area(),
     );
     frame.render_widget(Clear, area);
-    let block = modal("Quickstart", ACCENT).padding(Padding::new(2, 2, 1, 1));
+    let vertical_padding = u16::from(area.height >= 24);
+    let block =
+        modal("Quickstart", ACCENT).padding(Padding::new(2, 2, vertical_padding, vertical_padding));
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    let intro_height = if setup.status.is_some() { 3 } else { 2 };
+    let permission_warning_height = if setup.allow_permission_bypass { 2 } else { 0 };
+    let scope_warning_height = u16::from(setup.scope == IdentityScope::Team);
+    // Custom, workspace, access, Full Access and submit occupy eleven fixed rows.
+    let form_height =
+        intro_height + discovered_height + 11 + permission_warning_height + scope_warning_height;
     let [
         intro,
         discovered_area,
@@ -42,19 +50,19 @@ pub(crate) fn render_quickstart(
         _details_spacer,
         details_area,
     ] = Layout::vertical([
-        Constraint::Length(3),
+        Constraint::Length(intro_height),
         Constraint::Length(discovered_height),
         Constraint::Length(3),
+        Constraint::Fill(1),
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(2),
-        Constraint::Min(1),
         Constraint::Length(3),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(permission_warning_height),
+        Constraint::Fill(1),
+        Constraint::Length(3),
+        Constraint::Length(scope_warning_height),
+        Constraint::Fill(1),
+        Constraint::Length(u16::from(inner.height > form_height)),
     ])
     .areas(inner);
 
@@ -132,8 +140,8 @@ pub(crate) fn render_quickstart(
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
-                format!("{}{:<14}", focus_marker(permissions_focused), "Full Access"),
-                Style::new().fg(DIM),
+                format!("{}{:<12}", focus_marker(permissions_focused), "Full Access"),
+                Style::new().bold(),
             ),
             Span::styled(
                 if setup.allow_permission_bypass {
@@ -143,7 +151,16 @@ pub(crate) fn render_quickstart(
                 },
                 focus_style(permissions_focused),
             ),
-        ])),
+        ]))
+        .block(
+            Block::default()
+                .title(" Suggested ")
+                .title_style(Style::new().bold())
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::new().fg(THEME.border))
+                .padding(Padding::horizontal(1)),
+        ),
         permissions_area,
     );
     if setup.allow_permission_bypass {

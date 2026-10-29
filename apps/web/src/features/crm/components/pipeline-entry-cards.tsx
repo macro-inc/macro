@@ -1,8 +1,8 @@
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import LockIcon from '@phosphor/lock-simple.svg';
-import TableIcon from '@phosphor/table.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import LockIcon from '@icon/system/regular/lock-simple.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button } from '@ui';
 import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
@@ -34,7 +34,8 @@ export function PipelineEntryCards(props: {
   entries: PipelineEntry[];
   renderCell: (
     entry: Accessor<PipelineEntry>,
-    cell: Accessor<PipelineEntryCell>
+    cell: Accessor<PipelineEntryCell>,
+    wrap: Accessor<boolean>
   ) => JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
 }) {
@@ -63,7 +64,9 @@ export function PipelineEntryCards(props: {
               {(entry) => (
                 <PipelineEntryCard
                   entry={entry()}
-                  renderCell={(cell) => props.renderCell(entry, cell)}
+                  renderCell={(cell, wrap) =>
+                    props.renderCell(entry, cell, wrap)
+                  }
                   onOpenPipeline={
                     props.onOpenPipeline
                       ? () => props.onOpenPipeline?.(entry().pipeline.id)
@@ -81,27 +84,38 @@ export function PipelineEntryCards(props: {
 
 function PipelineEntryCard(props: {
   entry: PipelineEntry;
-  renderCell: (cell: Accessor<PipelineEntryCell>) => JSX.Element;
+  renderCell: (
+    cell: Accessor<PipelineEntryCell>,
+    wrap: Accessor<boolean>
+  ) => JSX.Element;
   onOpenPipeline?: () => void;
 }) {
+  let card: HTMLElement | undefined;
   const [expanded, setExpanded] = createSignal(false);
   const hidden = () => props.entry.cells.length - ROW_FIELDS;
   const shown = () => {
     const all = rows(props.entry.cells);
     return expanded() ? all : all.slice(0, 1);
   };
+  const toggle = () => {
+    setExpanded((open) => !open);
+    // Collapsing from the pinned control can leave the now shorter card above the view.
+    if (!expanded()) card?.scrollIntoView({ block: 'nearest' });
+  };
   return (
     <article
-      class="flex min-w-0 flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel"
+      ref={card}
+      class="flex min-w-0 flex-col rounded-xl border border-edge-muted bg-panel"
       aria-label={props.entry.pipeline.name}
     >
-      <header class="flex h-10 items-center gap-2.5 border-b border-edge-muted bg-hover pl-3.5 pr-1.5">
+      <header class="flex h-10 items-center gap-2.5 rounded-t-xl border-b border-edge-muted bg-hover pl-3.5 pr-1.5">
         <TableIcon class="size-4 shrink-0 text-ink-muted" />
         <span class="min-w-0 truncate text-[13px] font-medium">
           {props.entry.pipeline.name}
         </span>
         <Show when={!props.entry.pipeline.shared}>
           <LockIcon
+            aria-hidden={false}
             role="img"
             aria-label="Private pipeline"
             class="size-3 shrink-0 text-ink-placeholder"
@@ -111,21 +125,23 @@ function PipelineEntryCard(props: {
         <Show when={props.onOpenPipeline}>
           {(open) => (
             <Button
+              variant="ghost"
+              aria-label={`Open ${props.entry.pipeline.name}`}
+              tooltip={`Open ${props.entry.pipeline.name}`}
               size="icon-sm"
-              label={`Open ${props.entry.pipeline.name}`}
               onClick={() => open()()}
             >
-              <ArrowUpRightIcon />
+              <ArrowUpRightIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
       </header>
-      <div class="flex flex-col gap-3 px-4 pb-3.5 pt-3">
+      <div class="@container/card flex flex-col gap-3 px-4 pb-3.5 pt-3">
         <Key each={shown()} by={(row) => row[0]?.column.id}>
           {(row) => (
             <div
-              class="grid gap-x-6"
-              style={{ 'grid-template-columns': rowColumns(row()) }}
+              class="grid grid-cols-2 gap-x-6 gap-y-3 @lg/card:grid-cols-(--row-columns)"
+              style={{ '--row-columns': rowColumns(row()) }}
             >
               <Key each={row()} by={(cell) => cell.column.id}>
                 {(cell) => (
@@ -143,7 +159,7 @@ function PipelineEntryCard(props: {
                     </div>
                     {/* Cells pad their own hit area; pull it out to align values with the labels. */}
                     <div class="-mx-2.5 -my-1.5 min-w-0">
-                      {props.renderCell(cell)}
+                      {props.renderCell(cell, expanded)}
                     </div>
                   </div>
                 )}
@@ -151,17 +167,25 @@ function PipelineEntryCard(props: {
             </div>
           )}
         </Key>
-        <Show when={hidden() > 0}>
+      </div>
+      <Show when={hidden() > 0}>
+        {/* An expanded card can be taller than the view; its control stays pinned in sight.
+            Sticky offsets start inside the record scroller's 3rem bottom padding, so reach past it. */}
+        <footer
+          class="rounded-b-xl border-t border-edge-muted bg-panel px-4 py-1.5"
+          classList={{ 'sticky -bottom-12': expanded() }}
+        >
           <Button
             variant="ghost"
             size="xs"
-            class="-ml-2 self-start text-ink-muted"
-            onClick={() => setExpanded((open) => !open)}
+            class="-ml-2 text-ink-muted"
+            aria-expanded={expanded()}
+            onClick={toggle}
           >
             {expanded() ? 'Show less' : `Show ${hidden()} more`}
           </Button>
-        </Show>
-      </div>
+        </footer>
+      </Show>
     </article>
   );
 }

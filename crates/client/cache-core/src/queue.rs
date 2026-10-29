@@ -50,11 +50,23 @@ pub struct StoredMutation {
     pub lease_expires_at_ms: Option<i64>,
     /// Last retryable network error, for diagnostics.
     pub last_error: Option<String>,
-    /// Wall-clock enqueue time, for diagnostics.
+    /// Wall-clock time the write was first enqueued, for diagnostics. A row
+    /// replacing an unsent row for the same UUID keeps the earlier time.
     pub created_at_ms: i64,
 }
 
+/// Largest integer a JavaScript number represents exactly.
+const MAX_SAFE_JS_INTEGER: i64 = (1 << 53) - 1;
+
 impl StoredMutation {
+    /// Enqueue time for JavaScript callers, or `None` when a number cannot
+    /// carry it exactly.
+    pub fn enqueued_at_ms(&self) -> Option<i64> {
+        (0..=MAX_SAFE_JS_INTEGER)
+            .contains(&self.created_at_ms)
+            .then_some(self.created_at_ms)
+    }
+
     /// Creates an unclaimed queue row for `request`.
     pub fn new(request: MutationRequest, created_at_ms: i64) -> Self {
         Self {
@@ -333,6 +345,9 @@ pub struct MutationInspection {
     pub client_metadata: Option<Json>,
     /// Original optimistic response for migrating durable local intent.
     pub optimistic_data: Json,
+    /// Wall-clock first-enqueue time in epoch milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enqueued_at_ms: Option<i64>,
 }
 
 impl TryFrom<QueuedMutation> for MutationInspection {
@@ -340,6 +355,7 @@ impl TryFrom<QueuedMutation> for MutationInspection {
 
     fn try_from(queued: QueuedMutation) -> Result<Self, Self::Error> {
         let source = decode_optimistic_source(&queued.optimistic.optimistic_data_json)?;
+        let enqueued_at_ms = queued.mutation.enqueued_at_ms();
         let request = queued.mutation.request;
         Ok(Self {
             transaction_id: queued.id.to_string(),
@@ -351,6 +367,7 @@ impl TryFrom<QueuedMutation> for MutationInspection {
                 .map_err(|error| error.to_string())?,
             client_metadata: source.client_metadata,
             optimistic_data: source.mutation_data,
+            enqueued_at_ms,
         })
     }
 }

@@ -199,6 +199,7 @@ export interface SoupViewContextValues {
   fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
   hasNextGroupPage: (groupKey: string) => boolean;
+  groupPageError: (groupKey: string) => unknown;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -795,6 +796,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   });
 
   const search = createSearchState({
+    surface: () => activeListView() ?? 'soup',
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
@@ -1139,6 +1141,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const groupQueries = createGroupedSoupQueries({
+    groupedPaging: () => itemsQuery.groupedPaging,
     initialPage: createMemo(() => {
       if (itemsSource().isPlaceholderData()) return;
 
@@ -1175,6 +1178,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const hasNextGroupPage = (groupKey: string) =>
     groupQueryFor(groupKey)?.hasNextPage() ?? false;
+
+  const groupPageError = (groupKey: string) =>
+    groupQueryFor(groupKey)?.error() ?? null;
 
   const resolveGroupLabel = (key: string): string | undefined => {
     const field = groupByField();
@@ -1590,6 +1596,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     fetchNextGroupPage,
     isFetchingGroupPage,
     hasNextGroupPage,
+    groupPageError,
   };
 
   return { context, rows: builtRows };

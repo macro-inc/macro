@@ -30,6 +30,8 @@ mod schema_ops;
 mod sharing;
 #[cfg(feature = "gateway")]
 mod tables;
+#[cfg(feature = "gateway")]
+mod team_share;
 mod transfer;
 #[cfg(feature = "gateway")]
 mod undo;

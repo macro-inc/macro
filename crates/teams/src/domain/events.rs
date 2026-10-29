@@ -144,6 +144,8 @@ pub enum TeamJoinMethod {
     },
     /// The user joined because their email matched the team's automatic-join domain.
     DomainAutoJoin,
+    /// The user opened the team's shareable invite link.
+    InviteLink,
 }
 
 /// Metadata for [`TeamTopicEvent::MemberJoined`].

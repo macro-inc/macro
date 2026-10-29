@@ -2,9 +2,9 @@ import { ModelCatalogMenu } from '@core/component/AI/component/input/ModelCatalo
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { buttonClasses, cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, Show } from 'solid-js';
@@ -95,8 +95,9 @@ function DesktopAgentPicker(props: AgentPickerProps) {
             : `${props.selected?.name ?? 'Choose agent'} · ${label()}`
         }
         class={cn(
-          'h-[33.75px] min-w-0 max-w-full gap-[5.625px] px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder',
-          props.triggerClass
+          'h-[33.75px] min-w-0 gap-[5.625px] px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder',
+          props.triggerClass,
+          'max-w-[min(18rem,100%)]'
         )}
       >
         <Show when={!rawModel()}>
@@ -173,7 +174,7 @@ function DesktopAgentPicker(props: AgentPickerProps) {
             </Show>
             <For each={groups()}>
               {(group) => (
-                <Dropdown.Group class="bg-transparent py-0">
+                <Dropdown.Group class="py-0">
                   <Dropdown.GroupLabel class="h-6 font-medium text-ink-muted">
                     {group.label}
                   </Dropdown.GroupLabel>
@@ -215,20 +216,16 @@ function DesktopAgentPicker(props: AgentPickerProps) {
               </p>
             </Show>
             <Show when={props.loading}>
-              <div
-                role="status"
-                class="bg-menu px-3 py-2 text-xs text-ink-muted"
-              >
+              <div role="status" class="px-3 py-2 text-xs text-ink-muted">
                 Loading agents…
               </div>
             </Show>
-            <Dropdown.Group class="items-end bg-transparent px-1.5 pt-1 pb-0">
+            <Dropdown.Group class="items-end px-1.5 pt-1 pb-0">
               <Dropdown.Item
                 closeOnSelect
                 class={buttonClasses({
-                  variant: 'strong',
+                  variant: 'secondary',
                   size: 'sm',
-                  glass: false,
                   class: 'w-auto gap-1.5 data-highlighted:overlay-hover',
                 })}
                 onSelect={() => {

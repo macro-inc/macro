@@ -88,6 +88,7 @@ impl From<EmailErr> for UpdateThreadLabelError {
             EmailErr::Unauthorized => UpdateThreadLabelError::Forbidden,
             EmailErr::InvalidDraft(_)
             | EmailErr::MessageDeliveryConflict(_)
+            | EmailErr::DraftGenerationConflict(_)
             | EmailErr::MessageAlreadySent(_)
             | EmailErr::ThreadHasNoInboundMessages => {
                 UpdateThreadLabelError::Conflict(err.to_string())

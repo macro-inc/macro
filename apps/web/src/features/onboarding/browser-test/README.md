@@ -28,6 +28,9 @@ bunx vite --config src/features/onboarding/browser-test/vite.config.ts
   the fixture follows the system color scheme. Overrides survive simulated redirects.
 - `/?view=signup` shows the signed-out slides; Google sign-up continues into the flow.
 - `/?view=flow&next=/channel/x` shows the signed-in flow with a deep link.
+- `/?view=flow&step=plan` opens that step. `step` must be a current step name.
+  Progress is stored in localStorage, so a later load without the query stays
+  on the saved step. Saved progress wins over `step`.
 
 Tests seed the world through `openFixture` in `fixture-page.ts`. They read the
 world and the recorded analytics through `window.onboardingFixture`.

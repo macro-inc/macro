@@ -10,7 +10,10 @@ import {
   isCalendarEventVisible,
   mapCalendarOccurrence,
 } from '../../calendar/types';
-import { safeConferenceUrl } from '../../calendar/utils/conference-link';
+import {
+  conferenceJoinUrl,
+  safeConferenceUrl,
+} from '../../calendar/utils/conference-link';
 import { calendarMacroCallUrl } from '../../calendar/utils/macro-call-link';
 import {
   isMeetingEvent,
@@ -94,7 +97,9 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
           id: event.id,
           title: event.title,
           color: event.calendar.color,
-          url,
+          url: url
+            ? conferenceJoinUrl(url, event.calendar.emailAddress)
+            : undefined,
           start: event.start,
           end: event.end,
           allDay: event.allDay,

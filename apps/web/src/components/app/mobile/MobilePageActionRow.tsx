@@ -31,7 +31,7 @@ export function MobilePageActionRow() {
   };
 
   return (
-    // Screen composers (0) and search scopes (100) take precedence.
+    // Screen composers (0) and search (100) take precedence.
     <FloatRegion region="accessory" priority={-1} active={isAvailable}>
       <div class="group/mobile-composer flex items-end justify-end gap-(--mobile-chrome-gutter) px-(--mobile-chrome-gutter)">
         {composer}

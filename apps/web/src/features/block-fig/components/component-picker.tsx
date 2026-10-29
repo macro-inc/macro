@@ -6,8 +6,8 @@
 
 import type { NodeRef } from '@core/fig-engine/design-types';
 import type { ComponentInfo } from '@core/fig-engine/types';
+import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
 import { Popover } from '@kobalte/core/popover';
-import DiamondsFour from '@phosphor/diamonds-four.svg';
 import { Layer } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { componentLabel, swapChoices } from '../core/design-system';
@@ -73,7 +73,7 @@ export function ComponentPicker(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="fig-editor-theme z-modal flex max-h-96 w-64 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
+            class="menu-surface fig-editor-theme z-modal flex max-h-96 w-64 flex-col p-2 text-xs outline-none"
             aria-label={props.label}
             data-testid="fig-component-picker"
             onKeyDown={(e: KeyboardEvent) => {

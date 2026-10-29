@@ -19,7 +19,7 @@ export type LayoutRefusal =
   | { kind: 'unknown-section'; sectionId: string }
   | { kind: 'gate-section'; sectionId: string }
   | { kind: 'booking-section'; sectionId: string }
-  /** The booking step is unique and comes after every question and screener. */
+  /** The booking step is unique and comes after every question and gate. */
   | { kind: 'booking-must-be-last'; sectionId: string }
   | { kind: 'column-on-form'; columnId: string }
   | {
@@ -120,7 +120,7 @@ function layoutProblems(layout: FormLayout): LayoutRefusal[] {
 
 /**
  * The edited layout, or the first problem the edit brings. Problems the
- * layout already had (two booking steps added concurrently, a screener whose
+ * layout already had (two booking steps added concurrently, a gate whose
  * question went in the grid) do not block edits, so they stay repairable.
  */
 function checkedEdit(

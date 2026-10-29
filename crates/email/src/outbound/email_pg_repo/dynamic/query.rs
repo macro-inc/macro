@@ -124,13 +124,14 @@ fn push_thread_candidate_select(
 ) {
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
-    // Multi-inbox owned scans fan out one ordered, LIMITed subscan per link:
-    // `link_id = ANY(...)` index scans can't return ordered output (pre-PG17),
-    // forcing a fetch-and-sort of every candidate thread across all inboxes.
-    // Per-link scans walk the index in order and stop at LIMIT.
+    // Owned scans fan out one ordered, LIMITed subscan per link.
+    // `link_id = ANY(...)` cannot return index order, even for a single id,
+    // so the planner fetches every matching thread and sorts. A per-link
+    // equality walk stops at LIMIT. Team scope stays on ANY: a per-link
+    // LIMIT would starve the cross-mailbox dedupe.
     let per_link_fanout = matches!(source, ThreadCandidateSource::Owned)
         && params.team_id.is_none()
-        && params.link_ids.len() > 1;
+        && !params.link_ids.is_empty();
 
     if per_link_fanout {
         builder.push(

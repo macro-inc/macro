@@ -2,10 +2,11 @@ use super::attachment_error::AttachmentApiError;
 use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use axum_extra::extract::Cached;
+use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
@@ -42,7 +43,7 @@ pub struct AddForwardedAttachmentResponse {
     tag = "Drafts",
     path = "/email/drafts/{id}/forwarded-attachments",
     operation_id = "add_forwarded_attachment",
-    params(PathParams),
+    params(PathParams, DraftEditPrecondition),
     request_body = AddForwardedAttachmentRequest,
     responses(
         (status = 201, body = AddForwardedAttachmentResponse),
@@ -52,6 +53,7 @@ pub struct AddForwardedAttachmentResponse {
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn handler(
+    Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<EmailSvc, AuthorizationService>>,
@@ -61,7 +63,13 @@ pub async fn handler(
     let actor = &authorization.authorization.user.macro_user_id;
     let attachment = ctx
         .draft_attachments
-        .forward(actor, link.id, draft_id, req.attachment_id)
+        .forward(
+            actor,
+            link.id,
+            draft_id,
+            req.attachment_id,
+            precondition.draft_generation,
+        )
         .await?;
     Ok((
         StatusCode::CREATED,

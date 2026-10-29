@@ -33,12 +33,13 @@ pub use mutation_thread::{
     EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,
 };
 pub use objects::{
-    GraphqlSoupAgentSession, GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel,
-    GraphqlSoupChannelMessage, GraphqlSoupChannelMessagePreview, GraphqlSoupChat,
-    GraphqlSoupCrmCompany, GraphqlSoupCrmContact, GraphqlSoupDatabaseRow, GraphqlSoupDocument,
-    GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
-    GraphqlSoupForeignEntity, GraphqlSoupInitiative, GraphqlSoupProject, GroupedSoup,
-    SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPatch, SoupUpdated,
+    GraphqlReminderScheduleType, GraphqlSoupAgentSession, GraphqlSoupBin, GraphqlSoupCall,
+    GraphqlSoupChannel, GraphqlSoupChannelMessage, GraphqlSoupChannelMessagePreview,
+    GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupCrmContact, GraphqlSoupDatabaseRow,
+    GraphqlSoupDocument, GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
+    GraphqlSoupForeignEntity, GraphqlSoupInitiative, GraphqlSoupProject, GraphqlSoupReminder,
+    GraphqlSoupReminderReference, GroupedSoup, SoupCacheProjection, SoupEntityEdges, SoupPage,
+    SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
     SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,

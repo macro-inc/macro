@@ -12,8 +12,8 @@ use super::{
     models::{
         FeedNotification, WorkFeedChange, WorkFeedDoneOutcome, WorkFeedDoneReceipt,
         WorkFeedDoneTarget, WorkFeedEntry, WorkFeedError, WorkFeedItem, WorkFeedItemKey,
-        WorkFeedItemState, WorkFeedPage, WorkFeedPrimaryReason, WorkFeedQuery, WorkFeedScope,
-        WorkFeedViewer, counts_as_unseen,
+        WorkFeedItemState, WorkFeedPage, WorkFeedPosition, WorkFeedPrimaryReason, WorkFeedQuery,
+        WorkFeedScope, WorkFeedViewer, counts_as_unseen,
     },
     policy,
     ports::{
@@ -28,6 +28,10 @@ mod test;
 
 /// Most candidate keys recomputed per source request.
 const RECOMPUTE_CHUNK: usize = 200;
+
+/// Most source pages one feed page reads while its state filter leaves it
+/// short. A page that is still short carries a cursor; the caller asks again.
+const MAX_PAGE_FILL_ROUNDS: usize = 4;
 
 /// The work feed's use cases.
 pub trait WorkFeedService: Send + Sync + 'static {
@@ -222,7 +226,7 @@ where
         scope: &WorkFeedScope,
         keys: &[WorkFeedItemKey],
     ) -> Result<HashMap<WorkFeedItemKey, Assembled<S::Entity>>, Report> {
-        let filter = policy::signal_filter(&viewer.user, scope.include_snippets);
+        let filter = policy::signal_filter(&viewer.user, scope);
         let types = policy::candidate_types(&scope.types);
         let mut current = HashMap::with_capacity(keys.len());
         for chunk in keys.chunks(RECOMPUTE_CHUNK) {
@@ -270,33 +274,71 @@ where
 {
     type Entity = S::Entity;
 
-    #[tracing::instrument(err, skip(self, viewer), fields(user = %viewer.user))]
+    #[tracing::instrument(
+        err,
+        skip(self, viewer),
+        fields(
+            user = %viewer.user,
+            fill_rounds = tracing::field::Empty,
+            entries = tracing::field::Empty,
+            has_next = tracing::field::Empty,
+        )
+    )]
     async fn page(
         &self,
         viewer: WorkFeedViewer,
         query: WorkFeedQuery,
     ) -> Result<WorkFeedPage<Self::Entity>, WorkFeedError> {
-        let page = self
-            .source
-            .page(SourceRequest {
-                viewer: viewer.clone(),
-                mode: query.scope.mode,
-                types: policy::candidate_types(&query.scope.types),
-                filter: policy::signal_filter(&viewer.user, query.scope.include_snippets),
-                limit: query.limit,
-                after: query.after,
-                only: None,
-            })
-            .await?;
-        let entries = self
-            .assemble(&viewer, page.items)
-            .await?
-            .into_iter()
-            .map(|assembled| assembled.entry)
-            .collect();
+        let types = policy::candidate_types(&query.scope.types);
+        let filter = policy::signal_filter(&viewer.user, &query.scope);
+        let limit = usize::from(query.limit);
+        let mut entries = Vec::with_capacity(limit);
+        let mut after = query.after;
+        let mut rounds = 0;
+        // Items with no reason left, and items in another state, are
+        // dropped, so the page reads on until it is full. A page that fills
+        // partway through a source page resumes after its last item.
+        for _ in 0..MAX_PAGE_FILL_ROUNDS {
+            rounds += 1;
+            let page = self
+                .source
+                .page(SourceRequest {
+                    viewer: viewer.clone(),
+                    mode: query.scope.mode,
+                    types: types.clone(),
+                    filter: filter.clone(),
+                    limit: query.limit,
+                    after: after.clone(),
+                    only: None,
+                })
+                .await?;
+            let mut assembled = self.assemble(&viewer, page.items).await?.into_iter();
+            for Assembled { entry, .. } in assembled.by_ref() {
+                if query.state.is_none_or(|state| entry.item.state == state) {
+                    entries.push(entry);
+                }
+                if entries.len() == limit {
+                    break;
+                }
+            }
+            after = match (entries.last(), assembled.len()) {
+                (Some(last), 1..) if entries.len() == limit => Some(WorkFeedPosition {
+                    sort_at: last.sort_at,
+                    entity_id: last.item.key.entity().entity_id.to_string(),
+                }),
+                _ => page.next,
+            };
+            if entries.len() == limit || after.is_none() {
+                break;
+            }
+        }
+        let span = tracing::Span::current();
+        span.record("fill_rounds", rounds);
+        span.record("entries", entries.len());
+        span.record("has_next", after.is_some());
         Ok(WorkFeedPage {
             entries,
-            next: page.next,
+            next: after,
         })
     }
 

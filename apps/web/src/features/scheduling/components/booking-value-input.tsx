@@ -144,7 +144,8 @@ export function BookingValueInput(props: {
               <NumberUnitInput.DecrementTrigger
                 size="icon-lg"
                 class="rounded-lg"
-                label={`Decrease ${props.label.toLowerCase()}`}
+                aria-label={`Decrease ${props.label.toLowerCase()}`}
+                tooltip={`Decrease ${props.label.toLowerCase()}`}
               />
             </NumberUnitInput.Controls>
           </Show>
@@ -248,7 +249,8 @@ export function BookingValueInput(props: {
               <NumberUnitInput.IncrementTrigger
                 size="icon-lg"
                 class="rounded-lg"
-                label={`Increase ${props.label.toLowerCase()}`}
+                aria-label={`Increase ${props.label.toLowerCase()}`}
+                tooltip={`Increase ${props.label.toLowerCase()}`}
               />
             </NumberUnitInput.Controls>
           </Show>

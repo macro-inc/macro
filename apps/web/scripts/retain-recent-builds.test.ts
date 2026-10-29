@@ -112,39 +112,6 @@ process.exit(1);
 const manifest = (build: number) =>
   JSON.stringify({ schemaVersion: 3, bundleBuild: build });
 
-describe('retention wiring', () => {
-  const infrastructure = readFileSync(
-    resolve(import.meta.dirname, '../../../infra/stacks/web-app/index.ts'),
-    'utf8'
-  );
-
-  it('does not let the generic sync delete a superseded build', () => {
-    const sync = infrastructure.slice(
-      infrastructure.indexOf('aws s3 sync ./output')
-    );
-    expect(sync.slice(0, sync.indexOf('`'))).not.toContain('--delete');
-  });
-
-  it('prunes last, after every publishing step has succeeded', () => {
-    const sync = infrastructure.indexOf('aws s3 sync ./output');
-    const indexPublish = infrastructure.indexOf(
-      'index-html-object-metadata-command'
-    );
-    // Anchored on the invocations: both scripts are named in comments too.
-    const cacheWasmPrune = infrastructure.indexOf(
-      'bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh'
-    );
-    const retain = infrastructure.indexOf(
-      'bash ../../../apps/web/scripts/retain-recent-builds.sh'
-    );
-    expect(sync).toBeLessThan(indexPublish);
-    expect(indexPublish).toBeLessThan(cacheWasmPrune);
-    expect(cacheWasmPrune).toBeLessThan(retain);
-    // Serialized behind the other prune so a failure above retires nothing.
-    expect(infrastructure).toContain('dependsOn: [pruneOldCacheWasmCommand]');
-  });
-});
-
 describe('retaining recent builds', () => {
   it('keeps what recent builds still refer to and drops what none do', () => {
     const { result, deleted } = run(

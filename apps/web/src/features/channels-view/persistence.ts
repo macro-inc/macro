@@ -38,6 +38,7 @@ const channelsExpandedGroupsSchema = z.preprocess(
   },
   z.object({
     favorites: z.boolean().default(true),
+    team_channels: z.boolean().default(true),
     channels: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
   })
@@ -48,6 +49,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
   tab: z.enum(['browse', 'recents', 'threads']).default('browse'),
   expandedGroups: channelsExpandedGroupsSchema.default({
     favorites: true,
+    team_channels: true,
     channels: true,
     direct_messages: true,
   }),
@@ -62,6 +64,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   tab: 'browse',
   expandedGroups: {
     favorites: true,
+    team_channels: true,
     channels: true,
     direct_messages: true,
   },
@@ -78,6 +81,9 @@ const channelsPreferencesSchema = z.object({
     .transform(clampChannelsRailWidth),
   sortBy: z
     .object({
+      team_channels: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.team_channels),
       channels: z
         .enum(['viewed_at', 'updated_at', 'created_at'])
         .default(CHANNELS_DEFAULT_SORT_BY.channels),

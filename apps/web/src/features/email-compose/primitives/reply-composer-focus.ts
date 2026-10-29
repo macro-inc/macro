@@ -14,7 +14,7 @@ export function takesFocusOnMount(mount: {
   requested: boolean;
   /** Restores a send the user just undid. */
   restoredSend: boolean;
-  /** Touch replies open in a drawer the user just asked for. */
+  /** Touch replies open in a full-screen composer the user just asked for. */
   desktop: boolean;
 }): boolean {
   return (

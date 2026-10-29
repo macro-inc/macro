@@ -7,16 +7,16 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { FigEngine } from '@core/fig-engine/client';
 import type { LayerRow, SearchHit } from '@core/fig-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import LockSimple from '@phosphor/lock-simple.svg';
-import LockSimpleOpen from '@phosphor/lock-simple-open.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import LockSimple from '@icon/system/regular/lock-simple.svg';
+import LockSimpleOpen from '@icon/system/regular/lock-simple-open.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   createEffect,
   createMemo,

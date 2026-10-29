@@ -69,7 +69,7 @@ export function buildEntityPropertiesInput(
     .with('DATABASE_ROW', () => 'DATABASE_ROW')
     // Users and CRM contacts carry no Soup properties.
     .with('USER', 'CONTACT', () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
   return soupEntityType && { entityType: soupEntityType, entityId };
 }
 
@@ -199,6 +199,7 @@ export function toGraphqlSetPropertyValue(
   return match(value)
     .with({ type: 'boolean' }, (v) => ({ boolean: v.value }))
     .with({ type: 'date' }, (v) => ({ date: v.value }))
+    .with({ type: 'date_range' }, (v) => ({ dateRange: v.value }))
     .with({ type: 'number' }, (v) => ({ number: v.value }))
     .with({ type: 'string' }, (v) => ({ string: v.value }))
     .with({ type: 'select_option' }, (v) => ({ selectOption: v.option_id }))
@@ -213,7 +214,9 @@ export function toGraphqlSetPropertyValue(
     }))
     .with({ type: 'link' }, (v) => ({ link: v.url }))
     .with({ type: 'multi_link' }, (v) => ({ multiLink: v.urls }))
-    .exhaustive();
+    .exhaustive(() => {
+      throw new Error(`Unsupported property value type: ${value.type}`);
+    });
 }
 
 /** Maps a REST property target type onto its GraphQL enum. */

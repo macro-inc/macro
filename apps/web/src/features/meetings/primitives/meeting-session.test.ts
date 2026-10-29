@@ -84,8 +84,25 @@ describe('meeting session ownership', () => {
     const end = vi.spyOn(trace, 'end');
     const { session, dispose } = setup({ prepare: async () => {} });
 
-    await session.join(undefined, preferences);
+    await session.join(undefined, preferences, {
+      setupId: 'setup-1',
+      microphone: 'blocked',
+      camera: 'granted',
+    });
 
+    expect(attributes).toHaveBeenCalledWith('meeting.setup.id', 'setup-1');
+    expect(attributes).toHaveBeenCalledWith(
+      'meeting.join.microphone_access',
+      'blocked'
+    );
+    expect(attributes).toHaveBeenCalledWith(
+      'meeting.join.camera_access',
+      'granted'
+    );
+    expect(attributes).toHaveBeenCalledWith(
+      'meeting.join.microphone_track',
+      false
+    );
     expect(phases.mock.calls.map(([name]) => name)).toEqual([
       'meeting.join.previous_session',
       'meeting.join.create',

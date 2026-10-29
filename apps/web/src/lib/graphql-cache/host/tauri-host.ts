@@ -251,10 +251,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const unlistenHydration = listenForHydration();
-  async function removeHydrationListener(): Promise<void> {
-    const unlisten = await unlistenHydration;
-    unlisten?.();
-  }
 
   async function initialize(): Promise<void> {
     const { default: schemaSdl } = await import(
@@ -682,19 +678,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
-      fireAndForget(
-        unlistenOps.then((fn) => fn?.()),
-        'graphql-cache-host'
-      );
-      fireAndForget(
-        unlistenCacheChanges.then((fn) => fn?.()),
-        'graphql-cache-host'
-      );
-      fireAndForget(removeHydrationListener(), 'graphql-cache-host');
-      fireAndForget(
-        unlistenSettlements.then((fn) => fn?.()),
-        'graphql-cache-host'
-      );
+      for (const unlisten of [
+        unlistenOps,
+        unlistenCacheChanges,
+        unlistenHydration,
+        unlistenSettlements,
+      ]) {
+        // UnlistenFn returns the unlisten IPC promise despite its void type.
+        fireAndForget(
+          unlisten.then((fn) => fn?.()),
+          'graphql-cache-host'
+        );
+      }
     },
   };
 }

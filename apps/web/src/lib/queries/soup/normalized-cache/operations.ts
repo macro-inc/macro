@@ -153,6 +153,14 @@ function updateSoupEntity<T extends SoupEntityTag>(
   };
 }
 
+/** Apply a row read from the server to every list holding it, without
+ * cancelling a list revalidation it may accompany. */
+export function hydrateSoupEntity<T extends SoupEntityTag>(
+  partial: SoupEntityPartial<T>
+): void {
+  updateSoupEntity(partial, false);
+}
+
 export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
   return (getSoupNormalizer().getObjectById(soupNormKey(entityId)) ??
     undefined) as SoupApiItem | undefined;
@@ -884,7 +892,9 @@ export function buildSingleEntityFilter(
     .with('crmContact', () => {
       throw new Error('CRM contacts are read through GraphQL Soup only');
     })
-    .exhaustive();
+    .exhaustive(() => {
+      throw new Error(`Unknown soup entity type: ${entityType}`);
+    });
 }
 
 async function updateRecentlyViewedItemLazily(
@@ -1003,7 +1013,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'company' }, (r) => r.id)
     .with({ type: 'calendarEvent' }, (r) => r.id)
     .with({ type: 'agentSession' }, (r) => r.id)
-    .exhaustive();
+    .exhaustive(() => '');
 }
 
 /** @private Captures every soup-list-shaped query (legacy items, parent

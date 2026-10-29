@@ -24,8 +24,8 @@ message/thread lookups by id, thread owner lookup, and an external
 ## Boundaries
 
 - Depends on: `email` (features `axum`, `inbound`), `model`, `models_email`.
-- Used by: `crates/memory`, `crates/ai_tools`, `services/document_cognition_service`,
-  `services/mcp_service`.
+- Used by: `crates/memory`, `crates/ai_tools`, `services/agent_harness_service`,
+  `services/agent_harness_service`.
 
 ## Recipes
 

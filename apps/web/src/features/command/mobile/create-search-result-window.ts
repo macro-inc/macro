@@ -8,109 +8,71 @@ import {
 } from 'solid-js';
 import type { EntitySearchCategory } from '../queries/entity-search';
 
-type SearchResultWindow<T> = {
+// History remembers a small ordering hint; the source owns all row objects.
+const MAX_SAVED_RESULT_IDS = 200;
+type SearchResultOrder = {
   accountId: string;
   query: string;
   category: EntitySearchCategory;
-  items: T[];
-  /** Live rows already loaded; retained rows may also belong to later pages. */
-  sourceSize: number;
+  ids: string[];
 };
 
-/** Restore loaded rows in their saved order while sources refresh and page. */
 export function createSearchResultWindow<T extends { id: string }>(options: {
   key: string;
   accountId: Accessor<string>;
   query: Accessor<string>;
   category: Accessor<EntitySearchCategory>;
   items: Accessor<T[]>;
-  pending: Accessor<boolean>;
+  itemKey?: (item: T) => string;
   discard: Accessor<boolean>;
-  hasMore: Accessor<boolean>;
 }) {
   const { handle } = useSplitPanelOrThrow();
+  const itemKey = options.itemKey ?? ((item: T) => item.id);
   const stored = untrack(() => handle.currentEntryState()?.[options.key]) as
-    | SearchResultWindow<T>
+    | SearchResultOrder
     | undefined;
   const scope = createMemo(() => ({
     accountId: options.accountId(),
     query: options.query(),
     category: options.category(),
   }));
-  const [preservedScope, setPreservedScope] = createSignal(
+  const [order, setOrder] = createSignal(
     untrack(() => {
-      const initial = scope();
-      return stored?.accountId === initial.accountId &&
-        stored.query === initial.query &&
-        stored.category === initial.category
-        ? initial
+      const current = scope();
+      return stored?.accountId === current.accountId &&
+        stored.query === current.query &&
+        stored.category === current.category
+        ? { scope: current, ids: stored.ids }
         : undefined;
     })
   );
-  const window = createMemo<SearchResultWindow<T>>(
-    (previous) => {
-      const currentScope = scope();
-      const { accountId, query, category } = currentScope;
-      const items = options.items();
-      const next = {
-        accountId,
-        query,
-        category,
-        items,
-        sourceSize: items.length,
-      };
-      if (options.discard()) return next;
-      if (
-        previous?.accountId === accountId &&
-        previous.query === query &&
-        previous.category === category
-      ) {
-        if (
-          previous.items.length > 0 &&
-          (options.pending() ||
-            (items.length < previous.sourceSize && options.hasMore()))
-        )
-          return previous;
-        if (preservedScope() === currentScope) {
-          const remaining = new Map(items.map((item) => [item.id, item]));
-          const ordered = previous.items.flatMap((item) => {
-            const updated = remaining.get(item.id);
-            // An absent saved row can still belong to a later source page.
-            if (!updated) return options.hasMore() ? [item] : [];
-            remaining.delete(item.id);
-            return [updated];
-          });
-          return {
-            ...next,
-            items: [...ordered, ...remaining.values()],
-          };
-        }
-      }
-      return next;
-    },
-    stored ?? {
-      accountId: untrack(options.accountId),
-      query: untrack(options.query),
-      category: untrack(options.category),
-      items: [],
-      sourceSize: 0,
+  const items = createMemo(() => {
+    const current = scope();
+    const saved = order();
+    const incoming = options.items();
+    if (options.discard() || !saved || saved.scope !== current) return incoming;
+    const remaining = new Map(incoming.map((item) => [itemKey(item), item]));
+    const ordered: T[] = [];
+    for (const id of saved.ids) {
+      const item = remaining.get(id);
+      if (!item) continue;
+      ordered.push(item);
+      remaining.delete(id);
     }
-  );
-  const preserveOrder = () => setPreservedScope(scope());
+    return [...ordered, ...remaining.values()];
+  });
+  const preserveOrder = () =>
+    setOrder({
+      scope: scope(),
+      ids: items().slice(0, MAX_SAVED_RESULT_IDS).map(itemKey),
+    });
   onCleanup(
     handle.registerEntryStateCaptor(options.key, () => {
       preserveOrder();
-      return window();
+      // Never return row objects, source callbacks, or virtualizer caches.
+      const saved = order();
+      return saved ? { ...saved.scope, ids: saved.ids } : undefined;
     })
   );
-  return {
-    items: () => window().items,
-    // Freeze before opening can update viewedAt and re-rank the live source.
-    preserveOrder,
-    needsMore: () =>
-      !options.pending() &&
-      !options.discard() &&
-      options.hasMore() &&
-      options.items().length < window().sourceSize,
-  };
+  return { items, preserveOrder };
 }

@@ -1,7 +1,14 @@
-import { githubLinkStatusQueryOptions } from '@queries/auth/github-link';
+import {
+  githubLinkStatusQueryOptions,
+  invalidateGithubLinkStatus,
+} from '@queries/auth/github-link';
 import type { authServiceClient } from '@service-auth/client';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -55,6 +62,51 @@ afterEach(() => {
 });
 
 describe('PR mention connection-status suspense', () => {
+  it('keeps a confirmed plain link through refetch errors and remounts', async () => {
+    checkGithubLinkStatus.mockResolvedValueOnce(
+      err([{ code: 'NOT_FOUND', message: 'GitHub account not linked' }])
+    );
+    await client.fetchQuery(githubLinkStatusQueryOptions());
+    const [mounted, setMounted] = createSignal(true);
+    const suspended = vi.fn();
+    function HiddenSurface() {
+      suspended();
+      return <span>Hidden surface</span>;
+    }
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Suspense fallback={<HiddenSurface />}>
+          <Show when={mounted()}>
+            <PullRequestMention
+              id="pr-1"
+              url="https://github.com/macro-inc/macro/pull/7956"
+              label="macro-inc/macro#7956"
+              key="sent"
+              theme={{}}
+            />
+          </Show>
+        </Suspense>
+      </QueryClientProvider>
+    ));
+    expect(screen.getByRole('link').getAttribute('href')).toBe(
+      'https://github.com/macro-inc/macro/pull/7956'
+    );
+    checkGithubLinkStatus.mockResolvedValueOnce(
+      err([{ code: 'HTTP_ERROR', message: 'Connection status unavailable' }])
+    );
+    await expect(
+      client.fetchQuery({ ...githubLinkStatusQueryOptions(), staleTime: 0 })
+    ).rejects.toThrow();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(screen.getByRole('link').getAttribute('href')).toBe(
+      'https://github.com/macro-inc/macro/pull/7956'
+    );
+    setMounted(false);
+    setMounted(true);
+    expect(screen.getByRole('link')).toBeDefined();
+    expect(suspended).not.toHaveBeenCalled();
+  });
+
   it.each(['linked', 'unlinked', 'error'] as const)(
     'keeps the composer and message visible during a retry that ends %s',
     async (outcome) => {
@@ -113,6 +165,13 @@ describe('PR mention connection-status suspense', () => {
       composer.focus();
       setInserted(true);
 
+      expect(checkGithubLinkStatus).toHaveBeenCalledTimes(1);
+      setInserted(false);
+      setInserted(true);
+      expect(checkGithubLinkStatus).toHaveBeenCalledTimes(1);
+
+      // An explicit retry still works and must not suspend either surface.
+      const settled = client.fetchQuery(githubLinkStatusQueryOptions());
       expect(checkGithubLinkStatus).toHaveBeenCalledTimes(2);
       expect(screen.getByRole('textbox')).toBe(composer);
       expect(document.activeElement).toBe(composer);
@@ -134,7 +193,6 @@ describe('PR mention connection-status suspense', () => {
                 message: 'Connection status unavailable',
               } as const,
             ]);
-      const settled = client.fetchQuery(githubLinkStatusQueryOptions());
       retry.resolve(response);
       if (outcome === 'error') {
         await expect(settled).rejects.toThrow();
@@ -156,4 +214,97 @@ describe('PR mention connection-status suspense', () => {
       ).toBe(outcome !== 'unlinked');
     }
   );
+});
+
+it('refreshes a failed inactive status query after OAuth completes', async () => {
+  checkGithubLinkStatus.mockResolvedValueOnce(
+    err([{ code: 'HTTP_ERROR', message: 'Connection status unavailable' }])
+  );
+  await expect(
+    client.fetchQuery(githubLinkStatusQueryOptions())
+  ).rejects.toThrow();
+  checkGithubLinkStatus.mockResolvedValueOnce(
+    ok({
+      github_user_id: '123',
+      github_username: 'macro-user',
+      reauthentication_required: false,
+    })
+  );
+
+  await invalidateGithubLinkStatus();
+
+  expect(checkGithubLinkStatus).toHaveBeenCalledTimes(2);
+  expect(client.getQueryData(githubLinkStatusQueryOptions().queryKey)).toEqual({
+    status: 'linked',
+    username: 'macro-user',
+    userId: '123',
+  });
+});
+
+it('refreshes a failed status query after OAuth when all observers are disabled', async () => {
+  checkGithubLinkStatus.mockResolvedValueOnce(
+    err([{ code: 'HTTP_ERROR', message: 'Connection status unavailable' }])
+  );
+  await expect(
+    client.fetchQuery(githubLinkStatusQueryOptions())
+  ).rejects.toThrow();
+  const observer = new QueryObserver(client, {
+    ...githubLinkStatusQueryOptions(),
+    enabled: false,
+    retryOnMount: false,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    checkGithubLinkStatus.mockResolvedValueOnce(
+      ok({
+        github_user_id: '123',
+        github_username: 'macro-user',
+        reauthentication_required: false,
+      })
+    );
+    await invalidateGithubLinkStatus();
+    expect(checkGithubLinkStatus).toHaveBeenCalledTimes(2);
+    expect(observer.getCurrentResult().data?.status).toBe('linked');
+  } finally {
+    unsubscribe();
+  }
+});
+
+it('does not reuse an in-flight pre-OAuth status request', async () => {
+  const previous =
+    Promise.withResolvers<
+      Awaited<ReturnType<typeof authServiceClient.checkGithubLinkStatus>>
+    >();
+  checkGithubLinkStatus.mockReturnValueOnce(previous.promise);
+  const pending = client.fetchQuery(githubLinkStatusQueryOptions());
+  // Cancellation is expected; attach a handler before refreshing.
+  const previousSettled = Promise.allSettled([pending]);
+  checkGithubLinkStatus.mockResolvedValueOnce(
+    ok({
+      github_user_id: '123',
+      github_username: 'macro-user',
+      reauthentication_required: false,
+    })
+  );
+  const refreshed = invalidateGithubLinkStatus();
+  previous.resolve(
+    err([{ code: 'NOT_FOUND', message: 'GitHub account not linked' }])
+  );
+  await previousSettled;
+  await refreshed;
+
+  expect(checkGithubLinkStatus).toHaveBeenCalledTimes(2);
+  expect(
+    client.getQueryData(githubLinkStatusQueryOptions().queryKey)
+  ).toMatchObject({ status: 'linked' });
+});
+
+it('does not report a post-OAuth status failure as an OAuth failure', async () => {
+  checkGithubLinkStatus.mockResolvedValue(
+    err([{ code: 'HTTP_ERROR', message: 'Connection status unavailable' }])
+  );
+  await expect(invalidateGithubLinkStatus()).resolves.toBeUndefined();
+  expect(
+    client.getQueryState(githubLinkStatusQueryOptions().queryKey)?.status
+  ).toBe('error');
 });

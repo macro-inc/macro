@@ -1,6 +1,6 @@
 //! Errors the session service can produce.
 
-use crate::domain::model::RepoUrl;
+use crate::domain::model::{CursorAgentId, RepoUrl, RunStatus};
 use agent_client_protocol::schema::v1::SessionId;
 pub use agent_runtime_protocol::domain::turn::{FailureLink, FailureNotice, FailureNoticeKind};
 use thiserror::Error;
@@ -122,6 +122,53 @@ impl UsageLimitExceeded {
     }
 
     /// The refusal as the `session/prompt` error carries it.
+    #[must_use]
+    pub fn refusal(&self) -> PromptRefusal {
+        let notice = self.notice();
+        PromptRefusal {
+            message: format!("{} {}", notice.title, notice.body),
+            notice: Some(Box::new(notice)),
+        }
+    }
+}
+
+/// A run Cursor ended in neither `FINISHED` nor `CANCELLED`.
+///
+/// Cursor's API carries no reason for a failed run: the run record and the
+/// stream's `result` have only the status, and the stream's `error` events
+/// seen in production are all about the stream itself. The run's page on
+/// cursor.com is the one place that says why, so the notice sends the person
+/// there. Before this the turn failed with a raw report naming a source line.
+#[derive(Debug, Error)]
+#[error("cursor run ended in {status:?}")]
+pub struct RunFailed {
+    /// The agent whose run failed, for the link to Cursor's page for it.
+    pub agent: CursorAgentId,
+    /// The terminal status Cursor reported.
+    pub status: RunStatus,
+}
+
+impl RunFailed {
+    /// Where Cursor shows an agent's runs; the agent id follows.
+    pub const AGENT_PAGE_URL: &'static str = "https://cursor.com/agents/";
+
+    /// What to show the person who sent the prompt.
+    #[must_use]
+    pub fn notice(&self) -> FailureNotice {
+        FailureNotice {
+            kind: FailureNoticeKind::ProviderRunFailed,
+            title: "Cursor run failed".to_owned(),
+            body: "Cursor stopped this run with an error. Open the run in Cursor to see why, \
+                   then send another message to continue."
+                .to_owned(),
+            link: Some(FailureLink {
+                label: "Open in Cursor".to_owned(),
+                url: format!("{}{}", Self::AGENT_PAGE_URL, self.agent),
+            }),
+        }
+    }
+
+    /// The failure as the `session/prompt` error carries it.
     #[must_use]
     pub fn refusal(&self) -> PromptRefusal {
         let notice = self.notice();

@@ -16,6 +16,7 @@ export type QuestionTypeId =
   | 'file'
   | 'datetime'
   | 'date'
+  | 'date-range'
   | 'url'
   | 'checkbox'
   | 'person'
@@ -109,6 +110,13 @@ export const QUESTION_TYPE_CHOICES: readonly QuestionTypeChoice[] = [
     widget: 'date',
   },
   {
+    id: 'date-range',
+    label: 'Time range',
+    group: 'details',
+    kind: { type: 'date_range' },
+    widget: null,
+  },
+  {
     id: 'url',
     label: 'Link',
     group: 'text',
@@ -159,11 +167,12 @@ export function widgetsFor(kind: FormColumnKind): QuestionWidget[] {
     .with(
       { type: 'number' },
       { type: 'boolean' },
+      { type: 'date_range' },
       { type: 'entity' },
       { type: 'relation' },
       () => []
     )
-    .exhaustive();
+    .exhaustive(() => []);
 }
 
 /** The widget a question shows with: its own, or its kind's default. */
@@ -212,6 +221,7 @@ export function questionTypeOf(
     .with({ type: 'number' }, () => 'number')
     .with({ type: 'boolean' }, () => 'checkbox')
     .with({ type: 'date' }, () => (shown === 'date' ? 'date' : 'datetime'))
+    .with({ type: 'date_range' }, () => 'date-range')
     .with({ type: 'link' }, () => (shown === 'file' ? 'file' : 'url'))
     .with({ type: 'select', multi: false }, () =>
       shown === 'dropdown' ? 'dropdown' : 'choice'
@@ -226,7 +236,7 @@ export function questionTypeOf(
     )
     .with({ type: 'entity' }, () => 'entity')
     .with({ type: 'relation' }, () => 'relation')
-    .exhaustive();
+    .exhaustive(() => 'short');
 }
 
 /** The chip label of a question's type. */
@@ -251,12 +261,13 @@ export function questionTypeLabel(
         { type: 'number' },
         { type: 'boolean' },
         { type: 'date' },
+        { type: 'date_range' },
         { type: 'link' },
         { type: 'select' },
         { type: 'relation' },
         () => 'Question'
       )
-      .exhaustive()
+      .exhaustive(() => 'Question')
   );
 }
 
@@ -271,6 +282,7 @@ export function sameColumnKind(
       { type: 'number' },
       { type: 'boolean' },
       { type: 'date' },
+      { type: 'date_range' },
       { type: 'link' },
       { type: 'tag' },
       (one) => right.type === one.type
@@ -297,7 +309,7 @@ export function sameColumnKind(
         right.database === one.database &&
         right.table === one.table
     )
-    .exhaustive();
+    .exhaustive(() => false);
 }
 
 /** Whether a kind's answers are picked from options the column owns. */

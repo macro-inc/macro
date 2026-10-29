@@ -98,13 +98,19 @@ const TEAM_ID: Uuid = Uuid::from_u128(0x7EA3);
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -128,6 +134,7 @@ impl BotAuthorizer for SelfBotAuthorizer {
                 let macro_user_id = MacroUserIdStr::try_from(user_id.clone())
                     .map_err(|_| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
                 Some(MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
@@ -175,6 +182,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
@@ -233,6 +241,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.opened.lock().unwrap().push(request);
         Ok(session)
@@ -271,6 +281,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.managed.lock().unwrap().push(request);
         Ok(session)
@@ -491,6 +503,8 @@ impl ExternalSessionRequester for RecordingRequester {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.requested.lock().unwrap().push(request);
         Ok(session)
@@ -1460,4 +1474,44 @@ async fn macrod_rejects_an_unsupported_base_before_dispatch() {
     .unwrap();
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert!(requests.requested.lock().unwrap().is_empty());
+}
+
+mod tool_actions;
+
+#[tokio::test]
+async fn internal_notifications_use_the_session_mount_once() {
+    use crate::inbound::notifications::{NotificationRouterState, notification_router};
+    let authorization = MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator,
+        InternalAuthConfig {
+            api_key: "test-internal-key".into(),
+            default_user_id: None,
+        },
+        SelfBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    )));
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://user:password@localhost/macrodb")
+        .unwrap();
+    let service = Arc::new(crate::domain::notifications::NotificationService(Arc::new(
+        crate::outbound::notifications::PgNotificationStore(pool),
+    )));
+    let app = Router::new().nest(
+        "/agent-sessions",
+        notification_router(NotificationRouterState {
+            authorization,
+            service,
+        }),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/agent-sessions/internal/notifications")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

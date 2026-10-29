@@ -7,6 +7,23 @@ export type ClientOptions = {
 export type AbGroup = 'A' | 'B';
 
 /**
+ * An agent's API key, and whether its turns can run on it.
+ */
+export type AgentApiKey = {
+    key?: null | SavedAgentApiKey;
+    /**
+     * Whether the agent owner's plan includes API keys. A key saved before a
+     * downgrade is still listed, and removable, but unused.
+     */
+    planAllows: boolean;
+};
+
+/**
+ * A provider an agent can bring its own key for.
+ */
+export type AgentApiKeyProvider = 'anthropic' | 'openai';
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -323,6 +340,16 @@ export type CreateTeamRequest = {
 };
 
 /**
+ * A newly created team invite link.
+ */
+export type CreatedTeamInviteLinkResponse = {
+    /**
+     * The new link's token. Any previous link stops working.
+     */
+    token: TeamInviteLinkToken;
+};
+
+/**
  * Request body for [`create_credit_checkout_handler`].
  */
 export type CreditCheckoutRequestBody = {
@@ -424,6 +451,12 @@ export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'o
 export type EmailConnectionProviders = {
     gmail: boolean;
     outlook: boolean;
+    /**
+     * Where a Microsoft 365 administrator approves Macro for their whole
+     * directory. Present when Outlook is configured and the request named an
+     * `original_url` for the administrator's browser to return to.
+     */
+    outlook_admin_consent_url?: string | null;
 };
 
 /**
@@ -891,6 +924,13 @@ export type GithubPullRequestReview = {
 export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
 
 /**
+ * Whether a pull request is open or closed, as a user sets it. Merging is a
+ * separate action, so unlike `GithubPullRequestStatus` there is no merged
+ * state.
+ */
+export type GithubPullRequestState = 'open' | 'closed';
+
+/**
  * The normalized lifecycle status for a GitHub pull request.
  */
 export type GithubPullRequestStatus = 'open' | 'closed' | 'merged';
@@ -1099,6 +1139,25 @@ export type InviteToTeamRequest = {
 };
 
 /**
+ * The result of opening a team invite link.
+ */
+export type JoinTeamByInviteLinkResponse = {
+    /**
+     * True when the user was already on the team and nothing changed.
+     */
+    already_member: boolean;
+    /**
+     * The team the link joins.
+     */
+    team_id: string;
+};
+
+/**
+ * A language the app's interface is available in, as a BCP 47 tag.
+ */
+export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pt-PT' | 'sv' | 'da' | 'nb' | 'fi' | 'pl' | 'ru' | 'ja' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'hi' | 'id' | 'vi' | 'th';
+
+/**
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
@@ -1233,6 +1292,7 @@ export type PatchTeamMemberPlanRequest = {
  */
 export type PatchTeamRequest = {
     default_link_share?: null | LinkShare;
+    language?: null | Language;
     /**
      * The new name for the team
      */
@@ -1395,6 +1455,17 @@ export type PublicGtmInviteLink = {
 };
 
 /**
+ * The key someone pasted.
+ */
+export type PutAgentApiKeyRequest = {
+    /**
+     * An Anthropic (`sk-ant-…`) or OpenAI (`sk-…`) key, for the provider of
+     * the agent's model.
+     */
+    apiKey: string;
+};
+
+/**
  * The key the user pasted.
  */
 export type PutCursorApiKeyRequest = {
@@ -1441,6 +1512,20 @@ export type ResendFusionauthVerifyUserEmailRequest = {
      * The email address to resend the verification email to
      */
     email: string;
+};
+
+/**
+ * The agent's saved key. Never includes the key.
+ */
+export type SavedAgentApiKey = {
+    /**
+     * The provider the key is for.
+     */
+    provider: AgentApiKeyProvider;
+    /**
+     * When the key was last replaced.
+     */
+    updatedAt: string;
 };
 
 /**
@@ -1522,6 +1607,39 @@ export type SetGithubPullRequestDraftResponse = {
     pullRequest?: null | EnrichedGithubPullRequest;
 };
 
+/**
+ * A request to close one pull request, or reopen it, on the user's behalf.
+ */
+export type SetGithubPullRequestStateRequest = {
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+    /**
+     * `closed` closes the pull request; `open` reopens it.
+     */
+    state: GithubPullRequestState;
+};
+
+/**
+ * Response body for a pull request that was closed or reopened.
+ */
+export type SetGithubPullRequestStateResponse = {
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * Whether the pull request is now open or closed.
+     */
+    state: GithubPullRequestState;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
@@ -1577,6 +1695,7 @@ export type Team = {
      */
     enterprise: boolean;
     id: string;
+    language?: null | Language;
     name: string;
     owner_id: string;
     slug: string;
@@ -1614,6 +1733,47 @@ export type TeamInviteDetails = {
      * The role being invited as
      */
     team_role: TeamRole;
+};
+
+/**
+ * The caller's team invite link.
+ */
+export type TeamInviteLinkResponse = {
+    token?: null | TeamInviteLinkToken;
+};
+
+/**
+ * The team an invite link joins, shown before the user accepts.
+ */
+export type TeamInviteLinkTeam = {
+    /**
+     * Id of the team the link joins.
+     */
+    team_id: string;
+    /**
+     * Name of the team the link joins.
+     */
+    team_name: string;
+};
+
+/**
+ * The secret in a team's shareable invite link.
+ *
+ * Anyone signed in who holds the token can join the team, so it is a random
+ * value rather than a time-ordered id, and an admin resetting the link
+ * replaces it.
+ */
+export type TeamInviteLinkToken = string;
+
+/**
+ * Identifies an invite link. The token travels in the body, not the path, so
+ * request spans and access logs that record the path never see it.
+ */
+export type TeamInviteLinkTokenRequest = {
+    /**
+     * The invite link's token.
+     */
+    token: TeamInviteLinkToken;
 };
 
 /**
@@ -1843,6 +2003,14 @@ export type UsageSnapshot = {
     used_cents: number;
 };
 
+/**
+ * The interface language a user picked for themselves. `None` follows their
+ * team's language, else their browser's.
+ */
+export type UserLanguage = {
+    language?: null | Language;
+};
+
 export type UserLinkResponse = {
     /**
      * Whether or not a link exists for the given idp
@@ -1909,6 +2077,76 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type DeleteAgentApiKeyData = {
+    body?: never;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type DeleteAgentApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type DeleteAgentApiKeyError = DeleteAgentApiKeyErrors[keyof DeleteAgentApiKeyErrors];
+
+export type DeleteAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type DeleteAgentApiKeyResponse = DeleteAgentApiKeyResponses[keyof DeleteAgentApiKeyResponses];
+
+export type GetAgentApiKeyData = {
+    body?: never;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type GetAgentApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type GetAgentApiKeyError = GetAgentApiKeyErrors[keyof GetAgentApiKeyErrors];
+
+export type GetAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type GetAgentApiKeyResponse = GetAgentApiKeyResponses[keyof GetAgentApiKeyResponses];
+
+export type PutAgentApiKeyData = {
+    body: PutAgentApiKeyRequest;
+    path: {
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/api-key';
+};
+
+export type PutAgentApiKeyErrors = {
+    400: ErrorResponse;
+    401: string;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type PutAgentApiKeyError = PutAgentApiKeyErrors[keyof PutAgentApiKeyErrors];
+
+export type PutAgentApiKeyResponses = {
+    200: AgentApiKey;
+};
+
+export type PutAgentApiKeyResponse = PutAgentApiKeyResponses[keyof PutAgentApiKeyResponses];
 
 export type UpdateAiBillingAutoReloadData = {
     body: UpdateAutoReloadRequest;
@@ -2482,6 +2720,39 @@ export type GetGithubPullRequestMergeabilityResponses = {
 
 export type GetGithubPullRequestMergeabilityResponse = GetGithubPullRequestMergeabilityResponses[keyof GetGithubPullRequestMergeabilityResponses];
 
+export type SetGithubPullRequestStateData = {
+    body: SetGithubPullRequestStateRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/state';
+};
+
+export type SetGithubPullRequestStateErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot change the pull request
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * GitHub declined the change
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
+
+export type SetGithubPullRequestStateResponses = {
+    200: SetGithubPullRequestStateResponse;
+};
+
+export type SetGithubPullRequestStateResponse2 = SetGithubPullRequestStateResponses[keyof SetGithubPullRequestStateResponses];
+
 export type ListGtmInviteLinksData = {
     body?: never;
     path?: never;
@@ -2720,9 +2991,20 @@ export type CreateInProgressLinkResponse2 = CreateInProgressLinkResponses[keyof 
 export type EmailConnectionProvidersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * **OPTIONAL**. Where the admin-consent flow returns to; required for `outlook_admin_consent_url`.
+         */
+        original_url?: string;
+    };
     url: '/link/email/providers';
 };
+
+export type EmailConnectionProvidersErrors = {
+    400: ErrorResponse;
+};
+
+export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];
 
 export type EmailConnectionProvidersResponses = {
     200: EmailConnectionProviders;
@@ -3432,6 +3714,112 @@ export type InviteToTeamResponses = {
     201: unknown;
 };
 
+export type DeleteTeamInviteLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link';
+};
+
+export type DeleteTeamInviteLinkErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteTeamInviteLinkError = DeleteTeamInviteLinkErrors[keyof DeleteTeamInviteLinkErrors];
+
+export type DeleteTeamInviteLinkResponses = {
+    204: void;
+};
+
+export type DeleteTeamInviteLinkResponse = DeleteTeamInviteLinkResponses[keyof DeleteTeamInviteLinkResponses];
+
+export type GetTeamInviteLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link';
+};
+
+export type GetTeamInviteLinkErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamInviteLinkError = GetTeamInviteLinkErrors[keyof GetTeamInviteLinkErrors];
+
+export type GetTeamInviteLinkResponses = {
+    200: TeamInviteLinkResponse;
+};
+
+export type GetTeamInviteLinkResponse = GetTeamInviteLinkResponses[keyof GetTeamInviteLinkResponses];
+
+export type CreateTeamInviteLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link';
+};
+
+export type CreateTeamInviteLinkErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateTeamInviteLinkError = CreateTeamInviteLinkErrors[keyof CreateTeamInviteLinkErrors];
+
+export type CreateTeamInviteLinkResponses = {
+    201: CreatedTeamInviteLinkResponse;
+};
+
+export type CreateTeamInviteLinkResponse = CreateTeamInviteLinkResponses[keyof CreateTeamInviteLinkResponses];
+
+export type JoinTeamByInviteLinkData = {
+    body: TeamInviteLinkTokenRequest;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link/join';
+};
+
+export type JoinTeamByInviteLinkErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type JoinTeamByInviteLinkError = JoinTeamByInviteLinkErrors[keyof JoinTeamByInviteLinkErrors];
+
+export type JoinTeamByInviteLinkResponses = {
+    200: JoinTeamByInviteLinkResponse;
+};
+
+export type JoinTeamByInviteLinkResponse2 = JoinTeamByInviteLinkResponses[keyof JoinTeamByInviteLinkResponses];
+
+export type GetTeamByInviteLinkData = {
+    body: TeamInviteLinkTokenRequest;
+    path?: never;
+    query?: never;
+    url: '/team/invite-link/team';
+};
+
+export type GetTeamByInviteLinkErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamByInviteLinkError = GetTeamByInviteLinkErrors[keyof GetTeamByInviteLinkErrors];
+
+export type GetTeamByInviteLinkResponses = {
+    200: TeamInviteLinkTeam;
+};
+
+export type GetTeamByInviteLinkResponse = GetTeamByInviteLinkResponses[keyof GetTeamByInviteLinkResponses];
+
 export type DeleteTeamInviteHandlerData = {
     body?: never;
     path: {
@@ -3706,6 +4094,52 @@ export type PatchUserGroupResponses = {
 };
 
 export type PatchUserGroupResponse = PatchUserGroupResponses[keyof PatchUserGroupResponses];
+
+export type GetUserLanguageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type GetUserLanguageErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetUserLanguageError = GetUserLanguageErrors[keyof GetUserLanguageErrors];
+
+export type GetUserLanguageResponses = {
+    200: UserLanguage;
+};
+
+export type GetUserLanguageResponse = GetUserLanguageResponses[keyof GetUserLanguageResponses];
+
+export type PutUserLanguageData = {
+    body: UserLanguage;
+    path?: never;
+    query?: never;
+    url: '/user/language';
+};
+
+export type PutUserLanguageErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutUserLanguageError = PutUserLanguageErrors[keyof PutUserLanguageErrors];
+
+export type PutUserLanguageResponses = {
+    /**
+     * Language updated
+     */
+    204: void;
+};
+
+export type PutUserLanguageResponse = PutUserLanguageResponses[keyof PutUserLanguageResponses];
 
 export type GetLegacyUserPermissionsData = {
     body?: never;

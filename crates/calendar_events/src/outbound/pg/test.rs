@@ -166,6 +166,9 @@ fn timed_upsert(
                 comment: None,
             }],
             reminders: EventReminders::default(),
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: starts_at,
             updated_at: starts_at + Duration::minutes(i64::from(sequence)),
         },
@@ -1109,8 +1112,7 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
         upsert: google.clone(),
     })
     .await
-    .unwrap()
-    .event_id;
+    .unwrap();
 
     sqlx::query!(
         r#"
@@ -1444,6 +1446,343 @@ async fn occurrence_range_uses_overlap_indexes_and_preserves_attendees(pool: PgP
         event.creator_email.as_deref() == Some("creator@example.com")
             && event.creator_name.as_deref() == Some("Creator")
     }));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn guest_policy_follows_the_canonical_copy(pool: PgPool) {
+    let owner_id = "macro|calendar-guests@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let locked_down = GuestPolicy {
+        can_modify: false,
+        can_invite_others: false,
+        can_see_other_guests: false,
+    };
+    let range = OccurrenceRange {
+        starts_at: Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap(),
+        start_date: NaiveDate::from_ymd_opt(2026, 7, 24).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 7, 26).unwrap(),
+    };
+    let mut first = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "guests@example.com",
+        "Planning",
+        1,
+    );
+    first.event.guest_policy = locked_down;
+    repo.upsert_event_fixture(first).await.unwrap();
+
+    let listed = repo
+        .list_occurrences(owner_id, range.clone(), None, 100)
+        .await
+        .unwrap();
+    assert!(!listed.is_empty());
+    assert!(
+        listed
+            .iter()
+            .all(|listing| listing.event.guest_policy == locked_down)
+    );
+
+    // The organizer restores Google's defaults; the next sync carries no
+    // switch at all and the entity follows.
+    let second = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "guests@example.com",
+        "Planning",
+        2,
+    );
+    repo.upsert_event_fixture(second).await.unwrap();
+
+    let listed = repo
+        .list_occurrences(owner_id, range, None, 100)
+        .await
+        .unwrap();
+    assert!(
+        listed
+            .iter()
+            .all(|listing| listing.event.guest_policy == GuestPolicy::default())
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_recorded_guest_policy_reaches_the_entity_and_every_copy(pool: PgPool) {
+    let owner_id = "macro|calendar-refused@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let event_id = repo
+        .upsert_event_fixture(timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "refused@example.com",
+            "Planning",
+            1,
+        ))
+        .await
+        .unwrap();
+    let hidden = GuestPolicy {
+        can_modify: false,
+        can_invite_others: true,
+        can_see_other_guests: false,
+    };
+
+    repo.record_guest_policy(event_id, hidden).await.unwrap();
+
+    let entity = sqlx::query!(
+        r#"
+        SELECT guests_can_modify, guests_can_invite_others, guests_can_see_other_guests
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!entity.guests_can_modify);
+    assert!(entity.guests_can_invite_others);
+    assert!(!entity.guests_can_see_other_guests);
+    let stored = sqlx::query_scalar!(
+        "SELECT normalized_payload FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let projection: StoredSourceProjection = serde_json::from_value(stored).unwrap();
+    assert_eq!(
+        projection.event.guest_policy, hidden,
+        "a restore from this copy keeps the recorded policy"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn source_projections_store_neither_viewer_capabilities_nor_a_default_policy(pool: PgPool) {
+    let owner_id = "macro|calendar-projection@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "projection@example.com",
+        "Planning",
+        1,
+    );
+    upsert.event.viewer_can = ViewerCapabilities {
+        rsvp: true,
+        ..ViewerCapabilities::NONE
+    };
+    let event_id = repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let stored = sqlx::query_scalar!(
+        "SELECT normalized_payload FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // Projections stored before these fields existed lack their keys, and an
+    // unchanged event must keep comparing equal to them.
+    assert!(stored["event"].get("viewerCan").is_none());
+    assert!(stored["event"].get("guestPolicy").is_none());
+    assert!(stored["event"].get("isSnapshot").is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_snapshot_stays_marked_on_reads_and_mutation_targets(pool: PgPool) {
+    let owner_id = "macro|calendar-snapshot@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "snapshot@example.com",
+        "Shared meeting",
+        1,
+    );
+    upsert.event.is_snapshot = true;
+    let event_id = repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let listed = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at: Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap(),
+                ends_at: Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap(),
+                start_date: NaiveDate::from_ymd_opt(2026, 7, 24).unwrap(),
+                end_date: NaiveDate::from_ymd_opt(2026, 7, 26).unwrap(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+    assert!(!listed.is_empty());
+    assert!(listed.iter().all(|listing| listing.event.is_snapshot));
+    let target = repo
+        .get_event_mutation_target(owner_id, event_id, None)
+        .await
+        .unwrap()
+        .expect("the owner may address their snapshot");
+    assert!(target.is_snapshot);
+    let stored = sqlx::query_scalar!(
+        "SELECT normalized_payload FROM calendar_event_sources WHERE event_id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let projection: StoredSourceProjection = serde_json::from_value(stored).unwrap();
+    assert!(
+        projection.event.is_snapshot,
+        "a restore from this copy keeps it a snapshot"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_snapshot_an_invitation_reached_stays_its_owners_seat(pool: PgPool) {
+    let owner_id = "macro|calendar-seat@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let copy = |sequence, is_snapshot| {
+        let mut upsert = timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "shared@example.com",
+            "Shared meeting",
+            sequence,
+        );
+        upsert.event.is_snapshot = is_snapshot;
+        upsert
+    };
+    let is_snapshot = |event_id| {
+        let repo = &repo;
+        async move {
+            repo.get_event_mutation_target(owner_id, event_id, None)
+                .await
+                .unwrap()
+                .expect("the owner may address their copy")
+                .is_snapshot
+        }
+    };
+
+    let event_id = repo.upsert_event_fixture(copy(1, true)).await.unwrap();
+    repo.upsert_event_fixture(copy(2, true)).await.unwrap();
+    assert!(is_snapshot(event_id).await, "a later sync keeps a snapshot");
+
+    // The organizer's invitation lands on the snapshot's Google event.
+    repo.upsert_event_fixture(copy(3, false)).await.unwrap();
+    assert!(!is_snapshot(event_id).await);
+    // Answering can leave Google's copy looking like the import again.
+    repo.upsert_event_fixture(copy(4, true)).await.unwrap();
+    assert!(!is_snapshot(event_id).await, "the seat stays a seat");
+    let entity_is_snapshot = sqlx::query_scalar!(
+        "SELECT is_snapshot FROM calendar_events WHERE id = $1",
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!entity_is_snapshot);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_snapshot_beside_the_real_meeting_stays_a_snapshot_when_addressed(pool: PgPool) {
+    let owner_id = "macro|calendar-snapshot-beside@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_id) = grant_and_provider_ids(&repo, link_id).await;
+    let team_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "team".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("writer".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    // The real invitation on the primary calendar is the canonical copy.
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::UserMutation(timed_upsert(
+            owner_id,
+            link_id,
+            (account_id, primary_id),
+            "beside@example.com",
+            "Shared meeting",
+            2,
+        )))
+        .await
+        .unwrap()
+        .event_id;
+    // A snapshot of the same meeting imported into another calendar shares
+    // the entity.
+    let mut snapshot = timed_upsert(
+        owner_id,
+        link_id,
+        (account_id, team_id),
+        "beside@example.com",
+        "Shared meeting",
+        1,
+    );
+    snapshot.event.is_snapshot = true;
+    snapshot.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("writer".to_owned()),
+        email_link_id: link_id,
+        account_id,
+        calendar_id: team_id,
+        provider_event_id: "snapshot-id".to_string(),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    repo.upsert_event(CalendarEventWrite::UserMutation(snapshot))
+        .await
+        .unwrap();
+
+    let canonical = repo
+        .get_event_mutation_target(owner_id, event_id, None)
+        .await
+        .unwrap()
+        .expect("the owner may address the meeting");
+    let addressed = repo
+        .get_event_mutation_target(owner_id, event_id, Some(team_id))
+        .await
+        .unwrap()
+        .expect("the owner may address their snapshot");
+
+    assert!(
+        !canonical.is_snapshot,
+        "the real invitation stays answerable"
+    );
+    assert_eq!(addressed.provider_event_id, "snapshot-id");
+    assert!(
+        addressed.is_snapshot,
+        "an answer addressed to the snapshot's calendar must not slip through"
+    );
 }
 
 /// A Google out-of-office auto-decline records the decline on the exception
@@ -3316,8 +3655,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
     });
     repo.upsert_event(CalendarEventWrite::UserMutation(team_copy))
         .await
-        .unwrap()
-        .event_id;
+        .unwrap();
 
     repo.remove_provider_source(account_id, primary_id, "provider-shared-remove@example.com")
         .await
@@ -3395,6 +3733,9 @@ fn reminder_upsert(
             is_read_only: false,
             attendees: Vec::new(),
             reminders,
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: starts_at - Duration::days(1),
             updated_at: starts_at - Duration::days(1),
         },
@@ -4010,8 +4351,7 @@ async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
     upsert.event.conference_provider = Some(ConferenceProvider::GoogleMeet);
     repo.upsert_event(CalendarEventWrite::UserMutation(upsert))
         .await
-        .unwrap()
-        .event_id;
+        .unwrap();
 
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
     let ends_at = starts_at + Duration::days(2);
@@ -4431,14 +4771,14 @@ async fn mention_previews_resolve_through_the_shared_uid(pool: PgPool) {
 }
 
 async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
         VALUES ($1, 'calendar_event', $2::uuid::text, 'channel', 'view')
         "#,
+        event_id,
+        channel_id,
     )
-    .bind(event_id)
-    .bind(channel_id)
     .execute(pool)
     .await
     .unwrap();
@@ -4446,20 +4786,20 @@ async fn share_with_channel(pool: &PgPool, event_id: Uuid, channel_id: Uuid) {
 
 async fn insert_channel(pool: &PgPool, owner_id: &str, members: &[&str]) -> Uuid {
     let channel_id = Uuid::now_v7();
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel_id,
+        owner_id,
     )
-    .bind(channel_id)
-    .bind(owner_id)
     .execute(pool)
     .await
     .unwrap();
     for member in members {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+            channel_id,
+            *member,
         )
-        .bind(channel_id)
-        .bind(*member)
         .execute(pool)
         .await
         .unwrap();
@@ -4529,11 +4869,11 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
         &[author_id, attendee_id, member_id, former_id],
     )
     .await;
-    sqlx::query(
+    sqlx::query!(
         "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        former_id,
     )
-    .bind(channel_id)
-    .bind(former_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -4601,11 +4941,13 @@ async fn mention_previews_fall_back_to_a_channel_shared_projection(pool: PgPool)
     }
 
     // A cancelled event no longer previews for anyone.
-    sqlx::query("UPDATE calendar_events SET status = 'cancelled' WHERE id = $1")
-        .bind(shared_event_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
+        shared_event_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let previews = repo
         .mention_previews(member_id, vec![request(shared_event_id)], now)
         .await
@@ -5013,6 +5355,47 @@ async fn team_out_of_office_shows_busy_only_status_without_its_title(pool: PgPoo
     assert!(
         rows.iter().all(|row| row.title.is_none()),
         "busy-only sharing discloses the status, never the title"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_reads_each_sources_own_event_type(pool: PgPool) {
+    let viewer = "macro|type-viewer@example.com";
+    let teammate = "macro|type-teammate@example.com";
+    insert_team(&pool, viewer, &[viewer, teammate]).await;
+    let link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        link,
+        provider,
+        "canonical-default@example.com",
+        "Parental leave",
+    ))
+    .await
+    .unwrap();
+    // The entity's stored type follows its canonical source, which can be a
+    // non-out-of-office copy of the same event; the primary calendar's own
+    // source still says out of office.
+    sqlx::query!(
+        "UPDATE calendar_events SET event_type = 'default' WHERE owner_id = $1",
+        teammate,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    enable_team_details(&repo, &[teammate]).await;
+
+    let rows = repo
+        .list_team_out_of_office(viewer, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(
+        rows.iter()
+            .all(|row| row.owner_id == teammate && row.title.as_deref() == Some("Parental leave"))
     );
 }
 
@@ -6873,7 +7256,134 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
 }
 
 mod changes;
+mod channel_grants;
+mod details;
+mod export;
+mod guest_policy;
 mod invitations;
+mod join_requests;
+mod meeting_copies;
+mod meeting_uid;
+#[cfg(feature = "notes")]
+mod notes;
+mod organizer_calendar;
 mod source_access;
 
 mod replacement;
+
+async fn link_email(pool: &PgPool, link_id: Uuid) -> String {
+    sqlx::query_scalar!(
+        r#"SELECT email_address::text AS "email_address!" FROM email_links WHERE id = $1"#,
+        link_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+fn attendee(email: &str, is_organizer: bool) -> CalendarAttendee {
+    CalendarAttendee {
+        email: email.to_string(),
+        display_name: None,
+        response_status: AttendeeResponseStatus::Accepted,
+        is_organizer,
+        is_optional: false,
+        is_self: false,
+        comment: None,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mention_previews_say_how_the_viewer_holds_the_meeting(pool: PgPool) {
+    let organizer_id = "macro|copy-organizer@example.com";
+    let guest_id = "macro|copy-guest@example.com";
+    let holder_id = "macro|copy-holder@example.com";
+    let member_id = "macro|copy-member@example.com";
+    let organizer_link = insert_link(&pool, organizer_id).await;
+    let guest_link = insert_link(&pool, guest_id).await;
+    let holder_link = insert_link(&pool, holder_id).await;
+    let organizer_email = link_email(&pool, organizer_link).await;
+    let guest_email = link_email(&pool, guest_link).await;
+    let holder_email = link_email(&pool, holder_link).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let uid = "held@example.com";
+
+    let copy = |owner_id: &str, link_id, provider, attendees: Vec<CalendarAttendee>| {
+        let mut upsert = timed_upsert(owner_id, link_id, provider, uid, "Planning", 1);
+        upsert.event.organizer_email = Some(organizer_email.clone());
+        upsert.event.attendees = attendees;
+        upsert
+    };
+    let organizer_copy = copy(
+        organizer_id,
+        organizer_link,
+        provider_ids(&repo, organizer_link).await,
+        vec![
+            attendee(&organizer_email, true),
+            attendee(&guest_email, false),
+        ],
+    );
+    let shared_event_id = organizer_copy.event.id;
+    repo.upsert_event_fixture(organizer_copy).await.unwrap();
+    let guest_copy = copy(
+        guest_id,
+        guest_link,
+        provider_ids(&repo, guest_link).await,
+        vec![
+            attendee(&organizer_email, true),
+            attendee(&guest_email, false),
+        ],
+    );
+    repo.upsert_event_fixture(guest_copy).await.unwrap();
+    // A snapshot lists its holder as the only guest so Google accepts it.
+    let mut snapshot = copy(
+        holder_id,
+        holder_link,
+        provider_ids(&repo, holder_link).await,
+        vec![attendee(&holder_email, false)],
+    );
+    snapshot.event.is_snapshot = true;
+    repo.upsert_event_fixture(snapshot).await.unwrap();
+    let channel_id = insert_channel(
+        &pool,
+        organizer_id,
+        &[organizer_id, guest_id, holder_id, member_id],
+    )
+    .await;
+    share_with_channel(&pool, shared_event_id, channel_id).await;
+
+    let now = Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap();
+    let held_as = |viewer: &'static str| {
+        let repo = &repo;
+        async move {
+            let previews = repo
+                .mention_previews(
+                    viewer,
+                    vec![CalendarMentionRequestItem {
+                        event_id: shared_event_id,
+                        occurrence_key: None,
+                    }],
+                    now,
+                )
+                .await
+                .unwrap();
+            let CalendarMentionPreview::Accessible(event) = &previews[0] else {
+                panic!("{viewer} preview should be accessible: {:?}", previews[0]);
+            };
+            event.viewer_copy
+        }
+    };
+    assert_eq!(
+        held_as(organizer_id).await,
+        Some(CalendarMentionViewerCopy::Event)
+    );
+    assert_eq!(
+        held_as(guest_id).await,
+        Some(CalendarMentionViewerCopy::Invitation)
+    );
+    assert_eq!(
+        held_as(holder_id).await,
+        Some(CalendarMentionViewerCopy::Snapshot)
+    );
+    assert_eq!(held_as(member_id).await, None);
+}

@@ -1,4 +1,4 @@
-/** Carry the feature bubbles into a grainy color field, then open the workspace. */
+/** Carry the feature bubbles into the existing sample workspace. */
 export function animateDemoEntrance(
   section: HTMLElement,
   scroller: HTMLElement

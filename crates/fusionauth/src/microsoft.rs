@@ -92,16 +92,34 @@ impl FusionAuthClient {
             url.query_pairs_mut()
                 .clear()
                 .extend_pairs(pairs)
-                .append_pair(
-                    "scope",
-                    &format!("{} Calendars.ReadWrite", oauth::MICROSOFT_SCOPES),
-                );
+                .append_pair("scope", &oauth::consent_scopes(true));
         }
         url.query_pairs_mut()
             .append_pair("code_challenge", challenge)
             .append_pair("code_challenge_method", "S256")
             .append_pair("nonce", nonce);
         Ok(url.into())
+    }
+
+    /// Constructs the tenant-wide admin-consent URL an administrator completes
+    /// when their directory does not let users consent to Macro themselves.
+    ///
+    /// `state` is opaque and is only URL-encoded, never JSON-serialized.
+    pub fn construct_microsoft_admin_consent_url(
+        &self,
+        redirect_uri: &str,
+        state: &str,
+        calendar: bool,
+    ) -> Result<String> {
+        let credentials = self.microsoft_credentials()?;
+        oauth::construct_admin_consent_url(
+            &credentials.client_id,
+            &credentials.tenant_id,
+            redirect_uri,
+            state,
+            calendar,
+        )
+        .map_err(FusionAuthClientError::from)
     }
 
     /// Exchanges a Microsoft authorization code for a refresh token and ID token.

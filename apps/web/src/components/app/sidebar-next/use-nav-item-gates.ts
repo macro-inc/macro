@@ -1,3 +1,4 @@
+import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -5,6 +6,7 @@ import {
   enableCalendarScheduling,
   enableCrm,
   enableTasksReviews,
+  enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
@@ -20,6 +22,8 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
+  const activity = useActivityFeedFlag();
+  const external = useFeatureFlag(enableWhatsappLinked);
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
@@ -28,6 +32,8 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showCustomers: crm().enabled,
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
+    showActivity: activity(),
+    showExternal: external().enabled,
     prefs: prefs(),
   }));
 }

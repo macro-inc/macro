@@ -19,6 +19,7 @@ function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
     to: [{ email: 'viewer@example.com' }],
     cc: [],
     bcc: [],
+    draft_generation: 0,
     attachments: [],
     attachments_draft: [],
     attachments_forwarded: [],
@@ -265,6 +266,12 @@ it('keeps rendering and attachment identities while excluding transport metadata
           filename: 'image.png',
           size_bytes: 123,
         },
+        {
+          db_id: 'cloud',
+          filename: 'invite.ics',
+          mime_type: 'text/calendar',
+          reference_url: 'https://outlook.office.com/mail/item',
+        },
       ],
       attachments_draft: [
         {
@@ -292,14 +299,19 @@ it('keeps rendering and attachment identities while excluding transport metadata
       ],
       provider_id: 'reply-provider-id',
       scheduled_send_time: '2026-10-01T12:00:00Z',
+      scheduled_send_status: 'unconfirmed',
     }),
   ]);
   const projected = toEmailThread(wire).messages[0];
   expect(projected).toMatchObject({
     provider_id: 'reply-provider-id',
     scheduled_send_time: '2026-10-01T12:00:00Z',
+    scheduled_send_status: 'unconfirmed',
     labels: [{ name: 'CATEGORY_PERSONAL', provider_label_id: 'UNREAD' }],
-    attachments: [{ db_id: 'inline', content_id: 'image-cid', sfs_id: 'file' }],
+    attachments: [
+      { db_id: 'inline', content_id: 'image-cid', sfs_id: 'file' },
+      { db_id: 'cloud', reference_url: 'https://outlook.office.com/mail/item' },
+    ],
     attachments_draft: [{ id: 'draft-file', s3_key: 'notes' }],
     attachments_forwarded: [
       { attachment_id: 'forward-file', filename: 'forward.txt' },

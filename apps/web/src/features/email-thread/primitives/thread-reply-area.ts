@@ -1,7 +1,7 @@
 import { type Accessor, createEffect, createMemo } from 'solid-js';
 import type { EmailMessage } from '../../email-message/core/email-message';
 
-/** Owns bottom/drawer reply placement independently of thread navigation. */
+/** Owns bottom/full-screen reply placement independently of thread navigation. */
 export function createThreadReplyArea(options: {
   threadId: Accessor<string>;
   isTouch: Accessor<boolean>;

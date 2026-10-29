@@ -12,9 +12,11 @@ import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { FullScreenCallPrompt } from '@channel/Call/FullScreenCallPrompt';
 import { CallKitSync } from '@channel/Call/use-callkit';
 import { dismissBootShell } from '@components/app/boot-shell';
 import { RootFrame } from '@components/app/Layout';
+import { useSessionWebsockets } from '@core/auth/session-websockets';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
@@ -31,6 +33,7 @@ import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
+import { useNotificationCoverTimeout } from '@macro/tauri/notification-launch';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
@@ -176,8 +179,12 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
  */
 function AppRouteFrame(props: RouteSectionProps) {
   useUserInfoSideEffects();
+  useSessionWebsockets();
+  useNotificationCoverTimeout();
   onMount(() => {
-    const cap = setTimeout(dismissBootShell, BOOT_SHELL_MAX_WAIT_MS);
+    const cap = setTimeout(() => {
+      dismissBootShell();
+    }, BOOT_SHELL_MAX_WAIT_MS);
     onCleanup(() => clearTimeout(cap));
   });
   return <RootFrame>{props.children}</RootFrame>;
@@ -214,6 +221,7 @@ export function Root() {
               <UserContextProvider>
                 <EmailLinksContextProvider>
                   <BrowserNotificationModal />
+                  <FullScreenCallPrompt />
                   <IosPushNotificationModal />
                   <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />

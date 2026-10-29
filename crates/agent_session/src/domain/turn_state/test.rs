@@ -3,6 +3,16 @@ use crate::domain::ports::AgentSessionLogRepo;
 use crate::testing::{InMemoryAgentSessionRepo, test_agent_session};
 use agent_fold::testing::{TURN, parse_log_as, test_session};
 
+#[test]
+fn only_open_work_moves_the_session_list() {
+    assert!(moves_session_list(TurnState::Starting));
+    assert!(moves_session_list(TurnState::Running));
+    assert!(moves_session_list(TurnState::Stopping));
+    assert!(moves_session_list(TurnState::Blocked));
+    assert!(!moves_session_list(TurnState::Idle));
+    assert!(!moves_session_list(TurnState::Disconnected));
+}
+
 #[tokio::test]
 async fn backfill_is_bounded_and_uses_the_authoritative_fold() {
     let repo = InMemoryAgentSessionRepo::new();

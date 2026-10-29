@@ -35,10 +35,7 @@ afterEach(() => {
   for (const dispose of cleanups.splice(0)) dispose();
 });
 
-function setup(
-  items: Row[],
-  initial: { accountId?: string; hasMore?: boolean; pending?: boolean } = {}
-) {
+function setup(items: Row[], initial: { accountId?: string } = {}) {
   return createRoot((dispose) => {
     cleanups.push(dispose);
     const [accountId, setAccountId] = createSignal(
@@ -47,8 +44,6 @@ function setup(
     const [query, setQuery] = createSignal('notes');
     const [category, setCategory] = createSignal<EntitySearchCategory>('all');
     const [incoming, setItems] = createSignal(items);
-    const [pending, setPending] = createSignal(initial.pending ?? false);
-    const [hasMore, setHasMore] = createSignal(initial.hasMore ?? false);
     const [discard, setDiscard] = createSignal(false);
     const results = createSearchResultWindow({
       key: 'results',
@@ -56,8 +51,6 @@ function setup(
       query,
       category,
       items: incoming,
-      pending,
-      hasMore,
       discard,
     });
     return {
@@ -67,8 +60,6 @@ function setup(
       setQuery,
       setCategory,
       setItems,
-      setPending,
-      setHasMore,
       setDiscard,
     };
   });
@@ -89,41 +80,41 @@ it('ranks live until opening, then updates rows in place and appends later resul
   expect(results.items()).toEqual([updated, original[0], added]);
 });
 
-it('restores saved order while rebuilding a shorter first page and paging further', () => {
+it('saves only bounded IDs and restores order using current source rows', () => {
   const first = setup(original);
-  first.results.preserveOrder();
   history.state = Object.fromEntries(
     [...history.captors].map(([key, read]) => [key, read()])
   );
+  expect(history.state).toEqual({
+    results: {
+      accountId: 'alice',
+      query: 'notes',
+      category: 'all',
+      ids: ['a', 'b', 'c'],
+    },
+  });
   first.dispose();
-  const { results, setItems } = setup([original[2]], { hasMore: true });
-  expect(results.items()).toEqual(original);
-  expect(results.needsMore()).toBe(true);
-  const updated = { id: 'c', name: 'Recently opened' };
-  setItems([updated, original[0], original[1]]);
-  expect(results.items()).toEqual([original[0], original[1], updated]);
-  expect(results.needsMore()).toBe(false);
-  const added = { id: 'd', name: 'Later result' };
-  setItems([updated, added, original[0], original[1]]);
-  expect(results.items()).toEqual([original[0], original[1], updated, added]);
+  const updated = { id: 'c', name: 'Current third' };
+  const second = setup([updated]);
+  expect(second.results.items()).toEqual([updated]);
+  second.setItems([updated, original[1], original[0]]);
+  expect(second.results.items()).toEqual([original[0], original[1], updated]);
+  second.setItems([]);
+  expect(second.results.items()).toEqual([]);
 });
 
-it('keeps saved rows that move beyond the refreshed page without scanning every page', () => {
-  const { results, setItems, setHasMore } = setup(original, { hasMore: true });
-  results.preserveOrder();
-  const added = { id: 'd', name: 'New recent result' };
-  setItems([added, original[2], original[0]]);
-  expect(results.items()).toEqual([...original, added]);
-  // The previously loaded size is rebuilt. Further pages follow user scrolling.
-  expect(results.needsMore()).toBe(false);
-  const updated = { id: 'c', name: 'Updated third' };
-  setItems([added, updated, original[0]]);
-  expect(results.items()).toEqual([original[0], original[1], updated, added]);
-  setItems([added, updated, original[0], original[1]]);
-  expect(results.items()).toEqual([original[0], original[1], updated, added]);
-  setItems([added, updated, original[0]]);
-  setHasMore(false);
-  expect(results.items()).toEqual([original[0], updated, added]);
+it('bounds saved ordering hints even after loading a large search', () => {
+  const rows = Array.from({ length: 1000 }, (_, i) => ({
+    id: `row-${i}`,
+    name: 'Large payload',
+  }));
+  setup(rows);
+  expect(history.captors.get('results')?.()).toEqual({
+    accountId: 'alice',
+    query: 'notes',
+    category: 'all',
+    ids: rows.slice(0, 200).map((row) => row.id),
+  });
 });
 
 it('preserves the mounted list when history is captured outside a result opener', () => {
@@ -133,25 +124,6 @@ it('preserves the mounted list when history is captured outside a result opener'
   );
   setItems([original[2], original[0], original[1]]);
   expect(results.items()).toEqual(original);
-});
-
-it('restores the source refill size without counting retained rows as extra loaded pages', () => {
-  const first = setup(original, { hasMore: true });
-  first.results.preserveOrder();
-  const added = { id: 'd', name: 'New recent result' };
-  first.setItems([added, original[2], original[0]]);
-  expect(first.results.items()).toEqual([...original, added]);
-  history.state = Object.fromEntries(
-    [...history.captors].map(([key, read]) => [key, read()])
-  );
-  first.dispose();
-  const second = setup([added, original[2], original[0]], { hasMore: true });
-  expect(second.results.items()).toEqual([...original, added]);
-  expect(second.results.needsMore()).toBe(false);
-  const next = { id: 'e', name: 'Next page' };
-  second.setItems([added, original[2], original[0], next]);
-  expect(second.results.items()).toEqual([...original, added, next]);
-  expect(second.results.needsMore()).toBe(false);
 });
 
 it('ranks new queries and categories afresh, including revisiting an earlier query', () => {
@@ -178,42 +150,32 @@ it('ranks new queries and categories afresh, including revisiting an earlier que
   expect(results.items()).toEqual(original);
 });
 
-it('discards saved rows on authoritative failure and accepts successful empty results', () => {
-  const { results, setItems, setPending, setHasMore, setDiscard } =
-    setup(original);
+it('uses current rows after authoritative failure and successful empty results', () => {
+  const { results, setItems, setDiscard } = setup(original);
   results.preserveOrder();
   batch(() => {
-    setPending(true);
-    setHasMore(true);
     setItems([original[2]]);
   });
-  expect(results.items()).toEqual(original);
+  expect(results.items()).toEqual([original[2]]);
   setDiscard(true);
   expect(results.items()).toEqual([original[2]]);
   batch(() => {
     setDiscard(false);
-    setPending(false);
-    setHasMore(false);
     setItems([]);
   });
   expect(results.items()).toEqual([]);
 });
 
 it('drops the previous account window while the next account is loading', () => {
-  const { results, setAccountId, setItems, setPending, setHasMore } =
-    setup(original);
+  const { results, setAccountId, setItems } = setup(original);
   results.preserveOrder();
   batch(() => {
     setAccountId('bob');
-    setPending(true);
-    setHasMore(true);
     setItems([]);
   });
   expect(results.items()).toEqual([]);
-  expect(results.needsMore()).toBe(false);
   batch(() => {
     setItems([original[2], original[0]]);
-    setPending(false);
   });
   expect(results.items()).toEqual([original[2], original[0]]);
 });
@@ -224,16 +186,12 @@ it('ignores another account snapshot when remounting a history entry', () => {
     [...history.captors].map(([key, read]) => [key, read()])
   );
   first.dispose();
-  const { results, setItems, setPending } = setup([], {
+  const { results, setItems } = setup([], {
     accountId: 'bob',
-    hasMore: true,
-    pending: true,
   });
   expect(results.items()).toEqual([]);
-  expect(results.needsMore()).toBe(false);
   batch(() => {
     setItems([original[2], original[0]]);
-    setPending(false);
   });
   expect(results.items()).toEqual([original[2], original[0]]);
 });

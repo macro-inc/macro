@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE agent_preview_watcher IN EXCLUSIVE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5152ca9dfd6de8e94283b0ea1eab5fcef68fd7ae018d65ada1fc4423cc311bbe"
+}

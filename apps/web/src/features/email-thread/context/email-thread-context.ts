@@ -44,6 +44,7 @@ export interface EmailThreadCommands {
   canMarkThreadNotDone: Accessor<boolean>;
   markThreadNotDone(): boolean;
   isThreadMarkedUnread: Accessor<boolean>;
+  isThreadMarkedRead: Accessor<boolean>;
   markThreadUnread(): boolean;
   markThreadRead(): boolean;
   blockSender(): boolean;

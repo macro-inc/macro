@@ -49,6 +49,7 @@ import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
 import { documentsTour } from './tour';
 import { DriveLoading, DriveWorkspace } from './views/drive-workspace';
+import { SignedOutDriveWorkspace } from './views/signed-out-drive-workspace';
 
 export type DriveViewProps = { initialFacets?: FacetSelection };
 
@@ -72,7 +73,10 @@ function DriveComposition(props: { route: DriveRouteState }) {
   );
   const searchText = () => view.value().search;
   const selection = () => ({ ...viewState(), search: searchText() });
-  const sidebar = createDriveSidebarSource();
+  const sidebar = createDriveSidebarSource({
+    databasesEnabled: () => databasesFlag().enabled,
+    formsEnabled: () => formsFlag().enabled,
+  });
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
       selection,
@@ -188,6 +192,16 @@ function DriveComposition(props: { route: DriveRouteState }) {
     >
       <DriveWorkspace tour={<ViewTour tour={documentsTour} />} />
     </DriveProvider>
+  );
+}
+
+/** Public details use the same viewer without constructing private Drive sources. */
+export function SignedOutDriveView() {
+  const route = createDriveRouteState(() => undefined);
+  return (
+    <DriveDetailNavigationProvider location={route.location}>
+      <SignedOutDriveWorkspace />
+    </DriveDetailNavigationProvider>
   );
 }
 

@@ -2,6 +2,26 @@
 
 ## Notifications
 
+Browser notifications must arrive while Macro is in a background tab, not just
+when it is visible. With browser permission and in-app delivery enabled, switch
+to an unrelated tab and trigger a notification from another session. Check that
+the alert arrives before returning to Macro and does not repeat on return. Try
+with one Macro tab and with several all hidden; only the elected notification
+leader should show the alert. This does not promise delivery after every Macro
+tab is closed or the browser suspends the page.
+
+GraphQL notification callbacks run on network receipt, independently of the local
+cache, which parks while all Macro tabs are hidden. Cache updates and channel
+reconciliation catch up afterward. The backend-free `parking.browser.e2e.ts`
+regression exercises that boundary with real storage and simulated visibility;
+OS banner presentation still needs the manual check above.
+
+For delayed cache catch-up, find `notification.receive` by `notification.id`.
+Its linked `graphql.subscription.cache_queue` and
+`graphql.subscription.cache_apply` phases distinguish waiting behind an earlier
+event from applying the event to storage. Receipt completes without waiting for
+these phases; listener errors mark receipt, while cache errors mark application.
+
 In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
 controls system notification delivery for this installation. The Notifications
 page is always present, in the same place on web, desktop, and mobile; Account
@@ -17,6 +37,24 @@ can still suppress alerts even when authorization is granted.
 Verify off/on and persistence after restarting; on the Notifications page, a failed
 toggle should show an error toast and allow retry.
 
+On macOS builds with notification activation, clicking an alert restores and
+focuses Macro and opens that notification's message, thread, or document location.
+The native notification retains its destination across app restarts, and startup
+waits for the layout before opening it. Receipt and dismissal must not navigate.
+Verify two alerts with different targets by clicking the older one, then repeat
+with Macro minimized, hidden, and quit. Test a channel reply and a document
+comment to check the location inside the entity, not just the entity itself.
+This requires a full native macOS release; frontend-only updates cannot add the
+response delegate or repair destinations in previously delivered alerts.
+
+In a signed macOS release, an alert from a person shows their avatar in place of
+the app icon, their name as the title, and the channel or document name beneath
+for group conversations; direct messages show only the sender. Alerts from one
+conversation stack together in Notification Center and play the default sound.
+Verify a channel message, a direct message, a document comment, and a reminder
+(no sender: app icon and the combined title). Local and ad-hoc builds lack the
+communication entitlement and show the app icon with the sender and subtitle.
+
 On Linux desktop builds with native notification activation, clicking a system
 notification (or its **Open** action) restores/presents Macro and opens that
 notification's target using the normal in-app navigation. Dismissing or expiring
@@ -28,6 +66,41 @@ binary reports **Update Macro to receive desktop notifications.** Activation is
 supported while the app process is running, not after quitting it. The isolated
 Linux WebKit/D-Bus regression is `bun run native:e2e:notifications`; compositor
 focus behavior still needs a real Wayland/X11 desktop check.
+
+On iOS builds with durable push navigation, a tapped channel push chooses the
+first route after verifying its recipient account. A failed or stalled native
+bridge must release startup within 1.5 seconds; the app can show its auth or
+retry UI while retaining the tap. If the bridge recovers later, the tap uses
+normal navigation without resetting the current page to the app root. Check
+both listener attachment and pending-intent reads, including a tap delivered
+before the pending read stalls. Receiving a push without tapping it must not
+navigate.
+
+For an iOS warm resume, leave the app running past its startup timeout before
+backgrounding it. Tap an uncached notification without a direct channel target
+and fail its notification lookup: the app must reveal the existing page and
+show **Failed to open notification.** A later tap must still open normally.
+Also stall navigation or its native acknowledgment: after eight seconds the
+frontend releases the cover without discarding the pending destination. Duplicate
+delivery must not restart that deadline; a newer tap must get its own deadline.
+`notification.cover_timeout` is recorded on the notification-open trace. This
+frontend recovery requires responsive JavaScript and native IPC; verify actual
+iOS presentation separately from browser bridge simulations.
+
+On iOS, Macro requests provisional authorization at launch, so
+**Settings → Apps → Macro → Notifications** exists before any prompt, and a
+signed-in device registers for pushes that arrive quietly in Notification
+Center. A quiet push counts as delivered, so those users get no email digest
+for it. The in-app **Mobile notifications** switch and enable prompt stay off
+while delivery is provisional; turning either on shows the system prompt.
+A quiet notification's **Keep → Deliver Immediately** authorizes Macro but
+leaves banners and the Lock Screen off: the switch shows on, iOS never prompts
+again, and only iOS Settings turns banners on.
+Verify on a fresh install: the Settings row appears without a prompt, the in-app
+prompt still appears, and upgrading from Settings or from a quiet notification's
+**Keep → Deliver Immediately** turns the switch on when Macro returns from the
+background. Notification Center pulled down over Macro does not background it,
+so the switch updates only after the next return.
 
 On native Android, enable notifications in Settings while signed in. Android 13+
 also asks for system permission; the system's **Activity** notification channel
@@ -42,6 +115,11 @@ without restarting the app. Android alerts without display text show
 Also verify logout and notification opt-out while registration is pending: late
 backend or native completions must leave the receiver disabled. If a new account
 signs in before cleanup finishes, its registration must remain active afterward.
+
+Mute indicators must use the current account's query data, not a retained copy
+from the previous session. Verify a same-tab sign-out/sign-in with the second
+account's muted-items request delayed: show no previous-account mute indicators
+while that query is pending, then apply only the second account's response.
 
 Toast regions are labeled `Notifications (alt+T)`; seven empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).

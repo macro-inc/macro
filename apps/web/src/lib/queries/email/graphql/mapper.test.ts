@@ -7,6 +7,7 @@ import { mapGraphqlEmailThreadPage } from './mapper';
 
 const message: EmailThreadMessageFieldsFragment = {
   __typename: 'GraphqlSoupEmailMessage',
+  draftGeneration: 0,
   operationStatus: null,
   calendarInvitations: [],
   id: 'message-1',
@@ -24,6 +25,7 @@ const message: EmailThreadMessageFieldsFragment = {
   isDraft: true,
   hasAttachments: true,
   scheduledSendTime: '2026-08-07T12:00:00Z',
+  scheduledSendStatus: 'FAILED',
   from: { email: 'from@example.com', name: 'From', photoUrl: 'from-photo' },
   to: [{ email: 'to@example.com', name: 'To', photoUrl: null }],
   cc: [],
@@ -157,6 +159,7 @@ describe('mapGraphqlEmailThreadPage', () => {
       provider_id: 'provider-message-1',
       replying_to_id: 'message-0',
       scheduled_send_time: '2026-08-07T12:00:00Z',
+      scheduled_send_status: 'failed',
       from: { email: 'from@example.com', photo_url: 'from-photo' },
       labels: [
         {
@@ -188,6 +191,37 @@ describe('mapGraphqlEmailThreadPage', () => {
       thread({
         viewerPermission: {
           __typename: 'GraphqlTeamRolePermission',
+        },
+      })
+    );
+
+    expect(mapped.access_level).toBe('view');
+  });
+
+  it('preserves a thread when a newer server returns an unknown delivery state', () => {
+    const fromNewerServer = JSON.parse('"AWAITING_PROVIDER_RECEIPT"');
+    const mapped = mapGraphqlEmailThreadPage(
+      thread({
+        messages: [{ ...message, scheduledSendStatus: fromNewerServer }],
+      })
+    );
+
+    expect(mapped.messages).toHaveLength(1);
+    expect(mapped.messages[0]).toMatchObject({
+      db_id: 'message-1',
+      body_macro: 'Macro',
+      scheduled_send_time: '2026-08-07T12:00:00Z',
+      scheduled_send_status: 'unconfirmed',
+    });
+  });
+
+  it('defaults an access level from a newer server to view-only', () => {
+    const fromNewerServer = JSON.parse('"SUPER_OWNER"');
+    const mapped = mapGraphqlEmailThreadPage(
+      thread({
+        viewerPermission: {
+          __typename: 'GraphqlAccessLevelPermission',
+          accessLevel: fromNewerServer,
         },
       })
     );

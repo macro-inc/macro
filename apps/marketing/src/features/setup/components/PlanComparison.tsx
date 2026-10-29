@@ -17,8 +17,8 @@ export function PlanComparison(props: {
       </h2>
       <p>
         Join your workspace as a Guest for free, with no credit card needed.
-        Connect up to two email accounts, use Haiku, and keep up to 5 GB of
-        files. Emails you send include a “Sent with Macro” footer.
+        Connect up to two email accounts, use Gemini Flash, and keep up to 5 GB
+        of files. Emails you send include a “Sent with Macro” footer.
       </p>
       <p class="mt-5">
         Pro removes the email watermark and account limit, unlocks every AI

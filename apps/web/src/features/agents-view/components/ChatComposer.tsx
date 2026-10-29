@@ -5,6 +5,7 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
+import { t } from '@app/lib/i18n';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -13,27 +14,39 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import {
+  TYPE_AGENT_COMMAND_SYMBOL_COMMAND,
+  TYPE_AT_SYMBOL_COMMAND,
+  TYPE_SKILL_SYMBOL_COMMAND,
+} from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
+import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
-import PlusIcon from '@phosphor/plus.svg';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
+  $getRoot,
+  $getSelection,
+  $isRangeSelection,
+  $isTextNode,
+} from 'lexical';
+import {
   createEffect,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { IMAGE_INPUT_WARNING } from '../../block-agent/state/image-input';
-import { createChatComposerTip } from '../primitives/chat-composer-tip';
+import { AgentComposerAddMenu } from '../views/ComposerAddMenu';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
@@ -46,6 +59,7 @@ export function ChatComposer(props: {
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
   supportsImages?: boolean | null;
+  modelName?: string;
   selector: JSX.Element;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
   session?: AgentInputProps;
@@ -56,11 +70,6 @@ export function ChatComposer(props: {
   drawerOpen?: boolean;
   placeholder?: string;
 }) {
-  const tip = createChatComposerTip(
-    () =>
-      props.draft.trim().length === 0 && !isTouchDevice() && !props.placeholder,
-    !props.session
-  );
   const attachments = () => props.attachments ?? [];
   const hasContent = () => !!props.draft.trim() || attachments().length > 0;
   const hasPendingAttachments = () =>
@@ -108,7 +117,6 @@ export function ChatComposer(props: {
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   const canSendNext = () =>
     !hasContent() &&
-    !props.session?.sendNextHeld &&
     props.session?.hasQueuedMessages &&
     props.session.onStop &&
     !disabled();
@@ -169,11 +177,16 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
-  // Apply host-supplied drafts (Home suggestions) to the existing editor.
-  createEffect(() => {
-    if (props.draft !== editor.controls.getMarkdown())
-      editor.controls.setMarkdown(props.draft);
-  });
+  // Only host draft changes should replace the editor contents.
+  createEffect(
+    on(
+      () => props.draft,
+      (draft) => {
+        if (draft !== editor.controls.getMarkdown())
+          editor.controls.setMarkdown(draft);
+      }
+    )
+  );
 
   onMount(() => {
     if (props.collapseOnBlur) {
@@ -207,8 +220,9 @@ export function ChatComposer(props: {
     )
       return;
     const attached = attachments();
-    editor.controls.clear();
     props.onDraftChange('');
+    editor.controls.clear();
+    hapticImpact('light');
     props.onSend(prompt, attached);
   };
 
@@ -232,23 +246,55 @@ export function ChatComposer(props: {
     if (event.type === 'pointerdown') editor.controls.focus();
   };
 
+  const openTypeahead = (kind: 'library' | 'skills') => {
+    editor.lexical.focus(() => {
+      editor.lexical.update(
+        () => {
+          if (!$isRangeSelection($getSelection())) $getRoot().selectEnd();
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) return;
+          const node = selection.anchor.getNode();
+          const preceding = $isTextNode(node)
+            ? node
+                .getTextContent()
+                .slice(selection.anchor.offset - 1, selection.anchor.offset)
+            : '';
+          if (preceding && !/\s/.test(preceding)) selection.insertText(' ');
+        },
+        {
+          discrete: true,
+          onUpdate: () =>
+            editor.lexical.dispatchCommand(
+              kind === 'library'
+                ? TYPE_AT_SYMBOL_COMMAND
+                : props.session
+                  ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+                  : TYPE_SKILL_SYMBOL_COMMAND,
+              undefined
+            ),
+        }
+      );
+    });
+  };
+
   const editorRow = () => (
     <div
       classList={{
         'max-h-6 overflow-hidden': !!collapsed(),
         'max-h-[min(15rem,30dvh)]': !collapsed(),
       }}
-      class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
+      class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] not-touch:group-data-[composer-compact=false]/composer:px-1.5 group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
     >
       <MarkdownShell
-        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
         placeholder={
           isTouchDevice()
-            ? // Phones are too narrow for the longer prompts and rotating tips.
+            ? // Phones are too narrow for the full mention and skills hint.
               'Message Macro AI'
-            : (props.placeholder ?? tip())
+            : (props.placeholder ??
+              'Type @ to mention docs, people, or channels, / for skills')
         }
         ariaLabel="Message the agent"
         autofocus={
@@ -328,7 +374,7 @@ export function ChatComposer(props: {
           data-composer-expanded={
             (isTouchDevice() && !collapsed()) || undefined
           }
-          class="relative z-10 min-w-0 rounded-[32px] transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
+          class="relative z-10 min-w-0 rounded-[28px] touch:rounded-[32px] transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
           }}
@@ -341,7 +387,7 @@ export function ChatComposer(props: {
           >
             <Show when={canAttach()}>
               <Input.DropOverlay
-                class="rounded-[32px]"
+                class="rounded-[28px] touch:rounded-[32px]"
                 hint="Drop files here to send them to the agent"
               />
             </Show>
@@ -353,14 +399,14 @@ export function ChatComposer(props: {
             >
               <Input.Attachments kind="media" class="pb-0" />
               <Input.Attachments kind="document" class="pb-0" />
-              {/* Expanded text keeps the compact row's vertical inset:
-                  7.5px padding + half the button/line-height difference. */}
+              {/* Desktop expanded text uses an 18px horizontal inset and 16px
+                  top padding; touch keeps the compact row's vertical inset. */}
               <div
                 ref={setLayout}
                 data-composer-compact={!drawerOpen() && isCompact()}
                 data-composer-coding={drawerOpen() || undefined}
                 data-composer-collapsed={collapsed() || undefined}
-                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)] data-[composer-collapsed=true]:h-(--mobile-chrome-button-size) data-[composer-collapsed=true]:items-center data-[composer-collapsed=true]:py-0 data-[composer-collapsed=true]:pl-3.5 data-[composer-collapsed=true]:pr-[9.5px]"
+                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)] not-touch:data-[composer-compact=false]:pt-4 data-[composer-collapsed=true]:h-(--mobile-chrome-button-size) data-[composer-collapsed=true]:items-center data-[composer-collapsed=true]:py-0 data-[composer-collapsed=true]:pl-3.5 data-[composer-collapsed=true]:pr-[9.5px]"
               >
                 <Show when={props.onAttachFiles}>
                   <div
@@ -371,9 +417,27 @@ export function ChatComposer(props: {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={disabled()}
-                    >
-                      <PlusIcon />
-                    </Input.AttachFilesAction>
+                      trigger={(openFiles, openImages) => (
+                        <AgentComposerAddMenu
+                          openFiles={openFiles}
+                          openImages={openImages}
+                          imageUnsupportedReason={
+                            props.supportsImages === false
+                              ? t('common.imagesUnsupported', {
+                                  model:
+                                    props.modelName ??
+                                    t('common.selectedModel'),
+                                })
+                              : undefined
+                          }
+                          openLibrary={() => openTypeahead('library')}
+                          openSkills={() => openTypeahead('skills')}
+                          getEditor={() => editor.lexical.getRootElement()}
+                          session={!!props.session}
+                          disabled={disabled()}
+                        />
+                      )}
+                    />
                   </div>
                 </Show>
                 {editorRow()}
@@ -425,10 +489,11 @@ export function ChatComposer(props: {
                         when={canSendNext()}
                         fallback={
                           <Button
-                            variant="strong"
+                            aria-label="Stop"
+                            tooltip="Stop"
+                            variant="secondary"
                             class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
-                            size="icon-composer"
-                            label="Stop"
+                            size="icon-md"
                             disabled={disabled()}
                             onClick={() => props.session?.onStop?.()}
                           >
@@ -441,8 +506,10 @@ export function ChatComposer(props: {
                           class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
                           intent="flush"
                           aria-label="Flush queued messages"
-                          tooltip="Flush queued messages"
-                          shortcut="Enter"
+                          tooltip={{
+                            content: 'Flush queued messages',
+                            shortcut: 'Enter',
+                          }}
                           onClick={sendNext}
                         />
                       </Show>
@@ -454,11 +521,6 @@ export function ChatComposer(props: {
           </Input.DropZone>
           <DictationPanel dictation={dictation} />
         </ComposerSurface>
-        <Show when={props.supportsImages === false}>
-          <p role="status" class="px-3 py-1 text-xs text-ink-muted">
-            {IMAGE_INPUT_WARNING}
-          </p>
-        </Show>
         <Show when={!isTouchDevice()}>{repositoryDrawer()}</Show>
         <DictationFeedback dictation={dictation} />
       </div>
@@ -483,6 +545,7 @@ export function ChatSessionInput(props: AgentInputProps) {
       onSend={props.onSend}
       session={props}
       supportsImages={props.supportsImages}
+      modelName={props.modelName}
       attachments={props.attachments}
       onAttachFiles={props.onAttachFiles}
       onRemoveAttachment={props.onRemoveAttachment}

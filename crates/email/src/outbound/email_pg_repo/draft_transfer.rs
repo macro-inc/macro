@@ -84,7 +84,8 @@ async fn source_facts(
         CASE WHEN l.provider='OUTLOOK' THEN COALESCE(d.checkpoint->'draft'->>'version',m.provider_version,d.base_version) ELSE m.provider_history_id END AS version,
         m.is_draft,m.is_sent,
         (COALESCE(d.delete_requested,false) OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS "retired!",
-        (EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id=m.id)
+        (m.draft_generation <> $3 OR EXISTS(SELECT 1 FROM email_send_attempts a WHERE a.message_id=m.id AND NOT a.cancelled AND NOT a.sent)
+            OR EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id=m.id)
             OR EXISTS(SELECT 1 FROM email_attachments_drafts a WHERE a.draft_id=m.id AND a.upload_pending)
             OR COALESCE(d.lease_until>now(),false) OR COALESCE(d.state IN ('conflict','unknown'),false)
             OR COALESCE(d.checkpoint->>'stage' NOT IN ('inspect','ready'),false)) AS "busy!",
@@ -97,7 +98,7 @@ async fn source_facts(
             jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='CC') AS cc_addresses,
             jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='BCC') AS bcc_addresses
             FROM email_message_recipients r JOIN email_contacts c ON c.id=r.contact_id WHERE r.message_id=m.id) recipients
-        WHERE m.id=$1 AND m.link_id=$2 FOR UPDATE OF m"#,request.source_id,request.source_link_id).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
+        WHERE m.id=$1 AND m.link_id=$2 FOR UPDATE OF m"#,request.source_id,request.source_link_id,request.draft_generation).fetch_optional(tx).await.map_err(db)?.ok_or(EmailErr::MessageNotFound(request.source_id))?;
     validate_transfer(TransferEligibility {
         authorized: true,
         draft: row.is_draft && !row.is_sent,
@@ -488,7 +489,13 @@ impl DraftTransferRepository for EmailPgRepo {
             RetirementOutcome::OriginalRemains => ("conflict", Some("move_original_remains")),
             RetirementOutcome::Sent => ("conflict", Some("move_source_sent")),
             RetirementOutcome::Reauthorization => ("conflict", Some("move_reauthorization")),
-            RetirementOutcome::Retry => ("cleanup", None),
+            RetirementOutcome::Retry => {
+                let changed=sqlx::query!("UPDATE email_draft_transfers SET lease_id=NULL,lease_until=NULL,available_at=now()+interval '30 seconds' WHERE id=$1 AND lease_id=$2 AND lease_until>now() AND state='cleanup'",plan.request.id,lease).execute(&self.pool).await.map_err(|_|MailboxError::Persistence)?.rows_affected();
+                if changed != 1 {
+                    return Err(MailboxError::Stale);
+                }
+                return Ok(());
+            }
         };
         let mut tx = self
             .pool
