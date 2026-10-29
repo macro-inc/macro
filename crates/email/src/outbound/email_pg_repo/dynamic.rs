@@ -2,6 +2,7 @@
 //! email queries that filter content based on input AST (EmailLiteral).
 
 mod filters;
+mod folders;
 mod query;
 mod resolve;
 

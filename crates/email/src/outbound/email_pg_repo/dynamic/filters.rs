@@ -996,7 +996,7 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
     match view {
         PreviewView::StandardLabel(
             PreviewViewStandardLabel::Spam | PreviewViewStandardLabel::Trash,
-        ) => "t.updated_at",
+        ) => "folder.latest_folder_message_ts",
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             "t.latest_outbound_message_ts"
         }

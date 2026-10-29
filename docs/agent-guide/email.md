@@ -362,6 +362,8 @@ show their latest message in that folder, and folder membership is checked befor
 pagination. These views load server pages; full-text search and offline predicate
 filtering are not available for them yet.
 
+Spam and Trash order threads by their latest message in that folder. Reading a thread or receiving a newer message outside the folder does not change that folder cursor. Pending provider moves affect folder membership immediately.
+
 Use **Not spam** on a Spam row or **Restore** on a Trash row. The same
 action appears in the selection toolbar for bulk restores, including on mobile.
 Outlook restores received mail to Inbox and provider drafts to Drafts. Gmail removes
