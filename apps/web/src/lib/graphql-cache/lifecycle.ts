@@ -27,6 +27,14 @@ export async function clearRegisteredCaches(): Promise<void> {
   // Soup cursors live outside the normalized cache. Reset them in the same
   // lifecycle operation so no later login resumes past records wiped below.
   clearExternalCacheState();
+  // With no host this session (cache disabled, startup failed, or not yet
+  // started), nothing can wipe the persisted database or its mutation queue.
+  // A new scope makes the next open replace it instead of replaying the
+  // previous account's queued writes.
+  if (hosts.size === 0) {
+    await rotateCacheScope();
+    return;
+  }
   const results = await Promise.allSettled(
     [...hosts].map((host) => host.clear())
   );
