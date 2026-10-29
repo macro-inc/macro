@@ -7,7 +7,9 @@ use crate::domain::harness::{HarnessReader, ToolFrame, claude_code};
 use agent_client_protocol::schema::v1::SessionId;
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::model::{Control, FoldedMessage, SessionMetadata, ToolUseId, TurnId, TurnState};
+use crate::domain::model::{
+    Author, Control, FoldedMessage, SessionMetadata, StopReason, ToolUseId, TurnId, TurnState,
+};
 use agent_client_protocol::schema::v1::{
     CompleteElicitationNotification, ContentBlock, CreateElicitationRequest, PromptRequest,
     RequestId, RequestPermissionRequest, Response, SessionNotification, SessionUpdate,
@@ -572,7 +574,19 @@ impl FoldState {
             .pending_interactions
             .retain(|pending| !disconnected && Some(pending.turn()) == live_turn);
         let interactions_changed = before != self.metadata.pending_interactions.len();
-        let turn = if disconnected {
+        let failed = self.turn.is_none()
+            && self
+                .messages
+                .iter()
+                .rev()
+                .find(|message| matches!(message.author, Author::Agent))
+                .is_some_and(|message| {
+                    self.turns_opened.checked_sub(1) == Some(message.id.0)
+                        && matches!(message.stop, Some(StopReason::Failed { .. }))
+                });
+        let turn = if failed {
+            TurnState::Failed
+        } else if disconnected {
             TurnState::Disconnected
         } else {
             match &self.turn {

@@ -619,6 +619,11 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 
 4. **Strip the instrumentation before committing.**
 
+### Agent session failure indicators
+
+Use the existing status dot in Home and Agents rows with `bg-failure` when the
+persisted `turnState` is `failed`; open the session to inspect its error.
+
 ### Agent system events
 
 Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global

@@ -1714,6 +1714,13 @@ with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
 Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
+
+### Failed session rows
+
+A failed agent turn shows a small red status dot in Home and Agents, including
+after reloading the list. Open the row to read the existing transcript error.
+Starting another turn clears the failure dot; unread state remains independent.
+
 ### Live development previews
 
 Coding agents can call the internal **SharePreview** tool with their local HTTP
@@ -2042,6 +2049,18 @@ revision stale, the AI reads the latest settings and confirms a fresh proposal.
 Identical retries reuse the saved link. Old pending booking review requests can
 be dismissed so the agent can resume with conversational confirmation.
 
+## Images in Cursor sessions
+
+Paste a public PNG, JPEG, GIF, or WebP URL into a Cursor prompt. After sending,
+the URL stays in the message and an image thumbnail appears; click it to open
+the media viewer. Extensionless image URLs work too. Reopen the session and
+verify the image remains visible. Check desktop and phone layouts.
+
+Images attached as ACP image blocks are also forwarded. Each prompt sends at
+most five images of up to 15 MiB each. HTML pages, SVGs, private or loopback
+addresses, failed fetches, and oversized images stay as text links. Stop during
+image resolution must cancel the prompt without starting a remote run.
+
 ## Image attachments and model selection
 
 Attach images using the plus button, paste, or drop. Image-capable models receive
@@ -2241,15 +2260,3 @@ report's error text. The row stays on one line and
 truncates on phones.
 
 The desktop Agents sidebar New menu offers Conversation, Work agent, Coding agent, and Routine, with short descriptions. Conversation opens the existing composer; Work agent and Coding agent open the agent editor with that kind preselected, including when a runtime setup page was previously open. Routine opens its unsaved composer. Canceling creation returns to the existing management flow.
-
-## Images in Cursor sessions
-
-Paste a public PNG, JPEG, GIF, or WebP URL into a Cursor prompt. After sending,
-the URL stays in the message and an image thumbnail appears; click it to open
-the media viewer. Extensionless image URLs work too. Reopen the session and
-verify the image remains visible. Check desktop and phone layouts.
-
-Images attached as ACP image blocks are also forwarded. Each prompt sends at
-most five images of up to 15 MiB each. HTML pages, SVGs, private or loopback
-addresses, failed fetches, and oversized images stay as text links. Stop during
-image resolution must cancel the prompt without starting a remote run.

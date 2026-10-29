@@ -16,6 +16,8 @@ between the sandbox and the rest of the product.
   transport that speaks `agent_runtime_protocol`.
 - `src/outbound/containers.rs` / `managed_containers.rs`: container
   provisioning.
+- `src/outbound/cursor/manager.rs`: compose Cursor sessions, including public
+  prompt-image fetching through the `cursor_cloud_agents` image-fetcher port.
 - `src/domain/trigger_router.rs`: routes an incoming trigger to a session.
 - `src/inbound/kafka.rs`: trigger ingestion.
 - `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
@@ -77,10 +79,6 @@ wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
-
-The Cursor session composition enables public prompt-image fetching through the
-`cursor_cloud_agents` image-fetcher port. Keep that wiring on both hosted and
-standalone Cursor entry points.
 
 ## Checks
 

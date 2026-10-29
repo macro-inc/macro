@@ -1913,6 +1913,8 @@ export type TurnPhase =
 export type TurnState =
   /**  No turn is open. */
   | 'idle'
+  /**  No turn is open, and the newest agent reply failed. */
+  | 'failed'
   /**
    *  A prompt this client issued is on the wire, unconfirmed, and the agent
    *  has produced nothing. Only a speculative fold reports this.

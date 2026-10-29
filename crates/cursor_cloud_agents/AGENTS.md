@@ -57,6 +57,13 @@ notifications as it arrives.
 
 ## Gotchas
 
+Prompt image resolution preserves the prompt text, tries up to eight unique links
+within a ten-second budget, and sends at most five images of 15 MiB each.
+HTTP resolution disables proxies, validates literal addresses and connection-time
+DNS answers, and checks each redirect. Stop cancels resolution and journals the prompt as aborted
+without creating remote work. Fetch failures leave links as text; never log link URLs
+or image bytes. Images are journaled as ACP image blocks for live display and replay.
+
 - `REPLAY.md`'s migration-rollout section documents a one-time consolidation
   of four old migrations into `20260906060601_cursor_session_replay`; don't
   reset or DOWN-migrate a database that already has journal history without
@@ -68,10 +75,3 @@ notifications as it arrives.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
-
-Prompt image resolution preserves the prompt text, tries up to eight unique links
-within a ten-second budget, and sends at most five images of 15 MiB each.
-HTTP resolution disables proxies, validates literal addresses and connection-time
-DNS answers, and checks each redirect. Stop cancels resolution and journals the prompt as aborted
-without creating remote work. Fetch failures leave links as text; never log link URLs
-or image bytes. Images are journaled as ACP image blocks for live display and replay.

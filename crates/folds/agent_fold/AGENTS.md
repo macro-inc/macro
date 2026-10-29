@@ -18,6 +18,9 @@ to the browser via `inbound/wasm`.
 
 - `src/domain/fold.rs`: the fold itself — read its module doc first; it's
   total by design (see "Why this cannot fail") and never errors on read.
+- `src/domain/fold/convert.rs` + `turn.rs`: map image blocks into attachments,
+  using source URLs or inline data; attach live image chunks to the user prompt
+  and deduplicate attachments by URI during replay.
 - `src/domain/model/segment/code_execution.rs`: expands internal code receipts
   into SDK activity rows for conversation snapshots, independent of harness.
 - `src/domain/model.rs`: the renderable vocabulary (`FoldedMessage`,
@@ -76,9 +79,8 @@ Server-added invocation context is marked by the protocol’s block metadata.
 Omit those blocks from user messages, including replay; preserve unmarked text
 even when it contains agent-context tags.
 
-ACP image blocks fold into image attachments. Prefer their source URI; use a
-data URI for inline-only images. Image chunks received after a prompt attach
-to that user message and deduplicate by URI, so live updates match replay.
+Terminal failures remain `TurnState::Failed` until a new turn starts; the existing
+session projection carries that state to list rows without loading transcripts.
 
 ## Checks
 
