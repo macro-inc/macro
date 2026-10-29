@@ -6,9 +6,26 @@ use scraper::Selector;
 lazy_static! {
     // --- Regexes ---
 
-    // Regex for "On [Date], [Sender] wrote:" lines. Case-insensitive.
+    /// "On [Date] [Sender] wrote:" attribution lines (Gmail, Superhuman, Apple
+    /// Mail, Macro). `\s` is Unicode-aware, so it also covers the narrow
+    /// no-break space Gmail puts before AM/PM and `&nbsp;`. The sender part may
+    /// span lines (and the `<a>` around the address) but is bounded so a
+    /// stray "wrote:" far below cannot pull in reply text.
     pub static ref ON_WROTE_RE: Regex = Regex::new(
-        r#"(?i)On (Mon|Tue|Wed|Thu|Fri|Sat|Sun), (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4} at \d{1,2}:\d{2} (AM|PM),? .* wrote:"#
+        r#"(?xi)
+        \bOn\s+
+        (?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\.?,?\s+)?   # weekday
+        (?:\d{1,2}\s+)?                                      # 29 Oct (day first)
+        (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+
+        (?:\d{1,2},?\s+)?                                    # Oct 29, (month first)
+        \d{4},?\s+
+        (?:at\s+)?
+        \d{1,2}:\d{2}(?::\d{2})?
+        (?:\s*[AP]\.?M\.?)?
+        ,?\s+
+        (?s:.{0,300}?)
+        \bwrote:
+        "#
     ).unwrap();
 
     // Regex for "From: ... Sent: ..." blocks, common in Outlook.
@@ -41,7 +58,7 @@ lazy_static! {
             ^On\s+
             (Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+
             (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+
-            .*
+            [^\n]*(?:\n[^\n]*)?   # clients wrap long attributions once
             wrote:
         )
         | # OR
@@ -81,5 +98,6 @@ lazy_static! {
     pub static ref BLOCKQUOTE_SELECTOR: Selector = Selector::parse("blockquote").unwrap();
     pub static ref ANY_ELEMENT_SELECTOR: Selector = Selector::parse("*").unwrap();
     pub static ref BODY_SELECTOR: Selector = Selector::parse("body").unwrap();
+    pub static ref IMG_SELECTOR: Selector = Selector::parse("img").unwrap();
     pub static ref BLOCK_LEVEL_ELEMENTS_SELECTOR: Selector = Selector::parse("p, div, li, h1, h2, h3, h4, h5, h6").unwrap();
 }

@@ -991,7 +991,9 @@ See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-fi
 
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 3. Email rows index the thread
+The disposable Quick Access projection is version 4; version 4 added task
+projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
+name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an
 earlier sender remains searchable after another participant replies. Snippets and
 message bodies are excluded. The frontend materializes only matched thread keys

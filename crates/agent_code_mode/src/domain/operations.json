@@ -270,6 +270,7 @@
   "email.getMessagesBatch": "Get Messages Batch",
   "email.addRemoveLabel": "Add Remove Label",
   "email.getMessage": "Get Message",
+  "email.getMessageEml": "Get Message Eml",
   "email.patchSettings": "Patch Settings",
   "email.mailboxSettingsOperations": "Mailbox Settings Operations",
   "email.disableSync": "Disable Sync",

@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
 import { enableProjects } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
@@ -84,7 +85,7 @@ export function InlineTaskProperties() {
     if (definitionIds?.length) {
       setPendingPins((pending) => new Set([...pending, ...definitionIds]));
     }
-    refetch();
+    fireAndForget(refetch(), 'inline-task-property-added-refresh');
   };
   const clearPendingPin = (definitionId: string) => {
     setPendingPins((pending) => {

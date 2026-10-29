@@ -25,12 +25,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|viewer@macro.com',
 }));
-vi.mock('../projects/project-search', () => ({
-  useProjectSearchQuery: () => ({
-    rows: () => undefined,
-    error: () => undefined,
-  }),
-}));
 vi.mock('@app/constants/hotkeys', () => ({
   GO_TO_COMMAND_SCOPE: 'go-to',
   GO_TO_LEADER_KEY: 'g',

@@ -1,6 +1,7 @@
 use super::constants::*;
-use scraper::{Element, ElementRef, Html};
-use std::{collections::HashSet, ops::Deref};
+use ego_tree::{NodeId, NodeRef};
+use scraper::{ElementRef, Html, Node};
+use std::ops::Deref;
 // --- Public API ---
 
 /// Parses an email's HTML content and returns the cleaned, latest reply.
@@ -12,56 +13,60 @@ pub fn extract_reply_html(subject: Option<&str>, html_content: &str) -> String {
         return html_content.to_string();
     }
 
-    let splitter = find_splitter(&document);
+    // A cut that leaves nothing visible is wrong (the reply itself sits inside
+    // the splitter), so fall through to the next candidate. If every cut is
+    // empty, assume the entire body is the reply.
+    find_splitters(&document)
+        .into_iter()
+        .map(|cut| get_html_before_cut(&document, cut))
+        .find(|reply| has_visible_content(reply))
+        .unwrap_or_else(|| html_content.to_string())
+}
 
-    if let Some(splitter_element) = splitter {
-        get_html_before_element(splitter_element)
-    } else {
-        // No splitter found, so assume the entire body is the reply.
-        html_content.to_string()
+/// Where the quoted thread starts: a node, and for a text node optionally the
+/// byte offset inside it (the attribution can share a text node with the
+/// reply, e.g. `See you then!<br>On Thu, ... wrote:`).
+#[derive(Clone, Copy)]
+struct Cut {
+    node: NodeId,
+    text_offset: Option<usize>,
+}
+
+impl From<ElementRef<'_>> for Cut {
+    fn from(element: ElementRef<'_>) -> Self {
+        Cut {
+            node: element.id(),
+            text_offset: None,
+        }
     }
 }
 
 // --- Core Logic & Orchestration ---
 
-/// Orchestrates the search for a splitter element by finding all potential
-/// candidates and choosing the one that appears earliest in the document.
-fn find_splitter(document: &Html) -> Option<ElementRef<'_>> {
-    // 1. Collect the NodeIds of all possible splitter candidates.
-    let candidate_ids: HashSet<_> = vec![
-        find_gmail_splitter(document),
-        find_outlook_splitter(document),
-        find_yahoo_splitter(document),
-        find_blockquote_splitter(document),
-        find_text_based_splitter(document),
+/// Collects every splitter candidate and orders them by where they appear in
+/// the document, earliest first.
+fn find_splitters(document: &Html) -> Vec<Cut> {
+    let candidates: Vec<Cut> = [
+        find_gmail_splitter(document).map(Cut::from),
+        find_outlook_splitter(document).map(Cut::from),
+        find_yahoo_splitter(document).map(Cut::from),
+        find_blockquote_splitter(document).map(Cut::from),
+        find_text_based_splitter(document).map(Cut::from),
+        find_on_wrote_text_splitter(document),
     ]
     .into_iter()
     .flatten()
-    // Map the ElementRefs to their NodeIds.
-    .map(|el| el.id())
     .collect();
 
-    // 2. If no candidates were found, there is no splitter.
-    if candidate_ids.is_empty() {
-        return None;
-    }
-
-    // 3. Perform a single depth-first traversal of the entire document.
-    //    The `find_map` method will stop and return the very first time our closure returns `Some`.
-
-    document.root_element().traverse().find_map(|edge| {
-        // We only care about opening tags of nodes.
+    // A single depth-first traversal gives document order; an ancestor opens
+    // before its descendants, so it sorts first.
+    let mut ordered: Vec<Cut> = Vec::with_capacity(candidates.len());
+    for edge in document.tree.root().traverse() {
         if let ego_tree::iter::Edge::Open(node) = edge {
-            // Check if this node's ID is in our set of candidates.
-            if candidate_ids.contains(&node.id()) {
-                // It is! This must be the earliest one.
-                // Wrap it as an ElementRef and return it to stop the search.
-                return ElementRef::wrap(node);
-            }
+            ordered.extend(candidates.iter().filter(|cut| cut.node == node.id()));
         }
-        // This node was not a candidate, continue the search.
-        None
-    })
+    }
+    ordered
 }
 
 // --- Specific Splitter-Finding Strategies ---
@@ -113,9 +118,14 @@ fn find_outlook_splitter(document: &Html) -> Option<ElementRef<'_>> {
 
 fn find_blockquote_splitter(document: &Html) -> Option<ElementRef<'_>> {
     if let Some(blockquote) = document.select(&BLOCKQUOTE_SELECTOR).next() {
-        // Check if the node right before the blockquote is an "On... wrote:" line.
+        // Check if the node right before the blockquote is an "On... wrote:"
+        // line. Only take the whole element when the attribution opens it;
+        // otherwise it also holds reply text and the cut belongs inside it
+        // (`find_on_wrote_text_splitter`).
         if let Some(prev_el) = find_prev_significant_sibling(blockquote)
-            && ON_WROTE_RE.is_match(&prev_el.text().collect::<String>())
+            && ON_WROTE_RE
+                .find(prev_el.text().collect::<String>().trim_start())
+                .is_some_and(|m| m.start() == 0)
         {
             // If so, use that header as the splitter for a cleaner cut.
             return Some(prev_el);
@@ -142,6 +152,49 @@ fn find_text_based_splitter(document: &Html) -> Option<ElementRef<'_>> {
         }
     }
     None
+}
+
+/// Finds the first "On [date] [sender] wrote:" attribution anywhere in the body
+/// and cuts at the text node where it starts. This catches attributions that
+/// share an element with the reply, which element-level strategies cannot cut
+/// without dropping the reply.
+fn find_on_wrote_text_splitter(document: &Html) -> Option<Cut> {
+    let body = document.select(&BODY_SELECTOR).next()?;
+
+    let mut text = String::new();
+    let mut spans: Vec<(usize, NodeId)> = Vec::new();
+    for node in body.descendants() {
+        let Some(node_text) = node.value().as_text() else {
+            continue;
+        };
+        if is_inside_non_content(node) {
+            continue;
+        }
+        // Separate nodes so words from adjacent blocks don't run together.
+        text.push('\n');
+        spans.push((text.len(), node.id()));
+        text.push_str(node_text);
+    }
+
+    let start = ON_WROTE_RE.find(&text)?.start();
+    let index = spans
+        .partition_point(|(node_start, _)| *node_start <= start)
+        .checked_sub(1)?;
+    let (node_start, node) = *spans.get(index)?;
+    let text_offset = start - node_start;
+    Some(Cut {
+        node,
+        text_offset: (text_offset > 0).then_some(text_offset),
+    })
+}
+
+fn is_inside_non_content(node: NodeRef<'_, Node>) -> bool {
+    node.ancestors().any(|ancestor| {
+        ancestor
+            .value()
+            .as_element()
+            .is_some_and(|el| matches!(el.name(), "style" | "script" | "title" | "head"))
+    })
 }
 
 /// The quoted thread starts at the horizontal rule when one sits directly
@@ -220,20 +273,18 @@ fn find_prev_significant_sibling(el: ElementRef) -> Option<ElementRef> {
     None
 }
 
-/// Traverses the DOM to collect all HTML content that appears before the splitter element.
-fn get_html_before_element(splitter: ElementRef) -> String {
-    let mut body_opt = None;
-    let mut current = Some(splitter);
-    while let Some(el) = current {
-        if el.value().name().eq_ignore_ascii_case("body") {
-            body_opt = Some(el);
-            break;
-        }
-        current = el.parent_element();
-    }
+/// Traverses the DOM to collect all HTML content that appears before the cut.
+fn get_html_before_cut(document: &Html, cut: Cut) -> String {
+    let Some(splitter) = document.tree.get(cut.node) else {
+        return String::new();
+    };
+    let body = std::iter::once(splitter)
+        .chain(splitter.ancestors())
+        .filter_map(ElementRef::wrap)
+        .find(|el| el.value().name().eq_ignore_ascii_case("body"));
 
-    let result = if let Some(body) = body_opt {
-        get_previous_html_recursively(body, splitter)
+    let result = if let Some(body) = body {
+        get_previous_html_recursively(body, cut)
     } else {
         String::new()
     };
@@ -242,30 +293,34 @@ fn get_html_before_element(splitter: ElementRef) -> String {
 }
 
 /// A recursive helper function that builds the HTML string by traversing the tree.
-fn get_previous_html_recursively(current_element: ElementRef, splitter: ElementRef) -> String {
+fn get_previous_html_recursively(current_element: ElementRef, cut: Cut) -> String {
     let mut reply_html_parts = Vec::new();
 
     for child in current_element.children() {
         // First, check if the child node IS the splitter itself.
-        if child.id() == splitter.id() {
-            // We have found the exact splitter element. Stop processing children at this level.
-            // Do not add anything to the parts and break the loop.
+        if child.id() == cut.node {
+            // Keep the part of a text node before the attribution.
+            if let (Some(offset), Some(text)) = (cut.text_offset, child.value().as_text())
+                && let Some(before) = text.get(..offset)
+            {
+                reply_html_parts.push(escape_text(before));
+            }
             break;
         }
 
         // If the child is not the splitter, check if it CONTAINS the splitter.
-        let contains_splitter = child.descendants().any(|d| d.id() == splitter.id());
+        let contains_splitter = child.descendants().any(|d| d.id() == cut.node);
 
         if contains_splitter {
             if let Some(child_el) = ElementRef::wrap(child) {
-                reply_html_parts.push(get_previous_html_recursively(child_el, splitter));
+                reply_html_parts.push(get_previous_html_recursively(child_el, cut));
             }
             break;
         } else {
             let html_part = if let Some(element) = ElementRef::wrap(child) {
                 element.html()
             } else if let Some(text) = child.value().as_text() {
-                text.to_string()
+                escape_text(text)
             } else if let Some(comment) = child.value().as_comment() {
                 format!("<!--{}-->", comment.deref())
             } else {
@@ -276,4 +331,25 @@ fn get_previous_html_recursively(current_element: ElementRef, splitter: ElementR
     }
 
     reply_html_parts.join("")
+}
+
+/// Text nodes hold decoded text; re-escape it so `&lt;addr&gt;` doesn't turn
+/// into markup.
+fn escape_text(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('\u{a0}', "&nbsp;")
+}
+
+/// Whether a reply has anything a reader would see: text or an image.
+fn has_visible_content(html: &str) -> bool {
+    let fragment = Html::parse_fragment(html);
+    fragment.select(&IMG_SELECTOR).next().is_some()
+        || fragment
+            .root_element()
+            .descendants()
+            .filter(|node| !is_inside_non_content(*node))
+            .filter_map(|node| node.value().as_text())
+            .any(|text| !text.trim().is_empty())
 }

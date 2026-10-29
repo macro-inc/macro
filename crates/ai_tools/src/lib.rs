@@ -274,12 +274,6 @@ pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     tools_for_inner(AiHost::AgentSession, true)
 }
 
-/// Public MCP tools for users with code mode: SDK-covered tools are hidden in
-/// favor of `ExecuteCode`, as in agent sessions.
-pub fn tools_for_mcp_code_mode() -> ToolSetWithPrompt {
-    tools_for_inner(AiHost::Mcp, true)
-}
-
 /// Existing agent-session tools exposed through the code-mode capability policy.
 pub fn code_mode_tools() -> Arc<AiToolSet> {
     tools_for(AiHost::AgentSession).toolset

@@ -48,12 +48,12 @@ function command(id: string, name: string, viewedAt: number): CommandMenuItem {
 function project(id: string, name: string, updatedAt = NOW): CommandMenuItem {
   return {
     id,
-    kind: 'initiative',
+    kind: 'entity',
     bucket: 'initiative',
-    name,
     searchText: name,
     sortTimestamp: updatedAt,
     timestamps: { updatedAt: new Date(updatedAt).toISOString() },
+    data: { id, type: 'initiative', name, ownerId: 'owner' },
   };
 }
 

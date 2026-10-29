@@ -41,9 +41,18 @@ internal class NameArgs { lateinit var identity: String; var displayName: String
 internal class ThemeArgs { var theme: Map<String, Map<String, Double>> = emptyMap() }
 @InvokeArg
 internal class ModeArgs { var mode = "hidden" }
+@InvokeArg
+internal class TracingArgs { var tracesUrl: String? = null; var environment = "" }
 
 @TauriPlugin(permissions = [Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"), Permission(strings = [Manifest.permission.CAMERA], alias = "camera")])
 class CallPlugin(private val activity: Activity) : Plugin(activity) {
+    @Command fun configureTracing(invoke: Invoke) {
+        try {
+            val args = invoke.parseArgs(TracingArgs::class.java)
+            CallTracing.configure(activity, args.tracesUrl, args.environment)
+            invoke.resolve()
+        } catch (_: Exception) { invoke.reject("Unable to configure native call tracing") }
+    }
     private var preparePermissionCallId: String? = null
     private var miniWindow: CallMiniWindow? = null
     override fun load(webView: WebView) { miniWindow = CallMiniWindow(activity, webView) }

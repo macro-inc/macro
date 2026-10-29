@@ -104,6 +104,16 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   code redirects a link flow to its `original_url` with `email_link_error`
   (`admin_consent_required`, `cancelled`, `failed`); only the `AADSTS` code
   from `error_description` is logged, never the description.
+- A Google consent that asked for the mailbox but came back without
+  `gmail.modify` (the user left the Gmail boxes unchecked) is refused in the
+  Google callback before any identity-provider link is written or replaced:
+  the pending row is deleted, the partial grant is revoked at Google so the
+  next consent screen lists every scope again, and the flow returns with
+  `email_link_error=gmail_not_granted`. Google's revocation drops the account's
+  whole grant to Macro, so it is skipped when an inbox for that address still
+  works (`needs_reauth` false); the refusal stands either way. Mirrors
+  Outlook's required-scope check in `src/domain/microsoft.rs`; Macro has no
+  mailbox-less link for either provider.
 - `/oauth/redirect` without a code answers "Sign-in failed" and logs
   `auth_handoff_failure=missing_code` with FusionAuth's error. `invalid_origin`
   ("Invalid origin uri <origin>") means the page that sent the browser to

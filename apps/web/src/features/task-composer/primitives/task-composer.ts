@@ -1,66 +1,10 @@
 import {
-  ComposeTaskTitleEditor,
-  TaskTitleAccessory,
-} from '../../task-composer/components/title-editor';
-
-export {
-  ComposeTaskTitleEditor,
-  TaskTitleAccessory,
-} from '../../task-composer/components/title-editor';
-
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
-import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
-import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
-import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
-import type { PortalScope } from '@core/component/ScopedPortal';
-import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { fireAndForget } from '@core/util/fireAndForget';
-import { onElementConnect } from '@core/util/onElementConnect';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
-import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
-import PaperclipIcon from '@icon/system/regular/paperclip.svg';
-import SplitIcon from '@icon/system/regular/square-half.svg';
-import XIcon from '@icon/system/regular/x.svg';
-import { Telemetry } from '@macro-inc/observability';
-import { Modals } from '@property/component/modal';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { PropertiesProvider } from '@property/context/PropertiesContext';
-import { InlineTagsPill } from '@property/tags';
-import type { PropertyApiValues } from '@property/types';
-import { queryReadyGate } from '@queries/gate';
-import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { useUserTeamsQuery } from '@queries/team/teams';
-import { debounce } from '@solid-primitives/scheduled';
-import { useQueryClient } from '@tanstack/solid-query';
-import { Button, cn, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
-import type { LexicalEditor } from 'lexical';
-import {
-  createEffect,
-  createSignal,
-  For,
-  onCleanup,
-  onMount,
-  Show,
-  Suspense,
-} from 'solid-js';
-import { reconcile, unwrap } from 'solid-js/store';
-import { tabbable } from 'tabbable';
-import type { TaskComposerContext } from '../../task-composer/core/context';
-import {
   createTaskComposerProperties,
   createTaskWithProperties,
   DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
   defaultTaskPropertyValues,
   taskComposerProjectValue,
-} from '../util/taskComposerProperties';
+} from '@block-md/util/taskComposerProperties';
 import {
   clearTaskComposerDraft,
   createTaskComposerLinkInSource,
@@ -68,80 +12,80 @@ import {
   loadTaskComposerDraft,
   saveTaskComposerDraft,
   taskComposerContextStorage,
-} from '../util/taskComposerStorage';
+} from '@block-md/util/taskComposerStorage';
 import {
   clearTaskSubmission,
   createTaskSubmissionList,
   submitTaskDraft,
   taskSubmissionDraftStorage,
   taskSubmissionKey,
-} from '../util/taskComposerSubmissions';
-import { EditorSystemMessage } from './EditorSystemMessage';
-import { InlinePropertyValue } from './InlinePropertyValue';
-import { RecoverTaskDrafts } from './RecoverTaskDrafts';
-import { TaskComposerPropertyEditor } from './TaskComposerPropertyEditor';
-import { SimilarTasksSection } from './TaskDuplicateList';
+} from '@block-md/util/taskComposerSubmissions';
+import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
+import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
+import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
+import type { PortalScope } from '@core/component/ScopedPortal';
+import { toast } from '@core/component/Toast/Toast';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import SplitIcon from '@icon/system/regular/square-half.svg';
+import { Telemetry } from '@macro-inc/observability';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { PropertyApiValues } from '@property/types';
+import { queryReadyGate } from '@queries/gate';
+import { useUpsertToHistoryMutation } from '@queries/history/history';
+import { useUserTeamsQuery } from '@queries/team/teams';
+import { debounce } from '@solid-primitives/scheduled';
+import { useQueryClient } from '@tanstack/solid-query';
+import type { LexicalEditor } from 'lexical';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
+import { reconcile, unwrap } from 'solid-js/store';
+import { tabbable } from 'tabbable';
+import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
 
-/**
- * Toast preview component for successful task creation.
- * @param props
- * @returns
- */
+/** A task to open, with the snapshot that renders it before it syncs. */
+type OpenableTask = { id: string; optimisticSnapshot?: Uint8Array };
 
-export type ComposeTaskSuccess = {
-  documentId: string;
-  title: string;
-  content: string;
+/** App capabilities the composer uses; `compose-task.tsx` supplies them. */
+export type TaskComposerHost = {
+  userId: Accessor<string | undefined>;
+  resolveAppLink: MentionLinkResolver | undefined;
+  /** Whether the composer floats over the layout rather than filling a split. */
+  isPopover: Accessor<boolean>;
+  setDisplayName(name: string): void;
+  close(): void;
+  /** Opens another composer on a recovered submission. */
+  openComposer(
+    params: Pick<ComposeTaskProps, 'composerContext' | 'recoveredDraftId'>
+  ): void;
+  openTask(
+    task: OpenableTask,
+    options: { newSplit: boolean; referredFrom: 'launcher' | null }
+  ): void;
+  /** Holds a new split for a task that is still being created. */
+  openPendingTask(): { show(task: OpenableTask): void; cancel(): void };
 };
 
-export interface ComposeTaskProps {
-  /** Replaces how the task is created, e.g. to also add it to a project. */
-  createTask?: typeof createTaskWithProperties;
-  onCreateTask?: (title: string, content: string) => void;
-  onClose?: () => void;
-  /** Identity of a locally retained, unconfirmed submission. */
-  recoveredDraftId?: string;
-  initialTitle?: string;
-  initialContent?: string;
-  placeholder?: string;
-  initialAssigneeIds?: string[];
-  /** Start in this project, e.g. when composing from the project's page. */
-  initialProjectId?: string;
-  composerContext?: TaskComposerContext;
-  /** Prefill the visible Due Date control when creating from a timeline. */
-  initialDueDate?: Date;
-  /**
-   * When provided, replaces the default success behavior (auto-copy link +
-   * toast) so the caller can handle the created task however it needs.
-   */
-  onSuccess?: (result: ComposeTaskSuccess) => void;
-  /**
-   * Fires when the user submits and the dialog closes but the create-task
-   * network call is still in flight. The originating editor can use this to
-   * drop in an await placeholder which onSuccess later replaces.
-   */
-  onCreateStart?: (init: { title: string; content: string }) => void;
-  /**
-   * Fires if the create-task API call fails after the dialog has been closed.
-   * Pairs with onCreateStart for placeholder cleanup.
-   */
-  onCreateFailure?: () => void;
-  /**
-   * Offers a toggle that links the created task back where it was composed
-   * from; `insert` runs after creation while the toggle is on.
-   */
-  linkInSource?: {
-    label: string;
-    insert: (result: ComposeTaskSuccess) => void;
-  };
-}
-
-export function ComposeTask(props: ComposeTaskProps) {
-  const splitPanel = useSplitPanelOrThrow();
-  const { popoverSplit, openWithSplit } = useSplitLayout();
-  const currentUserId = useUserId();
+/**
+ * Draft, property, and submission state for one task composer, shared by the
+ * desktop and mobile views through the `TaskComposer` parts.
+ */
+export function createTaskComposer(
+  props: ComposeTaskProps,
+  host: TaskComposerHost
+) {
+  const currentUserId = host.userId;
   const queryClient = useQueryClient();
   const draftOwner = currentUserId() ?? '';
   const submissions = createTaskSubmissionList(
@@ -261,12 +205,8 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [tagLayoutMode, setTagLayoutMode] =
     createSignal<ComposerTagLayoutMode>('bottom');
   let titleEditorRoot: HTMLDivElement | undefined;
-  let attachInputRef: HTMLInputElement | undefined;
 
-  const handleAttachFiles = async (event: Event) => {
-    const input = event.currentTarget as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    input.value = '';
+  const attachFiles = async (files: File[]) => {
     const editor = bodyEditor();
     if (!editor || files.length === 0) return;
     for (const file of files) {
@@ -343,7 +283,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       saveTaskComposerDraft(draftSnapshot(), draftStorage);
     }
   });
-  const clearDraft = () => {
+  const discardSavedDraft = () => {
     debouncedSave.clear();
     clearTaskComposerDraft(draftStorage);
   };
@@ -407,32 +347,21 @@ export function ComposeTask(props: ComposeTaskProps) {
       toast.failure('Failed to copy link to clipboard');
     }
 
-    const snapshotParams = optimisticSnapshot
-      ? { params: { optimisticSnapshot }, preserveParams: true as const }
-      : {};
-
+    const task = { id: documentId, optimisticSnapshot };
     toast.success('Task created', {
       subtext: linkCopied ? 'Link copied' : undefined,
       actions: [
         {
           label: 'Open',
           icon: ArrowSquareOutIcon,
-          onClick: () => {
-            openWithSplit(
-              { type: 'task', id: documentId, ...snapshotParams },
-              { referredFrom: null }
-            );
-          },
+          onClick: () =>
+            host.openTask(task, { newSplit: false, referredFrom: null }),
         },
         {
           label: 'Open (New Split)',
           icon: SplitIcon,
-          onClick: () => {
-            openWithSplit(
-              { type: 'task', id: documentId, ...snapshotParams },
-              { referredFrom: null, preferNewSplit: true }
-            );
-          },
+          onClick: () =>
+            host.openTask(task, { newSplit: true, referredFrom: null }),
         },
       ],
     });
@@ -440,17 +369,13 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   const recoverDraft = (id: string) => {
     if (currentUserId() !== draftOwner) return;
-    popoverSplit({
-      type: 'component',
-      id: 'task-compose',
-      params: {
-        composerContext: props.composerContext,
-        recoveredDraftId: id,
-      },
+    host.openComposer({
+      composerContext: props.composerContext,
+      recoveredDraftId: id,
     });
   };
 
-  const createTask = async (inSplit: boolean) => {
+  const submit = async (inSplit: boolean) => {
     if (
       !draftSessionActive ||
       isCreating() ||
@@ -477,7 +402,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     const definitions = createDefinitions();
     const snapshot = draftSnapshot();
     const shareWithTeam = sharesWithTeam();
-    let split: ReturnType<typeof openWithSplit>['split'];
+    let pendingSplit: ReturnType<typeof host.openPendingTask> | undefined;
     let started = false;
     let createdTask: Awaited<ReturnType<typeof createTaskWithProperties>> =
       null;
@@ -508,7 +433,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               showFailureToast: false,
               onCreated: confirm,
               onMutate: () => {
-                clearDraft();
+                discardSavedDraft();
                 if (keepOpen) {
                   submittedInput = false;
                   skipNextDraftSave = true;
@@ -519,13 +444,10 @@ export function ComposeTask(props: ComposeTaskProps) {
                   if (editor) initializeEditorEmpty(editor);
                   requestAnimationFrame(() => titleEditorRoot?.focus());
                 } else {
-                  splitPanel.handle.close();
+                  host.close();
                   props.onClose?.();
                   if (inSplit) {
-                    split = openWithSplit(
-                      { type: 'component', id: 'loading' },
-                      { referredFrom: 'launcher', preferNewSplit: true }
-                    ).split;
+                    pendingSplit = host.openPendingTask();
                   } else {
                     props.onCreateStart?.({
                       title: taskTitle,
@@ -553,7 +475,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         return;
       }
       if (!inSplit && !keepOpen) props.onCreateFailure?.();
-      split?.goBack();
+      pendingSplit?.cancel();
       if (currentUserId() === draftOwner) {
         toast.failure('Task creation was not confirmed', {
           subtext:
@@ -568,23 +490,11 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (currentUserId() !== draftOwner) return;
     const { documentId, initialSnapshot } = createdTask;
     if (inSplit) {
-      const snapshotParams = initialSnapshot
-        ? {
-            params: { optimisticSnapshot: initialSnapshot },
-            preserveParams: true as const,
-          }
-        : {};
-      if (split) {
-        split.replace({
-          next: { type: 'task', id: documentId, ...snapshotParams },
-          mergeHistory: true,
-          referredFrom: 'launcher',
-        });
+      const task = { id: documentId, optimisticSnapshot: initialSnapshot };
+      if (pendingSplit) {
+        pendingSplit.show(task);
       } else {
-        openWithSplit(
-          { type: 'task', id: documentId, ...snapshotParams },
-          { referredFrom: 'launcher', preferNewSplit: true }
-        );
+        host.openTask(task, { newSplit: true, referredFrom: 'launcher' });
       }
     } else if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
@@ -597,28 +507,25 @@ export function ComposeTask(props: ComposeTaskProps) {
     linkCreatedTask({ documentId, title: taskTitle, content: taskContent });
     props.onCreateTask?.(taskTitle, taskContent);
   };
-  const handleCreateTask = () => createTask(false);
-  const handleContinueInSplit = () => createTask(true);
+  const createTask = () => submit(false);
+  const continueInSplit = () => submit(true);
 
-  const handleClose = () => {
-    splitPanel.handle.close();
+  const close = () => {
+    host.close();
     props.onClose?.();
   };
 
-  const handleOpenSimilarTask = (taskId: string) => {
+  const openSimilarTask = (taskId: string) => {
     // Closing snapshots the draft (incl. these results); open the existing task
     // in a new split so the composer's work isn't lost.
-    splitPanel.handle.close();
+    host.close();
     props.onClose?.();
-    openWithSplit(
-      { type: 'task', id: taskId },
-      { referredFrom: null, preferNewSplit: true }
-    );
+    host.openTask({ id: taskId }, { newSplit: true, referredFrom: null });
   };
 
-  const handleClearDraft = () => {
+  const clearDraft = () => {
     if (recovered) clearTaskSubmission(draftOwner, recovered.id);
-    clearDraft();
+    discardSavedDraft();
     skipNextDraftSave = true;
     setTitle('');
     setContent('');
@@ -663,7 +570,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   onMount(() => {
-    splitPanel.handle.setDisplayName('New task');
+    host.setDisplayName('New task');
     const container = containerRef();
     if (container) {
       attachHotkeys(container);
@@ -679,16 +586,14 @@ export function ComposeTask(props: ComposeTaskProps) {
     scopeId: composeHotkeyScope,
     description: 'Create task',
     keyDownHandler: () => {
-      handleCreateTask().catch((error) =>
-        Telemetry.error(error, { surface: 'compose-task' })
-      );
+      fireAndForget(createTask(), 'compose-task');
       return true;
     },
     runWithInputFocused: true,
   });
 
   const editorConfig = buildConfig('markdown')
-    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .withAppLinkResolver(host.resolveAppLink)
     .withMentions()
     .withTags({
       applyTargetLabel: 'Task',
@@ -717,307 +622,57 @@ export function ComposeTask(props: ComposeTaskProps) {
       return true;
     });
 
-  const editor = editorConfig.buildHandle().lexical;
-  setBodyEditor(editor);
-  const portalScope = (): PortalScope =>
-    splitPanel.handle.isPopover() ? 'local' : 'block';
+  setBodyEditor(editorConfig.buildHandle().lexical);
+  const portalScope = (): PortalScope => (host.isPopover() ? 'local' : 'block');
 
-  // In the phone sheet the keyboard leaves too little room for the whole
-  // composer, so the footer pins to the bottom of the sheet's scroll. It only
-  // takes a background while pinned over content; at rest it would show as a
-  // band against the glass sheet.
-  const pinsFooter = () => isTouchDevice() && splitPanel.handle.isPopover();
-  const [footerPinned, setFooterPinned] = createSignal(false);
-  const observeFooter = (footer: HTMLElement) => {
-    if (!pinsFooter()) return;
-    onElementConnect(footer, () => {
-      const observer = new IntersectionObserver(
-        ([entry]) => setFooterPinned(!!entry && entry.intersectionRatio < 1),
-        {
-          root: footer.closest('[data-drawer-scroll-body]'),
-          // At rest the footer ends 16px above the viewport's bottom edge;
-          // pinned, it reaches the edge.
-          rootMargin: '0px 0px -15px 0px',
-          threshold: 1,
-        }
-      );
-      observer.observe(footer);
-      onCleanup(() => observer.disconnect());
-    });
+  return {
+    props,
+    draftOwner,
+    submissions,
+    recovered,
+    initialState,
+    title,
+    setTitle,
+    content,
+    bodyEditor,
+    containerRef,
+    setContainerRef,
+    setTitleEditorRoot: (el: HTMLDivElement) => {
+      titleEditorRoot = el;
+    },
+    editorConfig,
+    portalScope,
+    isPopover: host.isPopover,
+    isCreating,
+    errorMessage,
+    setErrorMessage,
+    hasDraftChanges,
+    createMore,
+    setCreateMore,
+    team,
+    shareWithTeam,
+    setShareWithTeam,
+    sharingHint,
+    linkInSourceEnabled,
+    setLinkInSourceEnabled,
+    tagLayoutMode,
+    setTagLayoutMode,
+    handleTitleTagPickerActive,
+    deleteTitleTagsAtStart,
+    properties,
+    setPropertyValues,
+    availableProperties,
+    addProperty,
+    saveHandler,
+    composerTags,
+    attachFiles,
+    recoverDraft,
+    createTask,
+    continueInSplit,
+    close,
+    openSimilarTask,
+    clearDraft,
   };
-
-  return (
-    <EntityComposer.Root tabIndex={-1} ref={setContainerRef}>
-      <EntityComposer.Header>
-        <div class="flex-1 flex items-center">
-          <Show when={splitPanel?.handle.isPopover()}>
-            <Button
-              onMouseDown={handleContinueInSplit}
-              disabled={isCreating()}
-              tabIndex={-1}
-              tooltip="Continue editing in split"
-              variant="ghost"
-              size="icon-md"
-            >
-              <ArrowsOutIcon class="size-4 shrink-0 pointer-events-none" />
-            </Button>
-          </Show>
-        </div>
-        <Show when={hasDraftChanges()}>
-          <Button
-            onMouseDown={handleClearDraft}
-            disabled={isCreating()}
-            tabIndex={-1}
-            tooltip="Clear Draft"
-            size="xs"
-            variant="secondary"
-          >
-            Clear Draft
-          </Button>
-        </Show>
-        <Show when={splitPanel?.handle.isPopover()}>
-          <Button
-            onMouseDown={handleClose}
-            tabIndex={-1}
-            tooltip="Close"
-            variant="ghost"
-            size="icon-md"
-          >
-            <XIcon class="size-4 shrink-0 pointer-events-none" />
-          </Button>
-        </Show>
-      </EntityComposer.Header>
-      <RecoverTaskDrafts
-        userId={draftOwner}
-        drafts={submissions().filter((draft) => draft.id !== recovered?.id)}
-        onOpen={recoverDraft}
-      />
-      <Show when={recovered}>
-        <div class="border-b border-edge-muted p-3 text-sm">
-          Recovered on this device. Task creation requires a connection. Check
-          Tasks before retrying to avoid creating a duplicate.
-        </div>
-      </Show>
-      <EntityComposer.Main>
-        <EntityComposer.Title>
-          <Show when={tagLayoutMode() === 'title'}>
-            <TaskTitleAccessory>
-              <InlineTagsPill
-                docTags={composerTags}
-                variant="secondary"
-                size="xs"
-                showPlaceholder
-                class="shrink-0"
-                onActiveChange={handleTitleTagPickerActive}
-              />
-            </TaskTitleAccessory>
-          </Show>
-          <ComposeTaskTitleEditor
-            value={title}
-            onChange={setTitle}
-            disabled={isCreating}
-            bodyEditor={bodyEditor}
-            containerRef={containerRef}
-            onUserInput={() => {
-              if (errorMessage()) {
-                setErrorMessage('');
-              }
-            }}
-            onTagSelected={(tag) => {
-              setTagLayoutMode('title');
-              fireAndForget(
-                composerTags.applyTag(tag.scope, tag.optionId),
-                'compose-task'
-              );
-            }}
-            onDeleteTagsAtStart={deleteTitleTagsAtStart}
-            portalScope={portalScope()}
-            ref={(el) => {
-              titleEditorRoot = el;
-            }}
-          />
-        </EntityComposer.Title>
-
-        <EntityComposer.Body class="mb-0">
-          <Scroll>
-            <MarkdownShell
-              config={editorConfig}
-              initialState={initialState.editorState}
-              initialValue={
-                initialState.editorState
-                  ? undefined
-                  : initialState.content || undefined
-              }
-              placeholder={props.placeholder ?? 'Add description...'}
-              portalScope={portalScope()}
-            />
-          </Scroll>
-        </EntityComposer.Body>
-
-        <div class="shrink-0 flex items-center py-2">
-          <input
-            ref={(el) => {
-              attachInputRef = el;
-            }}
-            type="file"
-            class="hidden"
-            multiple
-            accept="image/*,video/*"
-            onChange={handleAttachFiles}
-          />
-          <Button
-            onMouseDown={() => attachInputRef?.click()}
-            tabIndex={-1}
-            tooltip="Attach image or video"
-            variant="ghost"
-            size="icon-md"
-          >
-            <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-          </Button>
-        </div>
-
-        <Suspense fallback={<div class="h-7" />}>
-          <PropertiesProvider
-            entityType="TASK"
-            canEdit={true}
-            properties={properties}
-            onRefresh={() => {}}
-            onPropertyAdded={() => {}}
-            onPropertyDeleted={() => {}}
-            saveHandler={saveHandler}
-          >
-            <EntityComposer.Properties
-              on:keydown={(e) => {
-                const target = e.target as HTMLElement;
-                const container = e.currentTarget;
-                const tabbables = tabbable(container);
-                const isFirst = tabbables.indexOf(target) === 0;
-                const isLast =
-                  tabbables.indexOf(target) === tabbables.length - 1;
-
-                // Shift+Tab or ArrowUp on first property -> focus editor
-                if (
-                  isFirst &&
-                  ((e.key === 'Tab' && e.shiftKey) || e.key === 'ArrowUp')
-                ) {
-                  const editor = bodyEditor();
-                  if (editor) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    editor.focus(undefined, { defaultSelection: 'rootEnd' });
-                  }
-                }
-
-                // Tab or ArrowDown on last property -> let tabbable handle or wrap
-                if (
-                  isLast &&
-                  ((e.key === 'Tab' && !e.shiftKey) || e.key === 'ArrowDown')
-                ) {
-                  // Allow default Tab behavior to continue to next focusable
-                  // element outside this container
-                }
-              }}
-            >
-              <For each={properties()}>
-                {(property) => (
-                  <InlinePropertyValue
-                    property={property}
-                    emptyLabel={property.displayName}
-                  />
-                )}
-              </For>
-              <Show when={tagLayoutMode() === 'bottom'}>
-                <InlineTagsPill
-                  docTags={composerTags}
-                  variant="secondary"
-                  size="xs"
-                  showPlaceholder
-                />
-              </Show>
-              <TaskComposerPropertyEditor
-                name={title()}
-                definitions={availableProperties()}
-                properties={properties()}
-                onAdd={addProperty}
-                onSave={(id, value) => setPropertyValues(id, value)}
-              />
-            </EntityComposer.Properties>
-            <Modals />
-          </PropertiesProvider>
-        </Suspense>
-      </EntityComposer.Main>
-
-      <Show when={errorMessage()}>
-        <div class="w-full border-b border-edge-muted" />
-        <div class="p-2">
-          <EditorSystemMessage variant="error">
-            {errorMessage()}
-          </EditorSystemMessage>
-        </div>
-      </Show>
-
-      {/* The team switch, Create More and Create Task need about 400px; a
-          phone is narrower, so the actions wrap to their own row. */}
-      <EntityComposer.Footer
-        ref={observeFooter}
-        class={cn(
-          'flex-wrap items-center',
-          // -bottom-4 offsets the scroll body's bottom padding, which sticky
-          // positioning insets from.
-          pinsFooter() &&
-            'sticky -bottom-4 z-1 -mx-4 -mt-3 -mb-4 px-4 pt-3 pb-4',
-          footerPinned() && 'bg-menu'
-        )}
-      >
-        <Show when={team()}>
-          {(team) => (
-            <Tooltip label={sharingHint()} tabIndex={0}>
-              <ToggleSwitch
-                class="shrink-0 ml-0.5"
-                checked={shareWithTeam()}
-                onChange={setShareWithTeam}
-                disabled={isCreating()}
-                label={`Share with ${team().name}`}
-                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-              />
-            </Tooltip>
-          )}
-        </Show>
-        <div class="ml-auto flex items-center gap-3">
-          <Show when={props.linkInSource}>
-            {(linkInSource) => (
-              <ToggleSwitch
-                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-                onChange={setLinkInSourceEnabled}
-                checked={linkInSourceEnabled()}
-                label={linkInSource().label}
-              />
-            )}
-          </Show>
-          <ToggleSwitch
-            labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-            onChange={setCreateMore}
-            disabled={!!recovered || isCreating()}
-            checked={createMore()}
-            label="Create More"
-          />
-          <EntityComposer.Submit
-            variant="primary"
-            size="sm"
-            onClick={handleCreateTask}
-            disabled={title().trim().length === 0 || isCreating()}
-            hasContent={title().trim().length > 0}
-          >
-            Create Task
-          </EntityComposer.Submit>
-        </div>
-      </EntityComposer.Footer>
-
-      <SimilarTasksSection
-        title={title}
-        content={content}
-        onOpenTask={handleOpenSimilarTask}
-      />
-    </EntityComposer.Root>
-  );
 }
+
+export type TaskComposerController = ReturnType<typeof createTaskComposer>;

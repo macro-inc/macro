@@ -42,6 +42,10 @@ pub mod attachment_cleanup;
 #[cfg(feature = "mailbox")]
 pub mod attachment_access;
 
+/// Authorized original-source (`.eml`) reads of synced messages.
+#[cfg(feature = "mailbox")]
+pub mod message_source;
+
 /// Provider-neutral mailbox connection entitlements.
 pub mod inbox_entitlement;
 

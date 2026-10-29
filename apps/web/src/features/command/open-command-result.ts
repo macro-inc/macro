@@ -115,8 +115,9 @@ export function createCommandResultOpener(
   };
 
   return (item: CommandMenuItem, openInNewSplit = false): boolean => {
-    if (item.kind === 'initiative' && !projectsFlag().enabled) return false;
-    if (item.kind === 'initiative') {
+    const isProject = isEntityItem(item) && item.bucket === 'initiative';
+    if (isProject && !projectsFlag().enabled) return false;
+    if (isProject) {
       openWithSplit(
         {
           type: 'component',

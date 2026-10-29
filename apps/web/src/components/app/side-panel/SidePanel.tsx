@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '@app/components/view-shell/CollapsibleSection';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
@@ -7,7 +8,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
-import CaretRight from '@icon/system/regular/caret-right.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import SidePanelIcon from '@icon/system/regular/sidebar-simple.svg';
@@ -571,8 +571,8 @@ function SidePanelOutlet(props: {
       when={props.floating}
       fallback={
         <Scroll class="flex flex-col min-h-0">
+          <Metadata />
           <Sections />
-          <Footers />
         </Scroll>
       }
     >
@@ -582,13 +582,13 @@ function SidePanelOutlet(props: {
           props.scrollable !== false && 'overflow-y-auto overscroll-contain'
         )}
       >
+        <Metadata />
         <Sections />
-        <Footers />
       </div>
     </Show>
   );
 
-  function Footers() {
+  function Metadata() {
     return (
       <For each={sortedSections().filter((section) => section.footer)}>
         {(section) => section.component(props.floating ?? false)}
@@ -597,7 +597,7 @@ function SidePanelOutlet(props: {
   }
 }
 
-/** Unheaded metadata always follows the panel's interactive sections. */
+/** Unheaded metadata appears before the panel's interactive sections. */
 function Footer(props: ParentProps) {
   const ctx = useContext(SidePanelContext);
   if (!ctx)
@@ -609,12 +609,12 @@ function Footer(props: ParentProps) {
       defaultOpen: false,
       footer: true,
       component: () => (
-        <footer
-          aria-label="Metadata"
-          class="border-t border-edge-muted px-3 py-3 text-xs leading-relaxed text-ink-extra-muted"
+        <section
+          aria-label="Details"
+          class="border-b border-edge-muted p-3 text-xs leading-relaxed text-ink-muted"
         >
           <Suspense fallback={<Loading />}>{props.children}</Suspense>
-        </footer>
+        </section>
       ),
     });
     onCleanup(() => ctx.unregister('metadata-footer'));
@@ -622,6 +622,11 @@ function Footer(props: ParentProps) {
   return null;
 }
 
+/** Native section composition; defer body content until the accordion opens. */
+export type SidePanelSectionLayout = (
+  content: () => JSX.Element,
+  actions?: JSX.Element
+) => JSX.Element;
 /**
  * A collapsible section that registers itself with the nearest SidePanel.Root.
  *
@@ -629,6 +634,7 @@ function Footer(props: ParentProps) {
  * inside the side panel's Accordion. Children evaluate lazily when the
  * panel renders the section, so they only mount when the panel is visible.
  *
+ * Use `render` when a provider must own both header actions and body content.
  * Must be a descendant of `<SidePanel.Root>`. A standalone Layout creates one.
  */
 function Section(
@@ -639,11 +645,12 @@ function Section(
     /** Render order — lower numbers appear first. */
     order?: number;
     /**
-     * Optional controls rendered at the right edge of the header row,
-     * outside the collapse trigger — clicking them doesn't toggle the
-     * section.
+     * Optional controls rendered at the right edge while the section is open,
+     * outside the collapse trigger. Keep them visible without hover.
      */
     actions?: JSX.Element;
+    /** Compose header and body beneath a shared provider without a portal. */
+    render?: (layout: SidePanelSectionLayout) => JSX.Element;
   }>
 ) {
   const ctx = useContext(SidePanelContext);
@@ -660,7 +667,10 @@ function Section(
       component: (floating) => (
         <Accordion.Item
           value={props.id}
-          class={cn(floating && 'border-b border-edge-muted last:border-b-0')}
+          class={cn(
+            'group/sidebar-section',
+            floating && 'border-b border-edge-muted last:border-b-0'
+          )}
         >
           <Show
             when={floating}
@@ -684,26 +694,36 @@ function Section(
   return null;
 
   function SectionContent() {
-    return (
-      <>
-        <Accordion.Header class="group flex items-center">
-          <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center justify-between gap-2 text-xs text-ink-muted hover:underline">
-            <span>{props.title}</span>
-            <CaretRight class="size-3 shrink-0 transition-transform duration-90 group-data-expanded:rotate-90" />
-          </Accordion.Trigger>
-          <Show when={props.actions}>
-            <div class="shrink-0 pr-2">{props.actions}</div>
-          </Show>
-        </Accordion.Header>
-        <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
-          <Suspense fallback={<Loading />}>
-            <div class="px-2 pb-2 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
-              {props.children}
-            </div>
-          </Suspense>
-        </Accordion.Content>
-      </>
-    );
+    const renderSection: SidePanelSectionLayout = (content, actions) => {
+      const resolvedActions = children(() =>
+        actions === undefined ? props.actions : actions
+      );
+      return (
+        <>
+          <Accordion.Header class="flex min-w-0 items-center gap-1">
+            <Accordion.Trigger class="flex min-w-0 flex-1 items-center gap-1 rounded-lg p-3 text-left text-xs font-medium leading-5 text-ink-muted outline-none transition-colors group-hover/sidebar-section:text-ink focus-visible:outline-2 focus-visible:outline-accent">
+              <span class="min-w-0 truncate">{props.title}</span>
+              <CollapsibleSection.Indicator class="touch:opacity-100 group-focus-within/sidebar-section:opacity-100" />
+            </Accordion.Trigger>
+            <Show when={resolvedActions.toArray().length > 0}>
+              <div class="hidden shrink-0 items-center pr-3 group-data-expanded/sidebar-section:flex">
+                {resolvedActions()}
+              </div>
+            </Show>
+          </Accordion.Header>
+          <Accordion.Content class="group/content overflow-hidden data-expanded:animate-accordion-down data-closed:animate-accordion-up">
+            <Suspense fallback={<Loading />}>
+              <div class="px-3 pb-3 text-sm opacity-0 group-data-expanded/content:opacity-100 transition-opacity duration-150 ease-out">
+                {content()}
+              </div>
+            </Suspense>
+          </Accordion.Content>
+        </>
+      );
+    };
+
+    if (props.render) return props.render(renderSection);
+    return renderSection(() => props.children);
   }
 }
 

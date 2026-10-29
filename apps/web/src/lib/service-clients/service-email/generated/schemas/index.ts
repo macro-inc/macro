@@ -222,6 +222,7 @@ export * from './createLabelRequest';
 export * from './createLabelResponse';
 export * from './deleteDraftParams';
 export * from './deleteScheduledDraftParams';
+export * from './emlFile';
 export * from './emptyResponse';
 export * from './errorResponse';
 export * from './eventReminderOverride';

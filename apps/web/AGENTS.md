@@ -284,7 +284,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
-- Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+- Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. Company/contact touch headers use a Switch view drawer that honors host collapse and square copy-link islands; keep phone breadcrumbs above the switcher and leave the workspace view strip unchanged. Record search fills the row beside filters with header spacing; section creation replaces the default floating dock action through FloatRegion. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -358,6 +358,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
+- Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
 - Virtualize mobile name results like desktop Command Menu; local Quick Access sources are unbounded, and mounting them all stalls iOS keyboard focus during layout. Load additional search pages near the scroll end instead of reserving a paging bar.
@@ -490,6 +491,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   The resolved interface language is reported to PostHog as the person
   property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
+- Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
 ## Rules
@@ -528,6 +530,15 @@ manual export when a distribution certificate path is supplied.
 
 ## Native notification navigation
 
+Android incoming calls use an opaque full-screen call screen, with the standard
+Calls notification as the fallback when full-screen access is unavailable.
+Keep notification Answer intents pointed directly at the call activity and scoped
+to the offered call; active calls retain the drawer and PiP controls. See
+`docs/development/android.md#native-calling` at the repository root.
+Native call tracing retains the browser telemetry gate and exporter for cold
+calls; propagate W3C context through push payloads, notification intents and
+ring-status requests, and keep caller names, tokens and URLs out of spans.
+
 Read iOS's durable pending tap before mounting the router, then choose its
 destination only after the authenticated account matches `recipientId`. Keep
 the native receipt pending until the destination route is applied; release the
@@ -541,6 +552,20 @@ Bound the pre-router bridge handoff to 1.5 seconds and release the native cover
 on failure or timeout without consuming the pending tap. Late responses must
 use normal account-checked navigation, never reset the mounted router's hash.
 `notification.launch` records whether startup continued ready, failed, or timed out.
+
+Bound the native cover to eight seconds for each received durable tap, including
+warm resumes and stalled route acknowledgments. Release without consuming the
+intent on timeout; duplicate delivery must not extend the deadline, and a newer
+tap gets its own deadline. Convert fallible notification lookups and navigation
+promises into error results so failure cleanup acknowledges the tap and shows
+the existing error toast. Keep the startup cover fallback in the same owner,
+and let it defer to a pending tap's deadline. The deadline requires responsive
+JavaScript and IPC; it cannot recover a frozen WebContent process.
+
+The frontend cover deadline has a backend-free phone browser regression:
+`bunx playwright test --config src/lib/tauri/browser-test/playwright.config.ts`.
+It uses the real navigation intent and push API with simulated native IPC;
+UIKit presentation still requires an iOS device or simulator.
 
 Generate APNs validators with `scripts/generate-api-schema.ts`; its compact
 `generated/push.ts` entry avoids importing every notification-service schema

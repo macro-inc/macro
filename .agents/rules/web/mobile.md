@@ -25,6 +25,11 @@ read their code, and follow that pattern rather than inventing a new one.
   control and show its touch replacement with the same one, or tablets get
   neither. Native checks (`isPlatform` in `@core/util/platform`) are for
   native bridges and platform-specific visual effects, not layout.
+- When a surface needs a different phone or touch layout, compose a separate
+  mobile view from shared parts (and a shared state primitive) instead of
+  branching on `isMobile()` / `isTouchDevice()` throughout one component;
+  extract the parts first if needed. The task composer
+  (`features/task-composer/views`) is the reference.
 - Gate hover and press styles with `not-touch:`; iOS leaves hover stuck.
 - No action lives only behind hover. `HoverCard` renders nothing on touch,
   so give it a tap path that opens a sheet, as `UserCardTrigger` does.

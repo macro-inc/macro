@@ -209,6 +209,10 @@ pub(crate) fn stored_owner(service: &TestService, id: Uuid) -> Option<Owner> {
         .map(|action| action.owner.clone())
 }
 
+pub(crate) fn stored_actions(service: &TestService) -> Vec<ScheduledAction> {
+    service.repo.actions.lock().unwrap().clone()
+}
+
 /// The same store behind a dispatcher that has stopped.
 pub(crate) fn with_stopped_dispatcher(service: &TestService) -> Arc<TestService> {
     let (tx, _) = tokio::sync::mpsc::channel(1);

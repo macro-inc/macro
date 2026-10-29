@@ -478,6 +478,11 @@ controls. Verify these remain
 available when returning to Drafts and reopening the draft.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
+**Download .eml** in the title menu saves the thread's newest sent or received
+message (drafts and sends still in flight are skipped) exactly as Gmail or
+Outlook holds it, named after its subject. Anyone who can view the thread can
+download it; verify the file opens in a mail client and that a thread holding
+only a draft does not offer the action.
 Verify that opening the title menu, returning to the list, and reopening a thread
 preserve working menu actions and header controls. Repeatedly navigate forward
 and backward, including after returning to the list: the subject and email body
