@@ -4,6 +4,7 @@ use anyhow::Context;
 /// Adds one reference to each SHA, restarts its expiry, and takes it out of
 /// the delete bucket, all in one MULTI/EXEC so a counter never exists without
 /// an expiry.
+#[tracing::instrument(skip_all, fields(sha_count = shas.len()), err)]
 pub(crate) async fn increment_counts(
     client: &redis::Client,
     shas: Vec<String>,
