@@ -18,7 +18,8 @@ Keep 16px between the property list and the bottom Add property action.
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
 properties. Empty collections show only the property header, with no placeholder
 or reserved content area. A labeled ghost Add button aligns with the shared
-value-selector column for both empty and populated collections. During compatible
+value-selector column for both empty and populated collections. Its icon and
+label use extra-muted ink until hovered or keyboard-focused. During compatible
 app-item drags, the property name uses accent ink and a small downward arrow
 while the row stays compact. Hovering anywhere on that property reveals its
 full-width dashed dropzone over 300ms; reduced motion disables the transition.
@@ -41,9 +42,9 @@ available for keyboard and touch.
 
 Collection drop handling and save callbacks stay in the property callers.
 
-The dedicated Tags section uses a plain muted “No tags added yet” message
-and a small ghost Add tags action, without a card, title, or description.
-The existing tag picker handles the action; read-only sections omit it.
+The empty dedicated Tags section shows one quiet, tag-icon Add tags prompt,
+without a separate message, card, title, or description. The existing tag picker
+handles the action; read-only sections show “No tags added yet” instead.
 Inline Tags property rows retain their compact treatment.
 
 ## Side-panel header actions

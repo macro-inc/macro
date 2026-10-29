@@ -6,6 +6,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -175,22 +176,25 @@ export function TagsRow(props: {
           </>
         }
       >
-        <div class="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span class="text-xs text-ink-muted">{t('common.emptyTags')}</span>
-          <Show when={props.canEdit}>
-            <TagPicker
-              docTags={docTags}
-              triggerClass={buttonClasses({
-                variant: 'ghost',
-                size: 'xs',
-              })}
-              triggerLabel={t('common.addTags')}
-            >
-              <PlusIcon class="size-3.5" />
-              {t('common.addTags')}
-            </TagPicker>
-          </Show>
-        </div>
+        <Show
+          when={props.canEdit}
+          fallback={
+            <span class="text-xs text-ink-muted">{t('common.emptyTags')}</span>
+          }
+        >
+          <TagPicker
+            docTags={docTags}
+            triggerClass={buttonClasses({
+              variant: 'ghost',
+              size: 'xs',
+              class: 'text-ink-extra-muted not-data-disabled:focus-visible:text-ink',
+            })}
+            triggerLabel={t('common.addTags')}
+          >
+            <TagIcon class="size-4" />
+            {t('common.addTags')}
+          </TagPicker>
+        </Show>
       </Show>
       <TagEditorDialog
         open={editorMode() !== null}

@@ -160,6 +160,7 @@ function EntityCollectionPropertyBody(props: {
             type="button"
             variant="ghost"
             size="xs"
+            class="text-ink-extra-muted not-data-disabled:focus-visible:text-ink"
             aria-label={`Add ${props.property.displayName}`}
             disabled={props.loading || isSaving()}
             onClick={handleAdd}

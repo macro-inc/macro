@@ -161,6 +161,7 @@ Separate the bottom Add property action from the list by 16px.
 Empty multi-entity collections show only their property header, without a
 placeholder or reserved content area. Align the labeled ghost Add button with
 the shared value-selector column for both empty and populated collections.
+Keep its icon and label extra-muted until hovered or keyboard-focused.
 While dragging a compatible app item, tint the property
 name and show a small downward arrow without expanding the row. Reveal the
 full-width dashed dropzone only while hovering that property, including its
@@ -182,9 +183,10 @@ announces additions, including picker saves. Existing values remain visible;
 further edits and drops stay locked during that operation. Add and value edits
 also remain disabled while the initial collection loads.
 
-The dedicated Tags section uses a plain muted “No tags added yet” message
-with a small ghost Add tags action, without a card, title, or description.
-Keep that action permission-gated and connected to the existing tag picker.
+The empty dedicated Tags section uses a single quiet, tag-icon Add tags prompt,
+without a separate message, card, title, or description. Keep the prompt
+permission-gated and connected to the existing tag picker; read-only sections
+show “No tags added yet” instead.
 Inline Tags property rows remain compact.
 
 The **Add** action remains the keyboard/touch alternative. This target does not
