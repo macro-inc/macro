@@ -108,6 +108,11 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
                         as={MobileDrawer.Item}
                         role="radio"
                         aria-label={label(section)}
+                        class={
+                          props.value === section
+                            ? 'text-ink'
+                            : 'text-ink-extra-muted'
+                        }
                         aria-checked={props.value === section}
                         onClick={() => props.onChange(section)}
                       >
@@ -119,7 +124,7 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
                           {label(section)}
                         </span>
                         <Show when={props.value === section}>
-                          <CheckIcon class="size-4 shrink-0 text-accent" />
+                          <CheckIcon class="size-4 shrink-0 text-ink" />
                         </Show>
                       </MobileDrawer.Close>
                     )}
