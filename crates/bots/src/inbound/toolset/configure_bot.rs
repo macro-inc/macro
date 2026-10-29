@@ -57,7 +57,7 @@ pub struct ConfigureBot {
     )]
     #[serde(default)]
     pub avatar_url: Option<String>,
-    /// Optional coding-agent session flag.
+    /// Optional AI-agent session flag.
     #[schemars(
         description = "Set true to make this bot an AI agent: mentions and DMs start an agent session. Omit to leave unchanged."
     )]
