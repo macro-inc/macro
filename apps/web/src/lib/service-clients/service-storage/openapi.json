@@ -9937,6 +9937,67 @@
         }
       }
     },
+    "/documents/similarity_search": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Handler for `POST /documents/similarity_search`.",
+        "description": "Returns existing tasks similar to an unsaved draft. Runs vector retrieval +\nrerank only and persists nothing.",
+        "operationId": "task_similarity_search_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskSimilaritySearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for searching tasks similar to an unsaved draft.",
+                  "required": ["results"],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskSimilarityResult"
+                      },
+                      "description": "Existing tasks similar to the draft."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/slug/{slug}": {
       "get": {
         "tags": ["document"],
@@ -34953,6 +35014,10 @@
             "type": ["string", "null"],
             "description": "User who triggered a bot-authored message."
           },
+          "triggered_via": {
+            "type": ["string", "null"],
+            "description": "Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
@@ -43056,6 +43121,55 @@
           "include_cbm_atm_nc": {
             "type": ["boolean", "null"],
             "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
+          }
+        }
+      },
+      "TaskSimilarityResult": {
+        "type": "object",
+        "description": "A similar existing task computed for an unsaved draft, returned to the task\ncomposer without persisting any embedding or match state.",
+        "required": ["taskId", "taskName", "vectorScore"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "The matching existing task."
+          },
+          "taskName": {
+            "type": "string",
+            "description": "The matching task's display name."
+          },
+          "vectorScore": {
+            "type": "number",
+            "format": "double",
+            "description": "Cosine similarity from vector search."
+          }
+        }
+      },
+      "TaskSimilaritySearchRequest": {
+        "type": "object",
+        "description": "Request body for searching tasks similar to an unsaved draft.",
+        "required": ["taskName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Draft task body as embedding-format markdown. The composer produces it\nclient-side with lexical-core's `markdownToEmbeddingText` (the same\nformat lexical-service's `/markdown/{id}?target=embedding` renders), so\nthis latency-sensitive endpoint embeds the text as-is without a\nlexical-service round trip."
+          },
+          "taskName": {
+            "type": "string",
+            "description": "Draft task title."
+          }
+        }
+      },
+      "TaskSimilaritySearchResponse": {
+        "type": "object",
+        "description": "Response for searching tasks similar to an unsaved draft.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskSimilarityResult"
+            },
+            "description": "Existing tasks similar to the draft."
           }
         }
       },

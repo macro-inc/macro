@@ -222,7 +222,7 @@ export function LocalRuntimeCard() {
                         </p>
                         <Button
                           type="button"
-                          variant="neutral"
+                          variant="primary"
                           size="sm"
                           onClick={() => setSetup({ running: snapshot() })}
                         >
@@ -295,7 +295,7 @@ export function LocalRuntimeCard() {
                   <div class="mt-4">
                     <Button
                       type="button"
-                      variant="neutral"
+                      variant="primary"
                       size="sm"
                       onClick={() => setSetup({})}
                     >

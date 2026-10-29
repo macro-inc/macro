@@ -137,3 +137,33 @@ fn advisory_progress_cannot_consume_the_log_budget() {
     assert_eq!(receiver.try_recv().unwrap().sequence, 3);
     assert!(receiver.try_recv().is_err());
 }
+
+#[test]
+fn result_budget_must_fit_in_a_frame() {
+    assert!(matches!(
+        Limits {
+            max_frame_bytes: 16 * 1024,
+            ..Limits::default()
+        }
+        .validate(),
+        Err(AdmissionError::InvalidLimits)
+    ));
+    assert!(matches!(
+        Limits {
+            max_frame_bytes: 16 * 1024,
+            max_result_bytes: 16 * 1024,
+            ..Limits::default()
+        }
+        .validate(),
+        Err(AdmissionError::InvalidLimits)
+    ));
+    assert!(
+        Limits {
+            max_frame_bytes: 16 * 1024,
+            max_result_bytes: 16 * 1024 - RESULT_FRAME_OVERHEAD,
+            ..Limits::default()
+        }
+        .validate()
+        .is_ok()
+    );
+}

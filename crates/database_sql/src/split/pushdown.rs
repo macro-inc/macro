@@ -96,7 +96,7 @@ fn pushable(
         }
     });
     let relation = relation?;
-    if spans || relations[relation].source != TableSource::Database {
+    if spans || relations.get(relation)?.source != TableSource::Database {
         return None;
     }
     Some((relation, push(filter, bindings)?))

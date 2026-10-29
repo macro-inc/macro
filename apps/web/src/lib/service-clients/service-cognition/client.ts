@@ -17,6 +17,8 @@ import {
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
+import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
+import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
@@ -518,6 +520,17 @@ export const cognitionApiServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  async databaseQuery(args: DatabaseQueryRequest) {
+    return fetchWithToken<DatabaseQueryAnswer, typeof AI_USAGE_LIMIT_ERROR>(
+      `${dcsHost}/database-query`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: aiUsageErrorResponseHandler,
+      }
+    );
   },
 
   async structuredCompletion(args: StructuredCompletionRequest) {

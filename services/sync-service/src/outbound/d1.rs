@@ -1,20 +1,34 @@
-use crate::timeit;
+use crate::{constants::SYSTEM_AUTHOR_ID, timeit};
 use tracing::{error, trace};
+use wasm_bindgen::JsValue;
 use worker::D1Database;
+
+/// Records who a peer edits as: the user whose token registered it, and the
+/// signed agent actor when the edit came from an agent acting for that user.
+/// The first owner keeps the peer, so a later registration of the same id can't
+/// re-attribute its edits; only a peer the system author holds (one an
+/// initialized snapshot wrote) is claimed by the user who registers it.
 pub async fn insert_user_mapping(
     db: D1Database,
     user_id: &str,
+    actor: Option<&str>,
     peer_id: u64,
     document_id: &str,
 ) -> worker::Result<()> {
     let elapsed = timeit!({
         let dbres = db.prepare(
-            "INSERT OR REPLACE INTO peer_user_map (document_id, peer_id, user_id) VALUES (?, ?, ?);",
+            "INSERT INTO peer_user_map (document_id, peer_id, user_id, actor) VALUES (?, ?, ?, ?) \
+             ON CONFLICT(document_id, peer_id) DO UPDATE SET \
+                user_id = excluded.user_id, \
+                actor = excluded.actor \
+             WHERE peer_user_map.user_id = ?;",
         )
         .bind(&[
             document_id.into(),
             peer_id.to_string().into(),
             user_id.into(),
+            actor.map_or(JsValue::NULL, JsValue::from),
+            SYSTEM_AUTHOR_ID.into(),
         ])?
         .run()
         .await?;
@@ -41,12 +55,14 @@ pub async fn insert_user_mapping(
     Ok(())
 }
 
-/// Map peers that wrote operations to `user_id`, keeping any mapping a peer
-/// already has: a peer that registered explicitly stays with its owner.
+/// Map peers that wrote operations to `user_id` (and the agent `actor` they
+/// wrote as), keeping any mapping a peer already has: a peer that registered
+/// explicitly stays with its owner.
 pub async fn insert_missing_user_mappings(
     db: &D1Database,
     document_id: &str,
     user_id: &str,
+    actor: Option<&str>,
     peer_ids: &[u64],
 ) -> worker::Result<()> {
     for chunk in peer_ids.chunks(BATCH_CHUNK_SIZE) {
@@ -54,9 +70,14 @@ pub async fn insert_missing_user_mappings(
             .iter()
             .map(|peer_id| {
                 db.prepare(
-                    "INSERT OR IGNORE INTO peer_user_map (document_id, peer_id, user_id) VALUES (?, ?, ?);",
+                    "INSERT OR IGNORE INTO peer_user_map (document_id, peer_id, user_id, actor) VALUES (?, ?, ?, ?);",
                 )
-                .bind(&[document_id.into(), peer_id.to_string().into(), user_id.into()])
+                .bind(&[
+                    document_id.into(),
+                    peer_id.to_string().into(),
+                    user_id.into(),
+                    actor.map_or(JsValue::NULL, JsValue::from),
+                ])
             })
             .collect::<worker::Result<Vec<_>>>()?;
         db.batch(statements).await?;
@@ -72,8 +93,8 @@ pub async fn copy_user_mappings(
     target_document_id: &str,
 ) -> worker::Result<()> {
     db.prepare(
-        "INSERT OR IGNORE INTO peer_user_map (document_id, peer_id, user_id) \
-         SELECT ?, peer_id, user_id FROM peer_user_map WHERE document_id = ?;",
+        "INSERT OR IGNORE INTO peer_user_map (document_id, peer_id, user_id, actor) \
+         SELECT ?, peer_id, user_id, actor FROM peer_user_map WHERE document_id = ?;",
     )
     .bind(&[target_document_id.into(), source_document_id.into()])?
     .run()
@@ -112,7 +133,7 @@ pub async fn get_peers_for_document_id(
 ) -> worker::Result<Vec<PeerWithUserId>> {
     let statement = db.prepare(
         "
-            SELECT peer_id, user_id
+            SELECT peer_id, user_id, actor
             FROM peer_user_map
             WHERE document_id = ?;
         ",
@@ -198,6 +219,7 @@ pub async fn get_blame_for_node(
         "
             SELECT b.peer_id AS peer_id,
                    p.user_id AS user_id,
+                   p.actor AS actor,
                    b.timestamp_ms AS timestamp_ms
             FROM blame b
             LEFT JOIN peer_user_map p

@@ -658,14 +658,22 @@ preferences keep them static. Use the searchable source picker below the questio
 choose a database; the entire chosen database is in scope, without a table
 prerequisite. An explicit source also disambiguates databases with identical names
 when previewing or refreshing an answer. **Automatic** finds a relevant accessible
-database from the question with the discovery tools and inspects all its tables.
-The answer's `QueryDatabase` runs with view access only, so asking a question never
-changes data, even for an editor. Both discovery and final answer formatting
-receive the registered database tool reference, including the current SQL dialect. Verify an Automatic question
-that needs ListDatabases, DescribeDatabase, and QueryDatabase completes with live
-results; repeat with an explicit source and an aggregate using an AS alias. The
-formatting step must preserve tool-call/result names and ids without another tool
-execution. If matching sources are
+database from the question with permission-checked schema discovery and inspects all
+its tables. Only schema discovery tools are available to the question agent. The
+host's SQL engine refuses writes, so asking a question never changes data, even for
+an editor. Document questions use the specialized `/cognition/database-query`
+endpoint. An explicit source with a loaded schema proposes SQL in one model call; the
+browser's read-only engine validates and executes it. Automatic discovery reuses the
+agent's final JSON when valid, avoiding a second formatting call. Both paths receive
+the shared SQL dialect reference. A parse or name-resolution failure gets at most one
+repair using the engine error; network and permission failures are never retried by
+the question composer. Verify Automatic completes with live results; repeat with an
+explicit source and an aggregate using an AS alias. Verify a failed repair keeps the
+previous saved answer. Each endpoint request has a 90-second deadline. In DevTools,
+`[database-query]` summaries separate generation, catalog loading, and browser reads;
+`[database-sql]` shows row fetches and engine time. Backend spans record source mode,
+model, tool count, discovery and formatting durations, and whether formatting fell
+back to another model call. If matching sources are
 ambiguous, the assistant asks for clarification. Type to search the
 source menu, use the arrow keys and Enter to choose, or Escape to return without
 changing it. The displayed source is checked against the query's actual table

@@ -140,6 +140,13 @@ listener failure shuts down the process so ECS can replace the task.
 
 - Analytics record the tool name, outcome, duration, and client headers only;
   never add tool arguments or results to them.
+- Public MCP tool calls run for the `ToolCaller` the bearer middleware
+  (`mcp_auth_proxy`) attached, and a call without one is refused: `Agent` (a
+  Macro API token's signed `agent_id`, which egress mints from the session's
+  `agent_session.bot_id`) writes as that agent; `McpClient` (OAuth) writes as
+  the Macro bot labelled "via <client name>"; `ApiKey` writes as the Macro bot.
+  Public `ExecuteCode` builds its context per call from the caller and signs an
+  agent caller into its SDK token. Never read a bot id from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.

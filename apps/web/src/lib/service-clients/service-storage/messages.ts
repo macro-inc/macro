@@ -26,6 +26,8 @@ export type MessageSender = {
   avatar_url?: string | null;
   /** For an agent (bot) message, the id of the user who triggered it. */
   triggered_by?: string | null;
+  /** The client the user triggered it through, such as "Claude Code". */
+  triggered_via?: string | null;
 };
 
 export type Message = StoredMessage & { sender?: MessageSender };

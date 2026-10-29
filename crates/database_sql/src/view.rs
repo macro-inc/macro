@@ -44,11 +44,11 @@ fn schema_column(column: &Column) -> SchemaColumn {
     )
 }
 
-/// The column a checked view names by placement.
-fn placed(table: &Table, placement: ColumnId) -> &Column {
+/// The column a view names by placement.
+fn placed(table: &Table, placement: ColumnId) -> Result<&Column, ViewProblem> {
     table
         .columns
         .iter()
         .find(|column| column.placement == placement)
-        .expect("the view was checked against this table")
+        .ok_or(ViewProblem::UnknownColumn { column: placement })
 }

@@ -162,7 +162,14 @@ impl SyncSession {
             Err(error) => return error_response(error),
         };
         let db = self.env.d1(USER_PEER_D1_BINDING)?;
-        insert_missing_user_mappings(&db, document_id, &author, &writers).await?;
+        insert_missing_user_mappings(
+            &db,
+            document_id,
+            &author,
+            stored_attribution.map(|attribution| attribution.actor.as_str()),
+            &writers,
+        )
+        .await?;
         Response::from_json(&UpdateResponse {
             revision: STANDARD.encode(prepared.revision),
             applied: prepared.applied,

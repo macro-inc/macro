@@ -7067,3 +7067,110 @@ async fn crm_document_literals_match_attachments_and_associations(
     assert!(not_acme.contains(DOC_B) && not_acme.contains(DOC_D));
     Ok(())
 }
+
+/// The Home unread feed sends `(unseen OR seen) AND unseen` for every entity
+/// type. The notification join it now takes must agree with the per-row fold
+/// of an equivalent tree the stripper leaves alone.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_unread_conjunction_matches_unoptimized_equivalent(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::NotificationState::{Seen, Unseen};
+    let unseen_doc = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let seen_doc = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let unseen_chat = "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1";
+    let seen_project = "11111111-1111-1111-1111-111111111111";
+    // The viewer `run_notification_filter` queries as owns this document.
+    let user_id = sqlx::query_scalar!(
+        r#"SELECT owner FROM "Document" WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'"#
+    )
+    .fetch_one(&db)
+    .await?;
+    for (notification_id, item_type, item_id, seen) in [
+        (
+            "30000000-0000-0000-0000-000000000001",
+            "document",
+            unseen_doc,
+            false,
+        ),
+        (
+            "30000000-0000-0000-0000-000000000002",
+            "document",
+            seen_doc,
+            true,
+        ),
+        (
+            "30000000-0000-0000-0000-000000000003",
+            "chat",
+            unseen_chat,
+            false,
+        ),
+        (
+            "30000000-0000-0000-0000-000000000004",
+            "project",
+            seen_project,
+            true,
+        ),
+    ] {
+        insert_notification(
+            &db,
+            notification_id,
+            &user_id,
+            item_type,
+            item_id,
+            false,
+            seen,
+        )
+        .await?;
+    }
+
+    let doc = |state| Expr::val(DocumentLiteral::NotificationState(state));
+    let chat = |state| Expr::val(ChatLiteral::NotificationState(state));
+    let project = |state| Expr::val(ProjectLiteral::NotificationState(state));
+    let optimized = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::and(
+            Expr::or(doc(Unseen), doc(Seen)),
+            doc(Unseen),
+        ))),
+        chat_filter: Some(Arc::new(Expr::and(
+            Expr::or(chat(Unseen), chat(Seen)),
+            chat(Unseen),
+        ))),
+        project_filter: Some(Arc::new(Expr::and(
+            Expr::or(project(Unseen), project(Seen)),
+            project(Unseen),
+        ))),
+        ..mock_empty_ast()
+    };
+    // Equivalent, but a notification literal under OR with another predicate
+    // stays on the correlated-EXISTS path.
+    let unoptimized = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::or(
+            doc(Unseen),
+            Expr::and(doc(Unseen), Expr::val(DocumentLiteral::Importance(true))),
+        ))),
+        chat_filter: Some(Arc::new(Expr::or(
+            chat(Unseen),
+            Expr::and(chat(Unseen), Expr::val(ChatLiteral::Importance(true))),
+        ))),
+        project_filter: Some(Arc::new(Expr::or(
+            project(Unseen),
+            Expr::and(project(Unseen), Expr::val(ProjectLiteral::Importance(true))),
+        ))),
+        ..mock_empty_ast()
+    };
+
+    let optimized_ids = run_notification_filter(&db, optimized).await?;
+    let unoptimized_ids = run_notification_filter(&db, unoptimized).await?;
+
+    assert_eq!(optimized_ids, unoptimized_ids);
+    assert!(optimized_ids.contains(&uuid(unseen_doc)));
+    assert!(optimized_ids.contains(&uuid(unseen_chat)));
+    assert!(!optimized_ids.contains(&uuid(seen_doc)));
+    assert!(!optimized_ids.contains(&uuid(seen_project)));
+    Ok(())
+}

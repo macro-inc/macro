@@ -383,7 +383,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
             {/* Inverted (black on light, white on dark) so inviting is the
                 page's primary action. */}
             <Button
-              variant="neutral"
+              variant="primary"
               class="text-[15px]"
               onClick={() => setShowInviteModal(true)}
             >

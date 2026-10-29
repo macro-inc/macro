@@ -313,7 +313,7 @@ export function Tags() {
       title="Tags"
       description="Manage personal labels and shared team labels."
       actions={
-        <Button variant="neutral" size="sm" onClick={() => openCreate('user')}>
+        <Button variant="primary" size="sm" onClick={() => openCreate('user')}>
           <PlusIcon class="size-4" />
           New tag
         </Button>

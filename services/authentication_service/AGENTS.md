@@ -112,6 +112,11 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `email_link_error=gmail_not_granted`. Mirrors Outlook's required-scope check
   in `src/domain/microsoft.rs`; Macro has no mailbox-less link for either
   provider.
+- `/oauth/redirect` without a code answers "Sign-in failed" and logs
+  `auth_handoff_failure=missing_code` with FusionAuth's error. `invalid_origin`
+  ("Invalid origin uri <origin>") means the page that sent the browser to
+  FusionAuth is missing from `infra/stacks/fusionauth-instance/origins.ts`;
+  these failures carry no user id.
 
 ## Related
 
