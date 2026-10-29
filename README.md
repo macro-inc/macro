@@ -180,6 +180,8 @@ Creating tasks in Macro is easy. Where possible, tasks created are bidirectional
 - In any agent chat
 - Via external MCP, API or SDK
 
+We made organizing tasks in Macro simple. Group related tasks into projects and assign responsibility to team members or agents. To track your work use lists, boards, and saved views. You can hand off tasks to agents and they'll use the context connected to the task to complete it and update the status.
+
 [Tasks docs &rarr;](https://docs.macro.com/product/tasks)
 
 <br />
