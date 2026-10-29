@@ -132,9 +132,11 @@ const BOOLEAN_FLAGS = new Set(["require-live", "require-unused-build"]);
 
 /// "The native code": every tracked blob under this directory except what
 /// never reaches the iOS binary — anything Android-only or desktop-only by
-/// Tauri's naming convention (a path component `android`, `macos`, `linux`,
-/// `windows` or `desktop`, that name plus `_`, `.` or `-`, or a `*.android.*`
-/// / `*.macos.*` / `*.linux.*` / `*.windows.*` infix; all behind
+/// Tauri's naming convention (a path component `android`, `macos`, `linux`
+/// or `windows`, or that name plus `_`, `.` or `-`; `desktop`, `desktop.*` or
+/// `desktop-*` but not `desktop_*`, since desktop_update compiles into
+/// mobile; or a `*.android.*` / `*.macos.*` / `*.linux.*` / `*.windows.*`
+/// infix; all behind
 /// cfg(target_os) / cfg(desktop)), the desktop updater manifest, editor
 /// config and Markdown docs — plus the version of the client cache wasm
 /// package, which the team bumps when a cache change must ship (the app compiles the cache crates
@@ -145,7 +147,7 @@ const BOOLEAN_FLAGS = new Set(["require-live", "require-unused-build"]);
 const NATIVE_TREE_PATH = "apps/web/tauri";
 const CACHE_WASM_MANIFEST = "crates/client/cache-wasm/Cargo.toml";
 const NATIVE_TREE_EXCLUDE =
-  /(^|\/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
+  /(^|\/)(android|macos|linux|windows)([_./-]|$)|(^|\/)desktop([./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
 const STAMP_RE = /native tree ([0-9a-f]{40})/;
 const STAMP_PR_RE = /for PR #(\d+)/;
 

@@ -33,11 +33,13 @@ jobs:
         # apps/web/tauri except the paths that never reach the iOS binary, recognised
         # by the same naming convention the Android gate uses (android-native.mjs,
         # which excludes iOS/macOS/linux/windows/apple/desktop-named paths): a path
-        # component that is `android`, `macos`, `linux`, `windows` or `desktop`,
-        # starts with that name plus `_`, `.` or `-`, or an extension-style
-        # `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the android_*
-        # plugins, tauri.android.conf.json and tauri.macos.conf.json, desktop_update
-        # and the desktop_* modules, linux_notification, the macos icons; the Rust
+        # component that is `android`, `macos`, `linux` or `windows` or starts with
+        # that name plus `_`, `.` or `-`; one that is `desktop` or starts with
+        # `desktop.` / `desktop-` (not `desktop_`: desktop_update and its Status type
+        # compile into mobile, only desktop_update/desktop/ is cfg(desktop)); or an
+        # extension-style `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the
+        # android_* plugins, tauri.android.conf.json and tauri.macos.conf.json,
+        # src/desktop/, desktop-cef, linux_notification, the macos icons; the Rust
         # ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
         # updater manifest, editor config and Markdown docs. `apple`/`ios` paths
         # stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
@@ -52,7 +54,7 @@ jobs:
         # detection (web_app_check_main/ios_native_check.rs).
         NATIVE_TREE_PATH=apps/web/tauri
         CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
+        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows)([_./-]|$)|(^|/)desktop([./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
         # native_tree_hash <commit>: prints the hash, fails if the path is missing.
         # (--full-tree: ls-tree otherwise narrows its output to the current directory,

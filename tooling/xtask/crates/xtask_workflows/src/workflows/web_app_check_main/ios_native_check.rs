@@ -98,7 +98,8 @@ fn paths_filter() -> Step<Use> {
             "filters",
             // Mirror NATIVE_TREE_EXCLUDE in scripts/ios_native_tree.sh: paths
             // named for another platform (android, macos, linux, windows,
-            // desktop) never reach the iOS binary. The generator rejects
+            // desktop) never reach the iOS binary; `desktop_*` stays counted
+            // because desktop_update compiles into mobile. The generator rejects
             // globs that match nothing, so only the shapes present in the
             // tree today are listed; when a file in a new shape appears
             // (e.g. the first windows_* module), extend this list to keep it
@@ -121,8 +122,6 @@ fn paths_filter() -> Step<Use> {
                   - '!apps/web/tauri/**/desktop/**'
                   - '!apps/web/tauri/**/desktop-*'
                   - '!apps/web/tauri/**/desktop-*/**'
-                  - '!apps/web/tauri/**/desktop_*'
-                  - '!apps/web/tauri/**/desktop_*/**'
                   - '!apps/web/tauri/**/desktop.*'
                   - '!apps/web/tauri/desktop-release.json'
                   - '!apps/web/tauri/.helix/**'

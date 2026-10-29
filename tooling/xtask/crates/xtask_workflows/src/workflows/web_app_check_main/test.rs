@@ -404,6 +404,60 @@ fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     );
 }
 
+/// The iOS native tree exempts desktop-only paths by name, but `desktop_update`
+/// is not cfg(desktop): its commands and Status type compile into mobile, so a
+/// `desktop_` prefix must stay counted while `desktop`, `desktop.*` and
+/// `desktop-*` are exempt.
+#[test]
+fn native_tree_exclude_counts_mobile_compiled_desktop_update() {
+    use std::process::Command;
+
+    let script = include_str!("../scripts/ios_native_tree.sh");
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(format!(
+            r#"set -euo pipefail
+{script}
+printf '%s\n' "$@" | awk '$0 ~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+"#
+        ))
+        .args([
+            "bash",
+            "src-tauri/src/desktop.rs",
+            "src-tauri/src/desktop/macrod.rs",
+            "src-tauri/src/desktop_update/desktop.rs",
+            "src-tauri/src/desktop_update/desktop/test.rs",
+            "src-tauri/capabilities/desktop.json",
+            "desktop-cef/src/main.rs",
+            "desktop-release.json",
+            "src-tauri/src/desktop_update.rs",
+            "src-tauri/src/desktop_update/state.rs",
+            "src-tauri/src/lib.rs",
+        ])
+        .env_remove("BASH_ENV")
+        .output()
+        .expect("run native tree exclusion");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .collect::<Vec<_>>(),
+        [
+            "src-tauri/src/desktop.rs",
+            "src-tauri/src/desktop/macrod.rs",
+            "src-tauri/src/desktop_update/desktop.rs",
+            "src-tauri/src/desktop_update/desktop/test.rs",
+            "src-tauri/capabilities/desktop.json",
+            "desktop-cef/src/main.rs",
+            "desktop-release.json",
+        ],
+    );
+}
+
 /// Exercise Git's actual HTTP header handling with and without checkout's
 /// persisted credentials. The local endpoint records the request, then rejects
 /// it: fetching repository objects is irrelevant to this authentication test.
