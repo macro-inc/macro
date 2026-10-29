@@ -14973,6 +14973,53 @@ export type TaskFilters = {
 };
 
 /**
+ * A similar existing task computed for an unsaved draft, returned to the task
+ * composer without persisting any embedding or match state.
+ */
+export type TaskSimilarityResult = {
+    /**
+     * The matching existing task.
+     */
+    taskId: string;
+    /**
+     * The matching task's display name.
+     */
+    taskName: string;
+    /**
+     * Cosine similarity from vector search.
+     */
+    vectorScore: number;
+};
+
+/**
+ * Request body for searching tasks similar to an unsaved draft.
+ */
+export type TaskSimilaritySearchRequest = {
+    /**
+     * Draft task body as embedding-format markdown. The composer produces it
+     * client-side with lexical-core's `markdownToEmbeddingText` (the same
+     * format lexical-service's `/markdown/{id}?target=embedding` renders), so
+     * this latency-sensitive endpoint embeds the text as-is without a
+     * lexical-service round trip.
+     */
+    markdown?: string | null;
+    /**
+     * Draft task title.
+     */
+    taskName: string;
+};
+
+/**
+ * Response for searching tasks similar to an unsaved draft.
+ */
+export type TaskSimilaritySearchResponse = {
+    /**
+     * Existing tasks similar to the draft.
+     */
+    results: Array<TaskSimilarityResult>;
+};
+
+/**
  * Disjoint busy/detail shapes prevent new event fields leaking by default.
  */
 export type TeamCalendarContent = {
@@ -20790,6 +20837,34 @@ export type GetBatchPreviewHandlerResponses = {
 };
 
 export type GetBatchPreviewHandlerResponse = GetBatchPreviewHandlerResponses[keyof GetBatchPreviewHandlerResponses];
+
+export type TaskSimilaritySearchHandlerData = {
+    body: TaskSimilaritySearchRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/similarity_search';
+};
+
+export type TaskSimilaritySearchHandlerErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type TaskSimilaritySearchHandlerError = TaskSimilaritySearchHandlerErrors[keyof TaskSimilaritySearchHandlerErrors];
+
+export type TaskSimilaritySearchHandlerResponses = {
+    /**
+     * Response for searching tasks similar to an unsaved draft.
+     */
+    200: {
+        /**
+         * Existing tasks similar to the draft.
+         */
+        results: Array<TaskSimilarityResult>;
+    };
+};
+
+export type TaskSimilaritySearchHandlerResponse = TaskSimilaritySearchHandlerResponses[keyof TaskSimilaritySearchHandlerResponses];
 
 export type GetDocumentByTeamSlugData = {
     body?: never;

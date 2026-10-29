@@ -494,6 +494,7 @@
   "storage.getDocumentPermissionsToken": "Get Document Permissions Token",
   "storage.presaveDocumentHandler": "Presave Document",
   "storage.getBatchPreviewHandler": "Get Batch Preview",
+  "storage.taskSimilaritySearchHandler": "Task Similarity Search",
   "storage.getDocumentByTeamSlug": "Get Document By Team Slug",
   "storage.handler": "Handler",
   "storage.getSystemSkillsHandler": "Get System Skills",
