@@ -230,6 +230,7 @@ async fn a_read_answers_typed_cells_row_ids_and_the_versions_it_read() {
         serde_json::to_value(&response).unwrap(),
         serde_json::json!({
             "results": [{
+                "sourceTable": GUESTS,
                 "columns": [
                     {"name": "Name", "kind": "text"},
                     {
@@ -274,6 +275,7 @@ async fn a_row_id_answers_as_a_row_of_the_table_read_not_an_entity() {
     assert_eq!(
         serde_json::to_value(&response).unwrap()["results"],
         serde_json::json!([{
+            "sourceTable": GUESTS,
             "columns": [
                 {"name": "row_id", "kind": "row", "relatedTable": GUESTS},
                 {"name": "Name", "kind": "text"},

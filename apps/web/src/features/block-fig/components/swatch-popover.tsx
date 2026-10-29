@@ -4,8 +4,8 @@
  * Delete or Escape do not reach the canvas), except ⌘/Ctrl shortcuts.
  */
 
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import X from '@phosphor/x.svg';
 import { Layer } from '@ui';
 import type { JSX } from 'solid-js';
 
@@ -42,7 +42,7 @@ export function SwatchPopover(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="fig-editor-theme z-modal rounded-xl border border-edge-muted bg-menu p-3 shadow-xl outline-none"
+            class="menu-surface fig-editor-theme z-modal p-3 outline-none"
             aria-label={props.label}
             onKeyDown={(e: KeyboardEvent) => {
               if (!e.metaKey && !e.ctrlKey) e.stopPropagation();

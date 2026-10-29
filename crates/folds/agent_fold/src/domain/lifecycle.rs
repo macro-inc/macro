@@ -24,8 +24,8 @@ use agent_runtime_protocol::domain::action::AgentActionId;
 use crate::domain::fold::FoldMachineImpl;
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
-    Author, ElicitationRequestId, FoldEvent, FoldedMessage, MessagePart, OwnedFoldEvent,
-    ProjectedSegment, SessionMetadata, TurnId, TurnPhase, TurnSignal, phase, project,
+    Author, ElicitationRequestId, FoldEvent, FoldedMessage, OwnedFoldEvent, ProjectedSegment,
+    SessionMetadata, TurnId, TurnPhase, TurnSignal, phase, project,
 };
 use crate::domain::ports::FoldMachine as _;
 
@@ -120,10 +120,11 @@ impl LifecycleFold {
         self.closed.insert(message.id);
         self.progress.remove(&message.id);
         signals.push(TurnSignal::TurnEnded {
+            notification_noop: false,
             turn: message.id,
             action_id: self.action_id(message),
             stop: stop.clone(),
-            last_text: last_text(message),
+            last_text: message.last_text(),
         });
     }
 
@@ -137,9 +138,35 @@ impl LifecycleFold {
                 candidate.id == reply.id && matches!(candidate.author, Author::User { .. })
             })
             .and_then(|prompt| prompt.request_id)
+            .or_else(|| {
+                self.inner
+                    .metadata()
+                    .notifications
+                    .iter()
+                    .find(|event| event.turn == reply.id.0)
+                    .and_then(|event| event.action_id.parse().ok())
+                    .map(AgentActionId::from_uuid)
+            })
     }
 
     fn observe_metadata(&mut self, metadata: &SessionMetadata, signals: &mut Vec<TurnSignal>) {
+        if let Some(turn) = metadata.noop_turn.map(TurnId)
+            && self.closed.insert(turn)
+        {
+            let action_id = metadata
+                .notifications
+                .iter()
+                .find(|event| event.turn == turn.0)
+                .and_then(|event| event.action_id.parse().ok())
+                .map(AgentActionId::from_uuid);
+            signals.push(TurnSignal::TurnEnded {
+                turn,
+                action_id,
+                notification_noop: true,
+                stop: super::model::StopReason::EndTurn,
+                last_text: None,
+            });
+        }
         let now = metadata
             .pending_elicitation()
             .map(|pending| (pending.request_id.clone(), TurnId(pending.turn)));
@@ -169,18 +196,4 @@ impl LifecycleFold {
             .map(|message| message.id)
             .collect();
     }
-}
-
-/// The last prose part of a message, trimmed; `None` when there is none.
-fn last_text(message: &FoldedMessage) -> Option<String> {
-    message
-        .parts
-        .iter()
-        .rev()
-        .find_map(|part| match part {
-            MessagePart::Text { text } => Some(text.trim()),
-            _ => None,
-        })
-        .filter(|text| !text.is_empty())
-        .map(str::to_owned)
 }

@@ -140,7 +140,7 @@ fn a_complete_turn_signals_one_end_with_its_stop_and_last_text() {
     assert!(
         matches!(
             signals.as_slice(),
-            [TurnSignal::TurnEnded { turn, action_id, stop: StopReason::EndTurn, last_text: Some(text) }]
+            [TurnSignal::TurnEnded { turn, action_id, stop: StopReason::EndTurn, last_text: Some(text), .. }]
                 if *turn == reply.id
                     // The hand-shaped fixture's prompt id is not a uuid this
                     // server minted, so no action id is attributed.

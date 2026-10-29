@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   resolveBranch,
   type SplitRouteNode,
@@ -32,7 +33,8 @@ function warmComponent(component: unknown): void {
   if (typeof preload !== 'function') return;
 
   const chunk: unknown = preload.call(component);
-  if (chunk instanceof Promise) void settleQuietly(chunk);
+  if (chunk instanceof Promise)
+    fireAndForget(settleQuietly(chunk), 'split-router');
 }
 
 function preloadNode(

@@ -268,6 +268,14 @@ pub trait BotService: Send + Sync + 'static {
         req: UpdateAgentRequest,
     ) -> impl Future<Output = Result<Agent, BotError>> + Send;
 
+    /// A live agent the caller may change: their own, or their team's. For
+    /// settings kept beside the agent, such as its API key.
+    fn manageable_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Agent, BotError>> + Send;
+
     /// Change part of a manageable agent's instructions or settings, keeping
     /// everything the patch leaves unnamed - owner and profile included.
     fn patch_agent(

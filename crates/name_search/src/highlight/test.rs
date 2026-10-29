@@ -38,3 +38,24 @@ fn escapes_regex_specials_in_term() {
         Some("plan <macro_em>(v2)</macro_em> draft")
     );
 }
+
+#[test]
+fn highlights_every_term_of_a_multi_term_query() {
+    assert_eq!(
+        super::highlight_name_terms("Peter Chinman, Teo Nys", &["peter", "teo"]).as_deref(),
+        Some("<macro_em>Peter</macro_em> Chinman, <macro_em>Teo</macro_em> Nys")
+    );
+}
+
+#[test]
+fn merges_overlapping_term_matches_into_one_span() {
+    assert_eq!(
+        super::highlight_name_terms("Macro Planning", &["plan", "lann"]).as_deref(),
+        Some("Macro <macro_em>Plann</macro_em>ing")
+    );
+}
+
+#[test]
+fn returns_none_when_no_term_matches() {
+    assert!(super::highlight_name_terms("Macro Planning", &["teo", " "]).is_none());
+}

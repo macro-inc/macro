@@ -230,8 +230,8 @@ async fn a_failed_purge_is_a_server_error() {
 }
 
 #[tokio::test]
-async fn kinds_other_services_own_are_refused_without_a_purge() {
-    for kind in ["agent_session", "scheduled_action"] {
+async fn unsupported_team_cleanup_kinds_are_refused_without_a_purge() {
+    for kind in ["agent_session", "scheduled_action", "external_chat"] {
         let services = Services::all_answering(OwnedPurgeOutcome::Purged);
 
         let status = services

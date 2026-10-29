@@ -1,0 +1,1 @@
+Explicit task priority filters. Choose only from the supplied Priority options. Do not infer priority from the topic or severity of a bug. Use [] when absent. Never turn negated priority into a positive filter.

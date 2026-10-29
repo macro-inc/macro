@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_sync_streams s SET initial_complete = true,last_completed_at = now(),\n                next_run_at = CASE WHEN notified_at > lease_started_at THEN now() ELSE now() + interval '5 minutes' END,lease_id = NULL,lease_until = NULL\n            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3\n                AND s.lease_until > now() AND l.id = s.link_id AND s.generation = l.sync_generation\n                AND l.is_sync_active AND l.grant_generation = $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4acdaabe36ce60615db5f1701b5a7b631829b745173a14913607fa77ee9e58dd"
+}

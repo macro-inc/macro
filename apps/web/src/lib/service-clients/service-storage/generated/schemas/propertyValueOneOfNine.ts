@@ -4,17 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { DateRange } from './dateRange';
 import type { PropertyValueOneOfNineType } from './propertyValueOneOfNineType';
 
 /**
- * Select option(s) - always an array (check is_multi_select to determine if single or multi)
-Single-select: {"type": "SelectOption", "value": ["uuid"]} (length 0 or 1)
-Multi-select: {"type": "SelectOption", "value": ["uuid1", "uuid2", ...]} (length 0+)
+ * Date range value
+Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
  */
 export type PropertyValueOneOfNine = {
   type: PropertyValueOneOfNineType;
-  /** Select option(s) - always an array (check is_multi_select to determine if single or multi)
-Single-select: {"type": "SelectOption", "value": ["uuid"]} (length 0 or 1)
-Multi-select: {"type": "SelectOption", "value": ["uuid1", "uuid2", ...]} (length 0+) */
-  value: string[];
+  /** Date range value
+Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}} */
+  value: DateRange;
 };

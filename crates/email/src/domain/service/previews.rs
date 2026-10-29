@@ -1,23 +1,30 @@
 use entity_access::domain::models::EntityAccessReceipt;
 use entity_access::domain::models::MemberTeamRole;
+use entity_access::domain::models::ViewAccessLevel;
 
 use crate::domain::{
     models::{
-        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, UserProvider,
+        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, PreviewView,
+        PreviewViewStandardLabel, UserProvider,
     },
     ports::EmailRepo,
 };
+use filter_ast::Expr;
 use frecency::domain::{
     models::{AggregateId, FrecencyByIdsRequest, FrecencyData},
     ports::FrecencyQueryService,
 };
+use item_filters::ast::email::EmailLiteral;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, SimpleSortMethod};
+use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, Query, SimpleSortMethod};
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
+use super::thread::email_thread_ids_from_receipts;
 
 #[cfg(test)]
 mod test;
@@ -147,6 +154,42 @@ where
             .into_page())
     }
 
+    /// Hydrate the Soup preview of each receipt-authorized thread. The
+    /// receipts settled who may read the threads; the preview query only
+    /// renders them, scoped to the inboxes that own them.
+    #[tracing::instrument(err, skip(self, receipts), fields(thread_count = receipts.len()))]
+    pub(crate) async fn get_email_thread_previews_by_receipts_impl(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<Vec<EnrichedEmailThreadPreview>, EmailErr> {
+        let thread_ids = email_thread_ids_from_receipts(receipts)?;
+        if thread_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut link_ids: Vec<Uuid> = self
+            .email_repo
+            .thread_metadata_by_ids(&thread_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|metadata| metadata.link_id)
+            .collect();
+        link_ids.sort_unstable();
+        link_ids.dedup();
+        if link_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        Ok(self
+            .get_email_thread_previews_impl(authorized_threads_request(
+                viewer, thread_ids, link_ids,
+            ))
+            .await?
+            .items)
+    }
+
     pub(crate) async fn get_link_by_auth_id_and_macro_id_impl(
         &self,
         auth_id: &str,
@@ -222,5 +265,32 @@ where
         }
 
         Ok(Some(team_id))
+    }
+}
+
+/// The preview request for threads whose receipts already authorized the
+/// read. Each thread renders in the view of the inbox that owns it, as the
+/// CRM list renders teammates' threads, and the exact id filter keeps the
+/// widened inbox scope from admitting any other thread.
+fn authorized_threads_request(
+    viewer: MacroUserIdStr<'static>,
+    thread_ids: Vec<Uuid>,
+    link_ids: Vec<Uuid>,
+) -> GetEmailsRequest {
+    let limit = u32::try_from(thread_ids.len()).unwrap_or(u32::MAX);
+    let thread_filter = thread_ids
+        .into_iter()
+        .map(|id| Expr::val(EmailLiteral::ThreadId(id)))
+        .reduce(Expr::or)
+        .map(Arc::new);
+    GetEmailsRequest {
+        view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+        link_ids,
+        macro_id: viewer,
+        limit: Some(limit),
+        query: Query::Sort(SimpleSortMethod::UpdatedAt, thread_filter),
+        include_frecency: false,
+        team_receipt: None,
+        crm_scope: None,
     }
 }

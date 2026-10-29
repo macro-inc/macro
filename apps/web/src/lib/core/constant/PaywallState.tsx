@@ -27,7 +27,7 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
     title: 'Folder limit reached',
     description:
       'Upgrade to create more folders and keep organizing your workspace.',
-    learnMoreUrl: 'https://docs.macro.com/product/folders',
+    learnMoreUrl: 'https://docs.macro.com/product/drive',
     learnMoreSubject: 'folders',
   },
   [PaywallKey.FILE_LIMIT]: {
@@ -75,7 +75,7 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
   [PaywallKey.MULTI_INBOX]: {
     title: 'Connect more inboxes',
     description: 'Upgrade your plan to connect more than two inboxes.',
-    learnMoreUrl: 'https://docs.macro.com/product/inbox',
+    learnMoreUrl: 'https://docs.macro.com/product/home',
     learnMoreSubject: 'multiple inboxes',
   },
   [PaywallKey.TEAMS]: {

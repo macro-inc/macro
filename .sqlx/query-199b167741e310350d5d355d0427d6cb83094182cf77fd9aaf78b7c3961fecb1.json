@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_events SET completed_at = CASE WHEN $4 THEN now() ELSE NULL END,\n                available_at = now() + make_interval(secs => $5::double precision), lease_id = NULL\n            WHERE connection_id = $1 AND event_id = $2 AND lease_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "199b167741e310350d5d355d0427d6cb83094182cf77fd9aaf78b7c3961fecb1"
+}

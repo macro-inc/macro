@@ -74,6 +74,8 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
         'paragraph',
         'heading',
         'list',
+        // ListNode is replaced by TaskListNode at runtime.
+        'task-list',
         'quote',
         'code',
         'custom-code',

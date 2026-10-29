@@ -4,11 +4,17 @@ import * as pulumi from '@pulumi/pulumi';
 const resources: pulumi.runtime.MockResourceArgs[] = [];
 
 beforeAll(async () => {
+  // The monitors depend on the GoAlert webhooks, which read these keys.
+  pulumi.runtime.setAllConfig({
+    'monitoring:goalertIntegrationKey': 'integration-key',
+    'monitoring:goalertNotifyIntegrationKey': 'notify-integration-key',
+  });
   pulumi.runtime.setMocks(
     {
       newResource(args) {
         resources.push(args);
-        return { id: args.name, state: args.inputs };
+        // Datadog monitor ids are numbers.
+        return { id: String(resources.length), state: args.inputs };
       },
       call(args) {
         return args.inputs;
@@ -75,4 +81,15 @@ test('dashboard charts only known backlog alongside health and deletion progress
   expect(
     resources.filter((r) => r.type.includes('monitor:Monitor'))
   ).toHaveLength(9);
+});
+
+test('only the prod missing-telemetry alarm is muted until instrumentation ships', () => {
+  const downtimes = resources.filter(
+    (r) => r.type === 'datadog:index/downtimeSchedule:DowntimeSchedule'
+  );
+  const heartbeat =
+    resources.indexOf(monitor('notification-consumer-heartbeat-prod')) + 1;
+  expect(downtimes.map((d) => d.inputs.monitorIdentifier)).toEqual([
+    { monitorId: heartbeat },
+  ]);
 });

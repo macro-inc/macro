@@ -50,6 +50,7 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
  */
 export function rendersOwnView(part: MessagePart | undefined): boolean {
   if (part?.kind !== 'tool_use') return false;
+  if (isCodeExecution(part) || presentedReviewId(part)) return true;
   const macroTool =
     part.detail.kind === 'macro' ||
     (part.detail.kind === 'other' &&
@@ -102,4 +103,38 @@ export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {
     }
   }
   return segments;
+}
+
+/** Only Macro's session-authenticated internal server may select this view. */
+export function isCodeExecution(part: MessagePart): boolean {
+  return (
+    part.kind === 'tool_use' &&
+    part.name.kind === 'mcp' &&
+    part.name.server === 'macro_internal' &&
+    part.name.tool === 'ExecuteCode'
+  );
+}
+
+/** Only the server-authored presentation call selects a persisted review card.
+ * The normal PresentReview invocation still renders its ordinary receipt.
+ */
+export function presentedReviewId(part: MessagePart): string | undefined {
+  if (
+    part.kind !== 'tool_use' ||
+    part.name.kind !== 'mcp' ||
+    part.name.server !== 'macro_internal' ||
+    part.name.tool !== 'PresentReview' ||
+    !('input' in part.detail)
+  )
+    return;
+  const input = part.detail.input;
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    !('reviewId' in input) ||
+    typeof input.reviewId !== 'string' ||
+    !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(input.reviewId)
+  )
+    return;
+  return part.id === `review_${input.reviewId}` ? input.reviewId : undefined;
 }

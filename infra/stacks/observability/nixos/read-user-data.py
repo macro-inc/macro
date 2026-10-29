@@ -7,13 +7,13 @@ import urllib.request
 
 CONFIG_ROOT = Path('/opt/observability')
 SETTING_KEYS = {
-    'region', 'grafanaHost', 'otlpHost',
+    'region', 'grafanaHost', 'otlpHost', 'oncallHost',
     'secretArn', 'alarmTopicArn', 'volumeId', 'logsBucket', 'tracesBucket',
 }
 
 
 def validate_payload(payload):
-    if not isinstance(payload, dict) or set(payload) != {'version', 'settings'} or payload['version'] != 5:
+    if not isinstance(payload, dict) or set(payload) != {'version', 'settings'} or payload['version'] != 6:
         raise ValueError('Unsupported observability user-data schema')
     settings = payload['settings']
     if not isinstance(settings, dict) or set(settings) != SETTING_KEYS:
@@ -22,6 +22,7 @@ def validate_payload(payload):
         'region': r'us-east-2',
         'grafanaHost': r'[a-z0-9-]+\.macro-internal\.com',
         'otlpHost': r'[a-z0-9-]+\.macro-internal\.com',
+        'oncallHost': r'[a-z0-9-]+\.macro-internal\.com',
         'alarmTopicArn': r'arn:aws:sns:us-east-2:\d{12}:[a-zA-Z0-9_-]+',
         'secretArn': r'arn:aws:secretsmanager:us-east-2:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+',
         'volumeId': r'vol-[a-f0-9]+',
@@ -31,8 +32,9 @@ def validate_payload(payload):
     for key, pattern in patterns.items():
         if not isinstance(settings[key], str) or not re.fullmatch(pattern, settings[key]):
             raise ValueError(f'Invalid runtime setting: {key}')
-    if settings['grafanaHost'] == settings['otlpHost']:
-        raise ValueError('UI and ingestion require separate hostnames')
+    hosts = [settings['grafanaHost'], settings['otlpHost'], settings['oncallHost']]
+    if len(set(hosts)) != len(hosts):
+        raise ValueError('Grafana, ingestion and on-call require separate hostnames')
     return settings
 
 
@@ -43,6 +45,7 @@ def write_runtime(payload, output_root):
         'GRAFANA_ALERT_TOPIC_ARN': settings['alarmTopicArn'],
         'GRAFANA_HOST': settings['grafanaHost'],
         'GRAFANA_ROOT_URL': 'https://' + settings['grafanaHost'] + '/',
+        'GOALERT_PUBLIC_URL': 'https://' + settings['oncallHost'],
         'LOGS_BUCKET': settings['logsBucket'],
         'TRACES_BUCKET': settings['tracesBucket'],
     }
@@ -55,6 +58,12 @@ def write_runtime(payload, output_root):
             f"  {settings['grafanaHost']} grafana;\n  {settings['otlpHost']} otlp;\n"
             '}\nmap "" $grafana_host {\n'
             f"  default {settings['grafanaHost']};\n" + '}\n'
+        ),
+        # GoAlert gets its own server so its paths never overlap Grafana's.
+        'oncall-server.conf': (
+            'server {\n  listen 0.0.0.0:8080;\n'
+            f"  server_name {settings['oncallHost']};\n"
+            '  include /etc/nginx/oncall-locations.conf;\n}\n'
         ),
         'bootstrap.json': json.dumps({'region': settings['region'], 'secretArn': settings['secretArn']}),
         'volume-id': settings['volumeId'],

@@ -16,6 +16,10 @@ import {
   type RangeSelection,
   type TextFormatType,
 } from 'lexical';
+import {
+  NODE_TRANSFORM,
+  type NodeTransformType,
+} from '../node-transform/nodeTransformPlugin';
 
 const META_OR_CTRL = IS_MAC ? 'meta' : 'ctrl';
 
@@ -205,4 +209,26 @@ export const DefaultShortcuts: Shortcut[] = [
     },
     priority: 0,
   },
+];
+
+const blockShortcut = (
+  digit: string,
+  transform: NodeTransformType
+): Shortcut => ({
+  label: `${META_OR_CTRL}+shift+${digit}`,
+  test: (e) =>
+    e.code === `Digit${digit}` &&
+    e.shiftKey &&
+    metaOrCtrl(e.metaKey, e.ctrlKey),
+  handler: (editor) => {
+    editor.dispatchCommand(NODE_TRANSFORM, transform);
+  },
+  priority: 0,
+});
+
+/** The mail-client block formats: numbered list, bulleted list, and quote. */
+export const ListAndQuoteShortcuts: Shortcut[] = [
+  blockShortcut('7', 'list-number'),
+  blockShortcut('8', 'list-bullet'),
+  blockShortcut('9', 'quote'),
 ];

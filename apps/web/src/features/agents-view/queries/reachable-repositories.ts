@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useAgentRepositoriesQuery } from '@queries/agent-repositories/repositories';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ReachableRepository } from '../core/repository';
@@ -32,6 +33,6 @@ export function createReachableRepositories(
     repositories,
     loading: () => query.isLoading,
     error: () => query.isError,
-    retry: () => void query.refetch(),
+    retry: () => fireAndForget(query.refetch(), 'agents-view'),
   };
 }

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import { debounce } from '@solid-primitives/scheduled';
 import type { ResultAsync } from 'neverthrow';
@@ -37,13 +38,16 @@ export function createDatabaseSearch(options: {
     const detail = options.detail();
     if (!detail) return;
     const current = ++generation;
-    void options.search(detail, value).match(
-      (groups) => {
-        if (current === generation) setResults({ status: 'ready', groups });
-      },
-      () => {
-        if (current === generation) setResults({ status: 'failed' });
-      }
+    fireAndForget(
+      options.search(detail, value).match(
+        (groups) => {
+          if (current === generation) setResults({ status: 'ready', groups });
+        },
+        () => {
+          if (current === generation) setResults({ status: 'failed' });
+        }
+      ),
+      'database'
     );
   }, TYPING_PAUSE_MS);
   onCleanup(() => {

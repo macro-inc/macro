@@ -1,4 +1,8 @@
 import { useSidePanel } from '@components/app/side-panel';
+import { createImageActions } from '@core/component/Lightbox/createImageActions';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Copy from '@icon/system/regular/copy.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   alignCommand,
@@ -9,6 +13,11 @@ import {
   styleCommand,
 } from '@macro-inc/graphics';
 import { attachConnectorControls } from '@macro-inc/graphics/browser';
+import type { GraphicsPresence } from '@macro-inc/graphics/loro';
+import {
+  attachPresencePointer,
+  GraphicsPresenceOverlay,
+} from '@macro-inc/graphics/loro/solid';
 import {
   ConnectorView,
   EllipseView,
@@ -16,7 +25,7 @@ import {
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
-import { Layer } from '@ui';
+import { Button, Layer } from '@ui';
 import {
   type Component,
   createMemo,
@@ -29,13 +38,11 @@ import type { CanvasClipboard } from '../clipboard';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
+import { MediaUploadPreviews } from '../components/media-upload-previews';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
-import {
-  canEmbedDocument,
-  setDocumentDisplayCommand,
-} from '../core/document-display';
+import { setDocumentDisplayCommand } from '../core/document-display';
 import {
   selectionLayoutCommand,
   selectionLayoutInfo,
@@ -47,7 +54,9 @@ import type {
   CanvasState,
   CanvasTool,
 } from '../primitives/create-canvas-state';
+import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
+import { useCanvasMediaSource } from '../queries/media';
 import { CanvasContextMenu } from './canvas-context-menu';
 import {
   CanvasDrawingToolbar,
@@ -56,16 +65,19 @@ import {
 } from './canvas-toolbars';
 import { ConnectorTargets } from './connector-targets';
 import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
+import { CanvasInsertMenu } from './insert-menu';
 import { CanvasTextContent } from './text-content';
 import { TextEditingView } from './text-editing-view';
 
 export function CanvasView(props: {
   state: CanvasState;
+  presence?: GraphicsPresence;
   fitOnLoad?: boolean;
   scopeId: string;
   embedView: Component<CanvasEmbedViewProps>;
   clipboard: CanvasClipboard;
   assets: CanvasAssetState;
+  insert: CanvasInsertState;
   onViewport: (element: HTMLElement) => void;
   onOpenDocument: (geometry: DocumentGeometry) => void;
   attachScope: (element: Element) => void;
@@ -94,6 +106,19 @@ export function CanvasView(props: {
     state.selection().length === 1
       ? state.document.items[state.selection()[0]!]
       : undefined;
+  const selectedImage = () => {
+    const item = selectedItem();
+    return item?.type === 'image' ? item : undefined;
+  };
+  const imageSource = useCanvasMediaSource(
+    () => selectedImage()?.geometry.source
+  );
+  const imageActions = createImageActions({
+    src: imageSource.url,
+    imageId: () => selectedImage()?.id ?? '',
+  });
+  const imageActionsDisabled = () =>
+    !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
   const styleKinds = () =>
     state.shapes().length
       ? state.shapes().map((item) => item.type)
@@ -119,11 +144,9 @@ export function CanvasView(props: {
       endHead: shared('endHead'),
     };
   };
-  const inspectorWidth = () =>
-    Math.min(288, Math.max(0, host.clientWidth - 48));
   const fit = () => {
     editor.fitScene({
-      width: host.clientWidth - inspectorWidth(),
+      width: host.clientWidth,
       height: host.clientHeight,
     });
   };
@@ -134,12 +157,19 @@ export function CanvasView(props: {
   const zoom = (factor: number) =>
     editor.zoomAt(
       {
-        x: (host.clientWidth - inspectorWidth()) / 2,
+        x: host.clientWidth / 2,
         y: host.clientHeight / 2,
       },
       editor.getCamera().scale * factor
     );
-  registerCanvasZoomHotkeys(props.scopeId, state, zoom, fit);
+  const fitSelection = () =>
+    editor.fitSelection({
+      width: host.clientWidth,
+      height: host.clientHeight,
+    });
+  registerCanvasZoomHotkeys(props.scopeId, state, zoom, () =>
+    state.selection().length ? fitSelection() : fit()
+  );
   const exitEmbed = () => {
     state.embeds.exit();
     focus();
@@ -177,6 +207,9 @@ export function CanvasView(props: {
     });
     props.attachScope(root);
     props.onViewport(host);
+    if (props.presence)
+      onCleanup(attachPresencePointer(host, editor, props.presence));
+    onCleanup(props.insert.attach(host));
     droppable(host);
     onCleanup(props.clipboard.attach(root));
     onCleanup(attachTextInput(root, state));
@@ -217,10 +250,35 @@ export function CanvasView(props: {
       data-canvas-next
     >
       <main class="relative size-full overflow-hidden">
+        <Show when={props.insert.location()} keyed>
+          {(location) => (
+            <CanvasInsertMenu
+              location={location}
+              onClose={props.insert.close}
+              onRestoreFocus={focus}
+              onSelect={(asset, mode) => {
+                if (mode === 'media')
+                  fireAndForget(
+                    props.assets.media(asset, location.world),
+                    'canvas-assets'
+                  );
+                else props.assets.document(asset, location.world, 'preview');
+                props.insert.close();
+              }}
+              onFiles={(files) => {
+                fireAndForget(
+                  props.assets.files(files, location.world),
+                  'canvas-assets'
+                );
+                props.insert.close();
+              }}
+            />
+          )}
+        </Show>
         <Show when={!sidePanel?.isOpen()}>
           <Layer depth={2}>
             <aside
-              class="absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg"
+              class="absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg touch:top-16 touch:max-h-[calc(100%-5rem)]"
               style={{
                 height:
                   state.selection().length > 0
@@ -240,8 +298,12 @@ export function CanvasView(props: {
                   onGrid={state.setGrid}
                   onZoom={zoom}
                   onFit={fit}
+                  hasSelection={state.selection().length > 0}
+                  onFitSelection={fitSelection}
                   snapMode={state.snapMode()}
                   onSnapMode={state.setSnapMode}
+                  snapToObjects={state.snapToObjects()}
+                  onSnapToObjects={state.setSnapToObjects}
                 />
               </header>
               <Show when={state.selection().length > 0}>
@@ -366,6 +428,38 @@ export function CanvasView(props: {
                       onScrub={() => state.text.scrubFontSize(state.inspector)}
                     />
                   </Show>
+                  <Show when={selectedImage()}>
+                    <div class="flex flex-col gap-2 p-3">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={imageActionsDisabled()}
+                        onClick={() =>
+                          fireAndForget(
+                            imageActions.copyToClipboard(),
+                            'canvas-image-actions'
+                          )
+                        }
+                      >
+                        <Copy class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+                        Copy image
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={imageActionsDisabled()}
+                        onClick={() =>
+                          fireAndForget(
+                            imageActions.downloadImage(),
+                            'canvas-image-actions'
+                          )
+                        }
+                      >
+                        <DownloadSimple class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+                        Save image
+                      </Button>
+                    </div>
+                  </Show>
                   <Show when={selectedItem()?.type === 'video'}>
                     <button
                       type="button"
@@ -403,7 +497,7 @@ export function CanvasView(props: {
                         const item = selectedItem();
                         return (
                           item?.type === 'document' &&
-                          canEmbedDocument(item.geometry.fileType)
+                          item.geometry.display === 'embed'
                         );
                       })()}
                     >
@@ -416,20 +510,11 @@ export function CanvasView(props: {
                           state.embeds.exit();
                           editor.execute(setDocumentDisplayCommand, {
                             id: item.id,
-                            display:
-                              item.geometry.display === 'embed'
-                                ? 'preview'
-                                : 'embed',
+                            display: 'preview',
                           });
                         }}
                       >
-                        {(() => {
-                          const item = selectedItem();
-                          return item?.type === 'document' &&
-                            item.geometry.display === 'embed'
-                            ? 'Use preview card'
-                            : 'Use full embed';
-                        })()}
+                        Use preview card
                       </button>
                     </Show>
                   </Show>
@@ -456,9 +541,12 @@ export function CanvasView(props: {
                 if (state.embeds.active()) return;
                 if (!event.dataTransfer?.files.length) return;
                 event.preventDefault();
-                void props.assets.files(
-                  Array.from(event.dataTransfer.files),
-                  point(event.clientX, event.clientY)
+                fireAndForget(
+                  props.assets.files(
+                    Array.from(event.dataTransfer.files),
+                    point(event.clientX, event.clientY)
+                  ),
+                  'canvas-assets'
                 );
               }}
               class="absolute inset-0"
@@ -538,12 +626,6 @@ export function CanvasView(props: {
                       embedView={props.embedView}
                       active={state.embeds.active() === itemProps.item.id}
                       onEnter={() => state.embeds.enter(itemProps.item.id)}
-                      onEmbed={() =>
-                        editor.execute(setDocumentDisplayCommand, {
-                          id: itemProps.item.id,
-                          display: 'embed',
-                        })
-                      }
                       onExit={exitEmbed}
                     />
                   ),
@@ -605,6 +687,10 @@ export function CanvasView(props: {
                 }
               >
                 <EraserTrail points={state.eraser.trail()} />
+                <MediaUploadPreviews
+                  previews={props.assets.previews()}
+                  camera={state.camera()}
+                />
                 <Show
                   when={
                     (state.isConnectorTool() || state.connector.gesture()) &&
@@ -629,15 +715,65 @@ export function CanvasView(props: {
                   )}
                 </Show>
               </GraphicsSurface>
+              <Show when={props.presence}>
+                {(presence) => (
+                  <GraphicsPresenceOverlay
+                    editor={editor}
+                    presence={presence()}
+                    renderers={{
+                      rectangle: (props) => (
+                        <RectangleView
+                          {...props}
+                          contentView={CanvasTextContent}
+                        />
+                      ),
+                      ellipse: (props) => (
+                        <EllipseView
+                          {...props}
+                          contentView={CanvasTextContent}
+                        />
+                      ),
+                      connector: (props) => (
+                        <ConnectorView
+                          {...props}
+                          contentView={CanvasTextContent}
+                        />
+                      ),
+                      text: (props) => (
+                        <TextView {...props} contentView={CanvasTextContent} />
+                      ),
+                    }}
+                  />
+                )}
+              </Show>
             </div>
           </ContextMenu.Trigger>
           <CanvasContextMenu
             state={state}
             clipboard={props.clipboard}
+            imageActions={
+              selectedImage()
+                ? {
+                    disabled: imageActionsDisabled(),
+                    onCopy: () =>
+                      fireAndForget(
+                        imageActions.copyToClipboard(),
+                        'canvas-image-actions'
+                      ),
+                    onSave: () =>
+                      fireAndForget(
+                        imageActions.downloadImage(),
+                        'canvas-image-actions'
+                      ),
+                  }
+                : undefined
+            }
             onClose={focus}
           />
         </ContextMenu>
         <CanvasDrawingToolbar
+          onAttach={props.insert.openFromToolbar}
+          attachOpen={!!props.insert.location()}
           tool={state.tool()}
           onTool={(tool) => {
             state.chooseTool(tool);

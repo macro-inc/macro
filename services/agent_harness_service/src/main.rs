@@ -10,6 +10,7 @@
 mod agent_runtime_directory;
 mod api;
 mod bots_directory;
+mod code_mode;
 mod coding_agent;
 mod coding_agents;
 mod config;
@@ -20,8 +21,11 @@ mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
 mod permission_policy;
+mod preview;
+mod public_mcp;
 mod routine_sessions;
 mod runtime_commands;
+mod scheduling;
 mod trigger;
 
 #[cfg(test)]
@@ -210,6 +214,28 @@ fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseEr
     url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
 }
 
+// Share the exact authenticated internal router between the listener and the
+// in-process MCP transport; internal tools are not third-party egress apps.
+fn internal_mcp_handler(
+    app: axum::Router,
+) -> agent_inmem::outbound::egress_mcp::InternalMcpHandler {
+    use http_body_util::BodyExt as _;
+    use tower::ServiceExt as _;
+    Arc::new(move |request| {
+        let app = app.clone();
+        Box::pin(async move {
+            let response = match app.oneshot(request.map(axum::body::Body::new)).await {
+                Ok(response) => response,
+                Err(never) => match never {},
+            };
+            response.map(|body| {
+                body.map_err(|error| -> agent_egress::domain::model::BoxError { Box::new(error) })
+                    .boxed_unsync()
+            })
+        })
+    })
+}
+
 async fn run() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     // AWS first, because the config's secrets resolve through Secrets Manager.
@@ -233,26 +259,10 @@ async fn run() -> anyhow::Result<()> {
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
-        .max_connections(5)
+        .max_connections(config.database_max_connections)
         .connect(config.database_url.as_ref())
         .await
         .context("failed to connect to macrodb")?;
-
-    // The same encrypted connection store serves browser consent and runtime
-    // credentials in every deployment. Only the KMS key configuration varies.
-    let claude_refresh =
-        Arc::new(claude_cloud_agents::outbound::credentials::ClaudeRefresh::new()?);
-    let claude_credentials = config.claude_oauth_kms_key_id().map(|key| {
-        claude_cloud_agents::domain::credentials::AccountCredentials::new(
-            Arc::new(
-                claude_cloud_agents::outbound::postgres::PgClaudeGrants::new(
-                    pool.clone(),
-                    AwsKmsCiphertexts::new(aws_sdk_kms::Client::new(&aws_config), key),
-                ),
-            ),
-            claude_refresh.clone(),
-        )
-    });
 
     // Built before the sessions rather than beside the other channel plumbing
     // below: this service owns the live actors, so it is where a session's
@@ -326,6 +336,28 @@ async fn run() -> anyhow::Result<()> {
         config.ai_pricing(),
         config.settlement_route()?,
     );
+    let input_service = Arc::new(universal_input::domain::UniversalInputService::new(
+        config
+            .typesafe_api_key
+            .value()
+            .map(jev::outbound::SystemOneJev::typesafe)
+            .transpose()?
+            .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+        universal_input::domain::temporal::WithTemporalExtraction::new(
+            universal_input::domain::search::WithSearchExtraction::new(
+                universal_input::domain::FallbackFieldExtractor::new(
+                    universal_input::outbound::clairic::ClairicFieldExtractor::from_config(
+                        &config.cloudflare_account_id,
+                        &config.cloudflare_api_token,
+                        recorder.clone(),
+                    )?,
+                    universal_input::outbound::AgentFieldExtractor::new(recorder.clone()),
+                ),
+            ),
+            universal_input::outbound::temporal::AgentTemporalExtractor::new(recorder.clone()),
+        ),
+        admission.clone(),
+    ));
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     // Shared with every replica: runtime command forwarding, model probes,
     // and the agent session log stream.
@@ -344,8 +376,19 @@ async fn run() -> anyhow::Result<()> {
             ),
             redis.clone(),
         ),
+        // After each finished turn Jev decides whether a generated name has
+        // stopped fitting; only then does Haiku propose a new one. Without a
+        // TypeSafe key, names stay as first generated.
         agent_session::domain::name_generation::AdmittedAgentSessionNameGenerator::new(
-            HaikuAgentSessionNameGenerator::new(recorder.clone()),
+            agent_session::domain::name_generation::ClassifiedRetitle::new(
+                HaikuAgentSessionNameGenerator::new(recorder.clone()),
+                config
+                    .typesafe_api_key
+                    .value()
+                    .map(jev::outbound::SystemOneJev::typesafe)
+                    .transpose()?
+                    .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+            ),
             admission.clone(),
         ),
         turn_observer.clone(),
@@ -423,14 +466,14 @@ async fn run() -> anyhow::Result<()> {
     // keep in sync. The rows hold no secrets - Pipedream owns the grants.
     let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
     // Custom MCP servers - the ones a person added by URL - in the same rows
-    // document_cognition_service manages, under the same encryption key, so
+    // agent_harness_service::cognition manages, under the same encryption key, so
     // the proxy can refresh a stored grant and persist what comes back.
     let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
         .context("invalid MCP credentials encryption key")?;
     let mcp_servers = Arc::new(PgServerRepo::new(pool.clone(), mcp_credentials_key));
 
     // The client that addresses Pipedream's remote MCP server, built from the
-    // same credentials `document_cognition_service` uses.
+    // same credentials `agent_harness_service::cognition` uses.
     let pipedream = PipedreamClient::new(PipedreamConfig {
         client_id: config.pipedream_client_id.to_string(),
         client_secret: config.pipedream_client_secret.to_string(),
@@ -510,7 +553,10 @@ async fn run() -> anyhow::Result<()> {
             ))?,
             matches!(config.environment, Environment::Local),
         )?
-        .with_owner_approvals(Arc::clone(&tool_approvals)),
+        .with_owner_approvals(Arc::clone(&tool_approvals))
+        .with_actor_mcp(Arc::new(
+            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new()?,
+        )),
     );
 
     // The proxy's public address, read once: the provisioner builds the
@@ -518,27 +564,131 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
-    // One connector for the agent and the telemetry catalog. It pools each
-    // server's session for the life of the egress token, so a replaced agent
-    // task and the catalog's listing reuse the handshake instead of opening
-    // a second set of clients and dropping them when the listing ends.
-    let mcp_connector = Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-        Arc::clone(&egress),
-        &egress_base_url,
-    )));
-    let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
-        Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
-    let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
-
+    // Notion imports started from sessions, public MCP, and the cognition
+    // routes share these jobs and hand their runs over on shutdown.
+    let import_jobs = ai_tools::ImportJobs::new();
     let tool_context = ai_tools::build_tool_service_context_from_env(
         pool.clone(),
         event_broker_tracker.clone(),
+        import_jobs.clone(),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         recorder.clone(),
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
+    let cognition_runtime = agent_harness_service::cognition::build(
+        agent_harness_service::cognition::config::Config::from_env()?,
+        pool.clone(),
+        event_broker_tracker.clone(),
+        import_jobs.clone(),
+    )
+    .await
+    .context("failed to compose cognition APIs")?;
+    let cognition_router = cognition_runtime.router.clone();
+    let service_shutdown = tokio_util::sync::CancellationToken::new();
+    let (http_listening, http_ready) = tokio::sync::watch::channel(false);
+    let scheduling_runtime = scheduling::build(
+        scheduling::config::Config::from_env()?,
+        pool.clone(),
+        std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
+        http_ready,
+    )
+    .await?;
+    let scheduling_router = scheduling_runtime.router.clone();
+    let preview_router = preview::build(
+        macro_config::ConfigLoader::load::<preview::config::Config>()?,
+        config.database_url.as_ref(),
+        pool.clone(),
+        service_shutdown.clone(),
+        event_broker_tracker.clone(),
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let code_scratch = tempfile::tempdir()?;
+    let code_runner = match &config.deno_binary {
+        Some(binary) => {
+            let runner = code_execution::outbound::deno::DenoRunner::new(
+                binary.into(),
+                code_scratch.path().to_owned(),
+                128,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
+            let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
+            // Public MCP runs get their own admission budget so external
+            // clients cannot exhaust the slots agent sessions rely on.
+            let public = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                code_execution::domain::Limits {
+                    max_running: 4,
+                    max_queued: 8,
+                    ..Default::default()
+                },
+            )?;
+            Some((
+                code_execution::domain::ExecutionService::new(
+                    runner,
+                    code_execution::domain::Limits::default(),
+                )?,
+                public,
+            ))
+        }
+        None => None,
+    };
+    // `ai-code-mode` decides, per user, whether agent sessions hide
+    // SDK-covered tools and whether the public MCP lists only code mode.
+    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
+        match (&code_runner, config.posthog_api_key.value()) {
+            (Some(_), Some(key)) => {
+                let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                    config
+                        .posthog_host
+                        .value()
+                        .unwrap_or("https://us.i.posthog.com"),
+                    key.to_owned(),
+                    std::time::Duration::from_secs(3),
+                )
+                .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+                Some(Arc::new(
+                    agent_inmem::domain::tool_mode::FlaggedToolMode::new(flags),
+                ))
+            }
+            _ => None,
+        };
+    let public_code_mode = match (&code_runner, &code_mode_selector) {
+        (Some((_, public)), Some(selector)) => Some(public_mcp::PublicCodeMode {
+            service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
+                Arc::new(public.clone()),
+                Arc::new(code_mode::UserRunCredentials {
+                    signer: MacroApiTokenSigner::new(
+                        pool.clone(),
+                        config.macro_api_token_issuer.as_ref(),
+                        config.macro_api_token_private_secret_key.as_ref(),
+                    ),
+                    hosts: code_mode::sdk_hosts()?,
+                }),
+            )),
+            selector: Arc::clone(selector),
+        }),
+        _ => None,
+    };
+    let public_mcp_router = public_mcp::router(
+        &config,
+        &secrets,
+        tool_context.clone(),
+        pool.clone(),
+        macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
+            config.environment,
+            &secrets,
+        )
+        .await?,
+        event_broker_tracker.clone(),
+        service_shutdown.clone(),
+        public_code_mode,
+    )
+    .await
+    .context("failed to compose public MCP")?;
     // Session tasks are read as the owner through the same services Macro's own tools use.
     let task_directory = agent_harness::outbound::session_tasks::DocumentTaskDirectory::new(
         tool_context.document_tool_context.service.clone(),
@@ -547,16 +697,97 @@ async fn run() -> anyhow::Result<()> {
             .entity_access_service
             .clone(),
     );
-    // Macro's own tools run in-process here rather than through the egress
-    // proxy, so they are held for the owner by the same approvals.
-    let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(
-        RigTurnEngine::new(pool.clone(), tool_context).with_gate(Arc::new(
-            agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
-                session_repo.clone(),
-                Arc::clone(&tool_approvals),
-            ),
-        )),
+    let owner_tool_gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate> = Arc::new(
+        agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
+            session_repo.clone(),
+            Arc::clone(&tool_approvals),
+        ),
     );
+    let code_executor = code_runner.as_ref().map(|(runner, _)| {
+        Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
+    });
+    let code_mode_enabled = code_executor.is_some();
+    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
+        Arc::new(agent_code_mode::domain::CodeModeService::new(
+            code_executor,
+            Arc::new(code_mode::RunCredentials {
+                signer: MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                gate: owner_tool_gate.clone(),
+                hosts: code_mode::sdk_hosts()?,
+            }),
+            Arc::new(agent_code_mode::outbound::postgres::PgExecutionStore::new(
+                pool.clone(),
+            )),
+            Arc::new(agent_code_mode::outbound::turns::SessionTurns(
+                session_repo.clone(),
+            )),
+        ));
+    let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
+        connection_gateway.clone(),
+        session_audience.clone(),
+    );
+    let session_tasks: Arc<dyn agent_session::domain::session_task::SessionTasks> = Arc::new(
+        agent_session::domain::session_task::SessionTaskService::new(
+            session_repo.clone(),
+            session_repo.clone(),
+            task_directory,
+            agent_harness::outbound::session_tasks::GithubTaskPullRequestLinker::new(
+                github::domain::service::PullRequestTaskLinkService::new(PgGithubSyncRepo::new(
+                    pool.clone(),
+                )),
+            ),
+            session_metadata_realtime.clone(),
+            macro_service_urls::AppServiceUrl::new()?.as_ref(),
+        ),
+    );
+    let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
+        Arc::new(
+            agent_session::domain::pull_request::SessionPullRequestService::new(
+                session_repo.clone(),
+                session_metadata_realtime,
+                session_tasks.clone(),
+            ),
+        );
+    // The MCP connector feeds the harness, while review presentation needs that
+    // harness. Fill this startup-only cell before any HTTP or agent work is served.
+    let reviews_cell = Arc::new(std::sync::OnceLock::new());
+    let internal_mcp = internal_mcp::router(
+        Arc::new(session_repo.clone()),
+        url::Url::parse(&egress_base_url)?
+            .host_str()
+            .context("egress URL needs a host")?
+            .to_owned(),
+        internal_mcp::InternalTools {
+            service: session_pull_requests.clone(),
+            tasks: session_tasks,
+            code_mode: code_mode_enabled.then(|| code_mode.clone()),
+            cognition: tool_context.cognition_tool_context.service.clone(),
+            reviews: reviews_cell.clone(),
+            gate: owner_tool_gate.clone(),
+        },
+    );
+    // One connector for the agent and the telemetry catalog. It pools each
+    // server's session for the life of the egress token, so a replaced agent
+    // task and the catalog's listing reuse the handshake instead of opening
+    // a second set of clients and dropping them when the listing ends.
+    let mcp_connector = Arc::new(AcpMcpConnector::new(
+        EgressMcpClient::new(Arc::clone(&egress), &egress_base_url)
+            .with_internal_mcp(internal_mcp_handler(internal_mcp.clone())),
+    ));
+    let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
+        Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
+    let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
+
+    let mut inmem_engine =
+        RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
+    if let Some(selector) = &code_mode_selector {
+        inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
+    }
+    let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(inmem_engine);
     // Normalize uploaded images before any provider sees them. In addition to
     // making local URLs reachable, this supplies the MIME type Gemini requires
     // and decodes formats that providers cannot consume directly.
@@ -589,6 +820,20 @@ async fn run() -> anyhow::Result<()> {
             ),
         ),
     );
+    // Agents' own Anthropic and OpenAI keys, under the Cursor key's CMK this
+    // role already decrypts with. Decrypt-only for the same reason as Cursor
+    // keys: saving them is the authentication service's job. Only agents
+    // whose owner is on a paid plan run on them.
+    let agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys> =
+        Arc::new(agent_api_keys::domain::AgentKeyService::new(
+            agent_api_keys::outbound::PgAgentKeyRepo::new(pool.clone()),
+            agent_api_keys::outbound::KmsAgentKeyCipher::new(AwsKmsCiphertexts::decrypting(
+                aws_sdk_kms::Client::new(&aws_config),
+            )),
+            agent_api_keys::outbound::EntitlementKeyPlans::new(
+                ai_billing::composition::pg_entitlement_source(pool.clone()),
+            ),
+        ));
     let inmem = InMemRuntime {
         manager: InMemAgentManager::new(
             Arc::clone(&inmem_model_engine),
@@ -597,6 +842,7 @@ async fn run() -> anyhow::Result<()> {
             Arc::clone(&inmem_model_access),
         )
         .with_admission(admission.clone())
+        .with_agent_keys(Arc::clone(&agent_keys))
         .with_dev_commands(enable_dev_commands),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
@@ -645,32 +891,6 @@ async fn run() -> anyhow::Result<()> {
             GithubSyncClientImpl::default(),
         ),
     ));
-    let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
-        connection_gateway.clone(),
-        session_audience.clone(),
-    );
-    let session_tasks: Arc<dyn agent_session::domain::session_task::SessionTasks> = Arc::new(
-        agent_session::domain::session_task::SessionTaskService::new(
-            session_repo.clone(),
-            session_repo.clone(),
-            task_directory,
-            agent_harness::outbound::session_tasks::GithubTaskPullRequestLinker::new(
-                github::domain::service::PullRequestTaskLinkService::new(PgGithubSyncRepo::new(
-                    pool.clone(),
-                )),
-            ),
-            session_metadata_realtime.clone(),
-            macro_service_urls::AppServiceUrl::new()?.as_ref(),
-        ),
-    );
-    let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
-        Arc::new(
-            agent_session::domain::pull_request::SessionPullRequestService::new(
-                session_repo.clone(),
-                session_metadata_realtime,
-                session_tasks.clone(),
-            ),
-        );
     let session_working_branches: Arc<
         dyn agent_session::domain::working_branch::SessionWorkingBranches,
     > = Arc::new(
@@ -681,15 +901,6 @@ async fn run() -> anyhow::Result<()> {
                 session_audience.clone(),
             ),
         ),
-    );
-    let internal_mcp = internal_mcp::router(
-        Arc::new(session_repo.clone()),
-        session_pull_requests.clone(),
-        session_tasks,
-        url::Url::parse(&egress_base_url)?
-            .host_str()
-            .context("egress URL needs a host")?
-            .to_owned(),
     );
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
@@ -815,18 +1026,6 @@ async fn run() -> anyhow::Result<()> {
             },
         },
     ));
-    fixed_runtimes.push((
-        bot_id::CLAUDE_BOT_ID,
-        AgentRuntimeConfig {
-            kind: AgentKind::ClaudeCloud,
-            model: claude_cloud_agents::domain::models::Model::default()
-                .id()
-                .to_owned(),
-            harness: "claude-cloud".into(),
-            instructions: String::new(),
-            mcp_servers: AgentMcpServers::OwnerConnections,
-        },
-    ));
     let runtime_directory =
         PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
@@ -839,31 +1038,10 @@ async fn run() -> anyhow::Result<()> {
         environment = %config.environment,
         "agent harness serving bots"
     );
-    let claude_provider = Arc::new(claude_cloud_agents::outbound::http::Provider(
-        claude_credentials.clone(),
-    ));
-    let claude_manager = agent_harness::outbound::claude::ClaudeContainerManager::new(
-        agent_harness::domain::claude::ClaudeSessions::new(
-            claude_provider.clone(),
-            session_repo.clone(),
-            session_repo.clone(),
-            url::Url::parse(&egress_base_url)?
-                .host_str()
-                .context("egress URL needs a host")?
-                .to_owned(),
-        ),
-        EgressProvisioner::new(
-            Arc::clone(&mcp_connections),
-            Arc::clone(&mcp_servers),
-            egress_base_url.clone(),
-        ),
-        claude_cloud_agents::inbound::acp::attach,
-    );
     let containers = RoutedContainerManager::new(
         sandbox_and_inmem,
         cursor_manager,
         codex_manager,
-        claude_manager,
         session_repo.clone(),
     );
 
@@ -1007,17 +1185,6 @@ async fn run() -> anyhow::Result<()> {
             repo_url: None,
         },
     )
-    .with_bot(
-        bot_id::CLAUDE_BOT_ID,
-        SessionDefaults {
-            bot_id: bot_id::CLAUDE_BOT_ID,
-            model: claude_cloud_agents::domain::models::Model::default()
-                .id()
-                .to_owned(),
-            harness: "claude-cloud".into(),
-            repo_url: None,
-        },
-    )
     // Sessions nothing names a bot for (the create menu's) run in-process;
     // explicitly selected coding agents keep their configured runtimes.
     .with_managed_bot(inmem_bot);
@@ -1079,11 +1246,38 @@ async fn run() -> anyhow::Result<()> {
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
+        .with_external_replies(Arc::new(
+            agent_harness::outbound::external_replies::PgExternalReplyStore::new(pool.clone()),
+        ))
+        .with_notifications(Arc::new(
+            agent_session::outbound::notifications::PgNotificationStore(pool.clone()),
+        ))
         .with_conversation_turns(conversation_turns)
         .with_admission(admission.clone())
+        .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)
         .with_warm_sessions(Arc::new(session_repo.clone()), tool_catalog),
     );
+    let reviews = agent_code_mode::domain::reviews::ReviewService::new(
+        Arc::new(agent_code_mode::outbound::reviews::PgReviewStore(
+            pool.clone(),
+            Arc::new(agent_session::outbound::notifications::PgNotificationStore(
+                pool.clone(),
+            )),
+        )),
+        Arc::new(agent_code_mode::outbound::postgres::PgExecutionStore::new(
+            pool.clone(),
+        )),
+        Arc::new(code_mode::reviews::Actions {
+            sessions: session_repo.clone(),
+            harness: harness.clone(),
+            context: tool_context.clone(),
+            tools: ai_tools::code_mode_tools(),
+        }),
+    );
+    reviews_cell
+        .set(reviews.clone())
+        .map_err(|_| anyhow::anyhow!("Review service was initialized twice"))?;
     let warm_cleanup = Arc::clone(&harness);
     let session_visibility_repo = session_repo.clone();
     tokio::spawn(async move {
@@ -1213,22 +1407,17 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
-    let model_service = Arc::new(
-        AgentModelsServiceImpl::new(
-            VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
-            InMemoryModels::new(
-                Some(inmem_model_engine),
-                config.inmem_model.clone(),
-                inmem_model_access,
-            ),
-            CursorModels::new(cursor_keys, cursor_api_base_url()),
-            macrod_models,
-            model_probe_timeout,
-        )
-        .with_claude(Arc::new(agent_harness::outbound::claude::ClaudeModels(
-            claude_provider,
-        ))),
-    );
+    let model_service = Arc::new(AgentModelsServiceImpl::new(
+        VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
+        InMemoryModels::new(
+            Some(inmem_model_engine),
+            config.inmem_model.clone(),
+            inmem_model_access,
+        ),
+        CursorModels::new(cursor_keys, cursor_api_base_url()),
+        macrod_models,
+        model_probe_timeout,
+    ));
     let model_state = AgentModelsRouterState::new(
         model_service,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1281,6 +1470,7 @@ async fn run() -> anyhow::Result<()> {
         draining_sessions.clone(),
         broker.clone(),
         session_repo.clone(),
+        PgConnectionRepo::new(pool.clone()),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let coding_agents = coding_agents::router(
@@ -1292,7 +1482,6 @@ async fn run() -> anyhow::Result<()> {
             PgHarnessRepo::new(pool.clone()),
             pool.clone(),
             codex_connections,
-            claude_credentials.clone(),
         ),
         agent_session::domain::routines::RoutineSessionsService::new(
             (*bots_directory).clone(),
@@ -1303,12 +1492,53 @@ async fn run() -> anyhow::Result<()> {
             ),
             draining_sessions.clone(),
             (*harness).clone(),
+            routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    // Served to the app by `POST /agent-mode-choice` for the composer's Auto mode.
+    let mode_classifier = match (
+        config.cloudflare_account_id.value(),
+        config.cloudflare_api_token.value(),
+    ) {
+        (Some(account_id), Some(token)) => Some(jev::domain::JevClassifier::new(
+            jev::outbound::SystemOneJev::clef_flash(account_id, token)
+                .context("failed to configure Clef Flash")?,
+            recorder.clone(),
+        )),
+        _ => None,
+    };
+    // Auto mode is limited to users with `enable-composer-auto-mode`.
+    let mode_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                std::time::Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let mode_choice = agent_harness::inbound::mode_choice::agent_mode_choice_router(
+        agent_harness::inbound::mode_choice::AgentModeChoiceRouterState::new(
+            Arc::new(
+                agent_harness::domain::mode_choice::ModeChoiceServiceImpl::new(
+                    mode_classifier,
+                    mode_flags,
+                    admission.clone(),
+                ),
+            ),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
     );
     // Served to the app by `GET /agent-repositories`; see `open_repositories`.
     let repositories_state = AgentRepositoriesRouterState::new(
@@ -1317,16 +1547,6 @@ async fn run() -> anyhow::Result<()> {
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
-    let claude_auth = claude_cloud_agents::inbound::auth::router(
-        claude_cloud_agents::inbound::auth::ClaudeAuthState::new(
-            Arc::new(claude_cloud_agents::domain::auth::AuthService::new(
-                claude_cloud_agents::outbound::oauth::ClaudeOAuth::new()?,
-                claude_credentials,
-                false,
-            )),
-            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
-        ),
-    );
     let http_port = config.port;
     let pull_requests =
         agent_session::inbound::axum_router::pull_requests::agent_session_pull_request_router(
@@ -1343,6 +1563,14 @@ async fn run() -> anyhow::Result<()> {
                 MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
             ),
         );
+    let code_executions = agent_code_mode::inbound::axum_router::code_execution_router(
+        agent_code_mode::inbound::axum_router::CodeExecutionRouterState::new(
+            code_mode,
+            reviews,
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
             agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
@@ -1361,6 +1589,38 @@ async fn run() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     ));
+    let notification_service = Arc::new(agent_session::domain::notifications::NotificationService(
+        Arc::new(agent_session::outbound::notifications::PgNotificationStore(
+            pool.clone(),
+        )),
+    ));
+    let app_connections = agent_harness::inbound::app_connections::app_connections_router(
+        agent_harness::inbound::app_connections::AppConnectionsRouterState::new(
+            Arc::new(
+                agent_harness::domain::app_connections::AppConnectedContinuation::new(
+                    Arc::new(session_repo.clone()),
+                    Arc::new(
+                        agent_harness::outbound::connected_apps::PipedreamConnectedApps::new(
+                            Arc::clone(&mcp_connections),
+                            Arc::new(mcp_select::NativeOverlayConnections::new(Some(Arc::clone(
+                                &mcp_servers,
+                            )))),
+                        ),
+                    ),
+                    Arc::clone(&notification_service),
+                ),
+            ),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
+    let notification_ingress = agent_session::inbound::notifications::notification_router(
+        agent_session::inbound::notifications::NotificationRouterState {
+            authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            service: notification_service,
+        },
+    );
+    let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
             api::ApiStates::new(
@@ -1372,21 +1632,36 @@ async fn run() -> anyhow::Result<()> {
                 repositories_state,
                 changes_state,
             )
-            .with_claude_auth(claude_auth)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
             .with_capabilities(capabilities)
+            .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
-            .with_tool_approvals(tool_approval_answers),
+            .with_tool_approvals(tool_approval_answers)
+            .with_app_connections(app_connections)
+            .with_code_executions(code_executions)
+            .with_notifications(notification_ingress)
+            .with_cognition(cognition_router)
+            .with_universal_input(universal_input::inbound::axum_router::axum_router(
+                universal_input::inbound::axum_router::UniversalInputRouterState::new(
+                    input_service,
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                ),
+            ))
+            .with_scheduling(scheduling_router)
+            .with_preview(preview_router)
+            .with_public_mcp(public_mcp_router)
+            .with_listening_signal(http_listening),
             http_runtime_commands_readiness,
             http_port,
-            shutdown_signal(),
+            http_shutdown.clone().cancelled_owned(),
         )
         .await
         {
             tracing::error!(error = ?error, "agent harness service http stopped");
+            http_shutdown.cancel();
         }
     });
 
@@ -1423,12 +1698,39 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let notification_cancel = tokio_util::sync::CancellationToken::new();
+    let notification_tasks = tokio_util::task::TaskTracker::new();
+    let notification_harness = harness.clone();
+    let notification_stop = notification_cancel.clone();
+    notification_tasks.spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(2));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                () = notification_stop.cancelled() => break,
+                _ = ticker.tick() => {
+                    tokio::select! {
+                        () = notification_stop.cancelled() => break,
+                        result = notification_harness.recover_notifications() => {
+                            if let Err(error) = result {
+                                tracing::warn!(?error, "durable session event recovery failed");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     let recovery_harness = harness.clone();
     let dm_recovery = tokio::spawn(async move {
         let mut ticker = tokio::time::interval(std::time::Duration::from_secs(10));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             ticker.tick().await;
+            if let Err(error) = recovery_harness.recover_external_replies().await {
+                tracing::error!(?error, "failed to reconcile external agent replies");
+            }
             if let Err(error) = recovery_harness.recover_conversations().await {
                 tracing::error!(
                     ?error,
@@ -1478,11 +1780,18 @@ async fn run() -> anyhow::Result<()> {
     ));
 
     let egress_port = config.egress_port;
+    let egress_shutdown = service_shutdown.clone();
     let egress_http = tokio::spawn(async move {
-        if let Err(error) =
-            api::serve_egress(egress, internal_mcp, egress_port, shutdown_signal()).await
+        if let Err(error) = api::serve_egress(
+            egress,
+            internal_mcp,
+            egress_port,
+            egress_shutdown.clone().cancelled_owned(),
+        )
+        .await
         {
             tracing::error!(error = ?error, "agent harness service egress stopped");
+            egress_shutdown.cancel();
         }
     });
 
@@ -1509,6 +1818,10 @@ async fn run() -> anyhow::Result<()> {
     let mut run_error = None;
     loop {
         tokio::select! {
+            () = service_shutdown.cancelled() => {
+                run_error = Some(anyhow::anyhow!("agent listener stopped unexpectedly"));
+                break;
+            }
             () = &mut shutdown => {
                 tracing::info!("agent harness service shutting down");
                 // SIGTERM lands minutes before the process actually stops:
@@ -1632,7 +1945,9 @@ async fn run() -> anyhow::Result<()> {
                                 | HarnessCommand::SteerQueued { .. }
                                 | HarnessCommand::Turn(_)
                                 | HarnessCommand::ToolApproval(_)
-                                | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
+                                | HarnessCommand::PresentTool { .. }
+                                | HarnessCommand::SessionStopped { .. }
+                                | HarnessCommand::DrainNotifications => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
                             let execution_span = tracing::info_span!(
@@ -1713,6 +2028,12 @@ async fn run() -> anyhow::Result<()> {
         }
     }
 
+    service_shutdown.cancel();
+    scheduling_runtime.stop();
+    cognition_runtime.stop();
+    notification_cancel.cancel();
+    notification_tasks.close();
+    notification_tasks.wait().await;
     http.abort();
     trigger.abort();
     egress_http.abort();
@@ -1721,6 +2042,9 @@ async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
+    if let Some((sessions, public)) = &code_runner {
+        tokio::join!(sessions.shutdown(), public.shutdown());
+    }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");
@@ -1732,6 +2056,12 @@ async fn run() -> anyhow::Result<()> {
         }
     }
 
+    // Running imports stop at their next checkpoint and hand their runs over.
+    import_jobs.hand_over().await;
+
+    service_shutdown.cancel();
+    cognition_runtime.shutdown().await;
+    scheduling_runtime.shutdown().await;
     event_broker_tracker.close();
     if tokio::time::timeout(
         std::time::Duration::from_secs(10),

@@ -1,7 +1,9 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import TimelineIcon from '@icon/system/regular/chart-gantt.svg';
+import KanbanIcon from '@icon/system/regular/kanban.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import KanbanIcon from '@phosphor/kanban.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TableIcon from '@phosphor/table.svg';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { Key } from '@solid-primitives/keyed';
 import {
@@ -14,9 +16,11 @@ import {
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
+import { Input } from '@ui/components/Input';
 import { Tooltip } from '@ui/components/Tooltip';
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, For, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   ContextMenuContent,
   MenuItem,
@@ -25,9 +29,14 @@ import {
 import type { BoardGrouping } from '../core/board-grouping';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { isDatabaseNameTaken } from '../core/property-creation';
+import type { TimelineRange } from '../core/timeline-range';
 import type { NewView } from '../core/view-creation';
 import type { ViewChange } from '../core/view-state';
-import { boardGroupColumns, movedViewOrder } from '../core/views';
+import {
+  boardGroupColumns,
+  movedViewOrder,
+  timelineRangeColumns,
+} from '../core/views';
 import {
   type DatabaseOpFailure,
   databaseOpMessage,
@@ -38,7 +47,8 @@ import { createInlineRename } from './inline-rename';
 /** A layout a stored view can be switched to from its tab's menu. */
 export type ShownLayout =
   | { kind: 'table' }
-  | { kind: 'board'; groupBy: BoardGrouping };
+  | { kind: 'board'; groupBy: BoardGrouping }
+  | { kind: 'timeline'; range: TimelineRange };
 
 type DatabaseToolbarProps = {
   columns: DatabaseViewColumn[];
@@ -58,7 +68,7 @@ type DatabaseToolbarProps = {
     name: string
   ) => ResultAsync<void, DatabaseOpFailure>;
   onDeleteView: (view: DatabaseView) => ResultAsync<void, DatabaseOpFailure>;
-  /** Lay a stored view out as a table, or as a board grouped as chosen. */
+  /** Lay a stored view out as a table, a board grouped as chosen, or a timeline along the dates chosen. */
   onShowViewAs: (
     view: DatabaseView,
     layout: ShownLayout
@@ -82,10 +92,8 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
   /** Viewers change only what All records shows them; stored views are everyone's. */
   const canChangeView = () => !props.selectedViewId || props.canEdit;
   const layout = () => props.view.layout;
-  const board = () => {
-    const current = layout();
-    return current.kind === 'board' ? current : undefined;
-  };
+  /** Boards and timelines add records from the toolbar; a table has its blank row. */
+  const addsRecords = () => layout().kind !== 'table';
   const viewRename = createInlineRename({
     name: (view: DatabaseView) => view.name,
     rename: (view, name) => props.onRenameView(view, name),
@@ -101,25 +109,41 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
   });
   const viewError = viewRename.error;
   const setViewError = viewRename.setError;
-  const groupColumns = () => boardGroupColumns(props.columns);
-  const createView = async (kind: 'table' | 'board') => {
+  const createView = async (kind: NewView['layout']) => {
     if (creating() || !props.canEdit) return;
-    const base = kind === 'table' ? 'Table view' : 'Board view';
+    const base = match(kind)
+      .with('table', () => 'Table view')
+      .with('board', () => 'Board view')
+      .with('timeline', () => 'Timeline view')
+      .exhaustive();
     const names = props.views.map((view) => view.name);
     let name = base;
     for (let suffix = 2; isDatabaseNameTaken(name, names); suffix += 1)
       name = `${base} ${suffix}`;
-    const column = groupColumns()[0];
-    const view: NewView =
-      kind === 'table'
-        ? { name, layout: 'table' }
-        : {
-            name,
-            layout: 'board',
-            groupBy: column
-              ? { kind: 'column', columnId: column.id }
-              : { kind: 'new-status' },
-          };
+    const view = match(kind)
+      .returnType<NewView>()
+      .with('table', () => ({ name, layout: 'table' }))
+      .with('board', () => {
+        const column = boardGroupColumns(props.columns)[0];
+        return {
+          name,
+          layout: 'board',
+          groupBy: column
+            ? { kind: 'column', columnId: column.id }
+            : { kind: 'new-status' },
+        };
+      })
+      .with('timeline', () => {
+        const column = timelineRangeColumns(props.columns)[0];
+        return {
+          name,
+          layout: 'timeline',
+          range: column
+            ? { kind: 'column', columnId: column.id }
+            : { kind: 'new-column' },
+        };
+      })
+      .exhaustive();
     setCreating(true);
     setViewError('');
     const created = await props.onCreateView(view);
@@ -143,24 +167,24 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
         canChangeView={canChangeView()}
         search={props.search}
         actions={props.actions}
-        onCreateRecord={board() ? props.onCreateRecord : undefined}
+        onCreateRecord={addsRecords() ? props.onCreateRecord : undefined}
         canCreateRecord={props.canCreateRecord}
         creating={props.creating}
         selection={
           <>
             <div
               ref={viewRail}
-              class="flex min-w-0 items-center gap-0.5 overflow-x-auto"
+              class="-m-1 flex min-w-0 items-center gap-1.5 overflow-x-auto p-1"
               aria-label="Views"
             >
               <Button
                 ref={allRecordsButton}
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 size="md"
                 aria-pressed={!props.selectedViewId}
                 onClick={() => props.onSelectView()}
-                class="max-w-40 px-4 aria-pressed:border-edge-frame aria-pressed:bg-active aria-pressed:text-ink"
+                class="max-w-40"
               >
                 <span class="truncate">All records</span>
               </Button>
@@ -188,7 +212,10 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                         }}
                         onRenameInput={viewRename.setDraft}
                         onRenameSave={(restoreFocus) =>
-                          void viewRename.save(restoreFocus)
+                          fireAndForget(
+                            viewRename.save(restoreFocus),
+                            'database'
+                          )
                         }
                         onRenameCancel={() => viewRename.cancel(true)}
                         onSelect={() => props.onSelectView(view().id)}
@@ -219,29 +246,42 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
             <Show when={props.canEdit}>
               <Dropdown placement="bottom-start">
                 <Dropdown.Trigger
-                  size="md"
-                  square
+                  aria-label="New view"
+                  tooltip="New view"
+                  size="icon-md"
                   variant="ghost"
-                  label="New view"
-                  class="ml-2 shrink-0"
+                  class="ml-1.5 shrink-0"
                   disabled={creating()}
                 >
-                  <PlusIcon class="size-3.5" />
+                  <PlusIcon class="size-4 touch:size-3.5" />
                 </Dropdown.Trigger>
                 <Dropdown.Content class="min-w-40">
                   <Dropdown.Item
-                    onSelect={() => void createView('table')}
+                    onSelect={() =>
+                      fireAndForget(createView('table'), 'database')
+                    }
                     disabled={creating()}
                   >
                     <TableIcon class="size-4" />
                     Table
                   </Dropdown.Item>
                   <Dropdown.Item
-                    onSelect={() => void createView('board')}
+                    onSelect={() =>
+                      fireAndForget(createView('board'), 'database')
+                    }
                     disabled={creating()}
                   >
                     <KanbanIcon class="size-4" />
                     Board
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    onSelect={() =>
+                      fireAndForget(createView('timeline'), 'database')
+                    }
+                    disabled={creating()}
+                  >
+                    <TimelineIcon class="size-4" />
+                    Timeline
                   </Dropdown.Item>
                 </Dropdown.Content>
               </Dropdown>
@@ -325,13 +365,13 @@ function ViewTab(props: {
               props.onRenameSave(true);
             }}
           >
-            <input
+            <Input
               ref={props.renameInput}
               aria-label="View name"
               maxlength={100}
               value={props.renameDraft}
               readOnly={props.renamePending}
-              class="h-8 w-36 rounded-md border border-ink/40 bg-input px-2 text-sm text-ink outline-none focus:ring-2 focus:ring-ink/10"
+              class="w-36"
               onInput={(event) =>
                 props.onRenameInput(event.currentTarget.value)
               }
@@ -349,10 +389,10 @@ function ViewTab(props: {
         <ContextMenu>
           <Tooltip label={props.view.name}>
             <ContextMenu.Trigger
+              tooltip={{ content: undefined, disabled: true }}
               as={Button}
-              variant="ghost"
+              variant="secondary"
               size="md"
-              tooltipDisabled
               type="button"
               {...(props.canReorder ? sortable.dragActivators : {})}
               data-view-id={props.view.id}
@@ -369,7 +409,7 @@ function ViewTab(props: {
                   props.onRename();
                 }
               }}
-              class="max-w-40 px-4 aria-pressed:border-edge-frame aria-pressed:bg-active aria-pressed:text-ink"
+              class="max-w-40"
             >
               <span class="truncate">{props.view.name}</span>
             </ContextMenu.Trigger>
@@ -383,52 +423,85 @@ function ViewTab(props: {
                   shortcut="F2"
                   onClick={props.onRename}
                 />
-                <Show
-                  when={props.view.layout.kind === 'board'}
-                  fallback={
-                    <ContextMenu.Sub>
-                      <SubTrigger text="Show as board" />
-                      <ContextMenuContent submenu class="min-w-44">
-                        <For
-                          each={boardGroupColumns(props.columns)}
-                          fallback={
-                            <MenuItem
-                              text="Create a Status column"
-                              closeOnSelect
-                              onClick={() =>
-                                props.onShowAs({
-                                  kind: 'board',
-                                  groupBy: { kind: 'new-status' },
-                                })
-                              }
-                            />
-                          }
-                        >
-                          {(column) => (
-                            <MenuItem
-                              text={`Group by ${column.name}`}
-                              closeOnSelect
-                              onClick={() =>
-                                props.onShowAs({
-                                  kind: 'board',
-                                  groupBy: {
-                                    kind: 'column',
-                                    columnId: column.id,
-                                  },
-                                })
-                              }
-                            />
-                          )}
-                        </For>
-                      </ContextMenuContent>
-                    </ContextMenu.Sub>
-                  }
-                >
+                <Show when={props.view.layout.kind !== 'table'}>
                   <MenuItem
                     text="Show as table"
                     closeOnSelect
                     onClick={() => props.onShowAs({ kind: 'table' })}
                   />
+                </Show>
+                <Show when={props.view.layout.kind !== 'board'}>
+                  <ContextMenu.Sub>
+                    <SubTrigger text="Show as board" />
+                    <ContextMenuContent submenu class="min-w-44">
+                      <For
+                        each={boardGroupColumns(props.columns)}
+                        fallback={
+                          <MenuItem
+                            text="Create a Status column"
+                            closeOnSelect
+                            onClick={() =>
+                              props.onShowAs({
+                                kind: 'board',
+                                groupBy: { kind: 'new-status' },
+                              })
+                            }
+                          />
+                        }
+                      >
+                        {(column) => (
+                          <MenuItem
+                            text={`Group by ${column.name}`}
+                            closeOnSelect
+                            onClick={() =>
+                              props.onShowAs({
+                                kind: 'board',
+                                groupBy: {
+                                  kind: 'column',
+                                  columnId: column.id,
+                                },
+                              })
+                            }
+                          />
+                        )}
+                      </For>
+                    </ContextMenuContent>
+                  </ContextMenu.Sub>
+                </Show>
+                <Show when={props.view.layout.kind !== 'timeline'}>
+                  <ContextMenu.Sub>
+                    <SubTrigger text="Show as timeline" />
+                    <ContextMenuContent submenu class="min-w-44">
+                      <For
+                        each={timelineRangeColumns(props.columns)}
+                        fallback={
+                          <MenuItem
+                            text="Create a Time range column"
+                            closeOnSelect
+                            onClick={() =>
+                              props.onShowAs({
+                                kind: 'timeline',
+                                range: { kind: 'new-column' },
+                              })
+                            }
+                          />
+                        }
+                      >
+                        {(column) => (
+                          <MenuItem
+                            text={`Along ${column.name}`}
+                            closeOnSelect
+                            onClick={() =>
+                              props.onShowAs({
+                                kind: 'timeline',
+                                range: { kind: 'column', columnId: column.id },
+                              })
+                            }
+                          />
+                        )}
+                      </For>
+                    </ContextMenuContent>
+                  </ContextMenu.Sub>
                 </Show>
                 <MenuItem
                   text="Delete view"

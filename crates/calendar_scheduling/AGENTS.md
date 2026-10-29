@@ -46,6 +46,7 @@ MacroDB migrations.
 
 ## Gotchas
 
+- Replacement availability uses the visitor's `timeZone` and local date; omitted zones and host administration keep schedule-date semantics.
 - Booking range queries are half-open and capped at 733 days and 5,000 records;
   insights must treat a failed query as an error, never as an empty dataset.
 - Existing bookings keep their original event/schedule snapshot after the

@@ -1,5 +1,6 @@
-import Check from '@phosphor/check.svg';
-import Copy from '@phosphor/copy.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Check from '@icon/system/regular/check.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 
@@ -48,7 +49,7 @@ export function MeetingCopyButton(props: {
         disabled={props.disabled || copying()}
         aria-busy={copying()}
         class="bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
-        onClick={() => void copy()}
+        onClick={() => fireAndForget(copy(), 'meetings')}
       >
         <Show when={copied()} fallback={<Copy class="size-4" />}>
           <Check class="size-4" />

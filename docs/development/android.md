@@ -128,158 +128,112 @@ The upload certificate identifies locally signed artifacts. When Google creates
 the Play App Signing key, Play-delivered APKs use that separate certificate; add
 its fingerprint to production associations before testing Play-installed links.
 
-### Production release artifacts
+### Releasing to Google Play from a pull request
 
-After web, cloud-storage, sync-service, and AI editing worker deployments succeed,
-`.github/workflows/release-production.yml` dispatches the independent
-`release-android.yml` workflow and does not wait for it. Android has its own
-concurrency group and cancellation lifecycle: a slow or canceled native build
-cannot hold the production deployment lock or delay the next deployment.
-Cancel an already-dispatched Android build from its own workflow run; canceling
-the production run does not cancel it.
+Android releases are driven from pull requests, like iOS (see
+`apps/web/docs/ios-releases.md`); they are not tied to the production
+deployment cycle. Three generated workflows plus the `Android Native Check`
+job of the web app PR checks enforce it:
 
-The Android workflow builds an ARM64 signed AAB from the selected release tag
-only when `apps/web/tauri/` differs from the closest ancestor release with a
-complete AAB, R8 mapping, and checksums. The first release without
-such a baseline builds an AAB. Frontend-only releases skip native builds and Play
-uploads; their app updates use the bundle updater. The comparison covers the
-entire Tauri directory, including Android, iOS, Rust, and native config files,
-plus one signal outside it: the `version` of the client cache wasm package in
-`crates/client/cache-wasm/Cargo.toml`. The app compiles the client cache
-crates natively, and the team bumps that version when a cache change must
-ship, so a bump since the baseline release counts as a native change (other
-edits under `crates/client` do not). Other changes outside the Tauri
-directory do not trigger a native release. If an external dependency or
-build-script change needs a new binary, bump the native version code in the
-Tauri directory as part of that change.
+**`Android Native Check`** runs on every PR against `main`. Its native tree
+excludes platform-specific desktop/iOS files and Markdown docs, which do not
+ship in the Android binary (`apps/web/scripts/android-native.mjs` defines
+what counts). When the Android native code changed, it requires a
+`versionCode` bump and asks Google Play whether that version code is a
+production release that Google has **published** (through review and
+available to users — the edit API's `status: completed` only describes the
+rollout, so the gate also reads the release list's `releaseLifecycleState`),
+built from the native code of the PR's merge result. Until both hold the
+check fails and the required `Web App Status Check` fails with it.
 
-Failed/incomplete artifact uploads do not advance the baseline. A rerun whose
-release already has complete artifacts skips rebuilding; retry a failed Play
-upload through the publishing workflow after checking Console.
+Add **`skip-android-update`** instead for native changes that don't break
+the native/web contract: it skips the whole gate, bump included, like
+`skip-ios-update`. Such a PR never releases, and the bump only feeds the
+Play release, which checks it again before building; the next PR that
+releases bumps against whatever `main` has by then. Because it never
+releases, the gate still refuses a skipped PR that raises the Android floor
+in `apps/web/min-native-build.json`. The `Native Check Label` workflow
+re-runs just the gate job when that label is added or removed.
 
-The native build uses production services, the pinned production Firebase config,
-and the normal OTA-enabled release build.
-The GitHub Actions `ANDROID_RELEASE_DOPPLER_TOKEN` secret must have read access to
-`android-release/prd`, including both the signing JSON and pinned Firebase secret.
-CI passes this dedicated read-only service token as `DOPPLER_TOKEN` only during
-configuration retrieval. Signing files live in the runner's temporary directory
-and are removed even when the build fails. Only AAB, R8 mapping, and checksum
-files are attached to the release; the separate `android-build-log` Actions artifact is retained for
-seven days, including on failed builds.
+To release:
 
-Android's native release identity lives in
-`apps/web/tauri/src-tauri/tauri.android.conf.json`: `version` is the user-visible
-versionName, and `bundle.android.versionCode` is an independent positive integer
-counter. Local Tauri builds and CI use the same values. Release tags may be
-`vYYYY.M.D` or `vYYYY.M.D.N` (valid dates, years 2000–2099, revision 0–99); they
-identify source and artifact filenames, and do not determine either Android
-version field.
+1. Bump and commit: `just android-bump` in `apps/web`. It also raises the
+   Android floor in `min-native-build.json` to the new versionCode, so the
+   next prod web deploy (`just build-prod`) stops serving shared JS to older
+   Android installs, which show the update-required prompt instead. Use
+   `just android-bump --no-min` for a release older installs don't need.
+   The gate accepts only those two floors: the new versionCode or the base
+   branch's. A PR without Android native changes may raise the floor only as
+   far as the base branch's versionCode.
+2. Add the **`android-update`** label once the PR is ready to merge. The
+   **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
+   first refuses drafts, PRs with failing checks (pending ones are waited on,
+   up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
+   native code that landed on `main` since they branched (the gate hashes
+   the merge result, so such a bundle could never pass it; merge `main`,
+   bump, re-add the label). It then builds the signed App Bundle from the PR
+   head on a hosted Ubuntu runner (Android SDK, Nix, signing and Firebase
+   config from Doppler `android-release/prd`), verifies it with bundletool,
+   checks again that neither the PR head nor `main` changed native code
+   during the build, uploads it to the **internal** track with
+   `status=completed`, and promotes it to **production** as a full rollout
+   (Google review applies). The bundle and R8 mapping are kept as a workflow
+   artifact for 90 days. The release notes carry a provenance stamp,
+   `native tree <hash> for PR #<n>`, the twin of the iOS TestFlight stamp.
+   The run comments the outcome on the PR; remove and re-add the label to
+   retry. Click **Enable auto-merge** on the PR to merge the moment it is
+   live. The label only works on a PR that is mergeable: GitHub does not
+   run `pull_request` workflows on a PR that conflicts with `main`, so the
+   release never starts there. The **`Release Label Check`** workflow
+   (`.github/workflows/release-label-check.yml`, a `pull_request_target`
+   workflow, which GitHub does run) then comments and removes the label;
+   resolve the conflicts and re-add it. On a mergeable PR that workflow
+   instead comments that the release started, with the version in flight
+   and a link to the run.
+3. Wait for Google. The **`Android Release Watch`** workflow (every 30
+   minutes) notices the version code being published on production, re-runs
+   the PR's failed `Android Native Check` job, and comments; the PR merges if
+   auto-merge is on.
+4. Pushes after the label: web-only commits need nothing. Native commits make
+   the bundle stale: **`Android Release Drift`** cancels an in-progress build,
+   removes the label and comments. A Play production release cannot be
+   withdrawn once submitted, so if the stale bundle was already promoted the
+   comment says so and the follow-up should ship as soon as possible (after
+   a force-push the old head is gone, so drift checks Play for the new
+   head's version code instead).
 
-Build **1** was the manual Play bootstrap bundle. The next native release uses
-build **2**. Before each subsequent native release (including a new binary with the same marketing version), run
-from `apps/web`:
+Play is the source of truth for what is live; nothing ties Android bundles
+to production release tags any more. `publish-android-play.yml` remains as
+the manual fallback (promote a version code by hand; upload a bundle from a
+GitHub release that carries one).
 
-```sh
-just android-bump
-```
+The native build uses production services, the pinned production Firebase
+config, and the normal OTA-enabled release build. The GitHub Actions
+`ANDROID_RELEASE_DOPPLER_TOKEN` secret must have read access to
+`android-release/prd`, including both the signing JSON and pinned Firebase
+secret; CI passes this dedicated read-only service token as `DOPPLER_TOKEN`
+only during configuration retrieval. Signing files live in the runner's
+temporary directory and are removed even when the build fails. The separate
+`android-build-log` Actions artifact is retained for seven days (unlike the
+90-day `android-release` bundle artifact), including on failed builds.
 
-Commit the changed config before tagging the release. This increments only
-`versionCode`; edit `version` separately when changing the marketing version.
-The PR's **Android Version Code** check compares its merged result with the base
-branch and requires a higher code when the Android native code changed: any
-file under `apps/web/tauri/` except iOS-, macOS-, Linux- and desktop-only
-paths by naming convention (`ios/` directories, `gen/apple/`, `*.ios.*` and
-`*.macos.*` config, `macos_*`/`linux_*` sources, the macOS icon set,
-`desktop-release.json`, `.helix/`), or a bump of the client cache wasm
-version. It feeds the required **Web App Status Check**, so a missing bump
-blocks merging. If another PR has already used your proposed code, update
-your branch and bump again. The release workflow applies the same definition
-(both read `apps/web/scripts/android-native.mjs`) and rejects native changes
-whose code is not greater than the last published AAB baseline, so a PR that
-passes the check cannot fail the release for the same reason. No version
-bump is needed for frontend-only, backend-only, or iOS/desktop-only changes.
-Builds never increment the counter implicitly, so retries of the same release
-retain its identity. Never distribute different releases with the same code or
-reuse a code already uploaded to Google Play. Keep the signing key for upgrades.
-The counter may not exceed [Google Play's 2,100,000,000 limit](https://developer.android.com/studio/publish/versioning).
+The Android workflows use ephemeral GitHub-hosted runners without a separate
+Nix cache mount. Do not invoke the shared `teardown-nix` cache-volume action
+there: its `fuser -km /nix` can kill the runner when `/nix` is on the root
+filesystem, preventing GitHub from receiving the build logs. Let the hosted
+VM be discarded.
 
-This deliberately resets the former date-based/test codes. The new Android package
-is a separate installation from the former `com.macro.app.prod` test APK; it does
-not update that app or inherit its local data. Do not carry the old test APK into
-the Play rollout. Uninstall the old app when moving testers to the new package:
-both apps claim the same `macro://` authentication and navigation callbacks.
-
-`MIN_NATIVE_BUILD_ANDROID` remains a separate compatibility floor. For the first
-build with runtime GraphQL SDL and schema 3 OTA support (#7724 and #7303), it is
-**1**. Both floors are checked in at `apps/web/min-native-build.json`, which
-`just build-prod` exports as `MIN_NATIVE_BUILD_ANDROID` / `MIN_NATIVE_BUILD_IOS`.
-Retain the floor as the native counter increases; raise it only when the frontend
-requires newer native capabilities. Older date-coded test APKs exceed this floor,
-so retire them rather than relying on it to exclude those test installs.
-
-When moving to Google Play, keep this same counter for AAB builds across all
-tracks (internal testing, closed testing, and production). Promote the same
-uploaded artifact between tracks; allocate a new code for a new binary. The
-existing `just android-build --apk false --aab true` path uses the same Tauri config.
-CI builds only the AAB; the Google Play workflow below uploads it to internal testing. Use
-[Play App Signing](https://developer.android.com/studio/publish/app-signing) and
-preserve its app-signing key once
-Play distribution starts; the upload key and installed-app signing key are
-separate roles.
-
-Before publishing artifacts, CI verifies the signing certificate, package/version,
-ARM64 ABI, and non-debuggable manifest, and checks the AAB structure
-with a checksum-pinned bundletool. The automatic Android workflow starts after
-web/backend rollout succeeds. Build or publishing failures are reported on the
-Android workflow; the production workflow reports only whether dispatch succeeded.
-CI verification does not replace the device qualification described above.
-
-To recover an Android artifact without redeploying production, manually run
-`release-android.yml` from `main` with `operation=rebuild` (the default) and
-`release_tag` set to an existing published production release. The source is
-checked out from that tag; this workflow has no web/backend deployment jobs.
-`publish_android` defaults to false so the first run can validate the build and leave the files in the `android-release` Actions artifact. Set it to
-true to attach the verified artifacts and checksums to the selected release.
-This explicit recovery path bypasses change detection and does not automatically
-upload to Play:
-
-```sh
-gh workflow run release-android.yml --ref main -f operation=rebuild -f release_tag=v2026.9.30.0 -f publish_android=true
-```
-
-The Android job uses an ephemeral GitHub-hosted runner without a separate Nix
-cache mount. Do not invoke the shared `teardown-nix` cache-volume action there:
-its `fuser -km /nix` can kill the runner when `/nix` is on the root filesystem,
-preventing GitHub from receiving the build logs. Let the hosted VM be discarded.
-
-The public GitHub release receives `macro-<tag>-android-arm64.aab`,
-`macro-<tag>-android-arm64-mapping.txt`, and a `.sha256` checksum for each.
-Release CI does not build or attach APKs. Testers install through Google Play's
-internal testing track after the bundle is uploaded; an AAB cannot be installed
-directly on a device.
+Testers install through Google Play's internal testing track once the
+bundle is uploaded; an AAB cannot be installed directly on a device.
 
 ### Google Play publishing
 
-`.github/workflows/publish-android-play.yml` runs from `main`. After successful
-backend/web rollout, the production workflow dispatches `release-android.yml`
-with `operation=release`. That independent workflow checks for native changes,
-builds and verifies the AAB, and attaches its artifacts to GitHub. It then
-dispatches the Play publishing workflow with `operation=upload-internal` and
-`status=completed`. Testers receive the new version subject to Google Play
-checks. Frontend-only releases do not dispatch the Play publishing workflow.
-The separate workflow result reports whether the Play upload succeeded; queuing
-it does not mean Play has accepted the release. Manual upload remains available
-for recovery and Console-review drafts.
-It downloads the verified AAB and R8 mapping from a published GitHub release,
-checks their checksums, authenticates with short-lived Google credentials, and
-uploads to the **internal testing** track for `com.macro.workspace.mobile`.
-Its separate `promote-production` operation submits an existing tested version
-for a full production rollout without rebuilding or uploading the binary again.
-All Play edits use one concurrency group, including uploads and promotions.
-Production promotion remains manual, after device qualification of the
-Play-installed internal build. The dispatcher runs the publishing workflow on
-`main` so the existing Google OIDC restrictions remain valid; its GitHub token
-has `actions: write` for the workflow dispatch.
+`.github/workflows/publish-android-play.yml` runs from `main` and is the
+manual fallback. Routine releases go through the `Android Play Release`
+workflow described above, which uploads the PR's bundle to internal testing
+and promotes it to production itself; the publishing workflow is for
+promoting a version code by hand or uploading a bundle attached to a GitHub
+release.
 
 #### First bundle (one time)
 
@@ -287,11 +241,9 @@ The Play app must already exist, and its first AAB must be uploaded manually
 before the publishing API can find the package. See the
 [upload action's setup guide](https://github.com/r0adkll/upload-google-play#faq).
 
-1. Merge the AAB build changes, then publish a release containing them. Recovery
-   builds check out the selected release tag, so a tag predating
-   `scripts/android-bundle.ts` cannot use the new verification step. For an older
-   release, build the AAB locally from the intended source and verify it
-   using the release signing procedure above.
+1. Build the first AAB locally from the intended source and verify it using
+   the release signing procedure above (the `Android Play Release` workflow
+   cannot run before the package exists in Play Console).
 2. Download `macro-<tag>-android-arm64.aab` and its checksum from the release (or
    from the `android-release` Actions artifact for a build-only run). Verify the
    checksum before upload.
@@ -310,8 +262,8 @@ before the publishing API can find the package. See the
    including sign-in, notifications, links, and upgrades.
 
 The first manual upload consumes its version code. For the next binary, run
-`just android-bump` in `apps/web` and commit before tagging. Do not upload the
-bootstrap bundle again through CI.
+`just android-bump` in `apps/web` and commit it on the PR that carries the
+native change. Do not upload the bootstrap bundle again through CI.
 
 #### Keyless publishing credentials (one time)
 
@@ -400,13 +352,13 @@ gh variable set GOOGLE_PLAY_SERVICE_ACCOUNT --repo macro-inc/macro \
   --body google-play-publisher@macro-435922.iam.gserviceaccount.com
 ```
 
-#### Routine upload and recovery
+#### Manual upload (fallback)
 
-After the first manual upload and credentials setup, native production releases
-automatically upload to internal testing with `status=completed`. For a manual
-upload or retry, select **Publish Android to Google Play** in Actions, run from
-`main`, select `operation=upload-internal`, and supply a published release tag
-that contains Android artifacts.
+The `Android Play Release` workflow uploads and promotes automatically. For a
+manual upload, select **Publish Android to Google Play** in Actions, run from
+`main`, select `operation=upload-internal`, and supply a published GitHub
+release tag that carries Android artifacts (none are produced automatically
+any more; attach them to a release first).
 `status=draft` (the default) saves a release for Console review. Select
 `status=completed` to release to internal testers, subject to Play's checks:
 
@@ -423,12 +375,11 @@ If a run fails, inspect Console before retrying: a completed upload may already
 have consumed the version code. Complete or promote an existing draft there
 instead of re-uploading it to change status. A new binary needs a new code. Avoid
 editing the same app in Console while a CI upload is in progress; committing
-another edit invalidates the upload's pending edit. Missing AAB or mapping assets
-must be recovered with the build workflow before publishing.
+another edit invalidates the upload's pending edit.
 
-#### Promote a tested version to production
+#### Promote a tested version to production (fallback)
 
-After qualifying the Play-installed internal build, manually run the same
+The release workflow promotes automatically. To promote by hand, run the same
 **Publish Android to Google Play** workflow from `main` with
 `operation=promote-production` and its exact Android `version_code`. Use the code
 shown in Play Console; this is not the release tag or marketing version. Leave
@@ -786,7 +737,9 @@ never use it for Play uploads. To build an emulator APK, run
 `apps/web/tauri/src-tauri` inside the Android Nix shell. ARM64 uses the launcher
 above. Keep OTA enabled for update acceptance; `--no-default-features` qualifies
 only embedded behavior. Shared OTA builds need both `MIN_NATIVE_BUILD_ANDROID`
-and `MIN_NATIVE_BUILD_IOS`; see the
+and `MIN_NATIVE_BUILD_IOS`; production builds read them from
+`apps/web/min-native-build.json`, whose Android floor `just android-bump`
+raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
 
 Android ConnectivityManager reports the validated default network and takes a
@@ -896,3 +849,169 @@ unit tests. Expired-session refresh, all pending-upload and queued-write logout
 paths, actual large-document rendering/hydration, and physical memory-pressure,
 battery, and cellular testing remain necessary for full Task 05 acceptance.
 Play verification remains Task 07.
+
+## Native calling
+
+Channel calls use the Android `call-kit` plugin with a self-managed Telecom
+`ConnectionService` and a native LiveKit room. The WebView observes that room;
+reloading or navigating the web UI does not create another media session.
+Native calls require Android 8/API 26 or newer and an installed binary that
+advertises the call-kit plugin. Android 7 and older installed binaries keep the
+browser call controls, including when they receive a newer frontend OTA bundle.
+
+The existing Android push registration supplies the FCM endpoint and advertises
+`nativeCallCapable` only when the installed binary and OS support native calls.
+Existing registrations default to false and keep ordinary call alerts until a
+capable app re-registers. Deploy the device-capability migration before services;
+deploy the notification ingress and call-producing services before enabling the
+new client registration. Native delivery suppresses ordinary alerts only for the
+platform and capable Android endpoints it handles, so another device can still
+receive its fallback alert. The document storage service publishes call pushes
+itself, so the `cloud-storage-service` stack grants its task role `sns:Publish`
+on both the APNS VoIP and FCM platform applications; without the FCM grant every
+native Android call fails at SNS (`AuthorizationError`) and falls back to an
+ordinary alert.
+
+Call pushes are data-only, high priority, have a 60-second TTL, and include a recipient-specific
+LiveKit token and HTTPS ring-status URL. The receiver checks the registered
+account and message age. Tokens are kept in memory and never logged or persisted.
+A dropped call push logs its reason under the `MacroCall` logcat tag (another
+account, invalid payload, stale, recently ended, or another call active).
+While ringing, the native coordinator polls the existing ring-status endpoint;
+answering rechecks it before connecting. Answered-elsewhere, cancelled, expired,
+and invalid-token rings are dismissed. Transient verification failures allow a
+retry but cannot authorize an answer. Logout/account switching ends native calls.
+
+The **Calls** notification channel presents Answer/Decline and an ongoing End
+call action. Telecom handles headset/system actions and coordinates interruptions.
+Android's full-screen-intent setting controls whether a locked phone opens the
+incoming-call screen automatically; when unavailable, Android keeps a heads-up
+call notification with Answer/Decline. Answer opens the call activity directly,
+so microphone permission requests and verification errors remain accessible
+without a background receiver launching an activity. Content, Answer, and
+Decline intents are bound to the offered call; stale notification actions cannot
+act on a replacement call. Android 14+ revokes full-screen access by default for
+Play installs unless the Play Console's full-screen intent declaration names calling
+as core functionality;
+check with `adb shell appops get <package> USE_FULL_SCREEN_INTENT`. Once
+notifications are on, Macro shows a toast while the setting is off; **Allow**
+opens Android's per-app setting, and the toast stays until returning to Macro
+finds access granted; **Hide** stops the prompt on that device. The
+call notification is public, so the lock screen shows the call and its actions.
+Test both permission states. Microphone access is required to join;
+camera access is requested when enabling video, and Bluetooth access when selecting
+that route on Android 12 or newer. A denied permission does not silently enable
+capture.
+
+While ringing, the native call activity fills the screen with an opaque themed
+background, caller initials and name (or channel name when unavailable), channel
+context, and large Answer/Decline controls. It has no drawer handle or participant
+tiles. Back hides the screen while leaving the notification available; cancellation,
+expiry and answering elsewhere dismiss it. A full-screen intent lets Android
+choose this screen while locked or a notification while the phone is in use.
+Test full-screen access allowed/denied, including notification Answer with
+microphone permission missing and a stale action after another call arrives.
+
+### Native call tracing
+
+The Kotlin call plugin uses OpenTelemetry to export through the same OTLP endpoint
+and enablement decision as browser telemetry. The guarded `configure_tracing`
+command persists only the endpoint and environment, so incoming calls can export
+without starting the WebView. Older binaries without the capability flag skip
+this command. Reapplying an unchanged configuration preserves an active trace;
+changing the endpoint or disabling telemetry closes and detaches it before shutting
+down the provider, without ending the call. Disabled calls do not propagate the
+old trace context in subsequent requests.
+
+The outbound notification adapter adds `traceparent`/`tracestate` to the existing
+Android call offer under `call.push.send`; older consumers ignore them. Native
+`call.incoming` adopts that producer context. Children cover `call.push.receive`,
+`call.notification`, `call.activity`, `call.permission.microphone`, `call.answer`,
+`call.ring_status` and `call.connect`. Notification intents carry W3C context;
+status requests inject it into HTTP headers so the backend request joins the
+trace. Older pushes without valid context start a native root. Search by
+`resource.service.name="android-calls"` and the opaque `call.id`; `call.outcome`
+records permission, retry, cancellation and connection outcomes. Durations come
+from span boundaries. Only exception classes are recorded: never caller/channel
+names, JWTs, authorization headers or connection URLs.
+
+The SDK uses a bounded 512-span queue and a three-second exporter timeout. It
+shares the native media stack's OkHttp 4 transport and enables core library
+desugaring, preserving the existing Android/Kotlin baseline. Consumer R8 rules
+retain the HTTP transport provider, and optional SDK interfaces and annotation
+types are present for release shrinking. Debug builds permit HTTP exporters for
+local device testing; releases require HTTPS. Export is best effort when the
+device is offline or terminated.
+
+Run `CallTracingTest` with the native connected-test command below. It uses local
+HTTP fixtures to verify producer context, real notification intents, permission
+outcomes, downstream headers, protobuf export, mid-call telemetry changes and
+connection failure without sending real pushes. With local Tempo on port 4318,
+add `-Pandroid.testInstrumentationRunnerArguments.tracesUrl=http://10.0.2.2:4318/v1/traces`.
+The synthetic trace ID is saved to `/sdcard/Download/native-call-trace-id.txt`;
+fetch it from Tempo at `http://localhost:3200/api/traces/<trace-id>` to inspect
+the connected backend producer, native phases and status-request server span.
+
+### Active call controls
+
+After answering, the native call activity presents a themed drawer at approximately
+92% of the safe screen height, above navigation bars/cutouts. A large participant tile sits
+above a horizontally scrolling participant strip; tapping a strip tile selects
+it as primary. Agent participants such as the transcriber are hidden. Speaker,
+Mute and Video form a labelled control row of Phosphor icons, with Leave in the
+header and camera switching on the primary local video tile. Hold Speaker to
+select headset/Bluetooth routing.
+
+As on iOS, Back, tapping the scrim, or swiping the handle down shrinks the drawer
+to a thumbnail over Macro (you on the left, the active speaker on the right).
+Tapping it reopens the drawer, dragging snaps it to a corner, and dragging it
+past a side tucks it away; once someone else is in the call an edge tab brings
+it back, and **Open call controls** reopens the drawer. On a locked phone the drawer
+goes straight to PiP where the device supports it. Leaving Macro continues the call in system PiP:
+from the thumbnail, Macro's main activity enters PiP (auto-enter on Android 12+,
+which needs `android:supportsPictureInPicture` on `MainActivity`) and hides the
+WebView so it keeps its size; from the drawer, the drawer enters PiP and
+reopens when Macro returns. PiP uses the same layout as iOS, its menu offers
+Mute and Leave, and expanding it reopens the drawer. A tap on a system PiP
+always shows Android's menu first. Audio continues in the foreground service
+while backgrounded; camera capture stops once neither the drawer, the thumbnail
+nor PiP is visible. The web call controls can also reopen the drawer.
+
+After a debug build generates Tauri's Gradle includes, run the plugin unit tests
+from `tauri/src-tauri/gen/android` with
+`./gradlew :tauri-plugin-call-kit:testDebugUnitTest`. Run
+`./gradlew :tauri-plugin-call-kit:connectedDebugAndroidTest` for native
+Telecom/foreground-notification instrumentation on an emulator or device.
+These tests use synthetic offers to check screen-on/off incoming presentation,
+decline/redelivery and stale/account filtering without connecting media. Shared tests run
+with `bun run test src/features/channel/Call/tests` from `apps/web`. Backend
+notification tests require the local SQLx test database described in
+[database.md](database.md), with `SQLX_OFFLINE` unset.
+
+For isolated native media testing, run a local LiveKit server in `--dev` mode
+bound to `0.0.0.0`, then add
+`-Pandroid.testInstrumentationRunnerArguments.livekitUrl=ws://10.0.2.2:7880`
+to the connected-test command on the standard Android emulator. The optional
+media tests use LiveKit's development credentials, a second native participant,
+and emulator microphone/camera permissions to verify video subscription, mute,
+camera start/stop, duplicate start, network interruption/reconnect, navigation/PiP,
+the in-app thumbnail and its PiP handoff (`MiniWindowTest`, Android 12+), and
+resource cleanup. Cleartext
+access is enabled only in the instrumentation APK. This test does not validate
+production FCM delivery or hardware audio quality.
+
+Hardware qualification is still required on Pixel and Samsung. For each device,
+record Android version, APK revision, permissions, route/accessory and results:
+
+| Flow | Required checks |
+| --- | --- |
+| Incoming | Foreground, background, locked, ordinary process death; answer, decline, timeout; full-screen permission allowed/denied |
+| Outgoing | Foreground start, lock/background after connecting, end from app/notification/headset |
+| Ring coordination | Caller cancels, answer on another device, duplicate/delayed push, logout/account switch while ringing |
+| Audio | Microphone denied/revoked, earpiece/speaker, wired headset, Bluetooth connect/disconnect, cellular-call interruption |
+| Lifecycle | Wi-Fi/cellular transitions, temporary offline/reconnect, navigation, WebView reload, foreground resume, no duplicate participant |
+| Video | Camera denial, front/back switch, remote video, supported PiP, PiP dismissal, background without PiP, end and reopen; granting camera permission for an ended call must not enable video on a replacement call |
+| In-app thumbnail | Drawer to thumbnail and back, drag to each corner, edge tab, leave the app into PiP (Android 12+ and older), expand PiP to the drawer, close PiP, call ending in PiP |
+
+A local build or JVM/shared-state test does not prove this hardware matrix. Play
+installation/distribution regression belongs to release workstream 07.

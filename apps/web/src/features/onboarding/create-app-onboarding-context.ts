@@ -5,10 +5,13 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { idToDisplayName, idToEmail } from '@core/user/util';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingPlansQuery,
+  useCreateBillingPortalMutation,
   useCreateCheckoutSessionMutation,
   useGithubLinkStatusQuery,
+  useTrialEligibilityQuery,
 } from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
@@ -88,6 +91,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   const createTeam = useCreateTeamWithInvitesMutation();
   const joinTeam = useJoinTeamMutation();
   const checkout = useCreateCheckoutSessionMutation();
+  const billingPortal = useCreateBillingPortalMutation();
   const completeOnboarding = useCompleteOnboardingMutation();
   const completeTutorial = useCompleteTutorialMutation();
   const connectTool = createOnboardingToolConnect();
@@ -173,9 +177,10 @@ export function createAppOnboardingContext(): OnboardingContext {
             loadableQuery(github, (data) => data.status)
           ),
         retry: () => {
-          if (connected.isError) void connected.refetch();
-          if (native.isError) void native.refetch();
-          if (github.isError) void github.refetch();
+          if (connected.isError)
+            fireAndForget(connected.refetch(), 'onboarding');
+          if (native.isError) fireAndForget(native.refetch(), 'onboarding');
+          if (github.isError) fireAndForget(github.refetch(), 'onboarding');
         },
       };
     },
@@ -207,8 +212,8 @@ export function createAppOnboardingContext(): OnboardingContext {
         contacts: () =>
           loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
         retry: () => {
-          void teams.refetch();
-          void invites.refetch();
+          fireAndForget(teams.refetch(), 'onboarding');
+          fireAndForget(invites.refetch(), 'onboarding');
         },
       };
     },
@@ -226,12 +231,39 @@ export function createAppOnboardingContext(): OnboardingContext {
       const query = useGtmInviteOfferQuery({ enabled: needsOnboarding });
       return () => loadableQuery(query, (offer) => offer ?? null);
     },
+    createTrialEligibility: () => {
+      const query = useTrialEligibilityQuery({ enabled: needsOnboarding });
+      return {
+        eligibility: () =>
+          loadableQuery(query, (data) => data.eligible, {
+            retainDataOnError: false,
+          }),
+        existingSubscription: () =>
+          queryReadyGate(query) && query.data.existingSubscription,
+        managing: () => billingPortal.isPending,
+        manage: async () => {
+          try {
+            const result = await billingPortal.mutateAsync({
+              returnUrl: window.location.href,
+            });
+            window.location.href = result;
+          } catch {
+            toast.failure(
+              "Couldn't open billing management. Please try again."
+            );
+          }
+        },
+        retry: () => {
+          fireAndForget(query.refetch(), 'onboarding');
+        },
+      };
+    },
     createPlanCatalog: () => {
       const query = useAiBillingPlansQuery();
       return {
         catalog: () => loadableQuery(query, (data) => data),
         retry: () => {
-          void query.refetch();
+          fireAndForget(query.refetch(), 'onboarding');
         },
       };
     },

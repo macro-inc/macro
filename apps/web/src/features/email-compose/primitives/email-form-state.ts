@@ -30,6 +30,7 @@ export type DraftFormAttachment =
     }
   | {
       type: 'remote';
+      uploadPending?: boolean;
       url: string;
       fileName: string;
       contentType: string;
@@ -38,6 +39,14 @@ export type DraftFormAttachment =
     }
   | {
       type: 'forwarded';
+      attachmentId: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+    }
+  | {
+      type: 'native';
+      referenceUrl?: string | null;
       attachmentId: string;
       fileName: string;
       mimeType: string;
@@ -148,8 +157,8 @@ export function createEmailFormState(
     ].filter((address): address is string => !!address);
   const [recipientsEdited, setRecipientsEdited] = createSignal(false);
 
-  const draftContainsAppendedReply = () => {
-    const encoded = draft?.body_html_sanitized;
+  const draftContainsAppendedReply = (message = draft) => {
+    const encoded = message?.body_html_sanitized;
     if (!encoded) return false;
     const decodedHtml = decodeBase64Utf8(encoded);
     if (!decodedHtml) return false;
@@ -202,23 +211,50 @@ export function createEmailFormState(
   // Values and edit revisions may outlive a mounted composer; effects do not.
   const [editRevision, setEditRevision] = createSignal(0);
 
-  const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>([
-    ...(draft?.attachments_draft.map((a) => ({
-      type: 'remote' as const,
-      attachmentId: a.id,
-      contentType: a.content_type,
-      fileName: a.file_name,
-      url: a.s3_key,
-      fileSize: a.size,
-    })) ?? []),
-    ...(draft?.attachments_forwarded.map((a) => ({
-      type: 'forwarded' as const,
-      attachmentId: a.attachment_id,
-      fileName: a.filename ?? 'attachment',
-      mimeType: a.mime_type ?? 'application/octet-stream',
-      fileSize: a.size_bytes ?? 0,
-    })) ?? []),
-  ]);
+  const draftAttachments = (message?: EmailMessage): DraftFormAttachment[] => {
+    const representedIds = new Set([
+      ...(message?.attachments_draft.map((a) => a.id) ?? []),
+      ...(message?.attachments_forwarded.map((a) => a.attachment_id) ?? []),
+    ]);
+    const representedCids = new Set(
+      [...representedIds].map((id) => `${id}@attachments.macro.com`)
+    );
+    for (const file of message?.attachments_draft ?? [])
+      if (file.content_id) representedCids.add(file.content_id);
+    return [
+      ...(message?.attachments
+        .filter(
+          (a) =>
+            !representedIds.has(a.db_id) &&
+            !representedCids.has(a.content_id?.replace(/^<|>$/g, '') ?? '')
+        )
+        .map((a) => ({
+          type: 'native' as const,
+          referenceUrl: a.reference_url,
+          attachmentId: a.db_id,
+          fileName: a.filename ?? 'attachment',
+          mimeType: a.mime_type ?? 'application/octet-stream',
+          fileSize: a.size_bytes ?? 0,
+        })) ?? []),
+      ...(message?.attachments_draft.map((a) => ({
+        type: 'remote' as const,
+        uploadPending: a.upload_pending,
+        attachmentId: a.id,
+        contentType: a.content_type,
+        fileName: a.file_name,
+        url: a.s3_key,
+        fileSize: a.size,
+      })) ?? []),
+      ...(message?.attachments_forwarded.map((a) => ({
+        type: 'forwarded' as const,
+        attachmentId: a.attachment_id,
+        fileName: a.filename ?? 'attachment',
+        mimeType: a.mime_type ?? 'application/octet-stream',
+        fileSize: a.size_bytes ?? 0,
+      })) ?? []),
+    ];
+  };
+  const [attachments, setAttachments] = createSignal(draftAttachments(draft));
 
   const setRecipients = (
     field: keyof EmailFormRecipients,
@@ -323,6 +359,28 @@ export function createEmailFormState(
 
   return {
     draft,
+    restoreDraft(message: EmailMessage) {
+      setSelectedInboxId(message.link_id);
+      setSenderChoice({ email: message.from?.email });
+      setRecipientsEdited(true);
+      setState({
+        subject: message.subject ?? '',
+        recipients: {
+          to: message.to.map(convertContactInfoToEmailRecipient),
+          cc: message.cc.map(convertContactInfoToEmailRecipient),
+          bcc: message.bcc.map(convertContactInfoToEmailRecipient),
+        },
+        withQuotedText: draftContainsAppendedReply(message),
+      });
+      setAttachments(draftAttachments(message));
+      options?.onRecipientsChange?.(
+        unwrap([
+          ...state.recipients.to,
+          ...state.recipients.cc,
+          ...state.recipients.bcc,
+        ])
+      );
+    },
     replyAppended: () => state.withQuotedText,
     setReplyAppended: (next: boolean) => setState('withQuotedText', next),
     recipients: () => {
@@ -355,6 +413,16 @@ export function createEmailFormState(
     attachments: {
       clear: () => setAttachments([]),
       list: attachments,
+      replace: (next: DraftFormAttachment[]) => setAttachments([...next]),
+
+      markUploadComplete: (attachmentId: string) =>
+        setAttachments((files) =>
+          files.map((file) =>
+            file.type === 'remote' && file.attachmentId === attachmentId
+              ? { ...file, uploadPending: false }
+              : file
+          )
+        ),
       add: (attachment: DraftFormAttachment) => {
         setAttachments((p) => [...p, attachment]);
       },
@@ -401,7 +469,9 @@ export function createEmailFormState(
       removeById: (attachmentId: string) => {
         setAttachments((p) =>
           p.filter(
-            (a) => a.type !== 'remote' || a.attachmentId !== attachmentId
+            (a) =>
+              (a.type !== 'remote' && a.type !== 'native') ||
+              a.attachmentId !== attachmentId
           )
         );
       },

@@ -25,6 +25,9 @@ vi.mock(
 vi.mock('@app/features/soup/search/context', () => ({
   SearchProvider: (props: { children: unknown }) => props.children,
 }));
+vi.mock('@app/lib/i18n/use-interface-language-sync', () => ({
+  useInterfaceLanguageSync: () => {},
+}));
 vi.mock('@app/lib/queries/calendar/graphql/use-calendar-cache', () => ({
   useCalendarCache: () => {},
 }));
@@ -49,7 +52,11 @@ vi.mock('@core/component/AI/signal/globalAttachments', () => ({
 vi.mock('@core/context/team', () => ({
   TeamContextProvider: (props: { children: unknown }) => props.children,
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'test-user' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'test-user',
+  useUserInfo: () => () => ({ userId: 'test-user' }),
+  useIsAuthenticated: () => () => true,
+}));
 vi.mock('@core/orchestrator', () => ({
   createBlockOrchestrator: vi.fn(() => ({})),
 }));
@@ -70,7 +77,10 @@ vi.mock('@service-connection/client', () => ({
   useRefreshTrackedEntitiesOnFocus: () => {},
   useReopenTrackedEntitiesOnReconnect: () => {},
 }));
-vi.mock('@service-connection/websocket', () => ({ ws: {} }));
+vi.mock('@service-connection/websocket', () => ({
+  ws: {},
+  createConnectionWebsocketEffect: () => {},
+}));
 
 vi.mock('./ShareButton', () => ({
   ShareModal: (props: {

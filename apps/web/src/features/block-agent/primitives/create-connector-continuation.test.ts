@@ -33,7 +33,7 @@ describe('connector continuation', () => {
     expect(deps.resume).not.toHaveBeenCalled();
     finish('connected');
     await pending;
-    expect(deps.resume).toHaveBeenCalledExactlyOnceWith('Linear');
+    expect(deps.resume).toHaveBeenCalledExactlyOnceWith(app);
     expect(flow.disabled()).toBe(false);
     dispose();
   });

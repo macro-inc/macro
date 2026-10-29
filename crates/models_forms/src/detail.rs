@@ -64,7 +64,7 @@ pub enum FormSectionDetail {
         message: String,
     },
     /// A booking step. Its destination is withheld from respondents until
-    /// their response has passed every screener and been accepted.
+    /// their response has passed every gate and been accepted.
     Booking {
         /// The section.
         #[schema(value_type = Uuid)]

@@ -12,7 +12,7 @@ export class DatabaseRow {
     /** The table this row belongs to. */
     readonly table: DatabaseTable,
     /** Identifier of the row. */
-    readonly id: string
+    readonly id: string,
   ) {}
 
   /** A handle to a row by id, within a table. */

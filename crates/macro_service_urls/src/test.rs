@@ -159,7 +159,7 @@ fn scheduled_action_service_url_parses() {
     assert_parses_for_all_environments(ScheduledActionServiceUrl::default_for_environment);
     assert_eq!(
         ScheduledActionServiceUrl::local().as_ref(),
-        "http://localhost:8099"
+        "http://localhost:8101/scheduled-action"
     );
     assert_eq!(
         ScheduledActionServiceUrl::dev().as_ref(),
@@ -234,7 +234,7 @@ fn mcp_service_url_parses() {
 fn mcp_service_url_defaults_are_bases_without_a_trailing_slash() {
     with_mock_override_env(missing_override, || {
         for (environment, expected) in [
-            (Environment::Local, "http://localhost:8080"),
+            (Environment::Local, "http://localhost:8101"),
             (Environment::Develop, "https://dev-gateway.macro.com/mcp"),
             (Environment::Production, "https://gateway.macro.com/mcp"),
         ] {
@@ -501,7 +501,7 @@ fn exported_service_urls_match_local_values() {
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
-        "http://localhost:8085",
+        "http://localhost:8101/cognition",
     );
     assert_eq!(
         service_urls.notification_service_url.as_ref(),
@@ -517,7 +517,7 @@ fn exported_service_urls_match_local_values() {
     );
     assert_eq!(
         service_urls.mcp_service_url.as_ref(),
-        "http://localhost:8080"
+        "http://localhost:8101"
     );
     assert_eq!(
         service_urls.unfurl_service_url.as_ref(),

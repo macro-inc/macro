@@ -44,4 +44,7 @@ export const calendarKeys = createQueryKeys('calendar', {
   searchPreviews: (
     items: readonly { eventId: string; occurrenceKey?: string | null }[]
   ) => ({ queryKey: [items] }),
+  joinRequests: (eventId: string) => ({
+    queryKey: [eventId],
+  }),
 });

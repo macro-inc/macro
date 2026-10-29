@@ -8,8 +8,9 @@ use rootcause::Report;
 
 use super::{
     models::{
-        HarnessAuthentication, HarnessAuthorizationOwner, HarnessTokenAuthorization,
-        MacroAuthorizationError, MacroUserAuthentication, ResolvedBotActingUser,
+        CredentialOrigin, HarnessAuthentication, HarnessAuthorizationOwner,
+        HarnessTokenAuthorization, MacroAuthorizationError, MacroUserAuthentication,
+        ResolvedBotActingUser,
     },
     ports::{HarnessAuthorizationRepo, HarnessAuthorizer},
 };
@@ -110,6 +111,8 @@ where
 fn user_authentication(acting_user: ResolvedBotActingUser) -> MacroUserAuthentication {
     let user_id = acting_user.macro_user_id.as_ref().to_owned();
     MacroUserAuthentication {
+        origin: CredentialOrigin::Harness,
+        agent_id: None,
         macro_user_id: acting_user.macro_user_id,
         user_context: UserContext {
             user_id,

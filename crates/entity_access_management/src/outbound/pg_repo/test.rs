@@ -16,6 +16,66 @@ const GRANDCHILD_PROJECT_ID: Uuid = Uuid::from_u128(0x33333333_3333_3333_3333_33
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
+async fn propagation_waits_for_revocation_before_reading_project_grants(pool: Pool<Postgres>) {
+    let propagation_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    sqlx::query!("SET lock_timeout = '100ms'")
+        .execute(&propagation_pool)
+        .await
+        .unwrap();
+    let repo = PgRepository::new(propagation_pool.clone());
+    let document_id = Uuid::from_u128(0x44444444_4444_4444_4444_444444444444);
+
+    let mut revocation = pool.begin().await.unwrap();
+    entity_access_db_utils::team_share::acquire_guard(&mut revocation)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "DELETE FROM entity_access WHERE entity_id = $1 AND entity_type = 'project' AND source_type = 'user' AND source_id = 'macro|testuser@test.com'",
+        ROOT_PROJECT_ID,
+    )
+    .execute(revocation.as_mut())
+    .await
+    .unwrap();
+
+    // Another transaction can still see the old grant, but propagation must
+    // wait for the revocation's guard instead of copying that stale snapshot.
+    let error = repo
+        .add_entity_to_project(&document_id, EntityType::Document, &ROOT_PROJECT_ID)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, sqlx::Error::Database(error) if error.code().as_deref() == Some("55P03"))
+    );
+
+    revocation.commit().await.unwrap();
+    repo.add_entity_to_project(&document_id, EntityType::Document, &ROOT_PROJECT_ID)
+        .await
+        .unwrap();
+    let grants = sqlx::query!(
+        "SELECT source_id FROM entity_access WHERE entity_id = $1 AND entity_type = 'document' ORDER BY source_id",
+        document_id,
+    )
+    .fetch_all(&propagation_pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        grants
+            .into_iter()
+            .map(|row| row.source_id)
+            .collect::<Vec<_>>(),
+        vec!["team-one"]
+    );
+    propagation_pool.close().await;
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
+)]
 async fn walk_up_from_grandchild_returns_all_ancestors(pool: Pool<Postgres>) {
     let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();

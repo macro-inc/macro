@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_draft_object_cleanup (object_key,available_at)\n        SELECT a.s3_key,now() + interval '1 day' FROM email_attachments_drafts a JOIN email_messages m ON m.id = a.draft_id\n        WHERE m.id = $1 AND m.thread_id = $2 AND m.link_id = ANY($3) AND m.is_draft AND NOT m.is_sent\n            AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id)\n        ON CONFLICT DO NOTHING\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "949e09a7bba879b6da49ad9cf537ae9a0d96ae3af7c3b0ee5a74b21104354717"
+}

@@ -12,6 +12,7 @@ import {
 } from '@app/features/soup/collection/transforms';
 import type { SoupRow } from '@app/features/soup/collection/types';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { ProjectRow, ProjectsContext } from '../context/projects-context';
@@ -52,12 +53,15 @@ export function createProjectCollection(capabilities: {
   onOpen?: (id: string, metadata?: ProjectListActivation) => void;
   initialState?: ProjectCollectionSnapshot;
   captureState?: (read: Accessor<ProjectCollectionSnapshot>) => void;
+  search?: { value: Accessor<string>; onChange: (value: string) => void };
 }) {
   const initial = capabilities.initialState;
   const [layout, setLayout] = createSignal<'list' | 'gantt'>(
     initial?.layout ?? 'list'
   );
-  const [search, setSearch] = createSignal(initial?.search ?? '');
+  const [localSearch, setLocalSearch] = createSignal(initial?.search ?? '');
+  const search = capabilities.search?.value ?? localSearch;
+  const setSearch = capabilities.search?.onChange ?? setLocalSearch;
   const query = debouncedDependent(search, 150);
   const [status, setStatus] = createSignal(initial?.status ?? '');
   const [priority, setPriority] = createSignal(initial?.priority ?? '');
@@ -191,7 +195,8 @@ export function createProjectCollection(capabilities: {
     isSelectable: (row) => row.kind === 'entity',
     onActivate: ({ item, metadata }) => {
       if (item.kind === 'group-header') disclosure.toggle(item.groupId);
-      else if (item.kind === 'load-more') void source.loadMore();
+      else if (item.kind === 'load-more')
+        fireAndForget(source.loadMore(), 'projects');
       else if (item.kind === 'entity')
         capabilities.onOpen?.(item.entity.id, metadata);
     },

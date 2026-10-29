@@ -11,6 +11,10 @@ import {
   useNativeSplitNavigationHandler,
   useSplitNavigationHandler,
 } from '@core/util/useSplitNavigationHandler';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -19,11 +23,8 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
+import { queryReadyGate } from '@queries/gate';
 import {
   usePrMentionQuery,
   usePullRequestByGithubKeyQuery,
@@ -57,6 +58,7 @@ const STATUS_ICON_CLASS: Record<string, string> = {
   open: 'text-success',
   merged: 'text-note',
   closed: 'text-failure',
+  draft: 'text-ink-muted',
 };
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -116,7 +118,11 @@ function pullRequestStatus(entity: ForeignEntity | undefined): string {
   if (!entity || entity.foreignEntitySource !== GITHUB_PULL_REQUEST_SOURCE) {
     return 'open';
   }
-  return optionalString(metadataRecord(entity.metadata).status) ?? 'open';
+  const metadata = metadataRecord(entity.metadata);
+  const status = optionalString(metadata.status) ?? 'open';
+  const isDraft = metadata.draft === true;
+  if (isDraft && status === 'open') return 'draft';
+  return status;
 }
 
 interface PullRequestParts {
@@ -186,6 +192,7 @@ const STATUS_PILL_CLASS: Record<string, string> = {
   open: 'bg-success/15 text-success',
   merged: 'bg-note/15 text-note',
   closed: 'bg-failure/15 text-failure',
+  draft: 'bg-ink-muted/15 text-ink-muted',
 };
 
 interface ChecksSummary {
@@ -251,11 +258,15 @@ function pullRequestPreview(
     ? (metadata.checks as GithubPullRequestCheckRun[])
     : undefined;
 
+  const rawStatus = optionalString(metadata.status) ?? 'open';
+  const isDraft = metadata.draft === true;
+  const status = isDraft && rawStatus === 'open' ? 'draft' : rawStatus;
+
   return {
     title: title ?? displayName ?? ref ?? fallbackLabel(label),
     ref,
     url: optionalString(metadata.url),
-    status: optionalString(metadata.status) ?? 'open',
+    status,
     additions: optionalNumber(metadata.additions),
     deletions: optionalNumber(metadata.deletions),
     commentCount: comments?.length || undefined,
@@ -383,7 +394,7 @@ export function PullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <Suspense
           fallback={
             <div class="p-3 flex items-center justify-center text-sm text-ink-muted">
@@ -438,7 +449,7 @@ function UnsyncedPullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <div class="flex items-center justify-between gap-2 p-2">
           <div class="flex items-center gap-2 min-w-0">
             <span class="relative size-4 shrink-0 inline-flex">
@@ -553,8 +564,9 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
 
   const githubLinkQuery = useGithubLinkStatusQuery({
     enabled: () => !lexicalWrapper?.skipPreviewFetch,
+    // Virtualized rows remount while scrolling; they should not retry failures.
+    retryOnMount: false,
   });
-  const isGithubLinked = () => githubLinkQuery.data?.status === 'linked';
 
   const isSelectedAsNode = () => {
     const sel = selection();
@@ -571,7 +583,15 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   // When GitHub is not linked, render as a plain link instead of the fancy mention UI
   const shouldRenderAsPlainLink = () => {
     if (lexicalWrapper?.skipPreviewFetch) return false;
-    return !!(githubLinkQuery.isFetched && !isGithubLinked() && props.url);
+    // An initial failure has no resource value and reading it during a retry
+    // suspends the surrounding surface. Refetch errors retain confirmed data;
+    // Solid Query exposes that value without suspending.
+    return !!(
+      props.url &&
+      !githubLinkQuery.isLoadingError &&
+      queryReadyGate(githubLinkQuery) &&
+      githubLinkQuery.data.status !== 'linked'
+    );
   };
 
   const open = (e: MouseEvent | KeyboardEvent | null) => {

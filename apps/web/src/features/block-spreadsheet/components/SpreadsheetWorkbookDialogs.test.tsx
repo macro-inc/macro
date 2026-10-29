@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { type ComponentProps, createSignal, type ParentProps } from 'solid-js';
+import { type ComponentProps, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SpreadsheetFindDialog } from './SpreadsheetDialogs';
 import {
@@ -13,9 +13,6 @@ import {
   SpreadsheetSheetDialog,
 } from './SpreadsheetWorkbookDialogs';
 
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@components/app/mobile/MobileDrawer', () => ({
   MobileDrawer: () => null,
@@ -77,12 +74,14 @@ describe('workbook dialogs', () => {
   it('returns focus to the editor when Find closes and leaves IME Enter alone', async () => {
     const [open, setOpen] = createSignal(false);
     const find = vi.fn();
+    const restoreFocus = vi.fn();
     const view = render(() => (
       <>
         <div role="grid" aria-label="Spreadsheet" tabIndex={0} />
         <SpreadsheetFindDialog
           open={open()}
           onClose={() => setOpen(false)}
+          onRestoreFocus={restoreFocus}
           query="Budget"
           onQuery={() => {}}
           replacement=""
@@ -108,8 +107,70 @@ describe('workbook dialogs', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(find).toHaveBeenCalledWith(false);
     fireEvent.keyDown(input, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await waitFor(() => expect(document.activeElement).toBe(grid));
+    await waitFor(() => expect(screen.queryByRole('search')).toBeNull());
+    expect(restoreFocus).toHaveBeenCalled();
+  });
+
+  it('blocks the browser find shortcut while the find bar is focused', async () => {
+    render(() => (
+      <SpreadsheetFindDialog
+        open
+        onClose={() => {}}
+        query="Budget"
+        onQuery={() => {}}
+        replacement=""
+        onReplacement={() => {}}
+        options={{ matchCase: false, entireCell: false, formulas: false }}
+        onOptions={() => {}}
+        matchCount={1}
+        matchIndex={0}
+        readonly={false}
+        notice=""
+        onFind={() => {}}
+        onReplace={() => {}}
+      />
+    ));
+    const input = await screen.findByRole('textbox', { name: 'Find in sheet' });
+    const event = new KeyboardEvent('keydown', {
+      key: 'f',
+      code: 'KeyF',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('keeps replace collapsed until the replace toggle is pressed', async () => {
+    const [open, setOpen] = createSignal(true);
+    render(() => (
+      <SpreadsheetFindDialog
+        open={open()}
+        onClose={() => setOpen(false)}
+        query="Budget"
+        onQuery={() => {}}
+        replacement=""
+        onReplacement={() => {}}
+        options={{ matchCase: false, entireCell: false, formulas: false }}
+        onOptions={() => {}}
+        matchCount={1}
+        matchIndex={0}
+        readonly={false}
+        notice=""
+        onFind={() => {}}
+        onReplace={() => {}}
+      />
+    ));
+    expect(screen.queryByRole('textbox', { name: 'Replace with' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+    expect(
+      await screen.findByRole('textbox', { name: 'Replace with' })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide replace' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: 'Replace with' })).toBeNull()
+    );
   });
 
   it('focuses and selects the sheet name on opening and reopening, and Escape closes', async () => {

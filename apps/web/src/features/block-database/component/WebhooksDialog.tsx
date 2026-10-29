@@ -1,5 +1,6 @@
-import CopyIcon from '@phosphor/copy.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { databaseWebhookUrl } from '@service-storage/databases';
 import type { DatabaseWebhookResponse } from '@service-storage/generated/schemas/databaseWebhookResponse';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
@@ -111,11 +112,12 @@ export function WebhooksDialog(props: {
                           onFocus={(event) => event.currentTarget.select()}
                         />
                         <CopyButton
-                          variant="outline"
-                          label="Copy webhook URL"
+                          aria-label="Copy webhook URL"
+                          tooltip="Copy webhook URL"
+                          variant="secondary"
                           onClick={() => copy(url())}
                         >
-                          <CopyIcon />
+                          <CopyIcon class="size-4" />
                           Copy
                         </CopyButton>
                       </div>
@@ -128,12 +130,13 @@ export function WebhooksDialog(props: {
                       <div class="flex items-center justify-between">
                         Example
                         <CopyButton
+                          aria-label="Copy example"
+                          tooltip="Copy example"
                           size="sm"
                           variant="ghost"
-                          label="Copy example"
                           onClick={() => copy(curl())}
                         >
-                          <CopyIcon />
+                          <CopyIcon class="size-3.5" />
                           Copy
                         </CopyButton>
                       </div>
@@ -163,10 +166,13 @@ export function WebhooksDialog(props: {
                         {new Date(webhook.createdAt).toLocaleDateString()}
                       </span>
                       <Button
+                        aria-label="Delete webhook"
+                        tooltip="Delete webhook"
                         variant="ghost"
                         size="icon-sm"
-                        label="Delete webhook"
-                        onClick={() => void remove(webhook)}
+                        onClick={() =>
+                          fireAndForget(remove(webhook), 'database-webhooks')
+                        }
                       >
                         <TrashIcon class="size-4" />
                       </Button>
@@ -181,9 +187,9 @@ export function WebhooksDialog(props: {
               </Button>
               <Button
                 type="button"
-                variant="accent"
+                variant="primary"
                 disabled={pending()}
-                onClick={() => void create()}
+                onClick={() => fireAndForget(create(), 'database-webhooks')}
               >
                 {pending() ? 'Creating…' : 'Create webhook'}
               </Button>

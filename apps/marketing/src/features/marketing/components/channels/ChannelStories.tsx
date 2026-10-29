@@ -1,10 +1,14 @@
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { WorkspaceComment } from '../../core/dummy-workspace';
+import { createDemoPointer } from '../../primitives/createDemoPointer';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
+import { demoTypingActions } from '../../primitives/demoTypingActions';
 import {
+  type DocumentShareHandle,
   DocumentShareSheet,
   LAUNCH_MEMBERS,
+  type ShareLevel,
 } from '../documents/DocumentShareSheet';
 import { WorkspaceDocuments } from '../workspace/WorkspaceDocuments';
 import '../documents/document-stories.css';
@@ -23,48 +27,6 @@ import {
 } from './channelProject';
 import '../workspace/dummy-workspace.css';
 import './channel-stories.css';
-
-/** Measures `selector` inside `frame` and returns the cursor's tip position. */
-function createCursorTarget(
-  frame: () => HTMLElement | undefined,
-  selector: () => string | undefined
-) {
-  const [point, setPoint] = createSignal<{ x: number; y: number }>();
-  onMount(() => {
-    const measure = () => {
-      const root = frame();
-      const query = selector();
-      const target = query
-        ? root?.querySelector<HTMLElement>(query)
-        : undefined;
-      if (!root || !target) return setPoint(undefined);
-      const bounds = target.getBoundingClientRect();
-      const parent = root.getBoundingClientRect();
-      setPoint({
-        x: bounds.left - parent.left + Math.min(bounds.width / 2, 48),
-        y: bounds.top - parent.top + bounds.height / 2,
-      });
-    };
-    createEffect(() => {
-      selector();
-      const id = requestAnimationFrame(measure);
-      onCleanup(() => cancelAnimationFrame(id));
-    });
-    const observer = new ResizeObserver(measure);
-    const root = frame();
-    if (root) {
-      observer.observe(root);
-      const conversation = root.querySelector('.channel-work-conversation');
-      if (conversation) observer.observe(conversation);
-      root.addEventListener('scroll', measure, true);
-    }
-    onCleanup(() => {
-      observer.disconnect();
-      root?.removeEventListener('scroll', measure, true);
-    });
-  });
-  return point;
-}
 
 /** Full chat navigation makes the hero recognizable as a channel. */
 export function ChannelHero() {
@@ -87,11 +49,11 @@ export function ChannelHero() {
 export function ChannelSharedWorkDemo() {
   let root!: HTMLDivElement;
   let frame: HTMLDivElement | undefined;
+  let resetSurface = () => {};
   const w = createChannelChecklist();
   const [aim, setAim] = createSignal<string>();
   const [clicking, setClicking] = createSignal(false);
   const [cursorVisible, setCursorVisible] = createSignal(false);
-  const [cursorOrigin, setCursorOrigin] = createSignal({ x: 0, y: 200 });
   const scrollToMessage = (id: string, smooth = true) => {
     const log = root?.querySelector<HTMLElement>(
       '.channel-work-conversation [role="log"]'
@@ -117,14 +79,20 @@ export function ChannelSharedWorkDemo() {
       )
       ?.click();
     setClicking(false);
-    setCursorVisible(false);
     setAim(undefined);
   };
   const playback = createProductWalkthrough({
     root: () => root,
     visibilityThreshold: 0.5,
     steps: 9,
-    reset: () => {},
+    loop: { hold: 8000 },
+    reset: () => {
+      resetSurface();
+      setAim(undefined);
+      setClicking(false);
+      setCursorVisible(false);
+      scrollToMessage('shared-plan', false);
+    },
     reduced: () => {
       clickMention('shared-plan');
       clickMention('welcome');
@@ -135,7 +103,7 @@ export function ChannelSharedWorkDemo() {
     advance: (step) => {
       if (step === 1) {
         scrollToMessage('shared-plan');
-        setCursorOrigin({ x: root.clientWidth * 0.68, y: 260 });
+        setAim('shared-plan');
         setCursorVisible(true);
       }
       if (step === 2) setAim('shared-plan');
@@ -148,7 +116,7 @@ export function ChannelSharedWorkDemo() {
             ?.getAttribute('data-narrow') === 'true';
         if (narrow) setAim('close');
         else scrollToMessage('welcome');
-        setCursorOrigin({ x: Math.min(root.clientWidth * 0.7, 360), y: 180 });
+
         setCursorVisible(true);
       }
       if (step === 6) {
@@ -164,15 +132,16 @@ export function ChannelSharedWorkDemo() {
       if (step === 9) clickMention('welcome');
     },
   });
-  const pointer = createCursorTarget(
-    () => frame,
-    () =>
+  const pointer = createDemoPointer({
+    frame: () => frame,
+    active: cursorVisible,
+    target: () =>
       aim() === 'close'
         ? '.channel-work-back'
         : aim()
           ? `[data-thread-id="${aim()}"] .sample-inline-reference`
-          : undefined
-  );
+          : undefined,
+  });
   return (
     <div ref={frame} class="channel-demo-frame">
       <ProductDemo
@@ -187,15 +156,19 @@ export function ChannelSharedWorkDemo() {
         height={620}
         mobileHeight={600}
       >
-        <ChannelWorkSurface workspace={w} />
+        <ChannelWorkSurface
+          workspace={w}
+          onReady={(reset) => {
+            resetSurface = reset;
+          }}
+        />
       </ProductDemo>
-      <Show when={cursorVisible()}>
+      <Show when={cursorVisible() && pointer()}>
         <DemoCursor
-          label="Jacob"
           clicking={clicking()}
           class="channel-demo-cursor"
           style={{
-            transform: `translate(${(pointer() ?? cursorOrigin()).x}px, ${(pointer() ?? cursorOrigin()).y}px)`,
+            transform: `translate(${pointer()!.x}px, ${pointer()!.y}px)`,
           }}
         />
       </Show>
@@ -203,27 +176,163 @@ export function ChannelSharedWorkDemo() {
   );
 }
 
-/** Show the actual channel grant in Share, with the document behind it. */
+/** Share the file to #launch, show the grant, and open the delivered file. */
 export function ChannelPermissionsDemo() {
   let root!: HTMLDivElement;
-  let shareTrigger: HTMLButtonElement | undefined;
+  let frame!: HTMLDivElement;
+  let form: DocumentShareHandle | undefined;
   const w = createChannelChecklist();
+  const initialMessages = structuredClone(
+    unwrap(w.data.channels.find((channel) => channel.id === 'launch')!.messages)
+  ).filter((message) => message.documentId !== 'plan');
+  w.setData(
+    'channels',
+    (channel) => channel.id === 'launch',
+    'messages',
+    initialMessages
+  );
   w.open('documents', 'plan');
   const [sharing, setSharing] = createSignal(false);
   const [manual, setManual] = createSignal(false);
+  const [channelMode, setChannelMode] = createSignal(false);
+  const [access, setAccess] = createSignal<ShareLevel>();
+  const [sharedMessageId, setSharedMessageId] = createSignal('');
+  const [target, setTarget] = createSignal<string>();
+  const [clicking, setClicking] = createSignal(false);
+  let shareCount = 0;
+  const message = 'Please check your items before tomorrow.';
+  const share = () => setSharing(true);
+  const deliver = (body: string, permission: ShareLevel) => {
+    setAccess(permission);
+    const id = `channel-file-share-${++shareCount}`;
+    setSharedMessageId(id);
+    w.setData(
+      'channels',
+      (channel) => channel.id === 'launch',
+      'messages',
+      (all) => [
+        ...all,
+        {
+          id,
+          person: 'jacob' as const,
+          time: '10:10 AM',
+          body,
+          documentId: 'plan',
+        },
+      ]
+    );
+  };
+  const openChannel = () => {
+    setSharing(false);
+    w.open('messages', 'launch');
+    w.setChannelThread(sharedMessageId());
+    setChannelMode(true);
+    if (manual())
+      queueMicrotask(() =>
+        root
+          .querySelector<HTMLButtonElement>(
+            `[data-thread-id="${sharedMessageId()}"] .sample-inline-reference`
+          )
+          ?.focus({ preventScroll: true })
+      );
+  };
+  const approach = (selector: string) => {
+    setClicking(false);
+    setTarget(selector);
+  };
+  const click = (action: () => void) => {
+    setClicking(true);
+    action();
+  };
+  const actions = [
+    { delay: 1200, run: () => approach('[data-document-share]') },
+    { delay: 650, run: () => click(share) },
+    { delay: 350, run: () => approach('[aria-label="Email or group"]') },
+    { delay: 650, run: () => click(() => {}) },
+    ...demoTypingActions(
+      'launch',
+      (text) => {
+        setClicking(false);
+        form?.typeRecipient(text);
+      },
+      250
+    ),
+    { delay: 500, run: () => approach('[data-share-channel-option]') },
+    { delay: 650, run: () => click(() => form?.selectChannel()) },
+    { delay: 350, run: () => approach('[aria-label="Optional message"]') },
+    { delay: 650, run: () => click(() => {}) },
+    ...demoTypingActions(
+      message,
+      (text) => {
+        setClicking(false);
+        form?.typeMessage(text);
+      },
+      250
+    ),
+    { delay: 700, run: () => approach('[data-share-submit]') },
+    { delay: 650, run: () => click(() => form?.share()) },
+    { delay: 1800, run: () => approach('[data-open-shared-channel]') },
+    { delay: 650, run: () => click(openChannel) },
+    {
+      delay: 1800,
+      run: () =>
+        approach(
+          `[data-thread-id="${sharedMessageId()}"] .sample-inline-reference`
+        ),
+    },
+    {
+      delay: 650,
+      run: () =>
+        click(() =>
+          root
+            .querySelector<HTMLButtonElement>(
+              `[data-thread-id="${sharedMessageId()}"] .sample-inline-reference`
+            )
+            ?.click()
+        ),
+    },
+    { delay: 400, run: () => setClicking(false) },
+  ];
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 1,
-    reset: () => {},
-    reduced: () => setSharing(true),
-    delay: () => 1200,
-    advance: () => setSharing(true),
+    steps: actions.length,
+    loop: { hold: 9000 },
+    reset: () => {
+      setSharing(false);
+      setChannelMode(false);
+      setAccess(undefined);
+      setTarget(undefined);
+      setClicking(false);
+      setManual(false);
+      setSharedMessageId('');
+      shareCount = 0;
+      form?.reset();
+      w.setData(
+        'channels',
+        (channel) => channel.id === 'launch',
+        'messages',
+        structuredClone(initialMessages)
+      );
+      w.setChannelThread(undefined);
+      w.open('documents', 'plan');
+    },
+    reduced: () => {
+      deliver(message, 'view');
+      openChannel();
+    },
+    delay: (step) => actions[step - 1].delay,
+    advance: (step) => actions[step - 1].run(),
+  });
+  const pointer = createDemoPointer({
+    frame: () => frame,
+    target,
+    active: () => !manual(),
   });
   return (
-    <div class="channel-permissions-demo">
+    <div ref={frame} class="channel-permissions-demo channel-demo-frame">
       <ProductDemo
         ref={(el) => (root = el)}
-        label="The document is shared with the channel"
+        label="Share a document with everyone in a channel"
         height={610}
         mobileHeight={660}
         onInteract={() => {
@@ -231,29 +340,59 @@ export function ChannelPermissionsDemo() {
           playback.pause();
         }}
       >
-        <WorkspaceDocuments
-          sharingDescription="Shared with #launch"
-          workspace={w}
-          onShare={() => {
-            shareTrigger = [
-              ...root.querySelectorAll<HTMLButtonElement>(
-                '[data-view-shell-top-bar] button'
-              ),
-            ].find((button) => button.textContent?.trim() === 'Share');
-            setSharing(true);
-          }}
-        />
+        <Show
+          when={channelMode()}
+          fallback={
+            <WorkspaceDocuments
+              sharingDescription={
+                access() ? 'Shared with #launch' : 'Only you have access'
+              }
+              workspace={w}
+              onShare={share}
+            />
+          }
+        >
+          <ChannelWorkSurface workspace={w} />
+        </Show>
         <DocumentShareSheet
           open={sharing()}
           autoFocus={manual()}
           title={w.data.documents.find((doc) => doc.id === 'plan')?.title ?? ''}
-          channel={{ members: LAUNCH_MEMBERS, level: 'view' }}
+          channel={
+            access()
+              ? {
+                  name: 'launch',
+                  members: LAUNCH_MEMBERS,
+                  level: access()!,
+                  fresh: !manual(),
+                }
+              : undefined
+          }
+          channelDestination="launch"
+          initialPermission="view"
+          onShareChannel={deliver}
+          onOpenChannel={openChannel}
+          onReady={(handle) => {
+            form = handle;
+          }}
           onClose={() => {
             setSharing(false);
-            shareTrigger?.focus({ preventScroll: true });
+            if (manual())
+              root
+                .querySelector<HTMLButtonElement>('[data-document-share]')
+                ?.focus({ preventScroll: true });
           }}
         />
       </ProductDemo>
+      <Show when={pointer()}>
+        {(point) => (
+          <DemoCursor
+            class="channel-demo-cursor"
+            clicking={clicking()}
+            style={{ transform: `translate(${point().x}px, ${point().y}px)` }}
+          />
+        )}
+      </Show>
     </div>
   );
 }
@@ -356,6 +495,8 @@ export function ChannelAgentDemo() {
   const [sessionOpen, setSessionOpen] = createSignal(false);
   let root!: HTMLDivElement;
   const w = createChannelProject();
+  const initialTasks = structuredClone(unwrap(w.data.tasks));
+  let resetSurface = () => {};
   const initial = [
     ...structuredClone(channelHistory.slice(10)),
     {
@@ -452,7 +593,17 @@ export function ChannelAgentDemo() {
     root: () => root,
     visibilityThreshold: 0.5,
     steps: 3,
-    reset: () => {},
+    loop: { hold: 8500 },
+    reset: () => {
+      resetSurface();
+      w.setData('tasks', structuredClone(initialTasks));
+      w.setData('channels', (channel) => channel.id === 'launch', 'messages', [
+        ...initial,
+      ]);
+      w.setChannelThread(undefined);
+      const log = root.querySelector('[role="log"]');
+      if (log) log.scrollTop = log.scrollHeight;
+    },
     reduced: () => {
       createFollowUp();
       bringCursor();
@@ -478,6 +629,9 @@ export function ChannelAgentDemo() {
         fallback={
           <ChannelWorkSurface
             workspace={w}
+            onReady={(reset) => {
+              resetSurface = reset;
+            }}
             renderMessageDetails={(message) =>
               message.id === 'cursor-finding' ? (
                 <DemoAgentChip

@@ -27,8 +27,20 @@ State ownership, reactivity, and async error handling.
   by oxlint `promise/prefer-await-to-then` — `bun run lint:oxlint` from the
   repository root.
 - **FE-13** Extract multi-step async coordination into named helper functions,
-  and make intentionally-unawaited promises explicit — no bare floating
-  promises.
+  and never leave a promise floating: `await` or `return` it, or start a
+  deliberate fire-and-forget with `fireAndForget(promise, surface)` from
+  `@core/util/fireAndForget`, which reports a rejection through
+  `Telemetry.error`. When a failure needs recovery (reset state, show the
+  feature's existing toast), catch it where the work starts instead. `void`
+  never marks a promise as handled, because whether a promise can reject isn't
+  visible in its type. Call the TanStack `QueryClient` methods that can't reject
+  without `throwOnError` (`cancelQueries`, `invalidateQueries`,
+  `refetchQueries`, `resetQueries`, `prefetchQuery`, `prefetchInfiniteQuery`)
+  bare. Enforced as errors by type-aware oxlint
+  `typescript/no-floating-promises` with `ignoreVoid: false` (`bun run
+  lint:oxlint` from the repository root, `just check`, and CI) and by the
+  ast-grep rule `ts-no-expression-void`, which bans `void` outside a statement
+  (`() => void p()`), where the lint can't see the promise.
 - **FE-14** Keep neverthrow `Result`/`ResultAsync` intact end-to-end — use the
   existing helpers (`ResultAsync`, `throwOnErr` in `queryFn`, `catchToResult`)
   instead of ad hoc `Promise <-> Result` conversions.
@@ -65,3 +77,21 @@ State ownership, reactivity, and async error handling.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".
+- **FE-58** A memo that builds an array or object must not recompute on
+  unrelated changes: read each input through its own memo first, so the result
+  keeps its identity while its contents do. A prop that looks like a plain
+  string often reaches you from an accessor that rereads the whole editor
+  state, and a fresh `options` array makes a Kobalte `Select` re-assert its
+  selection and call `onChange` again. Pair it with setters that write nothing
+  when nothing changed (`setReminderMinutes` and `setField` in
+  `create-calendar-event-form-controller.ts`): without both, the control's
+  answer edits the state that produced it and the loop only ends in a stack
+  overflow that takes the app down.
+- **FE-59** Browser callbacks (observers, timers, listeners) run without a
+  Solid owner: `onCleanup` there never runs, and computations created there,
+  including the memo behind a `cond && value` prop read, are never disposed.
+  Wait for an element to enter the document with `onElementConnect` from
+  `@core/util/onElementConnect`, which runs the callback under the caller's
+  owner, and register cleanup for setup-time resources (plugins, debounced
+  saves) at setup, not in that callback. Enforced by ast-grep
+  `ts-/tsx-no-ownerless-element-connect`, CI error.

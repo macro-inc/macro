@@ -4,7 +4,8 @@
  * while writing a new equation and while one is selected on the slide.
  */
 
-import X from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { onMount, Show } from 'solid-js';
 import type { EquationEditor as Editor } from '../primitives/create-equation-editor';
@@ -50,14 +51,14 @@ export function EquationEditorPanel(props: {
       eq.close();
     } else if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void eq.commit();
+      fireAndForget(eq.commit(), 'pptx-editor');
     }
   };
 
   return (
     <div
       ref={panel}
-      class="absolute top-2 left-1/2 z-20 flex w-[28rem] max-w-[calc(100%-1rem)] -translate-x-1/2 flex-col gap-1.5 rounded-xl border border-edge bg-menu p-2 text-ink shadow-xl"
+      class="menu-surface absolute top-2 left-1/2 z-20 flex w-[28rem] max-w-[calc(100%-1rem)] -translate-x-1/2 flex-col gap-1.5 p-2"
       data-testid="pptx-equation-editor"
       role="dialog"
       aria-label={isNew() ? 'New equation' : 'Edit equation'}
@@ -73,13 +74,14 @@ export function EquationEditorPanel(props: {
         </span>
         <span class="flex-1" />
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-xs"
           variant="ghost"
-          label="Close"
           data-testid="pptx-equation-close"
           onClick={() => eq.close()}
         >
-          <X />
+          <X class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <textarea
@@ -147,10 +149,10 @@ export function EquationEditorPanel(props: {
         <span class="flex-1" />
         <Button
           size="xs"
-          variant="cta"
+          variant="primary"
           data-testid="pptx-equation-insert"
           disabled={props.readonly || (isNew() && !eq.latex().trim())}
-          onClick={() => void eq.commit()}
+          onClick={() => fireAndForget(eq.commit(), 'pptx-editor')}
         >
           {isNew() ? 'Insert' : 'Done'}
         </Button>

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM whatsapp_inbound_event WHERE account_id = $1 AND (attempts >= $2 OR generation <> $3) RETURNING event_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5afaebdd06f66373d5badbf23038b6cf560869911933305cb7cba434e84f229a"
+}

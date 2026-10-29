@@ -41,11 +41,13 @@ import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
+  storeChatStateImmediate,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import {
   blockElementSignal,
@@ -53,8 +55,10 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
 import { createRenameDssEntityMutation } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -174,7 +178,7 @@ function ChatInner(props: {
   // Sync isGenerating from controller phase
   createEffect(() => {
     input.setIsGenerating(chat.isGenerating());
-    if (chat.isGenerating()) invalidateUserQuota();
+    if (chat.isGenerating()) fireAndForget(invalidateUserQuota(), 'chat-quota');
   });
 
   const blockHandle = blockHandleSignal.get;
@@ -238,7 +242,7 @@ function ChatInner(props: {
     }
 
     chat.dispatch({ type: 'stream_connected', stream: result.stream, owner });
-    invalidateUserQuota();
+    fireAndForget(invalidateUserQuota(), 'chat-quota');
   });
 
   const onStop = async () => {
@@ -259,14 +263,22 @@ function ChatInner(props: {
     const inputText = markdownText();
     const attached = input.attachments.attached();
     const model_ = input.model();
-    saveChatState({ attachments: attached, input: inputText, model: model_ });
+    const state = { attachments: attached, input: inputText, model: model_ };
+    // An empty composer is the sent state. Write it now and drop any
+    // debounced copy of the prompt, so a remount cannot put that prompt
+    // back in the box beside the message already in the transcript.
+    if (inputText.length === 0 && attached.length === 0) {
+      storeChatStateImmediate(props.data.chat.id, state);
+      return;
+    }
+    saveChatState(state);
   });
 
   const setPendingLocation = pendingLocationParamsSignal.set;
 
   createMethodRegistration(blockHandle, {
     sendMessage: async (sendRequest: SendBuilder) => {
-      onSend({
+      await onSend({
         content: sendRequest.userRequest,
         model: sendRequest.model ?? input.model(),
         attachments: sendRequest.attachments ?? [],
@@ -287,7 +299,9 @@ function ChatInner(props: {
       speed: pendingSend.speed,
       attachments: pendingSend.attachments ?? [],
       toolset: { type: 'all' },
-    });
+    }).catch((error) =>
+      Telemetry.error(error, { surface: 'chat-pending-send' })
+    );
   }
 
   registerScopeSignalHotkey(scopeId, {
@@ -307,7 +321,7 @@ function ChatInner(props: {
     description: 'Stop AI response',
     condition: () => chat.isGenerating(),
     keyDownHandler: () => {
-      void onStop();
+      fireAndForget(onStop(), 'chat-stop');
       return true;
     },
     hotkeyToken: TOKENS.chat.stop,
@@ -371,8 +385,12 @@ function ChatInner(props: {
         <FloatRegionOrInline region="accessory">
           {/* Same wrapper as the home composer, so the box is the same width
               and sits at the same offset whether a chat is being started or
-              continued. */}
-          <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+              continued. Inline on desktop it is the pane's last row, so the
+              corner prompt waits. */}
+          <div
+            class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0"
+            data-holds-prompts={isTouchDevice() ? undefined : ''}
+          >
             <ChatInput
               editor={editor}
               initialValue={props.loadedInputText}

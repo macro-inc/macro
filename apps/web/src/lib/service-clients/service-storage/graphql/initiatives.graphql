@@ -1,3 +1,30 @@
+# Chips and previews must not select counts, task ids, members, or sharing:
+# those fields check access to every task in the project.
+fragment InitiativeIdentityFields on GraphqlSoupInitiative {
+  __typename
+  id
+  displayName
+  viewerPermission {
+    __typename
+    ... on GraphqlAccessLevelPermission {
+      accessLevel
+    }
+  }
+}
+
+# Quick Access reads cached projects by key after a cache search hit. Select
+# only fields every initiative write includes (create and update replies carry
+# no viewedAt), so a new or renamed project stays complete.
+fragment InitiativeQuickAccessFields on GraphqlSoupInitiative {
+  __typename
+  displayName
+  metadata {
+    ownerId
+    createdAt
+    updatedAt
+  }
+}
+
 fragment InitiativeDetailFields on GraphqlSoupInitiative {
   __typename
   id
@@ -39,6 +66,15 @@ query Initiative($initiativeId: ID!) {
     id
     initiative(initiativeId: $initiativeId) {
       ...InitiativeDetailFields
+    }
+  }
+}
+
+query InitiativeIdentity($initiativeId: ID!) {
+  user {
+    id
+    initiative(initiativeId: $initiativeId) {
+      ...InitiativeIdentityFields
     }
   }
 }

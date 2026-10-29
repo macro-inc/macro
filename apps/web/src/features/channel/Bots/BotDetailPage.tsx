@@ -5,7 +5,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import {
   useBotChannelsQuery,
   useBotQuery,
@@ -13,10 +14,16 @@ import {
   useUpdateBotMutation,
 } from '@queries/bots/bots';
 import { useSyncBotChannelsMutation } from '@queries/channel/channel-bots';
-import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
+import {
+  useCurrentTeamQuery,
+  useIsTeamAdmin,
+  useIsTeamOwner,
+} from '@queries/team/teams';
 import { Button } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { useChatV3AgentsFlag } from '../use-chat-v3-agents-flag';
+import { BotAdvancedSection } from './BotAdvancedSection';
 import { BotAgentSection } from './BotAgentSection';
 import { BotAvatar } from './BotAvatar';
 import { BotDeleteDialog } from './BotDeleteDialog';
@@ -38,11 +45,13 @@ import { CreateBotTokenDialog } from './CreateBotTokenDialog';
 import { createBotAvatarUpload } from './createBotAvatarUpload';
 
 export function BotDetail(props: { botId: string; onBack: () => void }) {
+  const agentsEnabled = useChatV3AgentsFlag();
   const agentDm = ENABLE_AGENT_DMS ? useOpenAgentDm() : undefined;
   const channelsContext = useChannelsContext();
   const currentUserId = useUserId();
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamOwner = useIsTeamOwner();
+  const isTeamAdmin = useIsTeamAdmin();
   const botQuery = useBotQuery(() => props.botId);
   const botChannelsQuery = useBotChannelsQuery(() => props.botId);
   const updateBotMutation = useUpdateBotMutation();
@@ -118,7 +127,8 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
         bot,
         currentUserId(),
         currentTeamQuery.data?.team.id,
-        isTeamOwner()
+        isTeamOwner(),
+        isTeamAdmin()
       )
     );
   };
@@ -206,7 +216,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
             disabled={pending()}
             onClick={leave}
           >
-            <CaretLeftIcon />
+            <CaretLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Back to bots
           </Button>
           <Show
@@ -222,7 +232,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                 class="flex flex-col gap-5"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void save();
+                  fireAndForget(save(), 'channel-bots');
                 }}
               >
                 <header class="flex items-center gap-3">
@@ -255,10 +265,15 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       class="ml-auto"
                       disabled={agentDm?.pending()}
-                      onClick={() => void agentDm?.open(props.botId)}
+                      onClick={() =>
+                        fireAndForget(
+                          agentDm?.open(props.botId),
+                          'channel-bots'
+                        )
+                      }
                     >
                       Message
                     </Button>
@@ -295,12 +310,6 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                   />
                 </BotFormSection>
 
-                <BotAgentSection
-                  checked={form.hasAgent}
-                  disabled={saving()}
-                  onChange={(checked) => setForm('hasAgent', checked)}
-                />
-
                 <BotFormSection
                   title="Channels"
                   description="Choose every channel this bot can post to."
@@ -320,6 +329,16 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                   channels={assignedChannels()}
                   onNewToken={() => setTokenOpen(true)}
                 />
+
+                <Show when={agentsEnabled()}>
+                  <BotAdvancedSection>
+                    <BotAgentSection
+                      checked={form.hasAgent}
+                      disabled={saving()}
+                      onChange={(checked) => setForm('hasAgent', checked)}
+                    />
+                  </BotAdvancedSection>
+                </Show>
 
                 <BotDetailActions
                   canDelete={canDelete()}
@@ -346,7 +365,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
         botName={botQuery.data?.name}
         pending={deleteBotMutation.isPending}
         onClose={() => setDeleteOpen(false)}
-        onConfirm={() => void deleteBot()}
+        onConfirm={() => fireAndForget(deleteBot(), 'channel-bots')}
       />
     </>
   );

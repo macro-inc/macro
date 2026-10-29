@@ -4,7 +4,8 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
-import CircleIcon from '@phosphor/circle.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CircleIcon from '@icon/system/regular/circle.svg';
 import { Property as PropertyUI } from '@property';
 import { Modals } from '@property/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -75,7 +76,11 @@ export function TaskPropertiesPreviewProvider(props: {
                 properties: () => metadata().properties ?? [],
                 isLoading: () => metadata().properties === undefined,
                 canEdit: () => metadata().canEdit,
-                refetch: () => void metadata().refetch(),
+                refetch: () =>
+                  fireAndForget(
+                    metadata().refetch(),
+                    'task-properties-preview'
+                  ),
               }}
             >
               {props.children}
@@ -194,6 +199,7 @@ function TaskPropertiesPreviewContent(
             when={props.isLoading}
             fallback={
               <CircleIcon
+                aria-hidden={false}
                 class="size-4 text-ink-muted"
                 role="img"
                 aria-label="Task status unavailable"

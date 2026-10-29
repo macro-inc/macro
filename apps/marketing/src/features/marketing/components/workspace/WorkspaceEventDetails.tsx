@@ -84,8 +84,8 @@ export function WorkspaceEventDetails(props: {
               <Calendar />
               <span>
                 {props.event.calendar === 'personal'
-                  ? 'jacob.beckerman@gmail.com'
-                  : 'jacob@macro.com'}
+                  ? 'jacob.beckerman@coparse.com'
+                  : 'jacob@coparse.com'}
               </span>
             </div>
             <div class="sample-event-detail-row">

@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import FileArrowUp from '@phosphor-icons/core/regular/file-arrow-up.svg';
+import FileArrowUp from '@icon/system/regular/file-arrow-up.svg';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

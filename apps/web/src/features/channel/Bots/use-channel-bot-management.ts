@@ -9,9 +9,10 @@ import { botManagement } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelType } from '@core/context/channels';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import CopyIcon from '@phosphor/copy.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { createSignal, onCleanup } from 'solid-js';
 
@@ -95,7 +96,7 @@ export function useChannelBotManagement(
     displayPriority: 8,
     condition: enabled,
     keyDownHandler: () => {
-      void copyWebhookUrl();
+      fireAndForget(copyWebhookUrl(), 'channel-bots');
       return true;
     },
   }).withGroup(commandGroup);

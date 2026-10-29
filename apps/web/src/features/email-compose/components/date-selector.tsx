@@ -1,11 +1,12 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createTimeOptions } from '@core/util/dateSearch/timeOptions';
+import { fireAndForget } from '@core/util/fireAndForget';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils/focus';
 import { Hotkey, highlightFirstMenuItemOnOpen, Surface } from '@ui';
 import {
@@ -158,7 +159,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       : undefined;
     if (preset) {
       e.preventDefault();
-      void onChange({ type: 'option', ...preset });
+      fireAndForget(onChange({ type: 'option', ...preset }), 'email-compose');
       return;
     }
 
@@ -173,7 +174,7 @@ export const DateSelector = (props: DateSelectorProps) => {
           return;
         }
         e.preventDefault();
-        void onChange(null);
+        fireAndForget(onChange(null), 'email-compose');
 
         break;
       }
@@ -284,10 +285,13 @@ export const DateSelector = (props: DateSelectorProps) => {
     if (!value || !value.trim().length) {
       const currentDate = selectedDate() ?? new Date();
 
-      void onChange({
-        type: 'custom',
-        date: startOfDay(currentDate),
-      });
+      fireAndForget(
+        onChange({
+          type: 'custom',
+          date: startOfDay(currentDate),
+        }),
+        'email-compose'
+      );
       return;
     }
 
@@ -304,7 +308,10 @@ export const DateSelector = (props: DateSelectorProps) => {
     currentDate = setHours(currentDate, Number(hours));
     currentDate = setMinutes(currentDate, Number(mins));
 
-    void onChange({ type: 'custom', date: currentDate });
+    fireAndForget(
+      onChange({ type: 'custom', date: currentDate }),
+      'email-compose'
+    );
   };
 
   return (
@@ -350,7 +357,7 @@ export const DateSelector = (props: DateSelectorProps) => {
 
       <DateSelectorPortalWrapper disabled={props.disablePortal}>
         <Combobox.Content
-          class="rounded-xl size-auto z-action-menu menu-open-animation glass w-full max-w-76 text-ink bg-menu-glass"
+          class="menu-surface size-auto z-action-menu menu-open-animation w-full max-w-76"
           as={Surface}
           depth={3}
           on:keydown={handleKeyDown}
@@ -364,7 +371,10 @@ export const DateSelector = (props: DateSelectorProps) => {
             disableAfterDate={props.disableAfterDate}
             mode={mode()}
             onSelectDate={(date) => {
-              void onChange({ type: 'custom', date });
+              fireAndForget(
+                onChange({ type: 'custom', date }),
+                'email-compose'
+              );
             }}
           >
             <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
@@ -399,7 +409,7 @@ export const DateSelector = (props: DateSelectorProps) => {
                     showValue={props.showCurrentValue !== false}
                     clearable={props.clearable !== false}
                     onClear={() => {
-                      void onChange(null);
+                      fireAndForget(onChange(null), 'email-compose');
                     }}
                   />
                 )}

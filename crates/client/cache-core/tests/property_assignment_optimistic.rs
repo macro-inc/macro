@@ -406,3 +406,78 @@ fn later_edit_rebases_over_new_server_id_without_duplicate_properties() {
         assert_eq!(properties(&data)[0]["value"]["optionIds"], json!(["low"]));
     });
 }
+
+#[test]
+fn skipped_uncached_query_links_keep_the_recovery_query_after_commit() {
+    block_on(async {
+        for cache_user in [false, true] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            if cache_user {
+                engine
+                    .write_query(
+                        None,
+                        "query { user { id } }",
+                        None,
+                        &serde_json::Map::new(),
+                        &json!({"user":{"id":"user-1"}}),
+                        None,
+                    )
+                    .await
+                    .unwrap();
+            }
+            let recovery = QueryRevalidation {
+                query: "query { user { emailThread { messages { id } } } }".into(),
+                operation_name: None,
+                variables_json: "{}".into(),
+                only_on_link_failure: true,
+            };
+            let recipe = OptimisticLinkPatch {
+                query: recovery.query.clone(),
+                record_root: None,
+                operation_name: None,
+                variables_json: "{}".into(),
+                path: ["user", "emailThread", "messages"]
+                    .into_iter()
+                    .map(|field| LinkPathSegment::Field {
+                        field: field.into(),
+                    })
+                    .collect(),
+                operation: LinkOperation::Remove {
+                    entity_key: EntityKey("GraphqlSoupEmailMessage:draft".into()),
+                },
+            };
+            let txn = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        client_metadata: None,
+                        identity_bindings: &[],
+                        uuid: UUID,
+                        query: MUTATION,
+                        operation_name: Some("Set"),
+                        variables: &variables(),
+                        data: &response("temporary-1", "urgent"),
+                        link_patches: &[recipe],
+                        revalidations: std::slice::from_ref(&recovery),
+                        created_at_ms: 1,
+                    },
+                )
+                .await
+                .unwrap()
+                .0;
+            let token = claim(&mut engine, 2).await;
+            let committed = engine
+                .commit_optimistic_write(
+                    txn,
+                    token,
+                    MUTATION,
+                    Some("Set"),
+                    &variables(),
+                    &response("server-1", "urgent"),
+                )
+                .await
+                .unwrap();
+            assert!(committed.revalidations.contains(&recovery));
+        }
+    });
+}

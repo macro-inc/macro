@@ -33,8 +33,8 @@ vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: host.openSettings }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
-vi.mock('./primitives/promotion', () => ({
-  hideSlackImportPromotion: host.hidePromotion,
+vi.mock('@app/features/connector-import/primitives/promotion', () => ({
+  hideImportPromotion: host.hidePromotion,
 }));
 vi.mock('@core/pipedream/flag', () => ({
   usePipedreamMcpFlag: () => () => true,
@@ -108,7 +108,7 @@ describe('Slack import production boundary', () => {
       'slack_v2',
       'import-slack-channels'
     );
-    expect(host.openSettings).toHaveBeenCalledWith('Connections');
+    expect(host.openSettings).toHaveBeenCalledWith('Connected');
   });
 
   it.each([
@@ -156,7 +156,7 @@ describe('Slack import production boundary', () => {
     await expect(
       host.props!.onCompleted(importReceipt({ status: 'completed' }))
     ).rejects.toThrow('Refresh failed');
-    expect(host.hidePromotion).toHaveBeenCalledWith('me', 'team');
+    expect(host.hidePromotion).toHaveBeenCalledWith('me', 'channels');
   });
 
   it('hides after a partial import with a completed channel', async () => {
@@ -167,6 +167,6 @@ describe('Slack import production boundary', () => {
       ...job,
       conversations: [{ ...job.conversations[0], status: 'completed' }],
     });
-    expect(host.hidePromotion).toHaveBeenCalledWith('me', 'team');
+    expect(host.hidePromotion).toHaveBeenCalledWith('me', 'channels');
   });
 });

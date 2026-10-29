@@ -1,11 +1,11 @@
-//! `Build Agent Daemon on Tag` — self-contained `macrod` binaries for Linux
-//! and macOS, attached to the release its tag names.
+//! `Build Agent Daemon on Tag` — self-contained `macrod` binaries for Linux,
+//! macOS, and Windows, attached to the release its tag names.
 //!
 //! Unlike everything else this repo builds, the daemon runs on a machine we
 //! know nothing about: a self-hoster points it at their own checkout and their
 //! own agent harness. So the Linux builds are musl-static (there is no host
-//! libc to match) and the macOS builds link nothing outside the OS. Neither is
-//! taken on faith — `package_agent_daemon.sh` inspects each binary and refuses
+//! libc to match), and the macOS and Windows builds link nothing outside the
+//! OS. None of that is taken on faith — `package_agent_daemon.sh` inspects each binary and refuses
 //! to package one that would reach for something that will not be there.
 //!
 //! Separate from [`super::build_desktop_on_tag`] on purpose. It publishes to
@@ -69,6 +69,21 @@ const MACOS_TARGETS: &[DaemonTarget] = &[
     },
 ];
 
+/// Built natively with MSVC: a cross-compile cannot link against the Windows
+/// SDK import libraries, and this runner can smoke-run what it builds.
+const WINDOWS_TARGETS: &[DaemonTarget] = &[DaemonTarget {
+    triple: "x86_64-pc-windows-msvc",
+    slug: "windows-x86_64",
+    smoke_run: true,
+}];
+
+fn all_targets() -> impl Iterator<Item = &'static DaemonTarget> {
+    LINUX_TARGETS
+        .iter()
+        .chain(MACOS_TARGETS)
+        .chain(WINDOWS_TARGETS)
+}
+
 /// Build the workflow.
 pub fn build_agent_daemon_on_tag() -> Workflow {
     let mut workflow = Workflow::new("Build Agent Daemon on Tag")
@@ -87,13 +102,16 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
     for target in MACOS_TARGETS {
         workflow = workflow.add_job(job_id(target), macos_job(target).add_needs("resolve-ref"));
     }
+    for target in WINDOWS_TARGETS {
+        workflow = workflow.add_job(job_id(target), windows_job(target).add_needs("resolve-ref"));
+    }
 
     let mut publish = build_appimage_on_tag::publish_job(
         RESOLVED_REF,
         xtask_paths::runtime_path!("release-artifacts/*"),
     )
     .add_needs("resolve-ref");
-    for target in LINUX_TARGETS.iter().chain(MACOS_TARGETS) {
+    for target in all_targets() {
         publish = publish.add_needs(job_id(target));
     }
     // A failed platform must not prevent successful platform artifacts from
@@ -104,9 +122,7 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
 }
 
 fn publish_when_any_build_succeeded() -> String {
-    let any_build = LINUX_TARGETS
-        .iter()
-        .chain(MACOS_TARGETS)
+    let any_build = all_targets()
         .map(|target| format!("needs.{}.result == 'success'", job_id(target)))
         .collect::<Vec<_>>()
         .join(" || ");
@@ -199,6 +215,25 @@ fn macos_job(target: &DaemonTarget) -> Job {
         .add_step(
             Step::new("Build daemon")
                 .run(include_str!("scripts/build_agent_daemon_macos.sh"))
+                .shell("bash")
+                .add_env(("TARGET", target.triple)),
+        )
+        .add_step(package_step(target))
+        .add_step(upload_step(target))
+}
+
+/// The runner's own Visual Studio toolchain links the binary; the build
+/// script makes it independent of the Visual C++ redistributable.
+fn windows_job(target: &DaemonTarget) -> Job {
+    Job::default()
+        .name(format!("Build daemon ({})", target.slug))
+        .runs_on(runners::Runner::Windows.to_string())
+        .add_step(steps::checkout_ref(RESOLVED_REF))
+        .add_step(steps::setup_rust_light())
+        .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
+        .add_step(
+            Step::new("Build daemon")
+                .run(include_str!("scripts/build_agent_daemon_windows.sh"))
                 .shell("bash")
                 .add_env(("TARGET", target.triple)),
         )

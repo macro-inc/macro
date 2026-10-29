@@ -9,8 +9,8 @@ import {
   MENU_ITEM_CLASS,
   MenuSeparator,
 } from '@core/component/ContextMenu';
+import Check from '@icon/system/regular/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import Check from '@phosphor/check.svg';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import {

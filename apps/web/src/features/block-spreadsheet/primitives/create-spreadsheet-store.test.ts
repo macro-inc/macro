@@ -731,4 +731,59 @@ describe('spreadsheet store', () => {
     dispose();
     doc.free();
   });
+
+  it('grows a table with a value typed beside it in one undo step', async () => {
+    const doc = new LoroDoc();
+    writeSpreadsheetCells(doc, {
+      A1: { value: 'Item' },
+      B1: { value: 'Qty' },
+      A2: { value: 'Pens' },
+      B2: { value: '2' },
+    });
+    let dispose = () => {};
+    const store = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createSpreadsheetStore({
+        canEdit: () => true,
+        source: {
+          doc: () => doc,
+          ready: () => true,
+          error: () => undefined,
+          status: () => 'local',
+          peers: () => [],
+          setSelection: () => {},
+        },
+      });
+    });
+    await Promise.resolve();
+    store.editSheets([
+      {
+        sheetId: DEFAULT_SHEET_ID,
+        edits: {},
+        metadata: {
+          tables: [
+            {
+              name: 'Sales',
+              range: 'A1:B2',
+              totalsRow: false,
+              bandedRows: true,
+            },
+          ],
+        },
+      },
+    ]);
+    store.setCells({ C2: { value: 'blue' } });
+    expect(store.cells().C1.value).toBe('Column3');
+    expect(store.activeSheet().metadata?.tables?.[0].range).toBe('A1:C2');
+    store.setCells({ A3: { value: 'Ink' } });
+    expect(store.activeSheet().metadata?.tables?.[0].range).toBe('A1:C3');
+    store.undo();
+    expect(store.cells().A3).toBeUndefined();
+    expect(store.activeSheet().metadata?.tables?.[0].range).toBe('A1:C2');
+    store.undo();
+    expect(store.cells().C1).toBeUndefined();
+    expect(store.activeSheet().metadata?.tables?.[0].range).toBe('A1:B2');
+    dispose();
+    doc.free();
+  });
 });

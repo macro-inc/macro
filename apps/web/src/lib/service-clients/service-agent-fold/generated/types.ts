@@ -213,6 +213,24 @@ export type ControlOutcome =
       message: string;
     };
 
+/**  Overall review decision. */
+export type DecisionOutcome =
+  /**  All selected actions were approved. */
+  | 'approved'
+  /**  All selected items were dismissed. */
+  | 'dismissed'
+  /**  The batch contains mixed or unconfirmed results. */
+  | 'partial';
+
+/**  Surface of a review decision. */
+export type DecisionVia =
+  /**  Review card. */
+  | 'card'
+  /**  Owner request in chat. */
+  | 'chat'
+  /**  Inbox action. */
+  | 'inbox';
+
 /**  One choice in a select. */
 export type ElicitationOption = {
   /**  The value sent back when chosen. */
@@ -484,7 +502,12 @@ export type FailureNoticeKind =
    */
   | 'provider_usage_limit'
   /**  The selected model cannot read image attachments in this conversation. */
-  | 'unsupported_image_input';
+  | 'unsupported_image_input'
+  /**
+   *  The provider ended the run in failure; its own page for the run is
+   *  where any detail it kept lives.
+   */
+  | 'provider_run_failed';
 
 /**  A file modification a tool reported. */
 export type FileDiff = {
@@ -496,7 +519,7 @@ export type FileDiff = {
   newText: string;
 };
 
-/**  One renderable message, scoped to its agent session for the browser. */
+/**  One renderable message, scoped to its agent session for its reader. */
 export type FoldedMessage = {
   /**  Session that scopes this message id. */
   agentSessionId: string;
@@ -546,30 +569,74 @@ export type FoldedMessage = {
  *  outright.
  */
 export type FoldedStreamEvent =
+  | FoldedStreamEvent_Serialize
+  | FoldedStreamEvent_Deserialize;
+
+/**
+ *  One change a pushed frame implied.
+ *
+ *  Payloads are carried whole rather than as deltas: a reader replaces the
+ *  message under the same session, turn, and author, or replaces its metadata
+ *  outright.
+ */
+export type FoldedStreamEvent_Deserialize =
   /**  A message derived for the first time. */
-  | {
+  | ({
       kind: 'new';
       /**  The message as it now stands. */
       message: FoldedMessage;
-    }
+    } & { messages?: never; metadata?: never })
   /**  A previously reported message, changed. */
-  | {
+  | ({
       kind: 'update';
       /**  The message as it now stands. */
       message: FoldedMessage;
-    }
+    } & { messages?: never; metadata?: never })
   /**  Replace all messages for this session, including removal of old rows. */
-  | {
+  | ({
       kind: 'replace';
       /**  The complete committed conversation. */
       messages: FoldedMessage[];
-    }
+    } & { message?: never; metadata?: never })
   /**  The session's metadata changed; here it is in full. */
-  | {
+  | ({
       kind: 'metadata';
       /**  The metadata as it now stands. */
-      metadata: SessionMetadata;
-    };
+      metadata: SessionMetadata_Deserialize;
+    } & { message?: never; messages?: never });
+
+/**
+ *  One change a pushed frame implied.
+ *
+ *  Payloads are carried whole rather than as deltas: a reader replaces the
+ *  message under the same session, turn, and author, or replaces its metadata
+ *  outright.
+ */
+export type FoldedStreamEvent_Serialize =
+  /**  A message derived for the first time. */
+  | ({
+      kind: 'new';
+      /**  The message as it now stands. */
+      message: FoldedMessage;
+    } & { messages?: never; metadata?: never })
+  /**  A previously reported message, changed. */
+  | ({
+      kind: 'update';
+      /**  The message as it now stands. */
+      message: FoldedMessage;
+    } & { messages?: never; metadata?: never })
+  /**  Replace all messages for this session, including removal of old rows. */
+  | ({
+      kind: 'replace';
+      /**  The complete committed conversation. */
+      messages: FoldedMessage[];
+    } & { message?: never; metadata?: never })
+  /**  The session's metadata changed; here it is in full. */
+  | ({
+      kind: 'metadata';
+      /**  The metadata as it now stands. */
+      metadata: SessionMetadata_Serialize;
+    } & { message?: never; messages?: never });
 
 /**
  *  Which ACP agent produced a session's log.
@@ -602,6 +669,168 @@ export type Harness =
   /**  OpenClaw. */
   | 'open_claw'
   /**  Not announced, or an agent this fold does not know. */
+  | 'unknown';
+
+/**  One object an import report calls out. */
+export type ImportItem = ImportItem_Serialize | ImportItem_Deserialize;
+
+/**  One object an import report calls out. */
+export type ImportItem_Deserialize = {
+  /**  The object's title. */
+  title: string;
+  /**  Its URL in the source workspace. */
+  url: string | null;
+  /**  Why it is called out. */
+  reason: string | null;
+};
+
+/**  One object an import report calls out. */
+export type ImportItem_Serialize = {
+  /**  The object's title. */
+  title: string;
+  /**  Its URL in the source workspace. */
+  url?: string | null;
+  /**  Why it is called out. */
+  reason?: string | null;
+};
+
+/**  How an approved import's write ended. */
+export type ImportOutcome =
+  /**  Every planned object was written or accounted for. */
+  | 'completed'
+  /**  The write stopped on an error. */
+  | 'failed'
+  /**  The owner cancelled it. */
+  | 'cancelled';
+
+/**  What an import plan proposes, once it is ready to approve. */
+export type ImportPlan = {
+  /**  The workspace the import reads. */
+  source?: ImportWorkspace;
+  /**  Objects to copy as they are; projects for Linear and Jira. */
+  copy: number;
+  /**  Data sources whose rows become tasks; issues for Linear and Jira. */
+  taskLists: number;
+  /**  Objects to leave in the source workspace. */
+  skipped: number;
+  /**  Objects that need handling by hand. */
+  byHand: number;
+};
+
+/**  The final report of an approved workspace import, with no page content. */
+export type ImportSettlement =
+  | ImportSettlement_Serialize
+  | ImportSettlement_Deserialize;
+
+/**  The final report of an approved workspace import, with no page content. */
+export type ImportSettlement_Deserialize = {
+  /**  The workspace the import read. */
+  source?: ImportWorkspace;
+  /**  How the write ended. */
+  outcome: ImportOutcome;
+  /**  Why it failed, or what went wrong in a completed write. */
+  error: string | null;
+  /**  Objects written into Macro. */
+  imported: number;
+  /**
+   *  Objects the plan copies: as they are or as task lists from Notion,
+   *  projects and issues from Linear or Jira.
+   */
+  planned: number;
+  /**  Planned documents. */
+  documents: number;
+  /**  Planned databases. */
+  databases: number;
+  /**  Rows those databases hold. */
+  databaseRows: number;
+  /**  Planned task lists; issues that become tasks for Linear and Jira. */
+  taskLists: number;
+  /**  Tasks those task lists or issues become. */
+  taskRows: number;
+  /**  Objects left in the source workspace. */
+  skipped: number;
+  /**  Planned objects that were not written. */
+  notWritten: number;
+  /**  Written objects shared with the owner's team. */
+  sharedWithTeam: number;
+  /**  Objects teammates had already imported, linked instead of copied. */
+  alreadyInMacro: number;
+  /**  Objects a teammate is writing at the same time, linked once written. */
+  waitingOnTeammates: number;
+  /**  The Macro folder the import writes into. */
+  rootFolderId: string | null;
+  /**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
+  failures: ImportItem_Deserialize[];
+  /**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
+  handItems: ImportItem_Deserialize[];
+};
+
+/**  The final report of an approved workspace import, with no page content. */
+export type ImportSettlement_Serialize = {
+  /**  The workspace the import read. */
+  source: ImportWorkspace;
+  /**  How the write ended. */
+  outcome: ImportOutcome;
+  /**  Why it failed, or what went wrong in a completed write. */
+  error?: string | null;
+  /**  Objects written into Macro. */
+  imported: number;
+  /**
+   *  Objects the plan copies: as they are or as task lists from Notion,
+   *  projects and issues from Linear or Jira.
+   */
+  planned: number;
+  /**  Planned documents. */
+  documents: number;
+  /**  Planned databases. */
+  databases: number;
+  /**  Rows those databases hold. */
+  databaseRows: number;
+  /**  Planned task lists; issues that become tasks for Linear and Jira. */
+  taskLists: number;
+  /**  Tasks those task lists or issues become. */
+  taskRows: number;
+  /**  Objects left in the source workspace. */
+  skipped: number;
+  /**  Planned objects that were not written. */
+  notWritten: number;
+  /**  Written objects shared with the owner's team. */
+  sharedWithTeam: number;
+  /**  Objects teammates had already imported, linked instead of copied. */
+  alreadyInMacro: number;
+  /**  Objects a teammate is writing at the same time, linked once written. */
+  waitingOnTeammates: number;
+  /**  The Macro folder the import writes into. */
+  rootFolderId?: string | null;
+  /**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
+  failures: ImportItem_Serialize[];
+  /**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
+  handItems: ImportItem_Serialize[];
+};
+
+/**
+ *  The workspace an import reads. Events stored before Linear and Jira
+ *  imports existed are Notion's.
+ */
+export type ImportWorkspace =
+  /**  Notion pages and databases. */
+  | 'notion'
+  /**  Linear projects and issues. */
+  | 'linear'
+  /**  Jira projects, epics and issues. */
+  | 'jira';
+
+/**  Review item state, shared with notification consumers. */
+export type ItemStatus =
+  /**  Still awaiting a decision. */
+  | 'pending'
+  /**  Claimed for execution. */
+  | 'submitting'
+  /**  Confirmed complete. */
+  | 'completed'
+  /**  Dismissed by the owner. */
+  | 'dismissed'
+  /**  Outcome requires reconciliation. */
   | 'unknown';
 
 /**  A unit of renderable content. */
@@ -707,6 +936,24 @@ export type MessagePart =
       entries: PlanEntry[];
     }
   /**
+   *  A background task the harness reported on: a command, subagent or
+   *  monitor it started earlier finished or emitted an event. The harness
+   *  hands the agent this report as a user turn; it is shown as a system
+   *  fact, never as something a person said.
+   */
+  | {
+      kind: 'task_notification';
+      /**  Where the task ended up; absent for a monitor's mid-stream event. */
+      status: TaskStatus | null;
+      /**
+       *  The harness's one-line account, such as `Background command
+       *  "Run tests" completed (exit code 0)`.
+       */
+      summary: string;
+      /**  The line a monitor streamed, for a monitor event. */
+      event: string | null;
+    }
+  /**
    *  The agent asking the user a question.
    *
    *  When the question was asked on behalf of a tool call this fold had
@@ -768,6 +1015,45 @@ export type ModelOption = {
    */
   group: string | null;
 };
+
+/**  Supported event contracts. Add new kinds here rather than inventing prompts. */
+export type NotificationEvent =
+  | NotificationEvent_Serialize
+  | NotificationEvent_Deserialize;
+
+/**  Supported event contracts. Add new kinds here rather than inventing prompts. */
+export type NotificationEvent_Deserialize =
+  /**  Owner decision and its confirmed results. */
+  | { kind: 'review.decided'; payload: ReviewOutcome_Deserialize }
+  /**  Completion of work initiated by a prior review decision. */
+  | { kind: 'review.settled'; payload: ReviewSettlement_Deserialize }
+  /**  The import plan a presented review shows finished planning. */
+  | { kind: 'import.planned'; payload: ImportPlan }
+  /**  An app connection became available to the session. */
+  | {
+      kind: 'app.connected';
+      payload: {
+        /**  Connected application's display name. */
+        app: string;
+      };
+    };
+
+/**  Supported event contracts. Add new kinds here rather than inventing prompts. */
+export type NotificationEvent_Serialize =
+  /**  Owner decision and its confirmed results. */
+  | { kind: 'review.decided'; payload: ReviewOutcome_Serialize }
+  /**  Completion of work initiated by a prior review decision. */
+  | { kind: 'review.settled'; payload: ReviewSettlement_Serialize }
+  /**  The import plan a presented review shows finished planning. */
+  | { kind: 'import.planned'; payload: ImportPlan }
+  /**  An app connection became available to the session. */
+  | {
+      kind: 'app.connected';
+      payload: {
+        /**  Connected application's display name. */
+        app: string;
+      };
+    };
 
 /**
  *  The one elicitation the user can answer right now, surfaced on
@@ -928,6 +1214,96 @@ export type PlanEntryStatus =
   /**  Successfully completed. */
   | 'completed';
 
+/**  One reviewed action's outcome. */
+export type ReviewItemOutcome =
+  | ReviewItemOutcome_Serialize
+  | ReviewItemOutcome_Deserialize;
+
+/**  One reviewed action's outcome. */
+export type ReviewItemOutcome_Deserialize = {
+  /**  Stable item identity. */
+  id: string;
+  /**  Confirmed state. */
+  status: ItemStatus;
+  /**  Whether the owner changed its draft before deciding. */
+  edited: boolean;
+  /**  Failure detail when work could not be confirmed. */
+  error: string | null;
+};
+
+/**  One reviewed action's outcome. */
+export type ReviewItemOutcome_Serialize = {
+  /**  Stable item identity. */
+  id: string;
+  /**  Confirmed state. */
+  status: ItemStatus;
+  /**  Whether the owner changed its draft before deciding. */
+  edited: boolean;
+  /**  Failure detail when work could not be confirmed. */
+  error?: string | null;
+};
+
+/**  The result of a review batch, with no draft content. */
+export type ReviewOutcome = ReviewOutcome_Serialize | ReviewOutcome_Deserialize;
+
+/**  The result of a review batch, with no draft content. */
+export type ReviewOutcome_Deserialize = {
+  /**  Overall result. */
+  outcome: DecisionOutcome;
+  /**  Authenticated owner who made the decision. */
+  by: string;
+  /**  Surface through which the owner acted. */
+  via: DecisionVia;
+  /**  Exact affected items and their final states. */
+  items: ReviewItemOutcome_Deserialize[];
+};
+
+/**  The result of a review batch, with no draft content. */
+export type ReviewOutcome_Serialize = {
+  /**  Overall result. */
+  outcome: DecisionOutcome;
+  /**  Authenticated owner who made the decision. */
+  by: string;
+  /**  Surface through which the owner acted. */
+  via: DecisionVia;
+  /**  Exact affected items and their final states. */
+  items: ReviewItemOutcome_Serialize[];
+};
+
+/**
+ *  How the work a review decision started ended. Untagged so settlements
+ *  stored before imports existed, bare [`ReviewOutcome`]s, still read.
+ */
+export type ReviewSettlement =
+  | ReviewSettlement_Serialize
+  | ReviewSettlement_Deserialize;
+
+/**
+ *  How the work a review decision started ended. Untagged so settlements
+ *  stored before imports existed, bare [`ReviewOutcome`]s, still read.
+ */
+export type ReviewSettlement_Deserialize =
+  /**  An approved import's background write ended. */
+  | {
+      /**  The import's final report. */
+      import: ImportSettlement_Deserialize;
+    }
+  /**  The decided actions' confirmed results. */
+  | ReviewOutcome_Deserialize;
+
+/**
+ *  How the work a review decision started ended. Untagged so settlements
+ *  stored before imports existed, bare [`ReviewOutcome`]s, still read.
+ */
+export type ReviewSettlement_Serialize =
+  /**  An approved import's background write ended. */
+  | {
+      /**  The import's final report. */
+      import: ImportSettlement_Serialize;
+    }
+  /**  The decided actions' confirmed results. */
+  | ReviewOutcome_Serialize;
+
 /**  A run of a reply's parts that reads as one unit. */
 export type Segment = {
   /**  Position among the reply's segments, from zero. */
@@ -1003,7 +1379,21 @@ export type SessionConfigSelectOption = {
  *
  *  `PartialEq` only: a pending form's numeric bounds are `f64`.
  */
-export type SessionMetadata = {
+export type SessionMetadata =
+  | SessionMetadata_Serialize
+  | SessionMetadata_Deserialize;
+
+/**
+ *  Session-level state derived from the log, latest-wins and carried whole.
+ *  Fields start absent and fill in as the log reveals them.
+ *
+ *  `PartialEq` only: a pending form's numeric bounds are `f64`.
+ */
+export type SessionMetadata_Deserialize = {
+  /**  System events, projected independently of the conversation messages. */
+  notifications: SessionNotification_Deserialize[];
+  /**  The last notification turn whose entire answer was suppressed. */
+  noopTurn: number | null;
   /**  The agent that produced the log. See [`Harness`]. */
   harness: Harness;
   /**
@@ -1044,6 +1434,95 @@ export type SessionMetadata = {
    */
   turn: TurnState;
 };
+
+/**
+ *  Session-level state derived from the log, latest-wins and carried whole.
+ *  Fields start absent and fill in as the log reveals them.
+ *
+ *  `PartialEq` only: a pending form's numeric bounds are `f64`.
+ */
+export type SessionMetadata_Serialize = {
+  /**  System events, projected independently of the conversation messages. */
+  notifications: SessionNotification_Serialize[];
+  /**  The last notification turn whose entire answer was suppressed. */
+  noopTurn: number | null;
+  /**  The agent that produced the log. See [`Harness`]. */
+  harness: Harness;
+  /**
+   *  Current model per the runtime's own `configOptions` responses, so a
+   *  rejected model change never moves it.
+   */
+  model: string | null;
+  /**  The models the runtime offers, in the order it listed them. */
+  supportedModels: ModelOption[];
+  /**
+   *  Every setting the ACP agent currently advertises. The list is replaced
+   *  whole whenever ACP returns a new `configOptions` snapshot.
+   */
+  configOptions: SessionConfigOption[];
+  /**  Session title, when the harness reports one. */
+  title: string | null;
+  /**
+   *  The slash commands the harness most recently advertised, in the order
+   *  it listed them. Empty until the first `available_commands_update`,
+   *  which arrives right after session setup, before any turn.
+   */
+  availableCommands: AvailableCommand[];
+  /**
+   *  The last system event's wire name (`"acp_ready"`, `"disconnected"`),
+   *  `None` until the runtime reports one.
+   */
+  status: string | null;
+  /**
+   *  Requests the user can answer on the current turn and connection.
+   *  Multiple permissions may coexist with the one allowed elicitation.
+   *  History remains in the transcript after these live requests clear.
+   */
+  pendingInteractions: PendingInteraction[];
+  /**
+   *  Where the newest turn stands, as one value. Readers used to derive it
+   *  from the transcript's tail, the status, and their own record of what
+   *  they had posted; this is that derivation done once, in the fold.
+   */
+  turn: TurnState;
+};
+
+/**  A timeline event or a card state change. Never a conversation message. */
+export type SessionNotification =
+  | SessionNotification_Serialize
+  | SessionNotification_Deserialize;
+
+/**  A timeline event or a card state change. Never a conversation message. */
+export type SessionNotification_Deserialize = {
+  /**  Outbox identity. */
+  id: string;
+  /**  Subject identity used to find an existing card. */
+  subjectId: string;
+  /**  Event creation time, RFC3339. */
+  createdAt: string;
+  /**  Turn that received it. */
+  turn: number;
+  /**  Stable delivery action identity. */
+  actionId: string;
+  /**  Whether this turn had no user prompt. */
+  systemTurn: boolean;
+} & NotificationEvent_Deserialize;
+
+/**  A timeline event or a card state change. Never a conversation message. */
+export type SessionNotification_Serialize = {
+  /**  Outbox identity. */
+  id: string;
+  /**  Subject identity used to find an existing card. */
+  subjectId: string;
+  /**  Event creation time, RFC3339. */
+  createdAt: string;
+  /**  Turn that received it. */
+  turn: number;
+  /**  Stable delivery action identity. */
+  actionId: string;
+  /**  Whether this turn had no user prompt. */
+  systemTurn: boolean;
+} & NotificationEvent_Serialize;
 
 /**
  *  Why a turn stopped.
@@ -1127,6 +1606,15 @@ export type SubagentResult = {
   /**  What kinds of tools the subagent called. */
   stats: ToolStats | null;
 };
+
+/**  How a background task ended, per [`MessagePart::TaskNotification`]. */
+export type TaskStatus =
+  /**  It ran to the end. */
+  | 'completed'
+  /**  It ended with an error or a nonzero exit. */
+  | 'failed'
+  /**  It was stopped, or did not survive the previous session. */
+  | 'stopped';
 
 /**  Where a held call stands. */
 export type ToolApprovalStatus =
@@ -1425,6 +1913,8 @@ export type TurnPhase =
 export type TurnState =
   /**  No turn is open. */
   | 'idle'
+  /**  No turn is open, and the newest agent reply failed. */
+  | 'failed'
   /**
    *  A prompt this client issued is on the wire, unconfirmed, and the agent
    *  has produced nothing. Only a speculative fold reports this.

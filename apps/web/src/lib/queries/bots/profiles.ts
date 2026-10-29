@@ -1,8 +1,9 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import type { BotOwnerProfile } from '@service-storage/generated/schemas/botOwnerProfile';
 import { AsyncBatcher } from '@tanstack/pacer';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { isHexHyphenatedId } from './bot-id';
 import { botProfileKeys } from './keys';
 
@@ -70,7 +71,7 @@ class BotProfileLoader {
         existing.push({ resolve, reject });
       } else {
         this.pendingRequests.set(botId, [{ resolve, reject }]);
-        this.batcher.addItem(botId);
+        fireAndForget(this.batcher.addItem(botId), 'bot-profiles');
       }
     });
   }
@@ -84,11 +85,15 @@ class BotProfileLoader {
 
 export const botProfileLoader = new BotProfileLoader();
 
+function botProfileQueryOptions(botId: string) {
+  return queryOptions({
+    queryKey: botProfileKeys.detail(botId).queryKey,
+    queryFn: () => botProfileLoader.load(botId),
+    enabled: botId.length > 0,
+  });
+}
+
 /** Profile for a bare bot UUID. `null` when the backend does not know it. */
 export function useBotProfile(botId: () => string) {
-  return useQuery(() => ({
-    queryKey: botProfileKeys.detail(botId()).queryKey,
-    queryFn: () => botProfileLoader.load(botId()),
-    enabled: botId().length > 0,
-  }));
+  return useQuery(() => botProfileQueryOptions(botId()));
 }

@@ -4,12 +4,19 @@ import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import { createQueryAuthorization } from '@queries/authorization';
 import {
   InitiativeDocument,
+  InitiativeIdentityDocument,
+  type InitiativeIdentityQuery,
   type InitiativeQuery,
+  type InitiativeQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { mapInitiativeDetail } from '@service-storage/initiative';
-import { type Client, stringifyDocument } from '@urql/core';
+import {
+  mapInitiativeDetail,
+  mapInitiativeIdentity,
+} from '@service-storage/initiative';
+import { type Client, type DocumentInput, stringifyDocument } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
+import type { ProjectIdentity } from '../core/project';
 import { toProjectDetail } from './project-model';
 import { projectProperties } from './project-properties';
 import { registerProjectRevalidation } from './project-revalidation';
@@ -21,27 +28,39 @@ export const projectDetailData = (project: InitiativeDetail) => ({
   properties: projectProperties(project.properties),
 });
 
-/** Seeds the detail read from a create response, so opening it needs no request. */
+/** Seeds the detail and identity reads from a create response, so neither needs a request. */
 export async function seedProjectDetail(
   userId: string | undefined,
   project: InitiativeDetail,
   host?: Pick<CacheHost, 'writeQuery' | 'disabled'>
 ) {
   if (!host || host.disabled || !userId) return;
+  // The create response already normalized the complete record. Establish its
+  // query edges without copying a second snapshot over those live fields.
+  const data = {
+    user: {
+      id: userId,
+      initiative: { __typename: 'GraphqlSoupInitiative', id: project.id },
+    },
+  } satisfies OptimisticResponse<InitiativeQuery> &
+    OptimisticResponse<InitiativeIdentityQuery>;
   try {
-    // The create response already normalized the complete record. Establish its
-    // query edge without copying a second snapshot over those live fields.
-    await host.writeQuery({
-      query: stringifyDocument(InitiativeDocument),
-      operationName: 'Initiative',
-      variables: { initiativeId: project.id },
-      data: {
-        user: {
-          id: userId,
-          initiative: { __typename: 'GraphqlSoupInitiative', id: project.id },
+    await Promise.all(
+      [
+        { document: InitiativeDocument, operationName: 'Initiative' },
+        {
+          document: InitiativeIdentityDocument,
+          operationName: 'InitiativeIdentity',
         },
-      } satisfies OptimisticResponse<InitiativeQuery>,
-    });
+      ].map(({ document, operationName }) =>
+        host.writeQuery({
+          query: stringifyDocument(document),
+          operationName,
+          variables: { initiativeId: project.id },
+          data,
+        })
+      )
+    );
   } catch (error) {
     console.warn(
       'Created project could not be seeded in the local cache',
@@ -50,29 +69,30 @@ export async function seedProjectDetail(
   }
 }
 
-/** One authorized read backs the project view and its chips and previews. */
-export function createProjectDetailQuery(
+function createAuthorizedProjectQuery<
+  QueryData extends { user: { id: string } },
+  Result,
+>(
+  document: DocumentInput<QueryData, InitiativeQueryVariables>,
+  select: (data: QueryData) => Result,
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
-  enabled: Accessor<boolean> = () => true
+  enabled: Accessor<boolean>
 ) {
   const active = () => enabled() && Boolean(userId() && projectId());
   const authorization = createQueryAuthorization(() =>
     JSON.stringify([userId(), projectId()])
   );
   const query = createLiveQuery(
-    InitiativeDocument,
+    document,
     () => (active() ? { initiativeId: projectId() } : undefined),
     () => ({
       client: client(),
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
       onResult: authorization.onResult,
-      select: (data) => ({
-        viewerId: data.user.id,
-        detail: projectDetailData(mapInitiativeDetail(data.user.initiative)),
-      }),
+      select: (data) => ({ viewerId: data.user.id, value: select(data) }),
     })
   );
   registerProjectRevalidation(client, active, () =>
@@ -87,7 +107,7 @@ export function createProjectDetailQuery(
       result.viewerId !== userId()
     )
       return undefined;
-    return result.detail;
+    return result.value;
   });
   return {
     get data() {
@@ -114,27 +134,51 @@ export function createProjectDetailQuery(
   };
 }
 
+/** The project view's read: counts, task ids, members, sharing, and properties. */
+export function createProjectDetailQuery(
+  client: () => Client,
+  userId: Accessor<string | undefined>,
+  projectId: Accessor<string>,
+  enabled: Accessor<boolean> = () => true
+) {
+  return createAuthorizedProjectQuery(
+    InitiativeDocument,
+    (data) => projectDetailData(mapInitiativeDetail(data.user.initiative)),
+    client,
+    userId,
+    projectId,
+    enabled
+  );
+}
+
+/** Chips, previews, and labels read only id, name, and the viewer's access. */
+export function createProjectIdentityQuery(
+  client: () => Client,
+  userId: Accessor<string | undefined>,
+  projectId: Accessor<string>,
+  enabled: Accessor<boolean> = () => true
+) {
+  return createAuthorizedProjectQuery(
+    InitiativeIdentityDocument,
+    (data): ProjectIdentity => {
+      const project = mapInitiativeIdentity(data.user.initiative);
+      return {
+        id: project.id,
+        name: project.name,
+        access: project.userAccessLevel,
+      };
+    },
+    client,
+    userId,
+    projectId,
+    enabled
+  );
+}
+
 /** Authorizes native project previews without exposing backing document identity. */
 export function useProjectIdentityQuery(
   id: Accessor<string>,
   userId: Accessor<string | undefined>
 ) {
-  const query = createProjectDetailQuery(getGraphqlSoupClient, userId, id);
-  return {
-    get isSuccess() {
-      return query.isSuccess;
-    },
-    get isError() {
-      return query.isError;
-    },
-    get isPending() {
-      return query.isPending;
-    },
-    get error() {
-      return query.error;
-    },
-    get data() {
-      return query.data?.project;
-    },
-  };
+  return createProjectIdentityQuery(getGraphqlSoupClient, userId, id);
 }

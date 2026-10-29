@@ -11,6 +11,10 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
+- `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for
+  agents (companies, pipeline entries, pipeline exports). Writes go through the
+  pipeline workflows and `CrmService`; CSV files reach documents through the
+  `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
@@ -53,6 +57,17 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- `resolve_association` also accepts `CrmAssociation::Activity`: all records in
+  CRM-enabled teams within the viewer/verified-bot scope, excluding hidden rows
+  even for admins. Preserve distinct contact IDs that share an email; returned
+  domains and addresses constrain the viewer's mailbox, not team email access.
+
+- Company names/logos live in the global `crm_domain_directory`. Only the
+  email pubsub workers carry a real `CompanyMetadataResolver`; every other
+  binary uses `NoOpCompanyMetadataResolver`, which leaves a pending entry
+  (NULL `enriched_at`) that `CrmServiceImpl::enrich_pending_domains` resolves
+  later with bounded retries. Never store an empty entry for a domain no
+  resolver answered for: resolved entries are permanent.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

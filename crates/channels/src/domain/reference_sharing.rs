@@ -18,6 +18,9 @@ use model_file_type::FileType;
 ///
 /// Posting a form lets the channel respond to it: anyone who can see the form
 /// grants View, whatever their own level. Edit is never granted by posting.
+///
+/// An external chat is shared read-only by its owner's mention; someone it was
+/// only shared with cannot pass it on.
 #[cfg_attr(
     not(feature = "outbound"),
     allow(dead_code, reason = "only the outbound share adapter grants access")
@@ -28,14 +31,20 @@ pub(crate) fn grant_level(
     access: Option<AccessLevel>,
 ) -> Option<AccessLevel> {
     match (item_type, access) {
-        (ReferencedShareItemType::AgentSession, Some(AccessLevel::Owner)) => {
-            Some(AccessLevel::View)
-        }
+        (
+            ReferencedShareItemType::AgentSession | ReferencedShareItemType::ExternalChat,
+            Some(AccessLevel::Owner),
+        ) => Some(AccessLevel::View),
         (ReferencedShareItemType::CalendarEvent, Some(level)) if level >= AccessLevel::Edit => {
             Some(AccessLevel::View)
         }
         (ReferencedShareItemType::Form, Some(_)) => Some(AccessLevel::View),
-        (ReferencedShareItemType::AgentSession | ReferencedShareItemType::CalendarEvent, _)
+        (
+            ReferencedShareItemType::AgentSession
+            | ReferencedShareItemType::CalendarEvent
+            | ReferencedShareItemType::ExternalChat,
+            _,
+        )
         | (_, None) => None,
         (ReferencedShareItemType::Document, Some(level)) if file_type == Some(FileType::Pdf) => {
             Some(level.min(AccessLevel::Comment))

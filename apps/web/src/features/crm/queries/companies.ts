@@ -1,5 +1,6 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
-import { throwOnErr } from '@core/util/result';
+import { analytics } from '@app/lib/analytics';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
@@ -12,6 +13,7 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import type { CompanyImporter } from '../context/crm-sources';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 
@@ -151,12 +153,39 @@ export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
       mutationFn: ({ name, domain }: { name: string; domain: string }) =>
         throwOnErr(() => deps.storage.createCompany({ name, domain })),
       onSuccess: (data) => {
+        analytics.track('crm_company_created', { companyId: data.id });
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
         return deps.client.invalidateQueries({ queryKey: soupKeys._def });
       },
     }),
     () => deps.client
   );
+}
+
+/**
+ * Creates companies for an import without `useCreateCompanyMutation`'s
+ * per-company soup refresh, which would refetch every listing once per row.
+ * A domain the team already tracks (409) is reported as existing.
+ */
+export function createCompanyImporter(
+  deps: CrmRecordDependencies
+): CompanyImporter {
+  return {
+    async create(input) {
+      const created = await deps.storage.createCompany(input);
+      if (created.isOk()) {
+        deps.client.setQueryData(
+          crmKeys.company(created.value.id).queryKey,
+          created.value
+        );
+        return 'created';
+      }
+      if (created.error.some((error) => error.code === 'CONFLICT'))
+        return 'exists';
+      throw new ThrownResultError(created.error);
+    },
+    refresh: () => deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+  };
 }
 
 /**
@@ -182,13 +211,18 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
         throwOnErr(() =>
           deps.storage.createContact({ companyId, name, email })
         ),
-      onSuccess: (_data, { companyId }) =>
-        Promise.all([
+      onSuccess: (contact, { companyId }) => {
+        analytics.track('crm_contact_created', {
+          companyId,
+          contactId: contact.id,
+        });
+        return Promise.all([
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        ]),
+        ]);
+      },
     }),
     () => deps.client
   );

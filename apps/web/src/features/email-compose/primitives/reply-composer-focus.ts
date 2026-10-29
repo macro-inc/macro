@@ -1,6 +1,27 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { type Accessor, onCleanup, onMount } from 'solid-js';
 
+/**
+ * Whether a reply composer takes the keyboard when it mounts. A saved reply
+ * that reappears with its thread (opening it, stepping to it with j/k, the
+ * reading pane following the list cursor) waits on desktop until it is
+ * clicked or replied to: taking the keyboard would type the next j into it.
+ */
+export function takesFocusOnMount(mount: {
+  /** Mounted from a saved reply draft. */
+  savedReply: boolean;
+  /** A reply key, button or hand-off asked for this reply. */
+  requested: boolean;
+  /** Restores a send the user just undid. */
+  restoredSend: boolean;
+  /** Touch replies open in a full-screen composer the user just asked for. */
+  desktop: boolean;
+}): boolean {
+  return (
+    !mount.savedReply || mount.requested || mount.restoredSend || !mount.desktop
+  );
+}
+
 /** Keeps forward recipients focused through Lexical's deferred selection work. */
 export function createReplyComposerFocus(options: {
   editor: Accessor<{ focus(): void } | undefined>;

@@ -3,7 +3,6 @@ import type { TeamConfigSource, TeamSource } from '../context/crm-sources';
 import {
   type CrmPermissions,
   type CrmTeamRole,
-  closedStageIds,
   DEFAULT_CRM_PERMISSIONS,
   roleSatisfies,
 } from '../core/team-config';
@@ -49,16 +48,4 @@ export function createCrmPermissions(
       roleSatisfies(role(), permissions().deleteRecords)
     ),
   };
-}
-
-/**
- * The set of stage option ids considered "closed" — explicit config when
- * present, else a label heuristic over the active stages.
- */
-export function createClosedStageIds(
-  settings: TeamConfigSource,
-  stages: Accessor<Array<{ id: string; label: string }>>
-): Accessor<Set<string>> {
-  const { config } = settings;
-  return createMemo(() => closedStageIds(stages(), config().closedStageIds));
 }

@@ -1,0 +1,18 @@
+---
+title: ReadDiscussion
+description: >-
+  Read the comment threads in the Discussion of a document, task, Tasks project
+  (initiative), CRM company or CRM contact: each thread's id, resolved state and
+  comments, with their ids, authors and text, oldest thread first.
+---
+
+# ReadDiscussion
+
+Read the comment threads in the Discussion of a document, task, Tasks project (initiative), CRM company or CRM contact: each thread's id, resolved state and comments, with their ids, authors and text, oldest thread first. Thread and comment ids are what Comment, EditComment, DeleteComment and ResolveComment take. For a document, ReadContent returns the same threads alongside the content, with the live text each inline comment is on.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"document"` \| `"initiative"` \| `"crm_company"` \| `"crm_contact"` | Yes | The kinds of item that carry a Discussion. |
+| `entityId` | string | Yes | The id of the item. |

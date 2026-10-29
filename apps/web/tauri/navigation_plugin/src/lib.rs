@@ -23,6 +23,10 @@ enum NavigationOutput<'a> {
     /// the dev server, ...) — the webview is allowed to load it directly.
     /// This is what permits the SPA's own page loads.
     Internal,
+    /// A third-party document the SPA embeds in an iframe. WebKit asks the
+    /// navigation handler about subframe loads too, so it must be allowed to
+    /// load in place; as a new window it is still external.
+    Embedded,
     /// A link to content inside the Macro app whose literal [Url] points at
     /// the remote website (e.g. `https://macro.com/app/...`). The webview
     /// must not load it — that would replace the running SPA with the live
@@ -51,6 +55,7 @@ pub enum Platform {
 pub struct MacroNavigationPlugin {
     internal_domains: Arc<[Url]>,
     app_link_hosts: &'static [&'static str],
+    embedded_documents: Arc<[Url]>,
     allowed_file_prefix: Option<PathBuf>,
 }
 
@@ -76,6 +81,7 @@ impl MacroNavigationPlugin {
                 .map(|s| s.parse())
                 .collect::<Result<Arc<_>, _>>()?,
             app_link_hosts: &[],
+            embedded_documents: Arc::new([]),
             allowed_file_prefix: None,
         })
     }
@@ -85,6 +91,30 @@ impl MacroNavigationPlugin {
     pub fn with_app_link_hosts(mut self, hosts: &'static [&'static str]) -> Self {
         self.app_link_hosts = hosts;
         self
+    }
+
+    /// Third-party pages the SPA loads in an iframe, matched by origin and
+    /// path (any query). On macOS the navigation handler cannot tell an
+    /// iframe load from a top-level one, and cancelling the iframe leaves an
+    /// empty frame over the app.
+    pub fn with_embedded_documents(
+        mut self,
+        documents: &'static [&'static str],
+    ) -> Result<Self, url::ParseError> {
+        self.embedded_documents = documents
+            .iter()
+            .map(|s| s.parse())
+            .collect::<Result<Arc<_>, _>>()?;
+        Ok(self)
+    }
+
+    fn is_embedded_document(&self, url: &Url) -> bool {
+        self.embedded_documents.iter().any(|document| {
+            document.scheme() == url.scheme()
+                && document.host_str() == url.host_str()
+                && document.port_or_known_default() == url.port_or_known_default()
+                && document.path() == url.path()
+        })
     }
 
     pub fn with_allowed_file_prefix(mut self, prefix: PathBuf) -> Self {
@@ -98,6 +128,9 @@ impl MacroNavigationPlugin {
         // are not necessarily allowlisted webview domains
         if let Some(scheme) = self.as_app_link(url) {
             return NavigationOutput::AppLink(scheme);
+        }
+        if self.is_embedded_document(url) {
+            return NavigationOutput::Embedded;
         }
         match self.as_internal_url(url) {
             Ok(()) => NavigationOutput::Internal,
@@ -168,6 +201,9 @@ impl MacroNavigationPlugin {
             NavigationOutput::Internal => MacroScheme::from_url(url)
                 .map(NavigationOutput::AppLink)
                 .unwrap_or(NavigationOutput::Blocked),
+            NavigationOutput::Embedded => {
+                NavigationOutput::External(ExternalUrl(Cow::Borrowed(url)))
+            }
             destination => destination,
         }
     }
@@ -217,7 +253,7 @@ impl MacroNavigationPlugin {
                 .log_and_consume();
                 false
             }
-            NavigationOutput::Internal => true,
+            NavigationOutput::Internal | NavigationOutput::Embedded => true,
             NavigationOutput::Blocked => false,
         }
     }

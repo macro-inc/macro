@@ -67,6 +67,8 @@ pub enum TriggerWork {
     /// service announces the reply into its channel from the trigger event
     /// it observed.
     PromptExisting {
+        /// Stable identity shared with the backend announcement.
+        message_id: Uuid,
         /// The session to feed.
         session: AgentSessionId,
         /// Who sent the message.
@@ -170,6 +172,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::PromptExisting {
+                message_id: message.message_id,
                 session: session_id,
                 sender,
                 content: message.content,

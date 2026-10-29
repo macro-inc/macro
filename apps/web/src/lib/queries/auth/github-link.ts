@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
@@ -23,6 +24,7 @@ type UseGithubLinkStatusQueryOptions = {
   enabled?: boolean | (() => boolean);
   refetchInterval?: number;
   refetchOnMount?: 'always';
+  retryOnMount?: boolean;
 };
 
 function hasReauthenticationError(
@@ -80,14 +82,23 @@ export function useGithubLinkStatusQuery(
       enabled,
       refetchInterval: options?.refetchInterval,
       refetchOnMount: options?.refetchOnMount,
+      retryOnMount: options?.retryOnMount,
     };
   });
 }
 
-export function invalidateGithubLinkStatus() {
-  return queryClient.invalidateQueries({
-    queryKey: authKeys.githubLinkStatus.queryKey,
+export async function invalidateGithubLinkStatus() {
+  const options = githubLinkStatusQueryOptions();
+  // A pre-OAuth request must not overwrite the newly verified connection.
+  await queryClient.cancelQueries({ queryKey: options.queryKey });
+  await queryClient.invalidateQueries({
+    queryKey: options.queryKey,
+    refetchType: 'none',
   });
+  // Invalidation skips queries whose observers are all disabled (for example,
+  // skipPreviewFetch mentions). Explicit fetching refreshes those readers too.
+  // Keep refresh failures in query state, not in the completed OAuth result.
+  return queryClient.prefetchQuery({ ...options, staleTime: 0 });
 }
 
 export function useInitGithubLinkMutation() {
@@ -111,7 +122,7 @@ export function useDeleteGithubLinkMutation() {
     mutationFn: async () =>
       await throwOnErr(() => authServiceClient.deleteGithubLink()),
     onSuccess: () => {
-      invalidateGithubLinkStatus();
+      fireAndForget(invalidateGithubLinkStatus(), 'github-link');
       invalidateAllSoup();
     },
   }));

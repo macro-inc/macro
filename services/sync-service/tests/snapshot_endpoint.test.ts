@@ -123,4 +123,33 @@ describe("snapshot endpoint tests", async () => {
 
     expect(response.status).toBe(404);
   });
+  test("rejects malformed snapshot versions without aborting the session", async () => {
+    const user = await createTestUser(mf, "test-doc");
+    const token = getTokenForDocument("test-doc", "test-user", "owner");
+    try {
+      for (const version of [
+        { peer: "invalid", counter: 0 },
+        { peer: "18446744073709551616", counter: 0 },
+        { peer: "1", counter: -1 },
+      ]) {
+        const response = await mf.dispatchFetch(
+          "http://localhost/document/test-doc/snapshot",
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ version_id: version }),
+          }
+        );
+        expect(response.status).toBe(400);
+      }
+      const healthy = await mf.dispatchFetch("http://localhost/document/test-doc/snapshot", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(healthy.status).toBe(200);
+      expect((await healthy.arrayBuffer()).byteLength).toBeGreaterThan(0);
+    } finally {
+      user.connection.getWebSocket().close();
+    }
+  });
+
 });

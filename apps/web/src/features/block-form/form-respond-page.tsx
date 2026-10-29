@@ -6,9 +6,9 @@
  * redirect (`withFormRespondShell` in `routes/shells.tsx`). The form itself is the shared
  * `RespondView`.
  */
-import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
-import Eye from '@phosphor/eye.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import Eye from '@icon/system/regular/eye.svg';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button, Layer } from '@ui';
 import { Show } from 'solid-js';
@@ -43,14 +43,13 @@ function FormRespondContent(props: { formId: string }) {
     openRelated: (destination) =>
       navigate(`/database/${destination.databaseId}`),
     openChannel: (channelId) => navigate(`/channel/${channelId}`),
-    openCalendarSettings: () =>
-      navigate(`/settings/${settingsTabToSlug('Booking links')}`),
+    openCalendarSettings: () => navigate('/scheduling'),
   });
   const source = context.createFormSource(() => props.formId);
   return (
     <FormProvider value={context}>
       <Layer depth={1}>
-        <main class="h-full min-h-0 overflow-y-auto bg-canvas-base text-ink">
+        <main class="h-full min-h-0 overflow-y-auto bg-canvas-base text-ink touch:pt-(--safe-top) touch:pb-(--mobile-content-inset-bottom)">
           <Show
             when={source.detail()}
             fallback={
@@ -59,7 +58,9 @@ function FormRespondContent(props: { formId: string }) {
                   <div class="mx-auto flex max-w-[680px] flex-col px-4 py-16">
                     <FormLoadFailureView
                       failure={failure()}
-                      onRetry={() => void source.refetch()}
+                      onRetry={() =>
+                        fireAndForget(source.refetch(), 'form-respond')
+                      }
                     />
                     <Show when={failure().kind === 'sign-in'}>
                       <SignInToRespond class="mx-auto text-sm text-link hover:underline">
@@ -78,7 +79,9 @@ function FormRespondContent(props: { formId: string }) {
                   <div class="mx-auto max-w-[680px] px-4 py-16">
                     <FormLoadFailureView
                       failure={{ kind: 'forbidden' }}
-                      onRetry={() => void source.refetch()}
+                      onRetry={() =>
+                        fireAndForget(source.refetch(), 'form-respond')
+                      }
                     />
                   </div>
                 }
@@ -107,7 +110,7 @@ function FormRespondContent(props: { formId: string }) {
                           Preview · responses won’t be saved
                         </span>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() =>
                             navigate(
                               `/form/${encodeURIComponent(props.formId)}`

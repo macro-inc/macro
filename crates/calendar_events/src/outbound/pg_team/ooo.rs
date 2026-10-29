@@ -11,7 +11,16 @@ pub(in crate::outbound) async fn list_team_out_of_office(
     range: OccurrenceRange,
     limit: u16,
 ) -> Result<Vec<TeamOutOfOffice>, Report> {
+    // Teammates drive the plan: their fresh accounts, then only those
+    // accounts' out-of-office sources through the partial index on the
+    // source's typed event_type, which every write sets from the same value as
+    // the payload's eventType. Unpacking every primary calendar's payloads
+    // first made each call scan the whole tenant to return a handful of rows.
     let rows = sqlx::query!(r#"
+        WITH teammates AS MATERIALIZED (
+            SELECT teammate.user_id FROM team_user viewer JOIN team_user teammate ON teammate.team_id=viewer.team_id
+            WHERE viewer.user_id=$1 AND teammate.user_id<>$1
+        )
         SELECT owner_id AS "owner_id!", event_id AS "event_id!", ical_uid AS "ical_uid!",
             occurrence_key AS "occurrence_key!", title AS "title?", time AS "time!"
         FROM (
@@ -22,15 +31,17 @@ pub(in crate::outbound) async fn list_team_out_of_office(
                     THEN COALESCE(exception.value->>'title',source.normalized_payload->'event'->>'title')
                 END AS title,
                 occurrence.value->'time' AS time
-            FROM calendar_event_sources source
-            JOIN calendar_events event ON event.id=source.event_id
+            FROM teammates
+            JOIN calendar_accounts account ON account.owner_id=teammates.user_id
+                AND account.sync_status IN ('ready','syncing') AND account.last_sync_error IS NULL
+                AND account.last_synced_at > now() - interval '15 minutes'
+            JOIN calendar_event_sources source ON source.account_id=account.id
+                AND source.event_type='out_of_office'
+                AND source.normalized_payload->'event'->>'eventType'='out_of_office'
+            JOIN calendar_events event ON event.id=source.event_id AND event.owner_id=account.owner_id
             JOIN calendars calendar ON calendar.id=source.calendar_id AND calendar.is_primary
                 AND NOT calendar.is_deleted AND calendar.synced_at IS NOT NULL AND calendar.last_sync_error IS NULL
                 AND calendar.snapshot_normalization_version >= 1
-            JOIN calendar_accounts account ON account.id=source.account_id
-                AND account.owner_id=event.owner_id
-                AND account.sync_status IN ('ready','syncing') AND account.last_sync_error IS NULL
-                AND account.last_synced_at > now() - interval '15 minutes'
             LEFT JOIN calendar_team_sharing sharing ON sharing.user_id=event.owner_id
             CROSS JOIN LATERAL jsonb_array_elements(source.normalized_payload->'occurrences') occurrence(value)
             LEFT JOIN LATERAL (
@@ -38,13 +49,8 @@ pub(in crate::outbound) async fn list_team_out_of_office(
                 WHERE candidate.value->>'recurrenceId'=occurrence.value->>'recurrenceId'
                 LIMIT 1
             ) exception ON true
-            WHERE event.owner_id IN (
-                SELECT teammate.user_id FROM team_user viewer JOIN team_user teammate ON teammate.team_id=viewer.team_id
-                WHERE viewer.user_id=$1 AND teammate.user_id<>$1
-            )
-              AND COALESCE(sharing.sharing,'busy_only')<>'none'
+            WHERE COALESCE(sharing.sharing,'busy_only')<>'none'
               AND source.provider_access_role = calendar.access_role
-              AND source.normalized_payload->'event'->>'eventType'='out_of_office'
               AND source.normalized_payload->'event'->>'visibility' IN ('default','public')
               AND COALESCE(exception.value->>'visibility','default') IN ('default','public')
               AND source.normalized_payload->'event'->>'status'<>'cancelled'

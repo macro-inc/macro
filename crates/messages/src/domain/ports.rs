@@ -163,8 +163,12 @@ pub struct CreateMessage {
     pub parent: MessageParent,
     /// Verified actor.
     pub actor: ChannelSender<'static>,
+    /// Server-verified guest display name; absent for account authors.
+    pub guest_name: Option<String>,
     /// User who triggered a bot message, if applicable.
     pub triggered_by: Option<String>,
+    /// Label of the client the user triggered it through, if any.
+    pub triggered_via: Option<String>,
     /// Parsed message input.
     pub input: PostMessage,
 }

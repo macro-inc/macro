@@ -1,19 +1,24 @@
-import { createFreshSearch } from '@core/util/freshSort';
+import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
+import { match } from 'ts-pattern';
 import type { CommandMenuItem } from './useCommandItems';
 
-const search = createFreshSearch<CommandMenuItem>({
-  config: {
-    useViewedAt: true,
-    dmBoost: 1.8,
-    fuzzyWeight: 0.7,
-    timeWeight: 0.7,
-    minFuzzyThreshold: 0.1,
-    commaSeparatedChannelMatch: true,
-  },
-  getName: (item) => item.searchText,
-  isDmItem: (item) => item.bucket === 'dm',
-  getTimestamp: (item) => item.timestamps,
-});
+/** The label a row shows; its search text can add emails, aliases, or command keywords. */
+function displayName(item: CommandMenuItem): string {
+  return match(item)
+    .with({ kind: 'entity' }, { kind: 'user' }, (row) => row.data.name)
+    .with({ kind: 'command' }, ({ data }) =>
+      typeof data.description === 'function'
+        ? data.description()
+        : data.description
+    )
+    .with(
+      { kind: 'search' },
+      { kind: 'ask-ai' },
+      { kind: 'new-project' },
+      (row) => row.searchText
+    )
+    .exhaustive();
+}
 
 function compareRecency(left: CommandMenuItem, right: CommandMenuItem) {
   return (
@@ -30,7 +35,7 @@ function isPeopleItem(item: CommandMenuItem) {
 }
 
 /** Keep the existing order within each group and the positions of other results. */
-function prioritizeInternalPeople(items: CommandMenuItem[]): CommandMenuItem[] {
+function prioritizeInternalPeople<T extends CommandMenuItem>(items: T[]): T[] {
   const people = items
     .filter(isPeopleItem)
     .sort(
@@ -45,8 +50,8 @@ function prioritizeInternalPeople(items: CommandMenuItem[]): CommandMenuItem[] {
 }
 
 /** Rank cached and local candidates together using the command menu's rules. */
-export function rankCommandSearchItems(
-  items: CommandMenuItem[],
+export function rankCommandSearchItems<T extends CommandMenuItem>(
+  items: T[],
   query: string,
   options: {
     preserveAdditionalEntityMatches: boolean;
@@ -54,18 +59,35 @@ export function rankCommandSearchItems(
      * fuzzy matcher would not match them. */
     preservedIds?: ReadonlySet<string>;
   }
-): CommandMenuItem[] {
+): T[] {
+  const search = createFreshSearch<T>({
+    config: {
+      ...NAME_MATCH_RANKING,
+      useViewedAt: true,
+      channelBoost: 3,
+      dmBoost: 1.8,
+      fuzzyWeight: 0.7,
+      timeWeight: 0.7,
+      minFuzzyThreshold: 0.1,
+    },
+    getName: (item) => item.searchText,
+    getDisplayName: displayName,
+    isChannelItem: (item) => item.bucket === 'channel' || item.bucket === 'dm',
+    isDmItem: (item) => item.bucket === 'dm',
+    getTimestamp: (item) => item.timestamps,
+  });
+
   const ranked = search(items, query)
     .sort(
       (left, right) =>
+        right.nameMatchRank - left.nameMatchRank ||
         right.combinedScore - left.combinedScore ||
         compareRecency(left.item, right.item)
     )
     .map(({ item }) => item);
   const preserved = (item: CommandMenuItem) =>
     options.preservedIds?.has(item.id) ||
-    (options.preserveAdditionalEntityMatches &&
-      (item.kind === 'entity' || item.kind === 'initiative'));
+    (options.preserveAdditionalEntityMatches && item.kind === 'entity');
   if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
     return prioritizeInternalPeople(ranked);
 

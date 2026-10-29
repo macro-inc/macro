@@ -4,7 +4,20 @@
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
-import { Switch } from '@kobalte/core/switch';
+import Braces from '@icon/system/regular/brackets-curly.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import FileC from '@icon/system/regular/file-c.svg';
+import FileCode from '@icon/system/regular/file-code.svg';
+import FileCpp from '@icon/system/regular/file-cpp.svg';
+import FileCss from '@icon/system/regular/file-css.svg';
+import FileHtml from '@icon/system/regular/file-html.svg';
+import FileJs from '@icon/system/regular/file-js.svg';
+import FileMd from '@icon/system/regular/file-md.svg';
+import FilePy from '@icon/system/regular/file-py.svg';
+import FileRs from '@icon/system/regular/file-rs.svg';
+import FileSql from '@icon/system/regular/file-sql.svg';
+import FileTs from '@icon/system/regular/file-ts.svg';
+import TrashCan from '@icon/system/regular/trash-simple.svg';
 import { $isCodeNode, CodeNode } from '@lexical/code';
 import {
   $isCustomCodeNode,
@@ -12,21 +25,7 @@ import {
   normalizedLanguage,
   type SupportedLanguage,
 } from '@macro-inc/lexical-core';
-import Braces from '@phosphor/brackets-curly.svg';
-import Copy from '@phosphor/copy.svg';
-import FileC from '@phosphor/file-c.svg';
-import FileCode from '@phosphor/file-code.svg';
-import FileCpp from '@phosphor/file-cpp.svg';
-import FileCss from '@phosphor/file-css.svg';
-import FileHtml from '@phosphor/file-html.svg';
-import FileJs from '@phosphor/file-js.svg';
-import FileMd from '@phosphor/file-md.svg';
-import FilePy from '@phosphor/file-py.svg';
-import FileRs from '@phosphor/file-rs.svg';
-import FileSql from '@phosphor/file-sql.svg';
-import FileTs from '@phosphor/file-ts.svg';
-import TrashCan from '@phosphor/trash-simple.svg';
-import { Button, CopyButton, cn, Dropdown } from '@ui';
+import { Button, CopyButton, cn, Dropdown, ToggleSwitch } from '@ui';
 import {
   $getNodeByKey,
   type EditorThemeClasses,
@@ -247,18 +246,16 @@ export function CodeBoxAccessory(props: {
             <Show when={showPreviewToggle()}>
               <div class="flex items-center gap-2 mr-2">
                 <div class="text-xs text-ink-extra-muted/50">Preview</div>
-                <Switch
+                <ToggleSwitch
+                  size="sm"
+                  label="Preview"
+                  labelClass="sr-only"
                   checked={isPreviewMode()}
                   onChange={(enabled) => {
                     setIsPreviewMode(enabled);
                     setPreviewModeOnNode(enabled);
                   }}
-                >
-                  <Switch.Input class="sr-only" />
-                  <Switch.Control class="inline-flex h-4 w-8 hover:ring hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                    <Switch.Thumb class="block size-3 rounded-full bg-surface transition-transform data-checked:translate-x-4" />
-                  </Switch.Control>
-                </Switch>
+                />
               </div>
             </Show>
             <Show when={props.editor.isEditable()}>
@@ -273,7 +270,7 @@ export function CodeBoxAccessory(props: {
                   deleteCode();
                 }}
               >
-                <TrashCan />
+                <TrashCan class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
             <CopyButton
@@ -287,7 +284,7 @@ export function CodeBoxAccessory(props: {
                 return copyCode();
               }}
             >
-              <Copy />
+              <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </CopyButton>
           </div>
         </div>
@@ -383,9 +380,7 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
   };
 
   return (
-    <div class={'absolute top-12 inset-x-0 bottom-0 z-10 p-2'}>
-      {renderSvg()}
-    </div>
+    <div class="absolute top-12 inset-x-0 bottom-0 z-10 p-2">{renderSvg()}</div>
   );
 }
 
@@ -436,12 +431,13 @@ export const StaticCodeBoxAccessory = (props: {
           <Show when={showPreviewToggle()}>
             <div class="flex items-center gap-2">
               <div class={cn('text-xs', textColor())}>Preview</div>
-              <Switch checked={isPreviewMode()} onChange={setIsPreviewMode}>
-                <Switch.Input class="sr-only" />
-                <Switch.Control class="inline-flex h-4 w-8 hover:ring hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                  <Switch.Thumb class="block size-3 rounded-full transition-transform data-checked:translate-x-4 bg-surface" />
-                </Switch.Control>
-              </Switch>
+              <ToggleSwitch
+                size="sm"
+                label="Preview"
+                labelClass="sr-only"
+                checked={isPreviewMode()}
+                onChange={setIsPreviewMode}
+              />
             </div>
           </Show>
           <CopyButton
@@ -455,7 +451,7 @@ export const StaticCodeBoxAccessory = (props: {
               return copyCode();
             }}
           >
-            <Copy />
+            <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </CopyButton>
         </div>
       </div>

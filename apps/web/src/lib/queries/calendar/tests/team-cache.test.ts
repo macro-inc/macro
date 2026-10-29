@@ -47,6 +47,41 @@ describe('team authorization invalidation', () => {
     unsubscribe();
   });
 
+  it('keeps OOO rows and their selection during an unrelated calendar refresh', async () => {
+    const queryKey = calendarKeys.teamOutOfOffice(
+      'alice',
+      undefined,
+      'team'
+    ).queryKey;
+    const cached = [{ title: 'Vacation' }];
+    queryClient.setQueryData(queryKey, cached);
+    let finish!: (rows: typeof cached) => void;
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn: () =>
+        new Promise<typeof cached>((resolve) => {
+          finish = resolve;
+        }),
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    const closeSelection = vi.fn();
+    const unsubscribeReset = subscribeToTeamCalendarReset(closeSelection);
+    const refresh = refreshTeamCalendarQueries({ outOfOfficeChanged: false });
+    expect(observer.getCurrentResult().data).toEqual(cached);
+    expect(observer.getCurrentResult().isPending).toBe(false);
+    expect(observer.getCurrentResult().isFetching).toBe(true);
+    expect(closeSelection).not.toHaveBeenCalled();
+    finish([{ title: 'Updated vacation' }]);
+    await refresh;
+    expect(observer.getCurrentResult().data).toEqual([
+      { title: 'Updated vacation' },
+    ]);
+    expect(closeSelection).not.toHaveBeenCalled();
+    unsubscribeReset();
+    unsubscribe();
+  });
+
   it("keeps the viewer's own team and settings visible while they refetch", async () => {
     const identity = { userId: 'alice', teamId: 'team' };
     const keys = [

@@ -35,15 +35,14 @@ describe('handleRefreshCalendar', () => {
     });
 
     expect(invalidateCalendarOccurrencesMock).toHaveBeenCalledTimes(1);
-    expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledTimes(1);
+    expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+      outOfOfficeChanged: true,
+    });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.invitations._def,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.visibleCalendars.queryKey,
-    });
-    expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: calendarKeys.teamOutOfOffice._def,
     });
   });
 
@@ -81,7 +80,36 @@ describe('handleRefreshCalendar', () => {
 
   it('clears team projections on sharing changes without touching own optimistic events', () => {
     handleRefreshCalendar({ event: 'team_sharing_changed' });
-    expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledTimes(1);
+    expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+      outOfOfficeChanged: true,
+    });
     expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
   });
+
+  it.each(['synced', 'team_sharing_changed'])(
+    'keeps OOO rows when %s explicitly excludes OOO changes',
+    (event) => {
+      handleRefreshCalendar({
+        event,
+        link_id: 'inbox',
+        team_ooo_changed: false,
+      });
+      expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+        outOfOfficeChanged: false,
+      });
+    }
+  );
+
+  it.each([true, undefined, null, 'false', 0])(
+    'clears OOO rows for a missing or unsafe hint: %s',
+    (team_ooo_changed) => {
+      handleRefreshCalendar({
+        event: 'team_sharing_changed',
+        team_ooo_changed,
+      });
+      expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+        outOfOfficeChanged: true,
+      });
+    }
+  );
 });

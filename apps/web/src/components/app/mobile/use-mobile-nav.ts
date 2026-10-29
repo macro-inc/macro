@@ -1,5 +1,6 @@
 import type { ListView } from '@app/constants/list-views';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import type { MobileSearchRouteState } from '@app/features/command/mobile/mobile-search-route-state';
 import {
   reviewsTabSearch,
   reviewsTabSearchCodec,
@@ -17,7 +18,13 @@ import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
  * only reachable through the Views menu or the dynamic nav button (folders,
  * companies, …).
  */
-export type MobileDockNavId = ListView | 'calendar' | 'reviews' | 'settings';
+export type MobileDockNavId =
+  | ListView
+  | 'calendar'
+  | 'reviews'
+  | 'booking-links'
+  | 'external'
+  | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
   if (id === 'documents') {
@@ -82,12 +89,16 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
     }
     const content = mobileNavContent(id);
     if (isNativeMobilePlatform()) {
-      replaceAllSplits(content);
+      const routeState: MobileSearchRouteState | undefined =
+        id === 'search' ? { sessionId: crypto.randomUUID() } : undefined;
+      // Search taps intentionally start a new search session.
+      replaceAllSplits(content, { routeState, resume: id !== 'search' });
       return;
     }
     const fgContent = globalSplitManager()?.activeSplit()?.content();
     const isOnNavView = fgContent?.type === 'component';
     openWithSplit(content, {
+      resume: id !== 'search',
       mergeHistory: isOnNavView,
       // Route through the router so an existing pane receives the default tab.
       search: id === 'documents' || id === 'reviews' ? {} : undefined,

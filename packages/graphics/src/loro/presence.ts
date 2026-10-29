@@ -140,4 +140,8 @@ export function createGraphicsPresence(
     },
   };
 }
-export type GraphicsPresence = ReturnType<typeof createGraphicsPresence>;
+/** Rendering and pointer sampling need no dependency on a particular transport. */
+export type GraphicsPresence = Pick<
+  ReturnType<typeof createGraphicsPresence>,
+  'getClock' | 'getRemote' | 'subscribe' | 'setCursor'
+>;

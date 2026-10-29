@@ -10,5 +10,5 @@ export type NotifEventOneOfOnethreeTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfOnethreeTag = {
-  crm_discussion: 'crm_discussion',
+  entity_access_granted: 'entity_access_granted',
 } as const;

@@ -13,6 +13,7 @@ import {
 import { callsRoute } from '@app/routes/routes';
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type JSX, Show, Suspense } from 'solid-js';
 import { CallsHeader } from '../components/calls-header';
 import { CallsSidebar } from '../components/calls-sidebar';
@@ -34,12 +35,12 @@ export function CallsView() {
         const matches = snapshot.entries[index].location.route.matches;
         if (!matches.some((match) => match.id === callsRoute.id)) break;
         if (matches.at(-1)?.id === callsRoute.id) {
-          void navigate(index - snapshot.index);
+          fireAndForget(navigate(index - snapshot.index), 'calls-view');
           return;
         }
       }
     }
-    void navigate({ route: callsRoute, params: {} });
+    fireAndForget(navigate({ route: callsRoute, params: {} }), 'calls-view');
   };
   const list = (header?: JSX.Element) => (
     <SoupView

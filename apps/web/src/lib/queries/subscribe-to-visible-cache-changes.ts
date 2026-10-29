@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
@@ -42,7 +43,7 @@ export function subscribeToVisibleCacheChanges(
   };
   const scheduled = leadingAndTrailing(
     throttle,
-    () => void runRefresh(),
+    () => fireAndForget(runRefresh(), 'visible-cache-refresh'),
     CACHE_REFRESH_INTERVAL_MS
   );
   const unsubscribe = host.onCacheChanged(

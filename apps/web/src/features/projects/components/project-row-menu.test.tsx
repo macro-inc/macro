@@ -1,14 +1,11 @@
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectRow } from '../context/projects-context';
 import type { ProjectAccess } from '../core/project';
 import { ProjectMenuDropdown } from './project-row-menu';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
-vi.mock('@app/components/ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 vi.mock('@entity', () => ({
   InlineEntity: (props: { entity: { name: string } }) => props.entity.name,
 }));

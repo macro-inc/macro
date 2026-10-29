@@ -3,6 +3,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   readRecordsByKeys,
   selectRecords,
@@ -17,8 +18,11 @@ import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
   graphqlCacheEnabled,
+  graphqlCacheRecoveryState,
   graphqlDraftQueueBlocked,
+  retryGraphqlCacheInitialization,
 } from '@service-storage/graphql-soup';
+import { ResultAsync } from 'neverthrow';
 import { queryClient } from '../client';
 import {
   invalidateAllSoup,
@@ -43,10 +47,22 @@ import {
   markDraftAttemptQueued,
   readLocalDraft,
   restoreLocalAttachments,
+  resumeLocalDraft,
 } from './local-drafts';
 import { fetchAndCacheThread, type ThreadQueryTransport } from './thread';
 
-export { assertEmailDraftQueueAvailable };
+export {
+  assertEmailDraftQueueAvailable,
+  graphqlCacheRecoveryState,
+  retryGraphqlCacheInitialization as recoverDraftSynchronization,
+};
+
+export async function retryEmailDraftSynchronization(
+  id: string
+): Promise<void> {
+  await retryGraphqlCacheInitialization();
+  await resumeLocalDraft(id);
+}
 
 /** Read content and persistence state together, including resolved local handles. */
 export async function readEmailDraft(
@@ -55,19 +71,29 @@ export async function readEmailDraft(
 ) {
   const local = await readLocalDraft(draftId);
   const host = getGraphqlCacheHost();
-  const result = host
-    ? await readRecordsByKeys(
-        host,
-        selectRecords(EmailThreadMessageFieldsFragmentDoc),
-        [`GraphqlSoupEmailMessage:${local?.serverDraftId ?? draftId}`]
+  const cached = host
+    ? await ResultAsync.fromPromise(
+        readRecordsByKeys(
+          host,
+          selectRecords(EmailThreadMessageFieldsFragmentDoc),
+          [`GraphqlSoupEmailMessage:${local?.serverDraftId ?? draftId}`]
+        ),
+        (error: unknown) => error
       )
     : undefined;
-  const selected = result?.records[0];
-  // A confirmed sent record always wins. A fully synced working copy must
-  // also yield to newer server content, attachments, and scheduling state.
+  // The independent working copy remains readable when cache startup fails.
+  // Without one, preserve the read error rather than inventing an empty draft.
+  if (cached?.isErr() && !local) throw cached.error;
+  const selected = cached?.isOk() ? cached.value.records[0] : undefined;
+  // Cancellation advances the server generation before restoring the local copy.
+  // An older accepted/sent cache record must not hide that restored draft.
+  // At the same or newer generation, server delivery state remains authoritative.
   if (
     selected &&
-    (!selected.record.isDraft || !local || local.status === 'synced')
+    (!local ||
+      ((selected.record.draftGeneration ?? 0) >=
+        (local.content.draft_generation ?? 0) &&
+        (!selected.record.isDraft || local.status === 'synced')))
   ) {
     return {
       draft: selected.record.isDraft
@@ -208,7 +234,7 @@ function rejection(
     markThreadDraftSaved(threadId);
     invalidateSoupEntity(threadId);
     void refetchSoupEntity(threadId, 'emailThread').catch(reportError);
-    void fetchAndCacheThread(threadId);
+    fireAndForget(fetchAndCacheThread(threadId), 'email-draft-queue');
   } else {
     toast.failure(message);
     reportError(new Error(`${message}: ${code}`));
@@ -219,7 +245,7 @@ function rejection(
 const SNAPSHOT_READ_ATTEMPTS = 3;
 
 /** The draft and thread records a queued write rebases onto, when cached. */
-async function readCachedDraftAndThread(
+export async function readCachedDraftAndThread(
   draftId: string,
   threadId: string
 ): Promise<
@@ -250,12 +276,13 @@ async function readCachedDraftAndThread(
       ),
     ]);
     if (draft.revision !== thread.revision) continue;
+    const mutationUuid = draft.records[0]?.identity?.mutationUuid;
     return {
       draftId: draft.records[0]?.record.id ?? draftId,
       threadDbId: thread.records[0]?.record.id ?? threadId,
       existingDraft: draft.records[0]?.record,
       existingThread: thread.records[0]?.record,
-      mutationUuid: draft.records[0]?.identity?.mutationUuid ?? undefined,
+      mutationUuid: mutationUuid ?? undefined,
     };
   }
   throw new Error('Email draft cache kept changing; retry the draft write');
@@ -289,8 +316,8 @@ export async function saveEmailDraftQueued(input: {
     ...cached,
     ...(local ? { draftId: local.draftId, clientMetadata: attempt } : {}),
     mutationUuid:
-      cached.mutationUuid ??
       input.args.mutationUuid ??
+      cached.mutationUuid ??
       String(input.args.draftId),
   });
   if (outcome.kind === 'failed') {
@@ -322,15 +349,12 @@ export async function saveEmailDraftQueued(input: {
         reportError
       );
     }
-    void queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
       void refetchSoupEntity(outcome.threadId, 'emailThread').catch(
         reportError
       );
     }
-    void queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(outcome.threadId).queryKey,
-    });
   } catch (error) {
     reportError(error);
   }
@@ -343,6 +367,7 @@ export async function saveEmailDraftQueued(input: {
 
 /** Deletes over the queue; a commit mirrors useDeleteDraftMutation's cache effects. */
 export async function deleteEmailDraftQueued(input: {
+  draftGeneration?: number;
   draftId: string;
   threadId: string;
   completingThread?: boolean;
@@ -359,6 +384,11 @@ export async function deleteEmailDraftQueued(input: {
     mutationUuid: cached.mutationUuid ?? input.draftId,
     draftId: local?.draftId ?? String(cached.draftId),
     clientMetadata: attempt,
+    draftGeneration:
+      input.draftGeneration ??
+      local?.content.draft_generation ??
+      cached.existingDraft?.draftGeneration ??
+      0,
     threadDbId: cached.threadDbId,
   });
   if (outcome.kind === 'failed') {
@@ -379,7 +409,7 @@ export async function deleteEmailDraftQueued(input: {
   }
   try {
     markThreadDraftSaved(input.threadId);
-    void queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
       void refetchSoupEntity(input.threadId, 'emailThread').catch(reportError);
       invalidateAllSoup();

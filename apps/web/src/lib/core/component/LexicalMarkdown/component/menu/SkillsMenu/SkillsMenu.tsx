@@ -11,14 +11,16 @@ import { searchQuickAccessEntities } from '@core/context/quickAccess/entity-sear
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { GithubPullRequestEntity } from '@entity';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import { type SlashMenuMcp, useSlashMenuMcps } from '@queries/slash-menu-mcps';
 import { useSlashMenuPullRequests } from '@queries/soup/slash-menu-pull-requests';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import type { SystemSkillSummary } from '@service-storage/generated/schemas/systemSkillSummary';
 import { cn, Surface } from '@ui';
-import type { LexicalEditor } from 'lexical';
+import { $createTextNode, $insertNodes, type LexicalEditor } from 'lexical';
 import {
   createEffect,
   createMemo,
@@ -52,6 +54,7 @@ import { ItemBin } from '../MentionsMenu/components/ItemBin';
 import { MentionsMenuItem } from '../MentionsMenu/components/MentionsMenuItem';
 import { useEntityMention } from '../MentionsMenu/hooks/useEntityMention';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
+import { McpRow } from './McpRow';
 import { PullRequestRow } from './PullRequestRow';
 import { SkillActions } from './SkillActions';
 
@@ -99,6 +102,7 @@ type SkillsMenuProps = {
  * Typeahead menu opened by typing `/` in an AI markdown area. Lists skill
  * documents the user can access; selecting one inserts a document mention
  * for the skill at the cursor, which the AI reads with its document tools.
+ * Also lists the user's connected MCPs; selecting one names it in the prompt.
  */
 export function SkillsMenu(props: SkillsMenuProps) {
   return (
@@ -129,6 +133,17 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     ...searchQuickAccessEntities(systemSkillItems(), activeSearchTerm()),
   ];
 
+  const {
+    mcps: allMcps,
+    loading: mcpsLoading,
+    error: mcpsError,
+  } = useSlashMenuMcps(props.menu.isOpen);
+  const mcps = createMemo(() => {
+    const term = activeSearchTerm().trim().toLowerCase();
+    return allMcps().filter((item) => item.name.toLowerCase().includes(term));
+  });
+  const pullRequestOffset = () => skills().length + mcps().length;
+
   const commands = createMemo(() =>
     filterCommands(props.agentCommands?.() ?? [], activeSearchTerm())
   );
@@ -145,7 +160,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
         .includes(term)
     );
   });
-  const commandOffset = () => skills().length + pullRequests().length;
+  const commandOffset = () => pullRequestOffset() + pullRequests().length;
   const newSkillIndex = () => commandOffset() + commands().length;
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
@@ -220,6 +235,20 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     insertSkill(item);
   };
 
+  /**
+   * MCP tools are already in the AI's toolset; naming the connection in the
+   * prompt steers it toward that server's tools.
+   */
+  const insertMcp = (item: SlashMenuMcp) => {
+    removeSearch();
+    const text = /\bmcp\b/i.test(item.name) ? item.name : `${item.name} MCP`;
+    props.editor.update(() => {
+      const textNode = $createTextNode(`${text} `);
+      $insertNodes([textNode]);
+      textNode.selectEnd();
+    });
+  };
+
   const insertPullRequest = (item: GithubPullRequestEntity) => {
     removeSearch();
     props.editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
@@ -244,7 +273,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
 
   const deleteSkill = (item: EntityItem) => {
     closeMenu();
-    void deleteAction.execute([item.data]);
+    fireAndForget(deleteAction.execute([item.data]), 'entity-actions');
   };
 
   /**
@@ -283,11 +312,14 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     },
     onSelect: () => {
       const selectedItem = skills()[selectedIndex()];
+      const selectedMcp = mcps()[selectedIndex() - skills().length];
       const selectedPullRequest =
-        pullRequests()[selectedIndex() - skills().length];
+        pullRequests()[selectedIndex() - pullRequestOffset()];
       const selectedCommand = commands()[selectedIndex() - commandOffset()];
       if (selectedItem) {
         itemAction(selectedItem);
+      } else if (selectedMcp) {
+        insertMcp(selectedMcp);
       } else if (selectedPullRequest) {
         insertPullRequest(selectedPullRequest);
       } else if (selectedCommand) {
@@ -328,30 +360,39 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     number | undefined
   >(undefined);
 
+  const preferredHeight = () => (props.agentCommands ? 384 : 256);
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
-    const preferredHeight = props.agentCommands ? 384 : 256;
-    if (h === undefined) return preferredHeight;
-    return Math.min(preferredHeight, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    if (h === undefined) return preferredHeight();
+    return Math.min(
+      preferredHeight(),
+      Math.max(0, h - PANEL_DECORATION_HEIGHT)
+    );
   };
 
   return (
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
+            fullHeight: preferredHeight() + PANEL_DECORATION_HEIGHT,
           }}
           use:clickOutside={() => {
             closeMenu();
           }}
           on:touchstart={(e) => e.stopPropagation()}
         >
-          <Surface depth={2} class="pt-2 pb-1.5 glass bg-menu-glass rounded-xl">
+          <Surface
+            depth={2}
+            hideBorder
+            class="menu-surface rounded-xl pt-2 pb-1.5"
+          >
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{ 'max-height': `${contentMaxHeight()}px` }}
@@ -401,13 +442,53 @@ function SkillsMenuInner(props: SkillsMenuProps) {
                   </For>
                 </Show>
               </ItemBin>
+              <div class="mt-2 border-t border-edge pt-2">
+                <ItemBin
+                  label="Connections"
+                  binType="connections"
+                  isSelected={
+                    selectedIndex() >= skills().length &&
+                    selectedIndex() < pullRequestOffset()
+                  }
+                >
+                  <Show
+                    when={mcps().length > 0}
+                    fallback={
+                      <div class="px-3.5 pb-2 text-xs text-ink-extra-muted">
+                        {mcpsError()
+                          ? 'Could not load connections'
+                          : mcpsLoading()
+                            ? 'Loading connections…'
+                            : searchTerm()
+                              ? 'No matching connections'
+                              : 'No connections yet'}
+                      </div>
+                    }
+                  >
+                    <For each={mcps()}>
+                      {(item, index) => (
+                        <McpRow
+                          item={item}
+                          selected={
+                            selectedIndex() === skills().length + index()
+                          }
+                          onHover={() =>
+                            setSelectedIndexFromMouse(skills().length + index())
+                          }
+                          onSelect={() => insertMcp(item)}
+                        />
+                      )}
+                    </For>
+                  </Show>
+                </ItemBin>
+              </div>
               <Show when={props.agentCommands}>
                 <div class="mt-2 border-t border-edge pt-2">
                   <ItemBin
                     label="Pull requests"
                     binType="pull-requests"
                     isSelected={
-                      selectedIndex() >= skills().length &&
+                      selectedIndex() >= pullRequestOffset() &&
                       selectedIndex() < commandOffset()
                     }
                   >
@@ -428,11 +509,11 @@ function SkillsMenuInner(props: SkillsMenuProps) {
                           <PullRequestRow
                             item={item}
                             selected={
-                              selectedIndex() === skills().length + index()
+                              selectedIndex() === pullRequestOffset() + index()
                             }
                             onHover={() =>
                               setSelectedIndexFromMouse(
-                                skills().length + index()
+                                pullRequestOffset() + index()
                               )
                             }
                             onSelect={() => insertPullRequest(item)}

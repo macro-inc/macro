@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS(SELECT event_id FROM calendar_projection_outbox WHERE next_run_at<=now() AND(lease_until IS NULL OR lease_until<now())\n            ORDER BY next_run_at LIMIT 1 FOR UPDATE SKIP LOCKED)\n            UPDATE calendar_projection_outbox o SET lease_id=$1,lease_until=now()+interval '2 minutes' FROM candidate c WHERE o.event_id=c.event_id\n            RETURNING o.event_id,o.owner_id,o.link_id,o.change_kind,o.revision",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "change_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7dcde00654e4cf97532ec1a6dc4725065d5180f93236f166fb2ab576b966e1d2"
+}

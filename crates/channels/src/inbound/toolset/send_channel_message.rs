@@ -9,7 +9,7 @@ use crate::domain::ports::ChannelService;
 use crate::inbound::toolset::{ChannelToolContext, types::ChannelMessageAttachmentInput};
 use entity_access::domain::ports::EntityAccessService;
 use messages::domain::{
-    models::{MessageAttribution, NewAttachment, PostMessage, PostMessageNotificationPolicy},
+    models::{NewAttachment, PostMessage, PostMessageNotificationPolicy},
     ports::MessageError,
 };
 
@@ -79,7 +79,7 @@ where
                 access,
                 PostMessage {
                     id: None,
-                    attribution: MessageAttribution::ActingUser,
+                    attribution: service_context.attribution(),
                     notification_policy: PostMessageNotificationPolicy::Default,
                     content: self.content.clone(),
                     thread_id: self.thread_id,

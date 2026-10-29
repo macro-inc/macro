@@ -17,7 +17,7 @@ adapter for listing `ScheduledAction` records. Read-only: no mutations.
 
 - Owns: GraphQL types/query for listing scheduled actions.
 - Not here: routine scheduling, triggers, and execution →
-  `services/scheduled_action`.
+  `crates/scheduled_action`.
 
 ## Boundaries
 

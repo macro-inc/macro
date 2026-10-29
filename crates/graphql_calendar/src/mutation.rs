@@ -1,5 +1,9 @@
 use async_graphql::{Context, ErrorExtensions, Object};
-use calendar_events::domain::{changes::CalendarEventChange, ports::CalendarMutationError};
+use calendar_events::domain::{
+    changes::CalendarEventChange,
+    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
+    ports::CalendarMutationError,
+};
 use graphql_common::require_authenticated_user;
 use uuid::Uuid;
 
@@ -17,8 +21,8 @@ pub use inputs::{
     CalendarReminderOverrideInput, CalendarRemindersInput, CreateCalendarEventInput,
     DeleteCalendarEventInput, GraphqlCalendarAttendeeInput, GraphqlCalendarConferenceChange,
     GraphqlCalendarDeletionScope, GraphqlCalendarOutOfOfficeAutoDeclineMode,
-    GraphqlCalendarRsvpScope, GraphqlCalendarUpdateScope, RespondToCalendarEventInput,
-    TimedEventTimeInput, UpdateCalendarEventInput,
+    GraphqlCalendarRsvpScope, GraphqlCalendarUpdateScope, InviteCalendarEventGuestsInput,
+    RespondToCalendarEventInput, TimedEventTimeInput, UpdateCalendarEventInput,
 };
 
 /// Calendar event mutations. Each answers with the event's committed state:
@@ -39,15 +43,27 @@ impl CalendarMutationRoot {
         let viewer = require_authenticated_user(ctx)?.as_ref().to_owned();
         let writes = &ctx.data::<CalendarGraphqlMutationContext>()?.writes;
         let request = input.into_request().map_err(invalid_input)?;
-        let event = writes
-            .create_event(
-                viewer.clone(),
-                request.email_link_id,
-                request.calendar_id,
-                request.draft,
-            )
-            .await
-            .map_err(mutation_error)?;
+        let event = if request.macro_call {
+            writes
+                .create_event_with_macro_call(
+                    viewer.clone(),
+                    request.email_link_id,
+                    request.calendar_id,
+                    request.draft,
+                )
+                .await
+                .map_err(macro_call_error)?
+        } else {
+            writes
+                .create_event(
+                    viewer.clone(),
+                    request.email_link_id,
+                    request.calendar_id,
+                    request.draft,
+                )
+                .await
+                .map_err(mutation_error)?
+        };
         committed_state(writes.as_ref(), viewer, event.id, None).await
     }
 
@@ -122,6 +138,32 @@ impl CalendarMutationRoot {
             .map_err(mutation_error)?;
         committed_state(writes.as_ref(), viewer, request.event_id, before).await
     }
+
+    /// Add guests to an event, the whole series or one occurrence, without
+    /// touching anyone already invited. The organizer may, and so may a
+    /// guest the organizer lets invite others; Google emails the new guests.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn invite_calendar_event_guests(
+        &self,
+        ctx: &Context<'_>,
+        input: InviteCalendarEventGuestsInput,
+    ) -> async_graphql::Result<GraphqlCalendarMutationPayload> {
+        let viewer = require_authenticated_user(ctx)?.as_ref().to_owned();
+        let writes = &ctx.data::<CalendarGraphqlMutationContext>()?.writes;
+        let request = input.into_request().map_err(invalid_input)?;
+        let before = state_before(writes.as_ref(), viewer.clone(), request.event_id).await;
+        writes
+            .invite_guests(
+                viewer.clone(),
+                request.event_id,
+                request.calendar_id,
+                request.guests,
+                request.scope,
+            )
+            .await
+            .map_err(mutation_error)?;
+        committed_state(writes.as_ref(), viewer, request.event_id, before).await
+    }
 }
 
 /// The event as it stood before a write, so the answer can name the
@@ -181,6 +223,42 @@ pub(crate) fn mutation_error(error: CalendarMutationError) -> async_graphql::Err
             "not_attendee",
             "the connected account is not an attendee of this event".into(),
         ),
+        CalendarMutationError::NotOrganizer => (
+            "not_organizer",
+            "Only the organizer can change guest permissions.".into(),
+        ),
+        CalendarMutationError::GuestsCannotInvite => (
+            "guests_cannot_invite",
+            "Only the organizer can invite guests to this event.".into(),
+        ),
+        CalendarMutationError::GuestListHidden => (
+            "guest_list_hidden",
+            "Guests cannot be added while the organizer hides the guest list.".into(),
+        ),
+        CalendarMutationError::GuestsCannotModify => (
+            "guests_cannot_modify",
+            "The organizer doesn't let guests change this event.".into(),
+        ),
+        CalendarMutationError::AlreadyOnCalendar => (
+            "already_on_calendar",
+            "This meeting is already on one of your calendars, so it can't be added to another \
+             one."
+                .into(),
+        ),
+        CalendarMutationError::JoinRequestOpen => (
+            "join_request_open",
+            "You've asked to join this event, so it reaches your calendar as an invitation once \
+             you're added as a guest."
+                .into(),
+        ),
+        CalendarMutationError::CopyRefused(_) => (
+            "copy_refused",
+            "Google Calendar won't add a copy of this event to that calendar.".into(),
+        ),
+        CalendarMutationError::Snapshot => (
+            "snapshot",
+            "This is your own copy of a shared event, so answers and guests won't reach its organizer.".into(),
+        ),
         CalendarMutationError::InvalidInput(message) => ("invalid_input", message.clone()),
         CalendarMutationError::ReauthRequired(_) => (
             "reauth_required",
@@ -207,6 +285,28 @@ pub(crate) fn mutation_error(error: CalendarMutationError) -> async_graphql::Err
         extensions.set("code", code);
         extensions.set("retryable", retryable);
     })
+}
+
+/// Map a failure creating an event together with its Macro call. A meeting
+/// that could not be minted leaves the calendar untouched, so the client may
+/// retry the same create.
+fn macro_call_error(error: CreateEventWithMacroCallError) -> async_graphql::Error {
+    match error {
+        CreateEventWithMacroCallError::Calendar(error) => mutation_error(error),
+        CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::InvalidInput(message)) => {
+            invalid_input(async_graphql::Error::new(message))
+        }
+        CreateEventWithMacroCallError::MeetingLink(error) => {
+            tracing::error!(error = ?error, "calendar event macro call creation failed");
+            async_graphql::Error::new(
+                "the Macro call for the event could not be created; the event was not saved",
+            )
+            .extend_with(|_, extensions| {
+                extensions.set("code", "macro_call_failed");
+                extensions.set("retryable", true);
+            })
+        }
+    }
 }
 
 /// Tag a malformed input with the same `invalid_input` code the calendar

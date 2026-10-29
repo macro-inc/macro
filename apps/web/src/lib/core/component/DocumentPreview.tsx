@@ -1,10 +1,11 @@
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
 } from '@app/features/calendar/utils/calendar-description';
+import { SharedEventActions } from '@app/features/calendar-view/components/SharedEventActions';
 import {
   type CalendarMentionTarget,
+  calendarEventDeepLink,
   copyCalendarEventMentionTarget,
 } from '@app/features/calendar-view/copy-event-mention';
 import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
@@ -30,29 +31,37 @@ import {
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
-import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
+import {
+  isBlockAlias,
+  itemToBlockName,
+  resolveBlockAlias,
+} from '@core/constant/allBlocks';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { matches } from '@core/util/match';
-import { openExternalUrl } from '@core/util/url';
+import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
-import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
-import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
-import MessageIcon from '@phosphor/chat-circle.svg';
-import ThreadIcon from '@phosphor/chats-circle.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import HighlightIcon from '@phosphor/highlighter-circle.svg';
-import Link from '@phosphor/link.svg';
-import MapPinIcon from '@phosphor/map-pin-simple.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
-import UsersIcon from '@phosphor/users.svg';
+import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
+import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
+import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
+import MessageIcon from '@icon/system/regular/chat-circle.svg';
+import ThreadIcon from '@icon/system/regular/chats-circle.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import HighlightIcon from '@icon/system/regular/highlighter-circle.svg';
+import Link from '@icon/system/regular/link.svg';
+import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
+import TextTIcon from '@icon/system/regular/text-t.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import {
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
@@ -65,7 +74,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Card, cn, Dropdown, Item } from '@ui';
+import { Button, Card, cn, Dropdown, Item } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -78,9 +87,11 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
+import { DocumentDownloadButton } from './DocumentDownloadButton';
 import {
   DocumentPreviewIconSkeleton,
   DocumentPreviewSkeleton,
@@ -90,6 +101,7 @@ import {
   TaskPropertiesPreview,
   TaskPropertiesPreviewProvider,
 } from './TaskPropertiesPreview';
+import { getShareItemNoun } from './TopBar/linkShare';
 
 /**
  * Returns the appropriate icon component based on the icon name
@@ -242,15 +254,18 @@ function ImageCoverStrip(props: {
 
     const controller = new AbortController();
     let objectUrl: string | undefined;
-    fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
-      (result) => {
-        if (controller.signal.aborted || result.isErr()) return;
-        const blob = result.value;
-        objectUrl = URL.createObjectURL(
-          new Blob([blob], { type: 'image/svg+xml' })
-        );
-        setSvgObjectUrl(objectUrl);
-      }
+    fireAndForget(
+      fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
+        (result) => {
+          if (controller.signal.aborted || result.isErr()) return;
+          const blob = result.value;
+          objectUrl = URL.createObjectURL(
+            new Blob([blob], { type: 'image/svg+xml' })
+          );
+          setSvgObjectUrl(objectUrl);
+        }
+      ),
+      'document-preview'
     );
 
     onCleanup(() => {
@@ -316,7 +331,7 @@ const calendarTimeFormat = new Intl.DateTimeFormat(undefined, {
 
 /** One compact local-time schedule line for a calendar mention preview. */
 export function calendarPreviewSchedule(
-  event: PreviewCalendarEventAccess['event']
+  event: Pick<PreviewCalendarEventAccess['event'], 'time'>
 ): string | undefined {
   if (event.time.kind === 'allDay') {
     const start = parseLocalDate(event.time.startDate);
@@ -339,9 +354,26 @@ export function calendarPreviewSchedule(
     : `${calendarDateFormat.format(start)}, ${calendarTimeFormat.format(start)} – ${calendarDateFormat.format(end)}, ${calendarTimeFormat.format(end)}`;
 }
 
+/** How the card says the viewer holds a meeting someone else mentioned. */
+function heldOnCalendarLabel(
+  viewerCopy: PreviewCalendarEventAccess['event']['viewerCopy']
+): string {
+  return match(viewerCopy)
+    .with('snapshot', () => 'Your copy is on your calendar')
+    .with('invitation', () => 'You’re invited · on your calendar')
+    .with('event', null, undefined, () => 'On your calendar')
+    .exhaustive(() => 'On your calendar');
+}
+
 /** Meeting-level rows of the calendar mention hover card. */
-function CalendarEventPreviewDetails(props: {
-  event: PreviewCalendarEventAccess['event'];
+export function CalendarEventPreviewDetails(props: {
+  event: Omit<PreviewCalendarEventAccess['event'], 'updatedAt'>;
+  /** The mentioned event, which a read-only share copies from. */
+  mentionedEventId: string;
+  /** Opens the viewer's own copy; absent where the card cannot open it. */
+  onOpen?: (event: MouseEvent) => void;
+  /** Team-calendar projections have no channel-share mutation capabilities. */
+  sharedActions?: boolean;
 }) {
   const organizer = () =>
     props.event.organizerName ?? props.event.organizerEmail;
@@ -366,13 +398,25 @@ function CalendarEventPreviewDetails(props: {
     }
     openExternalUrl(anchor.href);
   });
+  // The mention names someone else's copy of a meeting the viewer also holds,
+  // such as one shared with them that they added or were invited to.
+  const heldFromMention = () =>
+    !!props.event.viewerEventId &&
+    props.event.viewerEventId !== props.mentionedEventId;
   return (
     <div class="px-2 pb-2 flex flex-col gap-1 text-sm text-ink-muted">
-      <Show when={!props.event.viewerEventId}>
-        <MetadataInfo icon={EyeIcon}>
-          Shared with you · not on your calendar
-        </MetadataInfo>
-      </Show>
+      <Switch>
+        <Match when={!props.event.viewerEventId}>
+          <MetadataInfo icon={EyeIcon}>
+            Shared with you · not on your calendar
+          </MetadataInfo>
+        </Match>
+        <Match when={heldFromMention()}>
+          <MetadataInfo icon={CalendarCheckIcon}>
+            {heldOnCalendarLabel(props.event.viewerCopy)}
+          </MetadataInfo>
+        </Match>
+      </Switch>
       <Show when={calendarPreviewSchedule(props.event)}>
         {(schedule) => (
           <MetadataInfo icon={ClockIcon}>
@@ -414,6 +458,31 @@ function CalendarEventPreviewDetails(props: {
           </span>
         </MetadataInfo>
       </Show>
+      <Switch>
+        <Match
+          when={!props.event.viewerEventId && props.sharedActions !== false}
+        >
+          <SharedEventActions
+            eventId={props.mentionedEventId}
+            title={props.event.title}
+            canRequestToJoin={props.event.canRequestToJoin ?? false}
+            joinRequestStatus={props.event.joinRequestStatus ?? undefined}
+          />
+        </Match>
+        <Match when={heldFromMention() && props.onOpen}>
+          {(open) => (
+            <div
+              class="mt-1 flex flex-wrap items-center gap-1"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Button variant="secondary" size="xs" onClick={open()}>
+                <CalendarCheckIcon class="size-3.5" />
+                Open
+              </Button>
+            </div>
+          )}
+        </Match>
+      </Switch>
     </div>
   );
 }
@@ -426,6 +495,7 @@ function CalendarEventPreviewDetails(props: {
  */
 export type DocumentPreviewContentProps = {
   delete?: () => void;
+  convertToText?: (link: string) => void;
   collapseInfo?: {
     isCollapsable: boolean;
     isCollapsed: boolean;
@@ -448,7 +518,24 @@ export type DocumentPreviewContentProps = {
     characterCount?: number;
   };
   useFallbackData?: boolean;
+  /**
+   * Runs once an open action has handed the target to a split. Native apps
+   * keep the pane behind a stacked pane mounted, so a sheet left up would
+   * stay over what was just opened.
+   */
+  onOpened?: () => void;
 };
+
+/**
+ * Tasks, skills and snippets are documents underneath; their cards name the
+ * kind of item the reference points at rather than its storage.
+ */
+function aliasNoun(alias: BlockAlias): string | undefined {
+  return match(alias)
+    .with('task', 'skill', 'snippet', (named) => named)
+    .with('csv', () => undefined)
+    .exhaustive();
+}
 
 /**
  * The inner preview body shared by every document/task preview: the header
@@ -495,6 +582,20 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     return props.documentInfo.type;
   });
 
+  // A gone or hidden item's card names what it was. The preview reports a
+  // cancelled meeting as missing too.
+  const itemNoun = () => {
+    const type = props.documentInfo.type;
+    return (
+      (isBlockAlias(type) ? aliasNoun(type) : undefined) ??
+      getShareItemNoun(itemPreviewEntity().type)
+    );
+  };
+  const deletedMessage = () =>
+    itemPreviewEntity().type === 'calendar_event'
+      ? 'This event was deleted or cancelled.'
+      : `This ${itemNoun()} was deleted or doesn't exist.`;
+
   // Derived state
   const canOpenInChat = createCallback(() => {
     if (blockName && ['chat'].includes(blockName)) {
@@ -538,14 +639,13 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   const isOpenable = () =>
     !!props.documentInfo.isOpenable && !isReadOnlyCalendarShare();
 
-  const openDocument = createCallback(async (event: MouseEvent) => {
+  const openTarget = async (event: MouseEvent): Promise<boolean> => {
     const calendarTarget = calendarOpenTarget();
     if (calendarTarget) {
-      await openCalendarEventSplit({
+      return openCalendarEventSplit({
         ...calendarTarget,
         openInNewSplit: event.shiftKey,
       });
-      return;
     }
     const type = targetBlockType();
     const splitManager = globalSplitManager();
@@ -559,7 +659,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         link += `?${queryParams}`;
       }
       navigate(link);
-      return;
+      return true;
     }
 
     if (event.shiftKey) {
@@ -567,7 +667,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         { type, id: props.documentInfo.id, params: props.documentInfo.params },
         { preferNewSplit: true }
       );
-      return;
+      return true;
     }
 
     splitManager.replaceAllSplits({
@@ -575,19 +675,27 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
       id: props.documentInfo.id,
       params: props.documentInfo.params,
     });
+    return true;
+  };
+
+  const openDocument = createCallback(async (event: MouseEvent) => {
+    if (await openTarget(event)) props.onOpened?.();
   });
 
   const handleOpenInChat = () => {
     const preview = item();
-    void openChatWithAgent({
-      type: 'document',
-      id: props.documentInfo.id,
-      name:
-        (isAccessiblePreviewItem(preview) ? preview.name : undefined) ??
-        props.documentInfo.name ??
-        '',
-      fileType: targetBlockType(),
-    });
+    fireAndForget(
+      openChatWithAgent({
+        type: 'document',
+        id: props.documentInfo.id,
+        name:
+          (isAccessiblePreviewItem(preview) ? preview.name : undefined) ??
+          props.documentInfo.name ??
+          '',
+        fileType: targetBlockType(),
+      }),
+      'document-preview'
+    );
   };
 
   // Copying an event has to reproduce what the calendar's own copy action
@@ -616,39 +724,36 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     };
   };
 
-  const handleCopy = () => {
-    try {
-      let hostname = window.location.hostname.replace('www.', '').toLowerCase();
-      if (hostname === 'localhost') {
-        hostname = 'dev.macro.com';
-      }
+  const documentLink = () => {
+    const mentionTarget = calendarMentionTarget();
+    if (mentionTarget) return calendarEventDeepLink(mentionTarget);
+    return buildSimpleEntityUrl(
+      { type: targetBlockType(), id: props.documentInfo.id },
+      props.documentInfo.params
+    );
+  };
 
+  const handleCopy = async () => {
+    try {
       const mentionTarget = calendarMentionTarget();
       if (mentionTarget) {
-        copyCalendarEventMentionTarget(mentionTarget);
+        await copyCalendarEventMentionTarget(mentionTarget);
         return;
       }
 
-      let link = `https://${hostname}/app/${targetBlockType()}/${props.documentInfo.id}`;
-
-      if (
-        props.documentInfo.params &&
-        Object.keys(props.documentInfo.params).length > 0
-      ) {
-        const queryParams = new URLSearchParams(
-          props.documentInfo.params
-        ).toString();
-        link += `?${queryParams}`;
-      }
-      navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(documentLink());
       toast.success('Copied document link to clipboard');
     } catch (e) {
       console.error(e);
+      toast.failure('Could not copy link');
     }
   };
 
   const handleCopyBranchName = () => {
-    copyBranchNameToClipboard(props.documentInfo.id);
+    fireAndForget(
+      copyBranchNameToClipboard(props.documentInfo.id),
+      'document-preview'
+    );
   };
 
   const isSplitAlreadyOpen = () => {
@@ -663,14 +768,16 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     );
   };
 
-  const openInNewSplit = createCallback(async () => {
+  const openTargetInNewSplit = async (): Promise<boolean> => {
     const calendarTarget = calendarOpenTarget();
     if (calendarTarget) {
-      await openCalendarEventSplit({ ...calendarTarget, openInNewSplit: true });
-      return;
+      return openCalendarEventSplit({
+        ...calendarTarget,
+        openInNewSplit: true,
+      });
     }
     const splitManager = globalSplitManager();
-    if (!splitManager) return;
+    if (!splitManager) return false;
 
     const type = targetBlockType();
     const existing = splitManager.getSplitByContent(
@@ -690,7 +797,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
       });
     }
 
-    if (!isBlockNameWithLocation(type)) return;
+    if (!isBlockNameWithLocation(type)) return true;
 
     const orchestrator = splitManager.getOrchestrator();
     const handle = await orchestrator.getBlockHandle(
@@ -699,6 +806,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     );
 
     await handle?.goToLocationFromParams(props.documentInfo.params);
+    return true;
+  };
+
+  const openInNewSplit = createCallback(async () => {
+    if (await openTargetInNewSplit()) props.onOpened?.();
   });
 
   const PreviewTitle = (local: { name: string }) => (
@@ -712,7 +824,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           class="min-w-0 text-left wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
           onClick={(event) => {
             event.stopPropagation();
-            void openDocument(event);
+            fireAndForget(openDocument(event), 'document-preview');
           }}
         >
           {local.name}
@@ -723,16 +835,19 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
 
   const renderActionButtons = () => (
     <Item.Actions
-      class="col-start-3 row-start-1 h-5"
+      class="col-start-3 row-start-1"
       onClick={(event) => event.stopPropagation()}
     >
+      <Show when={targetBlockType() === 'video'}>
+        <DocumentDownloadButton documentId={props.documentInfo.id} />
+      </Show>
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          size="icon-sm"
+          size="icon-md"
           variant="ghost"
           aria-label="Reference actions"
         >
-          <DotsThree />
+          <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>
@@ -744,6 +859,14 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 {props.previewInfo?.isPreviewable
                   ? 'Convert to Embed'
                   : 'Convert to Card View'}
+              </Dropdown.Item>
+            </Show>
+            <Show when={props.convertToText}>
+              <Dropdown.Item
+                onSelect={() => props.convertToText?.(documentLink())}
+              >
+                <TextTIcon class="size-4" />
+                Convert to Plain Text
               </Dropdown.Item>
             </Show>
             <Show when={props.collapseInfo?.isCollapsable}>
@@ -776,7 +899,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
               </Dropdown.Item>
             </Show>
             <Show when={isOpenable() && !isSplitAlreadyOpen()}>
-              <Dropdown.Item onSelect={() => void openInNewSplit()}>
+              <Dropdown.Item
+                onSelect={() =>
+                  fireAndForget(openInNewSplit(), 'document-preview')
+                }
+              >
                 <ColumnsPlusRight class="size-4" />
                 Open in New Split
               </Dropdown.Item>
@@ -923,7 +1050,19 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 {/* Calendar event schedule, location, and people */}
                 <Show when={matches(item(), isCalendarEventPreviewItem)}>
                   {(calendarItem) => (
-                    <CalendarEventPreviewDetails event={calendarItem().event} />
+                    <CalendarEventPreviewDetails
+                      event={calendarItem().event}
+                      mentionedEventId={props.documentInfo.id}
+                      onOpen={
+                        isOpenable()
+                          ? (event) =>
+                              fireAndForget(
+                                openDocument(event),
+                                'document-preview'
+                              )
+                          : undefined
+                      }
+                    />
                   )}
                 </Show>
 
@@ -994,11 +1133,18 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
               props.documentInfo.name
             }
             fallback={
-              <div class="text-sm p-4">
+              <div class="relative text-sm p-4">
+                {/* An editor can still turn a reference the viewer can't
+                    open back into its link. */}
+                <Show when={props.convertToText}>
+                  <div class="absolute top-3 right-3">
+                    {renderActionButtons()}
+                  </div>
+                </Show>
                 {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized />
+                  <Unauthorized noun={itemNoun()} />
                 ) : (
-                  <NotFound />
+                  <NotFound message={deletedMessage()} />
                 )}
               </div>
             }
@@ -1050,6 +1196,7 @@ export function PopupPreview(
         <Suspense fallback={<DocumentPreviewSkeleton />}>
           <DocumentPreviewContent
             delete={props.delete}
+            convertToText={props.convertToText}
             collapseInfo={props.collapseInfo}
             documentInfo={props.documentInfo}
             previewInfo={props.previewInfo}

@@ -3,18 +3,20 @@
 ## What it is
 
 Email feature: Lambda, triggered every minute by EventBridge, that finds
-scheduled email drafts whose `send_time` has passed and publishes a
-`ScheduledPubsubMessage` per draft for `email_service` to actually send.
+due delivery/reconciliation work and terminal deferred message deletions, then
+publishes a `ScheduledPubsubMessage` for the email worker to process.
 
 ## Start here
 
-- `src/handler.rs`: `fetch_pending_scheduled_messages` query + publish loop;
+- `src/outbound.rs`: recovery selection and queue adapters;
+  `src/handler.rs` invokes the email domain recovery scanner;
   `README.md` explains the trigger cadence and the `scheduled_messages` table.
 
 ## Scope
 
-- Owns: finding due scheduled sends and enqueuing them exactly once.
-- Not here: sending the email itself, or the enqueue-failure recovery path →
+- Owns: repeatedly finding eligible durable work and publishing wakeups; worker
+  claims provide fencing and idempotency.
+- Not here: provider submission, reconciliation, or deferred-deletion application →
   `email_service`'s scheduled message worker (`src/pubsub/scheduled`).
 
 ## Checks

@@ -1,5 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import FolderIcon from '@phosphor/folder.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import { For } from 'solid-js';
 import type { DriveFolderNode } from '../core/types';
 import type { DriveLocationMenu } from './drive-navigation';

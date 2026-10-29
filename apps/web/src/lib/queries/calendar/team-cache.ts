@@ -64,16 +64,24 @@ export function resetTeamCalendarSession() {
 }
 
 /**
- * Clear teammates' payloads first: a revoked title must disappear even if the
- * refetch fails. The viewer's own team and settings only refetch, so their
- * controls never drop back to loading, and a setting with a save in flight
- * waits for that save to refetch it.
+ * Clear teammates' payloads unless the server excluded OOO changes: a revoked
+ * title must disappear even if the refetch fails. The viewer's own team and
+ * settings only refetch, so their controls never drop back to loading, and a
+ * setting with a save in flight waits for that save to refetch it.
  */
-export async function refreshTeamCalendarQueries() {
+export async function refreshTeamCalendarQueries(options?: {
+  outOfOfficeChanged: boolean;
+}) {
   const saving = (mutationKey: QueryKey) =>
     queryClient.isMutating({ mutationKey }) > 0;
   await Promise.all([
-    queryClient.resetQueries({ queryKey: calendarKeys.teamOutOfOffice._def }),
+    options?.outOfOfficeChanged === false
+      ? queryClient.invalidateQueries({
+          queryKey: calendarKeys.teamOutOfOffice._def,
+        })
+      : queryClient.resetQueries({
+          queryKey: calendarKeys.teamOutOfOffice._def,
+        }),
     queryClient.invalidateQueries({
       queryKey: calendarTeamKeys.identity._def,
     }),

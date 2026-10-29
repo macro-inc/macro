@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import Image from '@phosphor-icons/core/regular/image.svg';
+import Image from '@icon/system/regular/image.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
 import { createSignal, Show, Suspense } from 'solid-js';
 

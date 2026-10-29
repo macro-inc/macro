@@ -1,8 +1,8 @@
 # Databases
 
 Choose **Create → Database** to create a database and its first table with a Name
-column. **C → L** opens a new database with its title selected and ready to type.
-Enter saves the title and focuses A1, ready to type without another click.
+column. **C → L** opens a new database with the normal static split-header title;
+opening or creating it does not start renaming or move focus into a cell.
 Opening **Ctrl-K** refreshes database discovery so a database created by AI or
 another client appears without reloading. **All** and **Documents** categories
 match its name, including databases with no view history.
@@ -18,10 +18,13 @@ Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
 A database contains tables; records belong to a table and
-its properties describe each record. The database name in the split header is an
-inline input for editors: click it to rename. Enter or leaving it saves; Escape
-cancels, and a failed rename shows a toast. Viewers without edit access see the
-split header's `viewer` badge instead.
+its properties describe each record. The database name in the split header is a
+static label until edited. Double-click it or choose **Rename** in Database actions
+to edit the same inline title with the current name selected. On touch devices,
+use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+a title does not enter the grid, and a failed rename shows a toast. Reload to verify
+the saved name persists. Viewers cannot enter rename from either entry point and
+see the split header's `viewer` badge instead.
 
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
@@ -42,6 +45,13 @@ conversion lists by default; request `includeEditingMetadata: true` when those
 are needed. `SaveDatabaseView` / `DeleteDatabaseView` manage table and kanban
 presentation; `SaveDatabaseQuery` saves a live answer. Document live-answer agents
 remain read-only, including schema commands and database creation.
+
+Programmatic clients use `POST /databases/query` or the SDK's
+`database.query(sql)` / `macro.databases.query(sql, options)`. The service runs
+one statement as the authenticated user, across their visible databases; writes
+require edit access. Pass returned `readVersions` as `baseVersions` to guard a
+follow-up write, check `truncatedTables` before reporting aggregate totals, and
+never automatically retry a write statement.
 
 ## Feature flag
 
@@ -140,18 +150,25 @@ editing still works. The standalone database app keeps its full column controls.
 
 Use **Add column** immediately after the table’s headers. It creates an **Unnamed**
 Text column (**Unnamed 2**, and so on if that name exists), selects its name in the
-header, and lets you type immediately. Enter saves; Escape keeps the default name.
+header, and lets you type immediately while creation saves in the background.
+Renaming or editing the new column waits for creation to finish; a refused
+creation removes the preview and shows an error. Enter saves the name and immediately
+puts the typing cursor in that column's first cell, without waiting for creation
+or renaming to finish. Escape keeps the default name.
 There is no creation dialog. Double-click a header, press F2 while it is focused,
 or choose **Rename column** from its arrow or right-click menu to rename it later.
-Its type icon stays in place while editing. SQL refers to tables and columns by
+Its type icon stays in place while editing. A rename updates the cached column
+label before the save finishes and keeps the same header mounted; the old name
+must not flash back while the schema refreshes. Reload to confirm it persisted.
+SQL refers to tables and columns by
 their display names (double-quoted), so a rename changes the name a saved query
 must use.
 
 The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
 
 The header arrow menu groups schema and view actions. **Change type** checks the
-column's values against Text, Number, Select, Multi-select, Date, Checkbox, URL,
-People, Documents, Tasks, and relations to tables in this database, showing
+column's values against Text, Number, Select, Multi-select, Date, Time range,
+Checkbox, URL, People, Documents, Tasks, and relations to tables in this database, showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
 relation). A type some values would not survive shows how many, such
@@ -163,7 +180,8 @@ batch), leaving this column as it is. Every other type converts immediately. A
 type change never empties a value; only deleting a cell, row, column, table or
 option does. Plain number strings can become numbers; padding, leading zeros and
 ambiguous values count as values that don't fit. A date becomes its `YYYY-MM-DD`
-text. Changing a placement never changes another table that uses the same property.
+text, or a one-day range. Text and single selects become ranges when each value
+is `start/end` or one date; a range can only become text. Changing a placement never changes another table that uses the same property.
 A relation can hold multiple records.
 
 **Formula columns.** **Change type → Formula** opens the formula editor under the
@@ -183,6 +201,8 @@ is refused ("Total's formula uses Quantity; change that formula first").
 **Delete column** opens a confirmation;
 it removes this table’s column and values while preserving other tables.
 Drag a column header left or right to reorder it, or use **Move left / Move right**.
+Holding or dragging a column menu item, including a type choice, does not move
+the column; a drag must start on the header itself.
 To add a column next to another, right-click its header and choose **Insert left** or
 **Insert right**: a Text column appears on that side with its name selected for
 editing, and its type is inferred from what you type.
@@ -201,19 +221,25 @@ text. Choosing Text explicitly disables inference. Populated columns never infer
 new type. Reference cells use Macro’s native mention menu, limited to the selected
 kind (for example, People shows users, Tasks shows tasks). Arrow keys navigate and
 Enter chooses; Escape returns without changing the value. Delete clears a selected
-reference cell. Text supports markdown and inline native mentions such as
+reference cell. Click a populated document/file reference (or press Enter) to open
+it in another split while keeping the database open. On touch, tapping uses the
+app's normal forward navigation. Right-click a populated editable reference to
+choose a replacement; F2 also opens the picker, and Escape cancels. Empty
+references still open the picker on click. Read-only references can be opened but
+not changed. Text supports markdown and inline native mentions such as
 `Say hi to @Maya`, stored using the same mention encoding as documents. A mention
 inside a sentence preserves Text.
 
 ### Select options
 
-A select or multi-select cell opens a compact option picker with its search field
-focused (**Search or create…**). Typing filters the options; when the typed name is
+A select or multi-select cell opens an option picker at least as wide as the cell,
+with its search field focused (**Search or create…**) as a borderless row above a
+divider. Typing filters the options; when the typed name is
 not an option yet, a **Create “…”** row adds it, picks it, and keeps focus (on the
 cell for a single select, in the search for a multi-select, which stays open). Arrow
-keys move through the rows and Enter picks. The **Clear value** Button sits on the
-right of a separate, bottom-padded footer below the option list. It sizes to its
-label and empties the cell; it stays available while searching.
+keys move through the rows and Enter picks. **Clear value** is a full-width row
+below a divider at the bottom, aligned with the options. It empties the cell and
+stays available while searching.
 From a freshly opened picker, Down starts at the first option and Up starts at the
 last. With no search text, Down after the last option focuses **Clear value** when present; Enter clears.
 From that button, Up returns to the last option and Down returns to the first.
@@ -252,14 +278,24 @@ toast. A database's only table cannot be deleted: the item is disabled there.
 An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
-Click a cell to edit, or focus it with the arrow keys and start typing. Enter
-saves and keeps that cell selected; Down then selects the same column in the
-next row, ready to type. Arrow keys inside a text editor keep their native cursor
+Click a cell to edit, or focus it with the arrow keys and start typing. The
+whole cell takes the click, including the space below its value when wrapped
+pills make the row taller; values sit vertically centered in such rows. Enter
+saves and immediately edits the same column in the next row, including the empty
+new-record row. Typing there starts the next record without waiting for the
+previous save. Shift+Enter moves up. Both place the typing cursor at the end of
+the destination cell's text, ready to type. The active cell has one subtle outline,
+with no additional border around its editor. Arrow keys inside a text editor keep their native cursor
 behavior. Escape cancels. Tab saves and immediately edits the next writable cell;
 Shift+Tab moves backward, and both wrap between rows. Read-only columns are
-skipped. Select values open the option picker; checkboxes change
+skipped. If a pending save infers a column's type, the cell currently being typed
+in keeps its editor, draft and focus until it is committed or canceled.
+Select values open the option picker; checkboxes change
 directly. Type on a selected select cell to search its options; Enter chooses a
 match, and Tab chooses the highlighted option or typed match before moving on.
+Blank cells stay visually blank; no `Unnamed` placeholder is inserted. Delete
+and Backspace both clear a selected cell immediately, including select and
+checkbox cells. While editing text, they retain their normal text-editing behavior.
 Number cells display thousands separators (for example, `100,000`); opening an
 editor shows the raw number for editing. Invalid numbers and integers outside the
 safe integer range stay in the editor with a failure outline instead of saving a
@@ -272,6 +308,25 @@ Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
 for a calendar. Typing on a selected date cell starts that search; Delete clears
 the date, and Tab leaves the selector without changing it.
+Time-range cells show their days (`Oct 9 – 13, 2026`) or, with times,
+`Oct 9, 9:00 AM – 5:00 PM` / `Oct 9, 9:00 AM – Oct 13, 5:00 PM`. They open the
+calendar event composer's date/time fields (`components/date-time-range`), with
+focus on the first, all on one row: a date button per end that drops down a
+calendar, and, with times, a time field beside each (type `3`, `3p`, `330` or
+`15:30` and the 15-minute list jumps there and fills in the rest; Enter, Tab
+or leaving commits, Escape restores; an end's times show the duration from the
+start), an **All day** switch, and an × (**Clear**), which empties the range and
+closes. An empty cell shows **Start date** / **End date** and starts all day;
+the first day picked sets both ends. A new start carries the end along,
+keeping the range's length. Turning All day off gives each end the next full
+hour, an hour long. An end before the start is shown in red with an inline
+message and never saved. Every other change saves at once; the fields' lists
+open inside the menu, Escape closes an open list and then the menu, and a
+click outside closes it. Delete on the cell empties it
+too. Range filters test a whole day: contains (the range overlaps that day),
+does not contain, starts after, starts on or before, ends before, ends on or
+after, so a 1 PM to 5 PM range contains its day. Properties of type **Time range**
+edit with the same fields.
 Invalid numbers remain in the editor for correction.
 Drag across table cells to select a rectangle, or Shift-click another cell to
 extend from the first cell. Delete or Backspace clears editable cells in that
@@ -318,6 +373,9 @@ not at all. New tables, columns and options carry ids the client mints, so
 later ops of the same batch can name them. Agents and MCP write SQL,
 which the same engine turns into those ops on the server, and their schema
 tools send the same ops.
+When databases share a table name, a selected database takes precedence for
+unqualified table names. Database-qualified names still select that database;
+without a selection, duplicate table names are ambiguous.
 Rows keep the table's order unless the view sorts them. After each of your own
 edits the grid reads its rows again, and another viewer's edit reaches an open
 grid or answer within a moment through the gateway's table-changed message; a
@@ -335,7 +393,7 @@ saved record. The same uncertain draft cannot submit another insert.
 View-only access allows browsing, searching, and filtering or sorting All records
 for yourself, but disables data, schema and stored view changes.
 
-## Table and board views
+## Table, board, and timeline views
 
 Tables contain the records; **Views** are shared ways to show them, stored with the
 database and the same for everyone who can open it. **All records** is always first:
@@ -343,11 +401,15 @@ the table in its own order. Filters, sorts and column changes made on All record
 change only what you see, until you make a view of them. Viewers can search and use
 All records; only editors change stored views.
 
-**New view** (the **+** beside the tabs) opens a dropdown with **Table** and
-**Board**. Choosing one immediately creates and opens it with an available default
-name, keeping the current filter and sort. A board starts grouped by the first
-single-select or single-person column, or creates a Status column if there are
-none. After creation, use the **Group by** dropdown in the board toolbar to change
+**New view** (the **+** beside the tabs) opens a dropdown with **Table**,
+**Board**, and **Timeline**. Choosing one immediately creates and opens it with an
+available default name, keeping the current filter and sort. A board starts grouped
+by the first single-select or single-person column, or creates a Status column if
+there are none. A timeline spans the first date-range column, or creates a Time
+range column if there are none. A view tab's right-click menu switches a stored view
+with **Show as table**, **Show as board** (one item per grouping column, or
+**Create a Status column**), and **Show as timeline** (**Along …** per date-range
+column, or **Create a Time range column**). After creation, use the **Group by** dropdown in the board toolbar to change
 the grouping column. Card settings stay; lane ordering resets for the new groups.
 Multi-selects and checkboxes cannot group a board. Double-click a view tab, press
 F2, or right-click it and choose **Rename view** to rename it in place (Enter saves,
@@ -377,7 +439,7 @@ and the row is scrolled to and highlighted, or its record opens when the view do
 not show it. Escape closes the search and returns focus to where it was opened
 from. The term is kept while you switch tables.
 
-A view's layout, Table or Board, is chosen when the view is created. Creating a
+A view's layout, Table, Board or Timeline, is chosen when the view is created. Creating a
 view closes the menu and opens its tab immediately while saving. If saving
 fails, the view shows **Retry** and **Dismiss**; retry checks whether the first
 attempt committed before creating anything again. Columns
@@ -455,6 +517,62 @@ of the board matches Tasks' hidden-lanes panel. Its **New group** button opens a
 name field. Its right-aligned actions show **Cancel** followed by a filled **Add
 group** button, which adds another option and lane with the next palette colour.
 Escape cancels; validation and save failures keep the draft for retry.
+
+A timeline draws one bar per record across its date-range column, on the shared
+Gantt chart: an all-day range spans whole days, and a range with times starts and
+ends at its exact times in the viewer's time zone. The chart is the whole view:
+the record list drawer at the left starts closed (**Show timeline items** opens
+it), beside **Today**, grid settings and zoom controls. A bar shows its record's
+name, then, as room allows, its times (**9:30 AM – 4 PM** within a day,
+**Oct 9, 10:30 AM → Oct 13, 5 PM** across days; all-day bars show none), then
+its bar fields separated by middots. What does not fit drops whole from the
+end (fields first, then times); only a name longer than its bar is cut short.
+Records with an empty range show a dashed chip with their name and **No
+dates** in their row at today (now at hours zoom), kept at the nearest visible
+edge when today is scrolled away; ungrouped, they sit under an **Undated**
+heading. Clicking a bar or chip, or Enter on it (they are focusable in row
+order), opens its record.
+The **Timeline menu** (the **⋯** above the chart, for anyone who can change the
+view) chooses **Time range** (which time-range column the bars span), **Bar label**
+(the column each record is named by, the table's first by default), **Bar
+fields** (other columns shown after the name, in the order turned on), **Group
+by** (**None**, or a single select or single person) and **Color by** (**None**,
+or a select or tag column). A colored bar takes its option's color as a soft
+fill with a solid left edge; a multi-valued cell tints by its first colored
+option and shows the others as dots at the bar's right end, and an empty cell
+or a removed or uncolored option stays neutral. A grouped timeline lists
+every option as a collapsible group, even an empty one, then the records with no
+value; undated records stay in their group. Zooming in
+(Ctrl/Cmd-scroll, the zoom buttons, or **Hours** under settings' **Period**)
+continues past days into hours: the header shows each day (**Fri, Oct 9**) above
+hour ticks that thin out as you zoom out, midnights draw a stronger line, nights
+and weekends are faintly shaded, and the today line becomes a now line with the
+current time. **Today** then centers on the current time. Editors can drag a bar
+to move it, or drag its left or right edge to change its start or end; the range
+saves when released, and Escape cancels, with both ends shown while dragging.
+All-day bars always move by whole days and stay all day. Bars with times move by
+whole days at week and month zoom (keeping their times), by hours at day zoom
+and by 15 minutes at hours zoom. Dragging a chip across gives its record dates:
+the day it is dropped on, or an hour at hours zoom. On a grouped timeline, a
+drag that starts mostly up or down moves the bar or chip into the group it is
+dropped on (highlighted while dragging) instead of rescheduling it; with the
+drawer open, a record's name drags between groups too. On touch, press and hold
+a bar before dragging it; a moving touch scrolls. Drag across empty space in the
+chart to create a record spanning those days, or at hours zoom those times in
+15-minute steps; it opens once saved.
+Right-clicking a bar, a chip or (drawer open) a record's name, or Shift+F10 /
+the menu key on a focused one, opens its menu: **Open record**, **Edit time
+range…** (the cell's date/time fields beside the bar), **Rename** (a name field over the
+bar; Enter or leaving it saves, Escape cancels), **Move to group** (grouped
+timelines; listed inline on phones), **Remove dates** or, on a chip, **Add
+dates** (all day today), **Duplicate** and **Delete record** (confirmed first).
+Viewers see only **Open record**. On touch, a **⋯** button at a bar's right end
+opens the same menu. Right-clicking empty chart space offers editors **New
+record here**: that day, or an hour at hours zoom, in the group of the row
+clicked. The toolbar's **New** creates
+a record spanning today and opens it. The date-range column cannot be deleted or
+retyped while a timeline spans it; deleting the grouping, coloring or a bar
+field column only drops it from the timeline.
 
 Creating or changing a record can make it fall outside the current
 filters. A saved-record notice offers **Open record** to inspect it without
@@ -538,15 +656,24 @@ answers still load when they approach the viewport. The empty input rotates thro
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to
 choose a database; the entire chosen database is in scope, without a table
-prerequisite. **Automatic** finds a relevant accessible database from the question
-with the discovery tools and inspects all its tables. The answer's `QueryDatabase`
-runs with view access only, so asking a question never changes data, even for an
-editor. Both discovery and final answer formatting receive the registered database
-tool reference, including the current SQL dialect. Verify an Automatic question
-that needs ListDatabases, DescribeDatabase, and QueryDatabase completes with live
-results; repeat with an explicit source and an aggregate using an AS alias. The
-formatting step must preserve tool-call/result names and ids without another tool
-execution. If matching sources are
+prerequisite. An explicit source also disambiguates databases with identical names
+when previewing or refreshing an answer. **Automatic** finds a relevant accessible
+database from the question with permission-checked schema discovery and inspects all
+its tables. Only schema discovery tools are available to the question agent. The
+host's SQL engine refuses writes, so asking a question never changes data, even for
+an editor. Document questions use the specialized `/cognition/database-query`
+endpoint. An explicit source with a loaded schema proposes SQL in one model call; the
+browser's read-only engine validates and executes it. Automatic discovery reuses the
+agent's final JSON when valid, avoiding a second formatting call. Both paths receive
+the shared SQL dialect reference. A parse or name-resolution failure gets at most one
+repair using the engine error; network and permission failures are never retried by
+the question composer. Verify Automatic completes with live results; repeat with an
+explicit source and an aggregate using an AS alias. Verify a failed repair keeps the
+previous saved answer. Each endpoint request has a 90-second deadline. In DevTools,
+`[database-query]` summaries separate generation, catalog loading, and browser reads;
+`[database-sql]` shows row fetches and engine time. Backend spans record source mode,
+model, tool count, discovery and formatting durations, and whether formatting fell
+back to another model call. If matching sources are
 ambiguous, the assistant asks for clarification. Type to search the
 source menu, use the arrow keys and Enter to choose, or Escape to return without
 changing it. The displayed source is checked against the query's actual table
@@ -588,12 +715,18 @@ instead of the engine's message. For development, start the web app with
 back the SQL toggle and editor, **View SQL**, the raw error under **Technical
 details**, and the server's summary on query tool rows.
 
+SQL conditions may nest parentheses up to 64 levels. Deeper input returns a
+parse error asking the assistant to simplify the condition.
+
 ## Sharing and files
 
 **Share** opens Macro's standard sharing dialog. The owner can share with people
-or channels and change or remove their access. Databases do not offer a public
-link. **Share** and viewer avatars (other people currently looking at the
-database) sit at the right of the split header, like other entities.
+or channels and change or remove their access, and an owner on a team sets
+**Team access** (view, comment, or edit for the owner's team; rows follow the
+database). Databases do not offer a public link. **Share** and viewer avatars (other people currently looking at the
+database) sit at the right of the split header, like other entities. From Drive,
+the row context menu offers the same Share action, plus Rename (edit or owner),
+Favorite, Copy Link, and Delete (owner).
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
 **Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline

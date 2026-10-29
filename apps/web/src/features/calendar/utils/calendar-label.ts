@@ -1,5 +1,5 @@
 import type { VisibleCalendar } from '@queries/calendar/calendars';
-import type { CalendarPeriodView } from '../types';
+import type { CalendarPeriodView, CalendarSource } from '../types';
 
 const CALENDAR_PERIOD_LABELS = {
   dayGridMonth: 'Month',
@@ -13,20 +13,22 @@ export function calendarPeriodLabel(view: CalendarPeriodView): string {
 }
 
 /**
- * Display label for a calendar in pickers and filters. Google names primary
- * calendars after the account email, so primaries collapse to the inbox
- * address; other calendars carry their inbox only when the visible set spans
- * more than one account.
+ * Display label for a calendar in pickers, filters and event details. Google
+ * names primary calendars after the account email and Outlook names its
+ * default one "Calendar", so primaries collapse to the inbox address; other
+ * calendars carry their inbox only when the visible set spans more than one
+ * account.
  */
 export function calendarDisplayLabel(
-  calendar: Pick<VisibleCalendar, 'name' | 'emailAddress' | 'isPrimary'>,
+  calendar: Pick<CalendarSource, 'name' | 'emailAddress' | 'isPrimary'>,
   spansInboxes: boolean
 ): string {
-  if (calendar.isPrimary || calendar.name === calendar.emailAddress) {
-    return calendar.emailAddress;
+  const { emailAddress } = calendar;
+  if (emailAddress && (calendar.isPrimary || calendar.name === emailAddress)) {
+    return emailAddress;
   }
-  return spansInboxes
-    ? `${calendar.name} — ${calendar.emailAddress}`
+  return spansInboxes && emailAddress
+    ? `${calendar.name} — ${emailAddress}`
     : calendar.name;
 }
 

@@ -23,7 +23,7 @@ export function notificationStateFromGraphql(
     .with('UNSEEN', () => 'unseen' as const)
     .with('SEEN', () => 'seen' as const)
     .with('DONE', () => 'done' as const)
-    .exhaustive();
+    .exhaustive(() => 'seen' as const);
 }
 
 /** Compile persisted UI filter intent into exact backend lifecycle states. */

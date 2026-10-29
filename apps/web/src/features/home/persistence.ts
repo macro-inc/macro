@@ -25,6 +25,9 @@ export function normalizeHomeFacets(raw: unknown) {
   ) {
     delete facets.read;
   }
+  if (facets.type?.includes('chats')) {
+    facets.type = facets.type.map((t) => (t === 'chats' ? 'agents' : t));
+  }
   return facets;
 }
 

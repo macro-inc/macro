@@ -125,28 +125,24 @@ function Person(props: {
     let opened: AiEngine | undefined;
     let sharedEngine: AiSharing | undefined;
     const open = async () => {
-      try {
-        const bytes = props.server.stored();
-        const fingerprint = await fileFingerprint(bytes);
-        opened = await AiEngine.open(bytes);
+      const bytes = props.server.stored();
+      const fingerprint = await fileFingerprint(bytes);
+      opened = await AiEngine.open(bytes);
+      if (closed) return;
+      if (shared) {
+        sharedEngine = await shareAiEngine(opened, shared, {
+          fingerprint,
+          takenSessions: () =>
+            session.collaboration.peers().map((p) => p.presence.session),
+          delivered: session.delivered,
+        });
         if (closed) return;
-        if (shared) {
-          sharedEngine = await shareAiEngine(opened, shared, {
-            fingerprint,
-            takenSessions: () =>
-              session.collaboration.peers().map((p) => p.presence.session),
-            delivered: session.delivered,
-          });
-          if (closed) return;
-          sharedEngine.onReplaced(() => setReplaced(true));
-          setSharing(sharedEngine);
-        }
-        setEngine(opened);
-      } catch (e) {
-        setFailure(String(e));
+        sharedEngine.onReplaced(() => setReplaced(true));
+        setSharing(sharedEngine);
       }
+      setEngine(opened);
     };
-    void open();
+    open().catch((e: unknown) => setFailure(String(e)));
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -243,11 +239,12 @@ export function CollabFixture(props: {
 }) {
   const server = new MemorySyncServer();
   const [stored, setStored] = createSignal(false);
+  const [loadFailure, setLoadFailure] = createSignal<string>();
   const load = async () => {
     server.store(await props.load());
     setStored(true);
   };
-  void load();
+  load().catch((e: unknown) => setLoadFailure(String(e)));
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>
@@ -273,6 +270,9 @@ export function CollabFixture(props: {
   window.aiFixture.collab = controls;
   return (
     <div class="flex min-h-0 flex-1">
+      <Show when={loadFailure()}>
+        {(message) => <div class="p-4 text-failure">{message()}</div>}
+      </Show>
       <Show when={stored()}>
         <For each={props.users}>
           {(user) => (

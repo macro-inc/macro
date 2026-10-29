@@ -2,11 +2,14 @@ pub mod attachment;
 pub mod calendar_invitation;
 pub mod contact;
 pub mod draft;
+pub mod draft_attachment_manifest;
 pub mod email_filter;
 pub mod error;
 pub mod label;
 pub mod link;
 pub mod mail_projection;
+pub mod mailbox_action;
+pub mod mailbox_operation;
 pub mod message;
 pub mod parsed_message;
 pub mod preview;
@@ -29,18 +32,18 @@ pub use draft::{
 pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
 pub use error::EmailErr;
 pub use label::{
-    Label, LabelListVisibility, LabelType, LinkLabel, MessageLabel, MessageListVisibility,
-    UpdateThreadLabelsResult,
+    Label, LabelListVisibility, LabelType, LinkLabel, MAX_BULK_ARCHIVE_THREADS, MessageLabel,
+    MessageListVisibility, SetThreadsArchivedResult, StagedLabelChange, UpdateThreadLabelsResult,
 };
 pub use link::{
-    EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, UserEmailLink,
-    UserEmailLinkSettings, UserProvider,
+    EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, ResolvedSendingInbox,
+    SendingInboxRequest, UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 pub use mail_projection::{
     EmailDraftAggregate, EmailDraftEntry, EmailPreview, EmailThreadDraftState,
     EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
 };
-pub use message::{Message, MessageRow, SimpleMessage};
+pub use message::{Message, MessageRow, ScheduledSend, ScheduledSendStatus, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};
 pub use preview::{
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery,

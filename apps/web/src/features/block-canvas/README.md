@@ -3,12 +3,25 @@
 Canvas Next is the default editor for saved canvases, drive details, and embeds.
 No rollout flag or local override is required.
 
+Both the Drive detail and block hosts use `queries/document.ts` to authorize and
+select shared content before fetching a legacy file seed. Native canvases never
+require a presigned blob URL.
+
+**Ask Macro** in the Drive header and standalone title menu attaches the canvas to an agent conversation
+on desktop and mobile. `ReadCanvas` inspects its live scene; `EditCanvas` runs
+bounded SDK commands as a peer in that same Loro room. Results show acknowledged
+operation counts and expandable outcomes. Unrelated concurrent edits survive.
+Text remains a whole-string register; new media/document references and deletion
+of embedded items stay in the authorized UI flow. See the worker
+[Canvas flow](../../../../../services/ai-editing-worker/AI_EDITING.md#canvas).
+
 The frontend treats unversioned JSON (and explicit version 1) as legacy Canvas.
 It converts supported records on load to `{ version: 2, document, legacy? }`.
 `document` is the graphics scene; `legacy` retains the original JSON and migration
-notes for recovery. No migration is saved merely by viewing a file. The first
-committed edit writes version 2 using the existing JSON/simple-save endpoint.
-Subsequent loads validate version 2 directly; they never replay the archived data.
+notes for recovery. No migration is saved merely by viewing a file. Native Canvas creation initializes the canonical versioned Loro snapshot on the backend and marks content ready in SyncService before returning. `POST /documents/create_canvas` and CreateDocument with empty Canvas content share this lifecycle. Native loading uses the content location and does not request an S3 presigned URL. The first editor opening a legacy S3 canvas migrates its scene into one versioned Loro snapshot in SyncService. The server serializes initialization; competing openers import only
+the winning seed. Subsequent opens use the shared scene and never replay the
+original JSON over live edits. JSON remains the import/export format and retains
+the legacy source for recovery.
 Unknown versions and invalid scenes fail closed without writing data.
 
 Migration preserves IDs, groups, stacking order, positions, shape labels,
@@ -22,11 +35,25 @@ Markdown embeds explicitly pass `isEmbedded` to the editor and use this same
 read-only surface, with Select and Hand tools and no property inspector. Selection
 does not expose transform handles or mutate the scene; embedded views cannot save
 canvas edits even when the viewer has edit permission on the original document.
-Saves are debounced and serialized; failures keep edits dirty. Save state is not
-shown in the canvas UI.
+Shared edits use the existing collaboration runtime, IndexedDB snapshot/WAL
+recovery, and live SyncService transport. Whole-file simple-save has been removed.
+Download/export reads the current shared scene; copying a canvas copies its
+live room as well as its original JSON seed. Viewers and embeds join existing
+rooms read-only and do not initialize a room. Before initialization they can view
+the original JSON while waiting for an editor to share it. Initial connection or
+local-storage failures keep the original file read-only with a Retry action;
+a recovered local snapshot supports editing while disconnected. Undelivered edits
+remain in the WAL and trigger a browser unload warning.
+Failed local appends stay buffered in the open session; Retry saving retries
+them without replacing the scene. Sources bind to the opening account and check
+fresh access on reconnect; only edit/owner grants permit scene writes.
 
-SyncService integration and collaboration remain a follow-up. This change keeps
-the existing whole-file save behavior. See [Graphics and Canvas parity](../../../../../docs/design/graphics-parity.md)
+Other people see live cursors, selections, and drawing/transform previews. Presence
+uses the shared awareness channel, publishes at most every 40–100 ms while moving,
+heartbeats every three seconds, and expires after ten seconds without updates.
+It never changes document data or undo. Mixed-content previews use bounds for
+text, connectors, media, and document cards. Selection/camera/tools stay local.
+Incoming scene changes cancel active canvas gestures; intent rebasing is deferred. See [Graphics and Canvas parity](../../../../../docs/design/graphics-parity.md)
 for the remaining editor and collaboration work.
 
 ## Controls
@@ -35,20 +62,34 @@ The floating top toolbar uses the shared `Toolbar` and Phosphor icons for drawin
 and inserting media, document cards, and embeds. Tooltips show each tool's shortcut.
 Zoom, reset-to-100%, fit, undo, and redo live at the bottom-left. Adjacent controls
 toggle floating properties and layers panels.
-Fit Scene uses the current viewport dimensions, centers all scene geometry and
+Fit Scene and menu/keyboard zoom use the full canvas viewport without subtracting
+floating panels. Fit Scene centers all scene geometry and
 zooms in or out to leave 100 screen pixels per side on the first axis to fill.
 Camera zoom limits still apply; padding decreases for small embedded viewports.
 Ctrl/Meta-wheel zoom is pointer-anchored, with a continuous 0.002 exponential rate
 per normalized wheel pixel and an exponent cap of 0.2 per event (about 22% zoom-in).
 Plain wheel input pans at its existing speed.
-The Canvas panel's zoom menu offers **No snapping** (the default for each session),
+The Canvas panel's zoom menu offers **No grid snapping** (the default grid mode for each session),
 **Snap to px** (1 canvas px at every zoom), and **Auto snapping** (the smallest
 currently visible dot-grid interval, including faint dots). Auto follows zoom;
 hiding the grid temporarily disables it. Drawing, moving, resizing, insertion, duplication, pasting, free
 connector endpoints and layout inspector values use the chosen interval; inspector
 scrubs preview the same snapped values they commit. Freehand and rotation keep
 their own precision, and connector bindings and aspect-ratio constraints stay exact.
-The preference is local editor state, not saved JSON or shared Loro data.
+The preferences are local editor state, not saved JSON or shared Loro data.
+**Snap to objects** is independently enabled by default. Moving selections snap
+their combined world bounds' edges and centers to nearby objects; axis-aligned
+resize handles snap their moving edges. Matching axes show dashed guides and
+prefer object alignment over grid snapping. The tolerance is six screen pixels,
+with a 160-screen-pixel perpendicular reach. Shift constraints and proportional /
+centered resizing remain intact; rotated resize frames retain local-axis behavior.
+The graphics engine caches sorted alignment anchors with perpendicular interval
+trees per immutable scene snapshot (O(n log n) construction). Each pointer update
+queries a constant number of selection anchors and prunes distant candidates,
+including long rows and columns, instead of comparing every selected object with
+every scene object. Selected objects, descendants, and ancestors are excluded.
+Gesture telemetry records query, candidate, and visited-index-node counts; its
+span measures the gesture, not cold index construction.
 The dot grid adapts to zoom, revealing 1, 4, 16, 64 px levels (and
 coarser levels at extreme zoom-out). Coarse dots remain steady while finer dots
 fade in gently; individual canvas pixels are faintly visible at 800%. Dots use
@@ -59,6 +100,10 @@ panel tokens; the dot-grid visibility toggle hides every level.
 The shared context menu exposes clipboard, grouping, layer ordering, select-all,
 and delete actions, with normal keyboard navigation and focus restoration. Active
 embedded editors and text editing retain their own context menus.
+With exactly one image selected, the context menu and inspector also offer
+**Copy image** and **Save image** for the original image, without canvas styling
+or transforms. These reuse the shared image actions (including native mobile
+sharing) and stay disabled while the image source or an action is pending.
 Selecting Arrow, Line, Connector, or Pencil repairs invisible drawing defaults:
 missing/transparent strokes use theme Ink, zero width uses 2 px, and zero opacity
 uses full opacity. Other style choices and existing shapes are preserved.
@@ -74,6 +119,7 @@ uses full opacity. Other style choices and existing shapes are preserved.
 | Move horizontally / vertically | Hold Shift while dragging; follows the dominant world axis |
 | Select inside a group | Cmd/Ctrl-click |
 | Copy / cut / paste | Cmd/Ctrl+C / X / V |
+| Paste in place | Shift+Cmd/Ctrl+V |
 | Duplicate | Cmd/Ctrl+D, or Option/Alt-drag |
 | Select all | Cmd/Ctrl+A |
 | Nudge | Arrows: one snap unit; Shift+arrows: ten snap units |
@@ -89,7 +135,11 @@ Native clipboard events own the actual copy/cut/paste keystrokes; proxied Macro
 commands expose those actions in the command UI without double handling.
 Clipboard context-menu actions use the browser clipboard API and report denied
 access. Fragments include whole selected subtrees, fresh IDs on insertion, stable
-relative order and world placement. Pasting repeatedly offsets by another 24 units.
+relative order and world placement. Copies include the source canvas ID: pasting
+within that canvas offsets each repeat by another 24 units. Fragments from another
+canvas (or without source metadata), including Excalidraw imports, are centered as
+a whole in the current viewport, accounting for pan and zoom. Shift+Cmd/Ctrl+V
+and **Paste in place** preserve original world coordinates without grid snapping.
 Canvas Next fragments preserve rich text. Plain text and HTML pasted onto the canvas
 create a wrapped text shape; pasting inside the editor belongs to Lexical. Image
 clipboard data uploads through the media adapter. Legacy Canvas clipboard format
@@ -179,16 +229,18 @@ outline tolerance; a thick stroke does not gain another 3px outside its paint.
 - `primitives/`: Solid state, mixed values, creation defaults and UI actions.
 - `components/`: inspector and layer list with explicit props.
 - `views/`: editor surface and controls composed around a supplied editor/state.
-- `canvas-next.tsx`: memory editor, Macro hotkey scope and clipboard wiring.
+- `canvas-next.tsx`: shared Loro editor (or read-only JSON before sharing), hotkeys and clipboard.
+- `queries/canvas-session.ts`: shared runtime, initialization, recovery, permissions and teardown.
+- `primitives/create-canvas-presence.ts`: ephemeral cursor/selection/gesture publication.
 - `clipboard.ts` / `hotkeys.ts`: host adapters. No browser/app dependency in the core.
 
-Core command and transform tests exercise both memory and Loro paths. Canvas Next
-currently uses memory plus versioned whole-file saves; it does not install awareness
-or production collaboration.
-
-The view/state already accept an editor. The current composition root constructs
-its own memory editor; a later collaboration checkpoint can inject Loro editors while
-retaining the same rich-text measurement, renderer, clipboard and input ownership.
+Core command and transform tests exercise both memory and Loro paths. Session
+integration tests use three peers and cover merging, undo, competing initializers,
+read-only access and recovery. The backend-free Playwright fixture runs the real
+canvas session, shared backend and presence overlays with rendered editor surfaces:
+`bunx playwright test --config src/features/block-canvas/browser-test/playwright.config.ts`
+from `apps/web`. This exercises the runtime against an in-memory SyncService stand-in;
+it does not establish a production participant limit or verify hosted transport.
 
 ## Pencil checkpoint
 
@@ -236,6 +288,12 @@ before ending editing. Mentions retain their typed
 Lexical nodes through reopening, copy/paste, and undo, and render with the shared
 mention decorators. Canvas Next currently disables backend mention tracking and
 notifications; mentions remain part of the same whole-content LWW string.
+AI editing uses `editor.mentionUser(itemId, at, {userId, email, displayName?})`
+to insert the same chip into text or a label while preserving its rich content.
+ReadCanvas returns bounded `userMentions` identities and offsets; offsets count
+UTF-16 text, newlines, and one U+FFFC per chip. The agent resolves real people
+through supplied identities or `macro.users.search` and disambiguates matches.
+The host remeasures and revalidates the complete batch before committing.
 
 Canvas Next stores a stringified Lexical editor tree in `TextGeometry.content`,
 including shape labels. `core/text-codec.ts` owns bounded tree validation, seed
@@ -272,8 +330,10 @@ stores one `textContent` string register per text item or labeled shape, separat
 from pose. Concurrent edits choose one complete tree; no character-level merging
 or shared caret is intended. Label layout metadata is separate from pose too, so
 adding a label and moving its owner can merge. Local typing undo stays in Lexical;
-finished edits use the canvas backend's undo. Canvas Next does not yet have a
-production SyncService connection.
+finished edits use the canvas backend's undo. Canvas Next uses the production SyncService connection. An unchanged text draft
+does not overwrite remote text on blur; remote deletion closes its draft, and
+remote movement updates the draft position. Simultaneous text edits still choose
+one completed content string rather than merging characters.
 
 Mixed selections containing text scale uniformly to preserve letter proportions;
 use a single text shape’s side edges to change wrapping width. Shape definitions
@@ -314,7 +374,12 @@ sized, fitted within 640 × 480 world units, and inserted in one undo step per b
 Uploading/loading is host-owned; only stable static-file or document references
 enter the scene. Reset/unmount invalidates pending insertion. Saved Canvas Next
 documents retain stable uploaded references;
-uploads use the existing static file service. Existing workspace file selection
+uploads use the existing static file service. Pasted and dropped files show local
+blob previews at their insertion positions while uploads finish. These previews
+are not editable scene items; failures, reset, and unmount release their URLs.
+Image nodes reserve their full bounds with the shared `skeleton-shimmer` and
+`bg-skeleton` classes until the browser loads the image, including in read-only
+canvases. Existing workspace file selection
 does not create a new file.
 
 Image/video shape definitions own validation, bounds, hit testing and resizing in
@@ -335,11 +400,37 @@ preview contents, and upload state are never stored in core. SVG-to-editable-sha
 conversion is not part of this checkpoint; SVG files can be inserted as images.
 
 
-New embed insertion is not currently exposed in the toolbar. An existing document
-card can switch between preview and embed in the inspector. Double-click
-an embed or choose Interact to enter; Done, Escape, or a click elsewhere on this
-canvas returns input to the outer canvas. Resizing changes the editor viewport.
+The drawing toolbar’s paperclip **Attach** button (shortcut hint `I`) opens a
+standard dropdown for Media, Upload media, and Reference. Its pickers appear
+above the toolbar and place attachments at the canvas center.
+
+Press `I` with the canvas focused to open a radial menu of separate floating rectangular buttons centered at the pointer
+(or the viewport center before a pointer location is available). **Media** opens
+the current searchable media picker; **Upload media** opens the OS file picker
+directly; **Reference** opens the searchable document picker. The pickers reuse
+the mentions menu's quick-access source, paging, icons, and rows. Media accepts
+workspace images/videos or local uploads; references create document preview cards.
+The full viewport around the center is divided into equal directional slices. Moving into
+a slice highlights its button and matching ring arc; clicking anywhere outside the buttons
+activates the highlighted slice instead of dismissing the menu. The center remains neutral. Arrow keys or Ctrl+J/K
+navigate; Enter selects and Escape closes. Scrolled results
+keep the same inset as the menu padding. The media picker includes a dashed drop
+area and Add files button for local images/videos.
+Insertion keeps the world position captured when the menu opened, even under
+pan/zoom. New embed insertion and preview-to-embed conversion are unavailable.
+Existing embeds can be converted to previews in the inspector. Double-click an
+existing embed or choose Interact to enter; Done, Escape, or a click elsewhere on
+this canvas returns input to the outer canvas. Resizing changes the editor viewport.
 The embedded block stays mounted when entering/leaving interaction mode.
+
+Document cards participate in the shared entity-mention reference system. Shared
+maps record mention IDs and durable pending removals, scoped by source canvas ID
+so copied rooms cannot remove the original canvas's mentions. Concurrently created
+mention IDs remain recorded independently. Removing a card retires its mentions
+only after the scene deletion and retirement reach SyncService; failures retain
+them for retry and reload recovery. Reference bookkeeping is excluded from scene
+undo. Tracking follows the shared mention-tracking flag. Mention creation and the
+CRDT commit are separate operations, so interruption between them is not transactional.
 
 `block-embed-adapter.tsx` mounts the existing unmanaged block loader with its own
 panel handle, toolbar, and hotkey scope. The existing editor owns permissions and
@@ -367,3 +458,26 @@ selection, and group movement. Scene hierarchy, paint order, and picking bounds
 are indexed on immutable snapshots; edits and undo replace those indexes.
 Selection outlines share a camera transform so panning does not rewrite every
 outline. Mutable scene builders continue to bypass caches.
+
+On touch layouts, keep the floating zoom/inspector below the split header so the details button and document-title file menu remain reachable.
+
+
+## AI snapshot rendering and measured fitting
+
+`canvas-render.html` mounts a read-only GraphicsSurface with the same
+CanvasTextContent/StaticLexical, CSS and text measurer as the live app. It has no
+session or persistence host and returns measured DOM text bounds. The worker uses
+it for immutable vision reads and asynchronous fitText measurements, then
+revalidates targets before its atomic write. Embedded references are explicit
+unavailable placeholders. `browser-test/render.playwright.config.ts` runs actual
+DOM fitting regressions on desktop and phone viewports.
+AI presence renders bounded validated geometry/text with per-target guards;
+reduced-motion receivers suppress AI action previews even with other observers.
+
+Precise AI changes use ApplyCanvasEdits: revision-checked CanvasEditor batches
+without a nested model. One batch can animate up to three spatial/group lanes;
+all lane previews share one dependency guard and one final atomic commit. The
+receiver expands validated lane metadata into ordinary smoothed named cursors.
+Reduced motion hides transient geometry and avoids presentation delays. The
+read-only render surface exposes resetCanvasSnapshot to dispose scene roots and
+closures before an isolated warm page is leased to another authorized request.

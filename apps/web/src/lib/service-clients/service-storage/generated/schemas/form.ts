@@ -29,6 +29,9 @@ default. */
   description: string;
   /** The form. */
   id: string;
+  /** Whether Drive leaves it, and the database behind it, out of its
+listings, as for a channel poll. */
+  isHiddenInDrive: boolean;
   /** Its display name. A standalone form follows the database it created;
 a form attached to an existing table has its own name. */
   name: string;

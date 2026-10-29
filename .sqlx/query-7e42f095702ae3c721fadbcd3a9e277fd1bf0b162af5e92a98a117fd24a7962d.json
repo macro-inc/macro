@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_mailbox_settings_work(id,link_id,kind,resource_key)\n                VALUES($1,$2,'create_label',$3) ON CONFLICT(link_id,kind,resource_key)\n                DO UPDATE SET revision=email_mailbox_settings_work.revision+1,next_run_at=now(),failure=NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e42f095702ae3c721fadbcd3a9e277fd1bf0b162af5e92a98a117fd24a7962d"
+}
