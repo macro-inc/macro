@@ -62,7 +62,11 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
         && let Some(row) = visible_row(row_of(start) - 1, 1)
     {
         frame.render_widget(
-            Paragraph::new(section("Herdr", "each session in its own tab", inner.width)),
+            Paragraph::new(section(
+                "Herdr",
+                "each session in its own workspace",
+                inner.width,
+            )),
             row,
         );
     }

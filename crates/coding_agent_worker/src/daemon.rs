@@ -55,18 +55,26 @@ impl Daemon {
         let tap = None;
 
         #[cfg(unix)]
-        let workspaces = if crate::herdr::drives_herdr(&config.harness) {
+        let (workspaces, titles) = if crate::herdr::drives_herdr(&config.harness) {
             let root = crate::herdr::instance_directory(credentials.harness_id)?;
             let herdr = crate::herdr::HerdrSession::detect()
                 .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
             crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
-            Some(crate::herdr::repositories::Workspaces::new(
-                config.workspace.path.clone(),
-                config.herdr.storage_path.clone().unwrap_or(root),
-                crate::herdr::cli::HerdrCli::new(herdr.bin, herdr.workspace_id),
-            ))
+            let storage = config.herdr.storage_path.clone().unwrap_or(root.clone());
+            (
+                Some(crate::herdr::repositories::Workspaces::new(
+                    config.workspace.path.clone(),
+                    storage.clone(),
+                )),
+                Some(crate::herdr::titles::TitleSync::new(
+                    EventStreamClient::new(&config.macro_api, &credentials),
+                    crate::herdr::cli::HerdrCli::new(herdr.bin, herdr.workspace_id),
+                    root,
+                    storage.join("worktrees"),
+                )),
+            )
         } else {
-            None
+            (None, None)
         };
 
         let runtime = Runtime::start(
@@ -96,6 +104,8 @@ impl Daemon {
 
         let shutdown = cancel.clone();
         let task = tokio::spawn(async move {
+            #[cfg(unix)]
+            let _titles = titles.map(|titles| titles.start(shutdown.clone()));
             let mut failures = 0u32;
             loop {
                 if shutdown.is_cancelled() {

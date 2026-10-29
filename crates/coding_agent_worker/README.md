@@ -8,21 +8,41 @@ repository is cloned using the operator's Git credentials. New worktrees start
 from a fresh fetch of `origin/main`; macrod never pulls into the operator's
 working branch. A repository without `main` produces an error.
 
-Herdr creates and registers the worktree. The session ID determines its path
-and branch, so redelivery reuses existing work without resetting edits. Cached
-repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
+macrod creates each Git worktree without registering it with Herdr's worktree
+grouping. The first prompt opens an independent top-level workspace with that
+worktree as its working directory. Each session gets its own workspace, even when
+another Herdr workspace already owns the repository's main checkout. The session
+ID determines the path and branch, so redelivery reuses existing work without resetting edits.
+Cached repositories and worktrees live under `~/.macrod/herdr/<harness-id>/`. Each
 paired macrod instance has one configuration and its own storage directory.
+
+Native workspaces use the prompt's visible text until Macro supplies its session
+name; hidden context and mention payloads are excluded from that initial label. While
+macrod is running, it checks the harness's session names every five seconds and
+updates the matching workspace and tab, including later renames made in Macro.
+Only a workspace created for that session is renamed. Older shared workspaces and
+workspaces into which the user moves a session keep their existing names.
 
 ### Reconnecting native sessions
 
 macrod records native session IDs and transcript locations in private files in
-its instance directory. ACP `session/load` replays the native transcript before
-acknowledging the load. A running Herdr agent is reattached; an explicitly missing
+its instance directory, together with the session's Herdr workspace and tab.
+Native launch retries and daemon restarts reuse that workspace; a closed session
+opens a new independent workspace on its next prompt. Existing shared tabs are
+reattached without changing their layout. ACP
+`session/load` replays the native transcript before acknowledging the load.
+A running Herdr agent is reattached; an explicitly missing
 agent resumes its native session on the next prompt. Socket errors do not create
 replacement agents. Changing the configured provider does not convert existing
 sessions into sessions for the other provider.
 
-A background reader forwards local TUI turns even without a Macro prompt.
+After ACP attaches a session, a background reader forwards local TUI turns even
+without a Macro prompt. The gateway currently binds existing sessions lazily:
+after a daemon restart or gateway reconnect, a Macro control must reattach the
+session before this reader runs again. Native conversations continue locally
+during that gap, and the next successful ACP load replays their saved history.
+Automatic reattachment for local-only activity is not yet implemented.
+
 Complete JSONL records are read in bounded batches. Partial lines wait for the
 next append; truncation or replacement requires a reload. Turn boundaries are
 forwarded in order, including multiple local turns between polls.
@@ -109,6 +129,8 @@ Start macrod inside Herdr and choose **Claude Code in herdr** or **Codex in
 herdr** in Quickstart. Select a workspace directory containing your existing
 clones and pair with Macro. Native CLI authentication and Git credentials are
 reused. Each instance has one configuration, with no profiles to choose per run.
+Keep the daemon running in its own Herdr workspace; native sessions open in
+separate top-level workspaces.
 
 The Config tab adds **Model** (empty uses the native default), **Extra args**
 (shell-style quoting), **Storage** (empty uses automatic instance storage), and
@@ -116,6 +138,10 @@ The Config tab adds **Model** (empty uses the native default), **Extra args**
 previous agent's model and extra arguments. Storage and focus preferences remain.
 Session metadata stays in the instance directory even with custom worktree storage.
 Choose a repository in Macro's composer; local sessions always start from `main`.
+
+For unattended Codex launches, include `-c check_for_update_on_startup=false` in
+**Extra args** and manage CLI updates separately; otherwise its startup update
+menu can stop an agent before the first prompt.
 
 ## Replies to chat-agent mentions
 

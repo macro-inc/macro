@@ -61,7 +61,7 @@ enum Command {
         session: String,
     },
     /// Serve ACP on stdio with each session as a live coding-agent TUI in
-    /// its own herdr window. Set as the harness of a macrod run inside herdr.
+    /// its own Herdr workspace. Set as the harness of a macrod run inside Herdr.
     #[cfg(unix)]
     HerdrAcp {
         /// Private storage for this paired macrod instance.
@@ -70,9 +70,6 @@ enum Command {
         /// Native model ID for new sessions.
         #[arg(long)]
         model: Option<String>,
-        /// Open sessions in dispatcher-managed worktrees.
-        #[arg(long, hide = true)]
-        managed_worktrees: bool,
         /// Which agent TUI each session runs.
         #[arg(long, value_enum, default_value_t)]
         kind: herdr::acp_agent::TuiAgent,
@@ -80,8 +77,7 @@ enum Command {
         /// `acceptEdits` or `bypassPermissions`.
         #[arg(long)]
         permission_mode: Option<String>,
-        /// Open each session's tab in the background rather than switching
-        /// herdr to it.
+        /// Open each session's workspace in the background.
         #[arg(long)]
         no_focus: bool,
         /// Extra arguments for every agent launch, e.g. `-- -s workspace-write`.
@@ -200,7 +196,6 @@ async fn main() -> ExitCode {
         Some(Command::HerdrAcp {
             state_dir,
             model,
-            managed_worktrees,
             kind,
             permission_mode,
             no_focus,
@@ -213,7 +208,6 @@ async fn main() -> ExitCode {
             return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
                 state_dir,
                 model,
-                managed_worktrees,
                 kind,
                 permission_mode,
                 no_focus,
