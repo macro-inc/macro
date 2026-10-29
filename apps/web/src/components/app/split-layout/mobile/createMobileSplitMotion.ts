@@ -1,5 +1,5 @@
-import { cn } from '@ui';
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { cn } from '@ui/utils/classname';
+import { createComputed, createSignal, on, onCleanup, onMount } from 'solid-js';
 import type { SplitId } from '../layoutManager';
 import { createMobileForwardAnimation } from './createMobileForwardAnimation';
 import type { MobilePaneStack } from './createMobilePaneStack';
@@ -12,7 +12,10 @@ const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
 const SWIPE_ANIMATION_MS = 88;
 const BG_PEEK_OFFSET = 110; // px the pane behind is offset left at rest; closes to 0 as the front slides away
 
-export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
+export function createMobileSplitMotion(options: {
+  stack: MobilePaneStack;
+  immediateOwner?: () => SplitId | undefined;
+}) {
   const { stack } = options;
 
   const forwardAnimation = createMobileForwardAnimation({
@@ -30,6 +33,15 @@ export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
   });
 
   const [outgoing, setOutgoing] = createSignal<SplitId>();
+
+  createComputed(
+    on([() => options.immediateOwner?.(), stack.front], ([owner, front]) => {
+      if (!owner || owner !== front) return;
+      forwardAnimation.reset();
+      swipeBackGesture.reset();
+      setOutgoing(undefined);
+    })
+  );
 
   onMount(() => {
     stack.setAnimatedTrigger(swipeBackGesture.trigger);

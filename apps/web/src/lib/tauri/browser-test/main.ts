@@ -1,3 +1,5 @@
+import { createContentPresentation } from '@components/app/split-layout/content-presentation';
+import type { SplitId } from '@components/app/split-layout/layoutManager';
 import {
   finishNotificationNavigation,
   pendingNotificationNavigation,
@@ -39,7 +41,9 @@ mockIPC((command, payload) => {
 });
 
 const PUSH = createPushApi('ios');
+let presentation: ReturnType<typeof createContentPresentation>;
 const dispose = createRoot((dispose) => {
+  presentation = createContentPresentation();
   useNotificationCoverTimeout();
   return dispose;
 });
@@ -63,7 +67,13 @@ const FIXTURE = {
   },
   complete() {
     const intent = pendingNotificationNavigation();
-    if (intent) finishNotificationNavigation(intent);
+    if (!intent) return;
+    const owner = 'fixture-pane' as SplitId;
+    const present = presentation.prepare(() =>
+      finishNotificationNavigation(intent)
+    );
+    presentation.register(owner, intent.notificationId, NAVIGATION);
+    present(owner, intent.notificationId);
   },
   blockFrames() {
     window.requestAnimationFrame = (callback) => FRAMES.push(callback);

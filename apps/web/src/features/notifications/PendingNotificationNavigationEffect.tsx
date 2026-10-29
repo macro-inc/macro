@@ -50,6 +50,7 @@ export function usePendingNotificationNavigationEffect(
     const navigationReady = layoutManager?.contentNavigationReady() ?? false;
     const navigationVersion = layoutManager?.contentNavigationVersion() ?? 0;
     const currentEvent = layoutManager?.events();
+    const awaitingPresentation = layoutManager?.presentation.pending();
 
     if (intent?.recipientId && account && intent.recipientId !== account) {
       activeAttempt = undefined;
@@ -76,6 +77,7 @@ export function usePendingNotificationNavigationEffect(
       // retry only after reconciliation changes the live layout.
       if (
         activeAttempt.applied ||
+        awaitingPresentation ||
         !activeAttempt.settled ||
         activeAttempt.eventAtStart === currentEvent
       ) {
@@ -108,6 +110,9 @@ export function usePendingNotificationNavigationEffect(
       // Keep the attempt in flight until native confirms receipt, so another
       // layout event cannot start a second navigation during that handshake.
       attempt.applied = true;
+      notificationOpenSpan(notificationId)?.event(
+        'notification.destination_presented'
+      );
       finishNotificationNavigation(intent);
     };
 
@@ -128,7 +133,10 @@ export function usePendingNotificationNavigationEffect(
         () => {
           if (!isCurrentAttempt() || attempt.applied) return;
           attempt.settled = true;
-          if (layoutManager.events() !== attempt.eventAtStart) {
+          if (
+            !layoutManager.presentation.pending() &&
+            layoutManager.events() !== attempt.eventAtStart
+          ) {
             setRetryRevision((revision) => revision + 1);
           }
         },

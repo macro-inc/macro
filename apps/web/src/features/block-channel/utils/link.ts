@@ -1,3 +1,4 @@
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import type {
@@ -64,10 +65,37 @@ export async function navigateToChannelMessage(
     sourceHandle?: SplitHandle;
     /** Runs once the destination has actually been applied or reused. */
     onApplied?: VoidFunction;
+    /** Native opens reveal a laid-out destination without the normal pane slide. */
+    onPresented?: VoidFunction;
   }
 ) {
   const splitManager = options?.splitManager ?? globalSplitManager();
   if (!splitManager) return;
+
+  if (options?.onPresented) {
+    splitManager.openWithSplit(
+      {
+        type: 'channel',
+        id: channelId,
+        params: getChannelParams(messageId, threadId),
+      },
+      {
+        activate: true,
+        referredFrom: null,
+        preferNewSplit: options.preferNewSplit,
+        handle: options.sourceHandle,
+        search: {
+          [channelsSearch.namespace]: {
+            messageId: [messageId],
+            threadId: threadId ? [threadId] : [],
+            seek: [crypto.randomUUID()],
+          },
+        },
+        onPresented: options.onPresented,
+      }
+    );
+    return;
+  }
 
   let onApplied = options?.onApplied;
   const reportApplied = () => {

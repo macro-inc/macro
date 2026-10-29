@@ -115,7 +115,7 @@ describe('reminder notification navigation', () => {
     await openNotificationFromId('n-1', layout, source, { onApplied });
     expect(track).not.toHaveBeenCalled();
 
-    openWithSplit.mock.calls[1][1].onApplied();
+    openWithSplit.mock.calls[1][1].onPresented();
 
     expect(track).toHaveBeenCalledExactlyOnceWith('notification_opened', {
       source: 'native_push',

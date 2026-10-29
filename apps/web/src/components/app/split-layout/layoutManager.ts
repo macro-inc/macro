@@ -1,16 +1,16 @@
 import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import type {
-  Entry,
-  NavigationResult,
-  PaneArrival,
-  PaneId,
-  SplitLocation,
-  SplitNavigateOptions,
-  SplitRouter,
-  SplitSearchUpdate,
+import {
+  claimOf,
+  type Entry,
+  type NavigationResult,
+  type PaneArrival,
+  type PaneId,
+  type SplitLocation,
+  type SplitNavigateOptions,
+  type SplitRouter,
+  type SplitSearchUpdate,
 } from '@app/lib/split-router';
-import { claimOf } from '@app/lib/split-router';
 import { trackNavigationLifecycle } from '@app/observability/navigation-lifecycle';
 import type {
   BlockAlias,
@@ -44,6 +44,10 @@ import {
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
+import {
+  type ContentPresentation,
+  createContentPresentation,
+} from './content-presentation';
 import { contentReference } from './content-reference';
 import {
   type ContentInstance,
@@ -214,6 +218,8 @@ export type OpenWithSplitOptions = {
   routeState?: unknown;
   /** Runs after a cooperating navigator applies or reuses its destination. */
   onApplied?: () => void;
+  /** Present the destination without a mobile slide, then report its active shell. */
+  onPresented?: () => void;
   mergeHistory?: boolean;
   activate?: boolean;
   referredFrom?: ReferredFrom;
@@ -322,6 +328,7 @@ export type SplitLayoutOptions = {
 
 export type SplitManager = {
   readonly viewState: ViewState;
+  readonly presentation: ContentPresentation;
   /** Whether the router has loaded the URL, so route-owned opens can run. */
   readonly contentNavigationReady: Accessor<boolean>;
   /** Changes when route-owned navigation becomes available. */
@@ -613,6 +620,7 @@ export function createSplitLayout(
     popovers: new Map(),
   });
   const [lastEvent, setLastEvent] = createSignal<SplitEventWithType>();
+  const presentation = createContentPresentation();
   const viewState = createViewState({
     activeOwner: () => state.activeSplitId,
     sessionKey: options.sessionKey,
@@ -905,7 +913,6 @@ export function createSplitLayout(
   ): MaybePromise<NavigationResult> {
     const { replace, referredFrom } = navigateOptions;
     const target = { location: toLocation(content) };
-
     return router.navigatePane(paneOf(id), target, {
       ...entryOptionsOf(content, { referredFrom }),
       replace,
@@ -1579,12 +1586,41 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions
   ) {
+    const present = options.onPresented
+      ? presentation.prepare(options.onPresented)
+      : undefined;
     const firstVisible = getVisibleSplits()[0];
     const source =
       options.handle ??
       activeSplit() ??
       (firstVisible ? getSplit(firstVisible.id) : undefined);
-    const target = { location: toLocation(content) };
+    const location = toLocation(content);
+    const claim = claimOf(router.routes, location.route);
+    const holder = claim ? router.claims.holderOf(claim) : undefined;
+    let presentationPane = present ? holder?.pane : undefined;
+    let inline = holder && holder.owner !== holder.pane;
+    if (present && !presentationPane) {
+      const existing = findOpenView(content);
+      if (existing?.topLevelSplit || existing?.activate) {
+        existing.activate?.();
+        const handle = existing.topLevelSplit ?? activeSplit();
+        presentationPane = handle ? paneOf(handle.id) : undefined;
+        inline = !existing.topLevelSplit;
+      }
+    }
+    const current = presentationPane
+      ? router.entry(presentationPane)
+      : undefined;
+    const target = {
+      location:
+        inline && current
+          ? {
+              ...current.location,
+              search: { ...current.location.search, ...location.search },
+            }
+          : location,
+    };
+
     const navigateOptions = {
       ...entryOptionsOf(content, {
         referredFrom: options.referredFrom ?? null,
@@ -1598,22 +1634,38 @@ export function createSplitLayout(
       ? !options.mergeHistory
       : options.preferNewSplit === true && canAppendSplit();
 
-    const result =
-      !source || wantsNewPane
-        ? router.open(
-            target,
-            {
-              newPane: true,
-              source: source && paneOf(source.id),
-              intent: { insertIndex: options.insertIndex, direct: true },
-            },
-            navigateOptions
-          )
-        : router.navigatePane(paneOf(source.id), target, navigateOptions);
+    let result: NavigationResult | Promise<NavigationResult>;
+    if (presentationPane) {
+      result = router.navigatePane(presentationPane, target, navigateOptions);
+    } else if (!source || wantsNewPane) {
+      result = router.open(
+        target,
+        {
+          newPane: true,
+          source: source && paneOf(source.id),
+          intent: { insertIndex: options.insertIndex, direct: true },
+        },
+        navigateOptions
+      );
+    } else {
+      result = router.navigatePane(paneOf(source.id), target, navigateOptions);
+    }
 
     afterNavigation(result, (outcome) => {
       const applied = outcome.status !== 'cancelled';
       if (applied) options.onApplied?.();
+      if (!applied || !present) return;
+      if (outcome.status === 'activated') {
+        // A claim may have appeared while routing awaited a guard. Activation
+        // carries its search asynchronously; target its owning pane explicitly.
+        if (claim && router.claims.holderOf(claim)?.pane)
+          openThroughRouter(content, options);
+        return;
+      }
+      const owner = outcome.pane;
+      router.activatePane(owner);
+      const entry = router.entry(owner);
+      if (entry) present(splitOf(owner), entry.id);
     });
   }
 
@@ -1675,7 +1727,11 @@ export function createSplitLayout(
         };
       }
     }
-    if (options.search || options.routeState !== undefined) {
+    if (
+      options.search ||
+      options.routeState !== undefined ||
+      options.onPresented
+    ) {
       openThroughRouter(content, options);
       return { status: 'navigating', sourceOwner };
     }
@@ -1831,6 +1887,7 @@ export function createSplitLayout(
 
   return {
     viewState,
+    presentation,
     splits: () => state.splits,
     findOpenView,
     registerOpenViews: contentInstances.register,

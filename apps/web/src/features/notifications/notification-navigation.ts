@@ -72,7 +72,17 @@ type OpenOptions = {
   newSplit?: boolean;
   sourceHandle?: SplitHandle;
   onApplied?: VoidFunction;
+  presentImmediately?: boolean;
 };
+
+function completionOptions(
+  onApplied: VoidFunction | undefined,
+  presentImmediately = false
+) {
+  if (!onApplied) return {};
+  if (presentImmediately) return { onPresented: onApplied };
+  return { onApplied };
+}
 
 function openContent(
   layoutManager: SplitManager,
@@ -90,9 +100,15 @@ function openContent(
     referredFrom: null,
     preferNewSplit: options.newSplit,
     handle: options.sourceHandle,
-    ...(options.onApplied ? { onApplied: reportApplied } : {}),
+    ...completionOptions(
+      options.onApplied ? reportApplied : undefined,
+      options.presentImmediately
+    ),
   });
-  if (result?.status === 'opened' || result?.status === 'reused')
+  if (
+    !options.presentImmediately &&
+    (result?.status === 'opened' || result?.status === 'reused')
+  )
     reportApplied();
 }
 
@@ -112,11 +128,18 @@ function openSplitIfNotOpen(
   options: OpenOptions & { params?: Record<string, unknown> } = {}
 ) {
   const existing = layoutManager.getSplitByContent(type, id);
-  if (existing) {
+  if (existing && !options.presentImmediately) {
     existing.activate();
     options.onApplied?.();
   } else {
-    openContent(layoutManager, contentReference(type, id), options);
+    openContent(
+      layoutManager,
+      {
+        ...contentReference(type, id),
+        ...(options.presentImmediately ? { params: options.params } : {}),
+      },
+      options
+    );
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params).catch(
@@ -166,7 +189,8 @@ async function openChannelNotification(
   layoutManager: SplitManager,
   newSplit: boolean = false,
   sourceHandle?: SplitHandle,
-  onApplied?: VoidFunction
+  onApplied?: VoidFunction,
+  presentImmediately = false
 ) {
   const channelId = notification.entity_id;
   const { messageId, threadId } = getChannelNotificationParams(notification);
@@ -176,6 +200,7 @@ async function openChannelNotification(
       newSplit,
       sourceHandle,
       onApplied,
+      presentImmediately,
     });
     return;
   }
@@ -185,7 +210,7 @@ async function openChannelNotification(
     splitManager: layoutManager,
     preferNewSplit: newSplit,
     sourceHandle,
-    ...(onApplied ? { onApplied } : {}),
+    ...completionOptions(onApplied, presentImmediately),
   });
 }
 
@@ -219,7 +244,8 @@ function getSupportedHandler(
   notification: UnifiedNotification,
   entity?: NotificationEntityOverride,
   sourceHandle?: SplitHandle,
-  onApplied?: VoidFunction
+  onApplied?: VoidFunction,
+  presentImmediately = false
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
   const tag = notification.notification_metadata.tag as NotificationType;
 
@@ -234,7 +260,8 @@ function getSupportedHandler(
               lm,
               newSplit,
               sourceHandle,
-              onApplied
+              onApplied,
+              presentImmediately
             )
       )
       .with(
@@ -245,6 +272,7 @@ function getSupportedHandler(
               newSplit,
               sourceHandle,
               onApplied,
+              presentImmediately,
             })
       )
       .with('external_chat_message', () => {
@@ -254,6 +282,7 @@ function getSupportedHandler(
             newSplit,
             sourceHandle,
             onApplied,
+            presentImmediately,
           });
       })
       .with('new_email', () => {
@@ -264,6 +293,7 @@ function getSupportedHandler(
             newSplit,
             sourceHandle,
             onApplied,
+            presentImmediately,
           });
         };
       })
@@ -275,6 +305,7 @@ function getSupportedHandler(
               newSplit,
               sourceHandle,
               onApplied,
+              presentImmediately,
             })
       )
       .with('entity_access_requested', 'entity_access_granted', () => {
@@ -396,6 +427,7 @@ function getSupportedHandler(
                   newSplit,
                   sourceHandle,
                   onApplied: applied,
+                  presentImmediately,
                 });
               else
                 openSplitIfNotOpen(
@@ -407,7 +439,12 @@ function getSupportedHandler(
                         section: 'overview',
                       })
                     : target.entityId,
-                  { newSplit, sourceHandle, onApplied: applied }
+                  {
+                    newSplit,
+                    sourceHandle,
+                    onApplied: applied,
+                    presentImmediately,
+                  }
                 );
             } catch {
               span.setAttr('access_requests.outcome', 'error');
@@ -427,6 +464,7 @@ function getSupportedHandler(
               newSplit,
               sourceHandle,
               onApplied,
+              presentImmediately,
             })
       )
       // Every agent-session kind opens the session itself: the chip in the
@@ -452,6 +490,7 @@ function getSupportedHandler(
               newSplit,
               sourceHandle,
               onApplied,
+              presentImmediately,
             });
           };
         }
@@ -464,6 +503,7 @@ function getSupportedHandler(
             newSplit,
             sourceHandle,
             onApplied,
+            presentImmediately,
           });
         };
       })
@@ -485,6 +525,7 @@ function getSupportedHandler(
               newSplit,
               sourceHandle,
               onApplied,
+              presentImmediately,
             });
             return;
           }
@@ -535,6 +576,7 @@ function getSupportedHandler(
               params: location.params,
               sourceHandle,
               onApplied,
+              presentImmediately,
             });
         }
       )
@@ -545,6 +587,7 @@ function getSupportedHandler(
             newSplit,
             sourceHandle,
             onApplied,
+            presentImmediately,
           });
         };
       })
@@ -581,7 +624,7 @@ function getSupportedHandler(
               manager: lm,
               handle: sourceHandle,
               openInNewSplit: newSplit,
-              ...(onApplied ? { onApplied } : {}),
+              ...completionOptions(onApplied, presentImmediately),
             }
           );
         };
@@ -602,7 +645,7 @@ function getSupportedHandler(
               manager: lm,
               handle: sourceHandle,
               openInNewSplit: newSplit,
-              ...(onApplied ? { onApplied } : {}),
+              ...completionOptions(onApplied, presentImmediately),
             }
           );
         };
@@ -632,10 +675,16 @@ function getSupportedHandler(
                 preferNewSplit: newSplit,
                 handle: sourceHandle,
                 allowDuplicate: true,
-                ...(onApplied ? { onApplied: reportApplied } : {}),
+                ...completionOptions(
+                  onApplied ? reportApplied : undefined,
+                  presentImmediately
+                ),
               }
             );
-            if (result.status === 'opened' || result.status === 'reused')
+            if (
+              !presentImmediately &&
+              (result.status === 'opened' || result.status === 'reused')
+            )
               reportApplied();
             return;
           }
@@ -644,6 +693,7 @@ function getSupportedHandler(
             params: { [COMMENT_LINK_PARAM]: meta.content.messageId },
             sourceHandle,
             onApplied,
+            presentImmediately,
           });
         };
       })
@@ -698,7 +748,8 @@ export function openNotification(
           reportOpened();
           reportOnApplied();
         }
-      : options.onApplied
+      : options.onApplied,
+    options.source === 'native_push'
   );
   if (!handler) {
     return errAsync({
@@ -758,7 +809,7 @@ export function openNotificationFromId(
         channelId,
         messageId,
         threadId ?? messageId,
-        { splitManager: layoutManager, onApplied: options.onApplied }
+        { splitManager: layoutManager, onPresented: options.onApplied }
       ),
       (cause): NavigationFailedError => ({
         tag: 'NavigationFailedError',

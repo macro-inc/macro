@@ -54,6 +54,14 @@ export function createRoutedSplitLayout(
   url: string,
   stacked = false
 ): SplitManager {
+  return createRoutedSplitLayoutHarness(orchestrator, url, stacked).manager;
+}
+
+export function createRoutedSplitLayoutHarness(
+  orchestrator: BlockOrchestrator,
+  url: string,
+  stacked = false
+) {
   let manager: SplitManager | undefined;
   const router = createSplitRouter({
     routes,
@@ -72,5 +80,5 @@ export function createRoutedSplitLayout(
     toContent: splitContentFromLocation,
     stacked: () => stacked,
   });
-  return manager;
+  return { manager, router };
 }
