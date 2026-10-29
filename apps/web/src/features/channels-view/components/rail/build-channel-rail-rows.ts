@@ -70,8 +70,8 @@ export function buildChannelSectionRows(options: {
 }
 
 /**
- * The keyboard-navigable rows of the All tab (or the flat Recent list), in
- * visual order. Collapsed sections contribute only their heading.
+ * Keyboard-navigable rows in visual order. Collapsed sections contribute
+ * only their heading; restored list modes keep their flat row ordering.
  */
 export function buildChannelRailRows(
   tab: ChannelsTab,
