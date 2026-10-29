@@ -37,6 +37,7 @@ import {
   Match,
   Show,
   Suspense,
+  type Signal,
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -395,8 +396,10 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                     loading={isLoading()}
                     onRefresh={refetch}
                     property={property}
-                    actions={
+                    actions={(saving) => (
                       <PropertyRowActions
+                        saving={saving}
+                        onRefresh={refetch}
                         canRemoveFromEntity={
                           !defaultPinnedDefinitionIds().has(
                             property.propertyDefinitionId
@@ -409,7 +412,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                           props.onPropertyPinned ? pinProperty : undefined
                         }
                       />
-                    }
+                    )}
                   />
                 )}
               </For>
@@ -614,9 +617,11 @@ function PropertyRowActions(props: {
   onPropertyPinned?: (propertyId: string) => void;
   pinFirst?: boolean;
   property: Property;
+  saving?: Signal<boolean>;
+  onRefresh?: () => Promise<unknown>;
 }) {
   const ctx = usePropertiesContext();
-  const [isSaving, setIsSaving] = createSignal(false);
+  const [isSaving, setIsSaving] = props.saving ?? createSignal(false);
 
   const canRemove = () =>
     props.canRemoveFromEntity &&
@@ -675,7 +680,7 @@ function PropertyRowActions(props: {
         props.property.propertyId,
         props.property.propertyDefinitionId
       );
-      ctx.onRefresh();
+      await (props.onRefresh ?? ctx.onRefresh)();
     } finally {
       setIsSaving(false);
     }

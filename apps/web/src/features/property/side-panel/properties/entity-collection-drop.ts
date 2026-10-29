@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isEntityDragData } from '@entity/types/drag';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { type Accessor, createUniqueId } from 'solid-js';
 import { getEntityType } from '../../editors/selectors/entityUtils';
@@ -10,20 +11,21 @@ import type { Property } from '../../types';
 export function getCollectionDropReference(
   property: Property,
   data: unknown,
-  selfId: string
+  selfId: string,
+  selfType: EntityType
 ): EntityReference | undefined {
   if (
     property.valueType !== 'ENTITY' ||
     !property.isMultiSelect ||
     property.isMetadata ||
-    !isEntityDragData(data) ||
-    data.id === selfId
+    !isEntityDragData(data)
   ) {
     return;
   }
 
   const entityType = getEntityType({ kind: 'entity', id: data.id, data });
   if (!entityType) return;
+  if (data.id === selfId && entityType === selfType) return;
   if (property.specificEntityType && property.specificEntityType !== entityType) {
     return;
   }
@@ -38,6 +40,7 @@ export function getCollectionDropReference(
 export function createEntityCollectionDropTarget(options: {
   property: Accessor<Property>;
   selfId: Accessor<string>;
+  selfType: Accessor<EntityType>;
   disabled: Accessor<boolean>;
   onDrop: (reference: EntityReference) => Promise<void>;
 }) {
@@ -47,7 +50,12 @@ export function createEntityCollectionDropTarget(options: {
   const [state, actions] = context;
   const id = `property-collection:${createUniqueId()}`;
   const referenceFor = (data: unknown) =>
-    getCollectionDropReference(options.property(), data, options.selfId());
+    getCollectionDropReference(
+      options.property(),
+      data,
+      options.selfId(),
+      options.selfType()
+    );
   const canDrop = () =>
     !options.disabled() && Boolean(referenceFor(state.active.draggable?.data));
   const droppable = createDroppable(id, {

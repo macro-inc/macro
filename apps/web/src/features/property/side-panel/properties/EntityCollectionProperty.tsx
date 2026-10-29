@@ -18,7 +18,7 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, CollectionEmptyState, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show, type Signal } from 'solid-js';
 import { createEntityCollectionDropTarget } from './entity-collection-drop';
 
 export function EntityCollectionProperty(props: {
@@ -26,9 +26,10 @@ export function EntityCollectionProperty(props: {
   loading?: boolean;
   onRefresh: () => Promise<unknown>;
   property: Property;
-  actions: JSX.Element;
+  actions: (saving: Signal<boolean>) => JSX.Element;
 }) {
   const ctx = usePropertiesContext();
+  const saving = createSignal(false);
 
   return (
     <PropertyNS.Root
@@ -42,7 +43,8 @@ export function EntityCollectionProperty(props: {
         loading={props.loading}
         onRefresh={props.onRefresh}
         property={props.property}
-        actions={props.actions}
+        saving={saving}
+        actions={props.actions(saving)}
       />
       <PropertyNS.PopoverEditor
         entitySelfFilter={{
@@ -59,16 +61,18 @@ function EntityCollectionPropertyBody(props: {
   loading?: boolean;
   onRefresh: () => Promise<unknown>;
   property: Property;
+  saving: Signal<boolean>;
   actions: JSX.Element;
 }) {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
   const entities = () => getEntityValues(props.property);
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const [isSaving, setIsSaving] = createSignal(false);
+  const [isSaving, setIsSaving] = props.saving;
   const dropTarget = createEntityCollectionDropTarget({
     property: () => props.property,
     selfId: () => props.entityId,
+    selfType: () => ctx.entityType,
     disabled: () =>
       Boolean(
         isReadOnly() || props.loading || isSaving() || propertyCtx.editorOpen()

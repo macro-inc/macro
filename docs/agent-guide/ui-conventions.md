@@ -158,9 +158,11 @@ Multi-entity property collections in the information panel accept compatible app
 items dragged from lists. The empty frame and populated collection body are the
 same drop target; a compatible hover highlights the body, and the empty frame
 shows **Drop to add**. Dropping adds a reference without moving the original item.
-Existing references stay in place. Duplicate references, the owning entity,
-unsupported item types, and types outside the property's restriction are ignored.
-Read-only, metadata, loading, saving, and open-editor states reject drops.
+Existing references stay in place. Duplicate references, the owning entity's
+matching type-and-ID pair, unsupported item types, and types outside the property's
+restriction are ignored. Read-only, metadata, loading, saving, and open-editor
+states reject drops. Collection edits and row removal share a busy state so neither
+can run while the other is saving or refreshing.
 
 The **Add** action remains the keyboard/touch alternative. This target does not
 upload files dragged from the computer. A persisted drop changes property data;
