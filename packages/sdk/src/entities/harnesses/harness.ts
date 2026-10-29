@@ -33,6 +33,32 @@ export class Harness extends MacroEntity<HarnessRecord> {
   /** Runtime kind. */
   readonly kind = this.field('kind');
 
+  /** Whether agents here may bypass permission prompts. */
+  readonly allowPermissionBypass = this.field('allow_permission_bypass');
+
+  /**
+   * Allow or forbid agents here to bypass permission prompts. Live sessions
+   * pick the change up at their next turn.
+   */
+  async setPermissionBypass(allowed: boolean): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.patchHarness({
+        path: { harness_id: this.id },
+        body: { allow_permission_bypass: allowed },
+      }),
+    );
+  }
+
+  /** Rename the host. */
+  async rename(name: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.patchHarness({
+        path: { harness_id: this.id },
+        body: { name },
+      }),
+    );
+  }
+
   /** Remove the host. */
   async delete(): Promise<void> {
     await this.mutate((c) =>

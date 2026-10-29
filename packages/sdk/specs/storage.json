@@ -15056,6 +15056,84 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PATCH /harnesses/{harness_id}`.",
+        "operationId": "patch_harness",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchHarnessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/health": {
@@ -36696,6 +36774,20 @@
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
+          }
+        }
+      },
+      "PatchHarnessRequest": {
+        "type": "object",
+        "description": "Request to change a registered harness. Omitted fields stay as they are.",
+        "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name."
           }
         }
       },
