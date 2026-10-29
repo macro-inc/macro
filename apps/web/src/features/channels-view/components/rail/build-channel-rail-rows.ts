@@ -31,6 +31,8 @@ const compareChannelName = (left: ChannelEntity, right: ChannelEntity) =>
  * Lay out the Team channels section: each label in saved order with the
  * channels the user can see in it (A→Z, the same for everyone), then the
  * channels in no label in the section's own sort. Empty labels stay visible as drop targets; a collapsed label hides its channels.
+ * With `isChannelVisible`, only matching channels are listed and labels with
+ * none of them are left out.
  *
  * Labelled channels come from `channelsById` because the paginated source
  * may not have reached them yet; anything unlabelled comes from `channels`
@@ -41,7 +43,9 @@ export function buildChannelSectionRows(options: {
   channels: readonly ChannelEntity[];
   channelsById: ReadonlyMap<string, ChannelEntity>;
   isLabelOpen: (labelId: string) => boolean;
+  isChannelVisible?: (channelId: string) => boolean;
 }): ChannelSectionRow[] {
+  const isVisible = options.isChannelVisible ?? (() => true);
   const rows: ChannelSectionRow[] = [];
   const labelled = new Set<string>();
 
@@ -55,15 +59,17 @@ export function buildChannelSectionRows(options: {
       .sort(compareChannelName);
 
     for (const channel of visible) labelled.add(channel.id);
+    const listed = visible.filter((channel) => isVisible(channel.id));
+    if (options.isChannelVisible && listed.length === 0) continue;
     rows.push({ kind: 'label', label });
     if (!options.isLabelOpen(label.id)) continue;
-    for (const channel of visible) {
+    for (const channel of listed) {
       rows.push({ kind: 'conversation', channel, labelId: label.id });
     }
   }
 
   for (const channel of options.channels) {
-    if (labelled.has(channel.id)) continue;
+    if (labelled.has(channel.id) || !isVisible(channel.id)) continue;
     rows.push({ kind: 'conversation', channel });
   }
 

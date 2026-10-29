@@ -31,6 +31,7 @@ import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
 import { TASK_SORT_DEFINITIONS } from '../constants';
+import { isProjectTab } from '../core/task-navigation';
 import type { TaskFacetContext } from '../filters/task-facets';
 import {
   type TaskViewContext,
@@ -156,7 +157,7 @@ export function useTasksDataSource(
   );
   const facetOptionsReady = () =>
     (options.enabled?.() ?? true) &&
-    state.tab !== 'projects' &&
+    !isProjectTab(state.tab) &&
     (state.savedViewActive
       ? Boolean(options.userId())
       : tagFacetReady(state.facets, options.tagSetsReady()));

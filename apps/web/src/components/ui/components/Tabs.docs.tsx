@@ -1,6 +1,9 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import ChatIcon from '@icon/system/regular/chat-text.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { createSignal, For } from 'solid-js';
@@ -21,6 +24,32 @@ function ViewDemo() {
       ]}
       value={value()}
       onChange={setValue}
+    />
+  );
+}
+// #endregion
+
+// #region demo:toggle
+function ToggleDemo() {
+  const [value, setValue] = createSignal<'all' | 'recent' | 'threads'>('all');
+  const [unreadOnly, setUnreadOnly] = createSignal(false);
+  return (
+    <Tabs
+      aria-label="Conversation views"
+      size="md"
+      options={[
+        { value: 'all', label: 'All', icon: ChatIcon },
+        { value: 'recent', label: 'Recent', icon: ClockIcon },
+        { value: 'threads', label: 'Threads', icon: ArrowBendUpLeftIcon },
+      ]}
+      value={value()}
+      onChange={setValue}
+      toggle={{
+        label: 'Unread',
+        icon: EyeSlashIcon,
+        checked: unreadOnly(),
+        onChange: setUnreadOnly,
+      }}
     />
   );
 }
@@ -156,7 +185,7 @@ export default defineDoc({
   status: 'stable',
   exports: ['Tabs'],
   import: "import { Tabs } from '@ui';",
-  propTypes: ['TabsProps', 'TabOption'],
+  propTypes: ['TabsProps', 'TabOption', 'TabsToggle'],
   demos: [
     {
       id: 'view',
@@ -164,6 +193,13 @@ export default defineDoc({
       description:
         'Header view tabs sit after the title, left of the controls. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
       render: ViewDemo,
+    },
+    {
+      id: 'toggle',
+      title: 'View filter toggle',
+      description:
+        '`toggle` adds an on/off filter that applies to every view, such as Unread, past a divider in the same frame. The frame turns soft: a borderless filled track, a borderless selected option, and a neutral switch whose segment fills while on. When the frame is too narrow for every label, the switch drops its text into a tooltip first, then options with icons show only their icons. `toggle.icon` sits in the switch track so the switch reads without its text.',
+      render: ToggleDemo,
     },
     {
       id: 'counts',
