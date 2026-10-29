@@ -798,6 +798,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging
 
