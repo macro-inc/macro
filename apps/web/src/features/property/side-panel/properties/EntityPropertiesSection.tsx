@@ -684,16 +684,12 @@ function PropertyRowActions(props: {
         <Show when={canRemove()}>
           <Button
             variant="ghost"
-            appearance="bare"
             size="icon-xs"
             data-property-row-action
             title="Remove from entity"
             aria-label="Remove from entity"
             disabled={isSaving()}
-            class={cn(
-              'text-ink-muted transition-opacity hover:bg-hover hover:text-failure-ink',
-              actionVisibility
-            )}
+            class={cn('transition', actionVisibility)}
             onClick={removeFromEntity}
           >
             <TrashIcon class="size-4" />
@@ -702,7 +698,6 @@ function PropertyRowActions(props: {
         <Show when={canPin()}>
           <Button
             variant="ghost"
-            appearance="bare"
             size="icon-xs"
             data-property-row-action
             title={pinLabel()}
@@ -710,14 +705,13 @@ function PropertyRowActions(props: {
             aria-pressed={isPinned()}
             disabled={isSaving()}
             class={cn(
-              'transition-opacity hover:bg-hover',
-              isPinned() ? 'text-accent' : 'text-ink-muted hover:text-ink',
+              'transition aria-pressed:bg-button-tertiary-bg aria-pressed:not-data-disabled:hover:bg-button-tertiary-hover',
               !isPinned() && actionVisibility
             )}
             onClick={togglePin}
           >
             <Show when={isPinned()} fallback={<PushPinIcon class="size-4" />}>
-              <PushPinSlashIcon class="size-4" />
+              <PushPinSlashIcon class="size-4 text-accent" />
             </Show>
           </Button>
         </Show>
