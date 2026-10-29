@@ -10,6 +10,17 @@ export function selectThreadSender(thread: EmailThread, viewerEmail?: string) {
   )?.from?.email;
 }
 
+/**
+ * The message a thread downloads as `.eml`: the newest one sent or received,
+ * which quotes the conversation before it. Drafts and sends still on their
+ * way have no provider copy yet.
+ */
+export function selectEmlMessage(thread: EmailThread) {
+  return selectThreadMessages(thread).messages.findLast(
+    (message) => !message.is_draft && !!message.provider_id
+  );
+}
+
 /** Select chronological messages and reply drafts without mutating the source. */
 export function selectThreadMessages(thread: EmailThread) {
   const messages = thread.messages.filter(

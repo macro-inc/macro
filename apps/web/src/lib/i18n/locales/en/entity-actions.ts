@@ -41,6 +41,7 @@ export default {
   copyId: 'Copy ID',
   share: 'Share',
   downloadDocx: 'Download',
+  downloadEml: 'Download .eml',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',

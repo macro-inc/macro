@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { message, thread } from '../tests/fixtures';
-import { selectThreadMessages, selectThreadSender } from './thread-messages';
+import {
+  selectEmlMessage,
+  selectThreadMessages,
+  selectThreadSender,
+} from './thread-messages';
 
 describe('thread message selection', () => {
   it.each([false, true])(
@@ -93,5 +97,28 @@ describe('thread message selection', () => {
     expect(output.draftMap).toEqual({ old: reply });
     expect(input.messages[0]).toBe(newer);
     expect(output.messages).toContain(standalone);
+  });
+  it('downloads the newest sent or received message, never a draft or pending send', () => {
+    const received = message('received', {
+      provider_id: 'p-received',
+      internal_date_ts: '2026-09-01T00:00:00Z',
+    });
+    const sent = message('sent', {
+      provider_id: 'p-sent',
+      internal_date_ts: '2026-09-02T00:00:00Z',
+    });
+    const pending = message('pending', {
+      provider_id: null,
+      internal_date_ts: '2026-09-03T00:00:00Z',
+    });
+    const draft = message('draft', {
+      is_draft: true,
+      provider_id: 'p-draft',
+      internal_date_ts: '2026-09-04T00:00:00Z',
+    });
+    expect(
+      selectEmlMessage(thread([draft, pending, sent, received]))?.db_id
+    ).toBe('sent');
+    expect(selectEmlMessage(thread([draft]))).toBeUndefined();
   });
 });
