@@ -161,13 +161,21 @@ fn macrod_wire(rollout: &str) -> Vec<String> {
                 LogEvent::Update(update) => {
                     ("session/update", json!({"sessionId":"s", "update":update}))
                 }
+                // With no prompt waiting, macrod ends the late item's turn.
+                LogEvent::LateUpdate(update) => {
+                    return Some(vec![
+                        json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":"session/update", "params":{"sessionId":"s", "update":update}}}).to_string(),
+                        json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":"_session/turn_complete", "params":{"sessionId":"s", "outcome":{"kind":"finished"}}}}).to_string(),
+                    ]);
+                }
                 LogEvent::TurnEnded(stop) => (
                     "_session/turn_complete",
                     json!({"sessionId":"s", "outcome":{"kind":if stop == "cancelled" {"cancelled"} else {"finished"}}}),
                 ),
             };
-            Some(json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":method, "params":params}}).to_string())
+            Some(vec![json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":method, "params":params}}).to_string()])
         })
+        .flatten()
         .collect()
 }
 

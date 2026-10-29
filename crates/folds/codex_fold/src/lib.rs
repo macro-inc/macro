@@ -5,8 +5,8 @@
 //! `event_msg` entries carry one `item_completed` per finished item (agent
 //! messages, reasoning, commands, file changes, tool calls) and a
 //! `task_complete` or `turn_aborted` when a turn ends. A background command
-//! can finish after its turn ended; that late item is reported as a turn of
-//! its own, so no turn is left open.
+//! can finish after its turn ended; that item is a [`LogEvent::LateUpdate`],
+//! so no turn is left open.
 
 #![deny(missing_docs)]
 
@@ -64,7 +64,7 @@ impl Fold for CodexLog {
                 if self.in_turn {
                     vec![LogEvent::Update(update)]
                 } else {
-                    vec![LogEvent::Update(update), LogEvent::TurnEnded("end_turn")]
+                    vec![LogEvent::LateUpdate(update)]
                 }
             }
             Some("task_started") => {
