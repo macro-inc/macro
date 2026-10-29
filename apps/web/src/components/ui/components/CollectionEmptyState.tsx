@@ -7,7 +7,7 @@ export type CollectionEmptyStateProps = Omit<ComponentProps<'div'>, 'children'> 
 };
 
 /**
- * Single-line empty collection row with copy and an optional trailing action.
+ * Compact bordered empty collection message with an optional outside action.
  * @do Keep loading, errors, collection data, and edit permissions with the caller.
  * @do Pass a shared Button as the action; omit it for read-only collections.
  * @dont Use this collection placeholder as a full-page empty state.
@@ -19,12 +19,14 @@ export function CollectionEmptyState(props: CollectionEmptyStateProps) {
     <div
       data-slot="collection-empty-state"
       class={cn(
-        'flex min-h-8 w-full items-center justify-between gap-2 rounded-lg border border-dashed border-border-secondary px-2 py-1 text-left',
+        'flex min-h-9 w-full items-center gap-2 text-left',
         local.class
       )}
       {...rest}
     >
-      <div class="min-w-0 text-xs text-ink-extra-muted">{local.message}</div>
+      <div class="flex min-h-9 min-w-0 flex-1 items-center rounded-lg border border-dashed border-border-secondary px-2 py-1 text-xs text-ink-extra-muted">
+        {local.message}
+      </div>
       {local.action}
     </div>
   );

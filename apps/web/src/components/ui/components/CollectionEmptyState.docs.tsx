@@ -25,7 +25,7 @@ function EditableDemo() {
         <CollectionEmptyState
           message={t('common.emptyCollection')}
           action={
-            <Button variant="ghost" size="xs" onClick={() => setAdded(true)}>
+            <Button variant="outline" size="xs" onClick={() => setAdded(true)}>
               <Plus class="size-4" />
               {t('common.add')}
             </Button>
@@ -55,7 +55,7 @@ export default defineDoc({
   exports: ['CollectionEmptyState'],
   import: "import { Button, CollectionEmptyState } from '@ui';",
   description:
-    'A compact, dashed single-line empty collection message with an optional trailing action. The caller owns loading, permissions, and any expanded drag-and-drop state.',
+    'A compact dashed empty collection message with an optional outline action outside the border. The caller owns loading, permissions, and any expanded drag-and-drop state.',
   demos: [
     {
       id: 'editable',

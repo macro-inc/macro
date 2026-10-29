@@ -154,14 +154,15 @@ confirmation drawers use the same action hierarchy.
 
 ## Property collections
 
-Multi-entity property collections use a compact empty message and trailing Add
-action inside a light dashed border at rest. Collection bodies stop before the
-header action column. While dragging an app item, compatible collections expand
-into dashed dropzones; hovering a valid zone strengthens its accent treatment.
-Empty-state and dropzone content keep the same spacing below the field label.
-Hidden Add actions retain their layout space so incompatible or unavailable
-empty rows keep their height, without rejection feedback. Existing values stay
-visible. Dropping adds a reference without moving the original item.
+Multi-entity property collections use a compact empty message inside a light
+dashed border with an outline Add action outside it, aligned with the header
+action column. The dedicated Tags section uses the same empty-state layout.
+While dragging an app item, compatible collections expand into dashed dropzones;
+hovering a valid zone strengthens its accent treatment. Empty-state and dropzone
+content keep the same spacing below the field label. Incompatible or unavailable
+collections retain their height, keep eligible Add actions visible, and show no
+rejection feedback. Existing values stay visible. Dropping adds a reference
+without moving the original item.
 Existing references stay in place. Duplicate references, the owning entity's
 matching type-and-ID pair, unsupported item types, and types outside the property's
 restriction are ignored. Read-only, metadata, loading, saving, and open-editor

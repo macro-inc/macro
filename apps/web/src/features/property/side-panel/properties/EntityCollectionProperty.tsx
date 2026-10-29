@@ -97,7 +97,6 @@ function EntityCollectionPropertyBody(props: {
     onDrop: (reference) => saveReferences([...entities(), reference]),
   });
   const isDraggingOver = () => dropTarget?.isOver() ?? false;
-  const isDragging = () => dropTarget?.isDragging() ?? false;
   const canDrop = () => dropTarget?.canDrop() ?? false;
   const dropZoneHeight = () => entities().length > 0 ? 'h-18' : 'h-16';
   const handleAdd: JSX.EventHandler<HTMLButtonElement, MouseEvent> = (event) => {
@@ -151,28 +150,7 @@ function EntityCollectionPropertyBody(props: {
             each={entities()}
             fallback={
               <Show when={!props.loading && !canDrop()}>
-                <CollectionEmptyState
-                  message={t('common.emptyCollection')}
-                  action={
-                    <Show when={!isReadOnly()}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        class={cn(
-                          'text-ink-extra-muted',
-                          isDragging() && 'invisible pointer-events-none'
-                        )}
-                        aria-hidden={isDragging()}
-                        disabled={isSaving() || isDragging()}
-                        onClick={handleAdd}
-                      >
-                        <Plus class="size-4" />
-                        {t('common.add')}
-                      </Button>
-                    </Show>
-                  }
-                />
+                <CollectionEmptyState message={t('common.emptyCollection')} />
               </Show>
             }
           >
@@ -218,6 +196,22 @@ function EntityCollectionPropertyBody(props: {
           </div>
         </div>
       </div>
+      <Show when={!props.loading && entities().length === 0 && !isReadOnly()}>
+        <div class="col-start-2 row-start-2 mt-1 flex min-h-9 items-center justify-end self-start">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            class={cn(canDrop() && 'invisible pointer-events-none')}
+            aria-hidden={canDrop()}
+            disabled={isSaving() || canDrop()}
+            onClick={handleAdd}
+          >
+            <Plus class="size-4" />
+            {t('common.add')}
+          </Button>
+        </div>
+      </Show>
     </div>
   );
 }
