@@ -45,7 +45,10 @@ export type AgentChatReplyBody =
   | {
       kind: 'segments';
       segments: AgentReplySegment[];
-      /** Show the spinner after the segments: the turn is still running. */
+      /**
+       * The turn is still running: the spinner follows the segments, unless
+       * they end in an open run of steps, which shows the turn working itself.
+       */
       pending?: boolean;
       /** A closing line the harness wrote: stopped, failed, said nothing. */
       footer?: string;
@@ -145,7 +148,10 @@ export function composeAgentChatReply(reply: AgentChatReply): string {
     return [head, body.markdown].filter(Boolean).join('\n\n');
   }
   const head = chrome(reply, false);
-  const tail = body.pending ? chrome({ ...reply, link: false }, true) : '';
+  const last = body.segments.at(-1);
+  const working = last?.kind === 'activity' && !last.sealed;
+  const tail =
+    body.pending && !working ? chrome({ ...reply, link: false }, true) : '';
   return [
     head,
     ...body.segments.map((segment) =>
