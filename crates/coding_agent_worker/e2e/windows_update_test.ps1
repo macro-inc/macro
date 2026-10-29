@@ -151,11 +151,17 @@ scope = "user"
     Wait-For "the launcher to prune $V1" { -not (Test-Path (Join-Path $installDir "versions\$V1")) } 30
     Check $true "the launcher pruned $V1"
     Write-Host "self-update $V1 -> $V2 passed"
+} catch {
+    Write-Host "error: $_"
+    Write-Host $_.ScriptStackTrace
+    Write-Host '--- mirror requests ---'
+    Get-Content $requests -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    throw
 } finally {
-    foreach ($process in $processes) {
-        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    $ids = @($processes | ForEach-Object { $_.Id }) + @(Cores | ForEach-Object { $_.ProcessId })
+    foreach ($id in ($ids | Where-Object { $_ })) {
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
     }
-    Cores | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     $listener.Stop()
     Remove-Job $server -Force -ErrorAction SilentlyContinue
     [Environment]::SetEnvironmentVariable('Path', $userPathBefore, 'User')
