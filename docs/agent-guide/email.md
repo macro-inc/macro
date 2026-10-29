@@ -603,8 +603,10 @@ are saved on this device independently of the mutation queue. A failed server
 save must leave the draft discoverable in **Drafts** (including grouped views)
 and in its reply thread. Saving is silent on desktop and mobile: no saved or
 syncing text appears, including offline. A failure shows a banner inside the
-composer, above the recipients, with **Retry** (or **Retry discard**); it never
-appears in the toolbar or the mobile header actions. Verify the banner on mobile
+composer, above the recipients, with **Retry** (or **Retry discard**); while the
+local cache waits for another owner the banner keeps **Retry** and retries by
+itself, and once local storage needs recovery it offers **Reload** instead. It
+never appears in the toolbar or the mobile header actions. Verify the banner on mobile
 sits below the header and that editing while failed continues saving locally
 without repeatedly submitting the rejected request. If sender metadata is still
 unavailable, the local draft is retained; reconnect and select an inbox before
