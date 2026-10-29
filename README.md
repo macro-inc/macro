@@ -103,13 +103,13 @@ The solution isn't to forgo tracking entirely. We tried that and it was a differ
 
 Creating tasks in Macro is easy. Where possible, tasks created are bidirectionally linked to the creating context (e.g. a customer email) so the full chain is auditable from "why are we doing this" → task → agent → pull request, all in one system.
 
-- Create a task from an email
-- From anywhere via `c` `t`
-- From a markdown doc with `/task`
-- From any `- [ ]` bullet by highlighting and clicking "Task"
-- `@Macro` create tasks in any channel or DM
-- In any agent chat
-- Via external MCP, API or SDK
+- Create a task from an email.
+- From anywhere via `c` `t`.
+- From a markdown doc with `/task`.
+- From any `- [ ]` bullet by highlighting and clicking "Task".
+- `@Macro` create tasks in any channel or DM.
+- In any agent chat.
+- Via external MCP, API or SDK.
 
 We made organizing tasks in Macro simple. Group related tasks into projects and assign responsibility to team members or agents. To track your work use lists, boards, and saved views. You can hand off tasks to agents and they'll use the context connected to the task to complete it and update the status.
 
@@ -121,13 +121,13 @@ We made organizing tasks in Macro simple. Group related tasks into projects and 
 
 We wanted everything in a single markdown editor without switching tools.
 
-- Native markdown compatibility
-- Live collaboration with CRDTs and Cloudflare durable objects make it feel like you're editing on the same computer. Edits come in ~instantly instead of ka-chunking like Google Docs
+- Native markdown compatibility.
+- Live collaboration with CRDTs and Cloudflare durable objects make it feel like you're editing on the same computer. Edits come in ~instantly instead of ka-chunking like Google Docs.
 - Version control: history and forking, with a neat UI for scrubbing history.
 - Offline editing and reconciliation.
-- @-linked to everything in your workspace: email, docs, tasks, messages, channels, companies, contacts, etc. Like Notion but multi-modal
-- Embed a database view or live query result inside your docs
-- Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649), [Android app](https://play.google.com/store/apps/details?id=com.macro.workspace.mobile&pcampaignid=web_share), or on the web
+- @-linked to everything in your workspace: email, docs, tasks, messages, channels, companies, contacts, etc. Like Notion but multi-modal.
+- Embed a database view or live query result inside your docs.
+- Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649), [Android app](https://play.google.com/store/apps/details?id=com.macro.workspace.mobile&pcampaignid=web_share), or on the web.
 - Agent native editing, powered by swarms of agents operating as peers in the CRDT collaboration system like human collaborators. See [Wolf's tech blog on this](https://404wolf.com/posts/AgentsAttackTheDocument/). Use via MCP or internal agent.
 
 ![The Team Channels PRD in Macro with tags, assignees, and readable requirements](.github/readme/docs-prd.jpg)
@@ -152,8 +152,9 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 ![Macro Sales Demo pipeline with nine visible fictional company cards across three stages and its navigation sidebar open](.github/readme/crm-board.jpg)
 
-- Kanban board and customizable deal stages, list view, saved views, shareable views, personal and team views, etc.
-- "Notes" on the company actually use the same system as channels/DMs, so you can @mention and do all of the things you expect in a channel. Basically, every deal gets its own channel, automatically, that's pinned right to the deal record
+- Customizable sales pipelines and deal stages with board and list views.
+- Company and contact records have their own discussions where your team can leave notes and @mention people and work.
+- See related emails, files, tasks, calls, and discussions from a company or contact record.
 - @mention the company or contact from any note, message, task, pull request, etc., to create a bidirectional link between the record and that thing. For example, @mention a company from an engineering task to note their request. It all ties together.
 
 [CRM docs &rarr;](https://docs.macro.com/product/crm)
@@ -164,9 +165,9 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 Since Macro has the team context in a single database, it is uniquely positioned to offer team-level memory with full context of all of the operations of the business. We do this every day via a cron job. Your memory is updated from team conversations, your DMs, your sent and received emails, tasks created and completed, etc. All of this is synthesized together in one pass, rather than severally, and combined with your previous memory to form the new memory output. The net result:
 
-- Macro has the best memory on what you're working on and what you care about vs. chatbots that only build memory from prior chats
-- This memory is available to external agents via MCP, or any AI model (OpenAI, Google, Anthropic, etc.) through the model picker for maximum portability
-- The memory is plainly stored in markdown so you can export it as you please. To manually update it, just ask the AI to remember something/update your memory
+- Macro has the best memory on what you're working on and what you care about vs. chatbots that only build memory from prior chats.
+- This memory is available to external agents via MCP, or any AI model (OpenAI, Google, Anthropic, etc.) through the model picker for maximum portability.
+- The memory is plainly stored in markdown so you can export it as you please. To manually update it, just ask the AI to remember something/update your memory.
 
 ![A Macro coding-agent session with tool calls, a successful audit, and a pull request](.github/readme/agents-task-handoff.jpg)
 
@@ -264,9 +265,9 @@ You can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.ma
 
 Have an idea, want to contribute, or want to work on Macro?
 
-- Feature requests: [contact@macro.com](mailto:contact@macro.com)
-- Contributions: see our [contribution guidelines](CONTRIBUTING.md)
-- Hiring: [teo@macro.com](mailto:teo@macro.com)
+- Feature requests: [contact@macro.com](mailto:contact@macro.com).
+- Contributions: see our [contribution guidelines](CONTRIBUTING.md).
+- Hiring: [teo@macro.com](mailto:teo@macro.com).
 
 <br />
 
