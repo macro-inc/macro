@@ -15,7 +15,7 @@ import {
 } from '@property/context/PropertiesContext';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
-import { useEntityProperties } from '@property/hooks';
+import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
   Property,
