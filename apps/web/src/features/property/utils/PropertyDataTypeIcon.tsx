@@ -1,5 +1,5 @@
 import ContactIcon from '@icon/system/regular/address-book.svg';
-import CompanyIcon from '@icon/system/regular/building.svg';
+import CompanyIcon from '@icon/system/regular/buildings.svg';
 import CalculatorIcon from '@icon/system/regular/calculator.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CalendarDotsIcon from '@icon/system/regular/calendar-dots.svg';

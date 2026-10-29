@@ -2,7 +2,7 @@ import { itemToBlockName } from '@core/constant/allBlocks';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import SkillIcon from '@icon/system/regular/blueprint.svg';
 import SnippetIcon from '@icon/system/regular/brackets-curly.svg';
-import CompanyIcon from '@icon/system/regular/building-office.svg';
+import CompanyIcon from '@icon/system/regular/buildings.svg';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import DatabaseIcon from '@icon/system/regular/database.svg';
@@ -100,6 +100,14 @@ describe('entity glyphs', () => {
   it('keeps the routine icon and label for saved mentions using the old block name', () => {
     expect(getIconConfig('automation')).toEqual(getIconConfig('routine'));
     expect(getIconConfig('automation').icon).toBe(RoutineIcon);
+  });
+
+  it('uses the CRM buildings glyph for company and crm_company', () => {
+    expect(getIconConfig('company').icon).toBe(CompanyIcon);
+    expect(getIconConfig('crm_company').icon).toBe(CompanyIcon);
+    expect(getIconConfig('company', 'bold').icon).toBe(
+      getIconConfig('crm_company', 'bold').icon
+    );
   });
 
   beforeEach(() => {

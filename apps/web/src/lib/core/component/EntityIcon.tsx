@@ -22,7 +22,6 @@ import BellSimpleBold from '@icon/system/bold/bell-simple-bold.svg';
 import BlueprintBold from '@icon/system/bold/blueprint-bold.svg';
 import BracketsCurlyBold from '@icon/system/bold/brackets-curly-bold.svg';
 import BuildingBold from '@icon/system/bold/building-bold.svg';
-import BuildingOfficeBold from '@icon/system/bold/building-office-bold.svg';
 import CalendarBold from '@icon/system/bold/calendar-bold.svg';
 import ClipboardTextBold from '@icon/system/bold/clipboard-text-bold.svg';
 import ClockClockwiseBold from '@icon/system/bold/clock-clockwise-bold.svg';
@@ -58,12 +57,13 @@ import SpreadsheetBold from '@icon/system/bold/table-bold.svg';
 import TableBold from '@icon/system/bold/table-bold.svg';
 import UsersBold from '@icon/system/bold/users-bold.svg';
 import UsersThreeBold from '@icon/system/bold/users-three-bold.svg';
+import BuildingsFill from '@icon/system/fill/buildings-fill.svg';
 import AddressBook from '@icon/system/regular/address-book.svg';
 import BellSimple from '@icon/system/regular/bell-simple.svg';
 import Blueprint from '@icon/system/regular/blueprint.svg';
 import BracketsCurly from '@icon/system/regular/brackets-curly.svg';
 import Building from '@icon/system/regular/building.svg';
-import BuildingOffice from '@icon/system/regular/building-office.svg';
+import Buildings from '@icon/system/regular/buildings.svg';
 import Calendar from '@icon/system/regular/calendar.svg';
 import ClipboardText from '@icon/system/regular/clipboard-text.svg';
 import ClockClockwise from '@icon/system/regular/clock-clockwise.svg';
@@ -496,15 +496,15 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Routine',
   },
   crm_company: {
-    icon: BuildingOffice,
-    boldIcon: BuildingOfficeBold,
+    icon: Buildings,
+    boldIcon: BuildingsFill,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
   },
   company: {
-    icon: BuildingOffice,
-    boldIcon: BuildingOfficeBold,
+    icon: Buildings,
+    boldIcon: BuildingsFill,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
