@@ -376,7 +376,7 @@ A desktop view's name opens the view switcher: clicking it shows the rail's apps
 in rail order, then the More apps, with a check on the current one. Choosing one
 replaces the view in that split, not the active split; Shift opens it in a new
 split. The navigation panel's title shows the name with a caret, sharing one
-hover background. Main headers show the name alone, with the same hover:
+hover background. Short names stay whole; long names ellipsize. Main headers show the name alone, with the same hover:
 `ViewSidebar.Title caret={false}` for plain titles, and the first breadcrumb
 (Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
 returns to the list. Titles that name content rather than the view (Calendar's

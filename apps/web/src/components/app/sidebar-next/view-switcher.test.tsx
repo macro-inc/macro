@@ -161,6 +161,17 @@ describe('ViewSwitcher', () => {
     );
   });
 
+  it('keeps a short view name visible instead of shrinking to one letter', () => {
+    renderSplits();
+    const trigger = within(
+      screen.getByRole('region', { name: 'left' })
+    ).getByRole('button', { name: 'Home' });
+    expect(trigger.className).toContain('max-w-full');
+    expect(trigger.className).toContain('w-max');
+    expect(trigger.className).not.toContain('calc(');
+    expect(trigger.textContent).toContain('Home');
+  });
+
   it('shows the plain name on touch devices and in popovers', () => {
     mocks.touch = true;
     renderSplits();
