@@ -81,6 +81,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const ranked = search(items, query)
     .sort(
       (left, right) =>
+        right.nameMatchRank - left.nameMatchRank ||
         right.combinedScore - left.combinedScore ||
         compareRecency(left.item, right.item)
     )

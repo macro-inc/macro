@@ -108,13 +108,14 @@ Keep the shared uploader from restoring removed attachments or publishing after
 the composer is disposed. The Share button and shortcut use the same upload guard.
 
 Menus that find entities by typed name (Command-K, mobile name search, @
-mentions) score how well the name matches with `NAME_MATCH_RANKING` in
-`@core/util/freshSort`: exact names, then prefixes, then tight matches near the
-start. Tune name relevance there for every menu; keep recency weights and type
-boosts in each menu's own config. Exact and prefix boosts compare the row's label
-(`getDisplayName`), and a row's search text must start with that label, adding
-emails, aliases, or command keywords after it. Mention menus rank loaded entity sources
-together with `MENTION_RANKING_CONFIG` in
+mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
+to the query first, then names starting with it, then other matches, with tight
+matches near the start scoring higher. Each menu's recency weights and type
+boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
+lift a row past a better name match. Tune name relevance there for every menu.
+Name groups and match position use the row's label (`getDisplayName`), so search
+text can add emails, aliases, or command keywords before or after it. Mention
+menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
 `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
 brevity, and type boosts. Task projects use the `initiative` bucket; `project`
 means a Drive folder. Preserve broader cache/server matches and the existing

@@ -193,8 +193,7 @@ function commandsToItems(
       id,
       kind: 'command',
       bucket: 'command',
-      // The label leads, like other rows, so name-match ranking scores it.
-      searchText: [description, tags, keywords].filter(Boolean).join(' '),
+      searchText: [tags, keywords, description].filter(Boolean).join(' '),
       sortTimestamp: lastUsedAt?.getTime() ?? 0,
       timestamps: { viewedAt: lastUsedAt, updatedAt: lastUsedAt },
       data: command,

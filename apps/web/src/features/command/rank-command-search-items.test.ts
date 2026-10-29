@@ -183,11 +183,19 @@ describe('command menu search ranking', () => {
 
     const create = {
       ...command('create', 'Create', NOW - DAY),
-      searchText: 'Create new make add',
+      searchText: 'new make add Create',
     };
     expect(ids([note('plan', 'Create plan'), create], 'create')[0]).toBe(
       'create'
     );
+  });
+
+  it('ranks an exact project name above a recently viewed channel that starts with it', () => {
+    const items = [
+      channel('channel', 'Launch plan rollout'),
+      project('project', 'Launch plan', NOW - 20 * DAY),
+    ];
+    expect(ids(items, 'launch plan')).toEqual(['project', 'channel']);
   });
 
   it('keeps ranking independent of whether a match came from cached or local results', () => {
