@@ -72,12 +72,14 @@ import {
   deduplicateChannels,
   resolveReferencedChannels,
   useChannelsByIdsQuery,
+  useSupportChannelIds,
 } from '../../queries';
 import type {
   ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsTab,
 } from '../../types';
+import { channelGroup } from '../../utils';
 import {
   buildChannelRailRows,
   buildChannelSectionRows,
@@ -110,9 +112,10 @@ const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'favorites',
   'channels',
   'direct_messages',
+  'support',
 ];
 const LABEL_KEY_PREFIX = 'label:';
-const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
+const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages', 'support'] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
   ...CHANNEL_TAB_IDS,
@@ -318,6 +321,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     deduplicateChannels([
       props.sources.channels.items(),
       props.sources.direct_messages.items(),
+      props.sources.support.items(),
       props.sources.recents.items(),
       props.sources.search.items(),
     ])
@@ -404,7 +408,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
     channelsById().get(channelId) ??
     referencedChannels().find((channel) => channel.id === channelId);
 
-  const channelActivity = useChannelRailActivity(allChannels, channelCalls);
+  // Support channels count toward Support wherever they were loaded from,
+  // including Recent and search.
+  const supportChannelIds = useSupportChannelIds();
+  const supportChannelIdSet = createMemo(() => new Set(supportChannelIds()));
+  const channelActivity = useChannelRailActivity(
+    allChannels,
+    channelCalls,
+    (channel) =>
+      supportChannelIdSet().has(channel.id) ? 'support' : channelGroup(channel)
+  );
 
   const isLabelOpen = (labelId: string) =>
     !state.collapsedLabels.includes(labelId);
@@ -450,6 +463,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         direct_messages: props.sources.direct_messages.items(),
         recents: props.sources.recents.items(),
         threads: props.sources.threads.items(),
+        support: props.sources.support.items(),
       },
       channelSectionRows()
     );
@@ -568,7 +582,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     },
   };
 
-  const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
+  const scrollScopeToSelectedOrStart = (
+    scope: ChannelsQueryScope | 'support'
+  ) => {
     // The Channels section renders label headings between channels, so its
     // indexes come from the rendered rows rather than the source.
     const rendered =
@@ -816,7 +832,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const currentGroup = list.focus.item()?.group;
 
     const sections = CHANNEL_RAIL_SECTIONS.filter((section) =>
-      section === 'favorites' ? favorites().length > 0 : true
+      section === 'favorites'
+        ? favorites().length > 0
+        : section === 'support'
+          ? props.sources.support.items().length > 0
+          : true
     );
 
     const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;

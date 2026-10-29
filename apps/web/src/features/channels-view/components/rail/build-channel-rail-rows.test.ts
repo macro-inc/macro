@@ -174,6 +174,7 @@ describe('buildChannelRailRows', () => {
     favorites: true,
     channels: true,
     direct_messages: true,
+    support: true,
   };
 
   it('lists channels once in their section and source order', () => {
@@ -186,6 +187,7 @@ describe('buildChannelRailRows', () => {
         direct_messages: [],
         recents: [],
         threads: [],
+        support: [],
       },
       buildChannelSectionRows({
         labels: [],
@@ -219,6 +221,7 @@ describe('buildChannelRailRows', () => {
         direct_messages: [],
         recents: [],
         threads: [],
+        support: [],
       },
       sectionRows
     );
@@ -241,6 +244,46 @@ describe('buildChannelRailRows', () => {
     ]);
   });
 
+  it('lists support channels in their own section after DMs', () => {
+    const support = channel('support', 'Macro Support x newuser', 'private');
+    const items = {
+      favorites: [],
+      channels: [acme],
+      direct_messages: [],
+      recents: [],
+      threads: [],
+      support: [support],
+    };
+    const sectionRows = buildChannelSectionRows({
+      labels: [],
+      channels: [acme],
+      channelsById: byId,
+      isLabelOpen: () => true,
+    });
+
+    const rows = buildChannelRailRows('browse', expanded, items, sectionRows);
+    expect(rows.map((row) => row.id)).toEqual([
+      'section:channels',
+      'channel:acme',
+      'section:direct_messages',
+      'section:support',
+      'channel:support',
+    ]);
+    expect(rows.at(-1)).toMatchObject({
+      group: 'support',
+      scope: 'support',
+      localIndex: 0,
+    });
+
+    const collapsed = buildChannelRailRows(
+      'browse',
+      { ...expanded, support: false },
+      items,
+      sectionRows
+    );
+    expect(collapsed.at(-1)?.id).toBe('section:support');
+  });
+
   it('leaves the recent tab as a flat list', () => {
     const rows = buildChannelRailRows(
       'recents',
@@ -251,6 +294,7 @@ describe('buildChannelRailRows', () => {
         direct_messages: [],
         recents: [zeta, acme],
         threads: [],
+        support: [],
       },
       []
     );
@@ -268,6 +312,7 @@ describe('buildChannelRailRows', () => {
         direct_messages: [],
         recents: [],
         threads: [dm, acme],
+        support: [],
       },
       []
     );
@@ -310,13 +355,14 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   ).toEqual(['deals']);
   const rows = buildChannelRailRows(
     'browse',
-    { favorites: true, channels: true, direct_messages: true },
+    { favorites: true, channels: true, direct_messages: true, support: true },
     {
       favorites: [],
       channels: [acme, zeta, deals],
       direct_messages: [],
       recents: [],
       threads: [],
+      support: [],
     },
     sections
   );

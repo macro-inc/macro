@@ -45,7 +45,7 @@ import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
 import type {
   ChannelListSort,
-  ChannelsGroup,
+  ChannelsRailGroup,
   ChannelsSortGroup,
   ChannelsTab,
 } from '../../types';
@@ -114,11 +114,11 @@ type ChannelRailSearch = {
 };
 
 type GroupConfig = {
-  group: ChannelsGroup;
+  group: ChannelsRailGroup;
   label: string;
   emptyLabel: string;
-  createLabel: string;
-  onCreate: () => void;
+  /** Sections without a create action leave this out. */
+  create?: { label: string; onCreate: () => void };
 };
 
 const GROUPS: GroupConfig[] = [
@@ -126,15 +126,22 @@ const GROUPS: GroupConfig[] = [
     group: 'channels',
     label: 'Channels',
     emptyLabel: 'No channels',
-    createLabel: 'Create channel',
-    onCreate: openNewChannelModal,
+    create: { label: 'Create channel', onCreate: openNewChannelModal },
   },
   {
     group: 'direct_messages',
     label: 'DMs',
     emptyLabel: 'No direct messages',
-    createLabel: 'Start direct message',
-    onCreate: () => runCreateAction('channel'),
+    create: {
+      label: 'Start direct message',
+      onCreate: () => runCreateAction('channel'),
+    },
+  },
+  // Signup creates support channels, so the section has no create action.
+  {
+    group: 'support',
+    label: 'Support',
+    emptyLabel: 'No support channels',
   },
 ];
 
@@ -764,10 +771,14 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           <Show
             when={props.config.group === 'channels'}
             fallback={
-              <CreateRailAction
-                label={props.config.createLabel}
-                onClick={props.config.onCreate}
-              />
+              <Show when={props.config.create}>
+                {(create) => (
+                  <CreateRailAction
+                    label={create().label}
+                    onClick={create().onCreate}
+                  />
+                )}
+              </Show>
             }
           >
             <ChannelsCreateMenu />
@@ -871,7 +882,8 @@ function ExpandedBrowse() {
     rail.labels().length > 0 ||
     rail.favorites().length > 0 ||
     rail.sources.channels.items().length > 0 ||
-    rail.sources.direct_messages.items().length > 0;
+    rail.sources.direct_messages.items().length > 0 ||
+    rail.sources.support.items().length > 0;
   const sourcesSettled = () =>
     !rail.sources.channels.isLoading() &&
     !rail.sources.direct_messages.isLoading() &&
@@ -891,7 +903,17 @@ function ExpandedBrowse() {
               whole sidebar, so favorites is never squeezed out. */}
           <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
             <For each={GROUPS}>
-              {(config) => <ExpandedGroupSection config={config} />}
+              {(config) => (
+                // Only people in other users' support channels see Support.
+                <Show
+                  when={
+                    config.group !== 'support' ||
+                    rail.sources.support.items().length > 0
+                  }
+                >
+                  <ExpandedGroupSection config={config} />
+                </Show>
+              )}
             </For>
           </div>
         </ViewSidebar.Content>

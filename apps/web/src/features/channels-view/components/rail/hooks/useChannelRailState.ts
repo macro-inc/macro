@@ -6,7 +6,7 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope } from '../../../queries';
-import type { ChannelsGroup, ChannelsQueryScope } from '../../../types';
+import type { ChannelsQueryScope, ChannelsRailGroup } from '../../../types';
 import {
   type ChannelRailRow,
   domIdForRow,
@@ -91,7 +91,7 @@ export function useChannelRailFavoritesState() {
 }
 
 export function useChannelRailScopeState(
-  scope: Accessor<ChannelsQueryScope | 'threads'>
+  scope: Accessor<ChannelsQueryScope | 'threads' | 'support'>
 ) {
   const rail = useChannelsRail();
 
@@ -179,7 +179,7 @@ export function useChannelRailVirtualizer(
   return { registerVirtualizer, loadMoreNearEnd };
 }
 
-export function useChannelRailSectionState(group: Accessor<ChannelsGroup>) {
+export function useChannelRailSectionState(group: Accessor<ChannelsRailGroup>) {
   const rail = useChannelsRail();
   const scope = useChannelRailScopeState(group);
   const state = createMemo(() => {
@@ -190,8 +190,12 @@ export function useChannelRailSectionState(group: Accessor<ChannelsGroup>) {
     return {
       ...scope(),
       open: rail.isGroupOpen(section),
+      // The last open section takes the height the collapsed ones above leave.
       fillAvailable:
-        section === 'direct_messages' && !rail.isGroupOpen('channels'),
+        (section === 'direct_messages' && !rail.isGroupOpen('channels')) ||
+        (section === 'support' &&
+          !rail.isGroupOpen('channels') &&
+          !rail.isGroupOpen('direct_messages')),
       focused: rail.list.focus.key() === rowId,
       containsFocus: rail.list.focus.item()?.group === section,
       domId: domIdForRow(rail.railId, rowId),

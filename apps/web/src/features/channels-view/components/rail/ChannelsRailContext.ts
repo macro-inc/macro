@@ -10,7 +10,7 @@ import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope, ChannelsSources } from '../../queries';
 import type {
   ChannelListSort,
-  ChannelsGroup,
+  ChannelsRailGroup,
   ChannelsRailSection,
   ChannelsSortGroup,
   ChannelsTab,
@@ -51,7 +51,7 @@ export type ChannelRailRow =
   | {
       kind: 'conversation';
       id: `channel:${string}`;
-      group?: ChannelsGroup;
+      group?: ChannelsRailGroup;
       scope: ChannelsSourceScope;
       /**
        * Index in the scope's rendered list. For `channels` that list mixes

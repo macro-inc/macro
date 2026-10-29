@@ -17,7 +17,7 @@ import {
 } from './ChannelsRailContext';
 
 export type ChannelRailItemsByScope = Record<
-  ChannelsQueryScope | 'threads',
+  ChannelsQueryScope | 'threads' | 'support',
   readonly ChannelEntity[]
 > & {
   favorites: readonly Favorite[];
@@ -72,7 +72,8 @@ export function buildChannelSectionRows(options: {
 
 /**
  * The keyboard-navigable rows of the All tab (or the flat Recent list), in
- * visual order. Collapsed sections contribute only their heading.
+ * visual order. Collapsed sections contribute only their heading; Favorites
+ * and Support appear only when they have rows.
  */
 export function buildChannelRailRows(
   tab: ChannelsTab,
@@ -174,6 +175,28 @@ export function buildChannelRailRows(
         })
       )
     );
+  }
+
+  if (items.support.length > 0) {
+    rows.push({
+      kind: 'section',
+      id: 'section:support',
+      group: 'support',
+    });
+    if (expandedGroups.support) {
+      rows.push(
+        ...items.support.map(
+          (channel, localIndex): ChannelRailRow => ({
+            kind: 'conversation',
+            id: `channel:${channel.id}`,
+            group: 'support',
+            scope: 'support',
+            localIndex,
+            channel,
+          })
+        )
+      );
+    }
   }
 
   return rows;

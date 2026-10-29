@@ -76,6 +76,7 @@ function createInitialState(
       favorites: initial.expandedGroups?.favorites ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
+      support: initial.expandedGroups?.support ?? true,
     },
     collapsedLabels: initial.collapsedLabels ?? [],
     threadsChannelId: initial.threadsChannelId,
@@ -84,6 +85,7 @@ function createInitialState(
       direct_messages:
         initial.sortBy?.direct_messages ??
         CHANNELS_DEFAULT_SORT_BY.direct_messages,
+      support: initial.sortBy?.support ?? CHANNELS_DEFAULT_SORT_BY.support,
       threads: initial.sortBy?.threads ?? CHANNELS_DEFAULT_SORT_BY.threads,
     },
     asideWidth: clampChannelsRailWidth(

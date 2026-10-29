@@ -8,6 +8,7 @@ export const CHANNELS_MAX_RAIL_WIDTH = DEFAULT_ASIDE_LAYOUT.max;
 export const CHANNELS_DEFAULT_SORT_BY = {
   channels: 'updated_at',
   direct_messages: 'updated_at',
+  support: 'updated_at',
   threads: 'updated_at',
 } satisfies Record<ChannelsSortGroup, ChannelListSort>;
 

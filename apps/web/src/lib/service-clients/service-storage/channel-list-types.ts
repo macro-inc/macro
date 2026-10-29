@@ -16,6 +16,8 @@ export type ChannelWithParticipants = Channel & {
   participants: ChannelParticipant[];
   /** Whether the requesting user is an active participant of the channel. */
   is_participant: boolean;
+  /** Whether this is a new user's support channel. Absent from older servers. */
+  is_support?: boolean;
 };
 
 /** A channel-list item: channel + participants + latest message + the viewer's read state. */

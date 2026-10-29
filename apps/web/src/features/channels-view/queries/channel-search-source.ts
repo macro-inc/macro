@@ -47,7 +47,7 @@ export function createChannelSearchSource(options: {
             is_participant: true,
             channel_types: match(options.scope())
               .with('direct_messages', () => ['direct_message'])
-              .with('channels', () => ['public', 'private', 'team'])
+              .with('channels', 'support', () => ['public', 'private', 'team'])
               .with('recents', 'search', 'threads', () => undefined)
               .exhaustive(() => undefined),
           },
@@ -72,7 +72,11 @@ export function createChannelSearchSource(options: {
     // message metadata.
     const scope = options.scope();
     return filterChannelsForScope(
-      scope === 'recents' || scope === 'threads' ? 'search' : scope,
+      scope === 'recents' || scope === 'threads'
+        ? 'search'
+        : scope === 'support'
+          ? 'channels'
+          : scope,
       matches
     );
   });
