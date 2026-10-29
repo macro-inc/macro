@@ -62,7 +62,7 @@ adopted('dss-errors-dev', {
   query: `logs("service:cloud-storage-service env:dev status:error ${DSS_EXPIRED_JWT_EXCLUSION}").index("*").rollup("count").last("5m") > 200`,
   message: `Dev cloud-storage-service logged {{value}} errors in 5 minutes.
 
-${notify({ pages: false })}`,
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '200',
     warning: '100',
@@ -208,7 +208,7 @@ adopted('channel-invite-spam-dev', {
     'logs("service:notification-service-dev message:\\"processing message\\" @notification_event_type:channel_invite").index("*").rollup("count").by("@sender_id").last("1h") > 10',
   message: `A user is generating a high number of channel invites. This could mean they are spamming users with invite emails.
 
-${notify({ pages: false })}`,
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '10',
     warning: '5',

@@ -23,11 +23,13 @@ and has two services, each with its pair of webhooks declared in `goalert.ts`:
   warnings and no-data go to Notify.
 - **Every recovery** closes on each service the monitor could have opened.
   Closing an alert GoAlert does not have open does nothing.
-- **The hourly re-post comes from GoAlert**: its escalation posts to the channel
-  and repeats every hour until someone acknowledges. Monitors still renotify
+- **Re-posts come from GoAlert**: a page posts to the channel again every hour
+  until someone acknowledges it; a Notify alert posts once. Monitors still renotify
   hourly (`RENOTIFY_MINUTES`); the repeat dedups into the open GoAlert alert
   (`$ALERT_CYCLE_KEY`) and reopens it if someone closed it while the monitor
   still fires.
+- **Dev and staging monitors notify no one** (`notify({ pages, environment })`).
+  They stay visible in Datadog; on-call is for prod.
 - **Datadog never posts to the channel itself**, so each alert appears once.
   The only exception is the GoAlert health check (`goalert-health`), which
   posts straight to `@webhook-macro-alert-hook` (a webhook integration
