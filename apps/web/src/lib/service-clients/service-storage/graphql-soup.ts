@@ -11,7 +11,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
-import { ThrownResultError } from '@core/util/result';
 import {
   createMutationQueueTelemetry,
   type MutationQueueClearCause,
@@ -149,14 +148,8 @@ async function authorizedDssGraphqlFetch(
   let response = await fetchWithCredentials();
   if (response.status !== 401) return response;
 
-  const tokenResult = await fetchToken(init?.signal);
-  if (tokenResult.isErr()) {
-    if (tokenResult.error.some((error) => error.code === 'UNAUTHORIZED'))
-      return response;
-    // A stalled refresh is a retryable transport failure, not proof that the
-    // session expired. Do not turn it back into the original HTTP 401.
-    throw new ThrownResultError(tokenResult.error);
-  }
+  const tokenResult = await fetchToken();
+  if (tokenResult.isErr()) return response;
 
   response = await fetchWithCredentials();
   return response;
