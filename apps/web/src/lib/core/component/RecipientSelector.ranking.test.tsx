@@ -53,8 +53,8 @@ afterEach(() => {
 
 // Sending inboxes on domains other than the Macro login's.
 const inboxes = [
-  { provider: 'Gmail', address: 'me@northwind.dev' },
-  { provider: 'Outlook', address: 'me@macro420.onmicrosoft.com' },
+  { provider: 'Gmail', address: 'me@northwind.example' },
+  { provider: 'Outlook', address: 'me@contoso.example' },
 ] as const;
 
 const recent = new Date(Date.now() - 60 * 60 * 1000);
@@ -145,16 +145,16 @@ it.each(inboxes)(
         user('eric.ngabo@macro.com', 'Eric Ngabo', recent),
         user('ligaba.t@macro.com', 'Ligaba Tesfaye', recent),
         user('gabriel@macro.com', 'Gabriel Ortiz', recent),
-        contact('tickets@megabus.com', 'Megabus'),
-        contact('orders@vagabond.coffee', 'Vagabond Coffee'),
-        contact('gab@macro420.onmicrosoft.com', 'Gab Birman'),
+        contact('tickets@omegabus.example', 'Omegabus Lines'),
+        contact('orders@vagabond.example', 'Vagabond Cafe'),
+        contact('gab@contoso.example', 'Gab Rowan'),
       ],
       address
     );
     fireEvent.input(selector.input, { target: { value: 'gab' } });
 
     const position = (await selector.suggestions()).findIndex((text) =>
-      text.includes('gab@macro420.onmicrosoft.com')
+      text.includes('gab@contoso.example')
     );
     expect(position).toBeGreaterThanOrEqual(0);
     expect(position).toBeLessThan(3);

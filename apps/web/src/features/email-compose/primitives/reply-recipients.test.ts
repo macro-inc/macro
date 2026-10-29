@@ -15,7 +15,7 @@ const bounceSenders = [
     provider: 'GMAIL',
     from: {
       name: 'Mail Delivery Subsystem',
-      email: 'mailer-daemon@googlemail.com',
+      email: 'mailer-daemon@example.com',
     },
   },
   {
@@ -23,7 +23,7 @@ const bounceSenders = [
     from: {
       name: 'Microsoft Outlook',
       email:
-        'MicrosoftExchange329e71ec88ae4615bbc36ab6ce41109e@macro420.onmicrosoft.com',
+        'MicrosoftExchange0123456789abcdef0123456789abcdef@contoso.example',
     },
   },
 ] as const satisfies {
@@ -74,10 +74,10 @@ it.each(bounceSenders)(
     expect(
       await sendReply(
         provider,
-        { name: 'Vendor Billing', email: 'noreply@vendor.com' },
+        { name: 'Vendor Billing', email: 'noreply@vendor.example' },
         participants
       )
-    ).toEqual([['noreply@vendor.com', 'teammate@example.com']]);
+    ).toEqual([['noreply@vendor.example', 'teammate@example.com']]);
   }
 );
 
