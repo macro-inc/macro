@@ -246,6 +246,17 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const currentDraftId = session.draftId;
   const [sentDraftId, setSentDraftId] = createSignal<string>();
   const currentThreadId = session.threadId;
+  // A reload reopens the draft this composer opened, which this device can
+  // read even while its save is queued. A draft the composer creates or moves
+  // to is recorded only once the server confirms it.
+  const confirmedDraftId = createMemo<string | undefined>((previous) => {
+    const identity = session.identity();
+    if (identity.kind === 'none') return undefined;
+    return session.serverConfirmed() ? identity.draftId : previous;
+  }, initialDraftId);
+  createEffect(
+    on(confirmedDraftId, (draftId) => props.host?.recordDraft?.(draftId))
+  );
   const sendLocked = () =>
     props.delivery.sendLocked?.(currentDraftId() ?? sentDraftId()) ?? false;
   observeDraftIdentity(
@@ -1276,6 +1287,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     draftGeneration,
     onTransferred: () => setDraftGeneration(0),
     session,
+    persistence,
     drafts: props.drafts,
     attachments: form.attachments,
     save: () => autosave.save(),
@@ -1310,13 +1322,18 @@ export function createEmailComposer(props: EmailComposerOptions) {
         );
       }
       autosave.cancel();
-      if (sourceInboxId && sourceInboxId !== inboxId) {
-        await draftTransfer?.move(destination, sourceInboxId);
-      }
+      const moved =
+        sourceInboxId && sourceInboxId !== inboxId
+          ? await draftTransfer?.move(destination, sourceInboxId)
+          : undefined;
       form.setSelectedInbox(inboxId, senderEmail);
       editVersion += 1;
       setDraftDirty(true);
-      await autosave.save();
+      // The save captures the new sender before the host can unmount this
+      // composer to show the moved draft.
+      const saved = autosave.save();
+      if (moved) props.host?.showMovedDraft?.(moved);
+      await saved;
     } catch (error) {
       props.notices.reportError(error);
       props.notices.feedback.failure(

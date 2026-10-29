@@ -12,6 +12,8 @@ type ThreadCollapsedIndicatorProps =
     latestReplyAt?: string;
     hasNewMessages?: boolean;
     hasUnreadNotifications?: boolean;
+    /** The count is every reply (the thread opens elsewhere), not a remainder. */
+    allReplies?: boolean;
   };
 
 const MAX_VISIBLE_PARTICIPANTS = 4;
@@ -24,6 +26,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     'latestReplyAt',
     'hasNewMessages',
     'hasUnreadNotifications',
+    'allReplies',
   ]);
   const visibleParticipants = () =>
     local.participants.slice(0, MAX_VISIBLE_PARTICIPANTS);
@@ -76,7 +79,9 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
         />
       </Show>
       <span class="text-accent font-medium whitespace-nowrap">
-        {getThreadReplyCountLabel(local.collapsedRepliesCount)}
+        {getThreadReplyCountLabel(local.collapsedRepliesCount, {
+          all: local.allReplies,
+        })}
       </span>
       <Show when={local.hasUnreadNotifications}>
         <span class="sr-only">Unread</span>

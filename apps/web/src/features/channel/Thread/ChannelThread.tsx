@@ -52,6 +52,7 @@ export function ChannelThread(props: ThreadProps) {
   });
 
   const isSelected = () => props.selectedMessageId?.() === props.data().id;
+  const repliesInPanel = () => !!props.onOpenThread;
 
   // The unified input's reply binding, resolved against this thread.
   // `undefined` unless the binding points into this thread; otherwise it is
@@ -170,38 +171,49 @@ export function ChannelThread(props: ThreadProps) {
     collapseThread: () => props.setIsExpanded(false),
     isSelected,
     hasReplies,
-    expandThread: () => props.setIsExpanded(true),
+    expandThread: () =>
+      props.onOpenThread ? props.onOpenThread() : props.setIsExpanded(true),
     isThreadExpanded: props.isExpanded,
-    setIsReplying: (v) => props.setIsReplying(v),
+    setIsReplying: (v) =>
+      v && props.onOpenThread
+        ? props.onOpenThread({ reply: true })
+        : props.setIsReplying(v),
   });
 
+  // With replies in the panel, the summary stands for every reply.
+  const inlineReplyCount = () => (repliesInPanel() ? 0 : visibleReplyCount());
   const collapsedRepliesCount = () =>
-    getCollapsedRepliesCount(thread().reply_count, visibleReplyCount());
+    getCollapsedRepliesCount(thread().reply_count, inlineReplyCount());
   const collapsedRepliesContainsNewMessages = () =>
     activeReplies()
-      .slice(visibleReplyCount())
+      .slice(inlineReplyCount())
       .some((reply: EntityMessage) => props.isNewMessage?.(reply));
   const collapsedRepliesHaveUnreadNotifications = () =>
     props.unreadMessageIds?.some(
       (id) =>
         id !== props.data().id &&
-        !displayReplies().some((reply) => reply.id === id)
+        (repliesInPanel() || !displayReplies().some((reply) => reply.id === id))
     ) ?? false;
   const collapsedReplyUsers = () =>
-    getUniqueReplyUserIds(activeReplies().slice(visibleReplyCount()));
+    getUniqueReplyUserIds(activeReplies().slice(inlineReplyCount()));
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   // Replying to this thread — inline input open, or the unified input bound.
   const isReplyingToThread = () =>
     props.isReplying() || unifiedReplyBinding() !== undefined;
   const hasInlineReplyInput = () =>
-    props.isReplying() && props.inputMode !== 'unified';
+    !repliesInPanel() && props.isReplying() && props.inputMode !== 'unified';
   const rootRailVisible = () =>
     !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
-    !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
+    repliesInPanel()
+      ? collapsedRepliesCount() > 0
+      : !isReplyingToThread() &&
+        !props.isExpanded() &&
+        collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
+    !repliesInPanel() &&
     hasReplies() &&
     !!replyAction() &&
     !isReplyingToThread() &&
@@ -345,9 +357,12 @@ export function ChannelThread(props: ThreadProps) {
                   onClick={selectThreadMessage}
                   selected={isSelected() && !isThreadFocused()}
                   targeted={
-                    // The unified input's reply is bound to this root, or
-                    // channel navigation landed on it.
-                    unifiedReplyBinding()?.boundToRoot || isRootNavTargeted()
+                    // The unified input's reply is bound to this root,
+                    // channel navigation landed on it, or the thread panel
+                    // shows its thread.
+                    unifiedReplyBinding()?.boundToRoot ||
+                    isRootNavTargeted() ||
+                    props.openInPanel
                   }
                 />
               </DebugSuspense>
@@ -374,32 +389,34 @@ export function ChannelThread(props: ThreadProps) {
               <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer flat={props.monorail}>
                   <DebugSuspense name="ChannelThread.ReplyList">
-                    <Thread.ReplyList
-                      parent={props.parent()}
-                      threadId={props.data().id}
-                      replies={displayReplies()}
-                      onMessageMount={props.onMessageMount}
-                      getMessageActions={props.getMessageActions}
-                      inputMode={props.inputMode}
-                      messageEditor={props.messageEditor}
-                      isNewMessage={props.isNewMessage}
-                      onReady={setReplyListHandle}
-                      positionTarget={props.targetNavigation?.positionTarget}
-                      selectedReplyId={replySelection.selectedId}
-                      targetedReplyId={() =>
-                        props.targetNavigation?.activeTargetReplyId() ??
-                        unifiedReplyBinding()?.boundReplyId
-                      }
-                      isThreadFocused={isThreadFocused}
-                      onSelectReply={selectReply}
-                      monorail={props.monorail}
-                      hideRail={props.hideRail}
-                      railContinues={
-                        hasInlineReplyInput() ||
-                        shouldShowCollapsedIndicator() ||
-                        shouldShowReplyButton()
-                      }
-                    />
+                    <Show when={!repliesInPanel()}>
+                      <Thread.ReplyList
+                        parent={props.parent()}
+                        threadId={props.data().id}
+                        replies={displayReplies()}
+                        onMessageMount={props.onMessageMount}
+                        getMessageActions={props.getMessageActions}
+                        inputMode={props.inputMode}
+                        messageEditor={props.messageEditor}
+                        isNewMessage={props.isNewMessage}
+                        onReady={setReplyListHandle}
+                        positionTarget={props.targetNavigation?.positionTarget}
+                        selectedReplyId={replySelection.selectedId}
+                        targetedReplyId={() =>
+                          props.targetNavigation?.activeTargetReplyId() ??
+                          unifiedReplyBinding()?.boundReplyId
+                        }
+                        isThreadFocused={isThreadFocused}
+                        onSelectReply={selectReply}
+                        monorail={props.monorail}
+                        hideRail={props.hideRail}
+                        railContinues={
+                          hasInlineReplyInput() ||
+                          shouldShowCollapsedIndicator() ||
+                          shouldShowReplyButton()
+                        }
+                      />
+                    </Show>
                   </DebugSuspense>
 
                   <Show when={hasInlineReplyInput()}>
@@ -471,7 +488,15 @@ export function ChannelThread(props: ThreadProps) {
                           collapsedRepliesCount={collapsedRepliesCount()}
                           participants={collapsedReplyUsers()}
                           latestReplyAt={collapsedLatestReplyAt()}
-                          onClick={() => props.setIsExpanded(true)}
+                          title={
+                            repliesInPanel() ? 'Open thread' : 'Expand thread'
+                          }
+                          allReplies={repliesInPanel()}
+                          onClick={() =>
+                            props.onOpenThread
+                              ? props.onOpenThread()
+                              : props.setIsExpanded(true)
+                          }
                           hasNewMessages={collapsedRepliesContainsNewMessages()}
                         />
                       </Show>

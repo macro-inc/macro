@@ -1,4 +1,5 @@
 import { getUploadFileSize } from '@core/mobile/nativeStagedUpload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 import {
@@ -7,15 +8,17 @@ import {
   type EmailInbox,
 } from '../context/compose-capabilities';
 import { attachmentLimitBytes } from '../core/constants';
+import type { DraftPersistence } from './draft-persistence';
 import type { DraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
 
 /** Preserve the operation ID across a lost response and adopt a distinct identity. */
 export function createDraftTransfer(options: {
   session: DraftSession;
+  persistence: Pick<DraftPersistence, 'restored'>;
   draftGeneration?: () => number;
   onTransferred?: () => void;
-  drafts: Pick<EmailDraftStorage, 'transferDraft'>;
+  drafts: Pick<EmailDraftStorage, 'transferDraft' | 'forgetLocalDraft'>;
   attachments: {
     list(): DraftFormAttachment[];
     replace(files: DraftFormAttachment[]): void;
@@ -27,7 +30,11 @@ export function createDraftTransfer(options: {
     createSignal<Parameters<EmailDraftStorage['transferDraft']>[0]>();
   return {
     pending,
-    async move(destination: EmailInbox, sourceInboxId: string) {
+    /** Resolves with the moved draft's ids once the server commits the move. */
+    async move(
+      destination: EmailInbox,
+      sourceInboxId: string
+    ): Promise<{ draftId: string; threadId: string } | undefined> {
       const pendingMove = pending();
       if (pendingMove && pendingMove.destinationInboxId !== destination.id) {
         throw new Error(
@@ -73,6 +80,11 @@ export function createDraftTransfer(options: {
       }
       options.invalidateOldSaves();
       options.onTransferred?.();
+      // The moved draft has no working copy yet, and the source's copy would
+      // linger as a draft whose server row is gone.
+      options.persistence.restored(undefined);
+      const forget = options.drafts.forgetLocalDraft?.(request.draftId);
+      if (forget) fireAndForget(forget, 'email-compose');
       options.session.dispatch({
         type: 'seeded',
         draftId: result.draftId,
@@ -91,6 +103,7 @@ export function createDraftTransfer(options: {
         }))
       );
       setPending(undefined);
+      return { draftId: result.draftId, threadId: result.threadId };
     },
   };
 }

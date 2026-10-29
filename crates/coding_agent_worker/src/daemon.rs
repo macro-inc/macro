@@ -11,10 +11,13 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::{Config, HarnessCredentials};
 use crate::dispatch::Dispatcher;
+use crate::harness::{HandoffSender, Handoffs};
+use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::agent_session::HarnessApi;
 use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
+use crate::turns::ActiveTurns;
 
 #[cfg(test)]
 mod test;
@@ -29,7 +32,23 @@ const BOUND_AGENT_REFRESH: Duration = Duration::from_secs(10);
 pub struct Daemon {
     cancel: CancellationToken,
     task: tokio::task::JoinHandle<rootcause::Result<()>>,
+    turns: ActiveTurns,
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "agents are handed off only on Unix")
+    )]
+    handoff: HandoffSender,
 }
+
+/// The agent a previous macrod process image handed over, ready to relay.
+#[cfg(unix)]
+pub type InheritedAgent = crate::handoff::HandedOffAgent;
+#[cfg(not(unix))]
+pub type InheritedAgent = std::convert::Infallible;
+
+/// How long a handoff may take before macrod gives up on keeping the agent.
+#[cfg(unix)]
+const HANDOFF_TIMEOUT: Duration = Duration::from_secs(30);
 
 impl Daemon {
     /// Connect the runtime and listen for agent triggers in background tasks.
@@ -40,6 +59,7 @@ impl Daemon {
         mut config: Config,
         credentials: HarnessCredentials,
         _config_path: &Path,
+        inherited: Option<InheritedAgent>,
     ) -> rootcause::Result<Self> {
         let cancel = CancellationToken::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
@@ -69,12 +89,18 @@ impl Daemon {
             None
         };
 
+        let turns = ActiveTurns::default();
+        let adopted = adopt(inherited, &turns);
+        let (handoffs, handoff) = Handoffs::channel();
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
             config.harness.clone(),
             &config.workspace.path,
             tap,
+            turns.clone(),
+            adopted,
+            handoffs,
         );
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
         #[cfg(unix)]
@@ -119,12 +145,42 @@ impl Daemon {
             }
         });
 
-        Ok(Self { cancel, task })
+        Ok(Self {
+            cancel,
+            task,
+            turns,
+            handoff,
+        })
     }
 
     /// Whether the serving task is still alive.
     pub fn is_running(&self) -> bool {
         !self.task.is_finished()
+    }
+
+    /// Whether no agent turn is running.
+    pub fn is_idle(&self) -> bool {
+        self.turns.is_idle()
+    }
+
+    /// Stop serving but keep the agent process running, handing it back so
+    /// the next process image can relay it. `None` when no agent is running
+    /// or it could not be detached in time; the agent is then stopped.
+    #[cfg(unix)]
+    pub async fn hand_off(self) -> Option<InheritedAgent> {
+        let (reply, handed) = tokio::sync::oneshot::channel();
+        let asked = self.handoff.sender.send(reply).await.is_ok();
+        let agent = if asked {
+            tokio::time::timeout(HANDOFF_TIMEOUT, handed)
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .flatten()
+        } else {
+            None
+        };
+        self.stop().await;
+        agent
     }
 
     /// Stop serving without waiting for an in-flight network request or trigger.
@@ -137,6 +193,24 @@ impl Daemon {
         let _ = self.task.await;
         tracing::info!("daemon stopped");
     }
+}
+
+/// Relay an inherited agent instead of spawning one, continuing its turns.
+#[cfg(unix)]
+fn adopt(inherited: Option<InheritedAgent>, turns: &ActiveTurns) -> Option<RunningAgent> {
+    let agent = inherited?;
+    match RunningAgent::adopt(agent, turns) {
+        Ok(agent) => Some(agent),
+        Err(error) => {
+            tracing::warn!(error = %error, "could not relay the inherited agent; starting a new one");
+            None
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn adopt(inherited: Option<InheritedAgent>, _turns: &ActiveTurns) -> Option<RunningAgent> {
+    inherited.map(|never| match never {})
 }
 
 /// Inside herdr, the directory macrod was started from is the repository

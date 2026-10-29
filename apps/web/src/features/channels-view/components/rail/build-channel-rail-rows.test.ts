@@ -167,6 +167,27 @@ describe('buildChannelSectionRows', () => {
       );
     }
   );
+  it('lists only visible channels and leaves out labels with none of them', () => {
+    const rows = buildChannelSectionRows({
+      labels: [
+        label('l1', 'Enterprise', ['zeta', 'acme'], 0),
+        label('l2', 'Onboarding', ['deals'], 1),
+      ],
+      channels: [globex, deals, zeta, acme],
+      channelsById: byId,
+      isLabelOpen: (labelId) => labelId !== 'l1',
+      isChannelVisible: (channelId) =>
+        channelId === 'zeta' || channelId === 'globex',
+    });
+
+    expect(
+      rows.map((row) =>
+        row.kind === 'label'
+          ? `label:${row.label.name}`
+          : `${row.labelId ?? '-'}:${row.channel.id}`
+      )
+    ).toEqual(['label:Enterprise', '-:globex']);
+  });
 });
 
 describe('buildChannelRailRows', () => {

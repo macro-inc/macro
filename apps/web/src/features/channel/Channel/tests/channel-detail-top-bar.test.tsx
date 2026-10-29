@@ -1,5 +1,5 @@
 import type { ChannelEntity } from '@entity';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -124,6 +124,11 @@ vi.mock('../use-channel-tab-items', () => ({
 }));
 
 import { ChannelDetailTopBar } from '../ChannelDetail';
+import {
+  type ChannelThreadPanel,
+  ChannelThreadPanelContext,
+  createChannelThreadPanel,
+} from '../thread-panel';
 
 const CHANNEL: ChannelEntity = {
   id: 'channel-1',
@@ -175,5 +180,57 @@ describe('channel top bar title menu', () => {
     setResolved(CHANNEL);
 
     expect(await screen.findByLabelText('Channel actions')).toBeTruthy();
+  });
+});
+
+describe('channel top bar thread layout toggle', () => {
+  beforeEach(() => localStorage.clear());
+
+  function renderWithThreadPanel() {
+    let panel: ChannelThreadPanel | undefined;
+    render(() => {
+      panel = createChannelThreadPanel();
+      return (
+        <ChannelThreadPanelContext.Provider value={panel}>
+          <ChannelDetailTopBar channelId="channel-1" />
+        </ChannelThreadPanelContext.Provider>
+      );
+    });
+    return panel!;
+  }
+
+  const toggle = () => screen.getByRole('switch') as HTMLInputElement;
+
+  it('is offered only by hosts with a thread panel', () => {
+    render(() => <ChannelDetailTopBar channelId="channel-1" />);
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('collapses threads into the side panel and expands them back inline', () => {
+    const panel = renderWithThreadPanel();
+    expect(toggle().checked).toBe(false);
+    expect(screen.getByText('Expand')).toBeTruthy();
+
+    panel.open('message-1');
+    expect(panel.openThreadId()).toBeUndefined();
+
+    fireEvent.click(toggle());
+    expect(toggle().checked).toBe(true);
+    expect(screen.getByText('Collapse')).toBeTruthy();
+    panel.open('message-1');
+    expect(panel.openThreadId()).toBe('message-1');
+
+    fireEvent.click(toggle());
+    expect(toggle().checked).toBe(false);
+    expect(panel.openThreadId()).toBeUndefined();
+  });
+
+  it('remembers the choice for the next channel', () => {
+    renderWithThreadPanel();
+    fireEvent.click(toggle());
+    cleanup();
+
+    renderWithThreadPanel();
+    expect(toggle().checked).toBe(true);
   });
 });
