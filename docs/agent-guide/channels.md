@@ -52,6 +52,9 @@ iPhone WebKit regression is
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`
 from `apps/web`.
 
+Data and loading state publish together, so automatic pagination observes the
+new page cursor before deciding whether to request another page.
+
 ## Empty direct messages
 
 An empty human DM shows the centered conversations illustration and “Say hello”

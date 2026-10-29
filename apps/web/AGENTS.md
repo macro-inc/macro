@@ -125,7 +125,8 @@ It also pastes a Macro link and Markdown into a code block, which must keep both
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
-Reconcile result data only; replace operation metadata so shared documents,
+Publish data and metadata atomically. Reconcile result data only; replace
+operation metadata so shared documents,
 cached query text, and operation names remain consistent across query changes.
 
 Block formatting passes a forward copy of the selection to Lexical's

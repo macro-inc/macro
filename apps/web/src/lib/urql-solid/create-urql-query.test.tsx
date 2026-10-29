@@ -505,6 +505,26 @@ describe('createUrqlQuery reactive state', () => {
     expect(descriptors).not.toHaveBeenCalledWith(second.nested);
   });
 
+  it('publishes initial data and settled loading state atomically', () => {
+    const fake = makeFakeClient();
+    const snapshots: Array<[string | undefined, boolean]> = [];
+    const dispose = createRoot((rootDispose) => {
+      const query = createUrqlQuery(() => activeOptions(fake.client));
+      createRenderEffect(() => {
+        snapshots.push([query.data?.value, query.isFetching]);
+      });
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ data: { value: 'loaded' } });
+
+    expect(snapshots).toEqual([
+      [undefined, true],
+      ['loaded', false],
+    ]);
+  });
+
   it('publishes data and status together without notifying unchanged data consumers', () => {
     const fake = makeFakeClient();
     const snapshots: Array<[string | undefined, boolean]> = [];
