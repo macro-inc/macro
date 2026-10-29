@@ -101,8 +101,11 @@ owners/admins and the human responsible for a bot-owned item review on its behal
 Only the first review of a request succeeds. Grants notify the requester; denials
 do not. Approved users appear in People with access, with controls to change or
 remove their direct grant. A pending request also puts the item, projects
-included, on the reviewer's Home feed until it is resolved. Opening a
-permission-request notification navigates to its item and opens Share.
+included, on the reviewer's Home feed until it is resolved. A project row has
+no Home preview: clicking it opens the project in place, Shift-click opens it
+in a new split, and when the project is already open in another split that
+split is focused. Opening a permission-request notification navigates to its
+item and opens Share.
 
 Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
 when the backend refuses a request with a usage-limit code. Free users can choose
