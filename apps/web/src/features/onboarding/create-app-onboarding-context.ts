@@ -80,6 +80,39 @@ async function copyLink(text: string, copied: string, failed: string) {
   throw new Error(failed);
 }
 
+async function linkUrl(token: Promise<string>) {
+  return teamInviteLinkUrl(await token);
+}
+
+async function textBlob(text: Promise<string>) {
+  return new Blob([await text], { type: 'text/plain' });
+}
+
+/**
+ * Copies text that is still loading. The clipboard write starts before the
+ * text resolves so it keeps the click's user activation.
+ */
+async function copyPendingText(text: Promise<string>): Promise<boolean> {
+  const clipboard = navigator.clipboard;
+  if (!clipboard) return false;
+  if (typeof ClipboardItem !== 'undefined' && clipboard.write) {
+    const write = clipboard.write([
+      new ClipboardItem({ 'text/plain': textBlob(text) }),
+    ]);
+    try {
+      await write;
+      return true;
+    } catch {
+      // Fall through to writeText once the text is known.
+    }
+  }
+  try {
+    return await writeClipboardData({ 'text/plain': await text });
+  } catch {
+    return false;
+  }
+}
+
 /** The created team's id, or undefined when creation failed. */
 async function createdTeamId(creation: Promise<{ id: string }>) {
   try {
@@ -281,19 +314,22 @@ export function createAppOnboardingContext(): OnboardingContext {
       await joinTeam.mutateAsync({ teamInviteId: inviteId });
     },
     copyTeamInviteLink: async () => {
-      let token: string;
+      const url = linkUrl(teamInviteLinkToken());
+      // Start the write inside the click; Safari drops it after an await.
+      const copied = copyPendingText(url);
       try {
-        token = await teamInviteLinkToken();
+        await url;
       } catch (error) {
         if (!createInviteLink.isError)
           toast.failure("Couldn't get your team's invite link");
         throw error;
       }
-      await copyLink(
-        teamInviteLinkUrl(token),
-        'Invite link copied',
-        'Could not copy invite link'
-      );
+      if (await copied) {
+        toast.success('Invite link copied');
+        return;
+      }
+      toast.failure('Could not copy invite link');
+      throw new Error('Could not copy invite link');
     },
     sendReferralInvites: async (emails) => {
       const { sent } = await sendReferrals.mutateAsync(emails);

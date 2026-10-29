@@ -55,6 +55,7 @@ export type FakeOnboardingWorld = {
   failures: Partial<
     Record<
       | 'emailAccounts'
+      | 'record'
       | 'teams'
       | 'catalog'
       | 'createTeam'
@@ -209,8 +210,7 @@ export function createFakeOnboarding(
         });
       return viewerState();
     },
-    createOnboardingRecord: () => () =>
-      settled() ? { t: 'ready', value: world.record } : { t: 'loading' },
+    createOnboardingRecord: () => () => loadable('record', () => world.record),
     createEmailAccounts: () => ({
       accounts: () => loadable('emailAccounts', () => world.emailAccounts),
       refresh: async () => {},

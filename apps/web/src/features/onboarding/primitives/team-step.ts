@@ -69,7 +69,12 @@ export function createTeamStep(
 }
 
 /** The create form's prefill, once contacts and the domain suggestion settle. */
-export type TeamFormSeed = { domain: string | undefined; prefilled: string[] };
+export type TeamFormSeed = {
+  domain: string | undefined;
+  /** The record loaded without a work domain: show referrals, not a team form. */
+  personal: boolean;
+  prefilled: string[];
+};
 
 export function teamFormSeed(input: {
   record: Loadable<OnboardingRecord>;
@@ -84,6 +89,7 @@ export function teamFormSeed(input: {
       : undefined;
   return {
     domain,
+    personal: input.record.t === 'ready' && !domain,
     prefilled: prefillableTeammates({
       contacts: input.contacts.t === 'ready' ? input.contacts.value : [],
       domain,

@@ -269,6 +269,19 @@ describe('onboarding flow', () => {
     ).toBeTruthy();
   });
 
+  it('keeps the team form when the onboarding record fails to load', async () => {
+    setup({
+      resume: 'team',
+      world: {
+        record: { status: 'active', suggestedTeamDomain: undefined },
+        failures: { record: 'Read failed' },
+      },
+    });
+    await heading('Built for teams.');
+    expect(screen.queryByText('Invite friends.')).toBeNull();
+    expect(screen.getByText('Workspace name')).toBeTruthy();
+  });
+
   it('lets personal addresses skip referrals', async () => {
     const { fake } = setup({
       resume: 'team',

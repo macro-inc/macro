@@ -62,7 +62,7 @@ export function TeamStep(props: {
   // A personal address has no team to create; it refers friends instead.
   const referring = () => {
     const ready = seed();
-    return team.state().t === 'create' && ready !== undefined && !ready.domain;
+    return team.state().t === 'create' && ready !== undefined && ready.personal;
   };
 
   return (
@@ -109,7 +109,7 @@ export function TeamStep(props: {
           >
             {(ready) => (
               <Show
-                when={ready().domain}
+                when={!ready().personal}
                 fallback={
                   <ReferralForm
                     finishing={props.finishing}
