@@ -1044,8 +1044,8 @@ sending; the picker never displays another inbox as selected before that choice.
 With no explicit selection, an unavailable primary still falls back to
 the first linked inbox.
 The desktop account dropdown marks the selected inbox with a checkmark. With
-exactly one connected inbox, the selector displays its address and omits
-`All inboxes`; the mobile filter drawer has no inbox section. The
+exactly one connected inbox and no alias selected, the selector displays its
+address and omits `All inboxes`; the mobile filter drawer has no inbox section. The
 touch sidebar keeps its existing account rows and shows up to four before
 scrolling independently. With many accounts, scroll to the last inbox in the
 dropdown and check that selecting it updates the selector and header filter.

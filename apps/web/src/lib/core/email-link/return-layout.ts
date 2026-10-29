@@ -45,11 +45,11 @@ export function rememberInboxLinkReturn(
 }
 
 /**
- * Read and clear what {@link rememberInboxLinkReturn} stashed for this link.
+ * What {@link rememberInboxLinkReturn} stashed for this link, left in place.
  * Returns undefined when nothing was stashed or the stash belongs to a
  * different flow.
  */
-export function consumeInboxLinkReturn(
+export function readInboxLinkReturn(
   linkId: string
 ): InboxLinkReturn | undefined {
   let raw: string | null;
@@ -64,18 +64,25 @@ export function consumeInboxLinkReturn(
   try {
     stored = JSON.parse(raw) as Partial<StoredInboxLinkReturn>;
   } catch {
-    stored = undefined;
-  }
-
-  // A stash that can't be matched is dead weight either way, so drop it.
-  try {
-    sessionStorage.removeItem(RETURN_LAYOUT_KEY);
-  } catch {
-    // Nothing to do — the read already succeeded.
+    return undefined;
   }
 
   if (!stored || stored.linkId !== linkId || typeof stored.url !== 'string') {
     return undefined;
   }
   return { url: stored.url, addition: stored.addition };
+}
+
+/** Read and clear the stash, as {@link readInboxLinkReturn} reads it. */
+export function consumeInboxLinkReturn(
+  linkId: string
+): InboxLinkReturn | undefined {
+  const stored = readInboxLinkReturn(linkId);
+  // A stash that can't be matched is dead weight either way, so drop it.
+  try {
+    sessionStorage.removeItem(RETURN_LAYOUT_KEY);
+  } catch {
+    // Storage is unavailable, so there is nothing left to clear.
+  }
+  return stored;
 }

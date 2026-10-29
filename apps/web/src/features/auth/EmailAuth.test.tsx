@@ -53,6 +53,7 @@ vi.mock('@core/constant/SettingsState', () => ({
   restoreSettingsReturnTo: vi.fn(),
 }));
 vi.mock('@core/email-link/return-layout', () => ({
+  readInboxLinkReturn: mocks.restore,
   consumeInboxLinkReturn: mocks.restore,
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));

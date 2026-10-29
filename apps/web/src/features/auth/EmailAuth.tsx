@@ -17,7 +17,10 @@ import {
   announceConsentCancelled,
   announceLinkedInbox,
 } from '@core/email-link/link-outcome';
-import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
+import {
+  consumeInboxLinkReturn,
+  readInboxLinkReturn,
+} from '@core/email-link/return-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -192,13 +195,15 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const linkId = stringParam(searchParams.link_id);
   // What the flow stashed against this attempt, if it stashed anything: the
   // layout it left from (the callback replaced the layout URL) and, for a
-  // plain add, the inboxes already connected when it started.
-  const stashed = linkId ? consumeInboxLinkReturn(linkId) : undefined;
+  // plain add, the inboxes already connected when it started. It is cleared
+  // only on leaving, so a reload while init runs can still use it.
+  const stashed = linkId ? readInboxLinkReturn(linkId) : undefined;
 
   // Reports true when it navigated, so callers can fall through otherwise.
   const restoreLayoutBeforeConsent = () => {
-    if (!stashed) return false;
-    navigate(stashed.url, { replace: true });
+    const stored = linkId ? consumeInboxLinkReturn(linkId) : undefined;
+    if (!stored) return false;
+    navigate(stored.url, { replace: true });
     return true;
   };
 
