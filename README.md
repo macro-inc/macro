@@ -177,6 +177,18 @@ See [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](http
 
 <br />
 
+# Calls
+
+[Placeholder]
+
+<br />
+
+# Calendar
+
+[Placeholder]
+
+<br />
+
 # How it all works together
 
 **Bidirectional @linking.** @mention a doc in a message and both know about each other. Your workspace becomes a web of context you can navigate in either direction.
