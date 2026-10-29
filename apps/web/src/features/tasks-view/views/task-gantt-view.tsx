@@ -378,45 +378,13 @@ export function TaskGanttView(props: {
                   when={props.source.hasMore?.() && !hasGlobalLoadMoreRow()}
                 >
                   <Gantt.Row>
-                    <div class="absolute inset-0">
-                      <Gantt.Label>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={props.source.isLoadingMore?.()}
-                          onClick={() =>
-                            fireAndForget(
-                              props.source.loadMore?.(),
-                              'tasks-view'
-                            )
-                          }
-                        >
-                          <Show when={props.source.isLoadingMore?.()}>
-                            <SpinnerIcon class="size-3 animate-spin" />
-                          </Show>
-                          {props.source.isLoadingMore?.()
-                            ? 'Loading tasks…'
-                            : 'Load more tasks'}
-                        </Button>
-                      </Gantt.Label>
-                    </div>
-                    <Gantt.Pagination>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={props.source.isLoadingMore?.()}
-                        onClick={() =>
-                          fireAndForget(props.source.loadMore?.(), 'tasks-view')
-                        }
-                      >
-                        <Show when={props.source.isLoadingMore?.()}>
-                          <SpinnerIcon class="size-3 animate-spin" />
-                        </Show>
-                        {props.source.isLoadingMore?.()
-                          ? 'Loading tasks…'
-                          : 'Load more tasks'}
-                      </Button>
-                    </Gantt.Pagination>
+                    <GanttContinuation
+                      isLoading={props.source.isLoadingMore?.() ?? false}
+                      failed={Boolean(error())}
+                      onLoad={() =>
+                        fireAndForget(props.source.loadMore?.(), 'tasks-view')
+                      }
+                    />
                   </Gantt.Row>
                 </Show>
                 <Gantt.TodayMarker />

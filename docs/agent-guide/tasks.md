@@ -335,6 +335,8 @@ Explicit URL values override saved preferences; back/forward navigation
 restores the corresponding controls, including the layout.
 Columns are 336px wide. Each column loads its next page when the end of its cards
 scrolls into view; a failed page shows **Retry** at the bottom of that column.
+Ungrouped results, such as a search, load their next page from the end of any
+column.
 Use the horizontal scrollbar to reach more columns. Vertical wheel input over
 empty board background or gaps also scrolls horizontally. A wheel gesture stays
 with its original scroll area until momentum stops, even if another column moves

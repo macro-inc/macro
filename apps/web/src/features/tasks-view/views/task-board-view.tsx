@@ -11,8 +11,10 @@ import {
   createSignal,
   For,
   type JSX,
+  Match,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { TaskBoard } from '../components/task-board';
 import {
@@ -94,15 +96,6 @@ export function TaskBoardView(props: {
       await operation();
     } catch {
       setReadError('Could not load tasks. Try again.');
-    }
-  };
-
-  const loadMore = async () => {
-    await source.loadMore();
-    const error = source.error();
-
-    if (error) {
-      throw error;
     }
   };
 
@@ -281,18 +274,30 @@ export function TaskBoardView(props: {
                   </p>
                 }
                 footer={
-                  <Show when={column().hasMore}>
-                    <TaskBoardColumnContinuation
-                      isLoading={column().loadingMore}
-                      failed={Boolean(source.groupError?.(column().id))}
-                      onLoad={() =>
-                        fireAndForget(
-                          source.loadMoreGroup(column().id),
-                          'tasks-view'
-                        )
-                      }
-                    />
-                  </Show>
+                  <Switch>
+                    <Match when={column().hasMore}>
+                      <TaskBoardColumnContinuation
+                        isLoading={column().loadingMore}
+                        failed={Boolean(source.groupError?.(column().id))}
+                        onLoad={() =>
+                          fireAndForget(
+                            source.loadMoreGroup(column().id),
+                            'tasks-view'
+                          )
+                        }
+                      />
+                    </Match>
+                    {/* Ungrouped results (search) continue from any column's end. */}
+                    <Match when={source.hasMore()}>
+                      <TaskBoardColumnContinuation
+                        isLoading={source.isLoadingMore()}
+                        failed={Boolean(source.error())}
+                        onLoad={() =>
+                          fireAndForget(source.loadMore(), 'tasks-view')
+                        }
+                      />
+                    </Match>
+                  </Switch>
                 }
               >
                 {(task) => {
@@ -319,23 +324,6 @@ export function TaskBoardView(props: {
           )}
         </TaskBoard.Columns>
       </TaskBoard.Root>
-      <Show when={source.hasMore()}>
-        <div class="p-3">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={source.isLoadingMore()}
-            onClick={() =>
-              fireAndForget(
-                read(() => loadMore()),
-                'tasks-view'
-              )
-            }
-          >
-            {source.isLoadingMore() ? 'Loading…' : 'Load more tasks'}
-          </Button>
-        </div>
-      </Show>
     </div>
   );
 }
