@@ -147,7 +147,10 @@ export function normalizeFuzzyScore(
 function calculateNameMatchBoost(
   name: string,
   term: string,
-  config: FreshSortConfigWithDefaults
+  config: Pick<
+    FreshSortConfigWithDefaults,
+    'exactNameBoost' | 'prefixNameBoost'
+  >
 ): number {
   if (!term) return 0;
   const normalizedName = name.trim().toLocaleLowerCase();
@@ -208,7 +211,7 @@ function ufuzzyFilter<T>(
 
 function freshSort<T>(
   filterResults: FuzzyFilterResult<T>[],
-  query: string,
+  getNameMatchBoost: (item: T) => number,
   config: FreshSortConfig<T> = {},
   isChannelItem: BooleanFn<T>,
   isDmItem: BooleanFn<T>,
@@ -218,7 +221,6 @@ function freshSort<T>(
     ...DEFAULT_CONFIG,
     ...config,
   } as FreshSortConfigWithDefaults;
-  const term = query.trim().toLocaleLowerCase();
   const totalWeight =
     finalConfig.fuzzyWeight +
     finalConfig.timeWeight +
@@ -261,11 +263,7 @@ function freshSort<T>(
     const itemBoost = finalConfig.boostFn
       ? finalConfig.boostFn(result.original)
       : 0;
-    const nameMatchBoost = calculateNameMatchBoost(
-      result.string,
-      term,
-      finalConfig
-    );
+    const nameMatchBoost = getNameMatchBoost(result.original);
 
     const combinedScore =
       (normalizedFuzzyWeight * fuzzyScore +
@@ -292,6 +290,8 @@ function freshSort<T>(
 interface CreateFreshSearchArgs<T> {
   config?: FreshSortConfig<T>;
   getName: NameFn<T>;
+  /** The label people see, for exact and prefix name boosts when `getName` adds aliases or emails. Default: getName */
+  getDisplayName?: NameFn<T>;
   isChannelItem?: BooleanFn<T>;
   isDmItem?: BooleanFn<T>;
   getTimestamp: TimestampFn<T>;
@@ -300,6 +300,7 @@ interface CreateFreshSearchArgs<T> {
 export function createFreshSearch<T>({
   config = {},
   getName,
+  getDisplayName = getName,
   isChannelItem = () => false,
   isDmItem = () => false,
   getTimestamp,
@@ -307,6 +308,9 @@ export function createFreshSearch<T>({
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
     const trimmedQuery = query.trim();
+    const term = trimmedQuery.toLocaleLowerCase();
+    const getNameMatchBoost = (item: T) =>
+      calculateNameMatchBoost(getDisplayName(item), term, finalConfig);
 
     const hasComma = trimmedQuery.includes(',');
     const hasSpace = trimmedQuery.includes(' ');
@@ -321,7 +325,7 @@ export function createFreshSearch<T>({
       }));
       return freshSort(
         allResults,
-        trimmedQuery,
+        getNameMatchBoost,
         config,
         isChannelItem,
         isDmItem,
@@ -359,7 +363,7 @@ export function createFreshSearch<T>({
       const allResults = [...channelResults, ...nonChannelResults];
       return freshSort(
         allResults,
-        trimmedQuery,
+        getNameMatchBoost,
         config,
         isChannelItem,
         isDmItem,
@@ -376,7 +380,7 @@ export function createFreshSearch<T>({
     );
     return freshSort(
       fuzzyResults,
-      trimmedQuery,
+      getNameMatchBoost,
       config,
       isChannelItem,
       isDmItem,

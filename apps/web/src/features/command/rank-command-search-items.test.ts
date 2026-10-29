@@ -171,6 +171,25 @@ describe('command menu search ranking', () => {
     }
   );
 
+  it('scores exact names against the label when search text adds emails or command keywords', () => {
+    const items = [
+      note('notes', 'Avery Morgan notes'),
+      {
+        ...contact('contact', 'Avery Morgan'),
+        searchText: 'Avery Morgan | avery.morgan@example.com',
+      },
+    ];
+    expect(ids(items, 'avery morgan')[0]).toBe('contact');
+
+    const create = {
+      ...command('create', 'Create', NOW - DAY),
+      searchText: 'Create new make add',
+    };
+    expect(ids([note('plan', 'Create plan'), create], 'create')[0]).toBe(
+      'create'
+    );
+  });
+
   it('keeps ranking independent of whether a match came from cached or local results', () => {
     const cached = channel('cached', 'Planning', NOW - DAY);
     const local = channel('local', 'Planning', NOW);

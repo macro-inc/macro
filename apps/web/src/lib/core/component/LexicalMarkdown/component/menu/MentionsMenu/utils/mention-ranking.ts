@@ -57,6 +57,12 @@ function getMentionName(item: MentionItem): string {
   return item.searchText;
 }
 
+/** Entity and user search text can add emails or aliases after the name. */
+function getMentionDisplayName(item: MentionItem): string {
+  if (item.kind === 'entity' || item.kind === 'user') return item.data.name;
+  return getMentionName(item);
+}
+
 function getMentionTimestamps(item: MentionItem) {
   return 'timestamps' in item ? item.timestamps : {};
 }
@@ -80,6 +86,7 @@ export function rankMentions<T extends MentionItem>(
       },
     },
     getName: getMentionName,
+    getDisplayName: getMentionDisplayName,
     isDmItem: (item) => item.kind === 'entity' && item.bucket === 'dm',
     getTimestamp: getMentionTimestamps,
   });

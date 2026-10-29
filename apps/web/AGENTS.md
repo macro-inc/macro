@@ -111,7 +111,9 @@ Menus that find entities by typed name (Command-K, mobile name search, @
 mentions) score how well the name matches with `NAME_MATCH_RANKING` in
 `@core/util/freshSort`: exact names, then prefixes, then tight matches near the
 start. Tune name relevance there for every menu; keep recency weights and type
-boosts in each menu's own config. Mention menus rank loaded entity sources
+boosts in each menu's own config. Exact and prefix boosts compare the row's label
+(`getDisplayName`), and a row's search text must start with that label, adding
+emails, aliases, or command keywords after it. Mention menus rank loaded entity sources
 together with `MENTION_RANKING_CONFIG` in
 `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
 brevity, and type boosts. Task projects use the `initiative` bucket; `project`
