@@ -254,7 +254,7 @@ permission failures should display a failed tool call without a successful resul
 model, and saves the result to static file service. An optional aspect ratio
 (`square`, `landscape`, `portrait`, `widescreen`, `tall`) controls its shape.
 The response includes `staticFileId`, the permanent image `url`, intrinsic pixel
-`width` and `height`, and ready-to-send `markdown`; it does not
+`width` and `height`, and `markdown` for Macro markdown documents; it does not
 create a document or take a filename or destination project.
 
 For edits or variations, attach photos with the existing paperclip or use Macro
@@ -271,7 +271,10 @@ its SFS URL without a filename header or document navigation. It preserves its
 aspect ratio and fits the available width. A status appears while generation is
 pending; a failed image load shows “Preview unavailable”. The tool already renders
 the result in chat, so the assistant should not add a document mention or duplicate
-image there. In channel messages, copy the returned `markdown` verbatim on its own line.
+image there. Agents never write image markdown in channel messages: an agent's
+reply in a channel or thread carries every image its turn generated as a
+`static/image` attachment with the image's dimensions, and `SendChannelMessage`
+takes the `staticFileId` as an `image` attachment.
 Its `<m-image>` markup preserves dimensions and fits the image within 400 × 400
 pixels, so loading it does not change the channel row height. Do not replace it
 with a plain Markdown image URL, which loses the dimensions. Agent previews also

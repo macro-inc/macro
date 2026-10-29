@@ -16,7 +16,7 @@ use messages::domain::{
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[schemars(
     title = "SendChannelMessage",
-    description = "Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message. To send an image or video, first upload it with CreateChannelMediaUpload (where available) and pass the returned attachment here; to attach a Macro document, pass its document ID."
+    description = "Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message. To send an image or video, first upload it with CreateChannelMediaUpload (where available) and pass the returned attachment here; to send an image made by GenerateImage, pass its staticFileId as an image attachment with its width and height, never as markdown in content; to attach a Macro document, pass its document ID."
 )]
 pub struct SendChannelMessage {
     /// macro markdown

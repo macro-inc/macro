@@ -10052,7 +10052,7 @@ export interface ToolTotal {
   sum: number;
 }
 /**
- * Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, copy the returned markdown verbatim on its own line; it includes dimensions so the image reserves space before loading. Do not cite it as a document. Generation takes several seconds.
+ * Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. When your reply is posted to a channel or thread, every image generated in the turn is attached to it automatically; never write image markdown in a channel message. To send it with SendChannelMessage, pass staticFileId as an attachment of kind image with the returned width and height. Only Macro markdown documents take the returned markdown, copied verbatim on its own line. Do not cite it as a document. Generation takes several seconds.
  */
 export interface GenerateImage {
   /**
@@ -10104,7 +10104,7 @@ export interface GenerateImageResponse {
    */
   height?: number | null;
   /**
-   * Ready-to-send channel image markup with dimensions. Copy verbatim on its own line.
+   * Image markup with dimensions for Macro markdown documents, never channel messages.
    */
   markdown?: string | null;
   /**
@@ -15112,7 +15112,7 @@ export interface SelfKnowledgeResponse {
   about: string;
 }
 /**
- * Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message. To send an image or video, first upload it with CreateChannelMediaUpload (where available) and pass the returned attachment here; to attach a Macro document, pass its document ID.
+ * Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message. To send an image or video, first upload it with CreateChannelMediaUpload (where available) and pass the returned attachment here; to send an image made by GenerateImage, pass its staticFileId as an image attachment with its width and height, never as markdown in content; to attach a Macro document, pass its document ID.
  */
 export interface SendChannelMessage {
   /**
@@ -15137,7 +15137,7 @@ export interface SendChannelMessage {
  */
 export interface ChannelMessageAttachmentInput {
   /**
-   * The attachmentId returned by CreateChannelMediaUpload (after its upload succeeded), or the ID of a Macro document.
+   * The attachmentId returned by CreateChannelMediaUpload (after its upload succeeded), the staticFileId returned by GenerateImage, or the ID of a Macro document.
    */
   id: string;
   kind: ChannelAttachmentKind;

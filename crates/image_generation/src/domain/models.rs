@@ -155,7 +155,7 @@ pub struct NewGeneratedImage {
 /// A generated image stored in static file service.
 #[derive(Debug)]
 pub struct StoredGeneratedImage {
-    /// Dimension-preserving channel markup composed by the editor service.
+    /// Dimension-preserving document image markup composed by the editor service.
     pub markdown: String,
     /// The stored static file.
     pub static_file: StoredImage,
@@ -186,7 +186,7 @@ pub enum GenerateImageError {
     /// The image was generated but not stored.
     #[error(transparent)]
     Storage(#[from] SaveImageError),
-    /// The saved image could not be composed into channel markup.
+    /// The saved image could not be composed into document markup.
     #[error(transparent)]
     Markup(#[from] ComposeImageError),
 }

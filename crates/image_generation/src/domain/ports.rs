@@ -84,7 +84,7 @@ pub trait ImageGenerationService: Send + Sync {
 /// Composes saved images using the editor's serialization contract.
 #[async_trait::async_trait]
 pub trait ImageMarkdownComposer: Send + Sync {
-    /// Return channel markup that preserves the intrinsic image dimensions.
+    /// Return document image markup that preserves the intrinsic image dimensions.
     async fn compose_image(
         &self,
         image: &StoredImage,

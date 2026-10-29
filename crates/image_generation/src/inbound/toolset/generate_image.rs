@@ -76,7 +76,7 @@ impl From<ImageReferenceInput> for ImageReference {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "GenerateImage",
-    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, copy the returned markdown verbatim on its own line; it includes dimensions so the image reserves space before loading. Do not cite it as a document. Generation takes several seconds."
+    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. When your reply is posted to a channel or thread, every image generated in the turn is attached to it automatically; never write image markdown in a channel message. To send it with SendChannelMessage, pass staticFileId as an attachment of kind image with the returned width and height. Only Macro markdown documents take the returned markdown, copied verbatim on its own line. Do not cite it as a document. Generation takes several seconds."
 )]
 /// Generate an image and save it as a static file.
 pub struct GenerateImage {
@@ -115,7 +115,7 @@ pub struct GenerateImageResponse {
     /// Intrinsic pixel height. Absent only in historical tool results.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
-    /// Ready-to-send channel image markup with dimensions. Copy verbatim on its own line.
+    /// Image markup with dimensions for Macro markdown documents, never channel messages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub markdown: Option<String>,
     /// Commentary the model produced alongside the image, when any.
@@ -145,7 +145,7 @@ fn generate_error(error: GenerateImageError) -> ToolCallError {
             "the image model request failed; try again shortly".to_string()
         }
         GenerateImageError::Markup(_) => {
-            "the image was saved but its channel markup could not be composed".to_string()
+            "the image was saved but its document markup could not be composed".to_string()
         }
         GenerateImageError::Storage(_) => {
             "the image was generated but could not be saved to Macro".to_string()
