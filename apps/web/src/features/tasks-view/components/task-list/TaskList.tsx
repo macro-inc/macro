@@ -44,6 +44,7 @@ import {
   createSignal,
   type JSX,
   Match,
+  on,
   type Setter,
   Show,
   Switch,
@@ -390,6 +391,39 @@ export function TaskList(props: TaskListProps) {
     });
   });
 
+  // A group's next page can arrive after the reader scrolled past that group,
+  // inserting rows above the viewport. Keep the first visible row in place.
+  let scrollAnchor: { id: string; offset: number } | undefined;
+  function recordScrollAnchor() {
+    const handle = virtualizer();
+    if (!handle || handle.scrollOffset <= 0) {
+      scrollAnchor = undefined;
+      return;
+    }
+    const index = handle.findItemIndex(handle.scrollOffset);
+    const row = visibleRows()[index];
+    scrollAnchor = row && {
+      id: row.id,
+      offset: handle.scrollOffset - handle.getItemOffset(index),
+    };
+  }
+  createEffect(
+    on(
+      visibleRows,
+      (rows) => {
+        const handle = virtualizer();
+        const anchor = scrollAnchor;
+        if (!handle || !anchor) return;
+        const index = rows.findIndex((row) => row.id === anchor.id);
+        if (index < 0) return;
+        const offset = handle.getItemOffset(index) + anchor.offset;
+        if (Math.abs(offset - handle.scrollOffset) >= 1)
+          handle.scrollTo(offset);
+      },
+      { defer: true }
+    )
+  );
+
   function checkNearEnd() {
     const handle = virtualizer();
     if (!handle) return;
@@ -503,7 +537,10 @@ export function TaskList(props: TaskListProps) {
                   viewportRef={setViewport}
                   items={visibleRows()}
                   focusedIndex={list.focus.index()}
-                  onScroll={checkNearEnd}
+                  onScroll={() => {
+                    recordScrollAnchor();
+                    checkNearEnd();
+                  }}
                 >
                   {(row) => (
                     <Switch>

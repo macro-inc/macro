@@ -57,7 +57,8 @@ The regular Tasks list loads a group's next page when the end of that group
 scrolls into view, with a spinner row instead of a `Load More` button. A failed
 page shows `Retry` in that row and stops automatic requests for the group.
 ArrowDown waits on a group's last loaded task until the next page arrives; after
-a failure it continues into the next group. Collapsed groups load nothing.
+a failure it continues into the next group. Collapsed groups load nothing. A page
+that arrives after you scroll past its group must not move the rows on screen.
 With GraphQL Soup enabled, verify a group with more than one page in both the
 regular Tasks list (scroll and ArrowDown) and a project task list (automatic
 pagination). Both must use the parent Soup query's continuation owner; reaching
@@ -293,7 +294,8 @@ A continuation row loads the next page when it scrolls near the visible rows,
 showing a spinner in the item list and at the visible calendar's left edge
 outside the open list, even after horizontal panning. A failed page shows
 **Retry loading tasks** there instead. Group continuations stay after their
-group; the global continuation appears once after the loaded rows. Continuation
+group; the global continuation appears once after the loaded rows. As in the
+list, a page that lands above the visible rows keeps them in place. Continuation
 rows and group headers do not start range creation.
 The chart contains loaded results, not an implied complete schedule. Selecting
 Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Board.
