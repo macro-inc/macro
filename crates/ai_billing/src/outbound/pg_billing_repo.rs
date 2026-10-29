@@ -1135,6 +1135,50 @@ impl BillingRepo for PgBillingRepo {
         }))
     }
 
+    async fn declined_credit_purchases(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<PendingReload>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, amount_cents, stripe_invoice_id
+            FROM ai_credit_reload
+            WHERE user_id = $1
+              AND kind = 'purchase'
+              AND status = 'failed'
+              AND stripe_invoice_id IS NOT NULL
+            ORDER BY created_at
+            "#,
+            payer.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| PendingReload {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id,
+            })
+            .collect())
+    }
+
+    async fn void_credit_purchase(&self, reload_id: Uuid) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE ai_credit_reload
+            SET status = 'failed', stripe_invoice_id = NULL, updated_at = NOW()
+            WHERE id = $1 AND kind = 'purchase' AND status <> 'paid'
+            "#,
+            reload_id,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
+    }
+
     async fn finish_credit_reload(
         &self,
         reload_id: Uuid,

@@ -697,6 +697,36 @@ impl BillingRepo for FakeRepo {
             stripe_invoice_id: None,
         }))
     }
+    async fn declined_credit_purchases(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<PendingReload>> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .reloads
+            .iter()
+            .filter(|r| {
+                r.kind == CreditReloadKind::Purchase
+                    && r.status == CreditReloadStatus::Failed
+                    && r.invoice.is_some()
+            })
+            .map(|r| PendingReload {
+                id: r.id,
+                amount_cents: r.amount_cents,
+                stripe_invoice_id: r.invoice.clone(),
+            })
+            .collect())
+    }
+    async fn void_credit_purchase(&self, reload_id: Uuid) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        for r in s.reloads.iter_mut().filter(|r| r.id == reload_id) {
+            r.status = CreditReloadStatus::Failed;
+            r.invoice = None;
+        }
+        Ok(())
+    }
     async fn finish_credit_reload(
         &self,
         reload_id: Uuid,
@@ -762,6 +792,8 @@ enum PayOutcome {
     Paid,
     /// Card declined: the invoice stays open for Stripe's retries.
     Declined,
+    /// The card needs 3-D Secure: the invoice stays open.
+    AuthenticationRequired,
     /// The provider could not be reached.
     Error,
 }
@@ -785,9 +817,13 @@ struct FakePayments {
     period_reply: Arc<Mutex<PeriodReply>>,
     period_requests: Arc<Mutex<Vec<(String, SubscriptionScope)>>>,
     no_card: Arc<Mutex<bool>>,
+    voided: Arc<Mutex<Vec<String>>>,
 }
 
 impl FakePayments {
+    fn voided(&self) -> Vec<String> {
+        self.voided.lock().unwrap().clone()
+    }
     fn remove_card(&self) {
         *self.no_card.lock().unwrap() = true;
     }
@@ -837,16 +873,21 @@ impl PaymentGateway for FakePayments {
         charge_id: Uuid,
         invoice_id: &str,
         _scope: SubscriptionScope,
-    ) -> Result<bool> {
+    ) -> Result<InvoicePayment> {
         self.payments
             .lock()
             .unwrap()
             .push((charge_id, invoice_id.to_string()));
         match *self.pay_outcome.lock().unwrap() {
-            PayOutcome::Paid => Ok(true),
-            PayOutcome::Declined => Ok(false),
+            PayOutcome::Paid => Ok(InvoicePayment::Paid),
+            PayOutcome::Declined => Ok(InvoicePayment::Declined),
+            PayOutcome::AuthenticationRequired => Ok(InvoicePayment::AuthenticationRequired),
             PayOutcome::Error => Err(BillingError::Payment(anyhow::anyhow!("card declined"))),
         }
+    }
+    async fn void_credit_invoice(&self, invoice_id: &str) -> Result<InvoiceVoid> {
+        self.voided.lock().unwrap().push(invoice_id.to_string());
+        Ok(InvoiceVoid::Voided)
     }
     async fn has_payment_method(
         &self,
@@ -3650,6 +3691,46 @@ async fn a_purchase_without_a_card_on_file_asks_for_checkout_and_charges_nothing
     assert!(payments.payments().is_empty());
     assert!(repo.reloads().is_empty());
     assert_eq!(repo.state.lock().unwrap().balance, 0);
+}
+
+#[tokio::test]
+async fn a_card_that_needs_authentication_voids_the_invoice_for_checkout() {
+    let (svc, repo, payments, _) = premium_service(0);
+    payments.set_pay(PayOutcome::AuthenticationRequired);
+    let payer = user("payer@x.com");
+
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    assert_eq!(
+        purchase.status,
+        CreditPurchaseStatus::AuthenticationRequired
+    );
+    let reloads = repo.reloads();
+    assert_eq!(payments.voided(), vec![format!("in_{}", reloads[0].id)]);
+    // Voided: neither retried nor counted against the monthly limit.
+    assert_eq!(reloads[0].status, CreditReloadStatus::Failed);
+    assert_eq!(reloads[0].invoice, None);
+    assert_eq!(repo.state.lock().unwrap().balance, 0);
+    assert!(!repo.state.lock().unwrap().auto_reload_suspended);
+}
+
+#[tokio::test]
+async fn removing_the_card_after_a_decline_voids_the_open_invoice_before_checkout() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+    let declined = svc.purchase_credits(&payer, 2_500).await.unwrap();
+    assert_eq!(declined.status, CreditPurchaseStatus::Declined);
+    let invoice = repo.reloads()[0].invoice.clone().unwrap();
+
+    payments.remove_card();
+    let purchase = svc.purchase_credits(&payer, 5_000).await.unwrap();
+
+    assert_eq!(purchase.status, CreditPurchaseStatus::PaymentMethodRequired);
+    assert_eq!(payments.voided(), vec![invoice]);
+    let reloads = repo.reloads();
+    assert_eq!(reloads.len(), 1);
+    assert_eq!(reloads[0].invoice, None);
 }
 
 #[tokio::test]

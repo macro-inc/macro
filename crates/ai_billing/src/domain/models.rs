@@ -584,6 +584,10 @@ pub enum CreditPurchaseStatus {
     /// The payer has no card on file. Nothing was reserved or charged; the
     /// payer can buy the same pack through checkout instead.
     PaymentMethodRequired,
+    /// The card needs the cardholder to authenticate (3-D Secure), which an
+    /// off-session charge can't do. The invoice was voided, so nothing was
+    /// charged; the payer can buy the same pack through checkout instead.
+    AuthenticationRequired,
 }
 
 /// A one-time credit purchase charged to the payer's card on file.

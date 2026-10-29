@@ -16,7 +16,7 @@ use super::models::{
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, CreditReloadRequest, EntitlementSource,
-    PaymentGateway, PendingReload, PurchaseReservation, UsageReader,
+    InvoicePayment, InvoiceVoid, PaymentGateway, PendingReload, PurchaseReservation, UsageReader,
 };
 use super::pricing::AiPricing;
 use ai_usage::AiUsageEnforcement;
@@ -602,8 +602,10 @@ where
 
     /// Collect a reserved card charge for credits: open its invoice (or pick
     /// up the one an earlier attempt opened), try to pay it, and book the
-    /// credits once paid. `Ok(true)` when paid, `Ok(false)` when declined. A
-    /// failure marks the charge failed; for an automatic reload it also pauses
+    /// credits once paid. Reports how the payment ended. A purchase whose card
+    /// needs authentication has its invoice voided, since the payer pays
+    /// through checkout instead; an automatic reload keeps it open like a
+    /// decline. A failure marks the charge failed; for an automatic reload it also pauses
     /// automatic reloads until the payer saves their settings again. A
     /// recorded invoice stays on the row because Stripe may still collect it,
     /// in which case the webhook books the credits.
@@ -612,7 +614,7 @@ where
         entitlement: &Entitlement,
         reload: PendingReload,
         kind: CreditReloadKind,
-    ) -> Result<bool> {
+    ) -> Result<InvoicePayment> {
         let payer = &entitlement.payer;
         let scope = SubscriptionScope::from(&entitlement.scope);
         let customer_id = match self.entitlements.stripe_customer_id(payer).await {
@@ -676,7 +678,7 @@ where
             .pay_overage_invoice(reload.id, &invoice_id, scope)
             .await
         {
-            Ok(true) => {
+            Ok(InvoicePayment::Paid) => {
                 self.repo
                     .record_credit_reload(payer, reload.amount_cents, &invoice_id)
                     .await?;
@@ -689,9 +691,23 @@ where
                     %kind,
                     "collected ai credit charge"
                 );
-                Ok(true)
+                Ok(InvoicePayment::Paid)
             }
-            Ok(false) => {
+            Ok(InvoicePayment::AuthenticationRequired) if kind == CreditReloadKind::Purchase => {
+                tracing::info!(
+                    cents = reload.amount_cents,
+                    invoice = %invoice_id,
+                    "ai credit purchase needs card authentication; voiding for checkout"
+                );
+                if self
+                    .abandon_credit_purchase(payer, reload.id, reload.amount_cents, &invoice_id)
+                    .await?
+                {
+                    return Ok(InvoicePayment::Paid);
+                }
+                Ok(InvoicePayment::AuthenticationRequired)
+            }
+            Ok(InvoicePayment::Declined | InvoicePayment::AuthenticationRequired) => {
                 // Declined: the invoice stays open for Stripe's retries and
                 // the webhook books the credits if one succeeds. A declined
                 // purchase is marked failed so buying again retries this
@@ -711,7 +727,7 @@ where
                     %kind,
                     "ai credit charge declined; invoice awaiting payment"
                 );
-                Ok(false)
+                Ok(InvoicePayment::Declined)
             }
             Err(e) => {
                 tracing::error!(
@@ -722,6 +738,33 @@ where
                 );
                 self.fail_credit_charge(payer, reload.id, kind).await?;
                 Err(e)
+            }
+        }
+    }
+
+    /// Void a purchase's open invoice so it can never charge the card, before
+    /// the payer pays through checkout instead. If Stripe collected it first,
+    /// book the credits and return `true`.
+    async fn abandon_credit_purchase(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        reload_id: Uuid,
+        amount_cents: i64,
+        invoice_id: &str,
+    ) -> Result<bool> {
+        match self.payments.void_credit_invoice(invoice_id).await? {
+            InvoiceVoid::Voided => {
+                self.repo.void_credit_purchase(reload_id).await?;
+                Ok(false)
+            }
+            InvoiceVoid::Paid => {
+                self.repo
+                    .record_credit_reload(payer, amount_cents, invoice_id)
+                    .await?;
+                self.repo
+                    .finish_credit_reload(reload_id, Some(invoice_id), CreditReloadStatus::Paid)
+                    .await?;
+                Ok(true)
             }
         }
     }
@@ -1015,6 +1058,24 @@ where
             .has_payment_method(&customer_id, scope)
             .await?
         {
+            // A purchase declined before the card was removed keeps an open
+            // invoice; void it so a card added later can't collect it on top
+            // of the checkout payment.
+            for declined in self
+                .repo
+                .declined_credit_purchases(&entitlement.payer)
+                .await?
+            {
+                if let Some(invoice_id) = declined.stripe_invoice_id.as_deref() {
+                    self.abandon_credit_purchase(
+                        &entitlement.payer,
+                        declined.id,
+                        declined.amount_cents,
+                        invoice_id,
+                    )
+                    .await?;
+                }
+            }
             return Ok(CreditPurchase {
                 amount_cents,
                 status: CreditPurchaseStatus::PaymentMethodRequired,
@@ -1037,8 +1098,13 @@ where
             .collect_credit_charge(&entitlement, reload, CreditReloadKind::Purchase)
             .await
         {
-            Ok(true) => CreditPurchaseStatus::Paid,
-            Ok(false) | Err(BillingError::Payment(_)) => CreditPurchaseStatus::Declined,
+            Ok(InvoicePayment::Paid) => CreditPurchaseStatus::Paid,
+            Ok(InvoicePayment::AuthenticationRequired) => {
+                CreditPurchaseStatus::AuthenticationRequired
+            }
+            Ok(InvoicePayment::Declined) | Err(BillingError::Payment(_)) => {
+                CreditPurchaseStatus::Declined
+            }
             Err(e) => return Err(e),
         };
         if status == CreditPurchaseStatus::Paid

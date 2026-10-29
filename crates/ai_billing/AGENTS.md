@@ -55,6 +55,9 @@ provider cost (plus markup for overage).
   reloads and `kind = 'purchase'` one-time buys (with `purchased_by`). Both
   count against the payer's monthly limit; automatic retries, orphan sweeps,
   and auto-reload suspension must stay scoped to `automatic`.
+- A voided purchase is `failed` with `stripe_invoice_id` cleared, so limit,
+  retry, and sweep queries (which count failed rows only with an invoice)
+  ignore it without a separate status.
 
 ## Related
 

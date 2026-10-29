@@ -114,6 +114,28 @@ pub struct PendingReload {
     pub stripe_invoice_id: Option<String>,
 }
 
+/// How an attempt to collect an invoice ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvoicePayment {
+    /// Collected.
+    Paid,
+    /// The card was declined; the invoice stays open for the provider's
+    /// retries.
+    Declined,
+    /// The card needs the cardholder to authenticate (3-D Secure), which an
+    /// off-session charge can't do; the invoice stays open.
+    AuthenticationRequired,
+}
+
+/// The state of an invoice after asking the provider to void it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvoiceVoid {
+    /// Void (or otherwise uncollectible): it can no longer charge the card.
+    Voided,
+    /// The provider collected it before it could be voided.
+    Paid,
+}
+
 /// A credit reload whose Stripe invoice outcome just changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedReload {
@@ -393,6 +415,17 @@ pub trait BillingRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<PurchaseReservation>> + Send;
 
+    /// One-time purchases by `payer` that were declined with their invoice
+    /// still open (status `failed`), oldest first.
+    fn declined_credit_purchases(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<PendingReload>>> + Send;
+
+    /// Mark a purchase whose invoice was voided: `failed` with no invoice, so
+    /// it is neither retried nor counted against the monthly limit.
+    fn void_credit_purchase(&self, reload_id: Uuid) -> impl Future<Output = Result<()>> + Send;
+
     /// Record the result of collecting a reserved reload.
     fn finish_credit_reload(
         &self,
@@ -515,16 +548,24 @@ pub trait PaymentGateway: Send + Sync + 'static {
     /// If no active or trialing subscription matches, an invoice-stored
     /// payment method may still collect the existing debt.
     ///
-    /// `Ok(true)` when it is paid, `Ok(false)` when the card was declined and
-    /// the invoice stays open for the provider's own retries (the webhook
-    /// reports the outcome), `Err` when the provider could not be reached or
-    /// rejected the request.
+    /// [`InvoicePayment::Paid`] when it is paid; `Declined` or
+    /// `AuthenticationRequired` when it was not and the invoice stays open
+    /// for the provider's own retries (the webhook reports the outcome);
+    /// `Err` when the provider could not be reached or rejected the request.
     fn pay_overage_invoice(
         &self,
         charge_id: Uuid,
         invoice_id: &str,
         scope: SubscriptionScope,
-    ) -> impl Future<Output = Result<bool>> + Send;
+    ) -> impl Future<Output = Result<InvoicePayment>> + Send;
+
+    /// Void an open credit reload invoice so it can never charge the card,
+    /// for example before the payer pays the same pack through checkout.
+    /// Reports [`InvoiceVoid::Paid`] when it was collected first.
+    fn void_credit_invoice(
+        &self,
+        invoice_id: &str,
+    ) -> impl Future<Output = Result<InvoiceVoid>> + Send;
 
     /// Whether a charge in `scope` has a card to collect from: the
     /// subscription's or the customer's default payment method, or a legacy

@@ -35,8 +35,9 @@ pub use models::{
 };
 pub use ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, CreditReloadRequest, EntitlementSource,
-    OverageChargeRequest, PaymentGateway, PendingCharge, PendingReload, PurchaseReservation,
-    ResolvedReload, SettlementCandidates, SettlementOutcome, SettlementTrigger, UsageReader,
+    InvoicePayment, InvoiceVoid, OverageChargeRequest, PaymentGateway, PendingCharge,
+    PendingReload, PurchaseReservation, ResolvedReload, SettlementCandidates, SettlementOutcome,
+    SettlementTrigger, UsageReader,
 };
 pub use pricing::{
     AiPricing, IncludedAllowanceCents, OverageMarkupPercent, PlanAllowances, PricingError,
