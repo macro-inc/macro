@@ -2,7 +2,7 @@
 //
 // macro-cache-prod climbed from 60% to 100% over a month before writes failed.
 // Memory and evictions also exist in Grafana
-// (infra/stacks/observability/nixos/alerting.nix); change both together.
+// (infra/stacks/observability/nixos/prod-alerts.nix); change both together.
 // Grafana pages on-call for memory, so it only notifies here.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';

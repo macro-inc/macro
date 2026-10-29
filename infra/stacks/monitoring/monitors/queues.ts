@@ -1,7 +1,7 @@
 // Prod SQS queues: dead letters, backlog age and backlog growth.
 //
 // The two queue-age monitors also exist in Grafana
-// (infra/stacks/observability/nixos/alerting.nix); change both together.
+// (infra/stacks/observability/nixos/prod-alerts.nix); change both together.
 // Grafana pages on-call for the work queues, so they only notify here.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';

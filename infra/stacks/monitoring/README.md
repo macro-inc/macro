@@ -40,7 +40,7 @@ its thresholds many times a day.
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts` and `regressions.ts` declare
 the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
-(`infra/stacks/observability/nixos/alerting.nix`), and Grafana pages on-call for
+(`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify, so one
 incident pages once. Keep thresholds and windows in sync by hand. The error-logs
 anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
@@ -165,7 +165,7 @@ is applied. Reach for `restrictedRoles` if convention stops being enough.
 ## Adding a monitor
 
 Add a prod threshold or anomaly monitor with `prodMonitor()` in the matching
-`monitors/*.ts`, a `thresholdGraph()` for it on that file's dashboard, and its Grafana copy in `alerting.nix` when the metric is in
+`monitors/*.ts`, a `thresholdGraph()` for it on that file's dashboard, and its Grafana copy in `prod-alerts.nix` when the metric is in
 CloudWatch. Declare anything else with `new datadog.Monitor(...)`, ending its
 message with `notify({ pages })` and setting `renotifyInterval: RENOTIFY_MINUTES`. Use the `adopted()` helper only
 for monitors that already exist in Datadog — it sets `protect`, which is there

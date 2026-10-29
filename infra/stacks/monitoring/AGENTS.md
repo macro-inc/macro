@@ -24,7 +24,7 @@ From `infra/`:
 
 - The CloudWatch-based monitors in `macrodb.ts`, `redis.ts` and `queues.ts`
   have hand-written Grafana copies in
-  `infra/stacks/observability/nixos/alerting.nix`. Change thresholds and windows
+  `infra/stacks/observability/nixos/prod-alerts.nix`. Change thresholds and windows
   in both. Grafana pages for those, so their Datadog copies use `pages: false`.
 - Read `README.md` before deployment: imported resources must be adopted first
   to avoid duplicate alerts. Never deploy without explicit approval.

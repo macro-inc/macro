@@ -19,6 +19,7 @@ in
     ./ci-dashboard.nix
     ./database-dashboard.nix
     ./database-queries-dashboard.nix
+    ./prod-alerts-dashboard.nix
     ./alerting.nix
     ./goalert.nix
   ];

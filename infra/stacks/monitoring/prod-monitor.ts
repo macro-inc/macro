@@ -5,7 +5,7 @@ import { alertMessage, RENOTIFY_MINUTES } from './notify';
 
 /**
  * A prod monitor declared in this stack. The rules with a CloudWatch metric
- * also exist in Grafana (infra/stacks/observability/nixos/alerting.nix); keep
+ * also exist in Grafana (infra/stacks/observability/nixos/prod-alerts.nix); keep
  * their thresholds and windows in sync there by hand.
  */
 export function prodMonitor(

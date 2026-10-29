@@ -77,6 +77,8 @@ packages, configuration, service users, resource limits and startup dependencies
 - `nixos/goalert.nix` and `nixos/goalert/`: GoAlert, its Postgres, backups and
   the Macro Alerts relay (see [On-call paging](#on-call-paging-goalert)).
 - `nixos/alerting.nix`: Grafana alert rules, contact points and routing.
+- `nixos/prod-alerts.nix`: prod alert queries and thresholds, shared by the
+  rules and `nixos/prod-alerts-dashboard.nix`.
 - `nixos/host.nix`: boot dependencies, retained storage and stable service identities.
 
 NixOS modules generate application configuration from Nix attributes. Alloy's
@@ -435,20 +437,27 @@ models. Grafana uses the EC2 role for regional metric reads and publishing to th
 configured alarm SNS topic. Other unprivileged HTTP/ingest services still cannot
 access instance metadata.
 
-`prodRules` in `nixos/alerting.nix` holds the prod CloudWatch rules: macrodb
-memory, swap, load, CPU, connections, replica lag, read latency and storage;
-Redis memory and evictions; SQS queue age. Each is a warning and a critical rule
-in the `Prod` group, reading CloudWatch in Virginia directly. Each has a Datadog
-copy in `infra/stacks/monitoring/monitors/`; keep thresholds and windows in sync
-by hand. Forecasts, anomalies, Database Monitoring, APM and log rules are
-Datadog-only.
+`nixos/prod-alerts.nix` lists the prod CloudWatch alerts: macrodb memory, swap,
+load, CPU, connections, replica lag, read latency and storage; Redis memory and
+evictions; SQS queue age. Each entry holds its query, thresholds, window and
+text once. `nixos/alerting.nix` turns each into a warning and a critical rule in
+the `Prod` group, reading CloudWatch in Virginia directly, and
+`nixos/prod-alerts-dashboard.nix` draws it as one panel with both thresholds on
+the `Prod alerts` dashboard (`/d/prod-alerts`, rows macrodb, Redis and Queues).
+Each rule carries its panel as `__dashboardUid__`/`__panelId__`, so the rule
+view and every notification link to the graph of the metric that fired. Each
+has a Datadog copy in `infra/stacks/monitoring/monitors/`; keep thresholds and
+windows in sync by hand. Forecasts, anomalies, Database Monitoring, APM and log
+rules are Datadog-only.
 
 Every alert posts to the `Macro Alerts` contact point through the loopback
-relay; critical ones renotify hourly, others every four hours. Critical alerts
-of rules with `pages = true` also go to the `GoAlert` contact point over
-loopback. GoAlert owns the alert from there: it opens, acknowledges and closes
-it, and its escalation posts each change to the channel. Their Datadog copies
-only notify, so an incident pages once.
+relay; critical ones renotify hourly, others every four hours. Grafana's
+`default.message` lists each alert's annotations (summary, description,
+runbook) and a `Panel:` link to its graph, opened an hour before the alert
+started. Critical alerts of rules with `pages = true` also go to the `GoAlert`
+contact point over loopback. GoAlert owns the alert from there: it opens,
+acknowledges and closes it, and its escalation posts each change to the
+channel. Their Datadog copies only notify, so an incident pages once.
 
 The dev rules below keep their own route to `Macro team email`.
 

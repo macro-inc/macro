@@ -14,8 +14,10 @@ us-east-1. `README.md` is the full operations guide.
 
 ## Recipes
 
-- Change a Grafana prod alert rule: edit `prodRules` in `nixos/alerting.nix`, and
-  its Datadog copy in `infra/stacks/monitoring/monitors/` by hand.
+- Change a Grafana prod alert rule: edit its entry in `nixos/prod-alerts.nix`
+  (rules and the `Prod alerts` dashboard panel both read it), and its Datadog
+  copy in `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next
+  free `panelId`; never renumber one, since sent notifications link to it.
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
