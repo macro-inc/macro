@@ -1,4 +1,5 @@
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
+import { reloadApp } from '@app/observability/reload';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -470,6 +471,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       busy={sync.busy()}
       error={sync.error()}
       onRetry={sync.retry}
+      onReload={() => reloadApp('user_recovery')}
       onKeepEditing={sync.keepEditing}
     />
   );

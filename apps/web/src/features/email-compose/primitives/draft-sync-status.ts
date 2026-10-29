@@ -7,6 +7,7 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { EmailDraftStorage } from '../context/compose-capabilities';
 import type { DraftSyncViewState } from '../core/local-draft';
 
@@ -70,7 +71,10 @@ export function createDraftSyncStatus(options: {
               ? 'Queued changes are preserved. Update or reload Macro to recover local storage.'
               : 'Reconnect or retry to resume draft synchronization.',
         failed: true,
-        action: availability === 'unavailable' ? 'retry' : undefined,
+        action: match(availability)
+          .with('unavailable', () => 'retry' as const)
+          .with('recovery-required', () => 'reload' as const)
+          .otherwise(() => undefined),
         canKeepEditing: false,
       };
     }

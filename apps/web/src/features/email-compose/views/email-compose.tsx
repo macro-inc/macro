@@ -1,3 +1,4 @@
+import { reloadApp } from '@app/observability/reload';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import {
@@ -235,6 +236,7 @@ function LoadedEmailComposeView(
       busy={sync.busy()}
       error={sync.error()}
       onRetry={sync.retry}
+      onReload={() => reloadApp('user_recovery')}
       onKeepEditing={sync.keepEditing}
     />
   );

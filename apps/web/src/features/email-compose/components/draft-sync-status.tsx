@@ -1,5 +1,6 @@
 import { Button } from '@ui';
 import { Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { DraftSyncViewState } from '../core/local-draft';
 
 /** In-composer banner for draft failures; saving itself stays silent. */
@@ -8,6 +9,7 @@ export function DraftSyncStatus(props: {
   busy: boolean;
   error?: string;
   onRetry(): void;
+  onReload(): void;
   onKeepEditing(): void;
 }) {
   return (
@@ -28,9 +30,14 @@ export function DraftSyncStatus(props: {
               size="sm"
               variant="secondary"
               disabled={props.busy}
-              onClick={props.onRetry}
+              onClick={
+                state().action === 'reload' ? props.onReload : props.onRetry
+              }
             >
-              {state().action === 'retry-discard' ? 'Retry discard' : 'Retry'}
+              {match(state().action)
+                .with('retry-discard', () => 'Retry discard')
+                .with('reload', () => 'Reload')
+                .otherwise(() => 'Retry')}
             </Button>
           </Show>
           <Show when={state().canKeepEditing}>

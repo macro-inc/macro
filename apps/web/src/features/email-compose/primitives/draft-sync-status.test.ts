@@ -139,7 +139,7 @@ it('offers retry for server failures while newer edits remain saved locally', as
 it('keeps local edits visible with an actionable synchronization status during recovery', async () => {
   const context = createComposeContext();
   const [availability, setAvailability] = createSignal<
-    'unavailable' | 'recovering' | 'ready'
+    'unavailable' | 'recovering' | 'recovery-required' | 'ready'
   >('unavailable');
   context.drafts.syncAvailability = availability;
   context.drafts.saveLocalDraft = vi.fn();
@@ -165,6 +165,8 @@ it('keeps local edits visible with an actionable synchronization status during r
   expect(status.state()?.action).toBe('retry');
   setAvailability('recovering');
   expect(status.state()?.action).toBeUndefined();
+  setAvailability('recovery-required');
+  expect(status.state()?.action).toBe('reload');
   setAvailability('ready');
   expect(status.state()).toBeUndefined();
 });
