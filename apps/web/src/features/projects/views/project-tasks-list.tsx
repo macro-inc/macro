@@ -70,7 +70,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 }
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
-  const { state, setState, source } = useTasksView();
+  const { state, setState } = useTasksView();
   return (
     <div class="flex size-full min-h-0 flex-col">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
