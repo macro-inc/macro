@@ -97,6 +97,38 @@ describe('loaded grouped pages', () => {
 });
 
 describe('local grouped Soup projection', () => {
+  it('does not index baseline evidence before a live snapshot is available', () => {
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      const row = groupedDocument('a');
+      let reads = 0;
+      const [live, setLive] = createSignal<ReturnType<typeof snapshot>>();
+      const [baseline, setBaseline] = createSignal({
+        bins: [{ key: 'todo', items: [row], totalCount: 1, nextCursor: null }],
+        untrustedKeys: new Set<string>(),
+      });
+      const project = createLocalGroupedSoupProjection({
+        baseline: () => {
+          reads++;
+          return baseline();
+        },
+        currentItems: () => new Map(),
+        snapshot: live,
+        input: () => input,
+        now: () => now,
+      });
+      expect(project()).toBeUndefined();
+      expect(reads).toBe(0);
+      setLive(snapshot([row]));
+      expect(project()?.[0].items).toHaveLength(1);
+      expect(reads).toBe(1);
+      setLive(undefined);
+      setBaseline({ bins: [], untrustedKeys: new Set() });
+      expect(project()).toBeUndefined();
+      expect(reads).toBe(1);
+    });
+  });
+
   it('only reevaluates the changed grouping row and keeps unrelated field updates live', () => {
     createRoot((dispose) => {
       onTestFinished(dispose);

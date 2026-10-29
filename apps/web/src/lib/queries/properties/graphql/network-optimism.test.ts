@@ -8,6 +8,7 @@ import {
 import {
   CombinedError,
   createClient,
+  gql,
   type Operation,
   type OperationResult,
 } from '@urql/core';
@@ -234,6 +235,48 @@ describe('network property optimism', () => {
     await second;
     expect(values.at(-1)).toEqual(entity('task', [property('confirmed')]));
     subscription.unsubscribe();
+  });
+
+  it('does not let a cache-only reader pin a confirmed value over later network data', async () => {
+    const { client, requests, request, respond, save } = setup();
+    const values: unknown[] = [];
+    const cachedValues: unknown[] = [];
+    const input = { entityType: 'DOCUMENT' as const, entityId: 'task' };
+    const live = client
+      .query(EntityPropertiesDocument, { input })
+      .subscribe((result) => values.push(result.data));
+    const cached = client
+      .query(
+        gql`query CachedProperties { user { soupEntity { id } } }`,
+        {},
+        { requestPolicy: 'cache-only' }
+      )
+      .subscribe((result) => cachedValues.push(result.data));
+    await respond(0, entity('task'));
+    await respond(1, entity('task'));
+    const saving = save('task', 'saved');
+    await respond(2, { setEntityProperty: property('saved') });
+    await respond(3, entity('task', [property('saved')]));
+    await saving;
+    expect(requests).toHaveLength(4);
+    const refreshed = client
+      .query(
+        EntityPropertiesDocument,
+        { input },
+        { requestPolicy: 'network-only' }
+      )
+      .toPromise();
+    await respond(4, entity('task', [property('external')]));
+    await refreshed;
+    expect(values.at(-1)).toEqual(entity('task', [property('external')]));
+    const rejected = save('task', 'rejected');
+    await request(5);
+    await respond(5, undefined, FAILED);
+    await rejected;
+    expect(values.at(-1)).toEqual(entity('task', [property('external')]));
+    expect(cachedValues.at(-1)).toEqual(entity('task', [property('saved')]));
+    live.unsubscribe();
+    cached.unsubscribe();
   });
 
   it('does not republish a previous session snapshot for a new edit or late response', async () => {

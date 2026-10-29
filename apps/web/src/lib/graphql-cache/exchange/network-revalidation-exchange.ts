@@ -17,6 +17,7 @@ import {
   mergeMap,
   pipe,
 } from 'wonka';
+import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
 import { isQueryObject, LiveQuery, withLiveQueryData } from './live-query';
 import {
   notifyOptimisticMutationEnqueued,
@@ -76,11 +77,23 @@ export function networkRevalidationExchange(
     let mutationId = 0;
     let activeScope: unknown = Symbol('uninitialized');
 
+    function projectData(data: unknown, confirmedOnly = false): unknown {
+      for (const layer of layers.values()) {
+        if (!confirmedOnly || layer.confirmed)
+          data = layer.update.project(data);
+      }
+      return data;
+    }
+
     function project(result: OperationResult): OperationResult {
-      let data = result.data;
-      for (const layer of layers.values()) data = layer.update.project(data);
+      const data = projectData(result.data);
       const state = queries.get(result.operation.key);
-      if (state && (enabled() || state.view) && isQueryObject(data)) {
+      if (
+        state &&
+        (enabled() || state.view) &&
+        isQueryObject(data) &&
+        supportsStoreReconciliation(data)
+      ) {
         if (state.view) state.view.replace(data);
         else state.view = new LiveQuery(data);
         return withLiveQueryData({ ...result, data }, state.view.data);
@@ -202,7 +215,8 @@ export function networkRevalidationExchange(
         requestId: id,
       });
       for (const layer of layers.values()) {
-        if (layer.confirmed) layer.queries.add(operation.key);
+        if (layer.confirmed && operation.context.requestPolicy !== 'cache-only')
+          layer.queries.add(operation.key);
       }
       return tagged;
     }
@@ -268,6 +282,9 @@ export function networkRevalidationExchange(
 
     function acceptQuery(result: OperationResult): OperationResult | undefined {
       const { operation } = result;
+      if (operation.context.requestPolicy === 'cache-only') {
+        result = { ...result, data: projectData(result.data, true) };
+      }
       const state = queries.get(operation.key);
       if (
         enabled() &&
@@ -305,7 +322,19 @@ export function networkRevalidationExchange(
         layer.update = confirmed;
         layer.confirmed = true;
         layer.afterRequest = requestId;
-        layer.queries = new Set(queries.keys());
+        layer.queries = new Set();
+        for (const [key, state] of queries) {
+          if (state.operation.context.requestPolicy === 'cache-only') {
+            if (state.result) {
+              state.result = {
+                ...state.result,
+                data: projectData(state.result.data, true),
+              };
+            }
+          } else {
+            layer.queries.add(key);
+          }
+        }
       } else {
         layers.delete(id);
       }

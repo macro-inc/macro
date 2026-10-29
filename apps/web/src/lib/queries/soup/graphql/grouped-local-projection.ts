@@ -263,7 +263,9 @@ export function createLocalGroupedSoupProjection(options: {
   const input = createMemo(options.input);
   const keys = createMemo(() => options.snapshot()?.keys);
   const records = createMemo(() => options.snapshot()?.records ?? []);
+  const hasSnapshot = createMemo(() => options.snapshot() !== undefined);
   const index = createMemo(() => {
+    if (!hasSnapshot()) return undefined;
     const baseline = options.baseline();
     const initial = input();
     return baseline && initial

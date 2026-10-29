@@ -847,6 +847,8 @@ confirms them, including through failed or stale refreshes. Failures remove only
 their own layer. Session changes discard old snapshots and layers, reject stale
 query responses, replace the plain client, and cancel undispatched writes.
 Healthy-cache operations retain the durable queue's existing ownership.
+Cache-only readers accept confirmed properties without pinning network layers;
+opaque values with keys unsupported by Solid use plain snapshots.
 The `graphql_cache.network_property_projection` span records active query and
 layer counts without property values.
 
@@ -959,8 +961,9 @@ for every continuation. The identity-read regression test guards linear work
 without a machine-dependent timing assertion. Small loaded views have modest
 projection cost; the 5,000-row reconciliation ceiling is not a frame-time budget.
 The production path now indexes immutable baseline identities and prior memberships
-once per evidence change. Per-row reactive memos track grouping fields; display-only
-patches keep the existing bins and update their live records in place. Membership
+once per evidence change while a live snapshot is available. Per-row reactive
+memos track grouping fields; display-only patches keep the existing bins and
+update their live records in place. Membership
 changes reuse the indexes, while row order, baseline, and scope changes still
 reconcile the affected view. Do not memoize mutable live records by object identity.
 
