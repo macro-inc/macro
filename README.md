@@ -122,7 +122,7 @@ We wanted everything in a single markdown editor without switching tools.
 - Version control: history and forking, with a neat UI for scrubbing history.
 - Offline editing and reconciliation.
 - @-linked to everything in your workspace: email, docs, tasks, messages, channels, companies, contacts, etc. Like Notion but multi-modal
-- Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) or on the web
+- Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649), [Android app](https://play.google.com/store/apps/details?id=com.macro.workspace.mobile&pcampaignid=web_share), or on the web
 - Agent native editing, powered by swarms of agents operating as peers in the CRDT collaboration system like human collaborators. See [Wolf's tech blog on this](https://404wolf.com/posts/AgentsAttackTheDocument/). Use via MCP or internal agent.
 
 ![The Team Channels PRD in Macro with tags, assignees, and a details sidebar](.github/readme/docs-prd.jpg)
