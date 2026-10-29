@@ -1328,7 +1328,7 @@
       },
       "RoutineTemplate": {
         "type": "object",
-        "description": "A shared routine's snapshot, readable by any signed-in user with its ID.",
+        "description": "A shared routine's snapshot, readable by signed-in users with sharing enabled.",
         "required": [
           "id",
           "author",

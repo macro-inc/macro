@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::service::test::{TestService, USER, configuration, service, user};
+use crate::domain::service::test::{
+    TestService, USER, configuration, service, stored_actions, user,
+};
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
@@ -275,7 +277,10 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                 .description,
             shared.description
         );
-        let copies = actions.get_actions(other_user(), false).await.unwrap();
+        let copies: Vec<_> = stored_actions(&actions)
+            .into_iter()
+            .filter(|action| action.owner.is_user(&other_user()))
+            .collect();
         assert_eq!(copies.len(), 1);
         assert_eq!(copies[0].id, activated.id);
         assert_eq!(copies[0].enabled, activated.enabled);
@@ -327,11 +332,7 @@ async fn templates_use_the_viewer_and_activating_users_rollout() {
             .await
             .is_err()
     );
-    assert!(
-        actions
-            .get_actions(other_user(), false)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    let stored = stored_actions(&actions);
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].id, Some(id));
 }
