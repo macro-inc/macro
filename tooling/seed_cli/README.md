@@ -50,8 +50,10 @@ Alex, Morgan, and Riley share a team; Sam does not.
 
 Alex owns the private `request-approve`, `request-deny`, and `request-cancel`
 channels, with Morgan as an existing member. Riley and Sam initially have no
-access. Copy a channel link as Alex and open it as Riley or Sam to test the
-denied-access entry point. The `already-member` channel includes Riley; public
+access. Sign in as Riley or Sam and open `public-lobby`, which all four personas
+can read. Follow Alex's private-channel links there to reach the denied-access
+entry point. These links stay on the current app origin, so they work across
+stack ports and hostnames. The `already-member` channel includes Riley; public
 and team lobbies plus an Alex–Morgan DM provide comparison cases. Messages
 describe each case. No requests or decisions are pre-created; this fixture
 prepares membership prerequisites and does not implement channel requests.

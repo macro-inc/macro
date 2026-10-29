@@ -116,6 +116,11 @@
       "channel": "dm-owner-member",
       "from": "access-member",
       "text": "Private DM control: this conversation is between Alex and Morgan only."
+    },
+    {
+      "channel": "public-lobby",
+      "from": "access-owner",
+      "text": "Try these private channels:\n\n- [#request-approve](/app/channels/5eed1caf-0e0f-81b1-a8ff-62cd6a207092)\n- [#request-deny](/app/channels/5eed1caf-5bcc-8437-95a5-305f92912b19)\n- [#request-cancel](/app/channels/5eed1caf-3ae7-8cda-b1f0-e31bb5ccbbd9)\n\nOpen a link as Riley or Sam and choose Ask to join. Alex or Morgan can review the request from the destination channel."
     }
   ]
 }
