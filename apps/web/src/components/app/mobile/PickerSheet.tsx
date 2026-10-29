@@ -1,17 +1,24 @@
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { Button } from '@ui';
 import {
+  type Accessor,
   createComputed,
   createContext,
+  createSignal,
   type JSX,
   on,
+  Show,
   useContext,
 } from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
 
 const PICKER_SEARCH = 'input[type="text"]:not(:disabled)';
 
-const PickerSheetContext = createContext<{ onCancel: () => void }>();
+const PickerSheetContext = createContext<{
+  onCancel: () => void;
+  /** Whether the sheet has finished sliding in. */
+  settled: Accessor<boolean>;
+}>();
 
 function usePickerSheet() {
   const sheet = useContext(PickerSheetContext);
@@ -35,6 +42,11 @@ function Root(props: {
 }) {
   let content: HTMLElement | undefined;
   const search = () => content?.querySelector<HTMLInputElement>(PICKER_SEARCH);
+  // Building a long picker list while the sheet slides in held iOS's main
+  // thread for over a second, so the slide stalled and the sheet appeared late
+  // and at the wrong size. The body mounts once the slide has ended instead.
+  const [settled, setSettled] = createSignal(false);
+  const settle = () => setSettled(true);
   // Opening runs inside the opener's tap, so the keyboard can move straight
   // to a stand-in input and on to the picker's search once it mounts. Without
   // it the keyboard drops as the composer's field blurs and rises again,
@@ -43,32 +55,46 @@ function Root(props: {
     on(
       () => props.open,
       (open) => {
-        if (open) triggerFocusInput(search);
+        if (!open) return;
+        setSettled(false);
+        triggerFocusInput(search);
       },
       { defer: true }
     )
   );
   return (
-    <PickerSheetContext.Provider value={{ onCancel: () => props.onCancel() }}>
+    <PickerSheetContext.Provider
+      value={{ onCancel: () => props.onCancel(), settled }}
+    >
       <MobileDrawer
         side="bottom"
         open={props.open}
         onOpenChange={(open) => {
           if (!open) props.onCancel();
         }}
-        // The search keeps focus rather than the drawer's first control
-        // (Cancel), without scrolling the sliding sheet.
+        // Focus waits for the picker's search to mount, rather than going to
+        // the drawer's first control (Cancel) and dropping the keyboard.
         onInitialFocus={(event) => {
-          const input = search();
-          if (!input) return;
           event.preventDefault();
-          input.focus({ preventScroll: true });
+          // Without a slide (reduced motion) there is no transition to end.
+          if (
+            content &&
+            parseFloat(getComputedStyle(content).transitionDuration) === 0
+          )
+            settle();
         }}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
           <MobileDrawer.Content
-            ref={content}
+            ref={(element: HTMLElement) => {
+              content = element;
+              // A listener beside the drawer's own: an onTransitionEnd prop
+              // would replace the handler that finishes its slides.
+              element.addEventListener('transitionend', (event) => {
+                if (event.target === element && props.open) settle();
+              });
+            }}
             targetHeight={92}
             data-corvu-no-drag
           >
@@ -114,11 +140,16 @@ function Header(props: {
 
 /**
  * The rest of the sheet, for the picker to fill: give its list `min-h-0
- * flex-1` and its own scroll rather than a popover's capped height.
+ * flex-1` and its own scroll rather than a popover's capped height. It mounts
+ * once the sheet has slid in, so a long list never stalls the slide; keep
+ * state that must exist at once (a draft) outside it.
  */
 function Body(props: { children: JSX.Element }) {
+  const sheet = usePickerSheet();
   return (
-    <div class="flex min-h-0 flex-auto flex-col text-sm">{props.children}</div>
+    <div class="flex min-h-0 flex-auto flex-col text-sm">
+      <Show when={sheet.settled()}>{props.children}</Show>
+    </div>
   );
 }
 
