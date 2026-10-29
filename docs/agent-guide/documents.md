@@ -100,8 +100,9 @@ lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
 do not. Approved users appear in People with access, with controls to change or
-remove their direct grant. Opening a permission-request notification navigates
-to its item and opens Share.
+remove their direct grant. A pending request also puts the item, projects
+included, on the reviewer's Home feed until it is resolved. Opening a
+permission-request notification navigates to its item and opens Share.
 
 Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
 when the backend refuses a request with a usage-limit code. Free users can choose
