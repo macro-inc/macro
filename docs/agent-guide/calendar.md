@@ -483,7 +483,12 @@ Events require connecting a Google account (`Connect calendar`). The
 section listing each connected account with a per-account `Enable` (grant calendar),
 `Reconnect` (expired Google authorization), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
-(email + calendar).
+(email + calendar; the item and the `Connect email` dialog both say the email
+and calendar connect together). A Google consent that leaves the email
+permissions unchecked connects nothing: the callback returns to the calendar
+with a persistent `Email access required` prompt whose `Try again` reopens
+`Connect email` asking for the same permissions, and Google lists every
+permission again on that retry.
 
 `Turn off` keeps its confirmation open with `Turning off…` until removal finishes;
 re-enabling is not offered while the old calendar is still being deleted. Reconnecting

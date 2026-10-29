@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   track: vi.fn(),
   openAddInbox: vi.fn(),
   fetchProviders: vi.fn(),
+  peek: vi.fn(),
+  custom: vi.fn(),
+  dismiss: vi.fn(),
 }));
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mocks.navigate,
@@ -46,13 +49,19 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ pageView: vi.fn(), track: mocks.track }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: mocks.success, failure: mocks.failure },
+  toast: {
+    success: mocks.success,
+    failure: mocks.failure,
+    custom: mocks.custom,
+    dismiss: mocks.dismiss,
+  },
 }));
 vi.mock('@core/constant/SettingsState', () => ({
   restoreSettingsReturnTo: vi.fn(),
 }));
 vi.mock('@core/email-link/return-layout', () => ({
   consumeInboxLinkReturn: mocks.restore,
+  readInboxLinkReturn: mocks.peek,
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
@@ -118,6 +127,11 @@ beforeEach(() => {
   });
   mocks.refetch.mockResolvedValue({});
   mocks.restore.mockReturnValue({ url: '/calendar/week' });
+  mocks.peek.mockReturnValue({
+    url: '/calendar/week',
+    scopes: 'gmail_and_calendar',
+  });
+  mocks.custom.mockReturnValue(7);
   mocks.init.mockReturnValue(okAsync(undefined));
 });
 afterEach(cleanup);
@@ -261,6 +275,56 @@ describe('consent that ended without a grant', () => {
     expect(await screen.findByText('Admin approval required')).toBeTruthy();
     await waitFor(() => expect(mocks.fetchProviders).toHaveBeenCalledOnce());
     expect(screen.getByRole('status').textContent).toBe('loading');
+  });
+
+  it('explains a consent that left out email with a prompt that retries the same request', async () => {
+    mocks.searchParams = {
+      link_id: 'oauth-link',
+      email_link_error: 'gmail_not_granted',
+      provider: 'gmail',
+    };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() => expect(mocks.custom).toHaveBeenCalledOnce());
+    const [prompt, options] = mocks.custom.mock.calls[0] as [
+      { title: string; actions: Array<{ label: string; onClick: () => void }> },
+      { persistent: boolean; region: string },
+    ];
+    expect(prompt.title).toBe('Email access required');
+    expect(options).toEqual({ persistent: true, region: 'prompt-region' });
+    expect(mocks.init).not.toHaveBeenCalled();
+    expect(mocks.failure).not.toHaveBeenCalled();
+    expect(mocks.navigate).toHaveBeenCalledWith('/calendar/week', {
+      replace: true,
+    });
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'gmail_not_granted' }
+    );
+
+    expect(prompt.actions.map((action) => action.label)).toEqual(['Try again']);
+    prompt.actions[0].onClick();
+    expect(mocks.dismiss).toHaveBeenCalledWith(7);
+    expect(mocks.openAddInbox).toHaveBeenCalledExactlyOnceWith({
+      scopes: 'gmail_and_calendar',
+    });
+  });
+
+  it('retries with email alone when the refused flow left no stash', async () => {
+    mocks.peek.mockReturnValue(undefined);
+    mocks.searchParams = {
+      link_id: 'oauth-link',
+      email_link_error: 'gmail_not_granted',
+      provider: 'gmail',
+    };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() => expect(mocks.custom).toHaveBeenCalledOnce());
+    const [prompt] = mocks.custom.mock.calls[0] as [
+      { actions: Array<{ onClick: () => void }> },
+    ];
+    prompt.actions[0].onClick();
+    expect(mocks.openAddInbox).toHaveBeenCalledExactlyOnceWith({
+      scopes: undefined,
+    });
   });
 
   it('returns quietly when the user cancelled on the consent screen', async () => {
