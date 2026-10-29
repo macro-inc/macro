@@ -58,8 +58,9 @@ does not mean every closure captures every local variable.
   itemQueryOptions(id()))`, so inputs still update reactively. Enforced by
   ast-grep `ts-/tsx-no-inline-query-callbacks`, CI error, for functions written
   in a query hook's options, and in `queryOptions` or client `fetchQuery`-family
-  options inside a `use*`, `create*`, or component function. Wrapper-hook
-  arguments (below) are not checked.
+  options inside a `use*`, `create*`, or component function or an object
+  method. Names ending in `Options` count as factories. The rule does not see
+  references to hook-local functions or wrapper-hook arguments (below).
 - Keep pure selectors and polling policies at module scope, or inside those
   factories. Check **all** retained callbacks: `queryFn`, `select`,
   `refetchInterval`, pagination, placeholder callbacks, and functions in `meta`.

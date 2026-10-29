@@ -23,19 +23,37 @@ rule:
         - kind: arrow_function
         - kind: function_expression
         - kind: method_definition
-    # useQueries' combine belongs to the per-mount observer, not the cache.
+    # An option's value, also behind a ternary, cast or fallback.
     - any:
         - kind: method_definition
-          not:
-            has:
-              field: name
-              regex: ^combine$
         - inside:
             kind: pair
-            not:
-              has:
-                field: key
-                regex: ^combine$
+            stopBy:
+              not:
+                any:
+                  - kind: parenthesized_expression
+                  - kind: ternary_expression
+                  - kind: binary_expression
+                  - kind: as_expression
+                  - kind: satisfies_expression
+                  - kind: non_null_expression
+    # useQueries' combine runs on the per-mount observer, not the cache.
+    - not:
+        any:
+          - has:
+              field: name
+              regex: ^combine$
+          - inside:
+              stopBy: end
+              any:
+                - kind: pair
+                  has:
+                    field: key
+                    regex: ^combine$
+                - kind: method_definition
+                  has:
+                    field: name
+                    regex: ^combine$
     - inside:
         stopBy: end
         any:
@@ -43,8 +61,9 @@ rule:
           - kind: call_expression
             has:
               field: function
-              regex: ^(useQuery|useInfiniteQuery|useQueries)$
-          # Factories and client calls are fine at module scope, not in a hook.
+              regex: ^(use|create)(Query|InfiniteQuery|Queries)$
+          # Factories and client calls are fine at module scope, not in a hook,
+          # a component, or a method that runs in one.
           - kind: call_expression
             has:
               field: function
@@ -52,11 +71,27 @@ rule:
             inside:
               stopBy: end
               any:
+                - kind: method_definition
                 - kind: function_declaration
-                  has:
-                    field: name
-                    regex: ^(use|create)[A-Z0-9]|^[A-Z]
+                  all:
+                    - has:
+                        field: name
+                        regex: ^(use|create)[A-Z0-9]|^[A-Z]
+                    - not:
+                        has:
+                          field: name
+                          regex: Options$
                 - kind: variable_declarator
-                  has:
-                    field: name
-                    regex: ^(use|create)[A-Z0-9]|^[A-Z]
+                  all:
+                    - has:
+                        field: name
+                        regex: ^(use|create)[A-Z0-9]|^[A-Z]
+                    - not:
+                        has:
+                          field: name
+                          regex: Options$
+                    - has:
+                        field: value
+                        any:
+                          - kind: arrow_function
+                          - kind: function_expression
