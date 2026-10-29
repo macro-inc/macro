@@ -450,7 +450,7 @@ fn property_values_are_a_typed_union_without_soup_names() {
 
     assert_sdl_line(
         &sdl,
-        "union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue",
+        "union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlDateRangePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue",
     );
     assert!(!sdl.contains("GraphqlSoupProperty"));
     assert!(!sdl.contains("GraphqlSoupDataType"));

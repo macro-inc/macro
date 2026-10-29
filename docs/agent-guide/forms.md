@@ -35,7 +35,8 @@ decides who may respond.
 
 Editors see **Build**, **Responses** (with its count), and **Settings** in the
 shared pill tab selector beside the form title in the top bar, kept per split (a split opened with
-`params.view` `responses` or `share` starts there). Viewers (respondents) land on the respond page
+`params.view` `responses` or `share` starts there). On touch devices the tabs sit at the top
+of the page, below the floating header. Viewers (respondents) land on the respond page
 instead. The header's primary button, for owners, is **Publish** (opens sharing)
 until someone responds or the form is shared (public, a channel, the team),
 then **Open form** (respond view in a new split); other editors always see
@@ -54,7 +55,8 @@ question or existing database field to that section, regardless of the current
 selection. Three visible actions sit below the canvas: **Add section** adds a
 question section directly, **Add gate** adds a gate with its inline rule editor
 open, and **Add meeting link** opens the booking-link picker (when scheduling is
-available). Hover a question boundary to reveal a plus that inserts a question
+available). On touch devices these three float above the dock as an **Add**
+menu (Section, Gate, Meeting link) in place of New. Hover a question boundary to reveal a plus that inserts a question
 at that position. Hover between sections to insert a **Section** or **Gate**.
 These controls also appear on keyboard focus and stay visible while their menus
 are open. Meeting links can only be added at the end; adding other sections later
@@ -75,6 +77,11 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   (keeps the column), **Required**, and the ⋯ menu (Move up / Move down / Move
   to section / **Delete column and answers…**, which confirms with the row
   count).
+- A **Time range** question (Numbers & dates) asks with the calendar
+  composer's **Start** → **End** date/time fields and **All day** switch, as a
+  database cell does; the answer counts once both ends are set, and an end
+  before the start is refused. Receipts show it as the table does. Gates test
+  it with the database's range tests.
 - Required questions show a **Required** badge below their answer preview.
   Selecting the question puts its Required switch at the bottom right, with
   duplicate, remove, and more actions on the left.

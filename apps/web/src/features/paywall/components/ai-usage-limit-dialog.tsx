@@ -280,7 +280,6 @@ export function AiUsageLimitDialogView(props: AiUsageLimitDialogProps) {
             >
               <Button
                 variant="ghost"
-                depth={3}
                 class="sm:-ml-3"
                 onClick={props.onOpenSettings}
               >
@@ -288,12 +287,11 @@ export function AiUsageLimitDialogView(props: AiUsageLimitDialogProps) {
               </Button>
             </Show>
             <div class="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button variant="ghost" depth={3} onClick={props.onClose}>
+              <Button variant="ghost" onClick={props.onClose}>
                 Dismiss
               </Button>
               <Button
-                variant="primary"
-                depth={3}
+                variant="neutral"
                 disabled={
                   props.offer?.pending || (limitReached() && !fixCard())
                 }

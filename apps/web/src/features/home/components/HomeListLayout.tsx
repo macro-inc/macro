@@ -43,7 +43,7 @@ export function HomeListLayout(
             title="Home"
             label="New chat"
             onCreate={props.onNewChat}
-            titleActions={<HomeFilterDropdown />}
+            actions={<HomeFilterDropdown />}
             searchLabel="Search Home"
             search={() => (
               <SearchBar

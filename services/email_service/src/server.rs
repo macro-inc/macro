@@ -355,6 +355,16 @@ pub async fn run() -> anyhow::Result<()> {
             },
             access: entity_access_service.as_ref().clone(),
         }),
+        event_forward_sender: Arc::new(
+            email::domain::service::attachments::StagedAttachmentSender::new(
+                email_service.service(),
+                EmailPgRepo::new(db.clone()),
+                crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
+                    s3: s3_client.clone(),
+                    bucket: config.attachment_bucket.to_string(),
+                },
+            ),
+        ),
         draft_attachments: Arc::new(email::domain::draft_attachments::DraftAttachmentService {
             repository: email::outbound::EmailPgRepo::new(db.clone()),
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {

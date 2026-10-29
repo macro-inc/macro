@@ -581,6 +581,7 @@ async fn complete(
     let _stop = call.clone().drop_guard();
     let mut parts = state.engine.run_turn(TurnRequest {
         purpose: TurnPurpose::Summary,
+        delivery: state.delivery,
         session_id: state.session_id,
         awaiting: Arc::new(AwaitingUser::default()),
         owner: state.owner.clone(),

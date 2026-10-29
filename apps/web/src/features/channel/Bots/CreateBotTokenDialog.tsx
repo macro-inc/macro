@@ -40,14 +40,14 @@ export function CreateBotTokenDialog(props: {
           </Dialog.Title>
           <div class="ml-auto">
             <Button
+              tooltip="Close"
               variant="ghost"
               size="icon-sm"
-              label="Close"
               aria-label="Close"
               disabled={minted.isPending()}
               onClick={close}
             >
-              <XIcon />
+              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
         </Panel.Header>
@@ -99,7 +99,7 @@ export function CreateBotTokenDialog(props: {
                           Cancel
                         </Button>
                         <Button
-                          variant="strong"
+                          variant="secondary"
                           size="sm"
                           disabled={isPending}
                           onClick={mint}
@@ -115,7 +115,7 @@ export function CreateBotTokenDialog(props: {
                         Store this token somewhere secure before closing.
                       </div>
                       <div class="flex justify-end border-t border-edge-muted pt-4">
-                        <Button variant="strong" size="sm" onClick={close}>
+                        <Button variant="secondary" size="sm" onClick={close}>
                           Done
                         </Button>
                       </div>

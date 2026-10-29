@@ -129,8 +129,9 @@ the optimistic tag. Repeat with an existing assignment and with removal.
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.
 
-- Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available while collapsed or empty.
-- Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or **+** button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
+- Desktop: use the **Saved views** sidebar section. Its icon-only **+** remains available when the section is empty, populated, collapsed, loading, or in an error state. Enter on the focused **+** starts a draft instead of opening the selected task.
+- Mobile: the **Saved views** pill sits after **Filters** and before the built-in task tabs, using the same mobile pill component. It shows the selected view's name and active styling, and opens a drawer of saved-view rows with selection and management menus, without a duplicate section heading or a header create button. Create views from changed filters, layout, grouping, or sort in the filter drawer.
+- The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
 - Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - When filters, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
@@ -142,6 +143,8 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 - Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, layout, grouping, sort, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
 - A conflicting save retains the draft and offers **Reload saved view** or **Duplicate**. A network failure also retains the name and sharing inputs.
 - Copy links use the existing split search codec, for example `/app/component/tasks?s0.tasks.savedView=<uuid>`.
+
+![Saved views section with a header plus and labeled empty-state action](images/saved-view-create-controls.png)
 
 Verify creation without early persistence, explicit save/reset, copy versus owner-only editing, desktop/mobile metadata dialogs, and returning from task detail. Repeat with another teammate, a removed/rejoined owner, an unavailable tag, and a stale revision.
 
@@ -308,7 +311,10 @@ outside project boards; project boards always retain the current project.
 Each pane or project scope and column keeps a separate composer draft. Project
 boards hide creation actions when the project is read-only.
 
-Click a card's body or title to open the task. Move at least 10 pixels with the
+Click a card's body or title to open the task. Right-click a card, or press
+Shift+F10 on its focused title, for the List row's task menu; it acts on that
+card alone, since the board has no selection. Right presses never start or
+redirect a drag. Move at least 10 pixels with the primary
 mouse button held to start dragging to another column; holding still does not
 start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
@@ -390,6 +396,17 @@ Due-date columns and priority/due-date sorting are not in this version.
 The shared board primitives remain independent of Tasks queries and mutations.
 
 ## Cached grouped lists
+
+Project grouping in the task list matches the Project column: tasks group by
+their initiative Project property, with unassigned tasks under **No Project**.
+Legacy folder membership does not affect these groups. Project headers resolve
+through the same authorized identity query as the Project column. Verify two
+projects and an unassigned task on desktop and mobile; changing or clearing a
+task’s Project must move it to the matching group without reloading.
+
+The synthetic project-grouping browser regression uses the production grouping
+logic and group headers, with HTTP replaced. Run from `apps/web`:
+`bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
 
 With GraphQL caching enabled, previously loaded grouped task lists remain usable
 when their background refresh fails without an HTTP response. Load a Priority-grouped
@@ -505,7 +522,8 @@ none), **Checks failing**, **Conflicts** (GitHub reports the branch conflicting
 with its base; read live for the open PRs on the board), **Ready to merge**
 (every check passed), and **Merged**. Cards show the status icon, priority,
 title, checks, `owner/repo#N`, author, link pills, labels, and agent sessions;
-clicking a card opens the PR. Dragging asks GitHub for the change as you: drop
+clicking a card opens the PR. Right-clicking a card, or Shift+F10 on its focused
+title, opens the list row's context menu. Dragging asks GitHub for the change as you: drop
 on **Merged** (from In review or Ready to merge) to merge after the same
 confirmation as the PR's Merge button; drop on **Draft** to convert any open PR
 to a draft; drop a draft on **In review** to mark it ready for review. Checks
@@ -513,12 +531,12 @@ failing, Conflicts, and Ready to merge take no drops, and merged cards cannot be
 dragged. A refusal shows GitHub's message and the card returns. **Load more pull
 requests** fetches the next page.
 
-PR rows can be added to or removed from Favorites through their context menu or
-bulk entity actions. When at least one accessible PR is favorited, Reviews shows
-a collapsible Favorites section below the views; the section is hidden otherwise.
+Pull requests can no longer be favorited. PRs favorited earlier still appear in
+a collapsible Favorites section below the views (hidden when there are none).
 Favorite rows open the PR in Reviews (Shift-click opens another split), and their
 context menu can remove the favorite. PR favorites also open in Reviews from the
-global Favorites sidebar or command menu.
+global Favorites sidebar or command menu. A PR row's context menu offers **Open
+in new split**, **Copy Link**, and **Open on GitHub**.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
 Opening a PR refreshes it from GitHub in the background for viewers with a
@@ -571,8 +589,13 @@ scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
 corners, an 8px outer inset, and a blurred backdrop, matching the create and
 filter sheets. Its footer wraps when a phone is too narrow for one row: the
 `Share with <team name>` switch keeps the left corner and `Create More` and
-`Create Task` move to a right-aligned row below it. `Create Task` shows no
-keyboard shortcut on touch. Desktop uses the centered composer dialog.
+`Create Task` move to a right-aligned row below it. When the keyboard leaves
+too little room for the whole composer, the footer pins to the bottom of the
+sheet (with a solid background only while pinned over content), so
+`Create Task` stays visible above the keyboard. `Create Task` shows no
+keyboard shortcut on touch. While the keyboard is up, the tag picker opens
+above its trigger so its search results stay above the keyboard. Desktop uses
+the centered composer dialog.
 
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
@@ -585,7 +608,8 @@ keyboard shortcut on touch. Desktop uses the centered composer dialog.
    set, the task is still created and a toast says it wasn't added to the project.
    The `Share with <team name>` switch in the footer's left corner (hidden when you
    aren't on a team) defaults to on and remembers your
-   choice in local storage across composer openings and page reloads. Hovering it
+   choice in local storage across composer openings and page reloads. Recovered
+   submissions use their saved sharing choice without changing this default. Hovering it
    explains whether the task will be visible to your whole team or only to you and
    the people you share it with. The choice also applies to Create More, continuing
    in a split, and tasks created from a project.
@@ -605,8 +629,8 @@ Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
 **Companies** and **Contacts** replace Status in the initial row; Status still
 starts as Not Started on the saved task. Record-level task creation prefills the
 company or contact, including the contact's company when already loaded. With the
-CRM flag off or loading, CRM supplies no preset; record-level creation still
-associates the task with its record. **Add property** opens the same property
+CRM flag off or loading, record-level creation uses the standard property row
+while retaining its record-scoped draft and associations. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor
@@ -616,6 +640,22 @@ records; reopening restores added properties as well as their values. **Clear Dr
 restores that view's preset.
 Later flag, focus or record changes leave the open draft and associations intact,
 even between launch and mount. The next opening uses the current context.
+
+Task creation requires a connection. Before any create request, the composer
+saves a separate copy of the title, description/editor state, properties, and
+sharing choice on this device. Pending submissions do not expire and survive an
+app restart. Reopen the same task composer context and choose **Recover: <title>**
+to continue an unconfirmed draft; **Clear Draft** discards that recovered copy.
+Explicit logout removes these account-scoped copies. Recovery does not submit
+anything automatically: check Tasks before retrying because a lost response may
+mean the task already exists. A submission still in flight cannot be recovered
+or submitted again. Recovered drafts create one task at a time.
+
+**Create More** keeps newer input separate from its pending submission. A late
+success removes only the confirmed submission; failure leaves it recoverable
+without replacing newer text. Continuing in a split has the same durable save.
+A confirmed create retires its saved copy before history/project follow-up work,
+so a failure in that follow-up does not present an already-created task for retry.
 
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.
@@ -708,7 +748,11 @@ horizontally in narrow splits, keeping list controls, Add existing tasks, and Ne
 task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
-`/app/component/initiative-view~<project-id>~overview` (or `tasks`).
+`/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
+in the project title and Projects row menus, copy `/app/initiative/<project-id>`,
+which opens the project in Tasks; pasting it, or an older
+`/app/component/initiative-view~<project-id>~overview` link, into a markdown
+editor inserts a project mention. A link to a project discussion stays a link.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
@@ -793,7 +837,8 @@ failed tasks selected for retry, and a request failure preserves the selection.
 The regular Tasks list includes a Project column. Its cell is a regular property
 cell: clicking it opens the same entity dropdown as the other property columns,
 listing projects. Narrow lists show Project as a compact pill after the row's
-Status, Priority and Assignees pills. Right-click a task and choose `Add to project…` to choose or clear
+Status, Priority and Assignees pills. A project's Tasks tab hides the Project
+column, pill and board-card property, since every task there shares that project. Right-click a task and choose `Add to project…` to choose or clear
 its project. On mobile the same action is in the long-press menu. For a selection,
 choose `Actions → Add to project…`; there is no separate assignment button in the
 selection toolbar. A context action on a selected row applies to the selection.

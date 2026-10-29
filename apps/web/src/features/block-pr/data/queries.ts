@@ -15,6 +15,8 @@ export type PrForeignEntityData = {
   id: string;
   prRef: PrRef;
   pullRequest: GithubPullRequestWithDetails;
+  /** The branch carrying the pull request's changes, when stored. */
+  headBranch?: string;
 };
 
 export function prForeignEntityQueryKey(id: string): string[] {
@@ -38,6 +40,7 @@ function prForeignEntityDataFromStored(
   return {
     id: pullRequest.id,
     prRef,
+    headBranch: pullRequest.head?.name ?? undefined,
     pullRequest: {
       additions: pullRequest.additions,
       authorLogin: pullRequest.authorLogin,

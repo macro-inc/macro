@@ -4,7 +4,9 @@
 //! `~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<session-id>.jsonl`. Its
 //! `event_msg` entries carry one `item_completed` per finished item (agent
 //! messages, reasoning, commands, file changes, tool calls) and a
-//! `task_complete` or `turn_aborted` when a turn ends.
+//! `task_complete` or `turn_aborted` when a turn ends. A background command
+//! can finish after its turn ended; that item is a [`LogEvent::LateUpdate`],
+//! so no turn is left open.
 
 #![deny(missing_docs)]
 
@@ -22,6 +24,7 @@ const TITLE_LIMIT: usize = 80;
 #[derive(Debug, Default)]
 pub struct CodexLog {
     seen: HashSet<String>,
+    in_turn: bool,
 }
 
 impl Fold for CodexLog {
@@ -55,13 +58,27 @@ impl Fold for CodexLog {
                 {
                     return Vec::new();
                 }
-                item_update(item)
-                    .map(LogEvent::Update)
-                    .into_iter()
-                    .collect()
+                let Some(update) = item_update(item) else {
+                    return Vec::new();
+                };
+                if self.in_turn {
+                    vec![LogEvent::Update(update)]
+                } else {
+                    vec![LogEvent::LateUpdate(update)]
+                }
             }
-            Some("task_complete") => vec![LogEvent::TurnEnded("end_turn")],
-            Some("turn_aborted") => vec![LogEvent::TurnEnded("cancelled")],
+            Some("task_started") => {
+                self.in_turn = true;
+                Vec::new()
+            }
+            Some("task_complete") => {
+                self.in_turn = false;
+                vec![LogEvent::TurnEnded("end_turn")]
+            }
+            Some("turn_aborted") => {
+                self.in_turn = false;
+                vec![LogEvent::TurnEnded("cancelled")]
+            }
             _ => Vec::new(),
         }
     }

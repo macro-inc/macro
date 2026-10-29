@@ -23,8 +23,8 @@ vi.mock('@core/constant/featureFlags', () => ({
   syncViaGateway: { key: 'sync-via-gateway', override: undefined },
   isFeatureEnabled: () => false,
 }));
-vi.mock('@service-connection/websocket-url', () => ({
-  resolveWsUrl: () => 'ws://gateway.test',
+vi.mock('../websocket-url', () => ({
+  resolveSyncRouterWsUrl: () => 'ws://dss.test/sync/ws',
 }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 

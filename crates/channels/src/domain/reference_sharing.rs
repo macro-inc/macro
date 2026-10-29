@@ -19,7 +19,7 @@ use model_file_type::FileType;
 /// Posting a form lets the channel respond to it: anyone who can see the form
 /// grants View, whatever their own level. Edit is never granted by posting.
 ///
-/// A WhatsApp chat is shared read-only by its owner's mention; someone it was
+/// An external chat is shared read-only by its owner's mention; someone it was
 /// only shared with cannot pass it on.
 #[cfg_attr(
     not(feature = "outbound"),
@@ -32,7 +32,7 @@ pub(crate) fn grant_level(
 ) -> Option<AccessLevel> {
     match (item_type, access) {
         (
-            ReferencedShareItemType::AgentSession | ReferencedShareItemType::WhatsAppGroup,
+            ReferencedShareItemType::AgentSession | ReferencedShareItemType::ExternalChat,
             Some(AccessLevel::Owner),
         ) => Some(AccessLevel::View),
         (ReferencedShareItemType::CalendarEvent, Some(level)) if level >= AccessLevel::Edit => {
@@ -42,7 +42,7 @@ pub(crate) fn grant_level(
         (
             ReferencedShareItemType::AgentSession
             | ReferencedShareItemType::CalendarEvent
-            | ReferencedShareItemType::WhatsAppGroup,
+            | ReferencedShareItemType::ExternalChat,
             _,
         )
         | (_, None) => None,

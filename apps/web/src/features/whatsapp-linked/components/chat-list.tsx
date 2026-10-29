@@ -98,12 +98,11 @@ export function ChatList(props: {
   label: string;
   chats: WhatsAppChat[];
   inCommunity?: boolean;
-  canAdd: boolean;
   /** JIDs whose add is in flight. */
   adding: ReadonlySet<string>;
   errors: Readonly<Record<string, string>>;
   onAdd: (chat: WhatsAppChat) => void;
-  onOpenGroup: (groupId: string) => void;
+  onOpenChat: (chatId: string) => void;
 }) {
   return (
     <ul class="flex flex-col" aria-label={props.label}>
@@ -130,22 +129,17 @@ export function ChatList(props: {
                     fallback={
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         aria-label={
                           props.adding.has(chat.jid)
                             ? 'Adding…'
                             : 'Add to Macro'
                         }
-                        disabled={!props.canAdd || props.adding.has(chat.jid)}
-                        tooltip={
-                          props.canAdd
-                            ? undefined
-                            : 'Adding WhatsApp chats is turned off'
-                        }
+                        disabled={props.adding.has(chat.jid)}
                         onClick={() => props.onAdd(chat)}
                       >
-                        <PlusIcon />
+                        <PlusIcon class="size-3.5" />
                         {/* Phones keep every row's action visible, so just the + there. */}
                         <span class="mobile:hidden">
                           {props.adding.has(chat.jid)
@@ -161,7 +155,7 @@ export function ChatList(props: {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => props.onOpenGroup(mine().groupId)}
+                          onClick={() => props.onOpenChat(mine().chatId)}
                         >
                           Open
                         </Button>
@@ -174,7 +168,7 @@ export function ChatList(props: {
                           variant="ghost"
                           size="sm"
                           aria-label={`Open ${chat.name}, shared with you by ${by().ownerName}`}
-                          onClick={() => props.onOpenGroup(by().groupId)}
+                          onClick={() => props.onOpenChat(by().chatId)}
                         >
                           Open
                         </Button>

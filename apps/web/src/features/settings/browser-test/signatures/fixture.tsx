@@ -7,7 +7,7 @@ import { createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
-import { themeCssVars } from '../../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../../theme/utils/themeCssVars';
 import {
   SettingsButton as Button,
   SettingsPage,
@@ -44,7 +44,7 @@ function Fixture() {
       >
         <SettingsSection
           title="Signatures"
-          description="Create a signature for each email account, import from Gmail, or paste your HTML. Preview it before sending."
+          description="Create a signature for each email account and preview it before sending."
         >
           <Show when={mounted()}>
             <For each={links.isSuccess ? links.data.links : []}>

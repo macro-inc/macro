@@ -62,6 +62,8 @@ fn decode_with_released_worker(
     serde_json::from_str(&serde_json::to_string(message).unwrap())
 }
 
+const WRITE: Uuid = Uuid::from_u128(0xb1);
+
 fn label_write(count: u128) -> Vec<(Uuid, String)> {
     (0..count)
         .map(|index| (Uuid::from_u128(index), format!("message-{index}")))
@@ -76,6 +78,7 @@ fn released_workers_decode_everything_a_default_producer_sends() {
         label_write(1001),
         vec![],
         vec!["INBOX".to_string()],
+        WRITE,
     );
     messages.extend([
         GmailOpsPubsubMessage {
@@ -143,6 +146,7 @@ fn label_write_batches_are_sent_only_when_enabled() {
             label_write(1001),
             vec!["TRASH".to_string()],
             vec![],
+            WRITE,
         );
 
     assert_eq!(
@@ -162,4 +166,30 @@ fn label_write_batches_are_sent_only_when_enabled() {
             .iter()
             .all(|message| decode_with_released_worker(message).is_err())
     );
+}
+
+#[test]
+fn every_label_write_operation_carries_the_write_id_with_or_without_batches() {
+    for batches in [false, true] {
+        let messages = client()
+            .gmail_label_write_batches(batches)
+            .gmail_label_write_messages(
+                Uuid::from_u128(0xa1),
+                label_write(1001),
+                vec![],
+                vec!["INBOX".to_string()],
+                WRITE,
+            );
+
+        let write_ids: Vec<_> = messages
+            .iter()
+            .map(|message| match &message.operation {
+                GmailOpsOperation::ModifyMessageLabels(payload) => payload.pending_write_id,
+                GmailOpsOperation::ModifyMessageLabelsBatch(payload) => payload.pending_write_id,
+                other => panic!("expected a label write, got {other}"),
+            })
+            .collect();
+        assert_eq!(write_ids.len(), if batches { 2 } else { 1001 });
+        assert!(write_ids.iter().all(|write_id| *write_id == Some(WRITE)));
+    }
 }

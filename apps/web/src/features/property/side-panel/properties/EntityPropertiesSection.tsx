@@ -419,7 +419,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                 filteredProperties().length > 0 && 'mt-2'
               )}
             >
-              <AddPropertyButton class="m-px gap-1.5" />
+              <AddPropertyButton size="xs" class="m-px gap-1.5" />
             </div>
           </Show>
           <Modals />
@@ -463,6 +463,11 @@ function propertyFromPendingDefinition(
       value: null,
     }))
     .with('DATE', () => ({ ...base, valueType: 'DATE' as const, value: null }))
+    .with('DATE_RANGE', () => ({
+      ...base,
+      valueType: 'DATE_RANGE' as const,
+      value: null,
+    }))
     .with('SELECT_STRING', () => ({
       ...base,
       valueType: 'SELECT_STRING' as const,
@@ -674,19 +679,19 @@ function PropertyRowActions(props: {
         onMouseDown={stopRowInteraction}
       >
         <Show when={canPin()}>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             title={pinLabel()}
             aria-label={pinLabel()}
             aria-pressed={isPinned()}
             disabled={isSaving()}
-            class="flex size-5 items-center justify-center rounded-full text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50"
             onClick={togglePin}
           >
-            <Show when={isPinned()} fallback={<PushPinIcon class="size-3" />}>
-              <PushPinSlashIcon class="size-3" />
+            <Show when={isPinned()} fallback={<PushPinIcon class="size-4" />}>
+              <PushPinSlashIcon class="size-4" />
             </Show>
-          </button>
+          </Button>
         </Show>
         <Show when={canRemove()}>
           <button
@@ -876,7 +881,6 @@ function NonUserEntityValue(props: { property: Property }) {
           <Button
             type="button"
             variant="ghost"
-            depth={0}
             size="icon-sm"
             aria-label={`Add ${props.property.displayName}`}
             onClick={(event) => {
@@ -960,7 +964,6 @@ function EntityCollectionPropertyBody(props: {
             <Button
               type="button"
               variant="ghost"
-              depth={0}
               size="icon-sm"
               class="size-5"
               aria-label={`Add ${props.property.displayName}`}
@@ -1063,6 +1066,7 @@ function NonUserEntityChip(props: {
         <Show when={props.canEdit && props.onRemove}>
           <div class="border-l border-edge-muted" />
           <Button
+            variant="ghost"
             type="button"
             size="icon-sm"
             class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
@@ -1072,7 +1076,7 @@ function NonUserEntityChip(props: {
             }}
             aria-label={`Remove ${name()}`}
           >
-            <DeleteIcon />
+            <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </div>

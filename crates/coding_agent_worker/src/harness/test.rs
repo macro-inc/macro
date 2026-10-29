@@ -92,3 +92,66 @@ async fn model_probe_process_failures_are_safely_redacted() {
     assert_eq!(error, "the ACP model probe process failed");
     assert!(!error.contains("secret-argument"));
 }
+
+#[tokio::test]
+async fn relay_teaches_a_new_session_on_its_first_prompt() {
+    let (mut service, service_side) = AcpChannel::duplex();
+    let (agent_side, mut agent) = AcpChannel::duplex();
+    let _relay = tokio::spawn(relay(service_side, agent_side));
+    let frame = |value: serde_json::Value| {
+        TransportFrame::Single(serde_json::from_value(value).expect("a valid JSON-RPC message"))
+    };
+    let received = |frame: TransportFrame| match frame {
+        TransportFrame::Single(message) => {
+            serde_json::to_value(message).expect("a serializable message")
+        }
+        other => panic!("expected one message, got {other:?}"),
+    };
+
+    service
+        .tx
+        .unbounded_send(frame(serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "session/new",
+            "params": {"cwd": "/home/operator/code", "mcpServers": []}
+        })))
+        .expect("the relay is running");
+    agent
+        .rx
+        .next()
+        .await
+        .expect("session/new reaches the agent");
+    agent
+        .tx
+        .unbounded_send(frame(serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "result": {"sessionId": "acp-1"}
+        })))
+        .expect("the relay is running");
+    service
+        .rx
+        .next()
+        .await
+        .expect("the answer reaches the service");
+    service
+        .tx
+        .unbounded_send(frame(serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "method": "session/prompt",
+            "params": {"sessionId": "acp-1", "prompt": [{"type": "text", "text": "hello"}]}
+        })))
+        .expect("the relay is running");
+
+    let prompt = received(agent.rx.next().await.expect("the prompt reaches the agent"));
+    let blocks = prompt["params"]["prompt"]
+        .as_array()
+        .expect("the prompt is a block list");
+    assert_eq!(blocks.len(), 2);
+    assert!(
+        blocks[0]["text"]
+            .as_str()
+            .is_some_and(|text| text.starts_with("<macrod-runtime>")),
+        "got {prompt}"
+    );
+    assert_eq!(
+        blocks[1],
+        serde_json::json!({"type": "text", "text": "hello"})
+    );
+}

@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.person_id, m.message_id, m.origin, m.deleted_at, m.revision_content, m.content_revision, m.revised_at\n            FROM external_chat_message m JOIN whatsapp_identity_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id\n            WHERE m.chat_id = $1 AND a.jid = $2 AND m.source_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "person_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "revised_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "0f970f32689bd2b2c7d8fece2882994f8b0502ac8d05e471a53690c3d269aca7"
+}

@@ -35,6 +35,10 @@ Pulumi stacks; they do not host extra agent processes.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
+- `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
+  and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
+  composes staged search type/field extraction and Clairic content extraction
+  with Nemotron temporal extraction and the shared admission/usage services.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
   domain/adapters live in `crates/scheduled_action`.
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;

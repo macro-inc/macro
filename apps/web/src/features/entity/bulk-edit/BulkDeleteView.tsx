@@ -84,7 +84,7 @@ export const BulkDeleteView = (props: {
           Cancel
         </Button>
         <Button
-          variant="strong"
+          variant="secondary"
           onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
         >
           {multi() ? `Delete ${entities().length} items` : 'Delete item'}

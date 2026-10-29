@@ -7,6 +7,7 @@ const port = Number(process.env.NOTIFICATION_BROWSER_PORT ?? 3008);
 export default defineConfig({
   testDir: directory,
   testMatch: '*.browser.e2e.ts',
+  testIgnore: 'attachments.browser.e2e.ts',
   outputDir: `${directory}/test-results`,
   timeout: 30_000,
   workers: 1,

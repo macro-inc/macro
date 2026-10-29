@@ -11,6 +11,7 @@ use crate::SystemPrompt;
 use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
 use crate::model::router::ModelRouter;
 use crate::stream::ToolResponse;
+use crate::types::{ChatMessage, ChatMessageContent, Role};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ServiceContext,
     ToolAnnotated, ToolAnnotations, ToolResult, ToolSet as AiToolSet, ToolSetError,
@@ -219,6 +220,7 @@ async fn run_session(
     });
     let before = transport.bodies().len();
     let mut session = util::test_loop()
+        .with_streamed_tool_calls()
         .with_model(model)
         .test_routed_session(
             &router(transport),
@@ -354,6 +356,95 @@ async fn sessions_with_different_instructions_share_the_shared_system_block() {
     assert_eq!(first[0]["system"][0], shared);
     assert_eq!(second[0]["system"][0], shared);
     assert_ne!(first[0]["system"][1], second[0]["system"][1]);
+}
+
+/// The next turn replays this one from its persisted parts. It must send the
+/// same bytes the live requests did, tool call ids included, or the cache
+/// misses from the first tool call on.
+#[tokio::test]
+async fn a_replayed_turn_repeats_its_live_requests() {
+    let transport = ScriptedProvider::new([
+        tool_use_response("toolu_load", "LoadTools", json!({"names": []})),
+        text_response("done"),
+        text_response("again"),
+    ]);
+    let (live, collected) = run_session(
+        &transport,
+        "anthropic/claude-opus-4-8",
+        split_prompt("task A"),
+        "load nothing",
+    )
+    .await;
+    assert!(collected.error.is_none(), "{:?}", collected.error);
+    let mut accumulator = crate::StreamAccumulator::new();
+    for part in collected.parts {
+        accumulator.push(part);
+    }
+    let history = [
+        ChatMessage {
+            content: ChatMessageContent::Text("load nothing".to_owned()),
+            role: Role::User,
+            attachments: None,
+        },
+        ChatMessage {
+            content: ChatMessageContent::AssistantMessageParts(accumulator.into_parts()),
+            role: Role::Assistant,
+            attachments: None,
+        },
+        ChatMessage {
+            content: ChatMessageContent::Text("and again".to_owned()),
+            role: Role::User,
+            attachments: None,
+        },
+    ];
+
+    let toolset: Arc<dyn AiToolSet<()> + Send + Sync> = Arc::new(DeferringToolSet {
+        eager: AsyncToolCollection::<()>::new().add_tool::<LoadToolsStandIn, ()>(),
+    });
+    let mut session = util::test_loop()
+        .with_streamed_tool_calls()
+        .with_model("anthropic/claude-opus-4-8")
+        .test_routed_session(
+            &router(&transport),
+            toolset,
+            Arc::new(()),
+            split_prompt("task A"),
+            util::usage_ctx(),
+        )
+        .await;
+    let stream = session
+        .send_message(crate::to_rig_messages(&history))
+        .await
+        .unwrap();
+    let replayed = util::collect(stream).await;
+    assert!(replayed.error.is_none(), "{:?}", replayed.error);
+
+    let replayed = &transport.bodies()[live.len()];
+    let earlier = live.last().unwrap()["messages"].as_array().unwrap();
+    let later = replayed["messages"].as_array().unwrap();
+    assert_eq!(&later[..earlier.len()], earlier.as_slice());
+    assert_eq!(earlier[1]["content"][0]["id"], json!("toolu_load"));
+}
+
+/// The turn's own part of the system prompt follows everything the loop
+/// adds, so it changes nothing before it.
+#[tokio::test]
+async fn the_turn_part_comes_after_the_model_line() {
+    let transport = ScriptedProvider::new([text_response("hi")]);
+    let (bodies, _) = run_session(
+        &transport,
+        "anthropic/claude-opus-4-8",
+        split_prompt("task A").with_turn("\n<macro_sdk>docs</macro_sdk>"),
+        "hi",
+    )
+    .await;
+
+    assert_eq!(
+        bodies[0]["system"][1]["text"],
+        json!(format!(
+            "\n<session_instructions>\ntask A\n</session_instructions>{MODEL_LINE}\n<macro_sdk>docs</macro_sdk>"
+        ))
+    );
 }
 
 #[tokio::test]

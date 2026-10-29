@@ -72,6 +72,12 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Optional TypeSafe key for Command K classification.
+    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    /// Optional Workers AI account for Clairic extraction and Auto mode's Clef Flash.
+    pub cloudflare_account_id: universal_input::outbound::clairic::CloudflareAccountId,
+    /// Workers AI token paired with the account ID.
+    pub cloudflare_api_token: universal_input::outbound::clairic::CloudflareApiToken,
     /// Shared pool for sessions, chat, integrations, and routine workers.
     #[macro_config_default(30)]
     pub database_max_connections: u32,

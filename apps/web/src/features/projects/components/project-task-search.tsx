@@ -24,16 +24,16 @@ export function ProjectTaskSearch(props: {
       when={expanded()}
       fallback={
         <Button
+          aria-label={label()}
+          tooltip={label()}
           ref={trigger}
-          variant="outline"
+          variant="secondary"
           size="icon-md"
-          noTouchResize
-          label={label()}
           aria-expanded={false}
           aria-controls={inputId}
           onClick={() => setExpanded(true)}
         >
-          <MagnifyingGlassIcon />
+          <MagnifyingGlassIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       }
     >

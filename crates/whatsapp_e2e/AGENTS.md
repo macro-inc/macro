@@ -5,7 +5,8 @@
 End-to-end tests for WhatsApp linked devices. Real session-service replicas
 (supervisor, advisory locks, account runners, whatsmeow clients, the encrypted
 Postgres device store) run against `whatsapp_fake_server`. The DSS side runs
-through `whatsapp_linked::LinkedService`, and both share one `#[sqlx::test]`
+through `WhatsAppService` and `ExternalChatService<WhatsAppProvider>`, and
+both share one `#[sqlx::test]`
 database. Nothing talks to WhatsApp or AWS (the KMS is
 `whatsapp_store_pg`'s `FakeWhatsAppKms`).
 
@@ -60,7 +61,7 @@ database. Nothing talks to WhatsApp or AWS (the KMS is
 - The change triggers live in `src/watch_tables.sql`; add a table there when a
   test waits on it.
 - A failed ingest wait prints the `whatsapp_inbound_event` and
-  `whatsapp_group_message` rows; start debugging there.
+  `external_chat_message` rows; start debugging there.
 - Fake phones send each group message as a real phone does: a sender key
   distribution message in a per-device `pkmsg`, plus the `skmsg`, under one
   message ID. The service must ignore the key-only part.

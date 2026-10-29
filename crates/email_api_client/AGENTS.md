@@ -43,7 +43,11 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Checks
 
-- `cargo test -p email_api_client --all-features`.
+- `cargo test -p email_api_client --all-features`. The Outlook calendar
+  mutation tests in `src/outbound/outlook/calendar/test/mutations.rs` drive the
+  calendar domain service against Postgres through `#[sqlx::test]`, so they
+  need the local test database from
+  [Database development](../../docs/development/database.md).
 
 ## Gotchas
 
@@ -66,6 +70,11 @@ Outlook (Microsoft Graph) outbound adapters.
   the link for reauthorization. Contact listings use `retry_with_fresh_token`
   to keep their WARN-level logging. Writes use `call_with_token` and do not
   retry.
+- `SendRequest::build_mime` (Gmail sends) turns an inline `text/calendar`
+  attachment with no Content-ID into the message's calendar body, the last
+  alternative after the text and HTML, which is how an answerable invitation
+  (RFC 6047) is sent; other files stay attachments. Outlook sends do not go
+  through it.
 - Graph answers a bodyless POST or PATCH without `Content-Length: 0` with 411
   Length Required. `transport.rs` adds the header, so new Graph calls must go
   through `request`/`conditional_request` rather than the raw client.

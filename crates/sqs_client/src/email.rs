@@ -44,6 +44,7 @@ impl SQS {
         messages: Vec<(Uuid, String)>,
         labels_to_add: Vec<String>,
         labels_to_remove: Vec<String>,
+        pending_write_id: Uuid,
     ) -> Vec<models_email::gmail::gmail_ops::GmailOpsPubsubMessage> {
         use models_email::gmail::gmail_ops::{
             GmailMessageRef, GmailOpsPubsubMessage, label_write_operations,
@@ -60,6 +61,7 @@ impl SQS {
             messages,
             labels_to_add,
             labels_to_remove,
+            pending_write_id,
             self.gmail_label_write_batches,
         )
         .into_iter()
@@ -232,9 +234,15 @@ impl EmailMessageEnqueuer for SQS {
         messages: Vec<(Uuid, String)>,
         labels_to_add: Vec<String>,
         labels_to_remove: Vec<String>,
+        pending_write_id: Uuid,
     ) -> Result<(), Self::Err> {
-        let messages =
-            self.gmail_label_write_messages(link_id, messages, labels_to_add, labels_to_remove);
+        let messages = self.gmail_label_write_messages(
+            link_id,
+            messages,
+            labels_to_add,
+            labels_to_remove,
+            pending_write_id,
+        );
         if !self.gmail_label_write_batches {
             return self.enqueue_gmail_ops_notifications_batch(messages).await;
         }

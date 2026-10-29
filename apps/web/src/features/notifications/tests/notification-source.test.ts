@@ -460,6 +460,81 @@ describe('createNotificationSource', () => {
     }
   );
 
+  it('tells an entity-wide mark seen which notifications it expects to change', async () => {
+    mocks.graphqlEnabled = true;
+    const { toNotificationEntityRef, updateNotificationsForEntities } =
+      await import('@queries/notification/entity-mutations');
+    vi.mocked(toNotificationEntityRef).mockReturnValue({
+      type: 'document',
+      id: 'doc',
+    });
+    vi.mocked(updateNotificationsForEntities).mockResolvedValue([]);
+    const unseen = notification('expected-unseen', 'document', 'doc');
+    const seen = {
+      ...notification('already-seen', 'document', 'doc'),
+      state: 'seen' as const,
+    };
+    mocks.notificationsQuery = {
+      data: [unseen, seen],
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      await markNotificationsForEntityAsRead(source, {
+        type: 'document',
+        id: 'doc',
+      });
+      // A reply without one of these means this tab was stale.
+      expect(updateNotificationsForEntities).toHaveBeenCalledWith({
+        entities: [{ type: 'document', id: 'doc' }],
+        operation: 'MARK_SEEN',
+        expectedNotificationIds: ['expected-unseen'],
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('expects nothing from a feed that has not started, without starting it', async () => {
+    mocks.graphqlEnabled = true;
+    const { toNotificationEntityRef, updateNotificationsForEntities } =
+      await import('@queries/notification/entity-mutations');
+    vi.mocked(toNotificationEntityRef).mockReturnValue({
+      type: 'document',
+      id: 'doc',
+    });
+    vi.mocked(updateNotificationsForEntities).mockResolvedValue([]);
+    const read = vi.fn(() => [notification('unseen', 'document', 'doc')]);
+    mocks.notificationsQuery = {
+      isStarted: false,
+      get data() {
+        return read();
+      },
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      await markNotificationsForEntityAsRead(source, {
+        type: 'document',
+        id: 'doc',
+      });
+      expect(updateNotificationsForEntities).toHaveBeenCalledWith(
+        expect.objectContaining({ expectedNotificationIds: [] })
+      );
+      expect(read).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
   it('can release a failed reversal to authoritative state without clearing newer intent', () => {
     mocks.graphqlEnabled = true;
     const row: UnifiedNotification = {
@@ -1193,18 +1268,19 @@ describe('createNotificationSource', () => {
   });
 });
 
-it('accepts the independent WhatsApp notification through the generated wire schema', () => {
+it('accepts the independent external chat notification through the generated wire schema', () => {
   const row: UnifiedNotification = {
     ...notification(
       '019a061e-0000-7000-8000-000000000003',
-      'whatsapp_group',
+      'external_chat',
       '019a061e-0000-7000-8000-000000000001'
     ),
-    notification_event_type: 'whatsapp_group_message',
+    notification_event_type: 'external_chat_message',
     notification_metadata: {
-      tag: 'whatsapp_group_message',
+      tag: 'external_chat_message',
       content: {
-        groupName: 'Design Crit',
+        provider: 'whatsapp',
+        chatName: 'Design Crit',
         messageId: '019a061e-0000-7000-8000-000000000002',
       },
     },

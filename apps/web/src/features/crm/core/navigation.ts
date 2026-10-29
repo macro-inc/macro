@@ -10,9 +10,11 @@ export const CRM_ACTIVITY_TABS = [
   { id: 'email', label: 'Email' },
   { id: 'notes', label: 'Notes' },
   { id: 'calls', label: 'Calls' },
+  { id: 'databases', label: 'Databases' },
 ] as const;
 
 export type CrmActivityTab = (typeof CRM_ACTIVITY_TABS)[number]['id'];
+export type CrmSoupActivityTab = Exclude<CrmActivityTab, 'databases'>;
 
 export function isCrmActivityTab(value: string): value is CrmActivityTab {
   return CRM_ACTIVITY_TABS.some((tab) => tab.id === value);

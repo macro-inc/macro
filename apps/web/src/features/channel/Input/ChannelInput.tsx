@@ -204,11 +204,8 @@ function WebDefaultActions(props: {
   );
 }
 
-function IosDefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-  addMenu: JSX.Element;
-}) {
+// The iOS keyboard dictates on its own, so there is no microphone to place.
+function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -218,7 +215,6 @@ function IosDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -241,11 +237,7 @@ function DefaultActions(props: {
         />
       }
     >
-      <IosDefaultActions
-        input={props.input}
-        dictation={props.dictation}
-        addMenu={props.addMenu}
-      />
+      <IosDefaultActions input={props.input} addMenu={props.addMenu} />
     </Show>
   );
 }
@@ -261,6 +253,9 @@ export function ChannelInput(props: ChannelInputProps) {
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
+  // Assigned once applySnapshot exists. Send clears before the request, so a
+  // failure has to put the same draft back into the editor.
+  let restoreFailedSend = (_snapshot: InputSnapshot) => {};
 
   const {
     inputState,
@@ -275,6 +270,7 @@ export function ChannelInput(props: ChannelInputProps) {
     callbacks: props,
     onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
+    restoreEditor: (snapshot) => restoreFailedSend(snapshot),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
       await uploadInputAttachments({
@@ -321,6 +317,9 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => {
       acceptTyping = true;
     });
+  };
+  restoreFailedSend = (snapshot) => {
+    applySnapshot(snapshot, { focus: false });
   };
 
   const flushPendingRestore = () => {
@@ -497,7 +496,7 @@ export function ChannelInput(props: ChannelInputProps) {
         {
           id: 'gif',
           label: 'GIF',
-          icon: <GifIcon class="size-3.5" />,
+          icon: <GifIcon class="size-5" />,
           onSelect: () =>
             runInEditor((editor) => action.action(editor, actionContext), {
               focus: true,
@@ -517,7 +516,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 {
                   id: 'mention',
                   label: 'Mention',
-                  icon: <AtIcon class="size-3.5" />,
+                  icon: <AtIcon class="size-5" />,
                   hint: '@',
                   onSelect: () =>
                     runInEditor(openMentionTypeahead, { focus: true }),
@@ -528,7 +527,7 @@ export function ChannelInput(props: ChannelInputProps) {
           {
             id: 'attach',
             label: 'Attach files',
-            icon: <PaperclipIcon class="size-3.5" />,
+            icon: <PaperclipIcon class="size-5" />,
             onSelect: () => collapsedInput.attach(),
           },
           ...gif(),
@@ -866,7 +865,6 @@ export function ChannelInput(props: ChannelInputProps) {
           getFocusTarget={() => lexicalEditor().getRootElement()}
           leadingAction={addMenu(true)}
           onOpen={collapsedInput.expand}
-          trailingAction={<DictationButton dictation={dictation} />}
           onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />
       </Show>

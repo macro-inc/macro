@@ -557,6 +557,9 @@ export type ColumnKind =
       type: 'date';
     }
   | {
+      type: 'date_range';
+    }
+  | {
       type: 'link';
     }
   | {
@@ -613,8 +616,8 @@ export type EntityKind =
   | 'INITIATIVE';
 /**
  * How a question is asked. Each column kind takes a few, the first its
- * default; kinds asked one way only (numbers, checkboxes, entity and row
- * pickers) take none.
+ * default; kinds asked one way only (numbers, checkboxes, date ranges,
+ * entity and row pickers) take none.
  */
 export type Widget =
   | 'short'
@@ -714,6 +717,14 @@ export type FilterTest =
       kind: 'date';
     }
   | {
+      operator: DateRangeOperator;
+      /**
+       * The start of the day compared against.
+       */
+      value: string;
+      kind: 'dateRange';
+    }
+  | {
       /**
        * Whether the box is checked.
        */
@@ -765,6 +776,17 @@ export type NumberOperator =
  * How a date cell compares to a date-time.
  */
 export type DateOperator = 'before' | 'after' | 'onOrBefore' | 'onOrAfter';
+/**
+ * How a date-range cell stands to a day: the whole day starting at the
+ * test's date-time, so a range from 1 PM to 5 PM contains its day.
+ */
+export type DateRangeOperator =
+  | 'contains'
+  | 'doesNotContain'
+  | 'endsBefore'
+  | 'endsOnOrAfter'
+  | 'startsAfter'
+  | 'startsOnOrBefore';
 /**
  * How a cell's options or references relate to a set of them. The first
  * two fit a column holding one value, the last three one holding several.
@@ -1000,6 +1022,7 @@ export type ToolFieldType =
   | 'number'
   | 'checkbox'
   | 'date'
+  | 'date_range'
   | 'link'
   | 'select'
   | 'tags'
@@ -1084,13 +1107,14 @@ export type ColumnType =
   | 'number'
   | 'boolean'
   | 'date'
+  | 'date_range'
   | 'link'
   | 'select'
   | 'select_number'
   | 'tag'
   | 'entity';
 /**
- * A column type as SQL spells it: text, number, boolean, date, link, select, select_number, tag, entity(KIND) or relation, with [] when a select or reference column holds several values (select[], entity(USER)).
+ * A column type as SQL spells it: text, number, boolean, date, link, select, select_number, tag, date_range, entity(KIND) or relation, with [] when a select or reference column holds several values (select[], entity(USER)).
  */
 export type SpelledColumnType = string;
 /**
@@ -1129,7 +1153,9 @@ export type DiscoveryResult =
   | {
       app: DiscoveredApp;
       /**
-       * Whether this caller has an enabled connection.
+       * Whether this caller has an enabled connection. For an app that
+       * connects through its own MCP server, that connection is checked
+       * there, not in Pipedream.
        */
       connected: boolean;
       /**
@@ -4009,6 +4035,7 @@ export type OutcomeKind =
   | 'number'
   | 'boolean'
   | 'date'
+  | 'dateRange'
   | 'select'
   | 'entity'
   | 'row';
@@ -4054,6 +4081,10 @@ export type Cell =
   | {
       type: 'date';
       value: string;
+    }
+  | {
+      type: 'dateRange';
+      value: DateRange;
     }
   | {
       type: 'options';
@@ -4546,7 +4577,8 @@ export type RenameableEntityType = 'project' | 'chat';
  */
 export type SortDirection = 'ascending' | 'descending';
 /**
- * A layout as an op asks for it: a board may leave its card title out.
+ * A layout as an op asks for it: a board or timeline may leave its title
+ * out.
  */
 export type RequestedLayout =
   | {
@@ -4581,6 +4613,31 @@ export type RequestedLayout =
        */
       hideEmptyLanes: boolean;
       kind: 'board';
+    }
+  | {
+      /**
+       * The date-range column whose cells are the bars.
+       */
+      range: string;
+      /**
+       * The column a bar is labelled by. Left out, a timeline keeps the
+       * title it has, and a new timeline takes the table's first column.
+       */
+      title?: string | null;
+      /**
+       * The single-select or single-person column grouping the bars, if
+       * any.
+       */
+      groupBy?: string | null;
+      /**
+       * The columns a bar shows after its title, in order.
+       */
+      barFields?: string[];
+      /**
+       * The select or tag column whose options color the bars, if any.
+       */
+      colorBy?: string | null;
+      kind: 'timeline';
     };
 /**
  * A lane of a board, named by what its cards' grouping cells hold: one
@@ -4703,7 +4760,7 @@ export type ChannelShareEntityType =
   | 'call'
   | 'thread'
   | 'agent_session'
-  | 'whatsapp_group'
+  | 'external_chat'
   | 'chat';
 /**
  * Content of a text editor code execution response - either a result or an error
@@ -6182,6 +6239,48 @@ export interface ConfigureBotResponse {
   bot: BotSummary;
   /**
    * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
+ * Add a remote MCP server to the current user's connections by its URL, so their agents and chats can use its tools. Use when the user asks to connect, add, or install an MCP server they give you the URL of, or one whose official remote MCP URL you are sure of; never guess a URL. Most servers need the user to sign in afterwards: when the result says so, tell them to open Settings → Connections and click Connect next to the server. Its tools are available in new conversations once connected. A URL the user already has is left as it is.
+ */
+export interface ConnectMcpServer {
+  /**
+   * The MCP server's streamable HTTP URL, e.g. `https://mcp.linear.app/mcp`. Must be https on a public host.
+   */
+  url: string;
+  /**
+   * Short display name for the server, e.g. `Linear`. Its tools are listed under this name.
+   */
+  serverName: string;
+}
+/**
+ * Response from [`ConnectMcpServer`].
+ */
+export interface ConnectMcpServerResponse {
+  /**
+   * The server's URL.
+   */
+  url: string;
+  /**
+   * The server's display name.
+   */
+  serverName: string;
+  /**
+   * Whether the user already had this server before the call.
+   */
+  alreadyConnected: boolean;
+  /**
+   * Whether the server holds the user's sign-in.
+   */
+  authenticated: boolean;
+  /**
+   * Whether the server's tools are turned on.
+   */
+  enabled: boolean;
+  /**
+   * What happened and what the user still has to do.
    */
   summary: string;
 }
@@ -12715,6 +12814,7 @@ export interface OpenDirectMessageResponse {
  * - **No subqueries** (`IN (SELECT ...)`): SELECT the ids first, then use them as literals (`WHERE row_id IN ('<id>', '<id>')`), or JOIN.
  * - **Conditions:** `col = | != | < | <= | > | >= literal`, `col [NOT] IN ('a', 'b')`, `col [NOT] LIKE '%pat%'` (case-insensitive), `col IS [NOT] NULL`, `col [NOT] HAS 'x'` (membership in a multi-valued column), combined with AND, OR and parentheses.
  * - **Literals:** `'text'` (a quote inside is doubled: `'Wolf''s place'`), numbers, TRUE/FALSE, NULL; dates are `'2026-08-13'` or an ISO date-time.
+ * - **Date ranges:** a date_range cell is written as an ISO interval, `'2026-08-13/2026-08-20'` (one date is a one-day range), and compares to a date: `=` contains it, `!=` does not, `<` ends before it, `>` starts after it, `<=` starts on or before it, `>=` ends on or after it. Ranges overlapping August: `WHERE "Span" >= '2026-08-01' AND "Span" <= '2026-08-31'`. Sorting orders by start, then end.
  * - **Writes:** `INSERT INTO table (col, ...) VALUES (...), (...)` or `INSERT INTO table DEFAULT VALUES`; `UPDATE table SET col = value, ... WHERE cond`; `DELETE FROM table WHERE cond`. The WHERE is required and takes any condition; `WHERE row_id = '<id>'` or `row_id IN ('<id>', ...)` names rows, and every id named must exist: read the ids first. `SET col = other_col` copies each row's own value of a column of the same kind. A multi-valued cell is written as a list, `['Urgent', 'Backend']`; `NULL` clears a cell.
  * - **`row_id`** is every row's id. A row-shaped SELECT returns each result row's in `rowIds`, and an INSERT the new rows' in `insertedRowIds`; never invent one. A row's title is its first column, and a row the app shows as "Unnamed" has a NULL title: find it with `WHERE "Name" IS NULL`.
  * - **Names are display names.** Double-quote a table or column name with spaces or punctuation (`FROM "Guest List" WHERE "Due Date" < '2026-09-01'`); names match case-insensitively, and a miss suggests the closest name. A table may be qualified by its database's name (`FROM "Offsite"."Guests"`).
@@ -12722,7 +12822,7 @@ export interface OpenDirectMessageResponse {
  * - **Relations hold the row ids of another table.** Write a list of row ids (`"Guests" = ['<row id>']`), test with `HAS '<row id>'`, and join with `ON i."Guest" = g.row_id`: `SELECT p."Name" AS party, COUNT(*) AS invites FROM "Invites" i JOIN "Parties" p ON i."Party" = p.row_id GROUP BY p."Name"`. Never compare a relation to a name.
  * - **Person and other entity columns hold Macro ids,** never names: `'macro|sam@example.com'` for a person, a list for a multi-valued column. Respect each column's `specificEntityType`.
  * - **People:** `macro.people` is everyone the user knows (contacts and teammates) with `id`, `name` and `email`, the viewer included: “me” is the row whose email is the signed-in user's. It is read-only. Find people there, then write their ids: `SELECT id, name, email FROM macro.people WHERE name LIKE '%julia%' OR email LIKE '%julia%'`, then `UPDATE "Parties" SET "Host" = 'macro|julia@example.com' WHERE row_id = '<id>'`. Join to read names or emails: `JOIN macro.people p ON t."Owner" = p.id`. Never invent a person or an id; when a name matches several people or none, ask.
- * - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`,  where type is text, number, boolean, date, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Call DescribeDatabase with `includeEditingMetadata: true` for the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column.
+ * - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`,  where type is text, number, boolean, date, date_range, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Call DescribeDatabase with `includeEditingMetadata: true` for the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column.
  * - **Schema commands** (one statement per call; edit access required):
  *   - `CREATE DATABASE "Sales CRM"` creates its starter table with a Name column. Call DescribeDatabase using the returned database ID before editing it; reuse that starter table.
  *   - `ALTER DATABASE "Sales CRM" RENAME TO "Sales"` and `ALTER DATABASE "Sales" REORDER TABLES (Deals, Companies)`.
@@ -12877,6 +12977,20 @@ export interface SelectOption {
    * The label users type in SQL.
    */
   label: string;
+}
+/**
+ * A span of time from `start` to `end`, both included. A write whose end
+ * comes before its start is refused.
+ */
+export interface DateRange {
+  /**
+   * Where it starts.
+   */
+  start: string;
+  /**
+   * Where it ends; never before the start.
+   */
+  end: string;
 }
 /**
  * Add or remove the user's own emoji reaction on a channel message or thread reply. The reaction is shown as coming from the user. Find message ids with ReadChannelMessages or ReadChannelThread. Use only when the user asks to react to a message.
@@ -15227,6 +15341,10 @@ export interface SetEntityProperty {
    */
   date_value?: string | null;
   /**
+   * For date_range properties: the start and end (ISO 8601 date-times); the end may not come before the start.
+   */
+  date_range_value?: ToolDateRange | null;
+  /**
    * For number properties.
    */
   number_value?: number | null;
@@ -15266,6 +15384,19 @@ export interface SetEntityProperty {
    * For multi link properties.
    */
   link_urls?: string[] | null;
+}
+/**
+ * A date range as the tool takes it.
+ */
+export interface ToolDateRange {
+  /**
+   * Where the range starts.
+   */
+  start: string;
+  /**
+   * Where the range ends; not before the start.
+   */
+  end: string;
 }
 export interface ToolEntityRef {
   entityType: ToolEntityType;
@@ -15379,7 +15510,7 @@ export interface SetSenderPolicyResponse {
   summary: string;
 }
 /**
- * Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, agent_session, or whatsapp_group. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
+ * Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, project, database, form, call, thread, agent_session, or external_chat. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
  */
 export interface ShareWithChannel {
   /**

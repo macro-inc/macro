@@ -8,6 +8,7 @@ import {
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
+import { toCellRange } from '../../database/core/cell-date-range';
 import type {
   DatabaseCellValue,
   DatabaseViewColumn,
@@ -77,6 +78,11 @@ export function entryCellValue(cell: GraphqlCell): DatabaseCellValue {
     )
     .with({ __typename: 'GraphqlDatePropertyValue' }, ({ dateValue }) =>
       String(dateValue)
+    )
+    .with(
+      { __typename: 'GraphqlDateRangePropertyValue' },
+      ({ rangeStart, rangeEnd }) =>
+        toCellRange({ start: rangeStart, end: rangeEnd })
     )
     .with({ __typename: 'GraphqlLinkPropertyValue' }, ({ urls }) =>
       listed(urls)

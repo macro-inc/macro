@@ -6,8 +6,16 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
-import type { WorkFeedEntry, WorkFeedScope } from '../core/work-feed';
-import { decodeWorkFeedEntry, encodeWorkFeedScope } from './decode';
+import type {
+  WorkFeedEntry,
+  WorkFeedPageState,
+  WorkFeedScope,
+} from '../core/work-feed';
+import {
+  decodeWorkFeedEntry,
+  encodeWorkFeedPageState,
+  encodeWorkFeedScope,
+} from './decode';
 
 /** Entries fetched per feed page. */
 export const WORK_FEED_PAGE_LIMIT = 50;
@@ -18,10 +26,12 @@ const isEntry = (entry: WorkFeedEntry | null): entry is WorkFeedEntry =>
 /** The variables of the feed page that starts at `cursor`. */
 export const workFeedPageVariables = (
   scope: WorkFeedScope,
+  state: WorkFeedPageState | undefined,
   cursor: string | null
 ): WorkFeedQueryVariables => ({
   input: {
     scope: encodeWorkFeedScope(scope),
+    ...(state ? { state: encodeWorkFeedPageState(state) } : {}),
     limit: WORK_FEED_PAGE_LIMIT,
     cursor,
   },
@@ -41,6 +51,7 @@ export type WorkFeedPages = {
 export function createWorkFeedQuery(options: {
   client: Accessor<Client>;
   scope: Accessor<WorkFeedScope>;
+  state: Accessor<WorkFeedPageState | undefined>;
   enabled: Accessor<boolean>;
 }) {
   return createUrqlInfiniteQuery<
@@ -50,11 +61,12 @@ export function createWorkFeedQuery(options: {
     WorkFeedPages
   >(() => {
     const scope = options.scope();
+    const state = options.state();
     return {
       query: WorkFeedDocument,
       client: options.client(),
       initialPageParam: null,
-      variables: (cursor) => workFeedPageVariables(scope, cursor),
+      variables: (cursor) => workFeedPageVariables(scope, state, cursor),
       getNextPageParam: (lastPage) =>
         lastPage.user.workFeed.nextCursor ?? undefined,
       enabled: options.enabled(),

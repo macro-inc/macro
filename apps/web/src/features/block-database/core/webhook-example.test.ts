@@ -20,6 +20,14 @@ const meetings: DatabaseViewColumn[] = [
     writable: true,
   },
   {
+    id: 'trip',
+    name: 'Trip',
+    dataType: 'DATE_RANGE',
+    isMultiSelect: false,
+    options: [],
+    writable: true,
+  },
+  {
     id: 'attendees',
     name: 'Attendees',
     dataType: 'SELECT_STRING',
@@ -95,6 +103,7 @@ describe('webhookExamplePayload', () => {
     expect(webhookExamplePayload(meetings, '2026-10-09')).toEqual({
       Title: 'Text',
       Date: '2026-10-09',
+      Trip: '2026-10-09/2026-10-09',
       Attendees: ['Alice'],
       Status: 'Scheduled',
       'Duration (min)': 1,

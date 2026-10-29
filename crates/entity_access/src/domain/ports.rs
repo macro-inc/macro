@@ -167,8 +167,8 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
-    /// Resolve ordinary shares on an adopted WhatsApp group.
-    fn get_whatsapp_group_access(
+    /// Resolve ordinary shares on an external chat.
+    fn get_external_chat_access(
         &self,
         form_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
