@@ -445,6 +445,40 @@ describe('grouped Soup live ownership', () => {
     );
   });
 
+  it('keeps projected bins stable when a live patch only changes display fields', async () => {
+    const state = setup();
+    state.executions[0].publish(
+      page([groupedDocument('a'), groupedDocument('b')])
+    );
+    state.requests[0].resolve(
+      update([groupedDocument('a'), groupedDocument('b')])
+    );
+    await state.requests[0].promise;
+    const before = state.query.data()?.user.groupSoup.bins;
+    state.listeners.forEach((listener) => listener(parseCacheRevision('2')));
+    const request = state.requests.at(-1)!;
+    request.resolve({
+      kind: 'live-query',
+      revision: parseCacheRevision('2'),
+      reset: false,
+      upserts: [],
+      patches: [
+        {
+          recordKey: 'GraphqlSoupDocument:a',
+          fields: [{ path: ['displayName'], value: 'Renamed' }],
+          identity: { pending: true, mutationUuid: null },
+        },
+      ],
+      removed: [],
+      retainedKeys: [],
+      optimistic: true,
+    });
+    await request.promise;
+    expect(state.query.data()?.user.groupSoup.bins).toBe(before);
+    expect(before?.[0].items[0].displayName).toBe('Renamed');
+    expect(state.executions).toHaveLength(1);
+  });
+
   it('recomputes normalized property changes without another network operation, including rollback', async () => {
     const state = setup();
     state.executions[0].publish(page([groupedDocument('a')]));

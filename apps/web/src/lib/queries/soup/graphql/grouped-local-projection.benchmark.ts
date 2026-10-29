@@ -1,3 +1,4 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { INITIAL_CACHE_REVISION } from '../../../graphql-cache/protocol';
@@ -7,6 +8,7 @@ import type {
   SoupItemFieldsFragment,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import {
+  createLocalGroupedSoupProjection,
   localSoupGroupKeys,
   mergeGroupedSoupBins,
   projectLocalGroupedSoup,
@@ -103,7 +105,7 @@ function scenario(
     recordKey: soupItemKey(record),
     record,
   }));
-  const [selected] = createStore({ records });
+  const [selected, setSelected] = createStore({ records });
   const snapshot = {
     revision: INITIAL_CACHE_REVISION,
     optimistic: true,
@@ -111,7 +113,7 @@ function scenario(
     keys: records.map((row) => row.recordKey),
     records: selected.records,
   };
-  return { input, before, baseline, pages, snapshot };
+  return { input, before, baseline, pages, snapshot, setSelected };
 }
 
 /** Incremental main-thread cost only: excludes worker filtering, IPC, network and DOM layout. */
@@ -128,31 +130,103 @@ export function runGroupedSoupBenchmark() {
       const data = scenario(size, field, multi);
       const result = createRoot((dispose) => {
         try {
-          const [tick, setTick] = createSignal(0);
-          // Measure tracked reads of actual Solid store proxies, not just plain JSON.
-          const grouped = createMemo(() => {
-            tick();
-            const currentItems = new Map<string, SoupItemFieldsFragment>();
-            for (const page of data.pages)
-              for (const bin of page.user.groupSoup.bins)
-                for (const item of bin.items)
-                  currentItems.set(soupItemKey(item), item);
-            return projectLocalGroupedSoup(
-              data.baseline,
-              currentItems,
-              data.snapshot,
-              data.input,
-              now
-            );
+          const groupedProjection = createRoot((disposeFullProjection) => {
+            try {
+              const [tick, setTick] = createSignal(0);
+              // Measure tracked reads of actual Solid store proxies, not just plain JSON.
+              const grouped = createMemo(() => {
+                tick();
+                const currentItems = new Map<string, SoupItemFieldsFragment>();
+                for (const page of data.pages)
+                  for (const bin of page.user.groupSoup.bins)
+                    for (const item of bin.items)
+                      currentItems.set(soupItemKey(item), item);
+                return projectLocalGroupedSoup(
+                  data.baseline,
+                  currentItems,
+                  data.snapshot,
+                  data.input,
+                  now
+                );
+              });
+              return measure(() => {
+                setTick((value) => value + 1);
+                return grouped().reduce(
+                  (count, bin) => count + bin.items.length,
+                  0
+                );
+              });
+            } finally {
+              disposeFullProjection();
+            }
           });
-          const groupedProjection = measure(() => {
-            setTick((value) => value + 1);
-            return grouped().reduce(
-              (count, bin) => count + bin.items.length,
-              0
-            );
+          const evidence = {
+            bins: data.baseline,
+            untrustedKeys: new Set<string>(),
+          };
+          const currentItems = new Map(
+            data.before.map((item) => [soupItemKey(item), item])
+          );
+          const incremental = createLocalGroupedSoupProjection({
+            baseline: () => evidence,
+            currentItems: () => currentItems,
+            snapshot: () => data.snapshot,
+            input: () => data.input,
+            now: () => now,
           });
-          return { groupedProjection };
+          let edit = 0;
+          const incrementalDisplay = measure(() => {
+            data.setSelected(
+              'records',
+              0,
+              'record',
+              'displayName',
+              `Edit ${edit++}`
+            );
+            return incremental()?.length ?? 0;
+          });
+          const incrementalGrouping = measure(() => {
+            const changed = edit++ % 2 === 0;
+            if (field === 'DATE') {
+              data.setSelected(
+                'records',
+                0,
+                'record',
+                'updatedAt',
+                changed ? now.toISOString() : '2026-09-01T00:00:00Z'
+              );
+            } else {
+              const properties = groupedDocument(
+                'changed',
+                changed ? ['destination'] : ['bin-0']
+              ).properties;
+              if (field === 'PROJECT') {
+                properties[0] = {
+                  ...properties[0],
+                  propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+                  value: {
+                    __typename: 'GraphqlEntityReferencePropertyValue',
+                    references: [
+                      {
+                        entityId: changed ? 'project-new' : 'project-0',
+                        entityType: 'INITIATIVE',
+                        specificMessageId: null,
+                      },
+                    ],
+                  },
+                };
+              }
+              data.setSelected(
+                'records',
+                0,
+                'record',
+                'properties',
+                properties
+              );
+            }
+            return incremental()?.length ?? 0;
+          });
+          return { groupedProjection, incrementalDisplay, incrementalGrouping };
         } finally {
           dispose();
         }

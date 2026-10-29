@@ -957,9 +957,26 @@ Page merging now accumulates each bin once instead of copying all earlier pages
 for every continuation. The identity-read regression test guards linear work
 without a machine-dependent timing assertion. Small loaded views have modest
 projection cost; the 5,000-row reconciliation ceiling is not a frame-time budget.
-Full property regrouping at that depth still exceeds a 16.7 ms frame, especially
-under throttling, and needs incremental projection before claiming smooth bulk
-updates at the ceiling.
+The production path now indexes immutable baseline identities and prior memberships
+once per evidence change. Per-row reactive memos track grouping fields; display-only
+patches keep the existing bins and update their live records in place. Membership
+changes reuse the indexes, while row order, baseline, and scope changes still
+reconcile the affected view. Do not memoize mutable live records by object identity.
+
+The benchmark also measures `incrementalDisplay` (one display-name patch) and
+`incrementalGrouping` (one grouping-field edit) through that production projection.
+On the same CPU with Chromium 155.0.8059.84, the three-value property cases measured:
+
+| Loaded rows | Full rebuild p95 | Incremental grouping p95 | Display-only patch p95 |
+| --- | --- | --- | --- |
+| 100 | 0.9 ms | 0.2 ms | <0.1 ms |
+| 1,000 | 8.5 ms | 1.3 ms | <0.1 ms |
+| 5,000 | 42.6 ms | 9.1 ms | <0.1 ms |
+| 5,000, 4× throttle | 196.0 ms | 27.0 ms | <0.1 ms |
+
+Display-only samples fall below the timer resolution, not to zero work. These
+measurements still exclude worker evaluation, IPC and DOM rendering; large
+membership changes under CPU throttling are not a frame-time guarantee.
 
 Network responses must provide the schema's identity fields (usually `id`, and
 `__typename` for abstract types) for normalization. They are not automatically

@@ -1,4 +1,7 @@
+import { deepEqual } from '@core/util/compareUtils';
+import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { type Accessor, createMemo, mapArray } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
   GroupedSoupInitialInput,
@@ -145,6 +148,84 @@ export function mergeGroupedSoupBins(
   }));
 }
 
+/** Index immutable server evidence once, not on each live field update. */
+function indexGroupedSoup(
+  baseline: readonly GroupedSoupBin[],
+  input: GroupedSoupInitialInput,
+  now: Date,
+  untrustedKeys: ReadonlySet<string>
+) {
+  const original = new Map<string, SoupItemFieldsFragment>();
+  const oldKeys = new Map<string, string[]>();
+  const bins = baseline.map((bin) => ({
+    ...bin,
+    itemIds: bin.items.map((item) => {
+      const key = soupItemKey(item);
+      original.set(key, item);
+      const keys = oldKeys.get(key);
+      if (keys) keys.push(bin.key);
+      else oldKeys.set(key, [bin.key]);
+      return key;
+    }),
+  }));
+  const previousKeys = new Map(
+    [...original].map(([key, item]) => [
+      key,
+      input.groupBy.field === 'PROPERTY'
+        ? untrustedKeys.has(key)
+          ? undefined
+          : localSoupGroupKeys(item, input, now)
+        : oldKeys.get(key),
+    ])
+  );
+  return {
+    original,
+    previousKeys,
+    bins,
+    rowCount: baseline.reduce((count, bin) => count + bin.items.length, 0),
+  };
+}
+
+function projectIndexedGroupedSoup(
+  baseline: ReturnType<typeof indexGroupedSoup>,
+  currentItems: ReadonlyMap<string, SoupItemFieldsFragment>,
+  keys: readonly string[],
+  selected: ReadonlyMap<string, SoupItemFieldsFragment>,
+  groupKeys: ReadonlyMap<string, string[] | undefined>
+): GroupedSoupBin[] {
+  const surviving = new Set(keys);
+  const evidence = keys.flatMap((key) => {
+    if (!baseline.original.has(key)) return [];
+    return [
+      {
+        id: key,
+        previousGroupKeys: baseline.previousKeys.get(key),
+        groupKeys: groupKeys.get(key),
+      },
+    ];
+  });
+  for (const key of baseline.original.keys()) {
+    if (!surviving.has(key))
+      evidence.push({
+        id: key,
+        previousGroupKeys: baseline.previousKeys.get(key),
+        groupKeys: [],
+      });
+  }
+  return reconcileGroupedSoup(baseline.bins, evidence).map((bin) => ({
+    key: bin.key,
+    totalCount: bin.totalCount,
+    nextCursor: bin.nextCursor,
+    items: bin.itemIds.flatMap((key) => {
+      const item =
+        selected.get(key) ??
+        currentItems.get(key) ??
+        baseline.original.get(key);
+      return item ? [item] : [];
+    }),
+  }));
+}
+
 /** Apply the maintained filter result without treating bounded candidates as complete bins. */
 export function projectLocalGroupedSoup(
   baseline: readonly GroupedSoupBin[],
@@ -154,61 +235,86 @@ export function projectLocalGroupedSoup(
   now: Date,
   untrustedKeys: ReadonlySet<string> = new Set()
 ): GroupedSoupBin[] {
-  const original = new Map(
-    baseline.flatMap((bin) =>
-      bin.items.map((item) => [soupItemKey(item), item] as const)
+  return projectIndexedGroupedSoup(
+    indexGroupedSoup(baseline, input, now, untrustedKeys),
+    currentItems,
+    snapshot.keys,
+    new Map(snapshot.records.map((row) => [row.recordKey, row.record])),
+    new Map(
+      snapshot.records.map((row) => [
+        row.recordKey,
+        localSoupGroupKeys(row.record, input, now),
+      ])
     )
   );
-  const oldKeys = new Map<string, string[]>();
-  for (const bin of baseline)
-    for (const item of bin.items) {
-      const key = soupItemKey(item);
-      oldKeys.set(key, [...(oldKeys.get(key) ?? []), bin.key]);
-    }
-  const previousKeys = (key: string, item: SoupItemFieldsFragment) =>
-    input.groupBy.field === 'PROPERTY'
-      ? untrustedKeys.has(key)
-        ? undefined
-        : localSoupGroupKeys(item, input, now)
-      : oldKeys.get(key);
-  const selected = new Map(
-    snapshot.records.map((row) => [row.recordKey, row.record])
-  );
-  const surviving = new Set(snapshot.keys);
-  const evidence = snapshot.keys.flatMap((key) => {
-    const previous = original.get(key);
-    if (!previous) return [];
-    const current = selected.get(key);
-    return [
-      {
-        id: key,
-        previousGroupKeys: previousKeys(key, previous),
-        groupKeys: current
-          ? localSoupGroupKeys(current, input, now)
-          : undefined,
-      },
-    ];
+}
+
+/** Track grouping fields per live row; unrelated field patches keep the bins intact. */
+export function createLocalGroupedSoupProjection(options: {
+  baseline: Accessor<
+    | { bins: readonly GroupedSoupBin[]; untrustedKeys: ReadonlySet<string> }
+    | undefined
+  >;
+  currentItems: Accessor<ReadonlyMap<string, SoupItemFieldsFragment>>;
+  snapshot: Accessor<LiveQuerySnapshot<SoupItemFieldsFragment> | undefined>;
+  input: Accessor<GroupedSoupInitialInput | undefined>;
+  now: Accessor<Date>;
+}): Accessor<GroupedSoupBin[] | undefined> {
+  const input = createMemo(options.input);
+  const keys = createMemo(() => options.snapshot()?.keys);
+  const records = createMemo(() => options.snapshot()?.records ?? []);
+  const index = createMemo(() => {
+    const baseline = options.baseline();
+    const initial = input();
+    return baseline && initial
+      ? indexGroupedSoup(
+          baseline.bins,
+          initial,
+          options.now(),
+          baseline.untrustedKeys
+        )
+      : undefined;
   });
-  for (const [key, item] of original) {
-    if (!surviving.has(key))
-      evidence.push({
-        id: key,
-        previousGroupKeys: previousKeys(key, item),
-        groupKeys: [],
-      });
-  }
-  const bins = reconcileGroupedSoup(
-    baseline.map((bin) => ({ ...bin, itemIds: bin.items.map(soupItemKey) })),
-    evidence
-  );
-  return bins.map((bin) => ({
-    key: bin.key,
-    totalCount: bin.totalCount,
-    nextCursor: bin.nextCursor,
-    items: bin.itemIds.flatMap((key) => {
-      const item =
-        selected.get(key) ?? currentItems.get(key) ?? original.get(key);
-      return item ? [item] : [];
-    }),
+  const rows = mapArray(records, (row) => ({
+    row,
+    groupKeys: createMemo(
+      () => {
+        const initial = input();
+        return initial
+          ? localSoupGroupKeys(row.record, initial, options.now())
+          : undefined;
+      },
+      undefined,
+      { equals: deepEqual }
+    ),
   }));
+  const selected = createMemo(
+    () => new Map(rows().map(({ row }) => [row.recordKey, row.record]))
+  );
+  const groupKeys = createMemo(
+    () =>
+      new Map(rows().map(({ row, groupKeys }) => [row.recordKey, groupKeys()]))
+  );
+  return createMemo(() => {
+    const baseline = index();
+    const order = keys();
+    const initial = input();
+    if (!baseline || !order || !initial) return undefined;
+    const span = Telemetry.span('graphql_cache.soup_grouped_local_evaluation');
+    try {
+      const result = projectIndexedGroupedSoup(
+        baseline,
+        options.currentItems(),
+        order,
+        selected(),
+        groupKeys()
+      );
+      span.setAttr('grouping.field', initial.groupBy.field);
+      span.setAttr('grouping.bin_count', result.length);
+      span.setAttr('grouping.baseline_count', baseline.rowCount);
+      return result;
+    } finally {
+      span.end();
+    }
+  });
 }
